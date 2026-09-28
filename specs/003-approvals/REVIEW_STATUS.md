@@ -16,3 +16,7 @@ The reviews also called for total loopback POST timeouts, SSE CRLF and buffer bo
 Hermes owns the approval timeout. Its `approvals.timeout` default is 300 seconds, and `agent.clarify_timeout` defaults to 3,600 seconds per profile. There is no expiry event. Late replies receive `409 approval_not_pending` through the API server. HMP must account for this behavior before the feature is considered ready.
 
 F3 expands the qualified-send `bridge_files` set by three approval-related Hermes files. The existing fingerprint is intentionally left at its pre-F3 value, so sending fails closed pending human requalification. The initial migration branch does not change that fingerprint.
+
+## Publication check
+
+The draft branch passes the zero-baseline privacy scanner. A supplemental review found only public protocol ranges, wildcard DNS syntax, and synthetic test IDs; no live address, hostname, key, or device identity is present. Gitleaks reports the same six reviewed test/type-check false positives as the initial migration branch.
