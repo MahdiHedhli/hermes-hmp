@@ -1,8 +1,8 @@
 """F3 fixture-gateway integration (DESIGN.md T7, T8).
 
 Same harness as `test_direct_send_fixture.py`: one real Hermes, real pairing, real loopback.
-T7 is the Bot Chat stream. T8 is the Phone-chat platform turn. Both need a pty for pairing, which
-this sandbox cannot allocate; `--collect-only` is the check that they are wired.
+T7 is the Bot Chat stream. T8 is the Phone-chat platform turn. Both need a PTY for pairing,
+loopback sockets and extracted qualified builds. Collection alone is not execution evidence.
 
 T4 leaves `direct_send_supported_builds.json`'s fingerprint stale, so a gateway built from this
 tree keeps the direct-send gate closed until a human requalifies that row. These tests are the
@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 _SIBLING = Path(__file__).with_name("test_direct_send_fixture.py")
 _spec = importlib.util.spec_from_file_location("f2_direct_send_fixture_tests", _SIBLING)
@@ -37,7 +38,15 @@ pytestmark = _f2.pytestmark
 @pytest.fixture(params=_f2.BUILDS)
 def gateway(request: pytest.FixtureRequest, tmp_path: Path):
     """The F2 direct-send gateway, including its pairing pty. Reused, not reimplemented."""
-    yield from _f2.gateway.__wrapped__(request, tmp_path)
+    for fixture in _f2.gateway.__wrapped__(request, tmp_path):
+        config_path = fixture.paths.home / "config.yaml"
+        config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+        config["gateway"]["platforms"]["hmp"]["extra"]["owner_device_ids"] = [
+            fixture.reference_device_id
+        ]
+        config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
+        fixture.restart_gateway()
+        yield fixture
 
 
 def _prompts(client: Client, profile: str = DEFAULT_PROFILE) -> tuple[int, Any]:

@@ -103,7 +103,7 @@ async def _answer(
 
 @pytest.mark.asyncio
 async def test_first_accept_then_same_body_does_not_call_again() -> None:
-    store, resolver = PromptStore(), FakeResolver()
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
     _store_approval(store)
     first = await _answer(store, resolver, {"choice": "once", "session_key": "client-supplied"})
     assert first.status == 200 and first.body["applied"] is True
@@ -115,7 +115,7 @@ async def test_first_accept_then_same_body_does_not_call_again() -> None:
 
 @pytest.mark.asyncio
 async def test_different_choice_after_accept_is_a_conflict() -> None:
-    store, resolver = PromptStore(), FakeResolver()
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
     _store_approval(store)
     await _answer(store, resolver, {"choice": "once"})
     conflict = await _answer(store, resolver, {"choice": "always"})
@@ -127,7 +127,7 @@ async def test_different_choice_after_accept_is_a_conflict() -> None:
 
 @pytest.mark.asyncio
 async def test_stale_resolver_is_applied_false_and_replayed() -> None:
-    store, resolver = PromptStore(), FakeResolver("stale")
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver("stale")
     _store_approval(store)
     stale = await _answer(store, resolver, {"choice": "deny"})
     assert stale.status == 409 and stale.body["applied"] is False
@@ -139,7 +139,7 @@ async def test_stale_resolver_is_applied_false_and_replayed() -> None:
 
 @pytest.mark.asyncio
 async def test_unknown_and_other_user_are_404_with_no_call() -> None:
-    store, resolver = PromptStore(), FakeResolver()
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
     _store_approval(store)
     missing = await _answer(
         store, resolver, {"choice": "once"}, request_id="never-stored-id-12345678"
@@ -151,7 +151,7 @@ async def test_unknown_and_other_user_are_404_with_no_call() -> None:
 
 @pytest.mark.asyncio
 async def test_choice_not_offered_does_not_call() -> None:
-    store, resolver = PromptStore(), FakeResolver()
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
     _store_approval(store, choices=("once", "deny"))
     result = await _answer(store, resolver, {"choice": "always"})
     assert result.status == 409 and result.body["applied"] is False
@@ -161,7 +161,7 @@ async def test_choice_not_offered_does_not_call() -> None:
 
 @pytest.mark.asyncio
 async def test_all_and_mixed_bodies_are_400() -> None:
-    store, resolver = PromptStore(), FakeResolver()
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
     _store_approval(store)
     for body in (
         {"choice": "once", "all": True},
@@ -176,23 +176,23 @@ async def test_all_and_mixed_bodies_are_400() -> None:
 
 
 @pytest.mark.asyncio
-async def test_past_expires_at_is_still_offered() -> None:
-    store, resolver = PromptStore(), FakeResolver()
+async def test_past_expiry_grace_is_refused() -> None:
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
     _store_approval(store, expires_at=1)
     result = await _answer(store, resolver, {"choice": "once"}, now=10_000)
-    assert result.body["applied"] is True
-    assert len(resolver.calls) == 1
+    assert result.body["applied"] is False
+    assert resolver.calls == []
 
 
 @pytest.mark.asyncio
 async def test_clarify_strips_recommended_and_other_then_text() -> None:
-    store, resolver = PromptStore(), FakeResolver()
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
     _store_clarify(store)
     chosen = await _answer(store, resolver, {"choice": "Ship it (Recommended)"})
     assert chosen.body == {"status": "resolved", "applied": True}
     assert resolver.calls[-1] == ("clarify", REQ, "Ship it")
 
-    store2, resolver2 = PromptStore(), FakeResolver()
+    store2, resolver2 = PromptStore(clock=lambda: 1), FakeResolver()
     _store_clarify(store2)
     other = await _answer(store2, resolver2, {"other": True})
     assert other.body == {"status": "awaiting_text", "applied": False}
@@ -203,7 +203,7 @@ async def test_clarify_strips_recommended_and_other_then_text() -> None:
 
 @pytest.mark.asyncio
 async def test_clarify_text_before_other_is_invalid_and_not_applied() -> None:
-    store, resolver = PromptStore(), FakeResolver()
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
     _store_clarify(store)
     result = await _answer(store, resolver, {"text": "free prose"})
     assert result.status == 409 and result.body["applied"] is False
@@ -213,7 +213,7 @@ async def test_clarify_text_before_other_is_invalid_and_not_applied() -> None:
 
 @pytest.mark.asyncio
 async def test_multi_select_dumps_labels() -> None:
-    store, resolver = PromptStore(), FakeResolver()
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
     _store_clarify(store, choices=("A (Recommended)", "B"), multi_select=True)
     result = await _answer(store, resolver, {"choices": ["A (Recommended)", "B"]})
     assert result.body["applied"] is True
@@ -222,7 +222,7 @@ async def test_multi_select_dumps_labels() -> None:
 
 @pytest.mark.asyncio
 async def test_two_in_flight_answers_share_one_resolver_call() -> None:
-    store = PromptStore()
+    store = PromptStore(clock=lambda: 1)
     _store_approval(store)
     started = asyncio.Event()
     release = asyncio.Event()
@@ -246,18 +246,19 @@ async def test_two_in_flight_answers_share_one_resolver_call() -> None:
 
 @pytest.mark.asyncio
 async def test_logs_do_not_contain_the_command(caplog: pytest.LogCaptureFixture) -> None:
-    store, resolver = PromptStore(), FakeResolver()
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
     _store_approval(store)
     with caplog.at_level(logging.DEBUG, logger=LOGGER_NAME):
         await _answer(store, resolver, {"choice": "deny"})
     assert SECRET_COMMAND not in caplog.text
-    assert "resolved_deny" in caplog.text
+    assert "outcome=resolved" in caplog.text
+    assert "resolved_deny" not in caplog.text
     assert "because" not in caplog.text
 
 
 @pytest.mark.asyncio
 async def test_desktop_held_hides_bot_chat_cards_and_keeps_phone_cards() -> None:
-    store = PromptStore()
+    store = PromptStore(clock=lambda: 1)
     _store_approval(store)
     _store_clarify(store, request_id="clarify-id-12345678")
     store.set_desktop_held(IID, USER, PROFILE)
@@ -283,7 +284,7 @@ async def _chunks(*parts: bytes) -> AsyncIterator[bytes]:
 
 @pytest.mark.asyncio
 async def test_stream_stores_approval_and_does_not_store_clarify_or_execute_code() -> None:
-    store = PromptStore()
+    store = PromptStore(clock=lambda: 1)
     bind = StreamBind(
         store=store, iid=IID, user_id=USER, profile=PROFILE, now=lambda: 5_000, timeout_s=300
     )
@@ -308,6 +309,7 @@ async def test_stream_stores_approval_and_does_not_store_clarify_or_execute_code
         yield _frame("clarify.requested", {"clarify_id": "c", "question": "huh"})
         yield _frame("assistant.completed", {"content": "done", "session_id": "tip"})
         yield _frame("run.completed", {"session_id": "tip"})
+        assert store.get((IID, USER, PROFILE, REQ)).status == "expired"
         yield _frame("done", {})
 
     result = await ds.consume_sse(parts(), bind=bind)
@@ -319,12 +321,12 @@ async def test_stream_stores_approval_and_does_not_store_clarify_or_execute_code
     assert row is not None and row.kind == "approval" and row.choices == ("once", "deny")
     assert row.command == SECRET_COMMAND and row.run_id == RUN
     assert store.desktop_held(IID, USER, PROFILE) is False
-    assert len(store.list_visible(IID, USER, PROFILE)) == 1
+    assert store.list_visible(IID, USER, PROFILE) == ()
 
 
 @pytest.mark.asyncio
 async def test_mailbox_keepalive_sets_desktop_held_until_done() -> None:
-    store = PromptStore()
+    store = PromptStore(clock=lambda: 1)
     bind = StreamBind(
         store=store, iid=IID, user_id=USER, profile=PROFILE, now=lambda: 5_000, timeout_s=300
     )
@@ -418,7 +420,7 @@ def test_shipped_fingerprint_is_not_qualified() -> None:
 
 @pytest.mark.asyncio
 async def test_phone_replay_conflict_and_pending_approval_suppression() -> None:
-    store = PromptStore()
+    store = PromptStore(clock=lambda: 1)
     delivered: list[str] = []
 
     class Sqlite:
@@ -487,7 +489,7 @@ async def test_phone_replay_conflict_and_pending_approval_suppression() -> None:
 
 @pytest.mark.asyncio
 async def test_phone_message_while_clarify_is_pending_is_not_a_new_turn() -> None:
-    store = PromptStore()
+    store = PromptStore(clock=lambda: 1)
     _store_clarify(store)
     delivered: list[str] = []
 
@@ -518,13 +520,13 @@ async def test_phone_message_while_clarify_is_pending_is_not_a_new_turn() -> Non
         pending_approvals=lambda _key: [],
         deliver=deliver,
     )
-    assert result.body["applied"] is True
+    assert result.status == 409 and result.body["applied"] is False
     assert delivered == []
 
 
 @pytest.mark.asyncio
 async def test_binder_requires_exactly_one_match_and_text_fallback_is_not_a_card() -> None:
-    store = PromptStore()
+    store = PromptStore(clock=lambda: 1)
     session = "namespace:hmp:dm:phone"
     store.remember_session(session, IID, USER, PROFILE, "c_chat")
 
@@ -535,7 +537,7 @@ async def test_binder_requires_exactly_one_match_and_text_fallback_is_not_a_card
         def list_gateway_approvals(self, _key: str) -> list[dict[str, str]]:
             return self.rows
 
-        def approval_timeout_s(self) -> int:
+        def approval_timeout_s(self, profile: str) -> int:
             return 300
 
     class Prompt:
@@ -552,7 +554,11 @@ async def test_binder_requires_exactly_one_match_and_text_fallback_is_not_a_card
             {"command": "echo hi", "request_id": REQ + "b"},
         ]
     )
-    assert await hooks.on_exec_approval(Prompt()) is False
+    assert await hooks.on_exec_approval(Prompt()) is True
+    assert all(row.choices == ("deny",) for row in store._rows.values())
+    store = PromptStore(clock=lambda: 1)
+    store.remember_session(session, IID, USER, PROFILE, "c_chat")
+    hooks.store = store
     hooks.bridge = Bridge([{"command": "echo hi", "request_id": REQ}])  # type: ignore[assignment]
     assert await hooks.on_exec_approval(Prompt()) is True
     assert store.get((IID, USER, PROFILE, REQ)).surface == "phone_chat"  # type: ignore[union-attr]
@@ -561,7 +567,7 @@ async def test_binder_requires_exactly_one_match_and_text_fallback_is_not_a_card
 
 
 def test_inert_reply_is_not_stored() -> None:
-    store = PromptStore()
+    store = PromptStore(clock=lambda: 1)
     store.remember_session("k", IID, USER, PROFILE, "c_chat")
     hooks = AdapterHooks(store=store, bridge=object(), now=lambda: 1, iid=IID)
     hooks.note_inert("c_chat")
@@ -574,7 +580,7 @@ def test_inert_reply_is_not_stored() -> None:
 def _arm(env: Env, *, flag: bool) -> None:
     env.bridge.authz_state = lambda *_a, **_k: AuthzState.AUTHORIZED  # type: ignore[method-assign]
     env.ctx.direct_send_flag = lambda: flag
-    env.ctx.prompt_store = PromptStore()
+    env.ctx.prompt_store = PromptStore(clock=lambda: 1)
     env.bridge.direct_send_endpoint = lambda *_a, **_k: DirectSendEndpoint(  # type: ignore[method-assign]
         host="127.0.0.1", port=9, api_key="k" * 20, path_prefix=""
     )
@@ -592,6 +598,7 @@ def test_prompt_routes_are_closed_when_the_flag_is_off(tmp_path: Path) -> None:
 
     async def scenario(client: TestClient) -> None:
         dev = await pair(env, client)
+        env.ctx.owner_device_ids = lambda: frozenset({dev.device_id})
         status, body = await get(client, "/bots/b/prompts", headers=env.headers(dev))
         assert status == 503 and body["error"]["code"] == "write_gate_closed"
         status, body = await post(
@@ -619,6 +626,7 @@ def test_empty_prompt_list_and_unknown_answer(tmp_path: Path) -> None:
 
     async def scenario(client: TestClient) -> None:
         dev = await pair(env, client)
+        env.ctx.owner_device_ids = lambda: frozenset({dev.device_id})
         status, body = await get(client, "/bots/b/prompts", headers=env.headers(dev))
         assert status == 200 and body == {"prompts": [], "desktop_held": False}
         status, body = await post(

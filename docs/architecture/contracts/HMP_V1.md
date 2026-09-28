@@ -205,6 +205,7 @@ Normative keywords follow RFC 2119 and RFC 8174.
 
   - `message` never echoes caller input.
   - The only allowed extras inside `error` are `why` (string), `authz` (an `AuthzState`), `head_message_id` (integer or null) and `definitive` (boolean).
+  - v1.3 AP-4/AP-5 additionally allow top-level `applied` on prompt results.
   - One top-level sibling is allowed: a `503 guarantees_unavailable` body also carries `"guarantees":{…}` (GU-5).
 - **ERR-2. Error table.** "Client action class" is what a client does. For a submit, "definitive" means Hermes will never execute this attempt.
 
@@ -1007,8 +1008,8 @@ which no supported build advertises today (§8).
   (unlike SES-1/SES-2's "not registered" pattern) — with the flag off, `POST .../chat/messages`
   answers `503 write_gate_closed` rather than `404`, matching how the original SUB-1 route already
   behaves under a closed GU-4 gate. This is the flag OD-F15's second live-config approval turns on,
-  for the owner's own paired devices only (enforced by the existing pairing trust boundary, no new
-  per-device ACL needed), never a general release default.
+  for owner dogfood, never a general release default. F3 prompt access and Phone chat additionally
+  require the explicit per-device allowlist in §7b; pairing alone is not owner authorization.
 
 ## 7b. Approvals and Phone chat (v1.3, amendment F3; OD-F16)
 
@@ -1024,8 +1025,16 @@ fingerprint that no longer matches the running Hermes tree: each route returns
 `handle_message`, or call `resolve_gateway_approval` / `resolve_gateway_clarify` /
 `mark_awaiting_text`. Pairing is still required. The flag does not authorize a device by itself.
 
-Auth on every route: bearer, then the per-bot gate (ERR-3), then `require_bot_authorized`. `{p}`
-is the served profile, checked against the stored row.
+Auth on every route: bearer, explicit owner-device membership, a shared F3 limit of 60 requests
+per minute per device, then the per-bot gate (`require_bot_authorized`, ERR-3), then the write
+gate. `{p}` is the served profile, checked against the stored row. An owner device is an active
+paired device whose exact ID appears in `gateway.platforms.hmp.extra.owner_device_ids` (list of
+strings, default empty; malformed config grants nobody). A non-owner receives `404 not_found`,
+even when bot-authorized or sharing the owner's `user_id`. The host loads changes through its
+normal config reload/restart; HMP reads the live adapter config each request. Owner devices of
+the same user share the existing per-request serialization and idempotency. Default-conversation
+snapshots omit `open_requests` for non-owners and while the direct-send flag is off.
+The explicit `direct_send.enabled` flag is mandatory even when the base gate is OPEN.
 
 - **AP-1. Bot Chat stream (amends DS-6).** The loopback body stays `{"message":"<text>"}`. The
   path is `{path_prefix}/api/sessions/{live_tip}/chat/stream`. A missing `session_chat_streaming`
@@ -1057,8 +1066,14 @@ is the served profile, checked against the stored row.
   timeout is unlimited). `desktop_held` true means `prompts` contains no `bot_chat` approval (a
   Phone-chat card may still be listed). `expires_at` is `observed_at` plus the timeout read from
   Hermes (`approvals.timeout`, default 300s; clarify `clarify.timeout`, else `agent.clarify_timeout`,
-  else 3600). It is a display hint. An answer whose local clock is past `expires_at` is still
-  offered to Hermes once. Hermes returning nothing pending is what makes the response stale.
+  else 3600), through `bridge.py` inside that target profile's runtime scope. It is a display hint,
+  not Hermes's timer. Approval values <= 0 mean immediate expiry; clarify <= 0 means unlimited.
+  Hermes returning nothing pending, clarify retirement, a vanished approval waiter, or the end
+  of the bound stream expires the row immediately. A 30-second grace after the display hint
+  is the local cleanup backstop: beyond it list omits the row and answer returns `409 stale`,
+  `applied:false` without forwarding. Purge removes rows and locks after retention, pinning
+  active/queued answerers so a lock cannot be replaced underneath them. Unknown IDs allocate
+  neither rows nor locks.
 - **AP-4. Answer.** `POST /hmp/v1/bots/{p}/prompts/{request_id}`. The path id is the only id. A
   `kind` field in the body is ignored; the stored row decides. `choice` together with `text`, or
   `other` together with either, is `400 bad_request`.
@@ -1097,23 +1112,38 @@ is the served profile, checked against the stored row.
   Idempotency key `(iid, user_id, profile, cmid)`, hash of `text`, reserved before
   `handle_message`. The same text replays the stored response and does not hand off again. A
   different text is `409 idempotency_conflict`. `handle_message` is called with
-  `allow_gateway_control:true` and returns `202 {"state":"submitted"}` once Hermes has accepted
+  `allow_gateway_control:false` and returns `202 {"state":"submitted"}` once Hermes has accepted
   the event. The route does not wait for the model. While `list_gateway_approvals` for this
   phone session is non-empty, the route does not call `handle_message` and returns
   `409 {"error":{"code":"stale",…},"applied":false}` — the composer is not a way to say yes.
-  While a clarify prompt is pending, the message text is handled by AP-4 (the same function) and
-  is not a new turn. The inert authorize trigger stays `allow_gateway_control:false`, and its
+  While a clarify prompt is pending, composer sends also return `409 stale`, `applied:false`.
+  Both kinds of prompt are answered only through AP-4; chat text never resolves a wait. The inert authorize trigger stays `allow_gateway_control:false`, and its
   outbound reply is still dropped. Phone chat does not claim DS-4's single-writer guard.
 - **AP-7. Who may answer.** The bearer resolves to `user_id`. The answer route loads the row by
   `request_id` and that `user_id`. Bot Chat answers use the `run_id` Hermes registered for the
   stream HMP opened, sent only to loopback. Phone chat answers use `build_session_key` of the
   source HMP built for this `user_id` and the `default` chat. A client-supplied session key is
-  ignored. Logging (SEC-4) is `log_event` only: outcome codes (`stored`, `resolved`, `resolved_once`,
-  `resolved_session`, `resolved_always`, `resolved_deny`, `stale`, `invalid_choice`, `conflict`,
+  ignored. Logging (SEC-4) is `log_event` only: outcome codes (`stored`, `resolved`,
+  `stale`, `invalid_choice`, `conflict`,
   `desktop_held`, `awaiting_text`, and for phone send `submitted`, `replay`, `conflict`, `refused`)
   and 8-character prefixes of `user_id`, `request_id`, `run_id`. Never the command, description,
-  question, clarify label, message text, SSE body, or `API_SERVER_KEY`. Approval `choice` is an
-  enum and may appear only as an outcome suffix. Clarify labels are not logged.
+  question, chosen answer, clarify label, message text, SSE body, or `API_SERVER_KEY`.
+  All successful answer logs use exactly `outcome=resolved`; no choice suffix is permitted.
+  When the adapter cannot uniquely match a command but holds valid pending request IDs for
+  this session, it may expose deny-only recovery cards with an empty command and explicit
+  unbound-approval copy. They still require an owner action through AP-4, and cannot allow
+  execution. No usable ID or queue read failure means fail closed until Hermes times out;
+  the fallback never enables slash or plaintext control.
+
+  Transport bounds: approval POST total/read deadlines are 15/10 seconds; SSE total/read
+  deadlines are 24 hours/90 seconds. Both disable redirects and environment proxies and use
+  only pinned loopback literals. SSE requires `text/event-stream`, validates supplied run IDs
+  against `run.started`, accepts LF/CRLF, caps frames at 64 KiB and buffers at 128 KiB. Approval
+  responses are capped at 64 KiB. Exceeding a bound closes the transport without retry.
+  Phone observations have a global 256-row cap, 60-second TTL and 8 KiB text cap; durable
+  role/text matches discard them. They are never merged into cursor-addressed snapshot/history
+  message arrays, which contain only durable Hermes rows.
+
 - **AP-8. Discovery.** F3 does not register the EV-1 SSE route. The client polls `GET …/prompts`.
   v1.3 names the live-tail frames so a later revision does not invent a second vocabulary:
   `approval.requested` (includes `surface`), `approval.settled`, `approval.unanswerable` (still the

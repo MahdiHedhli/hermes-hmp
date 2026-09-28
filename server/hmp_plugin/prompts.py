@@ -11,8 +11,10 @@ import asyncio
 import hashlib
 import json
 import threading
-from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass, field
+import time
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
 from typing import Protocol
 
 from .contract import IDEMPOTENCY_RETENTION_S
@@ -20,8 +22,11 @@ from .logging_policy import log_event
 
 APPROVAL_CHOICES = ("once", "session", "always", "deny")
 _RECOMMENDED_SUFFIX = "(Recommended)"
-_PROVISIONAL_ID_BASE = 1_000_000_000
 _REQUEST_ID_MAX = 256
+EXPIRY_GRACE_S = 30
+OBSERVATION_TTL_S = 60
+OBSERVATION_CAP = 256
+OBSERVATION_MAX_BYTES = 8192
 
 
 def _log(event: str, outcome: str, **ids: str) -> None:
@@ -119,7 +124,8 @@ def _bad() -> HttpResult:
 class PromptStore:
     """Process-memory prompts, the desktop-held marker, and Phone-chat transcript observations."""
 
-    def __init__(self) -> None:
+    def __init__(self, *, clock: Callable[[], float] = time.time) -> None:
+        self._clock = clock
         self._guard = threading.Lock()
         self._rows: dict[tuple[str, str, str, str], PromptRow] = {}
         self._desktop: set[tuple[str, str, str]] = set()
@@ -127,16 +133,48 @@ class PromptStore:
         self._suppressed: set[str] = set()
         self._observations: dict[tuple[str, str, str], list[tuple[str, str, float]]] = {}
         self._locks: dict[tuple[str, str, str, str], asyncio.Lock] = {}
+        self._lock_users: dict[tuple[str, str, str, str], int] = {}
         self._phone_tasks: dict[tuple[str, str, str, str], asyncio.Task[HttpResult]] = {}
-        self._next_provisional = _PROVISIONAL_ID_BASE
 
-    def answer_lock(self, key: tuple[str, str, str, str]) -> asyncio.Lock:
+    @asynccontextmanager
+    async def answer_row(self, key: tuple[str, str, str, str]) -> AsyncIterator[PromptRow | None]:
+        # Pin the row AND lock before awaiting. Purge cannot split waiting answerers across locks.
         with self._guard:
-            lock = self._locks.get(key)
-            if lock is None:
-                lock = asyncio.Lock()
-                self._locks[key] = lock
-            return lock
+            row = self._rows.get(key)
+            lock = None
+            if row is not None:
+                lock = self._locks.setdefault(key, asyncio.Lock())
+                self._lock_users[key] = self._lock_users.get(key, 0) + 1
+        if lock is None:
+            yield None
+            return
+        try:
+            async with lock:
+                yield row
+        finally:
+            with self._guard:
+                self._lock_users[key] -= 1
+                if not self._lock_users[key]:
+                    del self._lock_users[key]
+
+    @staticmethod
+    def expire(row: PromptRow, now: int) -> None:
+        if row.status == "open":
+            row.status = "expired"
+            row.settled_at = now
+
+    def expire_run(self, run_id: str, now: int) -> None:
+        with self._guard:
+            for row in self._rows.values():
+                if row.run_id == run_id:
+                    self.expire(row, now)
+
+    def reconcile_approvals(self, session_key: str, pending: set[str], now: int) -> None:
+        with self._guard:
+            for row in self._rows.values():
+                if (row.session_key == session_key and row.kind == "approval"
+                        and row.request_id not in pending):
+                    self.expire(row, now)
 
     def get(self, key: tuple[str, str, str, str]) -> PromptRow | None:
         with self._guard:
@@ -144,13 +182,26 @@ class PromptStore:
 
     def purge(self, now: int) -> None:
         with self._guard:
+            for row in self._rows.values():
+                if row.expires_at is not None and now > row.expires_at + EXPIRY_GRACE_S:
+                    self.expire(row, now)
             stale = [
-                key
-                for key, row in self._rows.items()
+                key for key, row in self._rows.items()
                 if row.settled_at is not None and now - row.settled_at >= IDEMPOTENCY_RETENTION_S
+                and not self._lock_users.get(key)
             ]
             for key in stale:
                 del self._rows[key]
+                self._locks.pop(key, None)
+            self._purge_observations(now)
+
+    def _purge_observations(self, now: float) -> None:
+        for key in list(self._observations):
+            kept = [item for item in self._observations[key] if now - item[2] < OBSERVATION_TTL_S]
+            if kept:
+                self._observations[key] = kept
+            else:
+                del self._observations[key]
 
     def put(self, row: PromptRow) -> None:
         key = (row.iid, row.user_id, row.profile, row.request_id)
@@ -195,7 +246,7 @@ class PromptStore:
                 choices=choices,
                 command=command,
                 description=description,
-                expires_at=now + timeout_s if timeout_s > 0 else None,
+                expires_at=now + max(0, timeout_s),
                 observed_at=now,
                 run_id=run_id,
             )
@@ -275,21 +326,35 @@ class PromptStore:
     def add_observation(
         self, iid: str, user_id: str, profile: str, *, role: str, text: str, now: float
     ) -> None:
+        if len(text.encode("utf-8")) > OBSERVATION_MAX_BYTES:
+            return
         key = (iid, user_id, profile)
         with self._guard:
+            self._purge_observations(now)
             self._observations.setdefault(key, []).append((role, text, now))
+            while sum(map(len, self._observations.values())) > OBSERVATION_CAP:
+                oldest = min(self._observations, key=lambda k: self._observations[k][0][2])
+                self._observations[oldest].pop(0)
+                if not self._observations[oldest]:
+                    del self._observations[oldest]
+
+    def discard_durable_observations(
+        self, iid: str, user_id: str, profile: str, durable: set[tuple[str, str]]
+    ) -> None:
+        key = (iid, user_id, profile)
+        with self._guard:
+            remaining = [item for item in self._observations.get(key, [])
+                         if (item[0], item[1]) not in durable]
+            if remaining:
+                self._observations[key] = remaining
+            else:
+                self._observations.pop(key, None)
 
     def observations(
         self, iid: str, user_id: str, profile: str
     ) -> tuple[tuple[str, str, float], ...]:
         with self._guard:
             return tuple(self._observations.get((iid, user_id, profile), ()))
-
-    def next_provisional_id(self) -> int:
-        with self._guard:
-            value = self._next_provisional
-            self._next_provisional += 1
-            return value
 
     def phone_task(self, key: tuple[str, str, str, str]) -> asyncio.Task[HttpResult] | None:
         with self._guard:
@@ -308,7 +373,10 @@ class PromptStore:
             if self._phone_tasks.get(key) is task:
                 del self._phone_tasks[key]
 
-    def list_visible(self, iid: str, user_id: str, profile: str) -> tuple[PromptRow, ...]:
+    def list_visible(
+        self, iid: str, user_id: str, profile: str, *, now: int | None = None
+    ) -> tuple[PromptRow, ...]:
+        self.purge(int(self._clock()) if now is None else now)
         held = self.desktop_held(iid, user_id, profile)
         with self._guard:
             rows = [
@@ -372,7 +440,7 @@ def list_prompts(
     store: PromptStore, *, iid: str, user_id: str, profile: str, now: int
 ) -> HttpResult:
     store.purge(now)
-    rows = store.list_visible(iid, user_id, profile)
+    rows = store.list_visible(iid, user_id, profile, now=now)
     return HttpResult(
         200,
         {
@@ -467,11 +535,12 @@ async def answer_prompt(
     digest = _canonical_answer(body)
     store.purge(now)
     key = (iid, user_id, profile, request_id)
-    async with store.answer_lock(key):
-        row = store.get(key)
+    async with store.answer_row(key) as row:
         if row is None:
             _log("prompt_answer", "not_found", user_id=user_id, request_id=request_id)
             return _not_found()
+        now = max(now, int(store._clock()))
+        store.purge(now)  # the wait for this row's lock may have crossed the expiry grace
         if row.status == "resolved" and row.answer_hash is not None:
             if row.answer_hash == digest:
                 replay = _replay(row)
@@ -484,9 +553,7 @@ async def answer_prompt(
                 applied=False,
             )
         if row.status == "expired":
-            replay = _replay(row)
-            if replay is not None:
-                return replay
+            return _error("stale", "request is no longer answerable", applied=False)
         result = await _apply(row, form, value, resolver, user_id)
         if result.status == 200 and result.body.get("status") == "resolved":
             row.status = "resolved"
@@ -524,7 +591,7 @@ async def _apply(
             return _error("stale", "request is no longer answerable", applied=False)
         _log(
             "prompt_answer",
-            f"resolved_{value}",
+            "resolved",
             user_id=user_id,
             request_id=row.request_id,
             run_id=row.run_id or "",
@@ -574,17 +641,6 @@ async def _apply(
     return HttpResult(200, {"status": "resolved", "applied": True})
 
 
-def message_as_clarify_body(row: PromptRow, text: str) -> Mapping[str, object]:
-    """AP-6: a phone message while a clarify is pending is an answer, not a new turn."""
-    if row.awaiting_text or not row.choices:
-        return {"text": text}
-    if row.multi_select:
-        return {"text": text}
-    if _match_choice(row.choices, text) is not None:
-        return {"choice": text}
-    return {"text": text}
-
-
 @dataclass
 class AdapterHooks:
     """Phone-chat adapter hooks. Hermes calls these on the event loop; Hermes work is threaded."""
@@ -593,7 +649,6 @@ class AdapterHooks:
     bridge: object
     now: Callable[[], int]
     iid: str
-    _approval_fallback: set[str] = field(default_factory=set)
 
     def note_inert(self, chat_id: str) -> None:
         self.store.suppress_transcript(chat_id)
@@ -615,11 +670,29 @@ class AdapterHooks:
             return False
         _iid, user_id, profile = owner
         if isinstance(metadata, Mapping) and metadata.get("is_approval_prompt") is True:
-            self._approval_fallback.add(chat_id)
+            content = "Approval unavailable. Wait for Hermes to expire it; chat cannot answer it."
         self.store.add_observation(
             self.iid, user_id, profile, role="assistant", text=content, now=float(self.now())
         )
         return True
+
+    async def reconcile_chat(self, chat_id: str) -> None:
+        with self.store._guard:
+            keys = [key for key, owner in self.store._sessions.items()
+                    if owner[0] == self.iid and owner[3] == chat_id]
+        lister = getattr(self.bridge, "list_gateway_approvals", None)
+        if not callable(lister):
+            return
+        for key in keys:
+            try:
+                pending = await asyncio.to_thread(lister, key)
+            except Exception:
+                _log("prompt_store", "unavailable")
+                continue  # unavailable is not proof the waiter is gone
+            if isinstance(pending, list):
+                ids = {row["request_id"] for row in pending if isinstance(row, Mapping)
+                       and isinstance(row.get("request_id"), str)}
+                self.store.reconcile_approvals(key, ids, self.now())
 
     def _owner_for_chat(self, chat_id: str) -> tuple[str, str, str] | None:
         return self.store.owner_of_chat(self.iid, chat_id)
@@ -651,9 +724,16 @@ class AdapterHooks:
             and isinstance(entry.get("request_id"), str)
             and entry.get("request_id") not in open_ids
         ]
-        if len(matches) != 1:
+        recovery = len(matches) != 1
+        if not matches:
+            # The runner may redact the command. Keep only request-bound deny recovery;
+            # never infer an allow choice from an ambiguous command string.
+            matches = [entry for entry in pending if isinstance(entry, Mapping)
+                       and isinstance(entry.get("request_id"), str)
+                       and entry["request_id"] not in open_ids]
+        matches = [entry for entry in matches if 0 < len(entry["request_id"]) <= _REQUEST_ID_MAX]
+        if not matches:
             return False
-        request_id = str(matches[0]["request_id"])
         raw_choices = getattr(prompt, "choices", ())
         choices = tuple(
             choice
@@ -662,24 +742,32 @@ class AdapterHooks:
         )
         if not choices:
             return False
-        timeout_s = await self._timeout("approval_timeout_s", 300)
+        timeout_s = await self._timeout("approval_timeout_s", 300, profile)
         description = getattr(prompt, "description", "") or ""
-        self.store.put(
-            PromptRow(
-                iid=iid,
-                user_id=user_id,
-                profile=profile,
-                request_id=request_id,
-                kind="approval",
-                surface="phone_chat",
-                choices=choices,
-                command=command,
-                description=description if isinstance(description, str) else "",
-                expires_at=self.now() + timeout_s if timeout_s > 0 else None,
-                observed_at=self.now(),
-                session_key=session_key,
+        if recovery:
+            if "deny" not in choices:
+                return False
+            choices = ("deny",)
+            command = ""
+            description = "Unbound approval. Deny to release this wait, or let Hermes time it out."
+        for match in matches:
+            request_id = str(match["request_id"])
+            self.store.put(
+                PromptRow(
+                    iid=iid,
+                    user_id=user_id,
+                    profile=profile,
+                    request_id=request_id,
+                    kind="approval",
+                    surface="phone_chat",
+                    choices=choices,
+                    command=command,
+                    description=description if isinstance(description, str) else "",
+                    expires_at=self.now() + max(0, timeout_s),
+                    observed_at=self.now(),
+                    session_key=session_key,
+                )
             )
-        )
         return True
 
     async def on_clarify(
@@ -697,7 +785,7 @@ class AdapterHooks:
             return False
         iid, user_id, profile, _chat = owner
         offered = tuple(choice for choice in (choices or []) if isinstance(choice, str))
-        timeout_s = await self._timeout("clarify_timeout_s", 3600)
+        timeout_s = await self._timeout("clarify_timeout_s", 3600, profile)
         # `send_clarify` does not carry `multi_select`, and HMP does not read the private
         # clarify index (AP-9). The answer path still honors the flag when a row has it.
         self.store.put(
@@ -732,12 +820,12 @@ class AdapterHooks:
                         request_id=row.request_id,
                     )
 
-    async def _timeout(self, name: str, default: int) -> int:
+    async def _timeout(self, name: str, default: int, profile: str) -> int:
         fn = getattr(self.bridge, name, None)
         if not callable(fn):
             return default
         try:
-            value = await asyncio.to_thread(fn)
+            value = await asyncio.to_thread(fn, profile)
         except Exception:
             return default
         if isinstance(value, bool) or not isinstance(value, int):
@@ -870,23 +958,9 @@ async def _phone_turn(
     pending_approvals: Callable[[str], object],
     deliver: Callable[[], Awaitable[bool]],
 ) -> tuple[HttpResult, str]:
-    clarifies = prompts.open_clarifies(iid, user_id, profile)
-    if len(clarifies) > 1:
-        _log("phone_send", "refused", user_id=user_id)
-        return _error("invalid_choice", "choice not offered", applied=False), "rejected"
-    if len(clarifies) == 1:
-        result = await answer_prompt(
-            prompts,
-            iid=iid,
-            user_id=user_id,
-            profile=profile,
-            request_id=clarifies[0].request_id,
-            body=message_as_clarify_body(clarifies[0], text),
-            resolver=resolver,
-            now=now,
-        )
-        status_name = "submitted" if result.status < 400 else "rejected"
-        return result, status_name
+    prompts.purge(now)
+    if prompts.open_clarifies(iid, user_id, profile):
+        return _error("stale", "answer through the prompt route", applied=False), "rejected"
 
     key = await asyncio.to_thread(session_key)
     if not isinstance(key, str) or not key:

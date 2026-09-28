@@ -851,3 +851,37 @@ def test_committed_bridge_files_contain_probe_set(src: Path, tmp_path: Path) -> 
         cwd=REPO_ROOT,
     )
     assert proc.returncode == 0, proc.stderr
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["/approve always", "/deny", "/stop", "/reset", "always", "yes"])
+async def test_phone_event_cannot_control_gateway_when_waiter_appears_during_delivery(
+    br, directory, monkeypatch, text
+) -> None:
+    _install_fake_event_module(monkeypatch, defer=True, control=True)
+    directory.chats[(USER, "alpha")] = CHAT
+    calls = []
+
+    async def deliver(event):
+        # A waiter arrived after the caller's preflight. The event itself must deny control.
+        calls.append(event)
+        assert event.allow_gateway_control is False
+        assert event.internal is False
+        assert event.defer_policy == "reject"
+        event._gateway_accepted = True
+
+    br._adapter.handle_message = deliver
+    assert await br.deliver_phone_message(user_id=USER, profile="alpha", text=text, message_id=CMID)
+    assert len(calls) == 1
+
+
+def test_prompt_timeout_hints_use_target_profile_a_b_a(br, world, monkeypatch) -> None:
+    approval = types.ModuleType("tools.approval_context")
+    clarify = types.ModuleType("tools.clarify_gateway")
+    approval._get_approval_timeout = lambda: {"alpha": 73, "beta": 241}[world.runner.scope]
+    clarify.get_clarify_timeout = lambda: {"alpha": 51, "beta": 0}[world.runner.scope]
+    monkeypatch.setitem(sys.modules, "tools.approval_context", approval)
+    monkeypatch.setitem(sys.modules, "tools.clarify_gateway", clarify)
+    for profile, expected in (("alpha", (73, 51)), ("beta", (241, 0)), ("alpha", (73, 51))):
+        assert (br.approval_timeout_s(profile), br.clarify_timeout_s(profile)) == expected
+        assert world.runner.scope is None

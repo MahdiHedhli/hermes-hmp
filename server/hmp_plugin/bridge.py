@@ -1186,18 +1186,20 @@ class HermesReadBridge:
 
         return bool(mark_awaiting_text(clarify_id))
 
-    def approval_timeout_s(self) -> int:
+    def approval_timeout_s(self, profile: str) -> int:
         from tools.approval_context import _get_approval_timeout
 
-        value = _get_approval_timeout()
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = _get_approval_timeout()
         if isinstance(value, bool) or not isinstance(value, int):
             return 300
         return value
 
-    def clarify_timeout_s(self) -> int:
+    def clarify_timeout_s(self, profile: str) -> int:
         from tools.clarify_gateway import get_clarify_timeout
 
-        value = get_clarify_timeout()
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = get_clarify_timeout()
         if isinstance(value, bool) or not isinstance(value, int):
             return 3600
         return value
@@ -1211,7 +1213,7 @@ class HermesReadBridge:
         self, *, user_id: str, profile: str, text: str, message_id: str
     ) -> bool:
         """AP-6. Builds the event off the loop (the Hermes import) and hands it to
-        `handle_message` on the loop. `allow_gateway_control` is true. Returns whether Hermes
+        `handle_message` on the loop. `allow_gateway_control` is false. Returns whether Hermes
         accepted the event."""
         event = await asyncio.to_thread(
             self._phone_event, user_id=user_id, profile=profile, text=text, message_id=message_id
@@ -1242,7 +1244,7 @@ class HermesReadBridge:
             kwargs["internal"] = False
         if "allow_gateway_control" not in names:
             raise BridgeError("MessageEvent lacks allow_gateway_control")
-        kwargs["allow_gateway_control"] = True
+        kwargs["allow_gateway_control"] = False
         if "defer_policy" in names:
             kwargs["defer_policy"] = "reject"
         return MessageEvent(**kwargs)

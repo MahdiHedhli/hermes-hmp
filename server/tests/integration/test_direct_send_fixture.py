@@ -320,6 +320,7 @@ def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSe
                 fake_model_module=fake_model_module, client=client,
                 no_bot_chat_key=no_bot_chat_key,
             )
+            direct_send_fixture.reference_device_id = ref["device"]["device_id"]
             try:
                 yield direct_send_fixture
             finally:

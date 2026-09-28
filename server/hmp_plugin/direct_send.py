@@ -69,6 +69,7 @@ import contextvars
 import hashlib
 import json
 import logging
+import re
 import socket
 from collections import OrderedDict
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
@@ -127,6 +128,15 @@ _INTERLEAVE_UNVERIFIED = "unverified"
 # this is generous headroom for DB/queueing latency, not a cross-host clock-skew allowance.
 _INTERLEAVE_TIMESTAMP_WINDOW_S = 120
 _APPROVAL_CHOICES = frozenset({"once", "session", "always", "deny"})
+SSE_MAX_FRAME_BYTES = 64 * 1024
+SSE_MAX_BUFFER_BYTES = 128 * 1024
+LOOPBACK_APPROVAL_TOTAL_S = 15.0
+LOOPBACK_APPROVAL_READ_S = 10.0
+LOOPBACK_STREAM_TOTAL_S = 24 * 60 * 60.0
+LOOPBACK_STREAM_READ_S = 90.0
+_SSE_BOUNDARY = re.compile(rb"\r?\n\r?\n")
+
+
 _STREAM_BIND: contextvars.ContextVar[StreamBind | None] = contextvars.ContextVar(
     "hmp_stream_bind", default=None
 )
@@ -158,6 +168,7 @@ class StreamBind:
 
 @dataclass
 class _StreamState:
+    run_id: str | None = None
     phase: str = "start"
     content: str | None = None
     session_id: str | None = None
@@ -172,6 +183,8 @@ def _format_host(host: str) -> str:
     """A URL-safe host component: an IPv6 literal must be bracketed (`[::1]`), an IPv4 literal is
     used as-is. Review round 2, BLOCKER #3: `bridge.py` only ever hands this function `127.0.0.1`
     or `::1` (never a name), but an unbracketed `::1` is not a valid HTTP authority at all."""
+    if host not in {"127.0.0.1", "::1"}:
+        raise ValueError("loopback literal required")
     return f"[{host}]" if ":" in host else host
 
 
@@ -252,6 +265,18 @@ def _apply_sse_frame(
     if not name:
         return
     state.saw_frame = True
+    incoming_run = payload.get("run_id") if payload is not None else None
+    if name == "run.started":
+        if state.phase != "start":
+            raise aiohttp.ClientPayloadError("duplicate run start")
+        if incoming_run is not None:
+            if not isinstance(incoming_run, str) or not incoming_run or len(incoming_run) > 256:
+                raise aiohttp.ClientPayloadError("invalid run id")
+            state.run_id = incoming_run
+    elif incoming_run is not None and incoming_run != state.run_id:
+        raise aiohttp.ClientPayloadError("mismatched run id")
+    if name == "approval.request" and (state.run_id is None or incoming_run != state.run_id):
+        raise aiohttp.ClientPayloadError("unbound approval")
     if name == "run.started":
         if state.phase == "start":
             state.phase = "after_start"
@@ -278,7 +303,8 @@ def _apply_sse_frame(
             command = raw_command if isinstance(raw_command, str) else ""
             raw_description = payload.get("description")
             description = raw_description if isinstance(raw_description, str) else ""
-            if isinstance(request_id, str) and isinstance(run_id, str):
+            if (isinstance(request_id, str) and 0 < len(request_id) <= 256
+                    and isinstance(run_id, str)):
                 bind.store.record_stream_approval(  # type: ignore[attr-defined]
                     iid=bind.iid,
                     user_id=bind.user_id,
@@ -309,6 +335,9 @@ def _apply_sse_frame(
             state.phase = "mailbox"
             bind.store.set_desktop_held(bind.iid, bind.user_id, bind.profile)  # type: ignore[attr-defined]
         return
+    if (name in {"run.completed", "run.failed", "run.cancelled", "error", "done"}
+            and bind is not None and state.run_id is not None):
+        bind.store.expire_run(state.run_id, bind.now())  # type: ignore[attr-defined]
     if name == "run.completed" and payload is not None:
         state.terminal = True
         session_id = payload.get("session_id")
@@ -352,13 +381,19 @@ async def consume_sse(
     buffer = b""
     try:
         async for chunk in chunks:
+            if len(buffer) + len(chunk) > SSE_MAX_BUFFER_BYTES:
+                raise aiohttp.ClientPayloadError("sse buffer limit")
             buffer += chunk
-            while b"\n\n" in buffer:
-                raw, buffer = buffer.split(b"\n\n", 1)
+            while match := _SSE_BOUNDARY.search(buffer):
+                raw, buffer = buffer[:match.start()], buffer[match.end():]
+                if len(raw) > SSE_MAX_FRAME_BYTES:
+                    raise aiohttp.ClientPayloadError("sse frame limit")
                 name, payload, comment = _parse_sse_frame(raw)
                 _apply_sse_frame(state, name, payload, comment=comment, bind=bind)
                 if name == "done":
                     return _stream_result(state)
+            if len(buffer) > SSE_MAX_FRAME_BYTES:
+                raise aiohttp.ClientPayloadError("sse frame limit")
         if buffer.strip():
             name, payload, comment = _parse_sse_frame(buffer)
             _apply_sse_frame(state, name, payload, comment=comment, bind=bind)
@@ -369,6 +404,8 @@ async def consume_sse(
     finally:
         if bind is not None:
             bind.store.clear_desktop_held(bind.iid, bind.user_id, bind.profile)  # type: ignore[attr-defined]
+            if state.run_id is not None:
+                bind.store.expire_run(state.run_id, bind.now())  # type: ignore[attr-defined]
 
 
 async def _iter_response_chunks(resp: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
@@ -404,23 +441,27 @@ async def aiohttp_loopback_call(
         f"/api/sessions/{session_segment}/chat/stream"
     )
     timeout = aiohttp.ClientTimeout(
-        total=None, connect=LOOPBACK_CONNECT_TIMEOUT_S, sock_connect=LOOPBACK_CONNECT_TIMEOUT_S
+        total=LOOPBACK_STREAM_TOTAL_S, sock_read=LOOPBACK_STREAM_READ_S,
+        connect=LOOPBACK_CONNECT_TIMEOUT_S, sock_connect=LOOPBACK_CONNECT_TIMEOUT_S
     )
     connector = aiohttp.TCPConnector(
         resolver=_PinnedLoopbackResolver(endpoint.host), use_dns_cache=False
     )
     async with (
-        aiohttp.ClientSession(trust_env=False, timeout=timeout, connector=connector) as session,
+        aiohttp.ClientSession(
+            trust_env=False, timeout=timeout, connector=connector, auto_decompress=False
+        ) as session,
         session.post(
             url,
             json={"message": text},
-            headers={"Authorization": f"Bearer {endpoint.api_key}"},
+            allow_redirects=False,
+            headers={"Authorization": f"Bearer {endpoint.api_key}", "Accept-Encoding": "identity"},
         ) as resp,
     ):
         if resp.status != 200:
             return LoopbackResult(status=resp.status, body=None, effective_session_id=None)
         content_type = resp.headers.get("Content-Type", "")
-        if "application/json" in content_type and "text/event-stream" not in content_type:
+        if content_type.split(";", 1)[0].strip().lower() != "text/event-stream":
             # Sync JSON is not this route. AP-1: no fallback, and the body is not logged.
             return LoopbackResult(status=502, body=None, effective_session_id=None)
         return await consume_sse(_iter_response_chunks(resp), bind=_STREAM_BIND.get())
@@ -443,23 +484,42 @@ async def aiohttp_approval_call(
         f"/v1/runs/{quote(run_id, safe='')}/approval"
     )
     timeout = aiohttp.ClientTimeout(
-        total=None, connect=LOOPBACK_CONNECT_TIMEOUT_S, sock_connect=LOOPBACK_CONNECT_TIMEOUT_S
+        total=LOOPBACK_APPROVAL_TOTAL_S, sock_read=LOOPBACK_APPROVAL_READ_S,
+        connect=LOOPBACK_CONNECT_TIMEOUT_S, sock_connect=LOOPBACK_CONNECT_TIMEOUT_S
     )
     connector = aiohttp.TCPConnector(
         resolver=_PinnedLoopbackResolver(endpoint.host), use_dns_cache=False
     )
     try:
         async with (
-            aiohttp.ClientSession(trust_env=False, timeout=timeout, connector=connector) as session,
+            aiohttp.ClientSession(
+                trust_env=False, timeout=timeout, connector=connector, auto_decompress=False
+            ) as session,
             session.post(
                 url,
                 json={"choice": choice, "request_id": request_id},
-                headers={"Authorization": f"Bearer {endpoint.api_key}"},
+                allow_redirects=False,
+                headers={
+                    "Authorization": f"Bearer {endpoint.api_key}", "Accept-Encoding": "identity"
+                },
             ) as resp,
         ):
             status = resp.status
+            if status == 409:
+                return "stale"
+            if 300 <= status < 400 or status == 401 or status >= 500:
+                return "unavailable"
             try:
-                payload = await resp.json(content_type=None)
+                raw = await resp.content.read(SSE_MAX_FRAME_BYTES + 1)
+                # read(n) can return short; read through EOF under the same absolute deadline.
+                while len(raw) <= SSE_MAX_FRAME_BYTES:
+                    part = await resp.content.read(SSE_MAX_FRAME_BYTES + 1 - len(raw))
+                    if not part:
+                        break
+                    raw += part
+                if len(raw) > SSE_MAX_FRAME_BYTES:
+                    return "unavailable"
+                payload = json.loads(raw)
             except (aiohttp.ContentTypeError, json.JSONDecodeError, ValueError):
                 payload = None
     except (TimeoutError, aiohttp.ClientError):
@@ -638,7 +698,7 @@ class DirectSendDeps:
     prompt_store: object | None = None
     # None skips the fingerprint check (unit fakes). Production sets the compat predicate.
     qualified: Callable[[], bool] | None = None
-    approval_timeout: Callable[[], int] | None = None
+    approval_timeout: Callable[[str], int] | None = None
 
 
 def _cmid_key(iid: str, user_id: str, profile: str, cmid: str) -> tuple[str, str, str, str]:
@@ -923,7 +983,7 @@ async def _execute(
                     timeout_s = 300
                     if deps.approval_timeout is not None:
                         try:
-                            raw_timeout = await asyncio.to_thread(deps.approval_timeout)
+                            raw_timeout = await asyncio.to_thread(deps.approval_timeout, profile)
                         except Exception as exc:
                             log_bridge_exception(exc)
                             raw_timeout = 300
