@@ -11,10 +11,12 @@ HMP is a mobile gateway plugin for Hermes. These requests come from implementing
 | Pairing access | A platform plugin currently synthesizes an inert inbound message to create a standard pairing request. | A documented plugin API to request access for a platform user. |
 | Message origin | Session rows do not identify the client surface that submitted a turn. | An optional, non-model-visible client/surface field stored with user rows. |
 | Updates | A mobile client discovers new rows by polling. | A session change feed or bounded long poll. |
+| Bot Chat approvals | The inspected session-chat route does not register an approval notifier or emit an answerable pending approval event. The run route has a different lifecycle and is not an equivalent replacement for a guarded Bot Chat send. | Register a per-run notifier on session chat, emit stable request IDs and offered choices, and provide an authenticated exact-ID answer route with Hermes-owned expiry and termination semantics. |
+| Session management | HMP has no verified, stable remote contract for the session controls requested for mobile. | Publish scoped session list and management operations, including pin, rename, copy ID, branch, export, move to project, open in terminal, archive, and delete, with the same authorization and active-session safeguards as Desktop. |
 
 ## Approval and clarify events
 
-Desktop-owned Bot Chat turns can surface prompts only through Desktop's process-local channel. A remote client cannot answer those same prompts through session chat. We propose durable, session-scoped pending prompt identifiers, event delivery for approval and clarify requests, and authenticated response routes that enforce the same authorization and expiry rules as Hermes itself. This is an upstream design request. HMP's proposed interim implementation is under security review and is not included in the initial public migration.
+Desktop-owned Bot Chat turns can surface prompts only through Desktop's process-local channel. A remote client cannot answer those same prompts through session chat. On the inspected Hermes build, session chat also lacks the notifier and approval events needed for API-owned Bot Chat turns. We propose durable, session-scoped pending prompt identifiers, event delivery for approval and clarify requests, and authenticated response routes that enforce the same authorization and expiry rules as Hermes itself. This is an upstream design request. HMP's proposed Phone chat path is under security review and is not in a released version.
 
 ## Additional API parity requests
 

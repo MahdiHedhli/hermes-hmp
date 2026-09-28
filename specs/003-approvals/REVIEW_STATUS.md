@@ -4,6 +4,22 @@
 Bot Chat approval qualification is still blocked by a missing Hermes session-stream approval
 lifecycle. This is not a complete F3 qualification.** This section supersedes earlier handoffs.
 
+## Controller fixture run after round 5
+
+The round-5 changes are committed at `ac469d3`. The controller ran the real gateway/PTY
+matrix against both isolated extracted builds outside the coding sandbox. Boundary and
+behavior probes passed on each build, but **neither build qualified** and no final runtime
+qualification receipt was produced.
+
+| Build | Integration result | Release implication |
+| --- | --- | --- |
+| Stock base | 15 passed, 1 failed; 32 deselected | T7 Bot Chat approval finished without a pending prompt, confirming the upstream session-chat gap. |
+| Experimental | 13 passed, 3 failed; 32 deselected | T7 has the same gap. Both T8 Phone chat tests timed out waiting for an approval card; the cause is still under investigation. |
+
+The observed experimental Phone chat failure prevents presenting that path as qualified even
+independently of T7. No fixture fingerprint was added to a runtime allowlist. The owner's live
+Hermes and plugin were not changed.
+
 ## Round-5 findings and changes
 
 1. **Polling concealed failures and starved answers.** F3 reused the direct-send test helper's
@@ -94,12 +110,9 @@ integration or receipt use. Run it outside this sandbox; T8 changes require that
 and unpatched T7 is expected to prevent qualification. Once Hermes is repaired, requalify the
 new source bytes rather than copying the old fingerprints into the runtime list.
 
-The initial `git add` succeeded, but the final staging/commit attempt was denied while
-creating `.git/index.lock`. No round-5 commit was created; HEAD remains `e1ddb28`.
-The eight changed repo files are left in the working tree (initial edits staged, this final
-status update unstaged). The controller must stage the final contents before committing.
-Scratch scripts/logs and updated `run.sh` remain under `/private/tmp/hmp-f3-r4/`.
-No push or attribution trailer was used.
+The coding sandbox could not create `.git/index.lock`; the controller later committed the
+round-5 changes at `ac469d3`. The fixture run above was performed after that commit. No push
+or attribution trailer was used for the round-5 commit.
 
 ---
 
