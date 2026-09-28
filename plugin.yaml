@@ -1,0 +1,9 @@
+# Root manifest makes `hermes plugins install owner/repo` work without a subdirectory.
+name: hmp
+label: Hermes Mobile (HMP)
+kind: platform
+version: 1.0.0-f1
+description: Hermes Mobile Protocol v1 platform adapter and operator CLI.
+author: Hermes Bot Mobile
+python_dependencies:
+  - "qrcode>=7.4.2,<9"

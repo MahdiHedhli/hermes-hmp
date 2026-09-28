@@ -1,0 +1,98 @@
+[project]
+name = "hmp-plugin"
+version = "0.1.0"
+description = "Hermes Mobile Protocol server plugin: paired mobile reads and guarded chat sends."
+readme = "README.md"
+requires-python = ">=3.11,<3.15"
+license = "MIT"
+dependencies = [
+    "aiohttp",
+    "cryptography",
+    # T032: `hermes hmp pair offer` renders the offer only as a terminal QR code (PR1-2, PR1-3).
+    # Pure Python (reviews/dependencies.md). Keep in step with `python_dependencies` in
+    # hmp_plugin/plugin.yaml, which is what Hermes PM actually installs.
+    "qrcode>=7.4.2,<9",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "pytest-asyncio",
+    "PyYAML>=6,<7",
+    "jsonschema>=4,<5",
+    # Test-only: tests/unit/test_tls_trust_injection.py reproduces a host's process-wide
+    # client-trust injection (`truststore.inject_into_ssl()`, which some Hermes builds call at
+    # startup). Pinned to the version those builds pin. The plugin itself never imports it.
+    "truststore==0.10.4",
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["hmp_plugin*"]
+
+# T024: the manifest and the two build lists ship inside the wheel (the compat gate and the
+# plugin loader read them next to the modules).
+[tool.setuptools.package-data]
+hmp_plugin = [
+    "plugin.yaml",
+    "read_compat_builds.json",
+    "write_supported_builds.json",
+    "direct_send_supported_builds.json",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+# T002: strict ruff config for the security-critical server plugin (constitution IV, VIII).
+line-length = 100
+target-version = "py311"
+extend-exclude = ["build", "dist", ".venv"]
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "F",    # pyflakes
+    "I",    # import sorting
+    "UP",   # pyupgrade: modern Python 3.11+ idioms
+    "B",    # flake8-bugbear: likely bugs and design smells
+    "C4",   # flake8-comprehensions
+    "SIM",  # flake8-simplify
+    "N",    # pep8-naming
+    "ASYNC",# flake8-async: correctness under aiohttp's event loop
+    "S",    # flake8-bandit: security-relevant patterns (SECURITY.md; constitution IV)
+    "RUF",  # ruff-native rules
+]
+ignore = [
+    "S101", # `assert` is normal and expected in pytest test files
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Root-relative globs: the CI runner (tools/ci/check_all.sh) invokes ruff once from the repo
+# root as `ruff check --config server/pyproject.toml server tools/ci tools/hermes_builds`, so
+# per-file-ignore paths are matched relative to the repo root, not to this file's own directory.
+#
+# Tests may assert freely and construct fixtures with predictable "secrets"/ports.
+"**/tests/**" = ["S101", "S105", "S106", "S311", "S603"]  # S603: tests run fixed local commands
+"**/__init__.py" = ["N999"]  # Git repository slug contains a hyphen; Python package names do not.
+# tools/ci and tools/hermes_builds scripts legitimately shell out to git/tar/uv/pytest by a
+# fixed, hardcoded name (never untrusted input) — that is their entire job. S607's "partial
+# executable path" warning is the same non-issue for the same reason.
+"tools/ci/*.py" = ["S603", "S607"]
+"tools/hermes_builds/*.py" = ["S603", "S607"]
+# tools/fixtures (T060/T061/T062) shells out to a fixed, extracted build's own `hermes`/`uv`/venv
+# python by a resolved path — same non-issue as above.
+"tools/fixtures/*.py" = ["S603", "S607"]
+# tools/compat (T063) shells out to `git`, `sys.executable`/`uv run` and this repo's own fixed
+# scripts (selfcheck.py, the pytest read suite, a generated SC-007 check script) — same non-issue.
+"tools/compat/*.py" = ["S603", "S607"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["hmp_plugin"]
+
+[tool.ruff.format]
+line-ending = "lf"

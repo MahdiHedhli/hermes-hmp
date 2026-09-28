@@ -1,0 +1,37 @@
+# T004 (specs/001-connect-and-browse, research R10): the Hermes builds this repo's compat work
+# extracts from the repo-level `_refs` clones. `clone` is a bare directory name resolved by
+# extract.py under a `_refs/` directory it locates by walking up from its own location (the
+# clones live one level above the git repository root, never inside it and never referenced as a
+# git submodule) — never a path baked in relative to this file, so the same builds.yaml works
+# from the main repo checkout and from any worktree.
+#
+# `optional: true` entries are skipped, not an error, if the ref does not resolve locally
+# (extract.py never fetches to make one resolve).
+#
+# `git_install: true` marks a build qualified for a *git-checkout* Hermes install at exactly
+# `ref` (a full 40-hex commit), rather than for a tarball/extracted install. The extracted tree
+# has no `.git`, so run_matrix.py records `git_sha` = the resolved commit for such a build
+# (CS-19: a git install matches only an entry carrying BOTH its git SHA and its fingerprint).
+# That is only valid because a clean checkout of a commit has the same read-bridge files as
+# `git archive` of it; the operator verifies the live install is clean before relying on it.
+format: 1
+builds:
+  - label: stock-base
+    clone: hermes-agent
+    ref: 04fa849e70
+    optional: false
+  - label: experimental
+    clone: hermes-agent-r0e
+    ref: 7e8c8f07a1
+    optional: false
+  - label: upstream
+    clone: hermes-agent
+    ref: v2026.9.21
+    optional: true
+  # The owner's local git install (read-only `git archive` source; the clone directory is a
+  # local, never-committed pointer to that install and is absent on every other machine).
+  - label: owner-local
+    clone: hermes-agent
+    ref: 8afaab3703e336d72a72c812dd2dd249f04f166a
+    optional: true
+    git_install: true

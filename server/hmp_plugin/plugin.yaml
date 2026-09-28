@@ -1,0 +1,21 @@
+# Hermes Mobile Protocol (HMP) v1 server plugin manifest.
+# Closed surface (HMP v1 PR-2; FR-054): one platform adapter + one operator CLI, registered in
+# __init__.register. No tools, hooks or capabilities are declared here, and none may be added
+# without a contract change (tools/ci/check_plugin_surface.py enforces this).
+name: hmp
+label: Hermes Mobile (HMP)
+kind: platform
+version: 1.0.0-f1
+description: >
+  Hermes Mobile Protocol v1 platform adapter and operator CLI for Hermes Bot Mobile.
+  F1 scope is read-only: readiness, pairing, the bot roster, and the default conversation's
+  snapshot and history. It registers no conversation-write route.
+author: Hermes Bot Mobile
+# Hermes PM installs Python dependencies only from a declaration next to this manifest: a subdir
+# install (`hermes plugins install <repo>#server/hmp_plugin`) copies this folder alone, so
+# `server/pyproject.toml` does not travel. `aiohttp` and `cryptography` are Hermes core
+# dependencies. `qrcode` is the operator CLI's terminal QR renderer (T032; cli.py only). Its floor
+# is 7.4.2, the version Hermes pins for its core extras: PM locks every plugin against the union of
+# core extras, so a higher floor cannot be admitted (reviews/dependencies.md, `qrcode`).
+python_dependencies:
+  - "qrcode>=7.4.2,<9"
