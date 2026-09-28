@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shlex
 import uuid
 from pathlib import Path
 from typing import Any
@@ -30,7 +31,12 @@ DirectSendFixture = _f2.DirectSendFixture
 DEFAULT_PROFILE = _f2.DEFAULT_PROFILE
 BOT_CHAT_SESSION_ID = _f2.BOT_CHAT_SESSION_ID
 send = _f2.send
-wait_for = _f2.wait_for
+
+
+# Match the fastest foreground phone cadence; never hide HTTP errors as no prompt.
+def wait_for(predicate, *, timeout: float):
+    return _f2.wait_for(predicate, timeout=timeout, interval=3.0)
+
 
 pytestmark = _f2.pytestmark
 
@@ -54,19 +60,28 @@ def _phone(client: Client, *, cmid: str, text: str, profile: str = DEFAULT_PROFI
     return client.post(f"/hmp/v1/bots/{profile}/phone/messages", payload)
 
 
+def _probe_command(gateway: DirectSendFixture) -> tuple[str, Path]:
+    # Even a mistakenly auto-approved command can touch only this test's own sentinel.
+    target = gateway.paths.out_dir / "approval-probe"
+    target.mkdir()
+    (target / "sentinel").write_text("requires explicit consent", encoding="utf-8")
+    return f"rm -rf {shlex.quote(str(target))}", target
+
+
 def test_t7_local_run_approval_unblocks_and_clarify_and_execute_code_do_not_card(
     gateway: DirectSendFixture,
 ) -> None:
     """No Desktop owner: a flagged terminal command cards, and answering it is what unblocks.
     A clarify tool call and an execute_code tool call on this stream do not become cards."""
     model = gateway.fake_model_module
+    command, target = _probe_command(gateway)
     gateway.fake_model.push(
         model.ToolCall(
             name="clarify",
             args={"questions": [{"question": "Which?", "choices": ["A", "B"]}]},
         ),
         model.ToolCall(name="execute_code", args={"code": "print(1)"}),
-        model.ToolCall(name="terminal", args={"command": "rm -rf /tmp/hmp-f3-approval-probe"}),
+        model.ToolCall(name="terminal", args={"command": command}),
         model.Text("unblocked"),
     )
     client = gateway.client
@@ -75,12 +90,15 @@ def test_t7_local_run_approval_unblocks_and_clarify_and_execute_code_do_not_card
     status, body = send(
         client, DEFAULT_PROFILE, cmid=str(uuid.uuid4()), expected_head=head, text="run the checks"
     )
-    assert status in (200, 202), body
+    assert status == 202, (
+        "Session-chat stream completed before a human answered. This Hermes route must "
+        "register a notifier, emit approval.request and keep the run waiting; "
+        f"/v1/runs approval support alone is insufficient: {status}, {body}"
+    )
 
     def card():
         code, payload = _prompts(client)
-        if code != 200:
-            return None
+        assert code == 200, payload
         approvals = [
             item
             for item in payload.get("prompts", [])
@@ -90,6 +108,7 @@ def test_t7_local_run_approval_unblocks_and_clarify_and_execute_code_do_not_card
 
     prompt = wait_for(card, timeout=30)
     assert prompt, _prompts(client)
+    assert target.exists(), "command ran without an answer"
     assert prompt["request_id"]
     assert "clarify" not in {item.get("kind") for item in _prompts(client)[1].get("prompts", [])}
     assert set(prompt["choices"]) <= {"once", "session", "always", "deny"}
@@ -103,9 +122,11 @@ def test_t7_local_run_approval_unblocks_and_clarify_and_execute_code_do_not_card
 
     def settled():
         code, payload = _prompts(client)
-        kinds = [item.get("kind") for item in payload.get("prompts", [])] if code == 200 else []
+        assert code == 200, payload
+        kinds = [item.get("kind") for item in payload.get("prompts", [])]
         return "approval" not in kinds
 
+    assert wait_for(lambda: not target.exists(), timeout=30), "approval did not unblock command"
     assert wait_for(settled, timeout=30)
 
 
@@ -127,8 +148,7 @@ def test_t7_desktop_held_has_no_phone_card(gateway: DirectSendFixture) -> None:
 
     def marker():
         code, payload = _prompts(client)
-        if code != 200:
-            return None
+        assert code == 200, payload
         bot_cards = [
             item
             for item in payload.get("prompts", [])
@@ -159,13 +179,18 @@ def test_t7_replay_does_not_open_a_second_stream(gateway: DirectSendFixture) -> 
     assert len(gateway.fake_model.main_requests()) == before + 1
 
 
-def test_t8_phone_approval_clarify_and_foreign_bearer(gateway: DirectSendFixture) -> None:
+def test_t8_phone_approval_clarify_and_unknown_id(gateway: DirectSendFixture) -> None:
     """Phone chat is an `hmp` platform turn. The card's request_id is what unblocks it.
-    A second device's bearer is 404. A session key in the body is ignored."""
+    An unknown ID is 404. A session key in the body is ignored."""
     model = gateway.fake_model_module
+    command, target = _probe_command(gateway)
     gateway.fake_model.push(
-        model.ToolCall(name="terminal", args={"command": "rm -rf /tmp/hmp-f3-phone-probe"}),
-        model.Text("phone turn done"),
+        model.ToolCall(name="terminal", args={"command": command}),
+        model.ToolCall(
+            name="clarify",
+            args={"questions": [{"question": "Which path?", "choices": ["Left", "Right"]}]},
+        ),
+        model.Text("clarify done"),
     )
     client = gateway.client
     cmid = str(uuid.uuid4())
@@ -175,8 +200,7 @@ def test_t8_phone_approval_clarify_and_foreign_bearer(gateway: DirectSendFixture
 
     def approval():
         code, payload = _prompts(client)
-        if code != 200:
-            return None
+        assert code == 200, payload
         cards = [
             item
             for item in payload.get("prompts", [])
@@ -190,20 +214,11 @@ def test_t8_phone_approval_clarify_and_foreign_bearer(gateway: DirectSendFixture
     status, body = _answer(client, prompt["request_id"], {"choice": "deny", "session_key": "nope"})
     assert status == 200 and body["applied"] is True
 
-    gateway.fake_model.push(
-        model.ToolCall(
-            name="clarify",
-            args={"questions": [{"question": "Which path?", "choices": ["Left", "Right"]}]},
-        ),
-        model.Text("clarify done"),
-    )
-    status, body = _phone(client, cmid=str(uuid.uuid4()), text="ask me")
-    assert status == 202, body
+    assert target.exists(), "denied command ran"
 
     def clarify():
         code, payload = _prompts(client)
-        if code != 200:
-            return None
+        assert code == 200, payload
         cards = [item for item in payload.get("prompts", []) if item.get("kind") == "clarify"]
         return cards[0] if cards else None
 
@@ -213,12 +228,13 @@ def test_t8_phone_approval_clarify_and_foreign_bearer(gateway: DirectSendFixture
     assert other[0] == 200
     assert other[1]["status"] == "awaiting_text"
     assert other[1]["applied"] is False
-    # The composer text is the answer, not a new turn.
+    # Phone input has no control authority, including free text after Other.
     status, body = _phone(client, cmid=str(uuid.uuid4()), text="neither of those")
+    assert status == 409 and body["applied"] is False
+    status, body = _answer(client, card["request_id"], {"text": "neither of those"})
     assert status == 200 and body["applied"] is True
 
-    # A bearer that is not this user. Pairing a second device is the fixture's own flow; until
-    # that device exists, an unknown id is the same 404 the foreign user would get.
+    # Unknown-ID behavior; foreign-user/device isolation is covered by the route unit tests.
     status, body = _answer(client, "not-a-stored-request-id", {"choice": "once"})
     assert status == 404 and body["error"]["code"] == "not_found"
 
@@ -228,8 +244,9 @@ def test_t8_restart_mid_wait_does_not_apply(gateway: DirectSendFixture) -> None:
     must not apply a choice. 404 is the unknown id; 409 stale is the in-process 'nothing
     pending' outcome if a row were still held. Neither has applied true."""
     model = gateway.fake_model_module
+    command, target = _probe_command(gateway)
     gateway.fake_model.push(
-        model.ToolCall(name="terminal", args={"command": "rm -rf /tmp/hmp-f3-restart-probe"}),
+        model.ToolCall(name="terminal", args={"command": command}),
     )
     client = gateway.client
     status, body = _phone(client, cmid=str(uuid.uuid4()), text="hold for restart")
@@ -237,13 +254,13 @@ def test_t8_restart_mid_wait_does_not_apply(gateway: DirectSendFixture) -> None:
 
     def approval():
         code, payload = _prompts(client)
-        if code != 200:
-            return None
+        assert code == 200, payload
         cards = [item for item in payload.get("prompts", []) if item.get("kind") == "approval"]
         return cards[0] if cards else None
 
     prompt = wait_for(approval, timeout=30)
     assert prompt, _prompts(client)
+    assert target.exists(), "command ran without an answer"
     request_id = prompt["request_id"]
     gateway.restart_gateway()
     status, body = _answer(gateway.client, request_id, {"choice": "always"})

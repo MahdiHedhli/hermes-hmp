@@ -180,7 +180,18 @@ def write_direct_send_config(
         f"        port: {api_server_port}\n",
         f'        key: "{api_key}"\n',
     ]
+    # Plugin platforms have no implicit hermes-hmp toolset. Without this explicit
+    # selection Phone turns send no tools, and the fake provider routes them as aux.
+    # Manual mode makes human approval deterministic; smart uses an auxiliary LLM.
     model_block = [
+        "platform_toolsets:\n",
+        "  hmp: [terminal, clarify]\n",
+        "approvals:\n",
+        "  mode: manual\n",
+        "  timeout: 120\n",
+        "  unattended_mode: deny\n",
+        "terminal:\n",
+        f"  cwd: {json.dumps(str(paths.out_dir))}\n",
         "model:\n",
         "  provider: custom\n",
         f"  base_url: {model_base_url}\n",

@@ -79,21 +79,72 @@ async def test_flag_off_even_with_full_guarantees(tmp_path, monkeypatch) -> None
     env.store.close()
 
 
-@pytest.mark.asyncio
-async def test_prompt_rate_limit_shared_across_routes(tmp_path, monkeypatch) -> None:
+def _rate_env(tmp_path, monkeypatch):
     env, who, request = _request_env(tmp_path, monkeypatch)
-    env.ctx.owner_device_ids = lambda: frozenset({who.device_id})
-    for _ in range(60):
-        await server.handle_prompts_list(request)
-    for handler in (
-        server.handle_prompts_list,
-        server.handle_prompt_answer,
-        server.handle_phone_send,
-    ):
+    env.ctx.owner_device_ids = lambda: frozenset({"dev-owner", "dev-second"})
+
+    async def body(request):
+        return {"client_message_id": "c", "text": "hello"}
+
+    async def phone(**kwargs):
+        return prompts.HttpResult(202, {"state": "submitted"})
+
+    monkeypatch.setattr(server, "read_json_body", body)
+    monkeypatch.setattr(prompts, "handle_phone_send", phone)
+    return env, who, request
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("cadence", [3, 15])
+async def test_phone_polling_and_answers_across_windows(tmp_path, monkeypatch, cadence):
+    env, _, request = _rate_env(tmp_path, monkeypatch)
+    try:
+        # Ten minutes, starting just before a window boundary. One answer, send and
+        # immediate refresh per poll deliberately exceed ordinary human activity.
+        start = (env.clock.now // 60) * 60 + 59
+        for elapsed in range(0, 600, cadence):
+            env.clock.now = start + elapsed
+            assert (await server.handle_prompts_list(request)).status == 200
+            assert (await server.handle_prompt_answer(request)).status == 404  # unknown ID
+            assert (await server.handle_phone_send(request)).status == 202
+            assert (await server.handle_prompts_list(request)).status == 200
+    finally:
+        env.store.close()
+
+
+@pytest.mark.asyncio
+async def test_prompt_buckets_are_bounded_separate_and_per_device(tmp_path, monkeypatch):
+    env, who, request = _rate_env(tmp_path, monkeypatch)
+    try:
+        for _ in range(60):
+            assert (await server.handle_prompts_list(request)).status == 200
         with pytest.raises(HmpError) as caught:
-            await handler(request)
+            await server.handle_prompts_list(request)
         assert caught.value.code.value == "rate_limited"
-    env.store.close()
+        # Poll exhaustion must leave the complete answer/send budget available.
+        for _ in range(30):
+            assert (await server.handle_prompt_answer(request)).status == 404
+            assert (await server.handle_phone_send(request)).status == 202
+        # A new profile/request ID is not a new budget. Rejection happens before
+        # authorization, body parsing or delivery, for every route.
+        request = make_mocked_request("POST", "/", match_info={"p": "other", "request_id": "new"})
+        for handler in (server.handle_prompts_list, server.handle_prompt_answer,
+                        server.handle_phone_send):
+            with pytest.raises(HmpError) as caught:
+                await handler(request)
+            assert caught.value.code.value == "rate_limited"
+        # A second owner device of the SAME user has independent bounded budgets.
+        who.device_id = "dev-second"
+        request = make_mocked_request("GET", "/", match_info={"p": "b", "request_id": REQ})
+        assert (await server.handle_prompts_list(request)).status == 200
+        assert (await server.handle_prompt_answer(request)).status == 404
+        assert (await server.handle_phone_send(request)).status == 202
+        who.device_id = "dev-owner"
+        env.clock.now += 60
+        assert (await server.handle_prompts_list(request)).status == 200
+        assert (await server.handle_prompt_answer(request)).status == 404
+    finally:
+        env.store.close()
 
 
 @pytest.mark.asyncio

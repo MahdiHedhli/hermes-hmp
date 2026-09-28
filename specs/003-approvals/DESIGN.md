@@ -21,7 +21,17 @@ the live adapter config on each request; loading a config-file edit into that ob
 Hermes's normal reload/restart behavior.
 
 All three F3 routes require, in order: authenticated device, owner-device membership, the
-shared 60 requests/minute/device F3 rate limit, per-bot authorization, and the direct-send gate.
+F3 per-device rate limit, per-bot authorization, and the direct-send gate.
+Prompt reads have a 60/minute/device bucket; answers and Phone sends share a separate
+60/minute/device action bucket. Both span all profiles and request IDs and reject excess
+requests with `429 rate_limited` before authorization/body parsing/resolution/delivery.
+The foreground phone cadence is 3–15 seconds (4–20 periodic reads/minute). Even one immediate
+refresh after every answer at the fastest cadence totals 40 reads/minute, leaving 20 for
+opening/resuming the view and retries. Answers never compete with those reads; an answer and
+a Phone send every three seconds total 40 actions/minute. This covers sustained client cadence
+across fixed-window boundaries without granting unbounded reads or mutations. Malicious or
+broken clients still hit their own device's limit. Tests use three-second prompt polling and
+fail immediately on HTTP errors instead of disguising 429 as an empty prompt list.
 A non-owner receives `404 not_found`, including a paired, authorized device sharing the owner's
 `user_id`. `direct_send.enabled` must be explicitly true even if the base write gate is OPEN.
 The dependency fingerprint/probe and loopback endpoint checks remain in force. No gate failure
@@ -51,6 +61,15 @@ existing accepted/queued/submitted vocabulary. A stream failure finalizes the cm
 without automatic retry. A terminal/disconnected stream retires its open prompt observations.
 Desktop mailbox delivery emits no approval request in the pinned build; its `desktop_held`
 marker lasts only while the stream is open. It is not proof an approval is pending on Desktop.
+
+**Round 5 source correction:** the extracted stock-base (`04fa849e`) and experimental
+(`7e8c8f07`) session-chat routes do **not** register a gateway approval notifier, populate
+`_run_approval_sessions`, or emit `approval.request`. Those behaviors exist only in
+`/v1/runs`. A flagged terminal call returns nonblocking `pending_approval`, then the turn
+can end without a card. The consumer above describes the required contract, not a capability
+these builds provide. T7 remains a mandatory positive qualification test; neither build may
+qualify until its actual session-chat route provides the complete approval lifecycle. A fixture
+config change, synthetic card, alternate route, or accepting an empty prompt list is not a fix.
 
 The session-chat agent has no clarify callback. Its `execute_code` path is unattended and
 never cards; the normal dangerous-terminal-command path can emit approvals. These existing
@@ -156,7 +175,7 @@ into this public repository. Test names below are in `server/tests/unit/`.
 | A1 BLOCKER: unbounded observations/corrupt history | TTL/global cap/size limit; durable discard; no snapshot injection | `test_observations_have_global_cap_ttl_and_no_snapshot_injection` |
 | A3, B4 SHOULD-FIX: unbounded loopback HTTP | Total/read deadlines, no redirects, bounded response, exact content type | `test_clients_set_finite_timeouts_and_disable_redirects`; `test_http_response_policy_without_network`; `test_http_redirects_and_content_type`; `test_approval_response_body_is_bounded` |
 | A4, B4 SHOULD-FIX: SSE framing/resources/binding | CRLF-safe bounded parser; run-ID validation | `test_sse_crlf_split_and_mismatched_run`; `test_sse_oversized_frame_rejected` |
-| B5 SHOULD-FIX, A6 NIT: spam/unknown locks/leaks | Shared per-device limiter, no unknown allocation, pinned lock cleanup | `test_prompt_rate_limit_shared_across_routes`; `test_unknown_ids_allocate_nothing`; `test_purge_cannot_replace_a_lock_with_waiting_answerers` |
+| B5 SHOULD-FIX, A6 NIT: spam/unknown locks/leaks | Separate bounded read/action buckets per device, no unknown allocation, pinned lock cleanup | `test_prompt_buckets_are_bounded_separate_and_per_device`; `test_phone_polling_and_answers_across_windows`; `test_unknown_ids_allocate_nothing`; `test_purge_cannot_replace_a_lock_with_waiting_answerers` |
 | A5 SHOULD-FIX: plaintext fallback deadlock | ID-bound deny-only recovery; no text approval | `test_ambiguous_binding_has_deny_only_recovery` |
 | B6 SHOULD-FIX: chosen answer in logs | `outcome=resolved` only | `test_logs_do_not_contain_the_command` |
 

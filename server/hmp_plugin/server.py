@@ -63,6 +63,8 @@ from .contract import (
     MAX_HEADER_BYTES,
     PATH_PREFIX,
     RATE_AUTHORIZE_PER_MIN_PER_DEVICE_ID,
+    RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE,
+    RATE_PROMPT_READ_PER_MIN_PER_DEVICE,
     RATE_READ_PER_MIN_PER_DEVICE_ID,
     RATE_SESSIONS_LIST_PER_MIN_PER_DEVICE_ID,
     READ_COMPAT_EXEMPT_PATH,
@@ -736,7 +738,9 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
     profile = request.match_info["p"]
     if not ctx.is_owner_device(who.device_id):
         raise HmpError(ErrorCode.NOT_FOUND)
-    ctx.limiter.check("prompts", who.device_id, 60, ctx.now())
+    ctx.limiter.check(
+        "prompt_reads", who.device_id, RATE_PROMPT_READ_PER_MIN_PER_DEVICE, ctx.now()
+    )
     await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
     await _require_approvals_gate(ctx, profile)
     store = ctx.prompt_store
@@ -764,7 +768,9 @@ async def handle_prompt_answer(request: web.Request) -> web.Response:
     request_id = request.match_info["request_id"]
     if not ctx.is_owner_device(who.device_id):
         raise HmpError(ErrorCode.NOT_FOUND)
-    ctx.limiter.check("prompts", who.device_id, 60, ctx.now())
+    ctx.limiter.check(
+        "prompt_actions", who.device_id, RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE, ctx.now()
+    )
     await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
     endpoint = await _require_approvals_gate(ctx, profile)
     body = await read_json_body(request)
@@ -807,7 +813,9 @@ async def handle_phone_send(request: web.Request) -> web.Response:
     profile = request.match_info["p"]
     if not ctx.is_owner_device(who.device_id):
         raise HmpError(ErrorCode.NOT_FOUND)
-    ctx.limiter.check("prompts", who.device_id, 60, ctx.now())
+    ctx.limiter.check(
+        "prompt_actions", who.device_id, RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE, ctx.now()
+    )
     await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
     body = await read_json_body(request)
     cmid, text = _parse_phone_body(body)

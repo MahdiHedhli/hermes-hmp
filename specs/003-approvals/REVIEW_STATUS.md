@@ -1,5 +1,108 @@
 # Approvals review status
 
+**Round 5: HMP rate limiting and fixture defects fixed on `feat/approvals`, base `e1ddb28`.
+Bot Chat approval qualification is still blocked by a missing Hermes session-stream approval
+lifecycle. This is not a complete F3 qualification.** This section supersedes earlier handoffs.
+
+## Round-5 findings and changes
+
+1. **Polling concealed failures and starved answers.** F3 reused the direct-send test helper's
+   250 ms polling (up to 240/minute) against one 60/minute/device bucket shared by reads,
+   answers and Phone sends. Predicates swallowed 429 as “not ready”; the settlement predicate
+   even treated an HTTP error as no remaining approval. F3 waits now poll every **3 seconds**,
+   matching the fastest phone cadence, and assert HTTP 200 immediately.
+   Production now has **60 reads/minute/device** and a separate **60 actions/minute/device**
+   shared by answers and Phone sends. Both aggregate across profiles/IDs, retain owner checks,
+   and reject before downstream work. At 3 seconds, 20 periodic reads plus 20 answer refreshes
+   fit with 20 reads of headroom; 20 answers plus 20 sends fit the independent action budget.
+   The 15-second cadence is less demanding. No unlimited route or fail-open fallback was added.
+
+2. **Phone fixture turns had no tools.** The fixture omitted `platform_toolsets.hmp`.
+   Hermes selects the nonexistent default `hermes-hmp`, which expands to no tools. The fake
+   provider classifies requests without tools as auxiliary and returns its default summary,
+   never consuming the queued terminal call. Controller logs confirm one text-only model call
+   and zero tool turns. The fixture now explicitly selects `[terminal, clarify]` in the root
+   and every named profile. It sets `approvals.mode: manual`, a 120-second timeout, and
+   `unattended_mode: deny`; the default smart guardian's fake auxiliary response is no longer
+   part of this human-approval test. Real Hermes config/toolset resolution verified root→A→B→A
+   on both extracted builds. These settings apply only to scratch fixtures.
+
+3. **Bot Chat's missing prompt is a real upstream capability gap.** On stock-base
+   `04fa849e70165336ba73e6750257a1ebd7ff998d` and experimental
+   `7e8c8f07a11a781b82ff2ad249196e2dc3f4bbb3`,
+   `gateway/platforms/api_server.py::_handle_session_chat_stream` calls `_run_agent`, which
+   registers no approval notifier and never populates `_run_approval_sessions`.
+   `tools/approval.py::_human_decision` therefore returns nonblocking `pending_approval`;
+   the agent ends its turn without an `approval.request` event. The required notifier/context
+   registration exists in `gateway/platforms/api_server_runs.py::_run_agent_sync`, used by
+   `/v1/runs`, **not the session-chat route HMP uses**. Manual fixture config cannot repair this.
+   A socket-free diagnostic executed the actual session-stream handler, executor and approval
+   guard (mocking model/transport/storage boundaries, never executing a command). Both builds
+   emitted `run.started`, `message.started`, `assistant.completed`, `run.completed`, `done`;
+   approval was false, guard status was `pending_approval`, and the run approval map was empty.
+   This rules out an HMP stream-consumer race. T7 still requires a real prompt and a human answer;
+   it now fails early with this explanation if the turn finishes before an answer.
+
+4. **Later fixture assumptions were stale.** The Phone test now scripts approval→clarify in
+   one turn, avoiding a second-send race while the previous agent is finishing. After “Other”,
+   composer text must return `409 stale`; only the request-ID answer route applies the text.
+   The unknown-ID test is named honestly (it did not pair a foreign bearer). Existing device/user
+   isolation regressions remain. Approval commands target only a per-test sentinel under the
+   fixture directory; assertions prove it survives before consent/after deny and disappears only
+   after an explicit Bot Chat approval. Terminal cwd is also confined to that fixture directory.
+
+## Round-5 validation
+
+- Socket-free CI set: **1097 passed, 2 skipped, 148 deselected**, one warning.
+  The existing runner excludes socket/gateway test functions because this sandbox denies binds;
+  these deselections are not integration evidence. Log: `/private/tmp/hmp-f3-r4/r5-unit.log`.
+- Focused cadence/isolation/config regressions: **4 passed**. Re-executing the round-4 handler
+  and config-writer function bodies against these regressions gives **3 failed, 1 passed**;
+  only the slow 15-second cadence already passed. Logs: `r5-red.log` under the same directory.
+- Real-Hermes diagnostic scripts and logs: `r5-route-probe.py`,
+  `r5-route-probe-{stock,experimental}.log`, `r5-config-probe.py`,
+  `r5-config-{stock,experimental}.log`, all under `/private/tmp/hmp-f3-r4/`.
+- Standalone stock-base F3 integration attempted: **8 setup errors, 16 deselected**, all
+  `PermissionError` at loopback bind. Log: `r5-integration.log`.
+- Matrix rerun: boundary and existing control/exact-ID behavioral probes pass for both builds;
+  integration cannot bind sockets. **Neither qualified; no candidates or final receipt.**
+  Output: `/private/tmp/hmp-f3-r4/r5-sandbox-matrix/`. The existing behavioral probes do not
+  prove session-stream approval support; T7 remains mandatory and exposes that gap.
+- Ruff (`server tools`), plugin-surface check, private-data scan and diff whitespace check pass.
+  `scan_logs` rejects the diagnostic/pytest failure logs on `TOKEN_B64U` matches for long test
+  identifiers, scratch paths and diagnostic field names (for example `run_approval_sessions`).
+  It is not reported as passing; the original logs and scanner remain unchanged. No bearer
+  was created by the denied integration setups, and no prompt/answer logging was added.
+- Diagnostic runtime warning: these extracted interpreters report SQLite 3.50.4's WAL-reset
+  issue. Hermes explicitly falls back to DELETE journaling for the diagnostic run stores,
+  mitigating that path. Runtime upgrade remains outside this HMP change; no installed runtime
+  or live Hermes home was touched.
+
+## Round-5 remaining work and handoff
+
+The proper Bot Chat fix belongs in Hermes's actual session-stream path: a per-run approval
+context/notifier, an owned run→approval-session mapping, `approval.request` events with exact
+request IDs and offered choices, and cleanup/wakeup on termination, disconnect and failure.
+It needs approval/deny, exact-ID, cross-profile, timeout and disconnect regressions on that route.
+HMP must not manufacture cards from tool text, switch to an unqualified alternate route, patch
+Hermes at plugin runtime, or mark empty prompts as success. No Hermes source or qualification
+allowlist was modified this round. The optional upstream-patch scope question is still open.
+
+`/private/tmp/hmp-f3-r4/run.sh` now writes to `controller-r5/`, preserving the controller's
+original evidence in `controller/`. It still requires a successful matrix before standalone
+integration or receipt use. Run it outside this sandbox; T8 changes require that live rerun,
+and unpatched T7 is expected to prevent qualification. Once Hermes is repaired, requalify the
+new source bytes rather than copying the old fingerprints into the runtime list.
+
+The initial `git add` succeeded, but the final staging/commit attempt was denied while
+creating `.git/index.lock`. No round-5 commit was created; HEAD remains `e1ddb28`.
+The eight changed repo files are left in the working tree (initial edits staged, this final
+status update unstaged). The controller must stage the final contents before committing.
+Scratch scripts/logs and updated `run.sh` remain under `/private/tmp/hmp-f3-r4/`.
+No push or attribution trailer was used.
+
+---
+
 **Round 4 remediation implemented on `feat/approvals`, base `e5a9fd6`; controller integration
 qualification remains pending.** This section supersedes the round-3 status and handoff below.
 

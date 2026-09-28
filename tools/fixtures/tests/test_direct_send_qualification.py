@@ -19,16 +19,26 @@ import run_matrix  # noqa: E402
 
 def test_config_owner_is_explicit_and_survives_flag_rewrite(tmp_path):
     paths = fc.instance_paths(tmp_path, "A")
-    (paths.home / "profiles" / "f1-alpha").mkdir(parents=True)
+    for profile in ("f1-alpha", "f1-beta"):
+        (paths.home / "profiles" / profile).mkdir(parents=True)
     kwargs = {"hmp_port": 1234, "api_server_port": 5678, "api_key": "fixture-key",
               "model_base_url": "http://127.0.0.1:9876"}
     for owners, enabled in [((), True), (("fixture-device",), True), (("fixture-device",), False)]:
-        dsf.write_direct_send_config(paths, ("f1-alpha",), owner_device_ids=owners,
+        dsf.write_direct_send_config(paths, ("f1-alpha", "f1-beta"), owner_device_ids=owners,
                                     direct_send_enabled=enabled, **kwargs)
         config = yaml.safe_load((paths.home / "config.yaml").read_text())
         extra = config["gateway"]["platforms"]["hmp"]["extra"]
         assert extra["owner_device_ids"] == list(owners)
         assert extra["direct_send"]["enabled"] is enabled
+        # Every profile is loaded independently; rewrites must preserve the human
+        # gate and a real tool-bearing Phone turn, without unattended auto-approval.
+        for home in (paths.home, paths.home / "profiles/f1-alpha", paths.home / "profiles/f1-beta"):
+            scoped = yaml.safe_load((home / "config.yaml").read_text())
+            assert scoped["platform_toolsets"]["hmp"] == ["terminal", "clarify"]
+            assert scoped["approvals"]["mode"] == "manual"
+            assert scoped["approvals"]["unattended_mode"] == "deny"
+            assert 30 < scoped["approvals"]["timeout"] < 300
+            assert Path(scoped["terminal"]["cwd"]).is_relative_to(tmp_path)
 
 
 def test_fixture_receipt_requires_exact_boundary_and_bytes(tmp_path):
