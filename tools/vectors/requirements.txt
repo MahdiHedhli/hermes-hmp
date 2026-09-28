@@ -1,0 +1,7 @@
+# Dependencies for tools/vectors/gen_hmp1_vectors.py and its regeneration test.
+# Install into a scratch venv (never the system Python):
+#   python3 -m venv /path/to/scratch/venv && /path/to/scratch/venv/bin/pip install -r tools/vectors/requirements.txt
+# The generator itself imports only cryptography and hashlib (T015: "only cryptography/hashlib").
+# pytest is needed only to run tools/vectors/tests/test_regen.py (IR-16).
+cryptography>=41
+pytest>=8.0

@@ -1,0 +1,28 @@
+name: CI
+on:
+  push:
+    branches: [main, 'migrate/**', 'feat/**']
+  pull_request:
+
+jobs:
+  plugin:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: '3.11'
+      - name: Lint
+        run: uvx ruff==0.16.9 check --config server/pyproject.toml server tools
+      - name: Unit tests
+        run: uv run --frozen --project server --extra dev pytest server/tests/unit -q
+      - name: Tool tests
+        run: uv run --frozen --project server --extra dev pytest tools/ci/tests tools/fixtures/tests tools/hermes_builds/tests tools/vectors/tests tools/acceptance/tests -q
+      - name: Closed plugin surface
+        run: python3 tools/ci/check_plugin_surface.py
+      - name: Log hygiene
+        run: python3 tools/ci/scan_logs.py
+      - name: Privacy gate
+        run: python3 tools/ci/scan_private.py

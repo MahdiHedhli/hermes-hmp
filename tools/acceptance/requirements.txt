@@ -1,0 +1,5 @@
+# Dependencies for tools/acceptance/interceptor.py, tools/acceptance/make_test_ca.py and their
+# tests. Install into a scratch venv (never the system Python):
+#   python3 -m venv /path/to/scratch/venv && /path/to/scratch/venv/bin/pip install -r tools/acceptance/requirements.txt
+cryptography>=42
+pytest>=8.0

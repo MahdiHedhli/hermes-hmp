@@ -1,0 +1,47 @@
+{
+  "format": 1,
+  "bridge_files": [
+    "gateway/authz_mixin.py",
+    "gateway/config.py",
+    "gateway/pairing.py",
+    "gateway/platforms/_shared.py",
+    "gateway/platforms/base.py",
+    "gateway/platforms/event.py",
+    "gateway/run.py",
+    "gateway/run_adapters.py",
+    "gateway/run_profile_reconcile.py",
+    "gateway/session.py",
+    "hermes_constants.py",
+    "hermes_state.py",
+    "hermes_state_compression.py",
+    "hermes_state_messages.py",
+    "hermes_state_registry.py",
+    "hermes_state_sessions.py"
+  ],
+  "builds": [
+    {
+      "label": "stock-base",
+      "fingerprint": "af86c86844fa99fc79a1c77800db0f2b6b20af8735f658cd7df88d2a3faabf2d",
+      "git_sha": null,
+      "source_sha": "04fa849e70165336ba73e6750257a1ebd7ff998d",
+      "qualified_by": "T063 tools/compat/run_matrix.py",
+      "qualified_at": "2026-09-25"
+    },
+    {
+      "label": "experimental",
+      "fingerprint": "bfef558e8947f372e960c088057bc0c0b1360a8cc2275532167b915b7ff21ea7",
+      "git_sha": null,
+      "source_sha": "7e8c8f07a11a781b82ff2ad249196e2dc3f4bbb3",
+      "qualified_by": "T063 tools/compat/run_matrix.py",
+      "qualified_at": "2026-09-25"
+    },
+    {
+      "label": "owner-local",
+      "fingerprint": "189020bb71c6e2ef209f5f58054e00778079b395b3fb85eccc2c05b58961c3aa",
+      "git_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
+      "source_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
+      "qualified_by": "T063 tools/compat/run_matrix.py",
+      "qualified_at": "2026-09-26"
+    }
+  ]
+}

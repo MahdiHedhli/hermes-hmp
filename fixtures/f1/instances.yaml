@@ -1,0 +1,206 @@
+# F1 fixture manifest — synthetic data only.
+#
+# Contract: specs/001-connect-and-browse/contracts/fixture-format.md
+# Validator: tools/fixtures/manifest.py
+# Builder (separate task, T060): tools/fixtures/build_fixture.py
+#
+# Every seeded message text below starts with `label_prefix`. No entry in this
+# file names a real host, IP address, email address, device identifier or
+# person. `example.invalid` is the RFC 2606 reserved non-resolving domain,
+# used here deliberately as a synthetic hostile-content payload — it is never
+# a live endpoint. This manifest is not continuity evidence (owner amendment 3).
+
+format: 1
+label_prefix: "[F1 SYNTHETIC]"
+# CS-22 scannable prefixes (contracts/fixture-format.md rule 7). Every P2
+# device name a fixture or test client sends must start with
+# device_name_prefix, and every `pair confirm` operator label must start
+# with operator_label_prefix. tools/ci/scan_logs.py (T033) greps logs for
+# these exact prefixes, so they must come from here, never be re-hard-coded.
+device_name_prefix: "f1-fixture-device-"
+operator_label_prefix: "f1-fixture-label-"
+continuity_evidence: false
+
+instances:
+  - key: A
+    display_label: "Fixture A"
+    port: 0                              # 0 = pick a free port at run time
+    users:
+      - key: userA                       # pre-created HMP user id minted at build time (hmpu_...)
+    profiles:
+      - name: f1-alpha                   # authorized for userA; non-empty history
+        display_name: "Alpha"
+        authorize_for: [userA]
+        conversation: conv-long
+        # Amendment A1 (session browsing, OD-F9/OD-F10, OD-F11): non-HMP sessions of this same
+        # bot, from other sources, so SES-1 (`GET .../sessions`) has real fixture coverage for
+        # both the ONE row OD-F11 says must be listed (the canonical, hidden "Bot Chat") and the
+        # channel/other sessions that must never be listed, whatever their own title or source.
+        # `session_id` values here are fixture-local keys the builder makes unique.
+        other_sessions:
+          # OD-F11 positive case: the bot's own canonical chat (Hermes Desktop's Bots view opens
+          # exactly this session -- title "Bot Chat", always hidden). This is the only
+          # `other_sessions` entry that should ever appear in a SES-1 listing.
+          - session_id: bot-chat-1
+            source: desktop
+            title: "Bot Chat"
+            conversation: conv-bot-chat
+            hidden: true
+          # OD-F11 negative cases: real channel/CLI sessions of the SAME bot, never listed.
+          - session_id: cli-1
+            source: cli
+            title: "[F1 SYNTHETIC] CLI session"
+            conversation: conv-cli
+          - session_id: telegram-1
+            source: telegram
+            title: "[F1 SYNTHETIC] Telegram thread"
+            conversation: conv-telegram
+          - session_id: discord-1
+            source: discord
+            title: "[F1 SYNTHETIC] Discord thread"
+            conversation: conv-discord
+          - session_id: desktop-1
+            source: desktop
+            title: "[F1 SYNTHETIC] Desktop chat"
+            conversation: conv-desktop
+          - session_id: compress-root
+            source: cli
+            title: "[F1 SYNTHETIC] before compression"
+            conversation: conv-compress-root
+            end_reason: compression
+          - session_id: compress-tip
+            source: cli
+            title: "[F1 SYNTHETIC] after compression"
+            conversation: conv-compress-tip
+            parent_session_id: compress-root
+          - session_id: archived-1
+            source: cli
+            title: "[F1 SYNTHETIC] archived session"
+            conversation: conv-archived
+            archived: true
+          # Hidden but NOT titled "Bot Chat": proves include_hidden=True does not, by itself,
+          # leak an arbitrary hidden session (OD-F11's selector is title AND hidden, not hidden
+          # alone).
+          - session_id: hidden-1
+            source: cli
+            title: "[F1 SYNTHETIC] hidden session"
+            conversation: conv-hidden
+            hidden: true
+      - name: f1-empty                   # authorized, no history (empty-state case)
+        display_name: "Empty"
+        authorize_for: [userA]
+        conversation: null
+      - name: f1-pending                 # not authorized: pending_operator case
+        display_name: "Pending"
+        authorize_for: []
+        conversation: null
+      - name: f1-roles                   # history with non user/assistant roles and hostile text
+        display_name: "Roles"
+        authorize_for: [userA]
+        conversation: conv-roles
+
+  - key: B
+    display_label: "Fixture B"
+    port: 0
+    users:
+      - key: userB
+    profiles:
+      - name: f1-alpha                   # SAME profile name as on A, different content (edge case)
+        display_name: "Alpha"
+        authorize_for: [userB]
+        conversation: conv-b
+      - name: f1-empty                   # authorized, no history (empty-state case for B)
+        display_name: "Empty"
+        authorize_for: [userB]
+        conversation: null
+
+conversations:
+  # Exceeds RO-3's snapshot maximum (default 50, max 500 per HMP v1 §RO-3) so the
+  # fixture also exercises the "earlier messages truncated" window-full case.
+  # Text is synthesized by the builder at build time; every generated message
+  # text must also start with `label_prefix` (enforced by the builder, T060).
+  conv-long:
+    generate:
+      count: 600
+      roles: [user, assistant]
+
+  # Non user/assistant roles, markup, a script tag, a bidi override control
+  # character and a reserved-domain URL — read-path rendering must neutralize
+  # all of it (FR series on safe rendering), never execute or reroute it.
+  conv-roles:
+    messages:
+      - role: user
+        text: "[F1 SYNTHETIC] plain user turn, nothing unusual here"
+      - role: tool
+        text: "[F1 SYNTHETIC] tool_output: {\"status\": \"ok\", \"rows\": 0}"
+      - role: system
+        text: "[F1 SYNTHETIC] system note: session initialized"
+      - role: assistant
+        text: "[F1 SYNTHETIC] <script>alert(1)</script> **bold markdown** ‮gnitset txet idib https://example.invalid"
+
+  conv-b:
+    generate:
+      count: 12
+      roles: [user, assistant]
+
+  # Amendment A1 (session browsing): the non-HMP sessions of f1-alpha/A above.
+  conv-bot-chat:
+    messages:
+      - role: user
+        text: "[F1 SYNTHETIC] bot chat: hello!"
+      - role: assistant
+        text: "[F1 SYNTHETIC] bot chat: hi, how can I help?"
+  conv-telegram:
+    messages:
+      - role: user
+        text: "[F1 SYNTHETIC] telegram source: ping"
+      - role: assistant
+        text: "[F1 SYNTHETIC] telegram source: pong"
+  conv-discord:
+    messages:
+      - role: user
+        text: "[F1 SYNTHETIC] discord source: standup notes?"
+      - role: assistant
+        text: "[F1 SYNTHETIC] discord source: posted below"
+  conv-cli:
+    messages:
+      - role: user
+        text: "[F1 SYNTHETIC] cli source: what changed in the last release?"
+      - role: assistant
+        text: "[F1 SYNTHETIC] cli source: three fixes landed, see the changelog"
+  conv-desktop:
+    messages:
+      - role: user
+        text: "[F1 SYNTHETIC] desktop source: draft the weekly summary"
+      - role: assistant
+        text: "[F1 SYNTHETIC] desktop source: draft attached below"
+  conv-compress-root:
+    messages:
+      - role: user
+        text: "[F1 SYNTHETIC] compression lineage: root turn, before compaction"
+  conv-compress-tip:
+    messages:
+      - role: assistant
+        text: "[F1 SYNTHETIC] compression lineage: tip turn, after compaction"
+  conv-archived:
+    messages:
+      - role: user
+        text: "[F1 SYNTHETIC] archived: excluded from the default session list"
+  conv-hidden:
+    messages:
+      - role: user
+        text: "[F1 SYNTHETIC] hidden: excluded from the default session list"
+
+# Applied by tools/fixtures/mutate.py during refresh/reconciliation tests
+# (out of scope for this task; referenced here so the manifest and mutator
+# share one vocabulary).
+mutations:
+  append:
+    conversation: conv-b
+    add: 3
+  rewrite:
+    conversation: conv-long
+    kind: in_place_compaction        # new row ids, same session (RO-8)
+  new_session:
+    conversation: conv-b
+    kind: session_replaced           # /new-equivalent (RO-6)

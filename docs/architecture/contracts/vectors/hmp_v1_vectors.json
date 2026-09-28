@@ -1,0 +1,737 @@
+{
+  "_meta": {
+    "schema_version": 1,
+    "contract_revision": "1.0",
+    "contract_file": "docs/architecture/contracts/HMP_V1.md",
+    "generator": "tools/vectors/gen_hmp1_vectors.py",
+    "independent": true,
+    "independent_note": "Generated from docs/architecture/contracts/HMP_V1.md alone. Imports no server code, no client code and no spike code. Non-stdlib dependencies: cryptography only (hashing uses hashlib only).",
+    "key_warning": "TEST-ONLY. Every key, secret, token and pairing value in this file is a fixed, publicly-known constant generated for conformance testing only. Never use any value from this file in a real deployment.",
+    "determinism_note": "All fields are byte-for-byte reproducible across regenerations of this file, with one exception: '*_sig_der_b64u' / '*_sig_der_hex' fields. ECDSA signing here uses a randomized nonce (no RFC 6979), so signature bytes differ run to run even for an identical key and message; both low-S and high-S encodings are valid (TR-13). A conforming test MUST verify these signatures against the accompanying public key and transcript bytes, and MUST NOT compare signature bytes for equality.",
+    "evidence_gaps": [
+      {
+        "id": "EVIDENCE_GAP-HMP1-HOST-INPUT",
+        "clause": "V-1 (hash domain tags table), ID-2 (\"bound to a hashed host id held outside every Hermes home\")",
+        "note": "HMP_V1.md names HMP1-HOST as a valid secret_hash domain tag (V-1) and states the instance key is bound to a 'hashed host id' (ID-2), but does not specify the exact byte encoding of the host id that is hashed (source string, length, normalization). This vector therefore tests only the generic secret_hash(tag, x) = SHA-256(tag || x) construction (TR-12) for the HMP1-HOST tag, using an arbitrary fixed-length TEST-ONLY placeholder for x. It is NOT a claim about the real host-id encoding used by ID-2's instance-key custody; that encoding is server-implementation scope not fixed by the contract text, and no vector here guesses at it."
+      }
+    ]
+  },
+  "keys": {
+    "instance_key_ik": {
+      "label": "TEST-ONLY",
+      "role": "instance key (IK); signs HMP1-PAIR-RESP (isig); self-signed TLS cert key (TR-1, TR-8)",
+      "curve": "P-256",
+      "private_scalar_hex": "32c507d49904f2f1cd4843f247465ff022280d792c1da852639668b98f482e29",
+      "spki_der_hex": "3059301306072a8648ce3d020106082a8648ce3d03010703420004698524cf6df9582a66646e4034924d3e717b0228d560909b20575547163e46c0ad9b85e251ecf1fcdcded65d4fee3b878bb9ad28de395cf86bd9b311431b50e6",
+      "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a"
+    },
+    "device_key_dk": {
+      "label": "TEST-ONLY",
+      "role": "device key (DK); signs HMP1-PAIR-REQ, HMP1-PAIR-DONE, HMP1-TOKEN, HMP1-SELF-REVOKE",
+      "curve": "P-256",
+      "private_scalar_hex": "87a411cae1efe44ea1e1cb05baae9fe016889c79d6ab1f1ab279f4a93f9f8046",
+      "spki_der_hex": "3059301306072a8648ce3d020106082a8648ce3d030107034200049f56021b7def02a92dc7d43d7e23ee2ba7ca3a5063a9055f67ab3991e2cf03daf70a0104b8cbf00a075d7af0ccd7259cfa583f7ba811f32f9f055990ba09b456",
+      "device_fp": "lonrz7kbcjcfli46blhqlu7h2kfg7h2kjndz4pyp4sdxcopibi5q",
+      "device_sas": "LONRZ-7KBCJ-CFLI4-6BLHQ"
+    }
+  },
+  "positive": {
+    "iid": {
+      "label": "TEST-ONLY",
+      "clause": "ID-2 identities table (iid)",
+      "instance_spki_der_hex": "3059301306072a8648ce3d020106082a8648ce3d03010703420004698524cf6df9582a66646e4034924d3e717b0228d560909b20575547163e46c0ad9b85e251ecf1fcdcded65d4fee3b878bb9ad28de395cf86bd9b311431b50e6",
+      "sha256_of_spki_hex": "bc2a1c4ad55951fa753407149dd81d9d4fd8facde996f8a015a86985cc4d0e38",
+      "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a",
+      "note": "iid = base32(lowercase, unpadded, RFC4648) of SHA-256(SPKI DER of the P-256 instance key, uncompressed point)."
+    },
+    "device_fp": {
+      "label": "TEST-ONLY",
+      "clause": "ID-2 identities table (device_fp)",
+      "device_spki_der_hex": "3059301306072a8648ce3d020106082a8648ce3d030107034200049f56021b7def02a92dc7d43d7e23ee2ba7ca3a5063a9055f67ab3991e2cf03daf70a0104b8cbf00a075d7af0ccd7259cfa583f7ba811f32f9f055990ba09b456",
+      "sha256_of_spki_hex": "5b9b1cfd41124455a39e0acf05d3e7d28a6f9f4a4b479e3f0fe4877139e80a3b",
+      "device_fp": "lonrz7kbcjcfli46blhqlu7h2kfg7h2kjndz4pyp4sdxcopibi5q",
+      "note": "Same construction as iid, over the device SPKI."
+    },
+    "device_sas": {
+      "label": "TEST-ONLY",
+      "clause": "ID-2 identities table (device_sas)",
+      "device_fp": "lonrz7kbcjcfli46blhqlu7h2kfg7h2kjndz4pyp4sdxcopibi5q",
+      "device_sas": "LONRZ-7KBCJ-CFLI4-6BLHQ",
+      "note": "device_sas = upper(device_fp[0:20]) grouped XXXXX-XXXXX-XXXXX-XXXXX (100 bits; a string-level slice of the base32 device_fp, not a re-encoding of raw hash bits)."
+    },
+    "b64u": [
+      {
+        "field": "oid",
+        "decoded_len": 16,
+        "raw_hex": "77bd483ccdaa2d53d92b25391ead2977",
+        "b64u": "d71IPM2qLVPZKyU5Hq0pdw"
+      },
+      {
+        "field": "s_offer_secret",
+        "decoded_len": 32,
+        "raw_hex": "b9a5aeb3bbcb02c91b61176b150d388177edd26809c19e2df17086f6725d4b28",
+        "b64u": "uaWus7vLAskbYRdrFQ04gXft0mgJwZ4t8XCG9nJdSyg"
+      },
+      {
+        "field": "nd",
+        "decoded_len": 32,
+        "raw_hex": "e4bb0c38bcb7bb1dd54865d2d8dc89c0ad88ff6d24a83ac6675678ce5a9bbe44",
+        "b64u": "5LsMOLy3ux3VSGXS2NyJwK2I_20kqDrGZ1Z4zlqbvkQ"
+      },
+      {
+        "field": "ni",
+        "decoded_len": 32,
+        "raw_hex": "37a9b3a29e66dd09ca6909fe285cf4118a991e8878c5bcc268119ae6decfd582",
+        "b64u": "N6mzop5m3QnKaQn-KFz0EYqZHoh4xbzCaBGa5t7P1YI"
+      },
+      {
+        "field": "nonce",
+        "decoded_len": 16,
+        "raw_hex": "c8bf71af85b7b033fcfe3a0da8833d27",
+        "b64u": "yL9xr4W3sDP8_joNqIM9Jw"
+      },
+      {
+        "field": "refresh_token_raw",
+        "decoded_len": 32,
+        "raw_hex": "61f0ef47a00d05417b9a3369a09729a31b9ab48b23f2feec25eee7446bbcdca5",
+        "b64u": "YfDvR6ANBUF7mjNpoJcpoxuatIsj8v7sJe7nRGu83KU"
+      },
+      {
+        "field": "pairing_id",
+        "decoded_len": 16,
+        "raw_hex": "37c2f0d5278493583f2ab12d46994206",
+        "b64u": "N8Lw1SeEk1g_KrEtRplCBg"
+      },
+      {
+        "field": "device_pub",
+        "decoded_len": 91,
+        "raw_hex": "3059301306072a8648ce3d020106082a8648ce3d030107034200049f56021b7def02a92dc7d43d7e23ee2ba7ca3a5063a9055f67ab3991e2cf03daf70a0104b8cbf00a075d7af0ccd7259cfa583f7ba811f32f9f055990ba09b456",
+        "b64u": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEn1YCG33vAqktx9Q9fiPuK6fKOlBjqQVfZ6s5keLPA9r3CgEEuMvwCgddevDM1yWc-lg_e6gR8y-fBVmQugm0Vg"
+      }
+    ],
+    "secret_hash": {
+      "HMP1-OFFER": {
+        "label": "TEST-ONLY",
+        "clause": "PR1-1, TR-12",
+        "tag": "HMP1-OFFER",
+        "x_field": "S (32-byte offer secret)",
+        "x_hex": "211fb109c5571150a73ccb72178a94ee8f5549a7c020d5bbcacd79a55e486a23",
+        "secret_hash_hex": "02ae77c019b9f9582d3eb323fa194837ac3a213a0c060bf36506fa9d91255316",
+        "note": "secret_hash('HMP1-OFFER', S) = SHA-256('HMP1-OFFER' || S), stored server-side per PR1-1. This is DIFFERENT from the plain SHA-256(S) used as the third field of the HMP1-PAIR-REQ transcript below (TR-13) -- see plain_sha256_of_S_hex there."
+      },
+      "HMP1-HOST": {
+        "label": "TEST-ONLY",
+        "clause": "V-1, ID-2",
+        "tag": "HMP1-HOST",
+        "x_field": "TEST-ONLY placeholder host-id bytes (contract does not define the real encoding)",
+        "x_hex": "fd670d36b76055ca659473d118e2cca10ba8fac8dfdb8c70",
+        "secret_hash_hex": "878099b5b2555d2ad7b2edc1eda1dc56f7070584c006573d51105b3a50adda6e",
+        "evidence_gap": "EVIDENCE_GAP-HMP1-HOST-INPUT",
+        "note": "Tests only the generic secret_hash(tag, x) construction for this tag. See _meta.evidence_gaps."
+      }
+    },
+    "transcripts": {
+      "HMP1-PAIR-REQ": {
+        "clause": "TR-13, PR2-1",
+        "signer": "device_key_dk",
+        "fields": {
+          "iid": {
+            "type": "str",
+            "len": 52,
+            "bytes_hex": "78717662797377766c66693775356a7561346b6a33776135747668357236776e35676c7072696176766275796c74636e62793461",
+            "value": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a"
+          },
+          "oid": {
+            "type": "raw",
+            "len": 16,
+            "bytes_hex": "9351af3fd9d97587adfc55bdbb541d1b"
+          },
+          "sha256_of_S": {
+            "type": "raw",
+            "len": 32,
+            "bytes_hex": "ed98425c1e3aca2b79ea991a31ce13717598c553429216bc4790598b6d4b6f33"
+          },
+          "device_pub": {
+            "type": "raw",
+            "len": 91,
+            "bytes_hex": "3059301306072a8648ce3d020106082a8648ce3d030107034200049f56021b7def02a92dc7d43d7e23ee2ba7ca3a5063a9055f67ab3991e2cf03daf70a0104b8cbf00a075d7af0ccd7259cfa583f7ba811f32f9f055990ba09b456"
+          },
+          "device_name": {
+            "type": "str",
+            "len": 17,
+            "bytes_hex": "5465737420446576696365202331e2808b",
+            "value": "Test Device #1\u200b"
+          },
+          "nd": {
+            "type": "raw",
+            "len": 32,
+            "bytes_hex": "2f682348418ff977cb4bbd25fe3ac261f97e55c2513225ebe9b541ba24d6faf9"
+          }
+        },
+        "transcript_hex": "484d50312d504149522d5245510000003478717662797377766c66693775356a7561346b6a33776135747668357236776e35676c7072696176766275796c74636e62793461000000109351af3fd9d97587adfc55bdbb541d1b00000020ed98425c1e3aca2b79ea991a31ce13717598c553429216bc4790598b6d4b6f330000005b3059301306072a8648ce3d020106082a8648ce3d030107034200049f56021b7def02a92dc7d43d7e23ee2ba7ca3a5063a9055f67ab3991e2cf03daf70a0104b8cbf00a075d7af0ccd7259cfa583f7ba811f32f9f055990ba09b456000000115465737420446576696365202331e2808b000000202f682348418ff977cb4bbd25fe3ac261f97e55c2513225ebe9b541ba24d6faf9",
+        "sig_der_hex": "304502201f3461e315f5240e61c6245cec3bdfd6be52509b994959e9ca55bbe043c9990d022100983439f059fb0b7ec223d264793fc56afa9b4901106e4c55ed308030993be209",
+        "sig_der_b64u": "MEUCIB80YeMV9SQOYcYkXOw739a-UlCbmUlZ6cpVu-BDyZkNAiEAmDQ58Fn7C37CI9JkeT_FavqbSQEQbkxV7TCAMJk74gk"
+      },
+      "HMP1-PAIR-RESP": {
+        "clause": "TR-13, PR2-4",
+        "signer": "instance_key_ik",
+        "fields": {
+          "iid": {
+            "type": "str",
+            "len": 52,
+            "bytes_hex": "78717662797377766c66693775356a7561346b6a33776135747668357236776e35676c7072696176766275796c74636e62793461",
+            "value": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a"
+          },
+          "oid": {
+            "type": "raw",
+            "len": 16,
+            "bytes_hex": "9351af3fd9d97587adfc55bdbb541d1b"
+          },
+          "device_pub": {
+            "type": "raw",
+            "len": 91,
+            "bytes_hex": "3059301306072a8648ce3d020106082a8648ce3d030107034200049f56021b7def02a92dc7d43d7e23ee2ba7ca3a5063a9055f67ab3991e2cf03daf70a0104b8cbf00a075d7af0ccd7259cfa583f7ba811f32f9f055990ba09b456"
+          },
+          "nd": {
+            "type": "raw",
+            "len": 32,
+            "bytes_hex": "2f682348418ff977cb4bbd25fe3ac261f97e55c2513225ebe9b541ba24d6faf9"
+          },
+          "ni": {
+            "type": "raw",
+            "len": 32,
+            "bytes_hex": "854a010b4b3421e5dfc129c72789b8482555e290a3b43b8f98421aa9151fef30"
+          },
+          "pairing_id": {
+            "type": "raw",
+            "len": 16,
+            "bytes_hex": "5562abe20e08dfd660768ea561811b08"
+          },
+          "device_sas": {
+            "type": "str",
+            "len": 23,
+            "bytes_hex": "4c4f4e525a2d374b42434a2d43464c49342d36424c4851",
+            "value": "LONRZ-7KBCJ-CFLI4-6BLHQ"
+          },
+          "confirm_by": {
+            "type": "u64",
+            "len": 8,
+            "bytes_hex": "000000006b49d200",
+            "value": 1800000000
+          }
+        },
+        "transcript_hex": "484d50312d504149522d524553500000003478717662797377766c66693775356a7561346b6a33776135747668357236776e35676c7072696176766275796c74636e62793461000000109351af3fd9d97587adfc55bdbb541d1b0000005b3059301306072a8648ce3d020106082a8648ce3d030107034200049f56021b7def02a92dc7d43d7e23ee2ba7ca3a5063a9055f67ab3991e2cf03daf70a0104b8cbf00a075d7af0ccd7259cfa583f7ba811f32f9f055990ba09b456000000202f682348418ff977cb4bbd25fe3ac261f97e55c2513225ebe9b541ba24d6faf900000020854a010b4b3421e5dfc129c72789b8482555e290a3b43b8f98421aa9151fef30000000105562abe20e08dfd660768ea561811b08000000174c4f4e525a2d374b42434a2d43464c49342d36424c485100000008000000006b49d200",
+        "sig_der_hex": "304402205fbe43928f6395bcd0ca5547cd53de00d30cce24625d0c95bc80ced14ef5bc9902203f4ea1c727d7acdf21cb88646855c28fe65747df1c7567571b7bb1a7da1dc84e",
+        "sig_der_b64u": "MEQCIF--Q5KPY5W80MpVR81T3gDTDM4kYl0MlbyAztFO9byZAiA_TqHHJ9es3yHLiGRoVcKP5ldH3xx1Z1cbe7Gn2h3ITg"
+      },
+      "HMP1-PAIR-DONE": {
+        "clause": "TR-13, PR4-1",
+        "signer": "device_key_dk",
+        "fields": {
+          "iid": {
+            "type": "str",
+            "len": 52,
+            "bytes_hex": "78717662797377766c66693775356a7561346b6a33776135747668357236776e35676c7072696176766275796c74636e62793461",
+            "value": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a"
+          },
+          "pairing_id": {
+            "type": "raw",
+            "len": 16,
+            "bytes_hex": "5562abe20e08dfd660768ea561811b08"
+          },
+          "nd": {
+            "type": "raw",
+            "len": 32,
+            "bytes_hex": "2f682348418ff977cb4bbd25fe3ac261f97e55c2513225ebe9b541ba24d6faf9"
+          },
+          "ni": {
+            "type": "raw",
+            "len": 32,
+            "bytes_hex": "854a010b4b3421e5dfc129c72789b8482555e290a3b43b8f98421aa9151fef30"
+          },
+          "ts": {
+            "type": "u64",
+            "len": 8,
+            "bytes_hex": "000000006b49d264",
+            "value": 1800000100
+          }
+        },
+        "transcript_hex": "484d50312d504149522d444f4e450000003478717662797377766c66693775356a7561346b6a33776135747668357236776e35676c7072696176766275796c74636e62793461000000105562abe20e08dfd660768ea561811b08000000202f682348418ff977cb4bbd25fe3ac261f97e55c2513225ebe9b541ba24d6faf900000020854a010b4b3421e5dfc129c72789b8482555e290a3b43b8f98421aa9151fef3000000008000000006b49d264",
+        "sig_der_hex": "304402204e53c49f5abdd8f7672d4f03dbe02ceb307e0344dca414fef2d509f7ed568fe90220515f5a16d657967445e2877e4660e333ae6064534e81bd729ab50646b6f664fd",
+        "sig_der_b64u": "MEQCIE5TxJ9avdj3Zy1PA9vgLOswfgNE3KQU_vLVCfftVo_pAiBRX1oW1leWdEXih35GYOMzrmBkU06BvXKatQZGtvZk_Q"
+      },
+      "HMP1-TOKEN": {
+        "clause": "TR-13, PR5-1",
+        "signer": "device_key_dk",
+        "fields": {
+          "iid": {
+            "type": "str",
+            "len": 52,
+            "bytes_hex": "78717662797377766c66693775356a7561346b6a33776135747668357236776e35676c7072696176766275796c74636e62793461",
+            "value": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a"
+          },
+          "device_id": {
+            "type": "str",
+            "len": 26,
+            "bytes_hex": "6465765f4b7475787446413173575354586c68756c616e714741",
+            "value": "dev_KtuxtFA1sWSTXlhulanqGA"
+          },
+          "sha256_of_refresh_raw": {
+            "type": "raw",
+            "len": 32,
+            "bytes_hex": "e6a2f4ba24f381d674de4b5133e60988c1c04b307f08c3691919d1ba17a67c2f"
+          },
+          "ts": {
+            "type": "u64",
+            "len": 8,
+            "bytes_hex": "000000006b49d2c8",
+            "value": 1800000200
+          },
+          "nonce": {
+            "type": "raw",
+            "len": 16,
+            "bytes_hex": "79de6bc9b40f65aea95a95b8033c8633"
+          }
+        },
+        "transcript_hex": "484d50312d544f4b454e0000003478717662797377766c66693775356a7561346b6a33776135747668357236776e35676c7072696176766275796c74636e627934610000001a6465765f4b7475787446413173575354586c68756c616e71474100000020e6a2f4ba24f381d674de4b5133e60988c1c04b307f08c3691919d1ba17a67c2f00000008000000006b49d2c80000001079de6bc9b40f65aea95a95b8033c8633",
+        "sig_der_hex": "3045022100f12c8a5d233624fcb4b13b87773206dce5ba6e0fd53f305fc900af0416f625dd0220714994e0c8603b915462a893501a0dbce4b658c65ed2a9ec649c48bb75429c34",
+        "sig_der_b64u": "MEUCIQDxLIpdIzYk_LSxO4d3Mgbc5bpuD9U_MF_JAK8EFvYl3QIgcUmU4MhgO5FUYqiTUBoNvOS2WMZe0qnsZJxIu3VCnDQ",
+        "refresh_token_raw_hex": "d7365dbdec33a0a16489f21c4f5a0353db8b20417aae0f34dc84e5fe48009694",
+        "note": "sha256_of_refresh_raw is SHA-256 of the RAW decoded refresh-token bytes (PR4-4, TR-12), never of its base64url text."
+      },
+      "HMP1-SELF-REVOKE": {
+        "clause": "TR-13, PR7-3",
+        "signer": "device_key_dk",
+        "fields": {
+          "iid": {
+            "type": "str",
+            "len": 52,
+            "bytes_hex": "78717662797377766c66693775356a7561346b6a33776135747668357236776e35676c7072696176766275796c74636e62793461",
+            "value": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a"
+          },
+          "device_id": {
+            "type": "str",
+            "len": 26,
+            "bytes_hex": "6465765f4b7475787446413173575354586c68756c616e714741",
+            "value": "dev_KtuxtFA1sWSTXlhulanqGA"
+          },
+          "ts": {
+            "type": "u64",
+            "len": 8,
+            "bytes_hex": "000000006b49d32c",
+            "value": 1800000300
+          }
+        },
+        "transcript_hex": "484d50312d53454c462d5245564f4b450000003478717662797377766c66693775356a7561346b6a33776135747668357236776e35676c7072696176766275796c74636e627934610000001a6465765f4b7475787446413173575354586c68756c616e71474100000008000000006b49d32c",
+        "sig_der_hex": "3044022020a50d0c5d93f627d6d5c2f8e9334b3f78745003083c9f85e8650d42cafccc8c02200244e8dc0c5b5c846b605c75b35c51467c7c13d6e6b91e6de4ca0515ee031272",
+        "sig_der_b64u": "MEQCICClDQxdk_Yn1tXC-OkzSz94dFADCDyfhehlDULK_MyMAiACROjcDFtchGtgXHWzXFFGfHwT1ua5Hm3kygUV7gMScg"
+      }
+    },
+    "qr_payload": {
+      "label": "TEST-ONLY",
+      "clause": "PR1-3",
+      "json": {
+        "v": 1,
+        "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a",
+        "ep": [
+          "https://example-test-instance\u002ets.net:8443",
+          "https://100\u002e64.0.1:8443"
+        ],
+        "oid": "Mdwc841zHWHcq_0rlS-FZA",
+        "s": "W9wIol9_4SHyr1IR5recNLcxd2RxROUkNozW-mM7tKw",
+        "exp": 1900000000
+      },
+      "json_text": "{\"v\":1,\"iid\":\"xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a\",\"ep\":[\"https://example-test-instance\u002ets.net:8443\",\"https://100\u002e64.0.1:8443\"],\"oid\":\"Mdwc841zHWHcq_0rlS-FZA\",\"s\":\"W9wIol9_4SHyr1IR5recNLcxd2RxROUkNozW-mM7tKw\",\"exp\":1900000000}",
+      "wire": "hmp1:eyJ2IjoxLCJpaWQiOiJ4cXZieXN3dmxmaTd1NWp1YTRrajN3YTV0dmg1cjZ3bjVnbHByaWF2dmJ1eWx0Y25ieTRhIiwiZXAiOlsiaHR0cHM6Ly9leGFtcGxlLXRlc3QtaW5zdGFuY2UudHMubmV0Ojg0NDMiLCJodHRwczovLzEwMC42NC4wLjE6ODQ0MyJdLCJvaWQiOiJNZHdjODQxekhXSGNxXzBybFMtRlpBIiwicyI6Ilc5d0lvbDlfNFNIeXIxSVI1cmVjTkxjeGQyUnhST1VrTm96Vy1tTTd0S3ciLCJleHAiOjE5MDAwMDAwMDB9",
+      "note": "wire = 'hmp1:' + b64u(UTF-8 JSON bytes). JSON key order is not wire-significant (a conforming client parses the JSON object; it does not byte-compare it), so json_text here is illustrative, not a canonicalization requirement."
+    }
+  },
+  "negative": {
+    "compressed_point_spki": {
+      "clause": "TR-12",
+      "curve": "P-256",
+      "spki_der_hex": "3039301306072a8648ce3d020106082a8648ce3d030107032200029f56021b7def02a92dc7d43d7e23ee2ba7ca3a5063a9055f67ab3991e2cf03da",
+      "spki_der_b64u": "MDkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDIgACn1YCG33vAqktx9Q9fiPuK6fKOlBjqQVfZ6s5keLPA9o",
+      "reason": "Device/instance keys MUST be an uncompressed SEC1 point (65 B, leading 0x04) inside SPKI; a compressed point (leading 0x02/0x03) MUST be rejected even though it encodes a valid, verifiable public key."
+    },
+    "p384_spki": {
+      "clause": "TR-12",
+      "curve": "P-384",
+      "spki_der_hex": "3076301006072a8648ce3d020106052b810400220362000435363f77d0f95efb0eb876f7929bc255bb72f4d67a24756cb50ddedc5031186ad536c4440c5eb6ba52de039644ec5f51a1c6d5740c19a075c01df46610f83c4cde72fa2103a72b09bb0dd3a5d806b198d7b36cbc069dc00154a3c6ab0eb1084b",
+      "spki_der_b64u": "MHYwEAYHKoZIzj0CAQYFK4EEACIDYgAENTY_d9D5XvsOuHb3kpvCVbty9NZ6JHVstQ3e3FAxGGrVNsREDF62ulLeA5ZE7F9RocbVdAwZoHXAHfRmEPg8TN5y-iEDpysJuw3TpdgGsZjXs2y8Bp3AAVSjxqsOsQhL",
+      "reason": "Only P-256 is accepted for device/instance keys; a syntactically valid uncompressed-point SPKI on another curve MUST be rejected."
+    },
+    "padded_b64u": {
+      "clause": "TR-11",
+      "raw_hex": "65118a85664799303f79239669dd1e44",
+      "canonical_b64u": "ZRGKhWZHmTA_eSOWad0eRA",
+      "padded_b64u": "ZRGKhWZHmTA_eSOWad0eRA==",
+      "reason": "base64url is canonical only when unpadded (RFC 4648 \u00a75 alphabet, no '='). The padded form decodes to the same bytes but MUST be rejected as non-canonical wire input."
+    },
+    "wrong_length": {
+      "clause": "TR-11",
+      "cases": [
+        {
+          "applies_to_fields": [
+            "oid",
+            "nonce",
+            "pairing_id"
+          ],
+          "expected_decoded_len": 16,
+          "actual_decoded_len": 15,
+          "variant": "short",
+          "raw_hex": "7e3e83f5d6b1a0b19c8efc720f357f",
+          "b64u": "fj6D9daxoLGcjvxyDzV_"
+        },
+        {
+          "applies_to_fields": [
+            "oid",
+            "nonce",
+            "pairing_id"
+          ],
+          "expected_decoded_len": 16,
+          "actual_decoded_len": 17,
+          "variant": "long",
+          "raw_hex": "7e3e83f5d6b1a0b19c8efc720f357f7e5c",
+          "b64u": "fj6D9daxoLGcjvxyDzV_flw"
+        },
+        {
+          "applies_to_fields": [
+            "s",
+            "nd",
+            "ni",
+            "tokens"
+          ],
+          "expected_decoded_len": 32,
+          "actual_decoded_len": 31,
+          "variant": "short",
+          "raw_hex": "2d57e7b04ecba80f6838a4a6f9966e242ca9cd7bc161785b45596f0ed830fb",
+          "b64u": "LVfnsE7LqA9oOKSm-ZZuJCypzXvBYXhbRVlvDtgw-w"
+        },
+        {
+          "applies_to_fields": [
+            "s",
+            "nd",
+            "ni",
+            "tokens"
+          ],
+          "expected_decoded_len": 32,
+          "actual_decoded_len": 33,
+          "variant": "long",
+          "raw_hex": "2d57e7b04ecba80f6838a4a6f9966e242ca9cd7bc161785b45596f0ed830fba879",
+          "b64u": "LVfnsE7LqA9oOKSm-ZZuJCypzXvBYXhbRVlvDtgw-6h5"
+        },
+        {
+          "applies_to_fields": [
+            "device_pub"
+          ],
+          "expected_decoded_len": 91,
+          "actual_decoded_len": 90,
+          "variant": "short",
+          "raw_hex": "ec48b91c9e387bcc0d7394def815cabfc5d2d0bdba5fd56e672ad9f4dbd8f61b8494f1b560b9b8bb43264dc25784755c38fbbff26b1163dc09bbc900be277c7b69ac7d37ea6cdb0128f0cabeaeb642c16bdb5a006684158fb2f5",
+          "b64u": "7Ei5HJ44e8wNc5Te-BXKv8XS0L26X9VuZyrZ9NvY9huElPG1YLm4u0MmTcJXhHVcOPu_8msRY9wJu8kAvid8e2msfTfqbNsBKPDKvq62QsFr21oAZoQVj7L1"
+        },
+        {
+          "applies_to_fields": [
+            "device_pub"
+          ],
+          "expected_decoded_len": 91,
+          "actual_decoded_len": 92,
+          "variant": "long",
+          "raw_hex": "ec48b91c9e387bcc0d7394def815cabfc5d2d0bdba5fd56e672ad9f4dbd8f61b8494f1b560b9b8bb43264dc25784755c38fbbff26b1163dc09bbc900be277c7b69ac7d37ea6cdb0128f0cabeaeb642c16bdb5a006684158fb2f5c09b",
+          "b64u": "7Ei5HJ44e8wNc5Te-BXKv8XS0L26X9VuZyrZ9NvY9huElPG1YLm4u0MmTcJXhHVcOPu_8msRY9wJu8kAvid8e2msfTfqbNsBKPDKvq62QsFr21oAZoQVj7L1wJs"
+        }
+      ],
+      "reason": "TR-11 fixes an exact decoded byte length per field. A value that base64url-decodes cleanly but to the wrong length MUST be rejected."
+    },
+    "float_ts": {
+      "clause": "ID-1, TR-10",
+      "example_route": "POST /hmp/v1/pair/complete (P4)",
+      "bad_request_json": {
+        "pairing_id": "VWKr4g4I39Zgdo6lYYEbCA",
+        "ts": 1800000100.0,
+        "sig_der_b64u": "MEQCIE5TxJ9avdj3Zy1PA9vgLOswfgNE3KQU_vLVCfftVo_pAiBRX1oW1leWdEXih35GYOMzrmBkU06BvXKatQZGtvZk_Q"
+      },
+      "reason": "Every protocol-minted timestamp (ts, exp, confirm_by, access_expires_at, served_at, turn.since, sent_at) is a JSON integer. A JSON float (even one with a zero fractional part, e.g. 1800000100.0) MUST be rejected, not coerced.",
+      "note": "The signature field here is named sig_der_b64u (not the wire name 'sig', per PR4-1) so every randomized-signature leaf in this file matches one glob for CI regeneration comparison (IR-16); it is the same HMP1-PAIR-DONE signature produced above."
+    },
+    "boolean_v": {
+      "clause": "TR-10, V-1",
+      "example_route": "hmp1: QR payload 'v', also POST body 'v' and /ready 'versions' entries",
+      "bad_qr_json": {
+        "v": true,
+        "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a",
+        "ep": [
+          "https://example-test-instance\u002ets.net:8443",
+          "https://100\u002e64.0.1:8443"
+        ],
+        "oid": "Mdwc841zHWHcq_0rlS-FZA",
+        "s": "W9wIol9_4SHyr1IR5recNLcxd2RxROUkNozW-mM7tKw",
+        "exp": 1900000000
+      },
+      "bad_qr_wire": "hmp1:eyJ2Ijp0cnVlLCJpaWQiOiJ4cXZieXN3dmxmaTd1NWp1YTRrajN3YTV0dmg1cjZ3bjVnbHByaWF2dmJ1eWx0Y25ieTRhIiwiZXAiOlsiaHR0cHM6Ly9leGFtcGxlLXRlc3QtaW5zdGFuY2UudHMubmV0Ojg0NDMiLCJodHRwczovLzEwMC42NC4wLjE6ODQ0MyJdLCJvaWQiOiJNZHdjODQxekhXSGNxXzBybFMtRlpBIiwicyI6Ilc5d0lvbDlfNFNIeXIxSVI1cmVjTkxjeGQyUnhST1VrTm96Vy1tTTd0S3ciLCJleHAiOjE5MDAwMDAwMDB9",
+      "reason": "v MUST be a JSON integer (1 in v1). A JSON boolean MUST be rejected, not treated as 1/0 (JSON true/false are a distinct type from integers per TR-10)."
+    },
+    "ep_validation": {
+      "clause": "FR-002, PR1-5, CS-10",
+      "cases": [
+        {
+          "sub_case": "http_scheme",
+          "ep": "http://100\u002e64.0.1:8443",
+          "reason": "scheme is http, not https"
+        },
+        {
+          "sub_case": "https_but_host_not_allowed",
+          "ep": "https://evil-example.invalid:8443",
+          "reason": "https, but host is neither *.ts.net, 100\u002e64.0.0/10, nor fd7a:115c:a1e0::/48"
+        },
+        {
+          "sub_case": "userinfo",
+          "ep": "https://user:pass@100\u002e64.0.1:8443",
+          "reason": "CS-10 forbids userinfo in ep"
+        },
+        {
+          "sub_case": "path",
+          "ep": "https://100\u002e64.0.1:8443/path",
+          "reason": "CS-10 forbids a path in ep"
+        },
+        {
+          "sub_case": "query",
+          "ep": "https://100\u002e64.0.1:8443?q=1",
+          "reason": "CS-10 forbids a query string in ep"
+        },
+        {
+          "sub_case": "fragment",
+          "ep": "https://100\u002e64.0.1:8443#frag",
+          "reason": "CS-10 forbids a fragment in ep"
+        },
+        {
+          "sub_case": "uppercase_host",
+          "ep": "https://EXAMPLE-TEST-INSTANCE.TS.NET:8443",
+          "reason": "CS-10 requires <host> to be a lowercase DNS name; uppercase is non-canonical"
+        },
+        {
+          "sub_case": "trailing_dot_host",
+          "ep": "https://example-test-instance\u002ets.net.:8443",
+          "reason": "CS-10 forbids a trailing dot on the .ts.net name"
+        },
+        {
+          "sub_case": "ipv4_just_below_range",
+          "ep": "https://100.63.255.255:8443",
+          "reason": "one address below the 100\u002e64.0.0/10 lower bound"
+        },
+        {
+          "sub_case": "ipv4_just_above_range",
+          "ep": "https://100.128.0.0:8443",
+          "reason": "one address past the top of the 100\u002e64.0.0/10 block"
+        },
+        {
+          "sub_case": "ipv6_outside_range",
+          "ep": "https://[fd7a:115c:a1e1::1]:8443",
+          "reason": "differs from the required fd7a:115c:a1e0::/48 prefix in the 48th bit"
+        },
+        {
+          "sub_case": "missing_port",
+          "ep": "https://100\u002e64.0.1",
+          "reason": "CS-10 requires ep to be exactly https://<host>:<port>; no port is present"
+        }
+      ],
+      "reason": "FR-002/CS-10 fixes the exact ep grammar (scheme, host form, no userinfo/path/query/fragment, mandatory port). Every case above is syntactically URL-shaped but violates exactly one requirement.",
+      "note": "Addresses used here are synthetic placeholders (see qr_payload note); none correspond to a real host, device or tailnet."
+    },
+    "unknown_version_v": {
+      "clause": "PR1-5, V-2",
+      "bad_qr_json": {
+        "v": 2,
+        "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a",
+        "ep": [
+          "https://example-test-instance\u002ets.net:8443",
+          "https://100\u002e64.0.1:8443"
+        ],
+        "oid": "Mdwc841zHWHcq_0rlS-FZA",
+        "s": "W9wIol9_4SHyr1IR5recNLcxd2RxROUkNozW-mM7tKw",
+        "exp": 1900000000
+      },
+      "bad_qr_wire": "hmp1:eyJ2IjoyLCJpaWQiOiJ4cXZieXN3dmxmaTd1NWp1YTRrajN3YTV0dmg1cjZ3bjVnbHByaWF2dmJ1eWx0Y25ieTRhIiwiZXAiOlsiaHR0cHM6Ly9leGFtcGxlLXRlc3QtaW5zdGFuY2UudHMubmV0Ojg0NDMiLCJodHRwczovLzEwMC42NC4wLjE6ODQ0MyJdLCJvaWQiOiJNZHdjODQxekhXSGNxXzBybFMtRlpBIiwicyI6Ilc5d0lvbDlfNFNIeXIxSVI1cmVjTkxjeGQyUnhST1VrTm96Vy1tTTd0S3ciLCJleHAiOjE5MDAwMDAwMDB9",
+      "reason": "A v1 client understands only v=1. PR1-5 requires rejecting an unknown v; v=2 is a syntactically valid integer but is not the v1 client's version."
+    },
+    "malformed_iid": {
+      "clause": "PR1-5, ID-2",
+      "cases": [
+        {
+          "sub_case": "wrong_length_short",
+          "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4",
+          "reason": "51 chars, not 52",
+          "bad_qr_json": {
+            "v": 1,
+            "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4",
+            "ep": [
+              "https://example-test-instance\u002ets.net:8443",
+              "https://100\u002e64.0.1:8443"
+            ],
+            "oid": "Mdwc841zHWHcq_0rlS-FZA",
+            "s": "W9wIol9_4SHyr1IR5recNLcxd2RxROUkNozW-mM7tKw",
+            "exp": 1900000000
+          },
+          "bad_qr_wire": "hmp1:eyJ2IjoxLCJpaWQiOiJ4cXZieXN3dmxmaTd1NWp1YTRrajN3YTV0dmg1cjZ3bjVnbHByaWF2dmJ1eWx0Y25ieTQiLCJlcCI6WyJodHRwczovL2V4YW1wbGUtdGVzdC1pbnN0YW5jZS50cy5uZXQ6ODQ0MyIsImh0dHBzOi8vMTAwLjY0LjAuMTo4NDQzIl0sIm9pZCI6Ik1kd2M4NDF6SFdIY3FfMHJsUy1GWkEiLCJzIjoiVzl3SW9sOV80U0h5cjFJUjVyZWNOTGN4ZDJSeFJPVWtOb3pXLW1NN3RLdyIsImV4cCI6MTkwMDAwMDAwMH0"
+        },
+        {
+          "sub_case": "wrong_length_long",
+          "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4aa",
+          "reason": "53 chars, not 52",
+          "bad_qr_json": {
+            "v": 1,
+            "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4aa",
+            "ep": [
+              "https://example-test-instance\u002ets.net:8443",
+              "https://100\u002e64.0.1:8443"
+            ],
+            "oid": "Mdwc841zHWHcq_0rlS-FZA",
+            "s": "W9wIol9_4SHyr1IR5recNLcxd2RxROUkNozW-mM7tKw",
+            "exp": 1900000000
+          },
+          "bad_qr_wire": "hmp1:eyJ2IjoxLCJpaWQiOiJ4cXZieXN3dmxmaTd1NWp1YTRrajN3YTV0dmg1cjZ3bjVnbHByaWF2dmJ1eWx0Y25ieTRhYSIsImVwIjpbImh0dHBzOi8vZXhhbXBsZS10ZXN0LWluc3RhbmNlLnRzLm5ldDo4NDQzIiwiaHR0cHM6Ly8xMDAuNjQuMC4xOjg0NDMiXSwib2lkIjoiTWR3Yzg0MXpIV0hjcV8wcmxTLUZaQSIsInMiOiJXOXdJb2w5XzRTSHlyMUlSNXJlY05MY3hkMlJ4Uk9Va05velctbU03dEt3IiwiZXhwIjoxOTAwMDAwMDAwfQ"
+        },
+        {
+          "sub_case": "invalid_alphabet_char",
+          "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby41",
+          "reason": "contains '1', which is outside RFC4648 base32's [A-Z2-7] digit set",
+          "bad_qr_json": {
+            "v": 1,
+            "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby41",
+            "ep": [
+              "https://example-test-instance\u002ets.net:8443",
+              "https://100\u002e64.0.1:8443"
+            ],
+            "oid": "Mdwc841zHWHcq_0rlS-FZA",
+            "s": "W9wIol9_4SHyr1IR5recNLcxd2RxROUkNozW-mM7tKw",
+            "exp": 1900000000
+          },
+          "bad_qr_wire": "hmp1:eyJ2IjoxLCJpaWQiOiJ4cXZieXN3dmxmaTd1NWp1YTRrajN3YTV0dmg1cjZ3bjVnbHByaWF2dmJ1eWx0Y25ieTQxIiwiZXAiOlsiaHR0cHM6Ly9leGFtcGxlLXRlc3QtaW5zdGFuY2UudHMubmV0Ojg0NDMiLCJodHRwczovLzEwMC42NC4wLjE6ODQ0MyJdLCJvaWQiOiJNZHdjODQxekhXSGNxXzBybFMtRlpBIiwicyI6Ilc5d0lvbDlfNFNIeXIxSVI1cmVjTkxjeGQyUnhST1VrTm96Vy1tTTd0S3ciLCJleHAiOjE5MDAwMDAwMDB9"
+        },
+        {
+          "sub_case": "uppercase",
+          "iid": "XQVBYSWVLFI7U5JUA4KJ3WA5TVH5R6WN5GLPRIAVVBUYLTCNBY4A",
+          "reason": "iid is fixed as lowercase (ID-2); uppercase is non-canonical",
+          "bad_qr_json": {
+            "v": 1,
+            "iid": "XQVBYSWVLFI7U5JUA4KJ3WA5TVH5R6WN5GLPRIAVVBUYLTCNBY4A",
+            "ep": [
+              "https://example-test-instance\u002ets.net:8443",
+              "https://100\u002e64.0.1:8443"
+            ],
+            "oid": "Mdwc841zHWHcq_0rlS-FZA",
+            "s": "W9wIol9_4SHyr1IR5recNLcxd2RxROUkNozW-mM7tKw",
+            "exp": 1900000000
+          },
+          "bad_qr_wire": "hmp1:eyJ2IjoxLCJpaWQiOiJYUVZCWVNXVkxGSTdVNUpVQTRLSjNXQTVUVkg1UjZXTjVHTFBSSUFWVkJVWUxUQ05CWTRBIiwiZXAiOlsiaHR0cHM6Ly9leGFtcGxlLXRlc3QtaW5zdGFuY2UudHMubmV0Ojg0NDMiLCJodHRwczovLzEwMC42NC4wLjE6ODQ0MyJdLCJvaWQiOiJNZHdjODQxekhXSGNxXzBybFMtRlpBIiwicyI6Ilc5d0lvbDlfNFNIeXIxSVI1cmVjTkxjeGQyUnhST1VrTm96Vy1tTTd0S3ciLCJleHAiOjE5MDAwMDAwMDB9"
+        },
+        {
+          "sub_case": "padded",
+          "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a=",
+          "reason": "iid is unpadded (ID-2/TR-11 style); a trailing '=' is non-canonical",
+          "bad_qr_json": {
+            "v": 1,
+            "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a=",
+            "ep": [
+              "https://example-test-instance\u002ets.net:8443",
+              "https://100\u002e64.0.1:8443"
+            ],
+            "oid": "Mdwc841zHWHcq_0rlS-FZA",
+            "s": "W9wIol9_4SHyr1IR5recNLcxd2RxROUkNozW-mM7tKw",
+            "exp": 1900000000
+          },
+          "bad_qr_wire": "hmp1:eyJ2IjoxLCJpaWQiOiJ4cXZieXN3dmxmaTd1NWp1YTRrajN3YTV0dmg1cjZ3bjVnbHByaWF2dmJ1eWx0Y25ieTRhPSIsImVwIjpbImh0dHBzOi8vZXhhbXBsZS10ZXN0LWluc3RhbmNlLnRzLm5ldDo4NDQzIiwiaHR0cHM6Ly8xMDAuNjQuMC4xOjg0NDMiXSwib2lkIjoiTWR3Yzg0MXpIV0hjcV8wcmxTLUZaQSIsInMiOiJXOXdJb2w5XzRTSHlyMUlSNXJlY05MY3hkMlJ4Uk9Va05velctbU03dEt3IiwiZXhwIjoxOTAwMDAwMDAwfQ"
+        }
+      ],
+      "reason": "PR1-5 requires rejecting a malformed iid in the QR payload. Each case is embedded in an otherwise-valid QR payload so the whole ingestion path can be tested, not just an isolated string check."
+    },
+    "qr_wrong_length": {
+      "clause": "PR1-5, TR-11",
+      "cases": [
+        {
+          "sub_case": "oid_15_bytes",
+          "field": "oid",
+          "decoded_len": 15,
+          "bad_qr_json": {
+            "v": 1,
+            "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a",
+            "ep": [
+              "https://example-test-instance\u002ets.net:8443",
+              "https://100\u002e64.0.1:8443"
+            ],
+            "oid": "EclKFXGCkkK1plhco-X3",
+            "s": "W9wIol9_4SHyr1IR5recNLcxd2RxROUkNozW-mM7tKw",
+            "exp": 1900000000
+          },
+          "bad_qr_wire": "hmp1:eyJ2IjoxLCJpaWQiOiJ4cXZieXN3dmxmaTd1NWp1YTRrajN3YTV0dmg1cjZ3bjVnbHByaWF2dmJ1eWx0Y25ieTRhIiwiZXAiOlsiaHR0cHM6Ly9leGFtcGxlLXRlc3QtaW5zdGFuY2UudHMubmV0Ojg0NDMiLCJodHRwczovLzEwMC42NC4wLjE6ODQ0MyJdLCJvaWQiOiJFY2xLRlhHQ2trSzFwbGhjby1YMyIsInMiOiJXOXdJb2w5XzRTSHlyMUlSNXJlY05MY3hkMlJ4Uk9Va05velctbU03dEt3IiwiZXhwIjoxOTAwMDAwMDAwfQ",
+          "reason": "oid MUST decode to exactly 16 bytes (TR-11); this QR's oid decodes to 15"
+        },
+        {
+          "sub_case": "s_33_bytes",
+          "field": "s",
+          "decoded_len": 33,
+          "bad_qr_json": {
+            "v": 1,
+            "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a",
+            "ep": [
+              "https://example-test-instance\u002ets.net:8443",
+              "https://100\u002e64.0.1:8443"
+            ],
+            "oid": "Mdwc841zHWHcq_0rlS-FZA",
+            "s": "aTfoYS1_l4QD4DblPvw7ekb8ouSz0fcVXGNGeNBdiCET",
+            "exp": 1900000000
+          },
+          "bad_qr_wire": "hmp1:eyJ2IjoxLCJpaWQiOiJ4cXZieXN3dmxmaTd1NWp1YTRrajN3YTV0dmg1cjZ3bjVnbHByaWF2dmJ1eWx0Y25ieTRhIiwiZXAiOlsiaHR0cHM6Ly9leGFtcGxlLXRlc3QtaW5zdGFuY2UudHMubmV0Ojg0NDMiLCJodHRwczovLzEwMC42NC4wLjE6ODQ0MyJdLCJvaWQiOiJNZHdjODQxekhXSGNxXzBybFMtRlpBIiwicyI6ImFUZm9ZUzFfbDRRRDREYmxQdnc3ZWtiOG91U3owZmNWWEdOR2VOQmRpQ0VUIiwiZXhwIjoxOTAwMDAwMDAwfQ",
+          "reason": "s MUST decode to exactly 32 bytes (TR-11); this QR's s decodes to 33"
+        }
+      ],
+      "reason": "PR1-5 requires rejecting a wrong-length oid or s. These are the generic wrong_length cases above, re-embedded inside a full QR payload so the QR-ingestion path itself is exercised."
+    },
+    "non_canonical_trailing_bits": {
+      "clause": "TR-11",
+      "cases": [
+        {
+          "field_length_class": 16,
+          "decoded_len": 16,
+          "raw_hex": "85f7558e0941f81c93ea9e2d3b19fe10",
+          "canonical_b64u": "hfdVjglB-ByT6p4tOxn-EA",
+          "non_canonical_b64u": "hfdVjglB-ByT6p4tOxn-EP",
+          "padding_bit_count": 4
+        },
+        {
+          "field_length_class": 32,
+          "decoded_len": 32,
+          "raw_hex": "4b0dfb3c3a7910c4646f08d3aabb04ccce1a57f37a429dc34d442844e9f5d2fe",
+          "canonical_b64u": "Sw37PDp5EMRkbwjTqrsEzM4aV_N6Qp3DTUQoROn10v4",
+          "non_canonical_b64u": "Sw37PDp5EMRkbwjTqrsEzM4aV_N6Qp3DTUQoROn10v7",
+          "padding_bit_count": 2
+        }
+      ],
+      "reason": "TR-11 requires base64url to round-trip exactly. For a decoded length not a multiple of 3 bytes, the final base64 character carries unused 'padding' bits that a canonical encoder always sets to zero. non_canonical_b64u sets those bits to a non-zero pattern: a lenient decoder (Python's stdlib included) still decodes it to the identical raw bytes as canonical_b64u, but re-encoding those bytes never reproduces non_canonical_b64u -- so it MUST be rejected as non-canonical input, not silently accepted as an alternate spelling of the same value."
+    },
+    "point_not_on_curve": {
+      "clause": "TR-12",
+      "curve": "P-256",
+      "spki_der_hex": "3059301306072a8648ce3d020106082a8648ce3d030107034200049f56021b7def02a92dc7d43d7e23ee2ba7ca3a5063a9055f67ab3991e2cf03daf70a0104b8cbf00a075d7af0ccd7259cfa583f7ba811f32f9f055990ba09b457",
+      "spki_der_b64u": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEn1YCG33vAqktx9Q9fiPuK6fKOlBjqQVfZ6s5keLPA9r3CgEEuMvwCgddevDM1yWc-lg_e6gR8y-fBVmQugm0Vw",
+      "reason": "Right length (91 B), right prefix (0x04, uncompressed), right curve OID -- but (x, y) does not satisfy y^2 = x^3 - 3x + b mod p, so it is not a point on P-256 at all and names no valid public key. A conforming implementation MUST reject this at key-load time (or the first signature verification against it MUST fail), not treat it as an unusual-but-valid key."
+    },
+    "past_exp": {
+      "clause": "PR1-5",
+      "bad_qr_json": {
+        "v": 1,
+        "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a",
+        "ep": [
+          "https://example-test-instance\u002ets.net:8443",
+          "https://100\u002e64.0.1:8443"
+        ],
+        "oid": "Mdwc841zHWHcq_0rlS-FZA",
+        "s": "W9wIol9_4SHyr1IR5recNLcxd2RxROUkNozW-mM7tKw",
+        "exp": 946684800
+      },
+      "bad_qr_wire": "hmp1:eyJ2IjoxLCJpaWQiOiJ4cXZieXN3dmxmaTd1NWp1YTRrajN3YTV0dmg1cjZ3bjVnbHByaWF2dmJ1eWx0Y25ieTRhIiwiZXAiOlsiaHR0cHM6Ly9leGFtcGxlLXRlc3QtaW5zdGFuY2UudHMubmV0Ojg0NDMiLCJodHRwczovLzEwMC42NC4wLjE6ODQ0MyJdLCJvaWQiOiJNZHdjODQxekhXSGNxXzBybFMtRlpBIiwicyI6Ilc5d0lvbDlfNFNIeXIxSVI1cmVjTkxjeGQyUnhST1VrTm96Vy1tTTd0S3ciLCJleHAiOjk0NjY4NDgwMH0",
+      "reason": "The client MUST reject a QR whose exp has already passed. 946684800 (2000-01-01T00:00:00Z) is used so this vector stays in the past at any future verification time."
+    }
+  }
+}

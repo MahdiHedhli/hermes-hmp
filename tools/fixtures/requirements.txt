@@ -1,0 +1,6 @@
+# Dependencies for tools/fixtures/manifest.py and its tests.
+# Install into a scratch venv (never the system Python):
+#   python3 -m venv /path/to/scratch/venv && /path/to/scratch/venv/bin/pip install -r tools/fixtures/requirements.txt
+pyyaml>=6.0
+jsonschema>=4.20
+pytest>=8.0

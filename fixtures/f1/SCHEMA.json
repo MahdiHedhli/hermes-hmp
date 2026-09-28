@@ -1,0 +1,237 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://hermes-bot-mobile.example/schemas/f1-fixture-manifest.json",
+  "title": "F1 fixture manifest",
+  "description": "Structural schema for fixtures/f1/instances.yaml. See specs/001-connect-and-browse/contracts/fixture-format.md for the authoritative contract text and the additional semantic rules (label-prefix coverage, no real-looking identifiers, empty/non-empty history coverage, CS-22 scannable prefixes) that tools/fixtures/manifest.py enforces beyond this schema.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "format",
+    "label_prefix",
+    "device_name_prefix",
+    "operator_label_prefix",
+    "continuity_evidence",
+    "instances",
+    "conversations"
+  ],
+  "properties": {
+    "format": {
+      "description": "Manifest format version.",
+      "const": 1
+    },
+    "label_prefix": {
+      "description": "Prefix every seeded message text must start with. Must be a bracketed marker, never empty.",
+      "type": "string",
+      "minLength": 3,
+      "pattern": "^\\[.+\\]$"
+    },
+    "device_name_prefix": {
+      "description": "CS-22 scannable prefix (contracts/fixture-format.md rule 7). Every P2 device name a fixture or test client sends must start with this exact, fixed value. tools/ci/scan_logs.py (T033) greps logs for it.",
+      "const": "f1-fixture-device-"
+    },
+    "operator_label_prefix": {
+      "description": "CS-22 scannable prefix (contracts/fixture-format.md rule 7). Every `pair confirm` operator label a fixture or test client uses must start with this exact, fixed value. tools/ci/scan_logs.py (T033) greps logs for it.",
+      "const": "f1-fixture-label-"
+    },
+    "continuity_evidence": {
+      "description": "Must always be literally false. Fixtures are never continuity evidence (owner amendment 3); tools refuse to run if this is changed.",
+      "const": false
+    },
+    "instances": {
+      "description": "Fixture-local Hermes instances. F1 fixtures use exactly the keys A and B.",
+      "type": "array",
+      "minItems": 2,
+      "items": { "$ref": "#/$defs/instance" }
+    },
+    "conversations": {
+      "description": "Named conversation fixtures referenced from profiles and mutations.",
+      "type": "object",
+      "minProperties": 1,
+      "propertyNames": { "pattern": "^[a-z][a-z0-9-]*$" },
+      "additionalProperties": { "$ref": "#/$defs/conversation" }
+    },
+    "mutations": {
+      "description": "Named mutations applied by tools/fixtures/mutate.py during refresh/reconciliation tests.",
+      "type": "object",
+      "propertyNames": { "pattern": "^[a-z][a-z0-9_-]*$" },
+      "additionalProperties": { "$ref": "#/$defs/mutation" }
+    }
+  },
+  "$defs": {
+    "instance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "display_label", "users", "profiles"],
+      "properties": {
+        "key": {
+          "description": "Fixture-local instance key, never a real iid.",
+          "type": "string",
+          "pattern": "^[A-Z][A-Z0-9]*$"
+        },
+        "display_label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "port": {
+          "description": "0 means pick a free loopback port at run time. Fixtures never bake in a real port.",
+          "type": "integer",
+          "const": 0
+        },
+        "users": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/user" }
+        },
+        "profiles": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/profile" }
+        }
+      }
+    },
+    "user": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key"],
+      "properties": {
+        "key": {
+          "description": "Fixture-local user key. The real HMP user id (hmpu_...) is minted at build time, never stored here.",
+          "type": "string",
+          "pattern": "^[a-zA-Z][a-zA-Z0-9_]*$"
+        }
+      }
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "authorize_for"],
+      "properties": {
+        "name": {
+          "description": "Hermes profile name. Always prefixed f1- to keep it identifiable as fixture data.",
+          "type": "string",
+          "pattern": "^f1-[a-z0-9-]+$"
+        },
+        "display_name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "authorize_for": {
+          "description": "User keys (from this instance's users list) authorized for this profile's bot. Empty means not authorized (pending_operator case).",
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "conversation": {
+          "description": "Key into top-level conversations, or null/absent for the empty-history case.",
+          "type": ["string", "null"]
+        },
+        "other_sessions": {
+          "description": "Amendment A1 (session browsing, OD-F9/OD-F10): non-HMP sessions of this same bot, from other Hermes sources (cli, desktop, cron, ...), independent of the HMP chat/authorize_for steps above -- OD-F10 gates them by bot-level authorization only, never a per-session grant.",
+          "type": "array",
+          "items": { "$ref": "#/$defs/other_session" }
+        }
+      }
+    },
+    "other_session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["session_id", "source"],
+      "properties": {
+        "session_id": {
+          "description": "Fixture-local session key, made globally unique by the builder (instance + profile + this key). Never a real Hermes session id.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]*$"
+        },
+        "source": {
+          "description": "The Hermes `sessions.source` label this fixture session is seeded under (e.g. cli, desktop, cron). Never `hmp` -- that is the phone's own conversation, seeded through the normal chat/conversation path above.",
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "not": { "const": "hmp" }
+        },
+        "title": {
+          "type": ["string", "null"]
+        },
+        "conversation": {
+          "description": "Key into top-level conversations, for this session's seeded messages. Omit for a session with no messages (e.g. an archived placeholder).",
+          "type": ["string", "null"]
+        },
+        "archived": {
+          "type": "boolean"
+        },
+        "hidden": {
+          "type": "boolean"
+        },
+        "parent_session_id": {
+          "description": "Another other_session's session_id, in the SAME profile, to build a compression lineage: the parent must also set end_reason: compression.",
+          "type": ["string", "null"]
+        },
+        "end_reason": {
+          "description": "Set on the ROOT of a compression lineage (end_reason: compression); its tip is the other_session entry whose parent_session_id names this one.",
+          "type": ["string", "null"]
+        }
+      }
+    },
+    "conversation": {
+      "description": "Exactly one of generate (synthesized at build time) or messages (given verbatim).",
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "maxProperties": 1,
+      "properties": {
+        "generate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["count", "roles"],
+          "properties": {
+            "count": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100000
+            },
+            "roles": {
+              "type": "array",
+              "minItems": 1,
+              "items": { "enum": ["user", "assistant", "tool", "system"] }
+            }
+          }
+        },
+        "messages": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/message" }
+        }
+      }
+    },
+    "message": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "text"],
+      "properties": {
+        "role": {
+          "enum": ["user", "assistant", "tool", "system"]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "mutation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["conversation"],
+      "properties": {
+        "conversation": {
+          "type": "string",
+          "description": "Key into top-level conversations."
+        },
+        "add": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "kind": {
+          "enum": ["in_place_compaction", "session_replaced"]
+        }
+      }
+    }
+  }
+}

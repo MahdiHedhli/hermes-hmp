@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "bridge_files": [
+    "gateway/authz_mixin.py",
+    "gateway/config.py",
+    "gateway/pairing.py",
+    "gateway/platforms/_shared.py",
+    "gateway/platforms/base.py",
+    "gateway/platforms/event.py",
+    "gateway/run.py",
+    "gateway/run_adapters.py",
+    "gateway/run_profile_reconcile.py",
+    "gateway/session.py",
+    "hermes_cli/active_sessions.py",
+    "hermes_constants.py",
+    "hermes_state.py",
+    "hermes_state_compression.py",
+    "hermes_state_messages.py",
+    "hermes_state_registry.py",
+    "hermes_state_sessions.py",
+    "hermes_state_titles.py"
+  ],
+  "builds": [
+    {
+      "label": "owner-local",
+      "fingerprint": "a509ad1ad5d124e7c997486dffb67c60007593d1e81da98c0d6ea38f4e10081d",
+      "git_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
+      "source_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
+      "qualified_by": "direct-send probe + tests/integration/test_direct_send_fixture.py (8/8, owner-local)",
+      "qualified_at": "2026-09-27"
+    }
+  ]
+}
