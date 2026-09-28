@@ -1,5 +1,72 @@
 # Approvals review status
 
+**Round 4 remediation implemented on `feat/approvals`, base `e5a9fd6`; controller integration
+qualification remains pending.** This section supersedes the round-3 status and handoff below.
+
+## Round-4 root cause and fix
+
+The controller's round-3 matrix passed boundary and behavior probes for stock-base and
+experimental, but both integration suites failed before endpoint resolution. Provisional
+receipts (and the final receipt producer) emitted only `label`, `fingerprint`, `git_sha` and
+`source_sha`. The fixture copied these identity-only entries into its runtime compatibility
+list. `compat._parse_build_entry` also requires `qualified_by` and `qualified_at`, so loading
+that list raised `ValueError`, and `_direct_send_build_qualified` returned false.
+
+This explains the whole early-refusal pattern: stock-base returned `write_gate_closed`;
+experimental's OPEN base gate returned `api_server_unavailable` with no endpoint; Phone chat
+and approvals returned `write_gate_closed`. Even stale-head/missing-chat requests failed before
+their guards. No SSE response or pinned connection was reached by these failures.
+
+- Both receipt producers now emit complete runtime entries. Provisional provenance explicitly
+  says integration is pending; final provenance is emitted only after qualification succeeds.
+- The installer validates receipts through the actual runtime parser before changing the scratch
+  plugin copy. Missing metadata is a fixture setup error rather than a hidden runtime 503.
+- The owner-removal integration case now restarts the gateway after rewriting the owner list,
+  matching Hermes's adapter-config loading behavior and the existing flag test.
+- Matrix pytest temporary directories now stay under its output directory for retained diagnostics.
+
+Runtime plugin code and committed build lists are unchanged. Fail-closed behavior, exact source
+fingerprints, owner/device authorization, flags, loopback literals, redirect policy, SSE content
+type and run-ID binding all retain their existing checks.
+
+## Round-4 validation
+
+The new socket-free regression failed before the fix with the actual missing `qualified_by`
+parser error. It now exercises the real matrix orchestration with subprocess execution replaced
+by controlled results, installs provisional and final receipts, and checks the runtime gate.
+Changed source bytes still close the gate. Failed, skipped and empty integration reports never
+produce a final receipt. Installer tests reject either missing provenance field without changing
+the installed file. These tests do not claim real integration qualification.
+
+- Requested unit/tools CI set, excluding socket/gateway cases: **1095 passed, 2 skipped,
+  148 deselected**, one existing aiohttp subclass deprecation warning. Logs and exact local
+  runner: `/private/tmp/hmp-f3-r4/unit-final.log` and `local_checks.py`; the exclusion list is
+  `deselected.txt` in the same directory. No test assertions or skip markers were weakened.
+- The first exclusion command used incorrect node IDs and attempted socket tests; it was
+  interrupted and replaced with a name-based exclusion filter. Its incomplete run is not
+  validation evidence. Matrix and standalone integration were left for the controller.
+- The offline wheel test initially failed because the isolated uv cache lacked setuptools.
+  It passed using the supplied interpreter's installed setuptools with
+  `UV_NO_BUILD_ISOLATION=1` and `UV_PYTHON`; the final offline suite used those settings too.
+- Ruff **0.16.9**, `server tools`: PASS. `check_plugin_surface`: PASS. `git diff --check`: PASS.
+- `scan_private`: PASS with zero baseline. `scan_logs`: PASS on the final offline log and wheel
+  recheck log; default captured-log scan also passes. Scanning the older failed pytest tracebacks
+  additionally produced 205 heuristic matches (203 token-shaped identifiers/paths, two literal
+  `bearer is` prose matches), all reviewed as non-secrets. No suppression was added.
+
+Controller handoff: run `/private/tmp/hmp-f3-r4/run.sh` from this checkout. It uses the supplied
+interpreter/builds, runs `run_matrix.py --target direct-send --builds stock-base,experimental`,
+then runs both integration suites with `HMP_DIRECT_SEND_QUALIFICATION` pointing at the final
+receipt. It stops on matrix failure and keeps scratch writes under `/private/tmp/hmp-f3-r4/`.
+No runtime qualification entries are committed. Release remains blocked until the controller
+reports passing matrix/integration results and review is complete.
+
+Local commit attempt: blocked by `Operation not permitted` creating `.git/index.lock`.
+All five changed files remain in the working tree; HEAD is still
+`e5a9fd611c515ab6f9eadf179c617e0fbc44e504`. No push or attribution trailer was added.
+
+## Historical round-3 record
+
 **Round 3 remediation implemented; release remains blocked on external integration and review.**
 Base: `7173cff`. The round-2 verdict was REJECT. The installed Hermes checkout remained read-only
 at `8afaab3703e336d72a72c812dd2dd249f04f166a`; checks used a temporary `git archive` export and the

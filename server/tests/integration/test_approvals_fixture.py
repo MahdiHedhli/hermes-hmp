@@ -260,6 +260,8 @@ def test_approvals_fixture_fails_closed(gateway: DirectSendFixture, closed_by: s
     """Fixture-only qualification never removes ACL, explicit flag or build checks."""
     if closed_by == "owner":
         gateway._rewrite_config(owner_device_ids=())
+        # Hermes loads platform extras when the adapter connects, just like the flag.
+        gateway.restart_gateway()
     elif closed_by == "flag":
         gateway.set_direct_send_flag(False)
     else:

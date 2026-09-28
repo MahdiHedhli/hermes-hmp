@@ -419,7 +419,7 @@ def install_fixture_qualification(build: fc.BuildInfo, out: Path, qualification:
     the committed fail-closed list. The matrix uses a provisional receipt after probes, then
     publishes a final receipt only after integration passes.
     """
-    from hmp_plugin.compat import compute_read_bridge_fingerprint
+    from hmp_plugin.compat import compute_read_bridge_fingerprint, load_read_compat_list
 
     fc.assert_outside_real_home(out, "fixture qualification destination")
     target = out.resolve() / "_hmp_plugin" / "direct_send_supported_builds.json"
@@ -429,6 +429,12 @@ def install_fixture_qualification(build: fc.BuildInfo, out: Path, qualification:
     receipt = json.loads(qualification.read_text(encoding="utf-8"))
     if receipt.get("format") != 1 or receipt.get("bridge_files") != data["bridge_files"]:
         raise fc.FixtureSafetyError("direct-send qualification fingerprint boundary differs")
+    # Validate with the actual runtime parser before changing the fixture. Identity-only
+    # candidates lack BuildEntry provenance and would silently close the runtime gate.
+    try:
+        load_read_compat_list(qualification)
+    except (TypeError, ValueError) as exc:
+        raise fc.FixtureSafetyError("invalid direct-send fixture qualification schema") from exc
     fingerprint = compute_read_bridge_fingerprint(build.src_dir, data["bridge_files"])
     entries = [e for e in receipt.get("builds", [])
                if e.get("label") == build.label and e.get("fingerprint") == fingerprint

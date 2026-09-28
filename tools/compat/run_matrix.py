@@ -58,6 +58,7 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -318,6 +319,19 @@ def unsupported_path_check(builds_dir: Path, qualified_label: str, scratch: Path
     }
 
 
+def direct_send_entry(result: dict[str, Any], *, provisional: bool = False) -> dict[str, Any]:
+    """A complete runtime BuildEntry; bootstrap provenance must not claim integration passed."""
+    return {
+        **{k: result[k] for k in ("label", "fingerprint", "git_sha", "source_sha")},
+        "qualified_by": (
+            "tools/compat/run_matrix.py (provisional fixture bootstrap; integration pending)"
+            if provisional else
+            "tools/compat/run_matrix.py (boundary, behavior and F2/F3 integration passed)"
+        ),
+        "qualified_at": datetime.now(UTC).isoformat(),
+    }
+
+
 def process_direct_build(spec: BuildSpec, builds_dir: Path, scratch: Path) -> dict[str, Any]:
     """Probe first; provisional qualification only in disposable fixture copies."""
     from hmp_plugin.compat import compute_read_bridge_fingerprint
@@ -354,7 +368,7 @@ def process_direct_build(spec: BuildSpec, builds_dir: Path, scratch: Path) -> di
         if proc.returncode:
             result["error"] = f"{stage} failed; see {stage}.log"
             return result
-    candidate = {k: result[k] for k in ("label", "fingerprint", "git_sha", "source_sha")}
+    candidate = direct_send_entry(result, provisional=True)
     provisional = work / "provisional-fixture-only.json"
     provisional.write_text(json.dumps({"format": 1, "bridge_files": data["bridge_files"],
                                       "builds": [candidate]}, indent=2) + "\n", encoding="utf-8")
@@ -366,6 +380,7 @@ def process_direct_build(spec: BuildSpec, builds_dir: Path, scratch: Path) -> di
         sys.executable, "-m", "pytest", "server/tests/integration/test_direct_send_fixture.py",
         "server/tests/integration/test_approvals_fixture.py", "-k", spec.label, "-q",
         "-o", "addopts=", f"--junitxml={report.resolve()}",
+        f"--basetemp={work.resolve() / 'pytest'}",
     ], cwd=REPO_ROOT, capture_output=True, text=True, check=False, env=env)
     (work / "integration.log").write_text(proc.stdout + proc.stderr, encoding="utf-8")
     result["integration_ok"] = proc.returncode == 0 and integration_report_passed(report)
@@ -455,7 +470,7 @@ def main(argv: list[str] | None = None) -> int:
         "format": 1,
         "results": results,
         "candidate_entries": [
-            {
+            direct_send_entry(r) if args.target == "direct-send" else {
                 "label": r["label"],
                 "fingerprint": r["fingerprint"],
                 "git_sha": r["git_sha"],
