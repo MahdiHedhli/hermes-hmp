@@ -634,7 +634,7 @@ def test_rate_limiter_is_lru_bounded() -> None:
 # --------------------------------------------------------------------------------------------------
 
 
-def test_route_table_is_exactly_f1(tmp_path: Path) -> None:
+def test_route_table_matches_declared_routes(tmp_path: Path) -> None:
     app = Env(tmp_path).app()
     routes = sorted((r.method, r.resource.canonical) for r in app.router.routes())
     expected = sorted(
@@ -643,10 +643,10 @@ def test_route_table_is_exactly_f1(tmp_path: Path) -> None:
             *server.F1_ROUTES,
             *server.A1_SESSION_ROUTES,
             *server.F2_DIRECT_SEND_ROUTES,
+            *server.MOBILE_CRON_ROUTES,
         )
     )
     assert routes == expected
-    assert len(expected) == 13
 
 
 def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
@@ -659,10 +659,12 @@ def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
     app = Env(tmp_path, session_browsing=False).app()
     routes = sorted((r.method, r.resource.canonical) for r in app.router.routes())
     expected = sorted(
-        (m, server.full_path(p)) for m, p, _ in (*server.F1_ROUTES, *server.F2_DIRECT_SEND_ROUTES)
+        (m, server.full_path(p))
+        for m, p, _ in (
+            *server.F1_ROUTES, *server.F2_DIRECT_SEND_ROUTES, *server.MOBILE_CRON_ROUTES,
+        )
     )
     assert routes == expected
-    assert len(expected) == 11
 
 
 def test_write_paths_are_404_with_zero_bridge_calls(tmp_path: Path) -> None:

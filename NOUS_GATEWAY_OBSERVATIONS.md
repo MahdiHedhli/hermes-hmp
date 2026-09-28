@@ -11,10 +11,19 @@ HMP is a mobile gateway plugin for Hermes. These requests come from implementing
 | Pairing access | A platform plugin currently synthesizes an inert inbound message to create a standard pairing request. | A documented plugin API to request access for a platform user. |
 | Message origin | Session rows do not identify the client surface that submitted a turn. | An optional, non-model-visible client/surface field stored with user rows. |
 | Updates | A mobile client discovers new rows by polling. | A session change feed or bounded long poll. |
+| Private session search | `SessionDB.search_messages` logs up to 200 characters of the query at INFO when a search crosses its slow threshold (`hermes_state_search.py` in the checked build). A phone search could put private conversation terms in host logs. | Log timing, path, and row count without query text, and cover the slow path with a regression test. HMP will add authorized, bounded search only after a qualified build includes this fix. |
 
 ## Approval and clarify events
 
 Desktop-owned Bot Chat turns can surface prompts only through Desktop's process-local channel. A remote client cannot answer those same prompts through session chat. We propose durable, session-scoped pending prompt identifiers, event delivery for approval and clarify requests, and authenticated response routes that enforce the same authorization and expiry rules as Hermes itself. This is an upstream design request. HMP's proposed interim implementation is under security review and is not included in the initial public migration.
+
+## Already usable without a new Hermes contract
+
+The profile-scoped API server has list, create, edit, pause, resume, and delete
+routes for scheduled jobs. HMP's mobile cron preview uses those existing routes
+with an owner-device gate, a closed-by-default host flag, and exact-build
+qualification. New jobs start paused. This feature does not require an upstream
+change; delivery of mobile push notifications remains a separate API gap.
 
 ## Additional API parity requests
 

@@ -53,7 +53,7 @@ from typing import Any
 from aiohttp import web
 from aiohttp.http_exceptions import LineTooLong
 
-from . import direct_send, wire
+from . import direct_send, mobile_cron, wire
 from .contract import (
     CONTRACT_REVISION,
     HISTORY_LIMIT_DEFAULT,
@@ -145,6 +145,15 @@ A1_SESSION_ROUTES: tuple[tuple[str, str, str], ...] = (
 F2_DIRECT_SEND_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("POST", "/bots/{p}/chat/messages", "DS-1"),
     ("GET", "/bots/{p}/chat/messages/by-client-id/{cmid}", "DS-8"),
+)
+
+MOBILE_CRON_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/bots/{p}/jobs", "CR-1"),
+    ("POST", "/bots/{p}/jobs", "CR-2"),
+    ("PATCH", "/bots/{p}/jobs/{job_id}", "CR-3"),
+    ("DELETE", "/bots/{p}/jobs/{job_id}", "CR-4"),
+    ("POST", "/bots/{p}/jobs/{job_id}/pause", "CR-5"),
+    ("POST", "/bots/{p}/jobs/{job_id}/resume", "CR-6"),
 )
 
 # aiohttp's parser limits for one request line or one header field (SEC-4: bounded at the same
@@ -559,6 +568,64 @@ async def handle_chat_send(request: web.Request) -> web.Response:
     return _direct_send_outcome_response(outcome, guarded=guarded)
 
 
+async def _cron_endpoint(request: web.Request, *, write: bool) -> Any:
+    """No job data or loopback call before device and profile authorization."""
+    who = bearer(request)
+    ctx = context(request)
+    if not ctx.is_owner_device(who.device_id):
+        raise HmpError(ErrorCode.NOT_FOUND)
+    ctx.limiter.check(
+        "cron_write" if write else "cron_read", who.device_id,
+        20 if write else 60, ctx.now(),
+    )
+    profile = request.match_info["p"]
+    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
+    if not ctx.cron_enabled() or not ctx.cron_build_qualified():
+        raise HmpError(ErrorCode.CRON_UNAVAILABLE)
+    endpoint = await asyncio.to_thread(ctx.bridge.direct_send_endpoint, profile)
+    if endpoint is None:
+        raise HmpError(ErrorCode.CRON_UNAVAILABLE)
+    return endpoint
+
+
+async def handle_cron_list(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=False)
+    return json_response(await mobile_cron.call(endpoint, method="GET"))
+
+
+async def handle_cron_create(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=True)
+    body = mobile_cron.create_body(await read_json_body(request))
+    return json_response(await mobile_cron.call(endpoint, method="POST", body=body))
+
+
+async def handle_cron_edit(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=True)
+    job_id = mobile_cron.job_id(request.match_info["job_id"])
+    body = mobile_cron.edit_body(await read_json_body(request))
+    return json_response(await mobile_cron.call(endpoint, method="PATCH", job=job_id, body=body))
+
+
+async def handle_cron_delete(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=True)
+    job_id = mobile_cron.job_id(request.match_info["job_id"])
+    return json_response(await mobile_cron.call(endpoint, method="DELETE", job=job_id))
+
+
+async def handle_cron_pause(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=True)
+    job_id = mobile_cron.job_id(request.match_info["job_id"])
+    result = await mobile_cron.call(endpoint, method="POST", job=job_id, action="pause")
+    return json_response(result)
+
+
+async def handle_cron_resume(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=True)
+    job_id = mobile_cron.job_id(request.match_info["job_id"])
+    result = await mobile_cron.call(endpoint, method="POST", job=job_id, action="resume")
+    return json_response(result)
+
+
 # DS-7's own definitive-failure codes that mean "HMP's guard refused before Hermes ever saw this
 # attempt" (or, for `write_gate_closed`/401, Hermes refused authentication before processing any
 # content) -- DS-8's `not_accepted` vocabulary. Any OTHER rejected row (`api_server_unavailable`
@@ -687,8 +754,12 @@ def build_app(ctx: ServerContext) -> web.Application:
         # switch below -- the gate is re-checked per request, inside the handler.
         "/bots/{p}/chat/messages": handle_chat_send,
         "/bots/{p}/chat/messages/by-client-id/{cmid}": handle_chat_lookup,
+        "/bots/{p}/jobs": handle_cron_list,
+        "/bots/{p}/jobs/{job_id}": handle_cron_edit,
+        "/bots/{p}/jobs/{job_id}/pause": handle_cron_pause,
+        "/bots/{p}/jobs/{job_id}/resume": handle_cron_resume,
     }
-    routes = list(F1_ROUTES) + list(F2_DIRECT_SEND_ROUTES)
+    routes = list(F1_ROUTES) + list(F2_DIRECT_SEND_ROUTES) + list(MOBILE_CRON_ROUTES)
     if ctx.session_browsing_enabled:
         # Amendment A1 kill switch: when off, SES-1/SES-2 are never added to the router at all,
         # so they 404 exactly like every other unregistered F1 route (server-modules.md).
@@ -696,10 +767,15 @@ def build_app(ctx: ServerContext) -> web.Application:
         handlers["/bots/{p}/sessions/{ref}/messages"] = handle_session_messages
         routes += list(A1_SESSION_ROUTES)
     for method, path, _clause in routes:
+        handler = handlers[path]
+        if path == "/bots/{p}/jobs" and method == "POST":
+            handler = handle_cron_create
+        elif path == "/bots/{p}/jobs/{job_id}" and method == "DELETE":
+            handler = handle_cron_delete
         if method == "GET":
-            app.router.add_get(full_path(path), handlers[path], allow_head=False)
+            app.router.add_get(full_path(path), handler, allow_head=False)
         else:
-            app.router.add_route(method, full_path(path), handlers[path])
+            app.router.add_route(method, full_path(path), handler)
     return app
 
 
