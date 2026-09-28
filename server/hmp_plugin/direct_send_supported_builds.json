@@ -18,7 +18,10 @@
     "hermes_state_messages.py",
     "hermes_state_registry.py",
     "hermes_state_sessions.py",
-    "hermes_state_titles.py"
+    "hermes_state_titles.py",
+    "tools/approval.py",
+    "tools/approval_context.py",
+    "tools/clarify_gateway.py"
   ],
   "builds": [
     {
@@ -26,7 +29,7 @@
       "fingerprint": "a509ad1ad5d124e7c997486dffb67c60007593d1e81da98c0d6ea38f4e10081d",
       "git_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
       "source_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
-      "qualified_by": "direct-send probe + tests/integration/test_direct_send_fixture.py (8/8, owner-local)",
+      "qualified_by": "F2 direct-send probe (2026-09-27). F3 added tools/approval.py, tools/approval_context.py and tools/clarify_gateway.py to bridge_files; this fingerprint is the pre-F3 value and no longer matches, so the direct-send gate stays closed until a human requalifies the row (T4).",
       "qualified_at": "2026-09-27"
     }
   ]

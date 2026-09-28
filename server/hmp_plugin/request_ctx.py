@@ -188,6 +188,8 @@ class ServerContext:
     direct_send_flag: Callable[[], bool] = field(default=lambda: False)
     # `direct_send.DirectSendDeps`, only on a supported build (mirrors `reads`/`authorize` above).
     direct_send_deps: Any = None
+    # v1.3 prompt rows (process memory). None until a supported listener builds one.
+    prompt_store: Any = None
 
     def direct_send_enabled(self) -> bool:
         try:
