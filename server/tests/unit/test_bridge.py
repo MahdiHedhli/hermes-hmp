@@ -885,3 +885,24 @@ def test_prompt_timeout_hints_use_target_profile_a_b_a(br, world, monkeypatch) -
     for profile, expected in (("alpha", (73, 51)), ("beta", (241, 0)), ("alpha", (73, 51))):
         assert (br.approval_timeout_s(profile), br.clarify_timeout_s(profile)) == expected
         assert world.runner.scope is None
+
+
+@pytest.mark.skipif(
+    not BUILD_SOURCES, reason="no Hermes build: set HMP_HERMES_SRC or HMP_HERMES_BUILDS_DIR"
+)
+@pytest.mark.parametrize("src", BUILD_SOURCES, ids=lambda p: p.parent.name)
+def test_real_hermes_approval_qualification(src: Path) -> None:
+    """B3: real guards/resolvers, with pending waiters and control-enabled comparisons."""
+    python = src / ".venv" / "bin" / "python"
+    if not python.is_file():
+        pytest.skip("this build has no venv")
+    for tool_args in (
+        [str(TOOL), "--dependencies-attr", "DIRECT_SEND_DEPENDENCIES", "--target",
+         str(SERVER_DIR / "hmp_plugin" / "direct_send_supported_builds.json"), "--check"],
+        [str(REPO_ROOT / "tools" / "compat" / "approval_probes.py")],
+    ):
+        proc = subprocess.run(
+            [str(python), *tool_args, "--hermes-src", str(src)],
+            capture_output=True, text=True, check=False, cwd=REPO_ROOT,
+        )
+        assert proc.returncode == 0, proc.stderr

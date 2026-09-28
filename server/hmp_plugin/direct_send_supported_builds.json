@@ -1,17 +1,27 @@
 {
   "format": 1,
   "bridge_files": [
+    "agent/secret_scope.py",
     "gateway/authz_mixin.py",
     "gateway/config.py",
     "gateway/pairing.py",
     "gateway/platforms/_shared.py",
+    "gateway/platforms/api_server.py",
+    "gateway/platforms/api_server_room_grants.py",
+    "gateway/platforms/api_server_run_idempotency.py",
+    "gateway/platforms/api_server_runs.py",
     "gateway/platforms/base.py",
     "gateway/platforms/event.py",
     "gateway/run.py",
     "gateway/run_adapters.py",
+    "gateway/run_busy.py",
+    "gateway/run_inbound.py",
     "gateway/run_profile_reconcile.py",
+    "gateway/run_turn_runner.py",
     "gateway/session.py",
     "hermes_cli/active_sessions.py",
+    "hermes_cli/auth.py",
+    "hermes_cli/profiles.py",
     "hermes_constants.py",
     "hermes_state.py",
     "hermes_state_compression.py",
@@ -21,16 +31,21 @@
     "hermes_state_titles.py",
     "tools/approval.py",
     "tools/approval_context.py",
-    "tools/clarify_gateway.py"
+    "tools/approval_gateway_wait.py",
+    "tools/approval_human_wait.py",
+    "tools/clarify_gateway.py",
+    "tools/interrupt.py"
   ],
-  "builds": [
+  "builds": [],
+  "requalification_required": [
     {
       "label": "owner-local",
       "fingerprint": "a509ad1ad5d124e7c997486dffb67c60007593d1e81da98c0d6ea38f4e10081d",
       "git_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
       "source_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
       "qualified_by": "F2 direct-send probe (2026-09-27). F3 added tools/approval.py, tools/approval_context.py and tools/clarify_gateway.py to bridge_files; this fingerprint is the pre-F3 value and no longer matches, so the direct-send gate stays closed until a human requalifies the row (T4).",
-      "qualified_at": "2026-09-27"
+      "qualified_at": "2026-09-27",
+      "reason": "bridge_files changed; rerun qualification"
     }
   ]
 }

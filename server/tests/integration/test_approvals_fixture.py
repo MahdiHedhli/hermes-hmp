@@ -12,12 +12,12 @@ behavioral pin for after that requalification. They do not update the fingerprin
 from __future__ import annotations
 
 import importlib.util
+import json
 import uuid
 from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
 _SIBLING = Path(__file__).with_name("test_direct_send_fixture.py")
 _spec = importlib.util.spec_from_file_location("f2_direct_send_fixture_tests", _SIBLING)
@@ -38,15 +38,7 @@ pytestmark = _f2.pytestmark
 @pytest.fixture(params=_f2.BUILDS)
 def gateway(request: pytest.FixtureRequest, tmp_path: Path):
     """The F2 direct-send gateway, including its pairing pty. Reused, not reimplemented."""
-    for fixture in _f2.gateway.__wrapped__(request, tmp_path):
-        config_path = fixture.paths.home / "config.yaml"
-        config = yaml.safe_load(config_path.read_text(encoding="utf-8"))
-        config["gateway"]["platforms"]["hmp"]["extra"]["owner_device_ids"] = [
-            fixture.reference_device_id
-        ]
-        config_path.write_text(yaml.safe_dump(config), encoding="utf-8")
-        fixture.restart_gateway()
-        yield fixture
+    yield from _f2.gateway.__wrapped__(request, tmp_path)
 
 
 def _prompts(client: Client, profile: str = DEFAULT_PROFILE) -> tuple[int, Any]:
@@ -261,3 +253,28 @@ def test_t8_restart_mid_wait_does_not_apply(gateway: DirectSendFixture) -> None:
         assert body["applied"] is False
     else:
         assert body["error"]["code"] == "not_found"
+
+
+@pytest.mark.parametrize("closed_by", ["owner", "flag", "qualification"])
+def test_approvals_fixture_fails_closed(gateway: DirectSendFixture, closed_by: str) -> None:
+    """Fixture-only qualification never removes ACL, explicit flag or build checks."""
+    if closed_by == "owner":
+        gateway._rewrite_config(owner_device_ids=())
+    elif closed_by == "flag":
+        gateway.set_direct_send_flag(False)
+    else:
+        path = gateway.paths.out_dir / "_hmp_plugin" / "direct_send_supported_builds.json"
+        data = json.loads(path.read_text(encoding="utf-8"))
+        data["builds"] = []
+        path.write_text(json.dumps(data), encoding="utf-8")
+        gateway.restart_gateway()
+    before = len(gateway.fake_model.main_requests())
+    for status, body in (
+        _prompts(gateway.client),
+        _phone(gateway.client, cmid=str(uuid.uuid4()), text="fixture must refuse"),
+        _answer(gateway.client, "missing-request", {"choice": "once"}),
+    ):
+        assert status == (404 if closed_by == "owner" else 503), body
+        assert body["error"]["code"] == (
+            "not_found" if closed_by == "owner" else "write_gate_closed")
+    assert len(gateway.fake_model.main_requests()) == before

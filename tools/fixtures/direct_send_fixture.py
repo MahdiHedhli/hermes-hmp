@@ -52,6 +52,10 @@ import _fixture_common as fc  # noqa: E402
 
 FIXTURE_SEED = THIS_DIR / "fixture_seed.py"
 FIXTURE_PAIRING_CLI = THIS_DIR / "fixture_pairing_cli.py"
+# Fixture tooling may be invoked without pytest's server pythonpath configuration.
+if str(fc.SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(fc.SERVER_DIR))
+
 BUILD_FIXTURE = THIS_DIR / "build_fixture.py"
 
 # CS-22-style scannable prefix (mirrors `fixtures/f1/instances.yaml`'s own `label_prefix`
@@ -117,6 +121,7 @@ def write_direct_send_config(
     model_base_url: str,
     named_profile_keys: dict[str, str] | None = None,
     direct_send_enabled: bool = True,
+    owner_device_ids: tuple[str, ...] = (),
     api_server_host: str = "127.0.0.1",
 ) -> None:
     """Rewrites the instance's own `config.yaml` (the SAME shape `build_fixture.py`'s
@@ -165,6 +170,7 @@ def write_direct_send_config(
         "      extra:\n",
         '        bind: "127.0.0.1"\n',
         f"        port: {hmp_port}\n",
+        f"        owner_device_ids: {json.dumps(list(owner_device_ids))}\n",
         "        direct_send:\n",
         f"          enabled: {'true' if direct_send_enabled else 'false'}\n",
         "    api_server:\n",
@@ -396,4 +402,38 @@ def build_offline(
     if instances:
         args += ["--instances", instances]
     result = subprocess.run(args, check=True, env=env, capture_output=True, text=True)
-    return json.loads(result.stdout)
+    info = json.loads(result.stdout)
+    qualification = os.environ.get("HMP_DIRECT_SEND_QUALIFICATION")
+    if qualification:
+        install_fixture_qualification(
+            fc.resolve_build(Path(builds_dir or env["HMP_HERMES_BUILDS_DIR"]), label),
+            out, Path(qualification),
+        )
+    return info
+
+
+def install_fixture_qualification(build: fc.BuildInfo, out: Path, qualification: Path) -> None:
+    """Apply a matrix receipt ONLY to the scratch plugin copy, bound to exact current bytes.
+
+    No environment override exists in the runtime plugin. Without a receipt, fixtures retain
+    the committed fail-closed list. The matrix uses a provisional receipt after probes, then
+    publishes a final receipt only after integration passes.
+    """
+    from hmp_plugin.compat import compute_read_bridge_fingerprint
+
+    fc.assert_outside_real_home(out, "fixture qualification destination")
+    target = out.resolve() / "_hmp_plugin" / "direct_send_supported_builds.json"
+    if not target.resolve().is_relative_to(out.resolve()):
+        raise fc.FixtureSafetyError("qualification destination escaped the fixture copy")
+    data = json.loads(target.read_text(encoding="utf-8"))
+    receipt = json.loads(qualification.read_text(encoding="utf-8"))
+    if receipt.get("format") != 1 or receipt.get("bridge_files") != data["bridge_files"]:
+        raise fc.FixtureSafetyError("direct-send qualification fingerprint boundary differs")
+    fingerprint = compute_read_bridge_fingerprint(build.src_dir, data["bridge_files"])
+    entries = [e for e in receipt.get("builds", [])
+               if e.get("label") == build.label and e.get("fingerprint") == fingerprint
+               and e.get("git_sha") is None and fingerprint is not None]
+    if len(entries) != 1:
+        raise fc.FixtureSafetyError("no exact direct-send fixture qualification for this build")
+    data["builds"] = entries
+    target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
