@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import Protocol
 
 from .contract import OtherWhy
+from .logging_policy import log_event
 
 READ_COMPAT_FILE = "read_compat_builds.json"  # GU-2c list (starts empty; populated by T064)
 WRITE_SUPPORTED_FILE = "write_supported_builds.json"  # GU-2a matrix (stays empty in F1)
@@ -433,7 +434,51 @@ DIRECT_SEND_DEPENDENCIES: tuple[DependencySpec, ...] = (
     ),
     DependencySpec("hermes_state", "SessionDB.get_session_by_title", gap="E-GAP-6/7"),
     DependencySpec("hermes_state", "SessionDB.get_compression_lineage", gap="E-GAP-6/7"),
+    # Amendment F3 (HMP_V1.md §7b AP-4/AP-9). Probed only with the direct-send gate, and only
+    # after `direct_send_supported_builds.json` still matches. Not part of the read probe.
+    DependencySpec("tools.approval", "resolve_gateway_approval", gap="E-GAP-9"),
+    DependencySpec("tools.approval", "list_gateway_approvals", gap="E-GAP-9"),
+    DependencySpec("tools.clarify_gateway", "resolve_gateway_clarify", gap="E-GAP-9/20"),
+    DependencySpec("tools.clarify_gateway", "mark_awaiting_text", gap="E-GAP-9/20"),
+    DependencySpec("tools.clarify_gateway", "get_clarify_timeout", gap="E-GAP-9/20"),
+    DependencySpec("tools.approval_context", "_get_approval_timeout", gap="E-GAP-9"),
 )
+
+_DIRECT_SEND_LIST = Path(__file__).resolve().parent / "direct_send_supported_builds.json"
+_direct_send_qualified_cache: bool | None = None
+
+
+def direct_send_build_qualified() -> bool:
+    """T4: fingerprint + probe against `direct_send_supported_builds.json`.
+
+    A stale fingerprint (the F3 `bridge_files` growth, before a human requalifies the row)
+    returns False and does not import the new modules. The result is cached for the process.
+    """
+    global _direct_send_qualified_cache
+    if _direct_send_qualified_cache is not None:
+        return _direct_send_qualified_cache
+    ok = _direct_send_build_qualified()
+    _direct_send_qualified_cache = ok
+    if not ok:
+        log_event("direct_send", outcome="unqualified")
+    return ok
+
+
+def _direct_send_build_qualified() -> bool:
+    try:
+        compat_list = load_read_compat_list(_DIRECT_SEND_LIST)
+    except (OSError, ValueError):
+        return False
+    root = locate_hermes_root()
+    if root is None:
+        return False
+    # getattr, not `.bridge_files`: compat.py's source must not contain the substring ".bridge".
+    files = getattr(compat_list, "bridge_files")  # noqa: B009
+    identity = GitFingerprintReader(files).read(root)
+    if identity is None or match_build(identity, compat_list.builds) is None:
+        return False
+    missing = probe_direct_send_dependencies(hermes_root=root, bridge_files=files)
+    return not missing
 
 
 def probe_direct_send_dependencies(

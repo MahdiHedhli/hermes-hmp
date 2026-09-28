@@ -407,9 +407,18 @@ def cmd_acquire_lease(args: argparse.Namespace) -> None:
     from hermes_cli.active_sessions import try_acquire_active_session
 
     profile_dir = Path(args.home) / "profiles" / args.profile
+    metadata = None
+    if args.desktop_held:
+        # The lease Hermes treats as a live Bot Chat mailbox owner
+        # (`find_canonical_live_owner`): HMP's DS-4 exempts it, and `api_server` admits the
+        # turn to that mailbox instead of running it locally.
+        metadata = {
+            "bot_live_delivery_consumer": True,
+            "live_session_id": args.session_id,
+        }
     lease, refusal = try_acquire_active_session(
         session_id=args.session_id, surface=args.surface, config={},
-        registry_home=profile_dir,
+        registry_home=profile_dir, metadata=metadata,
     )
     if lease is None:
         _fail(f"acquire-lease refused: {refusal}")
@@ -529,6 +538,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--profile", required=True)
     p.add_argument("--session-id", required=True)
     p.add_argument("--surface", default="f1-fixture-synthetic-lease")
+    p.add_argument(
+        "--desktop-held",
+        action="store_true",
+        help="advertise bot_live_delivery_consumer so the Bot Chat mailbox path owns the turn",
+    )
     p.set_defaults(func=cmd_acquire_lease)
 
     p = sub.add_parser("compat-identity")

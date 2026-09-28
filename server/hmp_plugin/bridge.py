@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
 
+from .compat import direct_send_build_qualified
 from .contract import (
     CONVERSATION_ID,
     TOOL_ARGUMENTS_CAP,
@@ -214,6 +215,7 @@ REACHED_DATA_ATTRIBUTES: frozenset[str] = frozenset(
         "profile_route_rejected",
         "config",
         "extra",
+        "_gateway_accepted",
     }
 )
 
@@ -737,6 +739,8 @@ class HermesReadBridge:
             return AuthorizeResult(authz=AuthzState.UNVERIFIABLE)
         self._pending_triggers.add(future)
         future.add_done_callback(self._trigger_done)
+        if hasattr(self._adapter, "note_inert_reply"):
+            self._adapter.note_inert_reply(chat_id)
         log_event("p6_trigger", outcome="sent")
         return AuthorizeResult(authz=AuthzState.PENDING_OPERATOR)
 
@@ -1138,3 +1142,107 @@ class HermesReadBridge:
             return None  # no usable key: the gate stays closed (never a short key, never a 401)
         prefix = "" if is_default else f"/p/{quote(profile, safe='')}"
         return DirectSendEndpoint(host=host, port=port, api_key=key, path_prefix=prefix)
+
+    # ------------------------------------------------------------------------------------------
+    # Amendment F3 (HMP_V1.md §7b). Function-local imports, only called once the direct-send
+    # gate is open. `resolve_all` is never passed. Private clarify indexes are not read.
+    # ------------------------------------------------------------------------------------------
+
+    def phone_session_key(self, user_id: str, profile: str) -> str | None:
+        """The session key `handle_message` will derive for this user's Phone chat. Not the
+        Bot Chat key, and not a value the phone sent."""
+        chat_id = self._directory.chat_id(user_id, profile)
+        if chat_id is None:
+            return None
+        source = self._source(chat_id=chat_id, user_id=user_id, profile=profile, user_name=None)
+        if _not_routed(source, profile):
+            return None
+        key = self._hermes.build_session_key(source, profile)
+        return key if isinstance(key, str) and key else None
+
+    def list_gateway_approvals(self, session_key: str) -> list[dict[str, object]]:
+        from tools.approval import list_gateway_approvals
+
+        rows = list_gateway_approvals(session_key)
+        if not isinstance(rows, list):
+            raise BridgeError("approval list is not a list")
+        return [row for row in rows if isinstance(row, dict)]
+
+    def resolve_gateway_approval(self, session_key: str, choice: str, request_id: str) -> int:
+        from tools.approval import resolve_gateway_approval
+
+        resolved = resolve_gateway_approval(
+            session_key, choice, resolve_all=False, request_id=request_id
+        )
+        return resolved if isinstance(resolved, int) and not isinstance(resolved, bool) else 0
+
+    def resolve_gateway_clarify(self, clarify_id: str, response: str) -> bool:
+        from tools.clarify_gateway import resolve_gateway_clarify
+
+        return bool(resolve_gateway_clarify(clarify_id, response))
+
+    def mark_clarify_awaiting_text(self, clarify_id: str) -> bool:
+        from tools.clarify_gateway import mark_awaiting_text
+
+        return bool(mark_awaiting_text(clarify_id))
+
+    def approval_timeout_s(self) -> int:
+        from tools.approval_context import _get_approval_timeout
+
+        value = _get_approval_timeout()
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 300
+        return value
+
+    def clarify_timeout_s(self) -> int:
+        from tools.clarify_gateway import get_clarify_timeout
+
+        value = get_clarify_timeout()
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 3600
+        return value
+
+    def direct_send_qualified(self) -> bool:
+        """T4: the running tree's fingerprint must still match the direct-send list.
+        A stale fingerprint keeps the gate closed. The probe runs only after a match."""
+        return direct_send_build_qualified()
+
+    async def deliver_phone_message(
+        self, *, user_id: str, profile: str, text: str, message_id: str
+    ) -> bool:
+        """AP-6. Builds the event off the loop (the Hermes import) and hands it to
+        `handle_message` on the loop. `allow_gateway_control` is true. Returns whether Hermes
+        accepted the event."""
+        event = await asyncio.to_thread(
+            self._phone_event, user_id=user_id, profile=profile, text=text, message_id=message_id
+        )
+        await self._adapter.handle_message(event)
+        return bool(getattr(event, "_gateway_accepted", False))
+
+    def _phone_event(self, *, user_id: str, profile: str, text: str, message_id: str) -> Any:
+        from gateway.platforms.event import MessageEvent, MessageType
+
+        chat_id = self._directory.chat_id(user_id, profile)
+        if chat_id is None:
+            raise BridgeError("no chat for the phone message")
+        label = self._directory.operator_label(user_id) or OPERATOR_LABEL_UNKNOWN
+        source = self._source(chat_id=chat_id, user_id=user_id, profile=profile, user_name=label)
+        if _not_routed(source, profile):
+            raise BridgeError("source is not routed to the profile")
+        names = {f.name for f in dataclasses.fields(MessageEvent)}
+        kwargs: dict[str, Any] = {
+            "text": text,
+            "message_type": MessageType.TEXT,
+            "message_id": message_id,
+            "source": source,
+            "user_id": user_id,
+            "user_name": label,
+        }
+        if "internal" in names:
+            kwargs["internal"] = False
+        if "allow_gateway_control" not in names:
+            raise BridgeError("MessageEvent lacks allow_gateway_control")
+        kwargs["allow_gateway_control"] = True
+        if "defer_policy" in names:
+            kwargs["defer_policy"] = "reject"
+        return MessageEvent(**kwargs)

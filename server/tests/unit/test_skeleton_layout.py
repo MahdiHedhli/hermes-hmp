@@ -27,6 +27,7 @@ CONTRACT_MODULES = {
     "revoke.py",
     "gate.py",
     "direct_send.py",
+    "prompts.py",
     "server.py",
     "request_ctx.py",
     "adapter.py",

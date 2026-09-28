@@ -65,12 +65,13 @@ our own reply). See `_check_interleave`'s own docstring for the exact rule and i
 
 from __future__ import annotations
 
+import contextvars
 import hashlib
 import json
 import logging
 import socket
 from collections import OrderedDict
-from collections.abc import Awaitable, Callable, Mapping
+from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 
 import aiohttp
@@ -125,6 +126,10 @@ _INTERLEAVE_UNVERIFIED = "unverified"
 # timestamps taken on this same host (Hermes's own row timestamp vs. this call's own clock), so
 # this is generous headroom for DB/queueing latency, not a cross-host clock-skew allowance.
 _INTERLEAVE_TIMESTAMP_WINDOW_S = 120
+_APPROVAL_CHOICES = frozenset({"once", "session", "always", "deny"})
+_STREAM_BIND: contextvars.ContextVar[StreamBind | None] = contextvars.ContextVar(
+    "hmp_stream_bind", default=None
+)
 
 
 @dataclass(frozen=True)
@@ -137,6 +142,30 @@ class LoopbackResult:
 
 
 LoopbackCall = Callable[[DirectSendEndpoint, str, str], Awaitable[LoopbackResult]]
+
+
+@dataclass(frozen=True)
+class StreamBind:
+    """Who a Bot Chat stream's `approval.request` belongs to. Set only for the consume."""
+
+    store: object
+    iid: str
+    user_id: str
+    profile: str
+    now: Callable[[], int]
+    timeout_s: int
+
+
+@dataclass
+class _StreamState:
+    phase: str = "start"
+    content: str | None = None
+    session_id: str | None = None
+    queued: bool = False
+    failed: bool = False
+    terminal: bool = False
+    saw_approval: bool = False
+    saw_frame: bool = False
 
 
 def _format_host(host: str) -> str:
@@ -174,15 +203,189 @@ class _PinnedLoopbackResolver(aiohttp.abc.AbstractResolver):
         return None
 
 
+def _parse_sse_frame(raw: bytes) -> tuple[str | None, dict[str, object] | None, bool]:
+    """One SSE frame. Comment-only frames (keepalives) carry no data. The payload is not logged."""
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return None, None, False
+    event_name: str | None = None
+    data_lines: list[str] = []
+    comment = False
+    for line in text.splitlines():
+        if not line:
+            continue
+        if line.startswith(":"):
+            comment = True
+            continue
+        if line.startswith("event:"):
+            event_name = line[6:].strip()
+        elif line.startswith("data:"):
+            data_lines.append(line[5:].lstrip())
+    if not data_lines:
+        return event_name, None, comment
+    try:
+        payload = json.loads("\n".join(data_lines))
+    except json.JSONDecodeError:
+        return event_name, None, False
+    if not isinstance(payload, dict):
+        return event_name, None, False
+    if event_name is None and isinstance(payload.get("event"), str):
+        event_name = payload["event"]
+    return event_name, payload, False
+
+
+def _apply_sse_frame(
+    state: _StreamState,
+    name: str | None,
+    payload: Mapping[str, object] | None,
+    *,
+    comment: bool,
+    bind: StreamBind | None,
+) -> None:
+    """Fold one frame into `state` and, when bound, the prompt store. No prompt text is logged."""
+    if comment and payload is None:
+        if state.phase == "after_start" and bind is not None:
+            state.phase = "mailbox"
+            bind.store.set_desktop_held(bind.iid, bind.user_id, bind.profile)  # type: ignore[attr-defined]
+        return
+    if not name:
+        return
+    state.saw_frame = True
+    if name == "run.started":
+        if state.phase == "start":
+            state.phase = "after_start"
+        return
+    if name == "message.started":
+        state.phase = "local"
+        if bind is not None:
+            bind.store.clear_desktop_held(bind.iid, bind.user_id, bind.profile)  # type: ignore[attr-defined]
+        return
+    if name == "approval.request" and payload is not None:
+        state.phase = "local"
+        state.saw_approval = True
+        if bind is not None:
+            bind.store.clear_desktop_held(bind.iid, bind.user_id, bind.profile)  # type: ignore[attr-defined]
+            raw_choices = payload.get("choices")
+            choices = tuple(
+                choice
+                for choice in raw_choices
+                if isinstance(choice, str) and choice in _APPROVAL_CHOICES
+            ) if isinstance(raw_choices, list) else ()
+            request_id = payload.get("request_id")
+            run_id = payload.get("run_id")
+            raw_command = payload.get("command")
+            command = raw_command if isinstance(raw_command, str) else ""
+            raw_description = payload.get("description")
+            description = raw_description if isinstance(raw_description, str) else ""
+            if isinstance(request_id, str) and isinstance(run_id, str):
+                bind.store.record_stream_approval(  # type: ignore[attr-defined]
+                    iid=bind.iid,
+                    user_id=bind.user_id,
+                    profile=bind.profile,
+                    request_id=request_id,
+                    run_id=run_id,
+                    command=command,
+                    description=description,
+                    choices=choices,
+                    now=bind.now(),
+                    timeout_s=bind.timeout_s,
+                )
+        return
+    if name == "run.queued":
+        state.phase = "mailbox"
+        state.queued = True
+        if bind is not None:
+            bind.store.set_desktop_held(bind.iid, bind.user_id, bind.profile)  # type: ignore[attr-defined]
+        return
+    if name == "assistant.completed" and payload is not None:
+        content = payload.get("content")
+        if isinstance(content, str):
+            state.content = content
+        session_id = payload.get("session_id")
+        if isinstance(session_id, str):
+            state.session_id = session_id
+        if state.phase != "local" and not state.saw_approval and bind is not None:
+            state.phase = "mailbox"
+            bind.store.set_desktop_held(bind.iid, bind.user_id, bind.profile)  # type: ignore[attr-defined]
+        return
+    if name == "run.completed" and payload is not None:
+        state.terminal = True
+        session_id = payload.get("session_id")
+        if isinstance(session_id, str):
+            state.session_id = session_id
+        return
+    if name in {"run.failed", "run.cancelled", "error"}:
+        state.failed = True
+        state.terminal = True
+        return
+    if name == "done":
+        state.terminal = True
+
+
+def _stream_result(state: _StreamState) -> LoopbackResult:
+    if not state.terminal:
+        raise aiohttp.ClientPayloadError("sse ended before a terminal event")
+    if state.failed:
+        return LoopbackResult(status=502, body=None, effective_session_id=state.session_id)
+    if state.content is not None and not state.queued:
+        body: dict[str, object] = {
+            "message": {"role": "assistant", "content": state.content},
+        }
+        if state.session_id is not None:
+            body["session_id"] = state.session_id
+        return LoopbackResult(
+            status=200, body=body, effective_session_id=state.session_id
+        )
+    if state.queued or state.phase == "mailbox":
+        return LoopbackResult(
+            status=202, body={"queued": True}, effective_session_id=state.session_id
+        )
+    raise aiohttp.ClientPayloadError("sse ended before a terminal event")
+
+
+async def consume_sse(
+    chunks: AsyncIterator[bytes], *, bind: StreamBind | None
+) -> LoopbackResult:
+    """Read a `chat/stream` body until `done` or EOF. Events update `bind` as they arrive."""
+    state = _StreamState()
+    buffer = b""
+    try:
+        async for chunk in chunks:
+            buffer += chunk
+            while b"\n\n" in buffer:
+                raw, buffer = buffer.split(b"\n\n", 1)
+                name, payload, comment = _parse_sse_frame(raw)
+                _apply_sse_frame(state, name, payload, comment=comment, bind=bind)
+                if name == "done":
+                    return _stream_result(state)
+        if buffer.strip():
+            name, payload, comment = _parse_sse_frame(buffer)
+            _apply_sse_frame(state, name, payload, comment=comment, bind=bind)
+        if not state.saw_frame and buffer.lstrip().startswith(b"{"):
+            # A JSON completion is the sync route. AP-1: do not treat it as success.
+            return LoopbackResult(status=502, body=None, effective_session_id=None)
+        return _stream_result(state)
+    finally:
+        if bind is not None:
+            bind.store.clear_desktop_held(bind.iid, bind.user_id, bind.profile)  # type: ignore[attr-defined]
+
+
+async def _iter_response_chunks(resp: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
+    while True:
+        chunk = await resp.content.read(4096)
+        if not chunk:
+            return
+        yield chunk
+
+
 async def aiohttp_loopback_call(
     endpoint: DirectSendEndpoint, live_tip_session_id: str, text: str
 ) -> LoopbackResult:
-    """DS-6: `POST [/p/<profile>]/api/sessions/{id}/chat`, body `{"message": text}`, bearer
-    `endpoint.api_key`, pinned to the resolved loopback literal `bridge.py` already positively
-    determined -- never a hostname, never a proxy. `trust_env=False` is the whole point: no
-    `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` is ever read, so the Bearer token cannot leave the host
-    through a configured proxy (review round-1 finding #6). `await`ed directly on this coroutine --
-    no `asyncio.to_thread` -- this is genuine async socket I/O, not blocking work.
+    """AP-1 / DS-6: `POST [/p/<profile>]/api/sessions/{id}/chat/stream`, body `{"message": text}`,
+    bearer `endpoint.api_key`, pinned to the resolved loopback literal. There is no fallback to
+    sync `POST …/chat`. `trust_env=False` so no proxy environment variable can redirect the
+    bearer off-box. `await`ed on this coroutine — genuine async socket I/O, not a thread hop.
 
     Review round 3: this request is the loopback verification. The connector's resolver returns
     only `endpoint.host` (the literal), with a short connect timeout. A refused or timed-out
@@ -196,7 +399,10 @@ async def aiohttp_loopback_call(
 
     host = _format_host(endpoint.host)
     session_segment = quote(live_tip_session_id, safe="")
-    url = f"http://{host}:{endpoint.port}{endpoint.path_prefix}/api/sessions/{session_segment}/chat"
+    url = (
+        f"http://{host}:{endpoint.port}{endpoint.path_prefix}"
+        f"/api/sessions/{session_segment}/chat/stream"
+    )
     timeout = aiohttp.ClientTimeout(
         total=None, connect=LOOPBACK_CONNECT_TIMEOUT_S, sock_connect=LOOPBACK_CONNECT_TIMEOUT_S
     )
@@ -211,20 +417,63 @@ async def aiohttp_loopback_call(
             headers={"Authorization": f"Bearer {endpoint.api_key}"},
         ) as resp,
     ):
-        status = resp.status
-        try:
-            body = await resp.json(content_type=None)
-        except (aiohttp.ContentTypeError, json.JSONDecodeError, ValueError):
-            body = None
-    effective_session_id = None
-    if isinstance(body, Mapping):
-        raw_effective = body.get("session_id")
-        effective_session_id = raw_effective if isinstance(raw_effective, str) else None
-    return LoopbackResult(
-        status=status,
-        body=body if isinstance(body, Mapping) else None,
-        effective_session_id=effective_session_id,
+        if resp.status != 200:
+            return LoopbackResult(status=resp.status, body=None, effective_session_id=None)
+        content_type = resp.headers.get("Content-Type", "")
+        if "application/json" in content_type and "text/event-stream" not in content_type:
+            # Sync JSON is not this route. AP-1: no fallback, and the body is not logged.
+            return LoopbackResult(status=502, body=None, effective_session_id=None)
+        return await consume_sse(_iter_response_chunks(resp), bind=_STREAM_BIND.get())
+
+
+async def aiohttp_approval_call(
+    endpoint: DirectSendEndpoint, run_id: str, request_id: str, choice: str
+) -> str:
+    """AP-4: `POST {prefix}/v1/runs/{stored_run_id}/approval` with `{choice, request_id}` only.
+
+    Returns `accepted`, `stale`, or `unavailable`. Never sends `all` or `resolve_all`. The
+    response body is not logged (SEC-4)."""
+    from urllib.parse import quote
+
+    if choice not in _APPROVAL_CHOICES or not run_id or not request_id:
+        return "unavailable"
+    host = _format_host(endpoint.host)
+    url = (
+        f"http://{host}:{endpoint.port}{endpoint.path_prefix}"
+        f"/v1/runs/{quote(run_id, safe='')}/approval"
     )
+    timeout = aiohttp.ClientTimeout(
+        total=None, connect=LOOPBACK_CONNECT_TIMEOUT_S, sock_connect=LOOPBACK_CONNECT_TIMEOUT_S
+    )
+    connector = aiohttp.TCPConnector(
+        resolver=_PinnedLoopbackResolver(endpoint.host), use_dns_cache=False
+    )
+    try:
+        async with (
+            aiohttp.ClientSession(trust_env=False, timeout=timeout, connector=connector) as session,
+            session.post(
+                url,
+                json={"choice": choice, "request_id": request_id},
+                headers={"Authorization": f"Bearer {endpoint.api_key}"},
+            ) as resp,
+        ):
+            status = resp.status
+            try:
+                payload = await resp.json(content_type=None)
+            except (aiohttp.ContentTypeError, json.JSONDecodeError, ValueError):
+                payload = None
+    except (TimeoutError, aiohttp.ClientError):
+        return "unavailable"
+    if status == 401 or status >= 500:
+        return "unavailable"
+    if status == 409:
+        return "stale"
+    if status != 200 or not isinstance(payload, dict):
+        return "stale"
+    resolved = payload.get("resolved")
+    if isinstance(resolved, int) and not isinstance(resolved, bool) and resolved > 0:
+        return "accepted"
+    return "stale"
 
 
 def _payload_hash(text: str, expected_head: int | None) -> bytes:
@@ -385,6 +634,11 @@ class DirectSendDeps:
     now: Callable[[], int]
     loopback_call: LoopbackCall = aiohttp_loopback_call
     tasks: PendingSendTasks = field(default_factory=PendingSendTasks)
+    # v1.3: process-memory prompts. None in tests that only exercise the DS-7 outcome.
+    prompt_store: object | None = None
+    # None skips the fingerprint check (unit fakes). Production sets the compat predicate.
+    qualified: Callable[[], bool] | None = None
+    approval_timeout: Callable[[], int] | None = None
 
 
 def _cmid_key(iid: str, user_id: str, profile: str, cmid: str) -> tuple[str, str, str, str]:
@@ -431,7 +685,17 @@ async def handle_direct_send(
     # source hydration that shells out.
     endpoint: DirectSendEndpoint | None = None
     if flag_enabled or base_write_gate.state is WriteGateState.OPEN:
-        endpoint = await asyncio.to_thread(deps.bridge.direct_send_endpoint, profile)
+        qualified_ok = True
+        if deps.qualified is not None:
+            try:
+                qualified_ok = bool(await asyncio.to_thread(deps.qualified))
+            except Exception as exc:
+                log_bridge_exception(exc)
+                qualified_ok = False
+        # A stale direct-send fingerprint (AP-1 / T4) never resolves an endpoint, so the gate
+        # stays closed and this call does not read the API key.
+        if qualified_ok:
+            endpoint = await asyncio.to_thread(deps.bridge.direct_send_endpoint, profile)
     effective_gate = gate_module.direct_send_gate(
         base_write_gate=base_write_gate, flag_enabled=flag_enabled, endpoint=endpoint
     )
@@ -654,6 +918,27 @@ async def _execute(
                     raise _refuse(ErrorCode.STALE_HEAD, retryable=False)
 
                 sent_at = deps.now()
+                bind_token = None
+                if deps.prompt_store is not None:
+                    timeout_s = 300
+                    if deps.approval_timeout is not None:
+                        try:
+                            raw_timeout = await asyncio.to_thread(deps.approval_timeout)
+                        except Exception as exc:
+                            log_bridge_exception(exc)
+                            raw_timeout = 300
+                        if isinstance(raw_timeout, int) and not isinstance(raw_timeout, bool):
+                            timeout_s = raw_timeout
+                    bind_token = _STREAM_BIND.set(
+                        StreamBind(
+                            store=deps.prompt_store,
+                            iid=iid,
+                            user_id=user_id,
+                            profile=profile,
+                            now=deps.now,
+                            timeout_s=timeout_s,
+                        )
+                    )
                 try:
                     result = await deps.loopback_call(
                         endpoint, fresh.live_tip_session_id, request.text
@@ -663,6 +948,9 @@ async def _execute(
                     # No HTTP response. Store `unknown` (never left pending, never resent).
                     await asyncio.to_thread(_finalize_unknown)
                     raise _refuse(ErrorCode.API_SERVER_UNAVAILABLE, retryable=True) from exc
+                finally:
+                    if bind_token is not None:
+                        _STREAM_BIND.reset(bind_token)
             finally:
                 if acquired:
                     lock.release()  # type: ignore[union-attr]

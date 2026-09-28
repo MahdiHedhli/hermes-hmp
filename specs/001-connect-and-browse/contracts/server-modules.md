@@ -44,11 +44,19 @@ server/
                                   #   find_canonical_owner, probed only when direct_send's flag is on
     bridge.py                     # the ONLY module importing Hermes internals: read subset + P6 trigger (§12);
                                   #   also list_sessions/resolve_session (amendment A1, SES-1/SES-2);
-                                  #   also resolve_bot_chat/registry_snapshot/direct_send_target (amendment F2, DS-4/DS-6)
+                                  #   also resolve_bot_chat/registry_snapshot/direct_send_target (amendment F2, DS-4/DS-6);
+                                  #   v1.3: list/resolve_gateway_approval, resolve_gateway_clarify,
+                                  #   mark_awaiting_text, approval/clarify timeouts, phone session key
+                                  #   (function-local, only after the direct-send gate is open)
     direct_send.py                # amendment F2: DS-2..DS-8 orchestration (gate order, guard, idempotency,
                                   #   the api_server loopback call, post-hoc verification). Never imports a Hermes
                                   #   internal itself -- reads bridge.py for Hermes state, and speaks api_server's
-                                  #   HTTP contract directly over aiohttp (GAP-2, not a bridge_files concern)
+                                  #   HTTP contract directly over aiohttp (GAP-2, not a bridge_files concern).
+                                  #   v1.3 (§7b AP-1): the loopback URL is /chat/stream, held until the SSE ends;
+                                  #   approval.request is stored as it arrives; POST /v1/runs/{run_id}/approval
+                                  #   uses the stored run_id. No sync /chat fallback.
+    prompts.py                    # amendment F3 (§7b): process-memory prompt rows, answer idempotency,
+                                  #   Phone-chat send, adapter hooks. No Hermes import.
     pairing.py                    # P2, P4 (PR2-*, PR4-*), sanitization (PR2-3)
     tokens.py                     # P5 exchange, rotation, retry grace (successor = HMAC over the RAW presented
                                   #   token, length-prefixed; R16, CS-13), family revoke (PR5-*)
@@ -152,16 +160,19 @@ SHA. Unresolvable git metadata or a missing listed file is unidentifiable, hence
 | GET | `/hmp/v1/bots/{p}/sessions/{ref}/messages?after=&limit=` | SES-2 (amendment A1, v1.1) | bearer + per-bot gate; same kill switch |
 | POST | `/hmp/v1/bots/{p}/chat/messages` | DS-1..DS-7 (amendment F2, v1.2) | bearer + per-bot gate; **always registered** (unlike SES-1/SES-2's kill switch), answers `503 write_gate_closed` rather than `404` when `direct_send`'s flag is off or the guard/gate otherwise fails closed |
 | GET | `/hmp/v1/bots/{p}/chat/messages/by-client-id/{cmid}` | DS-8 (amendment F2, v1.2) | bearer + per-bot gate; always registered, read-only, never re-sends |
+| GET | `/hmp/v1/bots/{p}/prompts` | AP-3 (amendment F3, v1.3) | bearer + per-bot gate; always registered; `503 write_gate_closed` when the direct-send gate is closed |
+| POST | `/hmp/v1/bots/{p}/prompts/{request_id}` | AP-4 (amendment F3, v1.3) | bearer + per-bot gate; answer is bound to the stored id and the authorized user |
+| POST | `/hmp/v1/bots/{p}/phone/messages` | AP-6 (amendment F3, v1.3) | bearer + per-bot gate; Phone chat hand-off (GU-4b), not SUB-1 |
 
 Not registered in F1 (FR-053): lookup (`SUB-1`'s own `by-client-id` route — the original submit path
 itself is unregistered too, matching v1.0's write gate that is never open on a supported build),
 events (SSE), approvals, clarify, stop. Requests to those paths get `404` and hand nothing to
 Hermes. A test asserts zero bridge calls and zero `handle_message` calls. The two amendment A1
 routes above follow the same non-registration pattern when the kill switch is off (`server.
-build_app` never adds them to the router at all). The two amendment F2 routes above are the one
-exception to "not registered": they are always in the router (mirroring how GU-4's original write
-gate already answers `503 guarantees_unavailable` rather than `404`), and a request reaching either
-one with the `direct_send` flag off gets a definitive `503 write_gate_closed`, never a bridge call.
+build_app` never adds them to the router at all). The two amendment F2 routes above, and the three amendment F3 routes, are the exception to
+"not registered": they are always in the router, and a request reaching any of them with the
+`direct_send` flag off (or a stale direct-send fingerprint) gets `503 write_gate_closed`, never a
+bridge call. The original SUB-1 / SSE / `…/approvals` / `…/clarify` / stop paths stay unregistered.
 
 ## Operator CLI (F1 subset)
 

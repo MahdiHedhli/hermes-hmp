@@ -189,12 +189,13 @@ class DirectSendFixture:
         self.no_bot_chat_key = no_bot_chat_key
         self._lease_holders: list[Any] = []
 
-    def acquire_lease(self, profile: str, session_id: str) -> None:
+    def acquire_lease(self, profile: str, session_id: str, *, desktop_held: bool = False) -> None:
         """A synthetic lease that stays live until this fixture tears down (`stop`) -- see
         `direct_send_fixture.start_lease_holder`'s own docstring for why the holder process must
         keep running rather than exit after acquiring."""
         self._lease_holders.append(dsf.start_lease_holder(
-            self.build, self.paths, profile=profile, session_id=session_id
+            self.build, self.paths, profile=profile, session_id=session_id,
+            desktop_held=desktop_held,
         ))
 
     def stop(self) -> None:

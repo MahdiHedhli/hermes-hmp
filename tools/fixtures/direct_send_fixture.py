@@ -312,7 +312,12 @@ def stop_gateway(proc: subprocess.Popen[bytes]) -> None:
 
 
 def start_lease_holder(
-    build: fc.BuildInfo, paths: fc.InstancePaths, *, profile: str, session_id: str
+    build: fc.BuildInfo,
+    paths: fc.InstancePaths,
+    *,
+    profile: str,
+    session_id: str,
+    desktop_held: bool = False,
 ) -> subprocess.Popen[str]:
     """Starts `fixture_seed.py acquire-lease` as a BACKGROUND process that holds the lease for as
     long as it stays alive (see that command's own docstring for why it must not exit). Blocks
@@ -327,6 +332,7 @@ def start_lease_holder(
         [
             str(build.venv_python), str(FIXTURE_SEED), "acquire-lease",
             "--home", str(paths.home), "--profile", profile, "--session-id", session_id,
+            *(["--desktop-held"] if desktop_held else []),
         ],
         env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True,

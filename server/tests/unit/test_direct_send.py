@@ -1185,6 +1185,7 @@ async def test_loopback_call_pins_the_connector_and_keeps_trust_env_off() -> Non
     resolved = seen["resolved"]
     assert isinstance(resolved, list) and resolved[0]["host"] == "127.0.0.1"
     assert str(seen["url"]).startswith("http://127.0.0.1:9/")
+    assert str(seen["url"]).endswith("/api/sessions/tip1/chat/stream")
 
 
 _LIVE_OWNER_META = {"bot_live_delivery_consumer": True, "live_session_id": "desk-live-1"}
