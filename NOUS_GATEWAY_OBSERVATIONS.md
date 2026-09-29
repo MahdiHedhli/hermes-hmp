@@ -17,6 +17,7 @@ The [unified gateway research](https://github.com/MahdiHedhli/hermes-hmp/blob/ma
 | Plugin install footprint | A bare `owner/repo` install stages the repository root, and the plugin guard scans its tests, tools, and docs along with runtime code. HMP keeps those files public for review, so its full-tree install prompts on numerous heuristic findings. | Let a root plugin manifest declare a bounded install file set. Verify the selected paths and source revision, reject escaping symlinks or imports outside the selected tree, and scan exactly the tree that will be activated. Keep dangerous findings blocking. |
 | Message origin | Session rows do not identify the client surface that submitted a turn. | An optional, non-model-visible client/surface field stored with user rows. |
 | Updates | A mobile client discovers new rows by polling. | A session change feed or bounded long poll. |
+| Scheduled-job parity | On qualified `8afaab37`, the profile API's `POST /api/jobs` passes delivery and repeat settings but ignores `context_from`; the PATCH allowlist excludes it. Desktop's scheduler writer supports previous-run continuity. HMP uses that exact-build, profile-scoped writer for its owner-gated preview, so it cannot assume this path is stable across Hermes updates. | Accept and validate `context_from` in the authenticated profile-scoped jobs create/update API, with the same lifecycle checks and scheduler notification as Desktop, and return the persisted job. This removes HMP's private writer dependency. |
 | Private session search | `SessionDB.search_messages` logs up to 200 characters of the query at INFO when a search crosses its slow threshold (`hermes_state_search.py` in the checked build). Hermes-wide search could put private conversation terms in host logs. HMP can separately page its authorized canonical Bot Chats and match on the phone without sending a query. | Log timing, path, and row count without query text, and cover the slow path with a regression test before any remote feature invokes native Hermes search. |
 | Session management | The profile-scoped API server already lists sessions, reads messages, changes title/pin/archive/hidden state, and deletes sessions. Its `/fork` ends the source session, so it cannot implement a non-destructive branch. Project moves, export, and opening a session in a terminal are not API server operations. | Preserve the existing safe metadata routes; add a non-destructive branch operation and explicit project/export capabilities where appropriate. A canonical Bot Chat must not be accidentally archived or deleted by a remote client. |
 | Canonical remote attachment | Current HMP reaches a qualified legacy Bot Chat path; the unified runtime PR is a local/gateway cutover, while remote Desktop/web/mobile entry is staged separately. | Expose authenticated, profile-scoped remote attach/submit/event/control operations with explicit capability negotiation, target-session authorization, durable request identity, and replay-or-snapshot recovery. Keep one execution owner. |
@@ -28,10 +29,14 @@ Desktop-owned Bot Chat turns can surface prompts only through Desktop's process-
 ## Already usable without a new Hermes contract
 
 The profile-scoped API server has list, create, edit, pause, resume, and delete
-routes for scheduled jobs. HMP's mobile cron preview uses those existing routes
-with an owner-device gate, a closed-by-default host flag, and exact-build
-qualification. New jobs start paused. This feature does not require an upstream
-change; delivery of mobile push notifications remains a separate API gap.
+routes for scheduled jobs. HMP's mobile cron preview uses those existing
+read/pause/resume/delete routes with an owner-device gate, a closed-by-default
+host flag, and exact-build qualification. New jobs start paused. On qualified
+builds, a narrow profile-scoped Hermes writer also saves Bot Chat delivery,
+finite repeats, and previous-run continuity for create/edit. The feature works
+without an upstream change on those builds, but a complete public API contract
+for continuity would remove that version-specific writer. Delivery of mobile
+push notifications remains a separate API gap.
 
 Bot default-model reads and writes are also possible on a qualified build using
 Hermes's profile-scoped validation. HMP keeps this preview off by default and

@@ -623,16 +623,36 @@ async def handle_cron_list(request: web.Request) -> web.Response:
 
 
 async def handle_cron_create(request: web.Request) -> web.Response:
-    endpoint = await _cron_endpoint(request, write=True)
+    await _cron_endpoint(request, write=True)
     body = mobile_cron.create_body(await read_json_body(request))
-    return json_response(await mobile_cron.call(endpoint, method="POST", body=body))
+    try:
+        raw = await asyncio.to_thread(
+            _require(context(request).bridge).create_mobile_cron,
+            request.match_info["p"], body,
+        )
+    except ValueError as exc:
+        raise HmpError(ErrorCode.BAD_REQUEST) from exc
+    except Exception as exc:
+        raise HmpError(ErrorCode.CRON_UNAVAILABLE) from exc
+    return json_response({"job": mobile_cron.project_job(raw)})
 
 
 async def handle_cron_edit(request: web.Request) -> web.Response:
-    endpoint = await _cron_endpoint(request, write=True)
+    await _cron_endpoint(request, write=True)
     job_id = mobile_cron.job_id(request.match_info["job_id"])
     body = mobile_cron.edit_body(await read_json_body(request))
-    return json_response(await mobile_cron.call(endpoint, method="PATCH", job=job_id, body=body))
+    try:
+        raw = await asyncio.to_thread(
+            _require(context(request).bridge).edit_mobile_cron,
+            request.match_info["p"], job_id, body,
+        )
+    except ValueError as exc:
+        raise HmpError(ErrorCode.BAD_REQUEST) from exc
+    except Exception as exc:
+        raise HmpError(ErrorCode.CRON_UNAVAILABLE) from exc
+    if raw is None:
+        raise HmpError(ErrorCode.NOT_FOUND)
+    return json_response({"job": mobile_cron.project_job(raw)})
 
 
 async def handle_cron_delete(request: web.Request) -> web.Response:

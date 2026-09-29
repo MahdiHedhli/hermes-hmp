@@ -11,3 +11,20 @@
    zero-baseline public privacy scan before pushing HMP.
 7. Leave the feature disabled until a release candidate receives the planned
    independent security and physical-device review.
+
+## Desktop-parity revision (2026-09-29)
+
+8. Extend the bounded wire shape with `deliver`, `continuity`, and `repeat`;
+   reject arbitrary destinations and preserve old clients' local default.
+9. Qualify Hermes's profile-scoped create/edit writer against exact builds
+   because `/api/jobs` does not persist `context_from`; verify Bot Chat
+   delivery, finite runs, continuity, and other-context preservation in an
+   isolated store. Keep reads, pause/resume, and delete on the scoped API.
+10. Add the app's schedule, delivery, repeat, and continuity controls with Bot
+    Chat as the new-job UI default, while preserving existing jobs' settings.
+11. Recheck the live host's exact installed commit and per-profile health,
+    install internal binaries on both iPhones and the Samsung tablet, and
+    record owner verification separately from unobserved scheduled runs.
+12. Before external release, observe scheduled Bot Chat delivery and continuity
+    across runs, finish physical pause/delete checks, and run the exact
+    candidate's independent source and signed-artifact reviews.

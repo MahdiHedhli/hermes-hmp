@@ -10,28 +10,29 @@
     "gateway/platforms/api_server.py",
     "gateway/platforms/shared_ingress.py",
     "gateway/run_adapters.py",
-    "hermes_constants.py"
+    "hermes_constants.py",
+    "tools/cronjob_prompt_scan.py"
   ],
   "builds": [
     {
       "label": "stock-base-source",
-      "fingerprint": "a4b7fb6b15de9748f1ab5a745f9e3fb0797be8565bd05b57e87bbcf70f309b60",
+      "fingerprint": "453a85fa1175446fae95119682b72236e5a859cfd6007657b26a0012ca53ded4",
       "git_sha": "04fa849e70165336ba73e6750257a1ebd7ff998d",
-      "qualified_by": "Hermes test_api_server_jobs.py (20) and HMP test_mobile_cron_stock.py (1)",
+      "qualified_by": "Hermes cron API and HMP scoped writer fixture, delivery/continuity/repeat tests",
       "qualified_at": "2026-09-28"
     },
     {
       "label": "stock-base-extracted",
-      "fingerprint": "a4b7fb6b15de9748f1ab5a745f9e3fb0797be8565bd05b57e87bbcf70f309b60",
+      "fingerprint": "453a85fa1175446fae95119682b72236e5a859cfd6007657b26a0012ca53ded4",
       "git_sha": null,
-      "qualified_by": "Hermes test_api_server_jobs.py (20) and HMP test_mobile_cron_stock.py (1)",
+      "qualified_by": "Hermes cron API and HMP scoped writer fixture, delivery/continuity/repeat tests",
       "qualified_at": "2026-09-28"
     },
     {
       "label": "hermes-8afaab37-git",
-      "fingerprint": "3db5c28b88eca27289e94f405c8645011906fd3ab3d42bd73d2a4b5972f74669",
+      "fingerprint": "da8a5a1e9a44232c975dc279ac5581a7b08d1a8ef2aaad35c58b2f87ae2d0c61",
       "git_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
-      "qualified_by": "Hermes test_api_server_jobs.py (20) and HMP test_mobile_cron_stock.py (1) in isolated Python 3.14 environment",
+      "qualified_by": "Hermes cron API and HMP scoped writer fixture, delivery/continuity/repeat tests",
       "qualified_at": "2026-09-28"
     }
   ]

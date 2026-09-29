@@ -300,6 +300,53 @@ class HermesApi:
             raise
         return True
 
+    def create_mobile_cron(self, fields: Mapping[str, object]) -> Mapping[str, object]:
+        """Use Hermes's scheduler registration path inside the selected profile scope."""
+        from cron.scheduler import create_job_with_scheduler_registration
+        from tools.cronjob_prompt_scan import _scan_cron_prompt
+
+        prompt = str(fields["prompt"])
+        if _scan_cron_prompt(prompt):
+            raise ValueError("Cron prompt rejected by Hermes")
+        continuity = fields.get("continuity") is True
+        return create_job_with_scheduler_registration(
+            name=fields["name"], schedule=fields["schedule"], prompt=prompt,
+            deliver=fields["deliver"], paused=True, repeat=fields.get("repeat"),
+            context_from=["self"] if continuity else None,
+        )
+
+    def edit_mobile_cron(
+        self, job_id: str, fields: Mapping[str, object]
+    ) -> Mapping[str, object] | None:
+        """Apply only HMP's fields through Hermes's own update writer."""
+        from cron.jobs import get_job, update_job
+        from cron.lifecycle_guard import check_gateway_lifecycle
+        from cron.scheduler import _notify_provider_jobs_changed
+        from tools.cronjob_prompt_scan import _scan_cron_prompt
+
+        if "prompt" in fields and _scan_cron_prompt(str(fields["prompt"])):
+            raise ValueError("Cron prompt rejected by Hermes")
+        if "prompt" in fields:
+            check_gateway_lifecycle(str(fields["prompt"]), None)
+        existing = get_job(job_id)
+        if existing is None:
+            return None
+        if any(existing.get(key) for key in (
+            "script", "no_agent", "workdir", "monitor_script", "monitor_url",
+        )):
+            raise ValueError("This job needs the Hermes desktop cron editor")
+        changes = {k: v for k, v in fields.items() if k != "continuity"}
+        if "continuity" in fields:
+            refs = [r for r in (existing.get("context_from") or []) if isinstance(r, str)
+                    and r.lower() != "self"]
+            if fields["continuity"] is True:
+                refs.append("self")
+            changes["context_from"] = refs or None
+        updated = update_job(job_id, changes)
+        if updated is not None:
+            _notify_provider_jobs_changed()
+        return updated
+
     def build_session_key(self, source: Any, profile: str | None) -> str:
         from gateway.session import build_session_key  # §12, E-GAP-6
 
@@ -659,6 +706,20 @@ class HermesReadBridge:
         if not self._hermes.write_profile_model(home, provider, model):
             return None
         return self.profile_default_model(profile)
+
+    def create_mobile_cron(
+        self, profile: str, fields: Mapping[str, object]
+    ) -> Mapping[str, object]:
+        home = self._profile_home(profile)
+        with self._hermes.profile_runtime_scope(home):
+            return self._hermes.create_mobile_cron(fields)
+
+    def edit_mobile_cron(
+        self, profile: str, job_id: str, fields: Mapping[str, object]
+    ) -> Mapping[str, object] | None:
+        home = self._profile_home(profile)
+        with self._hermes.profile_runtime_scope(home):
+            return self._hermes.edit_mobile_cron(job_id, fields)
 
     # ------------------------------------------------------------------------------------------
     # Authorization (ERR-3, PR6-1): fails closed to UNVERIFIABLE
