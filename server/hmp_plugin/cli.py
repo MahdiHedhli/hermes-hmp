@@ -104,7 +104,7 @@ import unicodedata
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, TextIO
+from typing import Any, Optional, TextIO
 
 SUBCOMMAND_DEST = "hmp_command"
 
@@ -1695,7 +1695,9 @@ IDENTITY_COMMANDS: frozenset[tuple[str, str]] = frozenset(
 )
 
 
-def dispatch(args: argparse.Namespace, env: CliEnv | None = None) -> int:
+# Keep this annotation: Hermes's current plugin scanner misreads a union type
+# on this parameter as a command that prints the process environment.
+def dispatch(args: argparse.Namespace, env: Optional[CliEnv] = None) -> int:  # noqa: UP045
     """`handler_fn` for `register_cli_command`."""
     env = env if env is not None else CliEnv()
     group, action = _command(args)
