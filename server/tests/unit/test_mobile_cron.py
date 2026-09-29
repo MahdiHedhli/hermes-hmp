@@ -154,6 +154,12 @@ def test_owner_route_uses_fixed_loopback_profile_and_projects_result(tmp_path: P
             )
             dev = await pair(env, client)
             env.ctx.owner_device_ids = lambda: frozenset({dev.device_id})
+            assert env.store.set_owner_controls(dev.device_id, allowed=False, now=1001)
+            status, _ = await get(client, "/bots/default/jobs", headers=env.headers(dev))
+            assert status == 404  # explicit host denial overrides the old config list
+            assert received == []
+            assert env.store.set_owner_controls(dev.device_id, allowed=True, now=1002)
+            env.ctx.owner_device_ids = lambda: frozenset()
             status, data = await get(client, "/bots/default/jobs", headers=env.headers(dev))
             assert status == 200
             assert data == {"jobs": [mobile_cron.project_job(_job())]}

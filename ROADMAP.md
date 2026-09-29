@@ -4,7 +4,7 @@ HMP follows the [feature list](FEATURES.md), [unified gateway research](HermesUn
 
 | Investment | Work | Boundary |
 | --- | --- | --- |
-| Current qualified Hermes | Pairing, Bot Chat reads and guarded sends, read-only setup checks, and owner-gated scheduled jobs and default-model previews. | Requalify each Hermes build and bridge fingerprint. Keep the owner and per-bot gates; do not widen the legacy send route to arbitrary sessions. |
+| Current qualified Hermes | Pairing, Bot Chat reads and guarded sends, read-only setup and bot health checks, and owner-gated scheduled jobs and default-model previews. | Requalify each Hermes build and bridge fingerprint. Keep the owner and per-bot gates; do not widen the legacy send route to arbitrary sessions. |
 | Release hardening | Integrate the draft features, run isolated gateway fixtures, then review the exact release candidate and device artifacts. | No live-host switch or external beta based solely on source tests. |
 | Installer footprint | Keep the current full-tree security scan and explain its caution findings to operators. | A quieter bare install needs Hermes to support a verified install file set; do not suppress scans or hide executable tests. |
 | Search | The distinct authorized start page is in draft; the companion app draft matches locally across available Bot Chats or within one. | Keep older-HMP, compaction-reset, incomplete-scan, and request bounds visible. Hermes-wide search still needs the upstream raw-query log fix. |

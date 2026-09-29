@@ -45,6 +45,7 @@ def test_migrate_creates_expected_tables(store: Store) -> None:
         "pairings",
         "users",
         "devices",
+        "device_owner_controls",
         "token_families",
         "refresh_tokens",
         "access_tokens",
@@ -117,6 +118,40 @@ def test_fresh_store_epochs_are_zero(store: Store) -> None:
 def test_schema_version_recorded(store: Store) -> None:
     row = store._conn.execute("SELECT schema_version FROM meta WHERE id = 1").fetchone()  # type: ignore[union-attr]
     assert row["schema_version"] == SCHEMA_VERSION
+
+
+def test_owner_controls_are_per_active_device_and_revocable(store: Store) -> None:
+    store.insert_user("hmpu_a", "label", 1000)
+    store.insert_device("dev_a", "hmpu_a", "f" * 64, b"x", "phone a", 1000, state="ACTIVE")
+    store.insert_device("dev_b", "hmpu_a", "g" * 64, b"y", "phone b", 1000, state="ACTIVE")
+    assert store.owner_controls_decision("dev_a") is None
+    assert store.set_owner_controls("dev_a", allowed=True, now=1001)
+    assert store.owner_controls_decision("dev_a") is True
+    assert store.owner_controls_decision("dev_b") is None
+    assert store.set_owner_controls("dev_a", allowed=False, now=1002)
+    assert store.owner_controls_decision("dev_a") is False
+    store.set_device_state("dev_a", "REVOKED")
+    assert not store.set_owner_controls("dev_a", allowed=True, now=1003)
+    assert not store.set_owner_controls("missing", allowed=True, now=1003)
+    assert store.owner_controls_decision("dev_a") is False
+
+
+def test_owner_controls_survive_reopen_and_upgrade_legacy_store(tmp_path: Path) -> None:
+    path = tmp_path / "hmp.sqlite3"
+    first = Store(path)
+    first.migrate()
+    first.insert_user("hmpu_a", "label", 1000)
+    first.insert_device("dev_a", "hmpu_a", "f" * 64, b"x", "phone a", 1000, state="ACTIVE")
+    first.set_owner_controls("dev_a", allowed=True, now=1001)
+    first._require_conn().execute("UPDATE meta SET schema_version = 1 WHERE id = 1")
+    first.close()
+
+    second = Store(path)
+    second.migrate()
+    assert second.owner_controls_decision("dev_a") is True
+    row = second._require_conn().execute("SELECT schema_version FROM meta WHERE id = 1").fetchone()
+    assert row["schema_version"] == SCHEMA_VERSION
+    second.close()
 
 
 # ------------------------------------------------------------------------------------------
