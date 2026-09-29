@@ -40,6 +40,7 @@ jobs:
   review:
     name: Independent source review
     needs: preflight
+    environment: release-security
     runs-on: ubuntu-latest
     timeout-minutes: 45
     outputs:
@@ -51,10 +52,10 @@ jobs:
           persist-credentials: false
       - name: Require review API key
         env:
-          REVIEW_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          REVIEW_API_KEY: ${{ secrets.HMP_RELEASE_REVIEW_API_KEY }}
         run: |
           if [ -z "$REVIEW_API_KEY" ]; then
-            echo 'Set OPENAI_API_KEY as a repository secret before release review.' >&2
+            echo 'Configure the release-security environment secret before release review.' >&2
             exit 1
           fi
       # Keep this as the last step in the job: the action removes runner sudo.
@@ -62,7 +63,7 @@ jobs:
         id: codex
         uses: openai/codex-action@f367b1e9572fd064ea71ef925ca24ee0f01080af # v1
         with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          openai-api-key: ${{ secrets.HMP_RELEASE_REVIEW_API_KEY }}
           permission-profile: ':read-only'
           output-schema: |
             {

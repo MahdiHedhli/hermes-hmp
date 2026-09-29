@@ -2,8 +2,12 @@
 
 Use a `release/*` branch after the feature set is frozen. Every push to it runs the ordinary
 plugin CI and a separate read-only source review against that exact commit. The review requires
-`OPENAI_API_KEY` in this repository's GitHub Actions secrets; it fails closed if the secret,
-review output, commit match, or passing verdict is missing. Never commit the key.
+the `HMP_RELEASE_REVIEW_API_KEY` secret in a GitHub Environment named
+`release-security`. Before adding the key, configure that environment to
+require maintainer approval and limit deployment branches to `release/*`.
+Do not create a repository-wide copy of the key. The workflow fails closed if
+the secret, review output, commit match, or passing verdict is missing. Never
+commit the key.
 
 The source reviewer checks pairing, device and profile authorization, owner-only write gates,
 replay and ambiguous sends, approvals, compatibility fingerprints, resource limits, and logs.
