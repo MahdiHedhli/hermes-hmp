@@ -11,6 +11,9 @@ HMP runs inside your own Hermes gateway. It pairs each phone to an instance, ser
 
 ```sh
 hermes plugins install 'MahdiHedhli/hermes-hmp#server/hmp_plugin' --enable
+hermes config set platforms.hmp.enabled true
+hermes config set platforms.hmp.extra.bind "$(tailscale ip -4)"
+hermes config set platforms.hmp.extra.port 18741
 hermes gateway restart
 hermes hmp compat
 hermes hmp pair offer
@@ -24,6 +27,8 @@ The operator confirms the matching code shown on the phone and host. See the
 [install and host configuration guide](docs/INSTALL.md) before connecting a
 device. Use `--ref <full-commit-sha>` to pin a reviewed revision; pinned
 plugins need an explicit reinstall to update.
+Choose an unused port in place of 18741. The listener requires a Tailscale
+address for phone access; plugin installation alone does not start it.
 
 | Start here | Purpose |
 | --- | --- |
