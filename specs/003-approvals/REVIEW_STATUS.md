@@ -16,9 +16,21 @@ qualification receipt was produced.
 | Stock base | 15 passed, 1 failed; 32 deselected | T7 Bot Chat approval finished without a pending prompt, confirming the upstream session-chat gap. |
 | Experimental | 13 passed, 3 failed; 32 deselected | T7 has the same gap. Both T8 Phone chat tests timed out waiting for an approval card; the cause is still under investigation. |
 
-The observed experimental Phone chat failure prevents presenting that path as qualified even
-independently of T7. No fixture fingerprint was added to a runtime allowlist. The owner's live
-Hermes and plugin were not changed.
+In that round, the experimental Phone chat failure prevented qualification independently of
+T7. No fixture fingerprint was added to a runtime allowlist. The owner's live Hermes and plugin
+were not changed.
+
+## Focused T8 rerun after admission and fixture-readiness fixes
+
+At HMP commit `4ce9aad` plus the test-harness readiness change on this branch, both isolated
+T8 cases pass against each exact extracted build: **stock-base 2/2**, **experimental 2/2**.
+The fixture uses a provisional qualification receipt bound to each build's source fingerprint;
+it is never installed into the runtime allowlist. The first experimental rerun exposed
+`refused_draining`: HMP's listener and bot roster were live while Hermes's startup-restore
+gate was still closed. The harness now waits for the post-restore `Press Ctrl+C to stop` marker
+from the gateway log before sending. This makes the real admission result visible and removes
+the startup race from T8. These focused passes do not clear the mandatory T7 failure or
+constitute a full qualification receipt.
 
 **Experimental admission risk addressed in the draft (source-path finding, not established as
 the T8 cause):** `BasePlatformAdapter.handle_message` sets `_gateway_accepted` when it starts a
@@ -27,7 +39,8 @@ background task; `defer_policy="reject"` reports the later durable admission or 
 is never reported as `202 submitted`; an unconfirmed event is stored as `200 unknown` and cannot
 be delivered twice by replaying its cmid. Regression tests failed before this change and pass
 after it. The stock build does not expose this admission API and retains its previous behavior.
-Real experimental T8 qualification is still required.
+The focused real-gateway T8 rerun now passes on the exact experimental build; full-matrix
+qualification and the T7 upstream gap remain open.
 
 ## Round-5 findings and changes
 

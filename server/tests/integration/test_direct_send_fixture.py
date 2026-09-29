@@ -254,6 +254,12 @@ class DirectSendFixture:
 
     def restart_gateway(self) -> None:
         dsf.stop_gateway(self.gateway_proc)
+        gateway_log = self.paths.home / "logs" / "gateway.log"
+        prior_ready_count = (
+            gateway_log.read_text(encoding="utf-8", errors="replace").count("Press Ctrl+C to stop")
+            if gateway_log.exists()
+            else 0
+        )
         log_path = self.paths.out_dir / f"gateway-restart-{int(time.time())}.log"
         self.gateway_proc = dsf.start_gateway(self.build, self.paths, log_path=log_path)
         if not dsf.wait_for_port(self.hmp_port, timeout=45.0):
@@ -272,6 +278,17 @@ class DirectSendFixture:
         )
         if not found:
             raise RuntimeError(f"{DEFAULT_PROFILE!r} never reappeared in the roster after restart")
+        # Experimental Hermes rejects reject-policy messages during startup restore even after
+        # HMP's listener and profile roster are live. This marker follows the restore gate.
+        ready = wait_for(
+            lambda: gateway_log.read_text(
+                encoding="utf-8", errors="replace"
+            ).count("Press Ctrl+C to stop") > prior_ready_count,
+            timeout=30.0,
+        )
+        if not ready:
+            tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+            raise RuntimeError(f"Gateway never finished startup restore.\n{tail}")
 
 
 @pytest.fixture(params=BUILDS)
