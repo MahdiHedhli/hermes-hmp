@@ -535,12 +535,13 @@ def test_offer_never_exercises_png_or_pil(c: Cli, monkeypatch: pytest.MonkeyPatc
         sys.modules.update(saved)
 
 
-def test_offer_refused_on_an_unsupported_build(c: Cli) -> None:
+def test_offer_warns_on_an_unsupported_build(c: Cli) -> None:
     c.write_record()
     c.compat = CompatResult(CompatStatus.UNSUPPORTED, OtherWhy.HERMES_READ_DEPENDENCY_MISSING)
-    assert c.run("pair", "offer") == cli.EXIT_REFUSED
-    assert "hermes_read_dependency_missing" in c.err
-    assert _count(c.env, "offers") == 0 and c.qr.rendered == []
+    assert c.run("pair", "offer", "--no-wait") == cli.EXIT_OK
+    assert "hermes_read_dependency_missing" in c.out
+    assert "no bot access or owner controls will be granted" in c.out
+    assert _count(c.env, "offers") == 1 and len(c.qr.rendered) == 1
 
 
 def test_offer_refused_without_a_qr_renderer(c: Cli) -> None:

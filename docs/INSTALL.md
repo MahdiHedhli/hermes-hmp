@@ -30,8 +30,12 @@ hermes hmp pair offer
 TLS-pinned listener readiness without changing files or running another
 Hermes command. It reports a served-bot count but cannot prove that every bot
 is routed, has a usable profile-scoped API key, or grants this device access.
-A nonzero result means pairing is not ready; inspect the gateway and the
-deployment checklist. Older HMP releases without this command can still use
+A nonzero result means Bot Chat is not ready; inspect the gateway and the
+deployment checklist. A running listener can still pair a device when only
+Hermes read compatibility is missing, but the phone cannot use bots and the
+pairing command does not grant bot access or owner controls in that state.
+Use `hermes hmp compat` to see the reason, then update to a qualified HMP/Hermes
+combination and grant bot access separately. Older HMP releases without this command can still use
 `hermes hmp compat` and the checklist.
 
 For Bot Chat sends and the scheduled-job and default-model previews, each

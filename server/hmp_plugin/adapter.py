@@ -9,15 +9,16 @@ authorization trigger, whose pairing code is never relayed, PR6-2) without loggi
 `connect` follows server-modules.md "Startup order": the compat gate runs first, from file reads
 only; `bridge.py` is imported only when the build is SUPPORTED. Then the store opens, the instance
 identity loads (ID-2; it may revoke every device on a clone, backup or host change), and the TLS
-listener starts. On an unsupported build the listener still starts and serves `/ready`, and every
-other path answers ERR-2a (FR-044a).
+listener starts. On an unsupported build the listener serves `/ready` and HMP-owned
+pairing/token/self-revoke routes; every Hermes-dependent path answers ERR-2a (FR-044a).
 
 PR7-6: when the listener sees the key change (a request or the watchdog), it closes and stays
 closed; the adapter reports a non-retryable fatal state until the gateway restarts under the new
 key.
 
-The adapter runs on every Hermes build, including unsupported ones, where it serves `/ready` and
-the ERR-2a refusals. It therefore cannot reach Hermes through `bridge.py`. Its Hermes imports are
+The adapter runs on every Hermes build, including unsupported ones, where it serves the
+bridge-independent device lifecycle and ERR-2a refusals. It therefore cannot reach Hermes through
+`bridge.py`. Its Hermes imports are
 the closed, controller-approved exception for the documented platform-plugin API, and nothing more:
 `gateway.platforms.base.{BasePlatformAdapter, SendResult}` and `gateway.config.Platform`
 (`tools/ci/check_plugin_surface.py`).

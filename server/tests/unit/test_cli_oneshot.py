@@ -31,7 +31,8 @@ from typing import Any
 import pytest
 
 from hmp_plugin import cli, crypto, server, wire
-from hmp_plugin.contract import OFFER_TTL_S, PAIRING_CONFIRM_WINDOW_S
+from hmp_plugin.compat import CompatResult, CompatStatus
+from hmp_plugin.contract import OFFER_TTL_S, PAIRING_CONFIRM_WINDOW_S, OtherWhy
 from hmp_plugin.pairing import PairingService
 
 from . import hmp_kit
@@ -240,6 +241,29 @@ def test_happy_path_y_confirms_and_pairs(c: Cli) -> None:
     assert _pairing_row(c.env)["state"] == "confirmed"
     # The raw QR payload (and the pairing secret it carries) is never printed (item 8).
     assert "hmp1:" not in c.out
+
+
+def test_unsupported_build_pairs_without_bot_or_owner_grant(c: Cli) -> None:
+    c.compat = CompatResult(CompatStatus.UNSUPPORTED, OtherWhy.HERMES_BUILD_UNSUPPORTED)
+    c.write_record(profiles=[("default", "Default Bot")])
+    dev = hmp_kit.Device(name="f1-fixture-unsupported")
+
+    result = _run_offer(
+        c,
+        sleep=FakeSleep([lambda: _claim_via_qr(c, dev)]),
+        stdin=FakeStdin(["y\n", "GRANT\n"]),
+        hermes_executable=lambda: "hermes",
+        run_hermes_cli=_boom_hermes_cli,
+    )
+
+    assert result == cli.EXIT_OK, c.out
+    assert "Paired ✓" in c.out
+    assert "Bot Chat and controls remain unavailable" in c.out
+    assert "Allow the phone to use all" not in c.out
+    assert "Type GRANT" not in c.out
+    row = _device_row(c.env)
+    assert row["state"] == "ACTIVE"
+    assert c.env.store.owner_controls_decision(row["device_id"]) is False
 
 
 def test_host_grants_owner_controls_only_after_explicit_word(c: Cli) -> None:
