@@ -119,6 +119,11 @@ def test_model_routes_use_exact_profile_and_do_not_retry_write(tmp_path: Path) -
         dev = await pair(env, client)
         env.ctx.owner_device_ids = lambda: frozenset({dev.device_id})
         headers = env.headers(dev)
+        assert env.store.set_owner_controls(dev.device_id, allowed=False, now=1001)
+        status, _ = await get(client, "/bots/other/model/default", headers=headers)
+        assert status == 404 and calls == []
+        assert env.store.set_owner_controls(dev.device_id, allowed=True, now=1002)
+        env.ctx.owner_device_ids = lambda: frozenset()
         status, data = await get(client, "/bots/other/model/default", headers=headers)
         assert status == 200 and data == {"provider": "nous", "model": "old"}
         response = await client.put(

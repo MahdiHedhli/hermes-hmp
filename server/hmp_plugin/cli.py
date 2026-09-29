@@ -70,6 +70,10 @@ Refusals and rules:
     transaction (PR3-4). Denial goes through `pairing.deny_pairing`.
 - **`devices revoke` (PR7-1)** revokes the device and every token family atomically. For a user's
   last device it prints the Hermes `pairing revoke` commands, and never runs them.
+- **Privileged phone controls.** After pairing, a separate host prompt requires the full word
+  `GRANT` before that device can manage jobs or default models. EOF, interruption and every other
+  answer record a denial. `devices grant-controls` and `devices deny-controls` are TTY-gated host
+  commands for later changes. An explicit decision overrides the legacy config allowlist.
 - **`instance rotate-key` (PR7-2)** makes a new key, revokes every device, and expires every open
   offer and pending pairing.
 - **`compat`** prints the build identity, the list match and the probe outcome. There are no
@@ -115,6 +119,8 @@ MUTATING_COMMANDS: frozenset[tuple[str, str | None]] = frozenset(
         ("pair", "confirm"),
         ("pair", "deny"),
         ("devices", "revoke"),
+        ("devices", "grant-controls"),
+        ("devices", "deny-controls"),
         ("instance", "rotate-key"),
     }
 )
@@ -160,7 +166,9 @@ _PROFILE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 LISTENER_RECORD_FILENAME = "listener.json"
 LISTENER_RECORD_FORMAT = 1
 RECORD_MODE = 0o600
-MAX_RECORD_BYTES = 4_096  # generous bound for a small, fixed-shape JSON record
+MAX_RECORD_BYTES = 16_384  # bounded profile inventory and status-only health snapshot
+HEALTH_MAX_AGE_S = 45
+HEALTH_STATES = frozenset({"ready", "disabled", "unsupported", "unavailable"})
 
 
 class ListenerRecordError(RuntimeError):
@@ -179,6 +187,8 @@ class ListenerRecord:
     # on a record written by an older gateway that never had this field -- the caller then falls
     # back to the generic placeholder next-steps text, as before this field existed.
     profiles: tuple[tuple[str, str], ...] | None = None
+    health_checked_at: int | None = None
+    health: tuple[tuple[str, str, str, str], ...] | None = None
 
 
 def listener_record_path(anchor_dir: Path) -> Path:
@@ -194,6 +204,8 @@ def write_listener_record(
     iid: str,
     nonce: str | None = None,
     profiles: Sequence[tuple[str, str]] | None = None,
+    health_checked_at: int | None = None,
+    health: Sequence[tuple[str, str, str, str]] | None = None,
 ) -> None:
     """Atomically write the record: a new 0600 temp file in the same directory, fsync, rename.
 
@@ -218,8 +230,12 @@ def write_listener_record(
             "pid": os.getpid(),
             "nonce": nonce if nonce is not None else secrets.token_hex(16),
             "profiles": [[p, d] for p, d in profiles] if profiles is not None else None,
+            "health_checked_at": health_checked_at,
+            "health": [list(row) for row in health] if health is not None else None,
         }
     ).encode("utf-8")
+    if len(body) > MAX_RECORD_BYTES:
+        raise OSError("listener record exceeds size limit")
     tmp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(tmp, flags, RECORD_MODE)
@@ -525,6 +541,9 @@ def read_listener_record(
     if not pid_alive(pid):  # type: ignore[arg-type]
         raise ListenerRecordError("the listener record is stale")
     profiles = _parse_record_profiles(data.get("profiles"))
+    checked_at, health = _parse_record_health(
+        data.get("health_checked_at"), data.get("health"), profiles
+    )
     return ListenerRecord(
         host=str(host),
         port=int(port),
@@ -532,6 +551,8 @@ def read_listener_record(
         pid=int(pid),  # type: ignore[arg-type]
         nonce=nonce,
         profiles=profiles,
+        health_checked_at=checked_at,
+        health=health,
     )
 
 
@@ -553,6 +574,35 @@ def _parse_record_profiles(raw: object) -> tuple[tuple[str, str], ...] | None:
             raise ListenerRecordError("the listener record is malformed")
         out.append((entry[0], entry[1]))
     return tuple(out)
+
+
+def _parse_record_health(
+    checked_at: object, raw: object, profiles: tuple[tuple[str, str], ...] | None
+) -> tuple[int | None, tuple[tuple[str, str, str, str], ...] | None]:
+    """Old records have no snapshot. A present snapshot must cover exactly the served bots."""
+    if checked_at is None and raw is None:
+        return None, None
+    if type(checked_at) is not int or checked_at < 0 or not isinstance(raw, list):
+        raise ListenerRecordError("the listener health record is malformed")
+    if profiles is None or len(raw) != len(profiles) or len(raw) > 128:
+        raise ListenerRecordError("the listener health record is malformed")
+    names = {name for name, _ in profiles}
+    if len(names) != len(profiles) or any(not _valid_profile_name(name) for name in names):
+        raise ListenerRecordError("the listener health record is malformed")
+    rows: list[tuple[str, str, str, str]] = []
+    for row in raw:
+        if (
+            not isinstance(row, list)
+            or len(row) != 4
+            or not isinstance(row[0], str)
+            or row[0] not in names
+            or any(not isinstance(value, str) or value not in HEALTH_STATES for value in row[1:])
+        ):
+            raise ListenerRecordError("the listener health record is malformed")
+        rows.append((row[0], row[1], row[2], row[3]))
+    if {row[0] for row in rows} != names or len({row[0] for row in rows}) != len(rows):
+        raise ListenerRecordError("the listener health record is malformed")
+    return checked_at, tuple(rows)
 
 
 def _default_verify_listener_live(
@@ -653,6 +703,14 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     devices.add_parser("list", help="List devices")
     revoke = devices.add_parser("revoke", help="Revoke a device and its tokens (PR7-1)")
     revoke.add_argument("device_id")
+    grant_controls = devices.add_parser(
+        "grant-controls", help="Allow one paired phone to manage jobs and default models"
+    )
+    grant_controls.add_argument("device_id")
+    deny_controls = devices.add_parser(
+        "deny-controls", help="Remove jobs and default-model control from one phone"
+    )
+    deny_controls.add_argument("device_id")
 
     instance = groups.add_parser("instance", help="Instance identity").add_subparsers(
         dest="instance_command"
@@ -664,6 +722,10 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     setup = groups.add_parser("setup", help="Check host readiness without changing configuration")
     setup.add_subparsers(dest="setup_command").add_parser(
         "check", help="Check the Hermes build, HMP identity, and pinned listener"
+    )
+    health = groups.add_parser("health", help="Check each served bot's enabled channels")
+    health.add_subparsers(dest="health_command").add_parser(
+        "check", help="Read the gateway's current bot-channel health snapshot"
     )
 
 
@@ -1238,6 +1300,37 @@ def _grant_bot_access(ctx: _Context, *, user_id: str) -> None:
         out.write(f"  {_combined_approve_command(list(remaining), user_id)}\n")
 
 
+def _prompt_owner_controls(ctx: _Context, *, device_id: str, label: str) -> None:
+    """Ask the host for a separate, per-device privileged-control decision.
+
+    The only granting answer is the full word GRANT. Existing y/n answers intended for the
+    bot-access prompt therefore cannot accidentally elevate a newly paired phone.
+    """
+    out = ctx.out
+    out.write(
+        "\nAllow this phone to manage scheduled jobs and bot default models? "
+        "This is separate from Bot Chat access.\n"
+    )
+    out.write(f"Type GRANT for {json.dumps(label, ensure_ascii=True)}, or Enter to keep it off: ")
+    out.flush()
+    try:
+        answer = ctx.env.stdin.readline()
+    except KeyboardInterrupt:
+        answer = ""
+        out.write("\n")
+    allowed = answer.strip() == "GRANT"
+    if ctx.store.set_owner_controls(device_id, allowed=allowed, now=ctx.now()):
+        out.write(
+            "Jobs and default-model control granted to this phone.\n"
+            if allowed
+            else "Jobs and default-model control stays off for this phone.\n"
+        )
+    else:
+        out.write("The phone is no longer active; privileged control was not granted.\n")
+    if not allowed:
+        out.write(f"To grant it later: hermes hmp devices grant-controls {device_id}\n")
+
+
 def _wait_for_scan_and_confirm(
     ctx: _Context, *, oid: str, exp: int, label: str | None, user: str | None, grant: bool = True
 ) -> int:
@@ -1307,7 +1400,7 @@ def _wait_for_scan_and_confirm(
             yes_share=user is not None,  # the operator already chose this user at offer time
         )
         try:
-            _, user_id = _do_confirm(ctx, ns)
+            device_id, user_id = _do_confirm(ctx, ns)
         except KeyboardInterrupt:
             out.write("\nCancelled. The pairing is still pending.\n")
             out.write(_resume_hint(pairing_id, confirm_label))
@@ -1328,6 +1421,7 @@ def _wait_for_scan_and_confirm(
             _grant_bot_access(ctx, user_id=user_id)
         else:
             _print_next_steps(ctx)
+        _prompt_owner_controls(ctx, device_id=device_id, label=confirm_label)
         return EXIT_OK
 
 
@@ -1563,6 +1657,7 @@ def _do_confirm(ctx: _Context, args: argparse.Namespace) -> tuple[str, str]:
 def _cmd_confirm(ctx: _Context, args: argparse.Namespace) -> int:
     device_id, user_id = _do_confirm(ctx, args)
     ctx.out.write(f"Confirmed. Device {device_id}, user {user_id}.\n")
+    _prompt_owner_controls(ctx, device_id=device_id, label=args.label)
     return EXIT_OK
 
 
@@ -1610,6 +1705,25 @@ def _cmd_devices_revoke(ctx: _Context, args: argparse.Namespace) -> int:
             ctx.out.write(f"  {line}\n")
         ctx.out.write(f"  {CONFIG_ALLOWLIST_NOT_CHECKED_NOTE}\n")
     return EXIT_OK
+
+
+def _cmd_devices_controls(ctx: _Context, args: argparse.Namespace, *, allowed: bool) -> int:
+    if not ctx.store.set_owner_controls(args.device_id, allowed=allowed, now=ctx.now()):
+        raise RefusedError("refused: device does not exist or is not active")
+    ctx.out.write(
+        "Jobs and default-model control granted.\n"
+        if allowed
+        else "Jobs and default-model control removed.\n"
+    )
+    return EXIT_OK
+
+
+def _cmd_devices_grant_controls(ctx: _Context, args: argparse.Namespace) -> int:
+    return _cmd_devices_controls(ctx, args, allowed=True)
+
+
+def _cmd_devices_deny_controls(ctx: _Context, args: argparse.Namespace) -> int:
+    return _cmd_devices_controls(ctx, args, allowed=False)
 
 
 def _cmd_show(ctx: _Context, _args: argparse.Namespace) -> int:
@@ -1670,7 +1784,7 @@ def _cmd_compat(env: CliEnv) -> int:
     return EXIT_OK
 
 
-def _cmd_setup_check(env: CliEnv) -> int:
+def _checked_setup(env: CliEnv) -> tuple[int, ListenerRecord | None]:
     """Read-only host preflight. Never opens the writable store or runs Hermes CLI."""
     from . import identity, server
 
@@ -1690,20 +1804,20 @@ def _cmd_setup_check(env: CliEnv) -> int:
         )
     except identity.NamedProfileError:
         out.write("HMP instance: unavailable under a named profile; use the default profile.\n")
-        return EXIT_REFUSED
+        return EXIT_REFUSED, None
     except identity.IdentityError:
         out.write("HMP instance: custody location is unsafe.\n")
-        return EXIT_REFUSED
+        return EXIT_REFUSED, None
 
     store_path = server.store_path(custody.anchor_dir)
     if not store_path.is_file():
         out.write("HMP instance: not initialized. Start the gateway with HMP enabled once.\n")
-        return EXIT_REFUSED
+        return EXIT_REFUSED, None
     try:
         loaded = identity.load_existing(_ReadOnlyEpoch(store_path), **_identity_kw(env))
     except (identity.IdentityError, sqlite3.Error, OSError):
         out.write("HMP instance: not current; inspect the gateway before pairing.\n")
-        return EXIT_REFUSED
+        return EXIT_REFUSED, None
     out.write("HMP instance: current.\n")
 
     try:
@@ -1714,19 +1828,44 @@ def _cmd_setup_check(env: CliEnv) -> int:
         )
     except ListenerRecordError:
         out.write("HMP listener: unavailable or unsafe. Start or inspect the gateway.\n")
-        return EXIT_REFUSED
+        return EXIT_REFUSED, None
     try:
         live = env.verify_listener_live(record, loaded.iid)
     except Exception:
         live = False
     if not live:
         out.write("HMP listener: TLS identity or readiness check failed.\n")
-        return EXIT_REFUSED
+        return EXIT_REFUSED, None
     out.write("HMP listener: running with the expected TLS identity.\n")
     count = len(record.profiles or ())
     out.write(f"Served bot count: {count} (routing and access are not verified here).\n")
     out.write("Review docs/INSTALL.md and server/DEPLOYMENT.md before pairing.\n")
-    return EXIT_OK if supported and count > 0 else EXIT_REFUSED
+    return (EXIT_OK, record) if supported and count > 0 else (EXIT_REFUSED, None)
+
+
+def _cmd_setup_check(env: CliEnv) -> int:
+    status, _record = _checked_setup(env)
+    return status
+
+
+def _cmd_health_check(env: CliEnv) -> int:
+    """Read-only operator diagnostic from the live, TLS-pinned gateway record."""
+    status, record = _checked_setup(env)
+    if status != EXIT_OK or record is None:
+        return EXIT_REFUSED
+    checked_at, rows = record.health_checked_at, record.health
+    age = int(env.clock()) - checked_at if checked_at is not None else None
+    if age is None or age < -5 or age > HEALTH_MAX_AGE_S or rows is None:
+        env.stdout.write("Bot channel health: unavailable or stale; inspect the gateway.\n")
+        return EXIT_REFUSED
+    healthy = True
+    for profile, send, cron, model in sorted(rows):
+        env.stdout.write(
+            f"Bot {json.dumps(profile)}: send={send}, jobs={cron}, model={model}.\n"
+        )
+        healthy &= all(state in ("ready", "disabled") for state in (send, cron, model))
+    env.stdout.write("Device access and later loopback execution are not verified.\n")
+    return EXIT_OK if healthy else EXIT_REFUSED
 
 
 _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], int]] = {
@@ -1736,6 +1875,8 @@ _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], 
     ("pair", "deny"): _cmd_deny,
     ("devices", "list"): _cmd_devices_list,
     ("devices", "revoke"): _cmd_devices_revoke,
+    ("devices", "grant-controls"): _cmd_devices_grant_controls,
+    ("devices", "deny-controls"): _cmd_devices_deny_controls,
     ("instance", "show"): _cmd_show,
     ("instance", "rotate-key"): _cmd_rotate,
 }
@@ -1756,9 +1897,11 @@ def dispatch(args: argparse.Namespace, env: CliEnv | None = None) -> int:
             return _cmd_compat(env)
         if (group, action) == ("setup", "check"):
             return _cmd_setup_check(env)
+        if (group, action) == ("health", "check"):
+            return _cmd_health_check(env)
         handler = _STORE_COMMANDS.get((group or "", action or ""))
         if handler is None:
-            env.stderr.write("usage: hermes hmp {pair,devices,instance,compat,setup} ...\n")
+            env.stderr.write("usage: hermes hmp {pair,devices,instance,compat,setup,health} ...\n")
             return EXIT_ENVIRONMENT
         if (group, action) in MUTATING_COMMANDS:
             _check_mutation_allowed(env)

@@ -45,6 +45,21 @@ compatible build and correctly refused with `not initialized` before a gateway
 start. No live Hermes home was used. The installed tree's guard returned
 **CAUTION, 87 findings**, matching the source-tree scan; see the [privacy gate](PRIVACY_GATE.md).
 
+## Bot channel health branch validation
+
+The additive `feat/bot-health-check` branch reports fixed status codes for the
+running gateway's served bots. The unit suite passed **1,085 tests** with **10
+skipped**; the focused CLI and adapter suite passed **104 tests**. Ruff, the
+plugin surface check, log scan, and zero-baseline privacy scan passed. A stale,
+incomplete, or malformed snapshot fails closed. The command does not send a
+message, transmit a key, add a network route, or change the guarded-send bridge
+file set. Its result does not certify a device's authorization or a later
+loopback call.
+At `e947a10`, eight stock-base direct-send gateway fixture cases passed. An
+isolated `HERMES_HOME` install of that exact commit and Plugin Doctor passed;
+the installer still reports the documented repository-wide CAUTION findings.
+Live host enablement is a separate operator-controlled step.
+
 ## Local fixture builds
 
 The stock-base and experimental Hermes source clones were copied into the new root's `_refs/` directory and extracted to scratch storage outside the repository. The source revisions are `04fa849e70` and `7e8c8f07a1`, respectively. Pairing fixtures require a real PTY, so they run locally rather than in the current GitHub Actions workflow.
