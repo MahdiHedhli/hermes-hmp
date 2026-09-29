@@ -13,13 +13,26 @@
 - A private network path between the phone and host, such as Tailscale.
 - Hermes gateway profile routing configured as described in [Deployment](../server/DEPLOYMENT.md).
 
-Install the plugin from its public repository. For reproducible deployments, add `--ref <full-commit-sha>`.
+Install the runtime plugin directory from its public repository. Hermes scans
+the selected directory, so this avoids scanning research documents and test
+fixtures as executable plugin content. The current runtime scan has two
+medium findings for subprocess calls; both use fixed argument lists, no shell,
+and bounded timeouts. Review any scanner warning before accepting it. Never
+disable the scanner or use `--allow-removed`.
 
 ```sh
-hermes plugins install MahdiHedhli/hermes-hmp
+hermes plugins install 'MahdiHedhli/hermes-hmp#server/hmp_plugin' --enable
+hermes gateway restart
 hermes hmp compat
 hermes hmp pair offer
 ```
+
+If an older root-directory HMP plugin is already installed, replace it with
+the runtime-only source using the same command with `--force`. This replaces
+the old installation; it does not turn off the scanner. Later releases can be
+installed with `hermes plugins update hmp`, followed by a gateway restart.
+For a fixed, reproducible version, add `--ref <full-commit-sha>` when installing;
+a pinned installation must be explicitly reinstalled to move to another SHA.
 
 Scan the offer in the mobile app, compare the short security code on both screens, and confirm on the host. Then approve only the profiles this device should access. Keep the offer and approval codes out of logs, screenshots, and support requests.
 
