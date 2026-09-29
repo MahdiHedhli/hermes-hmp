@@ -23,3 +23,5 @@ Fixture and compatibility tests need extracted Hermes source builds and a real P
 - Keep app code and private research evidence out of this repository.
 
 The [Spec Kit constitution](.specify/memory/constitution.md) records the project-wide rules. A feature PR should include a focused specification, plan, and verification tasks under `specs/`.
+
+Routine PRs use the deterministic CI checks above. At feature freeze, maintainers use the [release security gate](docs/RELEASE_SECURITY.md) on an exact `release/*` commit; it is not run on every development push.

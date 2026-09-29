@@ -27,6 +27,7 @@ Hermes may ask you to confirm its community-plugin scan findings; the full-tree 
 | [Feature specs](specs/README.md) | Spec Kit workflow and migration plan |
 | [Privacy gate](PRIVACY_GATE.md) | Public migration scan and installer verdict |
 | [Validation](VALIDATION.md) | Test counts and isolated install result |
+| [Release security](docs/RELEASE_SECURITY.md) | Exact-commit source review and runtime qualification gates |
 
 ## Repository
 
