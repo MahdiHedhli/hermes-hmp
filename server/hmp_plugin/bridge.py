@@ -666,6 +666,11 @@ class HermesReadBridge:
         )
 
     def _profile_home(self, profile: str) -> Path:
+        # Keep the served set authoritative even if a future Hermes resolver returns a fallback
+        # home for an explicit unknown profile. The v2026.8.31 resolver did exactly that, and a
+        # direct substitution here would turn an unserved bot read into a root-profile read.
+        if not isinstance(profile, str) or not profile or profile not in self.served_profiles():
+            raise BridgeError("profile is not served")
         runner = self._runner()
         home = _as_path(runner._routed_profile_home(profile))
         if home is None:

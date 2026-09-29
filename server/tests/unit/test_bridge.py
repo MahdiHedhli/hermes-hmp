@@ -80,6 +80,17 @@ def test_served_profiles_fail_loudly(world: World, br: HermesReadBridge) -> None
         br.served_profiles()
 
 
+def test_unserved_profile_cannot_read_fallback_home(world: World, br: HermesReadBridge) -> None:
+    """A resolver returning the root home for an unknown profile must not leak its sessions."""
+    world.runner.homes["ghost"] = world.runner.homes["alpha"]
+    world.dbs["alpha"].seed_session("private-alpha")
+
+    with pytest.raises(BridgeError, match="profile is not served"):
+        br.resolve_session(USER, "ghost", "private-alpha")
+
+    assert "_routed_profile_home" not in world.runner.calls
+
+
 # --------------------------------------------------------------------------------------------------
 # Per-bot authorization: fails closed to UNVERIFIABLE
 # --------------------------------------------------------------------------------------------------
