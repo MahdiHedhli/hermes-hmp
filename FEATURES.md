@@ -7,6 +7,7 @@ HMP is the Hermes gateway plugin used by the [HermesBot Mobile](https://hermes-b
 | Available | Device pairing | Local QR offer, operator code comparison, one key per device, and a separate host decision for jobs and model controls. |
 | Available | Private transport | TLS instance-key pinning over a private network such as Tailscale. |
 | Available | Bot roster and Bot Chat reads | Profile list, snapshots, history, and access state through the Hermes gateway. |
+| Qualification required | Newer Hermes builds | HMP can be installed, but pairing and Bot Chat reads require a reviewed bridge build. The release watch tests new tags; an unvalidated Git SHA is not admitted solely because its version is newer. A stable upstream profile-scoped API is needed for warning-only forward compatibility. |
 | Draft | Host setup check | Read-only build, identity, and pinned-listener diagnostic; profile routing remains an operator check. See [install](docs/INSTALL.md). |
 | Draft | Bot channel health check | Read-only per-bot send, jobs, and model prerequisites from the running gateway; enabled failures exit nonzero. See [install](docs/INSTALL.md). |
 | Draft | HMP release check | Read-only `hermes hmp update check` compares the installed pin with the latest published stable release and its exact Hermes compatibility manifests. No release is published yet; it never installs automatically. |
