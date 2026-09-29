@@ -4,7 +4,7 @@ HMP is the Hermes gateway plugin used by the [HermesBot Mobile](https://hermes-b
 
 | Status | Capability | Notes |
 | --- | --- | --- |
-| Available | Device pairing | Local QR offer, operator code comparison, and one key per device. |
+| Available | Device pairing | Local QR offer, operator code comparison, one key per device, and a separate host decision for jobs and model controls. |
 | Available | Private transport | TLS instance-key pinning over a private network such as Tailscale. |
 | Available | Bot roster and Bot Chat reads | Profile list, snapshots, history, and access state through the Hermes gateway. |
 | Draft | Host setup check | Read-only build, identity, and pinned-listener diagnostic; profile routing remains an operator check. See [install](docs/INSTALL.md). |

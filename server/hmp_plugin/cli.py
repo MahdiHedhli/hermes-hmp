@@ -70,6 +70,10 @@ Refusals and rules:
     transaction (PR3-4). Denial goes through `pairing.deny_pairing`.
 - **`devices revoke` (PR7-1)** revokes the device and every token family atomically. For a user's
   last device it prints the Hermes `pairing revoke` commands, and never runs them.
+- **Privileged phone controls.** After pairing, a separate host prompt requires the full word
+  `GRANT` before that device can manage jobs or default models. EOF, interruption and every other
+  answer record a denial. `devices grant-controls` and `devices deny-controls` are TTY-gated host
+  commands for later changes. An explicit decision overrides the legacy config allowlist.
 - **`instance rotate-key` (PR7-2)** makes a new key, revokes every device, and expires every open
   offer and pending pairing.
 - **`compat`** prints the build identity, the list match and the probe outcome. There are no
@@ -115,6 +119,8 @@ MUTATING_COMMANDS: frozenset[tuple[str, str | None]] = frozenset(
         ("pair", "confirm"),
         ("pair", "deny"),
         ("devices", "revoke"),
+        ("devices", "grant-controls"),
+        ("devices", "deny-controls"),
         ("instance", "rotate-key"),
     }
 )
@@ -697,6 +703,14 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     devices.add_parser("list", help="List devices")
     revoke = devices.add_parser("revoke", help="Revoke a device and its tokens (PR7-1)")
     revoke.add_argument("device_id")
+    grant_controls = devices.add_parser(
+        "grant-controls", help="Allow one paired phone to manage jobs and default models"
+    )
+    grant_controls.add_argument("device_id")
+    deny_controls = devices.add_parser(
+        "deny-controls", help="Remove jobs and default-model control from one phone"
+    )
+    deny_controls.add_argument("device_id")
 
     instance = groups.add_parser("instance", help="Instance identity").add_subparsers(
         dest="instance_command"
@@ -1286,6 +1300,37 @@ def _grant_bot_access(ctx: _Context, *, user_id: str) -> None:
         out.write(f"  {_combined_approve_command(list(remaining), user_id)}\n")
 
 
+def _prompt_owner_controls(ctx: _Context, *, device_id: str, label: str) -> None:
+    """Ask the host for a separate, per-device privileged-control decision.
+
+    The only granting answer is the full word GRANT. Existing y/n answers intended for the
+    bot-access prompt therefore cannot accidentally elevate a newly paired phone.
+    """
+    out = ctx.out
+    out.write(
+        "\nAllow this phone to manage scheduled jobs and bot default models? "
+        "This is separate from Bot Chat access.\n"
+    )
+    out.write(f"Type GRANT for {json.dumps(label, ensure_ascii=True)}, or Enter to keep it off: ")
+    out.flush()
+    try:
+        answer = ctx.env.stdin.readline()
+    except KeyboardInterrupt:
+        answer = ""
+        out.write("\n")
+    allowed = answer.strip() == "GRANT"
+    if ctx.store.set_owner_controls(device_id, allowed=allowed, now=ctx.now()):
+        out.write(
+            "Jobs and default-model control granted to this phone.\n"
+            if allowed
+            else "Jobs and default-model control stays off for this phone.\n"
+        )
+    else:
+        out.write("The phone is no longer active; privileged control was not granted.\n")
+    if not allowed:
+        out.write(f"To grant it later: hermes hmp devices grant-controls {device_id}\n")
+
+
 def _wait_for_scan_and_confirm(
     ctx: _Context, *, oid: str, exp: int, label: str | None, user: str | None, grant: bool = True
 ) -> int:
@@ -1355,7 +1400,7 @@ def _wait_for_scan_and_confirm(
             yes_share=user is not None,  # the operator already chose this user at offer time
         )
         try:
-            _, user_id = _do_confirm(ctx, ns)
+            device_id, user_id = _do_confirm(ctx, ns)
         except KeyboardInterrupt:
             out.write("\nCancelled. The pairing is still pending.\n")
             out.write(_resume_hint(pairing_id, confirm_label))
@@ -1376,6 +1421,7 @@ def _wait_for_scan_and_confirm(
             _grant_bot_access(ctx, user_id=user_id)
         else:
             _print_next_steps(ctx)
+        _prompt_owner_controls(ctx, device_id=device_id, label=confirm_label)
         return EXIT_OK
 
 
@@ -1611,6 +1657,7 @@ def _do_confirm(ctx: _Context, args: argparse.Namespace) -> tuple[str, str]:
 def _cmd_confirm(ctx: _Context, args: argparse.Namespace) -> int:
     device_id, user_id = _do_confirm(ctx, args)
     ctx.out.write(f"Confirmed. Device {device_id}, user {user_id}.\n")
+    _prompt_owner_controls(ctx, device_id=device_id, label=args.label)
     return EXIT_OK
 
 
@@ -1658,6 +1705,25 @@ def _cmd_devices_revoke(ctx: _Context, args: argparse.Namespace) -> int:
             ctx.out.write(f"  {line}\n")
         ctx.out.write(f"  {CONFIG_ALLOWLIST_NOT_CHECKED_NOTE}\n")
     return EXIT_OK
+
+
+def _cmd_devices_controls(ctx: _Context, args: argparse.Namespace, *, allowed: bool) -> int:
+    if not ctx.store.set_owner_controls(args.device_id, allowed=allowed, now=ctx.now()):
+        raise RefusedError("refused: device does not exist or is not active")
+    ctx.out.write(
+        "Jobs and default-model control granted.\n"
+        if allowed
+        else "Jobs and default-model control removed.\n"
+    )
+    return EXIT_OK
+
+
+def _cmd_devices_grant_controls(ctx: _Context, args: argparse.Namespace) -> int:
+    return _cmd_devices_controls(ctx, args, allowed=True)
+
+
+def _cmd_devices_deny_controls(ctx: _Context, args: argparse.Namespace) -> int:
+    return _cmd_devices_controls(ctx, args, allowed=False)
 
 
 def _cmd_show(ctx: _Context, _args: argparse.Namespace) -> int:
@@ -1809,6 +1875,8 @@ _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], 
     ("pair", "deny"): _cmd_deny,
     ("devices", "list"): _cmd_devices_list,
     ("devices", "revoke"): _cmd_devices_revoke,
+    ("devices", "grant-controls"): _cmd_devices_grant_controls,
+    ("devices", "deny-controls"): _cmd_devices_deny_controls,
     ("instance", "show"): _cmd_show,
     ("instance", "rotate-key"): _cmd_rotate,
 }

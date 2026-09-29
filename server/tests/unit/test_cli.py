@@ -298,6 +298,8 @@ MUTATING = [
     ("pair", "confirm", "pid", "--sas", "S", "--label", "f1-fixture-label-1"),
     ("pair", "deny", "pid"),
     ("devices", "revoke", "dev_x"),
+    ("devices", "grant-controls", "dev_x"),
+    ("devices", "deny-controls", "dev_x"),
     ("instance", "rotate-key"),
 ]
 
@@ -1023,6 +1025,20 @@ def test_devices_list_and_revoke_last_device_hint(c: Cli) -> None:
     assert c.env.store.get_device(device)["state"] == "REVOKED"
     assert f"hermes -p alpha pairing revoke hmp {user}" in c.out
     assert c.run("devices", "revoke", "dev_missing") == 1
+
+
+def test_host_can_change_owner_controls_for_one_active_device(c: Cli) -> None:
+    pairing_id, sas = _pending(c.env)
+    assert c.confirm(pairing_id, "--sas", sas, "--label", "f1-fixture-label-1") == 0
+    device = _device_id(pairing_id)
+    assert c.env.store.owner_controls_decision(device) is False  # EOF defaults to no grant
+    assert c.run("devices", "grant-controls", device) == 0
+    assert c.env.store.owner_controls_decision(device) is True
+    assert c.run("devices", "deny-controls", device) == 0
+    assert c.env.store.owner_controls_decision(device) is False
+    assert c.run("devices", "revoke", device) == 0
+    assert c.run("devices", "grant-controls", device) == 1
+    assert c.env.store.owner_controls_decision(device) is False
 
 
 def _device_id(pairing_id: str) -> str:
