@@ -310,7 +310,7 @@ only the extracted fixtures; they never add an owner-local entry to the committe
 The first command reruns all requested CI tests, including the previously blocked socket tests.
 
 ```bash
-export HMP_HERMES_BUILDS_DIR=/private/tmp/claude-501/-Users-mhedhli-Documents-Coding-Hermes-Bot-Mobile/b92f30dd-0a00-4c39-90d2-4fc012477eae/scratchpad/hermes_builds
+export HMP_HERMES_BUILDS_DIR=/path/to/isolated/hermes_builds
 server/.venv/bin/python -m pytest server/tests/unit tools/ci/tests tools/fixtures/tests tools/hermes_builds/tests tools/vectors/tests tools/acceptance/tests -q
 server/.venv/bin/python tools/compat/run_matrix.py --target direct-send --builds stock-base,experimental --out /private/tmp/hmp-f3-round3-controller --json-out /private/tmp/hmp-f3-round3-controller/matrix.json --fixture-qualification-out /private/tmp/hmp-f3-round3-controller/qualified.json
 export HMP_DIRECT_SEND_QUALIFICATION=/private/tmp/hmp-f3-round3-controller/qualified.json
