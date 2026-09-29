@@ -17,7 +17,9 @@ from types import SimpleNamespace
 from typing import Any
 
 from aiohttp import ClientSession, Fingerprint
+from gateway.config import Platform
 from gateway.platform_registry import PlatformEntry, platform_registry
+from gateway.session import SessionSource, SessionStore, build_session_key
 
 import hmp_plugin
 from hmp_plugin.adapter import HmpAdapter
@@ -56,6 +58,30 @@ async def main() -> None:
     registration = RegistryContext()
     hmp_plugin.register(registration)
     assert registration.cli_registered
+
+    # In this tag, standalone gateways use the legacy `agent:main` session namespace even when
+    # their active profile is named. A read adapter must not always pass the profile name to
+    # build_session_key: that would miss a real standalone Bot Chat. Use the old store's own
+    # key generator as the authority, without creating a store or touching state.db.
+    source = SessionSource(
+        platform=Platform("hmp"), chat_id="probe", chat_type="dm", user_id="probe",
+        profile="serenity",
+    )
+    session_store = object.__new__(SessionStore)
+    session_store.config = SimpleNamespace(
+        multiplex_profiles=False,
+        group_sessions_per_user=True,
+        thread_sessions_per_user=False,
+    )
+    assert session_store._generate_session_key(source) == build_session_key(source, profile=None)
+    assert session_store._generate_session_key(source) != build_session_key(
+        source, profile="serenity"
+    )
+    session_store.config.multiplex_profiles = True
+    assert session_store._generate_session_key(source) == build_session_key(
+        source, profile="serenity"
+    )
+
     adapter = platform_registry.create_adapter(
         "hmp", SimpleNamespace(extra={"bind": "127.0.0.1", "port": port})
     )
