@@ -16,6 +16,9 @@ hermes hmp pair offer
 
 Hermes may ask you to confirm its community-plugin scan findings; the full-tree verdict is recorded in the [privacy gate](PRIVACY_GATE.md). The operator confirms the matching code shown on the phone and host. See the [install and host configuration guide](docs/INSTALL.md) before connecting a device. Use `--ref <full-commit-sha>` to pin a reviewed revision.
 
+After configuring and starting the gateway, draft `hermes hmp setup check`
+checks build and listener readiness without changing host configuration.
+
 | Start here | Purpose |
 | --- | --- |
 | [Features](FEATURES.md) | Available, preview, and planned capabilities |

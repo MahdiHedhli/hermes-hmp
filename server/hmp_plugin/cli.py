@@ -661,6 +661,10 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     instance.add_parser("rotate-key", help="Rotate the instance key; revokes every device (PR7-2)")
 
     groups.add_parser("compat", help="Show build identity, list match and probe result (GU-2c)")
+    setup = groups.add_parser("setup", help="Check host readiness without changing configuration")
+    setup.add_subparsers(dest="setup_command").add_parser(
+        "check", help="Check the Hermes build, HMP identity, and pinned listener"
+    )
 
 
 # --------------------------------------------------------------------------------------------------
@@ -1666,6 +1670,65 @@ def _cmd_compat(env: CliEnv) -> int:
     return EXIT_OK
 
 
+def _cmd_setup_check(env: CliEnv) -> int:
+    """Read-only host preflight. Never opens the writable store or runs Hermes CLI."""
+    from . import identity, server
+
+    out = env.stdout
+    result = env.compat()
+    supported = bool(getattr(result, "supported", False))
+    out.write(f"Hermes read compatibility: {'supported' if supported else 'unsupported'}\n")
+    if not supported:
+        out.write("Check `hermes hmp compat` and use a qualified Hermes build.\n")
+
+    kw = env.identity_kwargs
+    try:
+        custody = identity.resolve_custody(
+            env=kw.get("env", env.environ),
+            hermes_root=kw.get("hermes_root"),
+            binding_root=kw.get("binding_root"),
+        )
+    except identity.NamedProfileError:
+        out.write("HMP instance: unavailable under a named profile; use the default profile.\n")
+        return EXIT_REFUSED
+    except identity.IdentityError:
+        out.write("HMP instance: custody location is unsafe.\n")
+        return EXIT_REFUSED
+
+    store_path = server.store_path(custody.anchor_dir)
+    if not store_path.is_file():
+        out.write("HMP instance: not initialized. Start the gateway with HMP enabled once.\n")
+        return EXIT_REFUSED
+    try:
+        loaded = identity.load_existing(_ReadOnlyEpoch(store_path), **_identity_kw(env))
+    except (identity.IdentityError, sqlite3.Error, OSError):
+        out.write("HMP instance: not current; inspect the gateway before pairing.\n")
+        return EXIT_REFUSED
+    out.write("HMP instance: current.\n")
+
+    try:
+        record = read_listener_record(
+            listener_record_path(custody.anchor_dir),
+            iid=loaded.iid,
+            pid_alive=env.pid_alive,
+        )
+    except ListenerRecordError:
+        out.write("HMP listener: unavailable or unsafe. Start or inspect the gateway.\n")
+        return EXIT_REFUSED
+    try:
+        live = env.verify_listener_live(record, loaded.iid)
+    except Exception:
+        live = False
+    if not live:
+        out.write("HMP listener: TLS identity or readiness check failed.\n")
+        return EXIT_REFUSED
+    out.write("HMP listener: running with the expected TLS identity.\n")
+    count = len(record.profiles or ())
+    out.write(f"Served bot count: {count} (routing and access are not verified here).\n")
+    out.write("Review docs/INSTALL.md and server/DEPLOYMENT.md before pairing.\n")
+    return EXIT_OK if supported and count > 0 else EXIT_REFUSED
+
+
 _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], int]] = {
     ("pair", "offer"): _cmd_offer,
     ("pair", "list"): _cmd_list,
@@ -1691,9 +1754,11 @@ def dispatch(args: argparse.Namespace, env: CliEnv | None = None) -> int:
     try:
         if group == "compat":
             return _cmd_compat(env)
+        if (group, action) == ("setup", "check"):
+            return _cmd_setup_check(env)
         handler = _STORE_COMMANDS.get((group or "", action or ""))
         if handler is None:
-            env.stderr.write("usage: hermes hmp {pair,devices,instance,compat} ...\n")
+            env.stderr.write("usage: hermes hmp {pair,devices,instance,compat,setup} ...\n")
             return EXIT_ENVIRONMENT
         if (group, action) in MUTATING_COMMANDS:
             _check_mutation_allowed(env)
