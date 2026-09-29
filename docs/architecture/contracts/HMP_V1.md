@@ -243,6 +243,7 @@ Normative keywords follow RFC 2119 and RFC 8174.
 | `write_gate_closed` (v1.2, DS-2(b)) | 503 | direct send while `"open_guarded"` is unavailable (dogfood flag off, `api_server` unreachable/misconfigured, or key invalid) | yes (HMP did not hand off) | Keep the draft. Composer is read-only for direct send on this instance. |
 | `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"` | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
 | `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, unqualified build, missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
+| `model_unavailable` (v1.5, MD-1) | 503 | mobile default model: flag off, unqualified build, missing scoped picker endpoint, or Hermes read/write failure | — | Reopen the model screen and check the current selection before another write. |
 
 - **ERR-2a. Read-compatibility refusal** (GU-2c; additive `other {why}` values, no contract revision; controller clarification, 2026-09-25).
   - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes build's identity is not on the read-compatible builds list or cannot be determined.
@@ -1025,6 +1026,36 @@ the profile's own server key, disabled proxy inheritance, redirects, and automat
 Phone clients must treat a transport failure after a write as an unknown outcome and
 refresh before attempting another write. The host flag defaults off; release requires
 fixture qualification and independent security review.
+
+## 7d. Bot default model (v1.5, draft)
+
+This additive route family is disabled unless `gateway.platforms.hmp.extra.model_management.enabled`
+is explicitly true, this authenticated device is in `owner_device_ids`, the selected bot
+passes the existing per-bot access check, and the running Hermes model writer is an exact
+qualified build. Non-owner devices receive `404 not_found`; a disabled or unqualified
+feature receives `503 model_unavailable`. These checks happen before a config read, model
+catalog request, or write.
+
+| Method | Path under `/hmp/v1` | Body | Result |
+|---|---|---|---|
+| GET | `/bots/{p}/model/default` | — | `{"provider":string,"model":string}` |
+| GET | `/bots/{p}/model/options` | — | `{"providers":[{"provider":string,"name":string,"models":[string,...]},...]}` |
+| PUT | `/bots/{p}/model/default` | `{"provider":string,"model":string}` | Stored provider/model, which Hermes may normalize |
+
+The current model read uses only Hermes's routed profile home and returns no other config.
+The options read uses the fixed profile-scoped loopback `/api/model/options` route and the
+profile's own API key. HMP never accepts a URL, key, base path, raw config patch, or provider
+configuration from the phone. Only authenticated providers with nonempty models are projected;
+all other catalog fields are discarded. HMP caps the response at eight MiB, 256 provider rows,
+10,000 model IDs, and fixed string lengths. It disables proxy inheritance and redirects.
+
+The PUT calls Hermes's existing validated profile-model writer rather than writing YAML from
+HMP. It accepts only provider and model, both bounded. A validation refusal is `400
+bad_request`; other write failures are `503 model_unavailable`. A model selection may affect
+billing. The phone must confirm the named bot and model before PUT. A lost response is an
+unknown result: refresh the current model and never automatically retry. The persisted
+default applies to new sessions; this route does not switch a running Desktop-owned turn.
+The host flag defaults off, and the owner's live Hermes is not qualified by this draft.
 
 ## 8. Guarantees, capability contract and write gate (FZ-R-8, FZ-R-9)
 

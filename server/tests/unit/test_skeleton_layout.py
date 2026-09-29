@@ -28,6 +28,7 @@ CONTRACT_MODULES = {
     "gate.py",
     "direct_send.py",
     "mobile_cron.py",
+    "mobile_model.py",
     "server.py",
     "request_ctx.py",
     "adapter.py",
@@ -37,6 +38,7 @@ CONTRACT_MODULES = {
 DATA_FILES = {
     "plugin.yaml", "read_compat_builds.json", "write_supported_builds.json",
     "mobile_cron_supported_builds.json",
+    "mobile_model_supported_builds.json",
 }
 
 

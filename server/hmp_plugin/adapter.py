@@ -54,7 +54,7 @@ from typing import Any
 from gateway.config import Platform
 from gateway.platforms.base import BasePlatformAdapter, SendResult
 
-from . import cli, compat, direct_send, identity, mobile_cron, server
+from . import cli, compat, direct_send, identity, mobile_cron, mobile_model, server
 from .authorize import Authorize
 from .cli import listener_record_path
 from .contract import PLATFORM_NAME, OtherWhy
@@ -144,6 +144,12 @@ def open_components(adapter: Any) -> server.ServerContext:
         block = live_extra.get("cron") if isinstance(live_extra, Mapping) else None
         return isinstance(block, Mapping) and block.get("enabled") is True
 
+    def _read_model_enabled() -> bool:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        block = live_extra.get("model_management") if isinstance(live_extra, Mapping) else None
+        return isinstance(block, Mapping) and block.get("enabled") is True
+
     ctx = server.ServerContext(
         identity=ident,
         store=store,
@@ -153,6 +159,8 @@ def open_components(adapter: Any) -> server.ServerContext:
         owner_device_ids=_read_owner_device_ids,
         cron_flag=_read_cron_enabled,
         cron_qualified=lambda: result.supported and mobile_cron.qualified_build(),
+        model_flag=_read_model_enabled,
+        model_qualified=lambda: result.supported and mobile_model.qualified_build(),
     )
     if result.supported:
         bridge_cls, directory_cls = _bridge_classes()

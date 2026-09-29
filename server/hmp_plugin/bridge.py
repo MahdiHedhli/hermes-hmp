@@ -276,6 +276,30 @@ class HermesApi:
 
         return _profile_runtime_scope(Path(profile_home))
 
+    def model_config(self) -> object:
+        """Read the current profile's config inside `profile_runtime_scope`."""
+        from hermes_cli.config import load_config
+
+        config = load_config()
+        return config.get("model") if isinstance(config, Mapping) else None
+
+    def write_profile_model(self, home: Path, provider: str, model: str) -> bool:
+        """Use the same scoped, validated writer as Hermes Desktop/dashboard.
+
+        A validation refusal is data, never a caller-visible upstream exception.
+        Other errors fail the feature closed and are logged by type only.
+        """
+        from fastapi import HTTPException
+        from hermes_cli.web_routers.profiles import _write_profile_model
+
+        try:
+            _write_profile_model(home, provider, model)
+        except HTTPException as exc:
+            if exc.status_code == 400:
+                return False
+            raise
+        return True
+
     def build_session_key(self, source: Any, profile: str | None) -> str:
         from gateway.session import build_session_key  # §12, E-GAP-6
 
@@ -613,6 +637,28 @@ class HermesReadBridge:
             if name not in out:
                 out.append(name)
         return out
+
+    def profile_default_model(self, profile: str) -> Mapping[str, object]:
+        """Read only the routed profile's persisted provider and default model."""
+        home = self._profile_home(profile)
+        with self._hermes.profile_runtime_scope(home):
+            model = self._hermes.model_config()
+        if isinstance(model, Mapping):
+            provider, default = model.get("provider"), model.get("default")
+            return {
+                "provider": provider if isinstance(provider, str) else "",
+                "model": default if isinstance(default, str) else "",
+            }
+        return {"provider": "", "model": model if isinstance(model, str) else ""}
+
+    def set_profile_default_model(
+        self, profile: str, provider: str, model: str
+    ) -> Mapping[str, object] | None:
+        """Validate and save via Hermes, then report the stored (possibly normalized) choice."""
+        home = self._profile_home(profile)
+        if not self._hermes.write_profile_model(home, provider, model):
+            return None
+        return self.profile_default_model(profile)
 
     # ------------------------------------------------------------------------------------------
     # Authorization (ERR-3, PR6-1): fails closed to UNVERIFIABLE

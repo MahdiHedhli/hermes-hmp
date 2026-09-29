@@ -644,6 +644,7 @@ def test_route_table_matches_declared_routes(tmp_path: Path) -> None:
             *server.A1_SESSION_ROUTES,
             *server.F2_DIRECT_SEND_ROUTES,
             *server.MOBILE_CRON_ROUTES,
+            *server.MOBILE_MODEL_ROUTES,
         )
     )
     assert routes == expected
@@ -661,7 +662,8 @@ def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
     expected = sorted(
         (m, server.full_path(p))
         for m, p, _ in (
-            *server.F1_ROUTES, *server.F2_DIRECT_SEND_ROUTES, *server.MOBILE_CRON_ROUTES,
+            *server.F1_ROUTES, *server.F2_DIRECT_SEND_ROUTES,
+            *server.MOBILE_CRON_ROUTES, *server.MOBILE_MODEL_ROUTES,
         )
     )
     assert routes == expected

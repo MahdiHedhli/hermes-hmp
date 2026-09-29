@@ -32,6 +32,19 @@ so refresh the list before creating another job.
 This preview is qualified only for the listed build bytes. Other builds fail closed.
 It is not enabled on the owner's live installation by adding these files.
 
+## Bot default model preview
+
+Model management is disabled by default. The host must run an exact Hermes build listed in
+`server/hmp_plugin/mobile_model_supported_builds.json`, with its profile-scoped API server
+available locally. Configure an owner device in the HMP gateway platform's private
+`extra.owner_device_ids` list and set `extra.model_management.enabled: true`. The phone
+then offers only models from Hermes's authenticated provider catalog for that bot. A model
+change affects new sessions and is never retried automatically; refresh the setting after
+an uncertain response. Do not commit device IDs, provider credentials, or API server keys.
+
+The preview fails closed on other Hermes builds and is not enabled on a live installation
+by adding these files.
+
 ## Local compatibility tests
 
 Keep source clones of the public Hermes builds in a sibling `_refs/` directory, or pass an explicit path:
