@@ -2,7 +2,13 @@
 
 ## Requirements
 
-- A current Hermes Agent installation on the host.
+- Hermes Agent `v0.21.4` (`v2026.9.21`) or newer is the recommended
+  starting point; `v0.21.5` (`v2026.9.24`) is the latest qualified public
+  tag. Installing HMP is not blocked by the Hermes version. Pairing and
+  Bot Chat access require a qualified bridge build. The exact Omarchy Y520
+  commit is also qualified. Older v0.21.x tags need a bridge adapter; newer
+  builds are watched but may need HMP updated before pairing works. See
+  [the release matrix](RELEASE_COMPAT_WATCH.md).
 - A private network path between the phone and host, such as Tailscale.
 - Hermes gateway profile routing configured as described in [Deployment](../server/DEPLOYMENT.md).
 

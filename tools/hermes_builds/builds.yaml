@@ -28,6 +28,25 @@ builds:
     clone: hermes-agent
     ref: v2026.9.21
     optional: true
+  - label: v921-git
+    clone: hermes-agent
+    ref: d337b736aa1e8ebecfab043842d13e4a2d2f48a3
+    optional: true
+    git_install: true
+  - label: v924-archive
+    clone: hermes-agent
+    ref: v2026.9.24
+    optional: true
+  - label: v924-git
+    clone: hermes-agent
+    ref: f97608f178d1ffeca59860195ab7da295f7c8e5f
+    optional: true
+    git_install: true
+  - label: omarchy-y520-git
+    clone: hermes-agent
+    ref: ca705dbf7ef86425b381b542712aff310f1ee52c
+    optional: true
+    git_install: true
   # The owner's local git install (read-only `git archive` source; the clone directory is a
   # local, never-committed pointer to that install and is absent on every other machine).
   - label: owner-local

@@ -5,7 +5,7 @@ Thanks for helping improve HMP. Please open an issue for behavior or contract ch
 ## Local checks
 
 ```sh
-uv run --frozen --project server --extra dev pytest server/tests/unit tools/ci/tests tools/fixtures/tests tools/hermes_builds/tests tools/vectors/tests tools/acceptance/tests
+uv run --frozen --project server --extra dev pytest server/tests/unit tools/ci/tests tools/compat/tests tools/fixtures/tests tools/hermes_builds/tests tools/vectors/tests tools/acceptance/tests --import-mode=importlib
 uvx ruff==0.16.9 check --config server/pyproject.toml server tools
 python3 tools/ci/check_plugin_surface.py
 python3 tools/ci/scan_private.py

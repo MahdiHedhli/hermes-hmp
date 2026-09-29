@@ -1663,6 +1663,12 @@ def _cmd_compat(env: CliEnv) -> int:
         else ("failed" if why == "hermes_read_dependency_missing" else "not run")
     )
     out.write(f"Dependency probe: {probe}\n")
+    if status != "supported":
+        out.write(
+            "For an older Hermes install, update to v0.21.5 (v2026.9.24). "
+            "If already newer, update HMP after that release is qualified; "
+            "see github.com/MahdiHedhli/hermes-hmp/blob/main/docs/RELEASE_COMPAT_WATCH.md.\n"
+        )
     return EXIT_OK
 
 

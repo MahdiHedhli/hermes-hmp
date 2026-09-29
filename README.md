@@ -31,7 +31,7 @@ Hermes may ask you to confirm its community-plugin scan findings; the full-tree 
 
 ## Repository
 
-`plugin.yaml` and `__init__.py` at the root are the install entry point. The unchanged HMP implementation and tests are in `server/`; fixture, vector, and compatibility tools are in `tools/`. Hermes installs the repository root for the bare command above.
+`plugin.yaml` and `__init__.py` at the root are the install entry point. The HMP implementation and tests are in `server/`; fixture, vector, and compatibility tools are in `tools/`. Hermes installs the repository root for the bare command above. See the [release compatibility watch](docs/RELEASE_COMPAT_WATCH.md) for tested Hermes tags and future-release checks.
 
 HMP registers one platform adapter and one operator CLI. It does not register agent tools or hooks. Unsupported Hermes builds fail closed for guarded operations. See [SECURITY.md](SECURITY.md) for reporting and the threat model.
 

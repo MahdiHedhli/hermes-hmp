@@ -96,7 +96,10 @@ def test_ref_resolves_never_fetches_and_returns_none_for_unknown_ref() -> None:
 def test_load_builds_matches_the_committed_manifest() -> None:
     builds = extract.load_builds()
     labels = {b.label for b in builds}
-    assert labels == {"stock-base", "experimental", "upstream", "owner-local"}
+    assert labels == {
+        "stock-base", "experimental", "upstream", "v921-git",
+        "v924-archive", "v924-git", "omarchy-y520-git", "owner-local",
+    }
     upstream = next(b for b in builds if b.label == "upstream")
     assert upstream.optional is True
     # A machine-local build: optional, so its absent clone is skipped everywhere else.
