@@ -190,7 +190,7 @@ def _run_real_cli_pty(
     argv: list[str],
     *,
     timeout: float = 30.0,
-    deny_owner_controls: bool = False,
+    grant_owner_controls: bool | None = None,
 ) -> str:
     """`hermes hmp <argv...>` (T032) under a real pseudo-terminal, both stdin and stdout attached
     to the slave end, so `CliEnv.interactive()` (`stdin.isatty() and stdout.isatty()`) is
@@ -230,15 +230,15 @@ def _run_real_cli_pty(
             if not data:
                 break
             chunks.append(data)
-            # Pairing now asks for a separate privileged-control grant. Fixture
-            # reference devices need Bot Chat access only, so explicitly leave
-            # jobs and model control off once the real host prompt appears.
+            # Pairing asks for a separate privileged-control grant. Most
+            # reference devices leave it off; the owner-control fixture sends
+            # GRANT only after this exact host prompt appears.
             if (
-                deny_owner_controls
+                grant_owner_controls is not None
                 and not owner_controls_answered
                 and b"or Enter to keep it off:" in b"".join(chunks)
             ):
-                os.write(master_fd, b"\n")
+                os.write(master_fd, b"GRANT\n" if grant_owner_controls else b"\n")
                 owner_controls_answered = True
         returncode = proc.wait(timeout=timeout)
     finally:
@@ -265,7 +265,7 @@ def cmd_confirm(args: argparse.Namespace) -> None:
             "--",
             pairing_id,
         ],
-        deny_owner_controls=True,
+        grant_owner_controls=False,
     )
     print(json.dumps({"ok": True, "pairing_id": pairing_id, "output": output}))
 
@@ -388,7 +388,7 @@ def cmd_pair_reference_client(args: argparse.Namespace) -> None:
             "--",
             p2["pairing_id"],
         ],
-        deny_owner_controls=True,
+        grant_owner_controls=args.grant_owner_controls,
     )
 
     pairing_raw = wire.b64u_decode(p2["pairing_id"], length=16)
@@ -474,6 +474,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--endpoint", required=True)
     p.add_argument("--user", required=True, help="HMP user id to activate the device under")
     p.add_argument("--label", default=None)
+    p.add_argument("--grant-owner-controls", action="store_true",
+                   help="fixture only: answer the host's separate controls prompt with GRANT")
     p.set_defaults(func=cmd_pair_reference_client)
 
     return parser

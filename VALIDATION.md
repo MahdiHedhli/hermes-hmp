@@ -70,11 +70,17 @@ secret scan passed. The only merge conflicts were documentation rows and the
 spec index. This is source and unit/tooling validation. A fresh isolated
 gateway fixture run found that the reference pairing client waited at the new
 per-device controls prompt. The fixture now explicitly leaves that privilege
-off. With this test-tool change, all **8 stock-base** and **8 experimental**
-direct-send gateway cases passed with a real PTY. The stock read fixture smoke
-case passed, and the real cron/model adapter tests passed on each extracted
-build (**2 per build**). Independent source review and a release build remain
-open. The candidate has not been installed into the owner's live Hermes.
+off. The expanded real-PTY matrix passed **18 cases**: 9 stock-base and 9
+experimental, with 9 owner-local cases skipped because that build was not
+extracted here. The added case pairs two devices for one user. Only the device
+whose host prompt received `GRANT` passes the per-device jobs/model gate; its
+newly created job stays paused. On experimental Hermes, the model route still
+fails closed at its separate exact-build gate, while the qualified cron route
+works.
+The stock read fixture smoke passed, and the real cron/model adapter tests
+passed on each extracted build (**2 per build**). Independent source review
+and a release build remain open. The candidate has not been installed into
+the owner's live Hermes.
 
 ## Local fixture builds
 

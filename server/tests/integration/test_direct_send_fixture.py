@@ -176,6 +176,7 @@ class DirectSendFixture:
         fake_model_module,
         client: Client,
         no_bot_chat_key: str,
+        user_id: str,
     ) -> None:
         self.build = build
         self.paths = paths
@@ -187,6 +188,7 @@ class DirectSendFixture:
         self.fake_model_module = fake_model_module
         self.client = client
         self.no_bot_chat_key = no_bot_chat_key
+        self.user_id = user_id
         self._lease_holders: list[Any] = []
 
     def acquire_lease(self, profile: str, session_id: str) -> None:
@@ -203,7 +205,8 @@ class DirectSendFixture:
         self._lease_holders.clear()
 
     def _rewrite_config(
-        self, *, direct_send_enabled: bool = True, api_server_host: str = "127.0.0.1"
+        self, *, direct_send_enabled: bool = True, api_server_host: str = "127.0.0.1",
+        cron_enabled: bool = False, model_enabled: bool = False,
     ) -> None:
         dsf.write_direct_send_config(
             self.paths, (DEFAULT_PROFILE, NO_BOT_CHAT_PROFILE, "f1-pending", "f1-roles"),
@@ -211,6 +214,7 @@ class DirectSendFixture:
             model_base_url=self.fake_model.base_url,
             named_profile_keys={NO_BOT_CHAT_PROFILE: self.no_bot_chat_key},
             direct_send_enabled=direct_send_enabled, api_server_host=api_server_host,
+            cron_enabled=cron_enabled, model_enabled=model_enabled,
         )
 
     def set_api_server_host(self, host: str) -> None:
@@ -317,7 +321,7 @@ def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSe
                 build, paths, hmp_port=hmp_port, api_server_port=api_server_port,
                 api_key=api_key, gateway_proc=proc, fake_model=fake_model,
                 fake_model_module=fake_model_module, client=client,
-                no_bot_chat_key=no_bot_chat_key,
+                no_bot_chat_key=no_bot_chat_key, user_id=authorized_user_id,
             )
             try:
                 yield direct_send_fixture
@@ -508,3 +512,45 @@ def test_timeout_then_lookup_reaches_accepted_without_a_resend(gateway: DirectSe
     # turn (the response is exactly the finalized outcome, no network call).
     status, body = send(client, DEFAULT_PROFILE, cmid=cmid, expected_head=head, text="be slow")
     assert status == 200 and body["state"] == "accepted", body
+
+
+def test_host_grant_is_per_device_on_real_gateway(gateway: DirectSendFixture) -> None:
+    """Pairing one privileged phone must not elevate a sibling of the same user."""
+    gateway._rewrite_config(cron_enabled=True, model_enabled=True)
+    gateway.restart_gateway()
+    jobs_path = f"/hmp/v1/bots/{DEFAULT_PROFILE}/jobs"
+    model_path = f"/hmp/v1/bots/{DEFAULT_PROFILE}/model/default"
+
+    # The first reference client explicitly declined controls at the host
+    # prompt. Both routes hide themselves from it even with feature flags on.
+    for path in (jobs_path, model_path):
+        status, body = gateway.client.get(path)
+        assert status == 404, body
+
+    granted_ref = dsf.pair_reference_device(
+        gateway.build, gateway.paths, port=gateway.hmp_port,
+        user_id=gateway.user_id, label="granted-fixture-phone",
+        grant_owner_controls=True,
+    )
+    granted = Client(
+        gateway.hmp_port, granted_ref["iid"], granted_ref["device"]["access_token"]
+    )
+    status, body = granted.get(jobs_path)
+    assert status == 200 and body["jobs"] == [], body
+    status, body = granted.post(jobs_path, {
+        "name": "owner-grant fixture", "schedule": "every 1h",
+        "prompt": "Summarize fixture status",
+    })
+    assert status == 200 and body["job"]["enabled"] is False, body
+    if gateway.build.label == "stock-base":
+        status, body = granted.get(model_path)
+        assert status == 200 and "model" in body, body
+    else:
+        # Experimental Hermes retains the qualified cron bridge fingerprint,
+        # but its model bridge fingerprint is not in the separate allowlist.
+        # A device grant must not bypass that build gate.
+        status, body = granted.get(model_path)
+        assert status == 503 and body["error"]["code"] == "model_unavailable", body
+    for path in (jobs_path, model_path):
+        status, body = gateway.client.get(path)
+        assert status == 404, body
