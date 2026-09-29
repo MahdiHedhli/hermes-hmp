@@ -81,15 +81,15 @@ async def main() -> None:
         ),
         pairing_stores={"default": object(), "serenity": object()},
     )
-    profile_api = dict(
-        profiles_to_serve=profiles_to_serve,
-        get_active_profile_name=get_active_profile_name,
-        get_hermes_home=get_hermes_home,
-        get_profile_dir=get_profile_dir,
-        profile_exists=profile_exists,
-        profile_matches_home=profile_matches_home,
-        validate_profile_name=validate_profile_name,
-    )
+    profile_api = {
+        "profiles_to_serve": profiles_to_serve,
+        "get_active_profile_name": get_active_profile_name,
+        "get_hermes_home": get_hermes_home,
+        "get_profile_dir": get_profile_dir,
+        "profile_exists": profile_exists,
+        "profile_matches_home": profile_matches_home,
+        "validate_profile_name": validate_profile_name,
+    }
     homes = served_profile_homes(runner, **profile_api)
     assert set(homes) == {"default", "serenity"}
     assert profile_home("serenity", homes) == get_profile_dir("serenity")

@@ -29,15 +29,15 @@ def _fixture(tmp_path: Path):
         ),
         pairing_stores={"default": object(), "serenity": object()},
     )
-    api = dict(
-        profiles_to_serve=lambda **_kw: list(paths.items()),
-        get_active_profile_name=lambda: "default",
-        get_hermes_home=lambda: default,
-        get_profile_dir=lambda name: paths[name],
-        profile_exists=lambda name: name in paths,
-        profile_matches_home=lambda name, home: paths.get(name) == home,
-        validate_profile_name=validate,
-    )
+    api = {
+        "profiles_to_serve": lambda **_kw: list(paths.items()),
+        "get_active_profile_name": lambda: "default",
+        "get_hermes_home": lambda: default,
+        "get_profile_dir": lambda name: paths[name],
+        "profile_exists": lambda name: name in paths,
+        "profile_matches_home": lambda name, home: paths.get(name) == home,
+        "validate_profile_name": validate,
+    }
     return runner, api, paths
 
 
