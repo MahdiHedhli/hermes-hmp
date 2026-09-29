@@ -386,6 +386,48 @@ def test_duplicate_cmid_never_runs_a_second_turn(gateway: DirectSendFixture) -> 
     assert len([m for m in assistant_rows if m["text"] == "fixture default reply"]) == 1
 
 
+def test_lost_reply_after_post_is_reconciled_without_a_second_turn(
+    gateway: DirectSendFixture,
+) -> None:
+    """The client sends the complete POST, closes before reading its reply, then only looks up.
+
+    This exercises the live gateway's accepted-but-unacknowledged path. The fixture never
+    retries the POST; the read-only status route must eventually identify the original ID.
+    """
+    client = gateway.client
+    ref = bot_chat_ref(client, DEFAULT_PROFILE)
+    head = bot_chat_head(client, DEFAULT_PROFILE, ref)
+    cmid = str(uuid.uuid4())
+    body = {"client_message_id": cmid, "expected_head": head, "text": "lost acknowledgement"}
+    conn = http.client.HTTPSConnection("127.0.0.1", client.port, context=client._ctx(), timeout=30)
+    try:
+        conn.request(
+            "POST",
+            f"/hmp/v1/bots/{DEFAULT_PROFILE}/chat/messages",
+            body=json.dumps(body).encode(),
+            headers=client._headers(),
+        )
+        # All request bytes were sent; intentionally discard the response, as a mobile client
+        # must after a post-connect failure. No second POST is permitted by this recovery path.
+    finally:
+        conn.close()
+
+    assert wait_for(
+        lambda: lookup(client, DEFAULT_PROFILE, cmid)[1].get("state") == "accepted",
+        timeout=30.0,
+    ), "the original send did not become discoverable by its client message ID"
+    status, result = lookup(client, DEFAULT_PROFILE, cmid)
+    assert status == 200 and result["state"] == "accepted", result
+
+    status, snapshot = client.get(f"/hmp/v1/bots/{DEFAULT_PROFILE}/sessions/{ref}/messages")
+    assert status == 200, snapshot
+    assert sum(m["role"] == "user" and m["text"] == body["text"] for m in snapshot["messages"]) == 1
+    assert sum(
+        m["role"] == "assistant" and m["text"] == "fixture default reply"
+        for m in snapshot["messages"]
+    ) == 1
+
+
 def test_stale_head_refused_before_any_loopback_call(gateway: DirectSendFixture) -> None:
     client = gateway.client
     ref = bot_chat_ref(client, DEFAULT_PROFILE)

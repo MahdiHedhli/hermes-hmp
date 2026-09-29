@@ -87,3 +87,15 @@ the owner's live Hermes.
 The stock-base and experimental Hermes source clones were copied into the new root's `_refs/` directory and extracted to scratch storage outside the repository. The source revisions are `04fa849e70` and `7e8c8f07a1`, respectively. Pairing fixtures require a real PTY, so they run locally rather than in the current GitHub Actions workflow.
 
 The matrix produced candidate read fingerprints `af86c86844fa99fc79a1c77800db0f2b6b20af8735f658cd7df88d2a3faabf2d` (stock-base) and `bfef558e8947f372e960c088057bc0c0b1360a8cc2275532167b915b7ff21ea7` (experimental). It did not change the committed compatibility list. The guarded-send `bridge_files` list and its owner-build fingerprint remain unchanged in the initial migration.
+
+## Lost send acknowledgement fixture (2026-09-29)
+
+The stock-base and owner-local isolated gateway fixtures now send a complete Bot Chat POST and
+close the TLS client before reading any response. A read-only lookup of the
+same client message ID reached `accepted`; the canonical transcript contained
+exactly one matching user row and one assistant reply. The focused integration
+test passed against the extracted stock-base (25.51 seconds) and exact
+owner-local Hermes `8afaab3703` (37.64 seconds) builds. This
+verifies server-side recovery from an accepted but unseen response without a
+second POST. It does not replace physical poor-network and app lifecycle
+checks on the three owner devices.
