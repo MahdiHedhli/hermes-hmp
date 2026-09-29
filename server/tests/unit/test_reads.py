@@ -672,6 +672,9 @@ def test_session_snapshot_and_history_unknown_ref_is_not_found(h: Harness) -> No
     with pytest.raises(HmpError) as err:
         h.reads.session_history(USER, "alpha", "ses1_unguessable", 1, 100)
     assert err.value.code == ErrorCode.NOT_FOUND
+    with pytest.raises(HmpError) as err:
+        h.reads.session_history(USER, "alpha", "ses1_unguessable", 0, 100)
+    assert err.value.code == ErrorCode.NOT_FOUND
 
 
 def test_session_ref_foreign_user_is_not_found(h: Harness) -> None:
@@ -680,6 +683,9 @@ def test_session_ref_foreign_user_is_not_found(h: Harness) -> None:
     ref = h.reads.list_sessions(USER, "alpha", cursor=None, limit=30).sessions[0].session_ref
     with pytest.raises(HmpError) as err:
         h.reads.session_snapshot(OTHER, "alpha", ref, 200)
+    assert err.value.code == ErrorCode.NOT_FOUND
+    with pytest.raises(HmpError) as err:
+        h.reads.session_history(OTHER, "alpha", ref, 0, 200)
     assert err.value.code == ErrorCode.NOT_FOUND
 
 
@@ -711,6 +717,22 @@ def test_session_history_pages_and_resets(h: Harness) -> None:
 
     db.compact_in_place("s-foreign", keep=1)
     reset = h.reads.session_history(USER, "alpha", ref, ids[-1], 100)
+    assert reset == HistoryReset(reason=ResetReason.HISTORY_REWRITTEN)
+
+
+def test_session_history_from_start_pages_earliest_active_rows(h: Harness) -> None:
+    db = h.world.dbs["alpha"]
+    ref = _session_ref(h, "s-bot-chat")
+    ids = [db.append("s-bot-chat", "user", f"synthetic {i}") for i in range(3)]
+    first = h.reads.session_history(USER, "alpha", ref, 0, 1)
+    assert isinstance(first, HistoryPage)
+    assert [m.id for m in first.messages] == ids[:1]
+    assert first.head_message_id == ids[-1]
+    rest = h.reads.session_history(USER, "alpha", ref, ids[0], 2)
+    assert isinstance(rest, HistoryPage)
+    assert [m.id for m in rest.messages] == ids[1:]
+    db.compact_in_place("s-bot-chat", keep=1)
+    reset = h.reads.session_history(USER, "alpha", ref, 0, 1)
     assert reset == HistoryReset(reason=ResetReason.HISTORY_REWRITTEN)
 
 
@@ -1069,8 +1091,32 @@ def test_routes_end_to_end(tmp_path: Path) -> None:
         )
         assert status == 200 and body["messages"] == [] and body["head_message_id"] == did
 
+        next_ids = [
+            world.dbs["alpha"].append("s-bot-chat", "assistant", f"synthetic {i}")
+            for i in range(2)
+        ]
+        start_path = f"/bots/alpha/sessions/{ref}/messages/from-start"
+        status, body = await hmp_kit.get(client, start_path + "?limit=1")
+        assert status == 401 and body["error"]["code"] == "wrong_instance"
+        status, body = await hmp_kit.get(client, start_path + "?limit=1", headers=headers)
+        assert status == 200 and [m["id"] for m in body["messages"]] == [did]
+        assert body["head_message_id"] == next_ids[-1]
+        assert "session_ref" not in body  # paged shape, not the latest snapshot
+        status, body = await hmp_kit.get(
+            client, f"/bots/alpha/sessions/{ref}/messages?after={did}&limit=2", headers=headers
+        )
+        assert status == 200 and [m["id"] for m in body["messages"]] == next_ids
+        for bad in ("?limit=1001", "?after=0", "?q=synthetic"):
+            status, body = await hmp_kit.get(client, start_path + bad, headers=headers)
+            assert status == 400 and body["error"]["code"] == "bad_request"
+
         status, body = await hmp_kit.get(
             client, "/bots/alpha/sessions/ses1_doesnotexist/messages", headers=headers
+        )
+        assert status == 404 and body["error"]["code"] == "not_found"
+        status, body = await hmp_kit.get(
+            client, "/bots/alpha/sessions/ses1_doesnotexist/messages/from-start",
+            headers=headers,
         )
         assert status == 404 and body["error"]["code"] == "not_found"
 
@@ -1084,5 +1130,9 @@ def test_routes_end_to_end(tmp_path: Path) -> None:
             client, f"/bots/beta/sessions/{ref}/messages", headers=headers
         )
         assert status == 403  # the per-bot gate refuses beta first (ERR-3 ordering)
+        status, body = await hmp_kit.get(
+            client, f"/bots/beta/sessions/{ref}/messages/from-start", headers=headers
+        )
+        assert status == 403
 
     hmp_kit.run(env, scenario)
