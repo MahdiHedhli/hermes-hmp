@@ -2,9 +2,10 @@
 
 ## Requirements
 
-- Hermes Agent `v0.21.4` (`v2026.9.21`) or newer is the recommended
-  starting point; `v0.21.5` (`v2026.9.24`) is the latest qualified public
-  tag. Installing HMP is not blocked by the Hermes version. Pairing and
+- Hermes Agent `v0.21.5` (`v2026.9.24`) is the earliest public tag with both
+  Bot Chat reads and guarded sends verified. `v0.21.4` (`v2026.9.21`) passed
+  the read checks, but its send path has not been qualified. Installing HMP
+  is not blocked by the Hermes version. Pairing and
   Bot Chat access require a qualified bridge build. The exact Omarchy Y520
   commit is also qualified. Older v0.21.x tags need a bridge adapter; newer
   builds are watched but may need HMP updated before pairing works. See

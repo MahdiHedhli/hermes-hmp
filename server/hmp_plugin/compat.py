@@ -39,6 +39,7 @@ from .contract import OtherWhy
 
 READ_COMPAT_FILE = "read_compat_builds.json"  # GU-2c list (starts empty; populated by T064)
 WRITE_SUPPORTED_FILE = "write_supported_builds.json"  # GU-2a matrix (stays empty in F1)
+DIRECT_SEND_COMPAT_FILE = "direct_send_supported_builds.json"  # guarded-write qualification
 
 # The runtime packages the plugin needs, as Hermes provides them (research R7).
 RUNTIME_DEPENDENCIES: tuple[str, ...] = ("aiohttp", "cryptography")
@@ -447,6 +448,41 @@ def probe_direct_send_dependencies(
     return probe_read_dependencies(
         hermes_root=hermes_root, bridge_files=bridge_files, specs=DIRECT_SEND_DEPENDENCIES
     )
+
+
+def direct_send_build_qualified(
+    read_identity: BuildIdentity | None,
+    *,
+    hermes_root: Path | None = None,
+    compat_path: Path | None = None,
+) -> bool:
+    """Admit guarded sends only for an independently qualified exact build.
+
+    The read fingerprint omits two files used by direct send. Recompute the larger
+    fingerprint and check its own list before probing those extra Hermes dependencies.
+    Any missing file, moved Git ref, probe error, or malformed list closes this gate.
+    """
+    if not isinstance(read_identity, BuildIdentity):
+        return False
+    try:
+        root = hermes_root if hermes_root is not None else locate_hermes_root()
+        if root is None:
+            return False
+        path = compat_path if compat_path is not None else Path(__file__).with_name(
+            DIRECT_SEND_COMPAT_FILE
+        )
+        qualified = load_read_compat_list(path)
+        send_files = getattr(qualified, "bridge_files")
+        identity = GitFingerprintReader(send_files).read(root)
+        if identity is None or identity.git_sha != read_identity.git_sha:
+            return False
+        if match_build(identity, qualified.builds) is None:
+            return False
+        return not probe_direct_send_dependencies(
+            hermes_root=root, bridge_files=send_files
+        )
+    except Exception:
+        return False
 
 
 def _resolve_qualname(module: object, qualname: str) -> object:

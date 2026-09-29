@@ -1663,6 +1663,11 @@ def _cmd_compat(env: CliEnv) -> int:
         else ("failed" if why == "hermes_read_dependency_missing" else "not run")
     )
     out.write(f"Dependency probe: {probe}\n")
+    if getattr(result, "supported", False):
+        from . import compat
+
+        send_ready = compat.direct_send_build_qualified(ident)
+        out.write(f"Guarded send qualification: {'qualified' if send_ready else 'unqualified'}\n")
     if status != "supported":
         out.write(
             "For an older Hermes install, update to v0.21.5 (v2026.9.24). "

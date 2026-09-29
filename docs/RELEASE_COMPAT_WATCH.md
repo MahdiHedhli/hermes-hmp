@@ -23,13 +23,17 @@ Its report is a source and test result, **not an automatic compatibility grant**
 | `v2026.9.11` | 15 of 16 files | Legacy adapter and full fixture tests |
 | `v2026.9.14` | 16 of 16 files, but missing `_routed_profile_home` dependency | Adapter and full fixture tests |
 | `v2026.9.21` (v0.21.4) | 16 of 16 files | Full read fixture matrix passed in isolation |
-| `v2026.9.24` (v0.21.5) | 16 of 16 files | Full read fixture matrix passed in isolation |
+| `v2026.9.24` (v0.21.5) | 16 of 16 files | Full read and eight-case guarded-send fixture matrices passed in isolation |
 
 The Omarchy Lenovo Legion Y520 owner's 2026-09-29 Git commit
 `ca705dbf7ef86425b381b542712aff310f1ee52c` also passed the same isolated
 read matrix and unsupported-build refusal. It is a moving main-branch commit,
 4,600 commits beyond `v2026.9.24`, not a new release tag. The exact Git
 commit and bridge fingerprint are qualified; a later update is a new build.
+Its separate eight-case direct-send fixture suite also passed in isolation;
+this result is recorded in `direct_send_supported_builds.json`. The guarded
+send route now checks that separate list and the additional dependencies
+before the owner-enabled send flag can open it.
 
 The August 31 through September 11 tags cannot work with the current bridge by
 loosening the version check. They need an adapter that uses their older gateway and
@@ -43,10 +47,11 @@ data together. Retest after an upstream change in any fingerprinted file. Do not
 silently admit an untested future source layout or turn off the fail-closed gate.
 
 The earliest public tagged build qualified for the current read bridge is
-`v2026.9.21`; `v2026.9.24` is the recommended installation target. Qualification
-here covers HMP's read fixture and the unsupported-build refusal. Persistent
-host actions and direct sends keep their separate host-side gates and must be
-verified for the target build before claiming those features work.
+`v2026.9.21`; `v2026.9.24` is the earliest public tag with guarded sends
+qualified. The `v2026.9.21` send fixture could not run because that Hermes
+source lacks its deterministic fake LLM test fixture; do not infer send support
+from the passing read matrix. Persistent host actions keep their separate
+host-side gates.
 
 To run the latest-tag matrix locally, keep the upstream source and fixture homes in
 scratch storage outside your real Hermes home. The matrix accepts a separately
