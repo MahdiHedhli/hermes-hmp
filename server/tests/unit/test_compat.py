@@ -579,7 +579,10 @@ _BUILDS_DIR = Path(os.environ.get("HMP_HERMES_BUILDS_DIR", str(_DEFAULT_BUILDS_D
 _STOCK_SRC = _BUILDS_DIR / "stock-base" / "src"
 _EXPERIMENTAL_SRC = _BUILDS_DIR / "experimental" / "src"
 # Machine-local optional builds (tools/hermes_builds/builds.yaml); see the T064 reproduction test.
-_MACHINE_LOCAL_LABELS = ("owner-local",)
+_MACHINE_LOCAL_LABELS = (
+    "owner-local", "upstream", "v921-git", "v924-archive", "v924-git",
+    "omarchy-y520-git",
+)
 
 _extracted_builds_reason = (
     f"no T004 extraction at {_BUILDS_DIR} "

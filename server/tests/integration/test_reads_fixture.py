@@ -53,8 +53,9 @@ MUTATE = REPO_ROOT / "tools" / "fixtures" / "mutate.py"
 # Machine-local optional builds (tools/hermes_builds/builds.yaml `optional: true`) join the read
 # suite only where they have actually been extracted, so `-k <label>` for one of them selects real
 # tests there and nothing is parametrized over a build absent from this machine.
-_OPTIONAL_BUILDS = ("owner-local",)
+_OPTIONAL_BUILDS = ("owner-local", "upstream", "v921-git", "v924-archive", "v924-git")
 _BUILDS_DIR_ENV = os.environ.get("HMP_HERMES_BUILDS_DIR", "")
+_CANDIDATE_BUILD = os.environ.get("HMP_COMPAT_CANDIDATE_LABEL", "")
 BUILDS = (
     "stock-base",
     "experimental",
@@ -62,6 +63,13 @@ BUILDS = (
         label
         for label in _OPTIONAL_BUILDS
         if _BUILDS_DIR_ENV and (Path(_BUILDS_DIR_ENV) / label / "src").is_dir()
+    ),
+    *(
+        (_CANDIDATE_BUILD,)
+        if _CANDIDATE_BUILD and _CANDIDATE_BUILD not in _OPTIONAL_BUILDS
+        and _BUILDS_DIR_ENV
+        and (Path(_BUILDS_DIR_ENV) / _CANDIDATE_BUILD / "src").is_dir()
+        else ()
     ),
 )
 CONVERSATION = "/hmp/v1/bots/f1-alpha/conversations/default"

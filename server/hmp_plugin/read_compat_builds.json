@@ -42,6 +42,46 @@
       "source_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
       "qualified_by": "T063 tools/compat/run_matrix.py",
       "qualified_at": "2026-09-26"
+    },
+    {
+      "label": "upstream",
+      "fingerprint": "9bac29e0f0604d3c3c3c45ac00f2208955c7cadaccddfd3783d675ffb315509f",
+      "git_sha": null,
+      "source_sha": "d337b736aa1e8ebecfab043842d13e4a2d2f48a3",
+      "qualified_by": "T063 tools/compat/run_matrix.py (isolated v2026.9.21 source)",
+      "qualified_at": "2026-09-29"
+    },
+    {
+      "label": "v921-git",
+      "fingerprint": "9bac29e0f0604d3c3c3c45ac00f2208955c7cadaccddfd3783d675ffb315509f",
+      "git_sha": "d337b736aa1e8ebecfab043842d13e4a2d2f48a3",
+      "source_sha": "d337b736aa1e8ebecfab043842d13e4a2d2f48a3",
+      "qualified_by": "T063 tools/compat/run_matrix.py (isolated v2026.9.21 source)",
+      "qualified_at": "2026-09-29"
+    },
+    {
+      "label": "v924-archive",
+      "fingerprint": "bbaa9f112ebef46360803fd0d59ee300c3d8b4dc657e722a3337249623d8d880",
+      "git_sha": null,
+      "source_sha": "f97608f178d1ffeca59860195ab7da295f7c8e5f",
+      "qualified_by": "T063 tools/compat/run_matrix.py (isolated v2026.9.24 source)",
+      "qualified_at": "2026-09-29"
+    },
+    {
+      "label": "v924-git",
+      "fingerprint": "bbaa9f112ebef46360803fd0d59ee300c3d8b4dc657e722a3337249623d8d880",
+      "git_sha": "f97608f178d1ffeca59860195ab7da295f7c8e5f",
+      "source_sha": "f97608f178d1ffeca59860195ab7da295f7c8e5f",
+      "qualified_by": "T063 tools/compat/run_matrix.py (isolated v2026.9.24 source)",
+      "qualified_at": "2026-09-29"
+    },
+    {
+      "label": "omarchy-y520-git",
+      "fingerprint": "d45f9a132819e7b18c9a653323409f386ff272e1824b90d0899cf3d45f11f627",
+      "git_sha": "ca705dbf7ef86425b381b542712aff310f1ee52c",
+      "source_sha": "ca705dbf7ef86425b381b542712aff310f1ee52c",
+      "qualified_by": "T063 tools/compat/run_matrix.py (isolated LLY520 tracked source)",
+      "qualified_at": "2026-09-29"
     }
   ]
 }
