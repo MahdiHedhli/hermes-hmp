@@ -105,10 +105,21 @@ pin. A pinned plugin's `hermes plugins check-updates` result also does not
 compare it with newer HMP revisions. Check the public repository and its
 release notes explicitly, keep the current installed SHA for rollback, and
 review a candidate commit before reinstalling HMP with `--ref <full-sha>`.
-Requalify the new Hermes/HMP combination with `hermes hmp compat` and
-`hermes hmp health check` after the gateway restarts, then verify a real
-client send separately. Do not infer send readiness from a read-only setup
-check. A release-aware check and explicit rollback flow are tracked in
+`hermes hmp update check` is a read-only advisory check against the latest
+published stable HMP release. It reports the installed and candidate full SHAs,
+Git ancestry, and exact Hermes build matches from the release's read, send,
+cron, and model compatibility lists. `listed` means the release manifest names
+this build; it is not a runtime health result. `unknown` must not be treated as
+supported. As of 2026-09-29, no HMP release has been published, so the check
+reports that state instead of suggesting `main` as a release.
+
+After reviewing a published release and its commit, save your current SHA and
+use `hermes plugins install MahdiHedhli/hermes-hmp --ref <full-sha> --force`
+in an isolated Hermes home first. Run `hermes hmp compat`,
+`hermes hmp health check`, and a real client send. To roll back, reinstall the
+saved full SHA with the same command and recheck those gates. Only then follow
+your normal live gateway change process. Requalify after the gateway restarts;
+a read-only setup check cannot prove send readiness. This feature is tracked in
 [issue #18](https://github.com/MahdiHedhli/hermes-hmp/issues/18).
 
 ## Local compatibility tests

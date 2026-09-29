@@ -9,6 +9,7 @@ HMP is the Hermes gateway plugin used by the [HermesBot Mobile](https://hermes-b
 | Available | Bot roster and Bot Chat reads | Profile list, snapshots, history, and access state through the Hermes gateway. |
 | Draft | Host setup check | Read-only build, identity, and pinned-listener diagnostic; profile routing remains an operator check. See [install](docs/INSTALL.md). |
 | Draft | Bot channel health check | Read-only per-bot send, jobs, and model prerequisites from the running gateway; enabled failures exit nonzero. See [install](docs/INSTALL.md). |
+| Draft | HMP release check | Read-only `hermes hmp update check` compares the installed pin with the latest published stable release and its exact Hermes compatibility manifests. No release is published yet; it never installs automatically. |
 | Preview | Bot Chat sends | Explicit owner gate on every build, profile-specific send status, freshness check, and retry-safe handling. A bot without a usable profile key reports read-only. Unsupported builds fail closed. |
 | Preview, off by default | Scheduled jobs | Owner-gated list, create-paused, edit, pause, resume, and delete on an exact qualified Hermes build. New mobile jobs can send results to Bot Chat or keep them in run history, use a finite run count, and carry Hermes's previous-run continuity. |
 | Preview, off by default | Bot default model | Owner-gated catalog and validated change within the selected bot's profile. New sessions use the choice. |

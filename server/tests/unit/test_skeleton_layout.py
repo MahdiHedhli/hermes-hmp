@@ -33,6 +33,7 @@ CONTRACT_MODULES = {
     "request_ctx.py",
     "adapter.py",
     "cli.py",
+    "update_check.py",
     "logging_policy.py",
 }
 DATA_FILES = {
