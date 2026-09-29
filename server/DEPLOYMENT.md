@@ -7,6 +7,26 @@ profile at all. It is unrelated to `HOST_HARDENING.md`, which covers exposure of
 host surfaces (`api_server`, the dashboard, `/api/status`); this note covers what HMP itself needs
 from the gateway config to route correctly.
 
+## Check the Hermes gateway topology first
+
+The explicit configuration below was qualified on the older fixture builds
+`04fa849e70` and `7e8c8f07a1`. Do not apply its `multiplex_profiles: true` line
+blindly to a different Hermes release. In Hermes `8afaab3703` (2026-09-26),
+an **unset** root value lets the gateway run a migration preflight and stay
+standalone when another profile gateway or a credential conflict blocks
+multiplexing. An explicit `true` takes the direct configuration path instead.
+It can also make `/p/<profile>/` reachable on the default API listener and
+changes profile secret scoping. These are host-wide effects, not HMP settings.
+
+Before changing the root flag on a multi-profile host, review the output of
+`hermes gateway migrate --multiplex --dry-run`, the listener exposure, and each
+profile's credentials. Resolve any migration blockers through Hermes's own
+workflow. HMP may report `not_served` until the topology is safe; do not force
+the flag to make the mobile app connect. The routing checklist below describes
+the configuration that the older qualified HMP fixtures need once the host is
+ready to serve those profiles. Requalify it against the exact Hermes build in
+use before automating it.
+
 ## The requirement
 
 For every profile HMP is to serve reads for, the Hermes gateway config needs **both**:
@@ -25,9 +45,11 @@ For every profile HMP is to serve reads for, the Hermes gateway config needs **b
          guild_id: "<profile>"
    ```
 
-Neither is an HMP default. A fresh Hermes install has no `profile_routes` at all, and
-`multiplex_profiles` is unset (single-profile). Without both, HMP is installed and paired
-correctly but every read for that bot fails closed (see "What happens if this is missing" below).
+Neither setting is supplied by HMP. A fresh Hermes install has no HMP
+`profile_routes`; an unset multiplex setting may resolve to standalone or
+multiplexed mode after Hermes's own preflight, depending on the build and host.
+Without a served and routed profile, HMP reads fail closed (see "What happens
+if this is missing" below).
 
 ## Why this is real Hermes behavior, not a fixture artefact
 
@@ -95,7 +117,9 @@ HMP already fails closed with an explicit, documented state rather than a silent
 
 ## Operator checklist
 
-- [ ] Root `config.yaml`: `gateway.multiplex_profiles: true`.
+- [ ] Confirm Hermes's effective gateway topology. On a multi-profile host,
+      review `hermes gateway migrate --multiplex --dry-run` before explicitly
+      setting `gateway.multiplex_profiles: true` in the root `config.yaml`.
 - [ ] Root `config.yaml`: one `gateway.profile_routes` entry per profile HMP should serve —
       `platform: hmp`, `profile: <name>`, `guild_id: <name>` (leave `bot_profile` unset: HMP is a
       root-level adapter, so routes apply against the default profile's bot, which is correct).

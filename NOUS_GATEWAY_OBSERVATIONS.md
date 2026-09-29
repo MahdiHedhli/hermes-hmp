@@ -1,6 +1,8 @@
 # Gateway observations for Nous Research
 
-HMP is a mobile gateway plugin for Hermes. These requests come from implementing a client that reads and sends to the canonical Bot Chat. They are proposals for upstream discussion, not claims that Hermes currently provides these APIs. Findings were checked against Hermes `main` at `8afaab37`; behavior may change in later releases.
+HMP is a mobile gateway plugin for Hermes. These requests come from implementing a client that reads and sends to the canonical Bot Chat. They are proposals for upstream discussion, not claims that Hermes currently provides these APIs. The legacy-path findings were checked against Hermes `8afaab37` on 2026-09-28; behavior may change in later releases.
+
+The [unified gateway research](HermesUnifiedGatewayResearch.md) and Nous's [one-gateway PR](https://github.com/NousResearch/hermes-agent/pull/106742) support one profile-scoped execution authority. The companion [entry-point plan](https://gist.github.com/unsupportedpastels/765f9d551ce88ee01630c18367763e75) explicitly places a future mobile client behind an authenticated gateway API, but treats remote entry-point migration as follow-on work. The requests below concern the remaining remote contract; they do not ask Nous to create a second session owner or duplicate work already in that PR.
 
 | Area | Current constraint | Requested upstream contract |
 | --- | --- | --- |
@@ -11,6 +13,7 @@ HMP is a mobile gateway plugin for Hermes. These requests come from implementing
 | Pairing access | A platform plugin currently synthesizes an inert inbound message to create a standard pairing request. | A documented plugin API to request access for a platform user. |
 | Message origin | Session rows do not identify the client surface that submitted a turn. | An optional, non-model-visible client/surface field stored with user rows. |
 | Updates | A mobile client discovers new rows by polling. | A session change feed or bounded long poll. |
+| Canonical remote attachment | Current HMP reaches a qualified legacy Bot Chat path; the unified runtime PR is a local/gateway cutover, while remote Desktop/web/mobile entry is staged separately. | Expose authenticated, profile-scoped remote attach/submit/event/control operations with explicit capability negotiation, target-session authorization, durable request identity, and replay-or-snapshot recovery. Keep one execution owner. |
 
 ## Approval and clarify events
 

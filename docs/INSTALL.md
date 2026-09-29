@@ -6,6 +6,10 @@
 - A private network path between the phone and host, such as Tailscale.
 - Hermes gateway profile routing configured as described in [Deployment](../server/DEPLOYMENT.md).
 
+On a multi-profile host, read Deployment's topology warning before setting
+`gateway.multiplex_profiles: true`. That setting can bypass Hermes's migration
+preflight and change API ingress and secret scoping on qualified builds.
+
 Install the plugin from its public repository. For reproducible deployments, add `--ref <full-commit-sha>`.
 
 ```sh
