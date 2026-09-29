@@ -106,14 +106,12 @@ def _resolve_source_sha(build_label: str) -> str | None:
 
 
 def bootstrap_compat_entry(build: fc.BuildInfo, plugin_copy_dir: Path) -> None:
-    """T023's compat gate (`server/hmp_plugin/compat.py`) fails EVERY route except `/ready` closed
-    until a build is listed in `read_compat_builds.json` -- by design (GU-2c), and correct: an
-    unlisted build must never serve reads. Populating that list for real is T063 (run the read
-    suite, compute candidates) and T064 (publish them); neither has landed. Without at least a
-    fingerprint-only entry for THIS extracted build, no HTTP read or even P1-P4 pairing can ever
-    succeed against a fixture instance -- which would make `--serve`'s reference-client pairing,
-    `selfcheck.py` (T061) and `server/tests/integration/test_reads_fixture.py` (T030) permanently
-    unrunnable, not merely skipped.
+    """T023's compat gate (`server/hmp_plugin/compat.py`) refuses Hermes-dependent routes until a
+    build is listed in `read_compat_builds.json` -- by design (GU-2c): an unlisted build must
+    never serve reads. The bridge-independent pairing amendment permits P1-P5 and self-revoke
+    without that entry, but `selfcheck.py` (T061) and the read fixture suite (T030) still need
+    qualified Bot Chat reads. A fingerprint-only entry is therefore bootstrapped for THIS
+    extracted build in a scratch copy only; it does not qualify any production build.
 
     Patches ONLY `plugin_copy_dir`'s `read_compat_builds.json` (`refresh_fixture_plugin_copy`'s
     scratch copy fixture instances actually import -- never the tracked
