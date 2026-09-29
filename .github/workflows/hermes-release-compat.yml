@@ -42,8 +42,8 @@ jobs:
           PY
       - name: Run real HMP fixture and unsupported-build checks for new and latest releases
         env:
-          BUILDS_DIR: ${{ runner.temp }}/hermes-builds
-          MATRIX_OUT: ${{ runner.temp }}/hmp-matrix
+          BUILDS_DIR: /tmp/hermes-builds-${{ github.run_id }}
+          MATRIX_OUT: /tmp/hmp-matrix-${{ github.run_id }}
           CANDIDATES: ${{ runner.temp }}/release-candidates.tsv
         run: |
           set -euo pipefail
@@ -72,7 +72,7 @@ jobs:
         if: always()
         env:
           REPORT: ${{ runner.temp }}/release-report.json
-          MATRIX_DIR: ${{ runner.temp }}/hmp-matrix
+          MATRIX_DIR: /tmp/hmp-matrix-${{ github.run_id }}
         run: |
           python3 - <<'PY'
           import json, os
