@@ -1,17 +1,22 @@
 # Roadmap
 
-HMP follows the [feature list](FEATURES.md) and the [upstream requests](NOUS_GATEWAY_OBSERVATIONS.md). Ordering can change as Hermes exposes new gateway contracts.
+HMP follows the [feature list](FEATURES.md), [unified gateway research](HermesUnifiedGatewayResearch.md), and [requests for Nous](NOUS_GATEWAY_OBSERVATIONS.md). The research describes a target architecture, not a remote API available to HMP today. As of September 29, Nous [PR #106742](https://github.com/NousResearch/hermes-agent/pull/106742) is open with conflicts; its [entry-point plan](https://gist.github.com/unsupportedpastels/765f9d551ce88ee01630c18367763e75) places authenticated remote clients in a later cutover.
 
-| Area | Next step | Dependency |
+| Investment | Work | Boundary |
 | --- | --- | --- |
-| Compatibility | Requalify guarded sends on each new Hermes build. | Exact build and bridge fingerprint review |
-| Scheduled jobs | Qualify more Hermes builds and complete the release security gate. | Exact cron fingerprint and owner-device flag |
-| Bot default model | Qualify more Hermes builds and complete the release security gate. | Exact model fingerprint and owner-device flag |
-| Bot lifecycle | Request a supported remote profile lifecycle and canonical Bot Chat create-or-get contract. | Hermes API gap; do not treat a profile-only create as a finished bot |
-| Session management | Design safe metadata actions around the existing profile-scoped session API. Keep destructive actions away from the canonical Bot Chat. | Owner authorization and exact session identity; non-destructive branch/project/export remain upstream gaps |
-| Approvals and choices | Finish authorization, expiry, resource-bound, and log-leak security review before any release. | Security clearance; upstream session events for full parity |
-| Bot tabs | Show and create the same tabs Desktop sees. | Shared server-side tab registry |
-| Updates | Replace polling with a session change feed when available. | Hermes gateway event or long-poll API |
-| Voice and screen | Add client features when authenticated API server routes are available. | Upstream routes and access controls |
+| Current qualified Hermes | Pairing, Bot Chat reads and guarded sends, read-only setup checks, and owner-gated scheduled jobs and default-model previews. | Requalify each Hermes build and bridge fingerprint. Keep the owner and per-bot gates; do not widen the legacy send route to arbitrary sessions. |
+| Release hardening | Integrate the draft features, run isolated gateway fixtures, then review the exact release candidate and device artifacts. | No live-host switch or external beta based solely on source tests. |
+| Search | Add authorized, bounded search after Hermes stops logging raw slow-query text. | Do not use the phone cache as a misleading substitute for all-chat search. |
+| Approvals and choices | Keep the reusable UI and security fixes in draft; require a passing real-route qualification. | Bot Chat still lacks a session-scoped prompt notifier. Do not enable an alternate execution owner or gateway-control shortcut. |
+| Bot lifecycle and session writes | Request complete remote bot create/delete and stable canonical session metadata operations. | A profile alone is not a Bot Mode bot; destructive or uncertain results need exact recovery. |
+| Canonical gateway | Prepare capability discovery and fixtures for durable admission, replay or snapshot, and Desktop/mobile ownership. | Wait for an authenticated remote entry with one execution authority; do not invent admission IDs or event watermarks in HMP. |
+
+## Adoption gate for a new Hermes release
+
+1. Confirm canonical runtime and authenticated remote entry have landed in the target release.
+2. Identify and authorize the exact installation, profile, and session; negotiate supported operations. Missing capabilities fail explicitly.
+3. Requalify HMP read/send, Cron, and model fingerprints in an isolated Hermes home.
+4. Prove the [research acceptance cases](HermesUnifiedGatewayResearch.md#20-hmp-acceptance-tests-derived-from-upstream): shared Desktop/mobile session, no duplicate turn after a lost acknowledgement, replay or authoritative snapshot after reconnect, stale-control refusal, profile isolation, and restart recovery.
+5. Add a versioned canonical-gateway adapter only after those checks pass, with a rollback for qualified older builds.
 
 Behavior changes belong in focused Spec Kit feature specs and must update the wire contract when applicable.

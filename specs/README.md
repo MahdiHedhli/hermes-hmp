@@ -13,5 +13,8 @@ Start from the [constitution](../.specify/memory/constitution.md) and the [spec]
 
 The migrated F1 and send design notes are reference material. New work should use the structure above.
 
-Current draft feature specs: [scheduled jobs](004-cron-mobile/spec.md) and
-[bot default model](005-bot-default-model/spec.md).
+Current draft feature specs: [scheduled jobs](004-mobile-cron/spec.md),
+[bot default model](005-bot-default-model/spec.md),
+[per-bot send gate](006-per-bot-send-gate/spec.md), and
+[host setup check](007-host-setup-check/spec.md). The setup-check branch
+originally used `004`; this integration gives each feature a unique number.
