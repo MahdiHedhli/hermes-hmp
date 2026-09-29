@@ -137,6 +137,7 @@ F1_ROUTES: tuple[tuple[str, str, str], ...] = (
 A1_SESSION_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("GET", "/bots/{p}/sessions", "SES-1"),
     ("GET", "/bots/{p}/sessions/{ref}/messages", "SES-2"),
+    ("GET", "/bots/{p}/sessions/{ref}/messages/from-start", "SES-2a"),
 )
 
 # Amendment F2 (direct send, HMP_V1.md §7a): DS-1/DS-8. Unlike A1_SESSION_ROUTES, these are
@@ -496,6 +497,27 @@ async def handle_session_messages(request: web.Request) -> web.Response:
     return _result_response(result)
 
 
+async def handle_session_history_start(request: web.Request) -> web.Response:
+    """SES-2a: the first active page, distinct from SES-2's latest snapshot.
+
+    The route is deliberately distinct so an older HMP returns 404 instead of silently treating
+    `after=0` as a latest snapshot and making phone search appear complete when it is not.
+    """
+    who = bearer(request)
+    ctx = context(request)
+    profile = request.match_info["p"]
+    ref = request.match_info["ref"]
+    if any(key != "limit" for key in request.query):
+        raise HmpError(ErrorCode.BAD_REQUEST)
+    limit = _query_int(request, "limit", default=HISTORY_LIMIT_DEFAULT, lo=1, hi=HISTORY_LIMIT_MAX)
+    ctx.limiter.check(
+        "bots_session_messages", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now()
+    )
+    reads = _require(ctx.reads)
+    result = await asyncio.to_thread(reads.session_history, who.user_id, profile, ref, 0, limit)
+    return _result_response(result)
+
+
 _CMID_MAX_BYTES = 128  # generous bound for a UUIDv7 or any reasonable client-generated id
 _TEXT_MAX_BYTES = MAX_BODY_BYTES  # the body-size limit is the real bound; no separate text cap
 
@@ -833,6 +855,7 @@ def build_app(ctx: ServerContext) -> web.Application:
         # so they 404 exactly like every other unregistered F1 route (server-modules.md).
         handlers["/bots/{p}/sessions"] = handle_sessions_list
         handlers["/bots/{p}/sessions/{ref}/messages"] = handle_session_messages
+        handlers["/bots/{p}/sessions/{ref}/messages/from-start"] = handle_session_history_start
         routes += list(A1_SESSION_ROUTES)
     for method, path, _clause in routes:
         handler = handlers[path]
