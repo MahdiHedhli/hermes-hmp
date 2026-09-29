@@ -26,8 +26,8 @@ At feature freeze, push a reviewed `release/*` branch to run the read-only
 source security-review workflow against that exact commit. Configure the
 repository's `OPENAI_API_KEY` Actions secret first; the workflow fails closed
 when it is absent. This is a release gate, not a review on every development
-push. Its gate job shows only verdict and finding counts; use private
-vulnerability reporting for sensitive details and fix any blocker or high
+push. Its structured output contains only severity and broad category; use
+private vulnerability reporting for actionable details and fix any blocker or high
 finding before release. A source verdict does not qualify mobile artifacts or
 replace deterministic CI and real-gateway fixture checks.
 

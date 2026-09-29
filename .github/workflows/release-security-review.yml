@@ -56,23 +56,20 @@ jobs:
               "properties": {
                 "verdict": {"type": "string", "enum": ["PASS", "REJECT", "OPEN"]},
                 "reviewed_sha": {"type": "string"},
-                "summary": {"type": "string"},
                 "findings": {
                   "type": "array",
                   "items": {
                     "type": "object",
                     "properties": {
                       "severity": {"type": "string", "enum": ["blocker", "high", "medium", "low"]},
-                      "file": {"type": "string"},
-                      "line": {"type": "integer"},
-                      "detail": {"type": "string"}
+                      "category": {"type": "string", "enum": ["pairing", "tls", "authorization", "replay", "expiry", "send", "jobs", "model", "listener", "logging", "resource", "compatibility", "installation", "other"]}
                     },
-                    "required": ["severity", "file", "line", "detail"],
+                    "required": ["severity", "category"],
                     "additionalProperties": false
                   }
                 }
               },
-              "required": ["verdict", "reviewed_sha", "summary", "findings"],
+              "required": ["verdict", "reviewed_sha", "findings"],
               "additionalProperties": false
             }
           prompt: |
@@ -88,7 +85,9 @@ jobs:
             not print credentials, private identifiers, exploit steps, or
             sensitive proof-of-concept details: this repository's Actions logs
             are public. Return reviewed_sha as the exact commit above. Report
-            findings with file, line, and a brief non-exploit description.
+            only severity and broad category for each finding. Do not put
+            paths, descriptions, or excerpts in the final answer. A failed
+            public gate will trigger a separate private finding review.
             Use REJECT for any security blocker, OPEN when
             evidence is insufficient, and PASS only when source review finds
             no blocker. This reviews source, not a signed mobile artifact.
@@ -116,8 +115,6 @@ jobs:
           print(f"Source review for {os.environ['REVIEWED_SHA']}: {verdict}")
           if result.get('reviewed_sha') != os.environ['REVIEWED_SHA']:
               sys.exit('Release source review returned the wrong commit SHA.')
-          if not isinstance(result.get('summary'), str):
-              sys.exit('Release source security review omitted its summary.')
           findings = result.get('findings')
           if not isinstance(findings, list):
               sys.exit('Release source security review omitted its findings list.')
@@ -127,12 +124,11 @@ jobs:
                   'blocker', 'high', 'medium', 'low'
               }:
                   sys.exit('Release source security review returned a malformed finding.')
-              if (
-                  not isinstance(finding.get('file'), str)
-                  or not isinstance(finding.get('line'), int)
-                  or finding['line'] < 1
-                  or not isinstance(finding.get('detail'), str)
-              ):
+              if finding.get('category') not in {
+                  'pairing', 'tls', 'authorization', 'replay', 'expiry', 'send',
+                  'jobs', 'model', 'listener', 'logging', 'resource',
+                  'compatibility', 'installation', 'other'
+              }:
                   sys.exit('Release source security review returned an incomplete finding.')
               counts[finding['severity']] += 1
           print(f'Security finding counts: {counts}')
