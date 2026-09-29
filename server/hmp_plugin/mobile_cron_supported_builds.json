@@ -26,6 +26,13 @@
       "git_sha": null,
       "qualified_by": "Hermes test_api_server_jobs.py (20) and HMP test_mobile_cron_stock.py (1)",
       "qualified_at": "2026-09-28"
+    },
+    {
+      "label": "hermes-8afaab37-git",
+      "fingerprint": "3db5c28b88eca27289e94f405c8645011906fd3ab3d42bd73d2a4b5972f74669",
+      "git_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
+      "qualified_by": "Hermes test_api_server_jobs.py (20) and HMP test_mobile_cron_stock.py (1) in isolated Python 3.14 environment",
+      "qualified_at": "2026-09-28"
     }
   ]
 }
