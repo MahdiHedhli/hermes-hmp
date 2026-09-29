@@ -675,6 +675,17 @@ authorized`, SES-3) is unchanged.
     unfiltered. A `tool` row renders as the collapsible result in S7. Every other role besides
     `user` and `assistant`, including `session_meta` and `system`, stays a neutral note.
 
+- **SES-2a. `GET /hmp/v1/bots/{p}/sessions/{ref}/messages/from-start?limit=`.** This distinct
+  read-only route returns the earliest available active rows in the existing RO-6 paged shape:
+  `200 {"messages":[…], "head_message_id":<int|null>}` or the same `reset` as SES-2. It calls
+  SES-2's `session_history` with cursor zero, then the client continues with SES-2's
+  `after=<last-id>` pages. It uses the same bearer, per-bot gate, opaque ref resolution,
+  per-device read limiter, history limit default/max, and session-browsing kill switch as SES-2.
+  Only `limit` is accepted; unknown or repeated query fields are `400 bad_request`. An older HMP
+  release has no route and returns 404, so a client cannot mistake SES-2's `after=0` latest
+  snapshot for complete history. No search term is sent to HMP or Hermes. Rows removed by Hermes
+  compaction are outside the available active history; clients must not claim to recover them.
+
 - **SES-3. Authz, rate limits, size caps.**
   - **Authz.** Identical per-bot gate to every existing `/bots/{p}/…` route (ERR-3), re-run on
     every call, fail-closed to `UNVERIFIABLE`/`503`. No per-session or per-source authorization
