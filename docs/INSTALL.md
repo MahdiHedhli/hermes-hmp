@@ -69,7 +69,8 @@ review it in the app and choose Resume when ready. A timed-out create may have s
 so refresh the list before creating another job.
 
 This preview is qualified only for the listed build bytes. Other builds fail closed.
-It is not enabled on the owner's live installation by adding these files.
+Installing the plugin does not enable the preview; the operator must set both
+the owner-device allowlist and the cron flag in the private host configuration.
 
 ## Bot default model preview
 
@@ -81,8 +82,8 @@ then offers only models from Hermes's authenticated provider catalog for that bo
 change affects new sessions and is never retried automatically; refresh the setting after
 an uncertain response. Do not commit device IDs, provider credentials, or API server keys.
 
-The preview fails closed on other Hermes builds and is not enabled on a live installation
-by adding these files.
+The preview fails closed on other Hermes builds. Installing the plugin does not
+enable it; the operator must set both private host controls described above.
 
 ## Local compatibility tests
 

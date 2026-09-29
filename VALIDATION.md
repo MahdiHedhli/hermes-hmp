@@ -54,7 +54,11 @@ plugin surface check, log scan, and zero-baseline privacy scan passed. A stale,
 incomplete, or malformed snapshot fails closed. The command does not send a
 message, transmit a key, add a network route, or change the guarded-send bridge
 file set. Its result does not certify a device's authorization or a later
-loopback call. The branch is not installed on the owner's live gateway.
+loopback call.
+At `e947a10`, eight stock-base direct-send gateway fixture cases passed. An
+isolated `HERMES_HOME` install of that exact commit and Plugin Doctor passed;
+the installer still reports the documented repository-wide CAUTION findings.
+Live host enablement is a separate operator-controlled step.
 
 ## Local fixture builds
 
