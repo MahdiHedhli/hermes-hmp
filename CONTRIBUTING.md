@@ -22,4 +22,13 @@ Fixture and compatibility tests need extracted Hermes source builds and a real P
 - Never commit secrets, real device IDs, private host paths, private addresses, or owner evidence. Run the zero-baseline privacy scan before pushing.
 - Keep app code and private research evidence out of this repository.
 
+At feature freeze, push a reviewed `release/*` branch to run the read-only
+source security-review workflow against that exact commit. Configure the
+repository's `OPENAI_API_KEY` Actions secret first; the workflow fails closed
+when it is absent. This is a release gate, not a review on every development
+push. Its gate job shows only verdict and finding counts; use private
+vulnerability reporting for sensitive details and fix any blocker or high
+finding before release. A source verdict does not qualify mobile artifacts or
+replace deterministic CI and real-gateway fixture checks.
+
 The [Spec Kit constitution](.specify/memory/constitution.md) records the project-wide rules. A feature PR should include a focused specification, plan, and verification tasks under `specs/`.
