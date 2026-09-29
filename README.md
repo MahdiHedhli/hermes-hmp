@@ -10,11 +10,20 @@ HMP runs inside your own Hermes gateway. It pairs each phone to an instance, ser
 ## Install
 
 ```sh
-hermes plugins install MahdiHedhli/hermes-hmp
+hermes plugins install 'MahdiHedhli/hermes-hmp#server/hmp_plugin' --enable
+hermes gateway restart
+hermes hmp compat
 hermes hmp pair offer
 ```
 
-Hermes may ask you to confirm its community-plugin scan findings; the full-tree verdict is recorded in the [privacy gate](PRIVACY_GATE.md). The operator confirms the matching code shown on the phone and host. See the [install and host configuration guide](docs/INSTALL.md) before connecting a device. Use `--ref <full-commit-sha>` to pin a reviewed revision.
+For an existing root-directory installation, replace the first command with
+`hermes plugins install 'MahdiHedhli/hermes-hmp#server/hmp_plugin' --force --enable`.
+`--force` permits replacement; it does not disable the security scanner. The
+runtime-only source scans as safe on the currently tested Hermes installer.
+The operator confirms the matching code shown on the phone and host. See the
+[install and host configuration guide](docs/INSTALL.md) before connecting a
+device. Use `--ref <full-commit-sha>` to pin a reviewed revision; pinned
+plugins need an explicit reinstall to update.
 
 | Start here | Purpose |
 | --- | --- |
@@ -31,7 +40,12 @@ Hermes may ask you to confirm its community-plugin scan findings; the full-tree 
 
 ## Repository
 
-`plugin.yaml` and `__init__.py` at the root are the install entry point. The HMP implementation and tests are in `server/`; fixture, vector, and compatibility tools are in `tools/`. Hermes installs the repository root for the bare command above. See the [release compatibility watch](docs/RELEASE_COMPAT_WATCH.md) for tested Hermes tags and future-release checks.
+`server/hmp_plugin/` is the install entry point. The root `plugin.yaml` remains
+for repository development, but installing the whole repository makes Hermes
+scan research and test fixtures as plugin content. Tests are in `server/`, and
+fixture, vector, and compatibility tools are in `tools/`. See the
+[release compatibility watch](docs/RELEASE_COMPAT_WATCH.md) for tested Hermes
+tags and future-release checks.
 
 HMP registers one platform adapter and one operator CLI. It does not register agent tools or hooks. Unsupported Hermes builds fail closed for guarded operations. See [SECURITY.md](SECURITY.md) for reporting and the threat model.
 
