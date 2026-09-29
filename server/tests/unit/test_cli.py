@@ -186,6 +186,60 @@ def _pending(
     return accepted.pairing_id, accepted.device_sas
 
 
+def test_setup_check_is_read_only_before_first_gateway_start(tmp_path: Path) -> None:
+    kw = hmp_kit.identity_kwargs(tmp_path)
+    out = io.StringIO()
+    cli_env = cli.CliEnv(
+        environ=kw["env"], stdout=out, stderr=io.StringIO(),
+        compat=lambda: SUPPORTED, identity_kwargs=kw,
+    )
+    parser = argparse.ArgumentParser(prog="hermes hmp")
+    cli.setup_parser(parser)
+
+    assert cli.dispatch(parser.parse_args(["setup", "check"]), cli_env) == cli.EXIT_REFUSED
+    assert "not initialized" in out.getvalue()
+    assert not kw["hermes_root"].exists()
+    assert not kw["binding_root"].exists()
+
+
+def test_setup_check_reports_pinned_listener_without_private_labels(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "private bot label")])
+    before_store = c.env.store_path.read_bytes()
+    before_binding = c.env.custody.binding_path.read_bytes()
+
+    assert c.run("setup", "check") == cli.EXIT_OK
+    assert "read compatibility: supported" in c.out
+    assert "expected TLS identity" in c.out
+    assert "Served bot count: 1" in c.out
+    assert "private bot label" not in c.out
+    assert "alpha" not in c.out
+    assert c.env.store_path.read_bytes() == before_store
+    assert c.env.custody.binding_path.read_bytes() == before_binding
+
+
+def test_setup_check_fails_closed_on_stale_or_wrong_listener(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "synthetic")])
+    c.alive.clear()
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "unavailable or unsafe" in c.out
+
+    c.alive.add(os.getpid())
+    c.listener_live = False
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "TLS identity or readiness check failed" in c.out
+
+
+def test_setup_check_requires_compatible_build_and_served_bot(c: Cli) -> None:
+    c.write_record(profiles=[])
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "Served bot count: 0" in c.out
+
+    c.write_record(profiles=[("alpha", "synthetic")])
+    c.compat = CompatResult(CompatStatus.UNSUPPORTED, OtherWhy.HERMES_BUILD_UNSUPPORTED)
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "read compatibility: unsupported" in c.out
+
+
 # --------------------------------------------------------------------------------------------------
 # Mutation refusals (PR1-2, PR3-2) and ID-2
 # --------------------------------------------------------------------------------------------------
