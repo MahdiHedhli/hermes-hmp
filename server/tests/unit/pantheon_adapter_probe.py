@@ -11,6 +11,7 @@ import asyncio
 import hashlib
 import os
 import socket
+import sqlite3
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -20,6 +21,7 @@ from aiohttp import ClientSession, Fingerprint
 from gateway.config import Platform
 from gateway.platform_registry import PlatformEntry, platform_registry
 from gateway.session import SessionSource, SessionStore, build_session_key
+from hermes_state import SessionDB
 
 import hmp_plugin
 from hmp_plugin.adapter import HmpAdapter
@@ -81,6 +83,39 @@ async def main() -> None:
     assert session_store._generate_session_key(source) == build_session_key(
         source, profile="serenity"
     )
+
+    # The old SessionDB offers a read-only constructor. Confirm it refuses a missing file and
+    # that one ordinary history read leaves an existing scratch database and sidecars byte-for-
+    # byte unchanged. This is a primitive check, not profile routing or Bot Chat qualification.
+    missing_db = state / "missing-state.db"
+    try:
+        SessionDB(missing_db, read_only=True)
+    except sqlite3.OperationalError:
+        pass
+    else:
+        raise AssertionError("read-only SessionDB opened a missing database")
+    assert not missing_db.exists()
+
+    read_home = state / "read-only-profile"
+    read_home.mkdir()
+    read_db = read_home / "state.db"
+    writer = SessionDB(read_db)
+    writer.close()
+
+    def contents() -> dict[str, str]:
+        return {
+            path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+            for path in read_home.iterdir()
+            if path.is_file()
+        }
+
+    before = contents()
+    reader = SessionDB(read_db, read_only=True)
+    try:
+        assert reader.list_sessions_rich(limit=2) == []
+    finally:
+        reader.close()
+    assert contents() == before
 
     adapter = platform_registry.create_adapter(
         "hmp", SimpleNamespace(extra={"bind": "127.0.0.1", "port": port})
