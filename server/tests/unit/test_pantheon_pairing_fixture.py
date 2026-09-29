@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -52,6 +53,7 @@ MISSING_BRIDGE_FILES = frozenset(
     reason="set HMP_PANTHEON_CLONE to a local clone with the v2026.8.31 tag",
 )
 def test_pantheon_allows_pairing_but_no_hermes_routes(tmp_path: Path) -> None:
+    _extract.assert_outside_real_home(tmp_path, "Pantheon fixture scratch")
     clone = Path(os.environ["HMP_PANTHEON_CLONE"]).resolve()
     assert (clone / ".git").exists(), "fixture must be a git clone"
     assert _extract.ref_resolves(clone, PANTHEON_TAG) == PANTHEON_SHA
@@ -85,6 +87,25 @@ def test_pantheon_allows_pairing_but_no_hermes_routes(tmp_path: Path) -> None:
     assert {
         name for name in sys.modules if name.split(".")[0] in {"gateway", "hermes_state"}
     } == hermes_modules_before
+
+    # Use the old platform registry and the real HMP TLS listener in a fresh interpreter.
+    # Both Hermes and XDG state stay in the scratch fixture. The parent below separately
+    # exercises signed pairing and self-revoke through the same server handlers.
+    server_root = Path(__file__).resolve().parents[2]
+    import_probe = subprocess.run(
+        [sys.executable, str(Path(__file__).with_name("pantheon_adapter_probe.py"))],
+        cwd=root,
+        env={
+            "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+            "PYTHONPATH": os.pathsep.join((str(root), str(server_root))),
+            "HERMES_HOME": str(tmp_path / "isolated-hermes-home"),
+            "XDG_STATE_HOME": str(tmp_path / "isolated-xdg-state"),
+        },
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert import_probe.returncode == 0, import_probe.stderr[-2000:]
 
     env = Env(tmp_path / "hmp-home", compat=result)
     assert env.ctx.bridge is None and env.ctx.reads is None
