@@ -6,6 +6,7 @@ Launched only by ``test_pantheon_pairing_fixture`` with an archived Hermes
 
 from __future__ import annotations
 
+import asyncio
 import os
 from pathlib import Path
 from types import SimpleNamespace
@@ -118,9 +119,10 @@ def main() -> None:
         is False
     )
 
-    # An HMP read adapter must reject the route marker before calling authz:
-    # Hermes's actual ingress drops that source before auth/session work.
+    # Hermes's shared ingress handler consumes this marker before auth or
+    # session setup. A future read adapter must make the same decision.
     assert rejected.profile_route_rejected is True
+    assert asyncio.run(runner._handle_message(SimpleNamespace(source=rejected))) is None
 
     # A primary transport can route into a named runtime. Authorization still
     # uses the stamped primary transport home, not the named runtime's .env.
