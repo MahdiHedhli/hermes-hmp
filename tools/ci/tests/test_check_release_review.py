@@ -28,21 +28,8 @@ def _review(**changes: object) -> str:
     return json.dumps(payload)
 
 
-def test_exact_commit_pass_with_no_blockers() -> None:
+def test_exact_commit_pass_with_no_findings() -> None:
     assert _GATE.validate_review(_review(), SHA) == ("PASS", 0)
-    assert _GATE.validate_review(
-        _review(
-            findings=[
-                {
-                    "severity": "medium",
-                    "file": "server/x.py",
-                    "line": 12,
-                    "detail": "Risk",
-                }
-            ]
-        ),
-        SHA,
-    ) == ("PASS", 1)
 
 
 @pytest.mark.parametrize(
@@ -55,19 +42,22 @@ def test_exact_commit_pass_with_no_blockers() -> None:
         (_review(findings="none"), SHA),
         (_review(verdict="OPEN"), SHA),
         (_review(verdict="REJECT"), SHA),
-        (
-            _review(
-                findings=[
-                    {
-                        "severity": "high",
-                        "file": "server/x.py",
-                        "line": 12,
-                        "detail": "Risk",
-                    }
-                ]
-            ),
-            SHA,
-        ),
+        *[
+            (
+                _review(
+                    findings=[
+                        {
+                            "severity": severity,
+                            "file": "server/x.py",
+                            "line": 12,
+                            "detail": "Risk",
+                        }
+                    ]
+                ),
+                SHA,
+            )
+            for severity in ("blocker", "high", "medium", "low")
+        ],
         (
             _review(
                 findings=[
@@ -83,6 +73,6 @@ def test_exact_commit_pass_with_no_blockers() -> None:
         ),
     ],
 )
-def test_missing_or_blocking_evidence_fails(raw: str, sha: str) -> None:
+def test_missing_or_unresolved_evidence_fails(raw: str, sha: str) -> None:
     with pytest.raises(ValueError):
         _GATE.validate_review(raw, sha)

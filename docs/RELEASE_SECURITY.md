@@ -7,8 +7,8 @@ review output, commit match, or passing verdict is missing. Never commit the key
 
 The source reviewer checks pairing, device and profile authorization, owner-only write gates,
 replay and ambiguous sends, approvals, compatibility fingerprints, resource limits, and logs.
-The verdict gate rejects `REJECT`, `OPEN`, or any blocker or high-severity finding. It prints
-only a count of lower-severity findings to public CI logs.
+The verdict gate rejects `REJECT`, `OPEN`, or any finding, regardless of severity. It prints
+only a finding count to public CI logs.
 
 Before enabling a guarded capability or distributing a plugin release, also verify the exact
 Hermes build in the isolated gateway/PTY fixture matrix, retain the build's fingerprint and

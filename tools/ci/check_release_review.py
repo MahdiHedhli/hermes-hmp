@@ -36,7 +36,6 @@ def validate_review(raw: str, expected_sha: str) -> tuple[str, int]:
     findings = result.get("findings")
     if not isinstance(findings, list):
         raise ValueError("review findings are missing or invalid")
-    high_findings = 0
     for finding in findings:
         if (
             not isinstance(finding, Mapping)
@@ -52,9 +51,7 @@ def validate_review(raw: str, expected_sha: str) -> tuple[str, int]:
             raise ValueError("review finding location is malformed")
         if not isinstance(finding.get("detail"), str) or not finding["detail"].strip():
             raise ValueError("review finding detail is malformed")
-        if finding["severity"] in {"blocker", "high"}:
-            high_findings += 1
-    if verdict != "PASS" or high_findings:
+    if verdict != "PASS" or findings:
         raise ValueError("release source review did not pass")
     return verdict, len(findings)
 
@@ -67,7 +64,7 @@ def main() -> int:
     except ValueError as exc:
         print(f"Release source review rejected: {exc}", file=sys.stderr)
         return 1
-    print(f"Release source review: {verdict}; {finding_count} non-blocking finding(s).")
+    print(f"Release source review: {verdict}; {finding_count} finding(s).")
     return 0
 
 
