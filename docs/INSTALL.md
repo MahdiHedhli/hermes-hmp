@@ -43,6 +43,16 @@ profile's Hermes configuration workflow to set and rotate them. A missing or
 unusable key leaves that bot's write controls unavailable; pairing and reads
 can still work.
 
+After the gateway starts, run `hermes hmp health check` to inspect every served
+bot's enabled send, jobs, and model prerequisites. The command uses a fresh
+gateway snapshot and the same pinned listener check as `setup check`. A missing
+profile-scoped key or loopback route makes that bot's enabled channels
+unavailable and returns a nonzero exit code; intentionally disabled channels
+are reported as disabled. The private snapshot contains only status codes, no
+keys or endpoints. Recheck after changing profile configuration and restarting
+the gateway. This is a prerequisite diagnostic: device authorization and the
+outcome of a later request are checked separately by HMP's routes.
+
 Scan the offer in the mobile app, compare the short security code on both screens, and confirm on the host. Then approve only the profiles this device should access. Keep the offer and approval codes out of logs, screenshots, and support requests.
 
 The plugin belongs to the Hermes instance where it is installed. Do not copy its instance keys or device store between hosts. See [Host hardening](../server/HOST_HARDENING.md) before exposing any Hermes host service.
@@ -59,7 +69,8 @@ review it in the app and choose Resume when ready. A timed-out create may have s
 so refresh the list before creating another job.
 
 This preview is qualified only for the listed build bytes. Other builds fail closed.
-It is not enabled on the owner's live installation by adding these files.
+Installing the plugin does not enable the preview; the operator must set both
+the owner-device allowlist and the cron flag in the private host configuration.
 
 ## Bot default model preview
 
@@ -71,8 +82,8 @@ then offers only models from Hermes's authenticated provider catalog for that bo
 change affects new sessions and is never retried automatically; refresh the setting after
 an uncertain response. Do not commit device IDs, provider credentials, or API server keys.
 
-The preview fails closed on other Hermes builds and is not enabled on a live installation
-by adding these files.
+The preview fails closed on other Hermes builds. Installing the plugin does not
+enable it; the operator must set both private host controls described above.
 
 ## Local compatibility tests
 

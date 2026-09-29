@@ -148,9 +148,12 @@ class Cli:
         port: int = 18920,
         iid: str | None = None,
         profiles: list[tuple[str, str]] | None = None,
+        health_checked_at: int | None = None,
+        health: list[tuple[str, str, str, str]] | None = None,
     ) -> None:
         cli.write_listener_record(
-            self.record_path(), host=host, port=port, iid=iid or self.env.iid, profiles=profiles
+            self.record_path(), host=host, port=port, iid=iid or self.env.iid, profiles=profiles,
+            health_checked_at=health_checked_at, health=health,
         )
 
 
@@ -238,6 +241,52 @@ def test_setup_check_requires_compatible_build_and_served_bot(c: Cli) -> None:
     c.compat = CompatResult(CompatStatus.UNSUPPORTED, OtherWhy.HERMES_BUILD_UNSUPPORTED)
     assert c.run("setup", "check") == cli.EXIT_REFUSED
     assert "read compatibility: unsupported" in c.out
+
+
+def test_health_check_fails_for_one_blocked_bot_without_disclosing_endpoint(c: Cli) -> None:
+    rows = [
+        ("alpha", "ready", "disabled", "disabled"),
+        ("beta", "unavailable", "disabled", "disabled"),
+    ]
+    c.write_record(
+        profiles=[("alpha", "Alpha"), ("beta", "Beta")],
+        health_checked_at=c.env.clock.now,
+        health=rows,
+    )
+    assert c.run("health", "check") == cli.EXIT_REFUSED
+    assert 'Bot "alpha": send=ready' in c.out
+    assert 'Bot "beta": send=unavailable' in c.out
+    assert c.record_path().stat().st_mode & 0o777 == 0o600
+    assert "API_SERVER_KEY" not in c.out
+    assert "127.0.0.1" not in c.out
+
+
+def test_health_check_accepts_disabled_channels_and_rejects_stale_snapshot(c: Cli) -> None:
+    rows = [("alpha", "disabled", "disabled", "disabled")]
+    c.write_record(
+        profiles=[("alpha", "Alpha")], health_checked_at=c.env.clock.now, health=rows
+    )
+    assert c.run("health", "check") == cli.EXIT_OK
+    c.write_record(
+        profiles=[("alpha", "Alpha")],
+        health_checked_at=c.env.clock.now - cli.HEALTH_MAX_AGE_S - 1,
+        health=rows,
+    )
+    assert c.run("health", "check") == cli.EXIT_REFUSED
+    assert "stale" in c.out
+
+
+def test_health_check_rejects_incomplete_record_and_old_gateway(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "Alpha")])
+    assert c.run("health", "check") == cli.EXIT_REFUSED
+    assert "unavailable or stale" in c.out
+    c.write_record(
+        profiles=[("alpha", "Alpha"), ("beta", "Beta")],
+        health_checked_at=c.env.clock.now,
+        health=[("alpha", "ready", "disabled", "disabled")],
+    )
+    assert c.run("health", "check") == cli.EXIT_REFUSED
+    assert "unavailable or unsafe" in c.out
 
 
 # --------------------------------------------------------------------------------------------------

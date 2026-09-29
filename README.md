@@ -18,6 +18,8 @@ Hermes may ask you to confirm its community-plugin scan findings; the full-tree 
 
 After configuring and starting the gateway, draft `hermes hmp setup check`
 checks build and listener readiness without changing host configuration.
+Draft `hermes hmp health check` additionally reports each served bot's enabled
+send, jobs, and model prerequisites without exposing keys.
 
 | Start here | Purpose |
 | --- | --- |

@@ -8,11 +8,12 @@ HMP is the Hermes gateway plugin used by the [HermesBot Mobile](https://hermes-b
 | Available | Private transport | TLS instance-key pinning over a private network such as Tailscale. |
 | Available | Bot roster and Bot Chat reads | Profile list, snapshots, history, and access state through the Hermes gateway. |
 | Draft | Host setup check | Read-only build, identity, and pinned-listener diagnostic; profile routing remains an operator check. See [install](docs/INSTALL.md). |
+| Draft | Bot channel health check | Read-only per-bot send, jobs, and model prerequisites from the running gateway; enabled failures exit nonzero. See [install](docs/INSTALL.md). |
 | Preview | Bot Chat sends | Explicit owner gate on every build, profile-specific send status, freshness check, and retry-safe handling. A bot without a usable profile key reports read-only. Unsupported builds fail closed. |
 | Preview, off by default | Scheduled jobs | Owner-gated list, create-paused, edit, pause, resume, and delete on an exact qualified Hermes build. |
 | Preview, off by default | Bot default model | Owner-gated catalog and validated change within the selected bot's profile. New sessions use the choice. |
 | Security blocked | Approvals and choices | Separate draft work needs a passing real-route qualification; Bot Chat lacks a Hermes session-stream prompt event. |
-| Upstream gap | Search | Hermes logs raw query text on a slow search path; HMP cannot safely expose full-corpus search yet. |
+| Under investigation | Phone Bot Chat search | The owner scoped search to phone Bot Chats. A complete, authorized corpus and a query path without Hermes's slow-query logging must be proven before enabling it. |
 | Upstream gap | Create and delete bots | The profile-scoped API server lacks a complete profile lifecycle and canonical Bot Chat create-or-get contract. |
 | Partly available | Session management | Read-only browsing exists. Metadata writes and non-destructive branching need a stable canonical remote contract. |
 

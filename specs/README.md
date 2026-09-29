@@ -16,5 +16,6 @@ The migrated F1 and send design notes are reference material. New work should us
 Current draft feature specs: [scheduled jobs](004-mobile-cron/spec.md),
 [bot default model](005-bot-default-model/spec.md),
 [per-bot send gate](006-per-bot-send-gate/spec.md), and
-[host setup check](007-host-setup-check/spec.md). The setup-check branch
+[host setup check](007-host-setup-check/spec.md), and
+[bot channel health](008-bot-health-check/spec.md). The setup-check branch
 originally used `004`; this integration gives each feature a unique number.
