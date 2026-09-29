@@ -75,6 +75,8 @@ direct-send gateway cases passed with a real PTY. The stock read fixture smoke
 case passed, and the real cron/model adapter tests passed on each extracted
 build (**2 per build**). Independent source review and a release build remain
 open. The candidate has not been installed into the owner's live Hermes.
+The `release/*` source-review workflow is present but has not run; the HMP
+repository does not yet have its required `OPENAI_API_KEY` Actions secret.
 
 ## Local fixture builds
 

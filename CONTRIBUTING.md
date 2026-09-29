@@ -23,3 +23,10 @@ Fixture and compatibility tests need extracted Hermes source builds and a real P
 - Keep app code and private research evidence out of this repository.
 
 The [Spec Kit constitution](.specify/memory/constitution.md) records the project-wide rules. A feature PR should include a focused specification, plan, and verification tasks under `specs/`.
+
+At feature freeze, push an exact candidate to `release/*` to run the
+[source security review workflow](.github/workflows/release-security-review.yml).
+It fails closed unless the repository has an `OPENAI_API_KEY` Actions secret
+and the read-only review returns a passing verdict for that commit. Keep the
+key in GitHub's secret store. This source review complements the real gateway
+fixtures and independent release review; it does not certify a live host.
