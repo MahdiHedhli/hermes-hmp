@@ -36,7 +36,11 @@ builds, a narrow profile-scoped Hermes writer also saves Bot Chat delivery,
 finite repeats, and previous-run continuity for create/edit. The feature works
 without an upstream change on those builds, but a complete public API contract
 for continuity would remove that version-specific writer. Delivery of mobile
-push notifications remains a separate API gap.
+push notifications remains a separate API gap. On the owner's qualified host,
+two runs of a phone-created job completed with Bot Chat delivery receipts and
+persisted replies. The second run's input contained the first answer,
+establishing previous-run continuity in this preview. This does not make the
+private writer a supported public API.
 
 Bot default-model reads and writes are also possible on a qualified build using
 Hermes's profile-scoped validation. HMP keeps this preview off by default and
