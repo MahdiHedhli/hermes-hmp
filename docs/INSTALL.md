@@ -43,6 +43,16 @@ profile's Hermes configuration workflow to set and rotate them. A missing or
 unusable key leaves that bot's write controls unavailable; pairing and reads
 can still work.
 
+After the gateway starts, run `hermes hmp health check` to inspect every served
+bot's enabled send, jobs, and model prerequisites. The command uses a fresh
+gateway snapshot and the same pinned listener check as `setup check`. A missing
+profile-scoped key or loopback route makes that bot's enabled channels
+unavailable and returns a nonzero exit code; intentionally disabled channels
+are reported as disabled. The private snapshot contains only status codes, no
+keys or endpoints. Recheck after changing profile configuration and restarting
+the gateway. This is a prerequisite diagnostic: device authorization and the
+outcome of a later request are checked separately by HMP's routes.
+
 Scan the offer in the mobile app, compare the short security code on both screens, and confirm on the host. Then approve only the profiles this device should access. Keep the offer and approval codes out of logs, screenshots, and support requests.
 
 The plugin belongs to the Hermes instance where it is installed. Do not copy its instance keys or device store between hosts. See [Host hardening](../server/HOST_HARDENING.md) before exposing any Hermes host service.

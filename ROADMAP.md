@@ -4,10 +4,10 @@ HMP follows the [feature list](FEATURES.md), [unified gateway research](HermesUn
 
 | Investment | Work | Boundary |
 | --- | --- | --- |
-| Current qualified Hermes | Pairing, Bot Chat reads and guarded sends, read-only setup checks, and owner-gated scheduled jobs and default-model previews. | Requalify each Hermes build and bridge fingerprint. Keep the owner and per-bot gates; do not widen the legacy send route to arbitrary sessions. |
+| Current qualified Hermes | Pairing, Bot Chat reads and guarded sends, read-only setup and bot health checks, and owner-gated scheduled jobs and default-model previews. | Requalify each Hermes build and bridge fingerprint. Keep the owner and per-bot gates; do not widen the legacy send route to arbitrary sessions. |
 | Release hardening | Integrate the draft features, run isolated gateway fixtures, then review the exact release candidate and device artifacts. | No live-host switch or external beta based solely on source tests. |
 | Installer footprint | Keep the current full-tree security scan and explain its caution findings to operators. | A quieter bare install needs Hermes to support a verified install file set; do not suppress scans or hide executable tests. |
-| Search | Add authorized, bounded search after Hermes stops logging raw slow-query text. | Do not use the phone cache as a misleading substitute for all-chat search. |
+| Search | Investigate complete, authorized search across phone Bot Chats and within one chat without invoking Hermes's raw slow-query log path. | Do not substitute a partial phone cache or widen the corpus to Desktop/CLI sessions. |
 | Approvals and choices | Keep the reusable UI and security fixes in draft; require a passing real-route qualification. | Bot Chat still lacks a session-scoped prompt notifier. Do not enable an alternate execution owner or gateway-control shortcut. |
 | Bot lifecycle and session writes | Request complete remote bot create/delete and stable canonical session metadata operations. | A profile alone is not a Bot Mode bot; destructive or uncertain results need exact recovery. |
 | Canonical gateway | Prepare capability discovery and fixtures for durable admission, replay or snapshot, and Desktop/mobile ownership. | Wait for an authenticated remote entry with one execution authority; do not invent admission IDs or event watermarks in HMP. |
