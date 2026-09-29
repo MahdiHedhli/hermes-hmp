@@ -43,6 +43,16 @@ Hermes's config CLI writes the canonical top-level path.
 hermes config set platforms.hmp.enabled true
 hermes config set platforms.hmp.extra.bind "$(tailscale ip -4)"
 hermes config set platforms.hmp.extra.port 18741
+```
+
+Before restarting, configure `gateway.multiplex_profiles` and
+`gateway.profile_routes` for every bot the phone should use, following
+[Deployment](../server/DEPLOYMENT.md). Pairing can succeed without routes,
+but the phone's bot-access requests will be refused as `not_routed`; selecting
+"Allow all" on the host cannot approve requests that were never created.
+Once routing is configured, continue:
+
+```sh
 hermes gateway restart
 hermes hmp compat
 hermes hmp instance show
@@ -54,11 +64,6 @@ If `pair offer` says there is no current instance identity after a restart,
 check the three `platforms.hmp` keys and the gateway start log. A successfully
 started listener creates the identity. Do not copy an identity or private key
 from another host.
-
-After pairing, use [Deployment](../server/DEPLOYMENT.md) to add
-`gateway.profile_routes` for each bot profile the phone should read. The
-listener can pair before those routes exist, but Bot Chat reads will refuse
-unrouted profiles.
 
 Scan the offer in the mobile app, compare the short security code on both screens,
 and confirm on the host. Selecting `y` at **Allow the phone to use all of these?**
