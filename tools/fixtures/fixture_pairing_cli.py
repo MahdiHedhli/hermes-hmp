@@ -184,7 +184,14 @@ def _pairing_id_for(args: argparse.Namespace) -> str:
     return _find_pairing_id_by_sas(store_path, crypto, sas=args.sas, sas_group=args.sas_group)
 
 
-def _run_real_cli_pty(home: str, xdg_state: str, argv: list[str], *, timeout: float = 30.0) -> str:
+def _run_real_cli_pty(
+    home: str,
+    xdg_state: str,
+    argv: list[str],
+    *,
+    timeout: float = 30.0,
+    deny_owner_controls: bool = False,
+) -> str:
     """`hermes hmp <argv...>` (T032) under a real pseudo-terminal, both stdin and stdout attached
     to the slave end, so `CliEnv.interactive()` (`stdin.isatty() and stdout.isatty()`) is
     genuinely true -- see the module docstring. `hermes` here is `sys.executable`'s own venv
@@ -203,6 +210,7 @@ def _run_real_cli_pty(home: str, xdg_state: str, argv: list[str], *, timeout: fl
         os.close(slave_fd)
         slave_fd = -1
         chunks: list[bytes] = []
+        owner_controls_answered = False
         sel = selectors.DefaultSelector()
         sel.register(master_fd, selectors.EVENT_READ)
         deadline = time.monotonic() + timeout
@@ -222,6 +230,16 @@ def _run_real_cli_pty(home: str, xdg_state: str, argv: list[str], *, timeout: fl
             if not data:
                 break
             chunks.append(data)
+            # Pairing now asks for a separate privileged-control grant. Fixture
+            # reference devices need Bot Chat access only, so explicitly leave
+            # jobs and model control off once the real host prompt appears.
+            if (
+                deny_owner_controls
+                and not owner_controls_answered
+                and b"or Enter to keep it off:" in b"".join(chunks)
+            ):
+                os.write(master_fd, b"\n")
+                owner_controls_answered = True
         returncode = proc.wait(timeout=timeout)
     finally:
         if slave_fd != -1:
@@ -247,6 +265,7 @@ def cmd_confirm(args: argparse.Namespace) -> None:
             "--",
             pairing_id,
         ],
+        deny_owner_controls=True,
     )
     print(json.dumps({"ok": True, "pairing_id": pairing_id, "output": output}))
 
@@ -369,6 +388,7 @@ def cmd_pair_reference_client(args: argparse.Namespace) -> None:
             "--",
             p2["pairing_id"],
         ],
+        deny_owner_controls=True,
     )
 
     pairing_raw = wire.b64u_decode(p2["pairing_id"], length=16)
