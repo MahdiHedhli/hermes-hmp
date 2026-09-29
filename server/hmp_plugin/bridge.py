@@ -1241,8 +1241,17 @@ class HermesReadBridge:
                 outcome = getattr(reported, "value", None)
                 if outcome == "admitted":
                     return True
-                if isinstance(outcome, str) and outcome.startswith("refused_"):
+                if outcome in {
+                    "refused_busy",
+                    "refused_draining",
+                    "refused_precondition_head",
+                    "refused_precondition_expired",
+                    "refused_lease_timeout",
+                    "refused_unauthorized",
+                }:
                     return False
+                # REFUSED_OTHER includes persist_failed and unreported_exit. Its detail
+                # is not on the ticket, so this cannot safely be called definitive.
                 return None
             remaining = deadline - loop.time()
             if remaining <= 0:

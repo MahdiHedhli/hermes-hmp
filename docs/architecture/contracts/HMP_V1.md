@@ -1114,8 +1114,10 @@ The explicit `direct_send.enabled` flag is mandatory even when the base gate is 
   different text is `409 idempotency_conflict`. `handle_message` is called with
   `allow_gateway_control:false`. On Hermes builds that expose a reject-policy admission ticket,
   HMP returns `202 {"state":"submitted"}` only after Hermes reports `admitted`; an explicit
-  `refused_*` outcome is a refusal. If the ticket is absent or has no definitive outcome within
-  five seconds, HMP stores and returns `200 {"state":"unknown"}`. Replaying that cmid returns
+  known refusal outcome is a refusal. `refused_other` can include persistence failures, and its
+  detail is unavailable on the ticket; HMP treats it as unknown. If the ticket is absent, has
+  an unclassified outcome, or has no outcome within five seconds, HMP stores and returns
+  `200 {"state":"unknown"}`. Replaying that cmid returns
   the stored unknown result without a second delivery. Older stock builds have no admission
   ticket; HMP uses their synchronous acceptance flag. The route does not wait for the model.
   While `list_gateway_approvals` for this

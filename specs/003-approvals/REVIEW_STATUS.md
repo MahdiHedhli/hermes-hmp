@@ -39,6 +39,9 @@ background task; `defer_policy="reject"` reports the later durable admission or 
 is never reported as `202 submitted`; an unconfirmed event is stored as `200 unknown` and cannot
 be delivered twice by replaying its cmid. Regression tests failed before this change and pass
 after it. The stock build does not expose this admission API and retains its previous behavior.
+Catch-all `refused_other` is now treated as unknown because the ticket omits the reason and
+`persist_failed` cannot be ruled out. HMP adds a Phone chat observation only after confirmed
+admission, so a refused or unknown send cannot appear as a delivered user turn.
 The focused real-gateway T8 rerun now passes on the exact experimental build; full-matrix
 qualification and the T7 upstream gap remain open.
 

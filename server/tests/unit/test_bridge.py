@@ -883,7 +883,13 @@ async def test_phone_event_cannot_control_gateway_when_waiter_appears_during_del
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("outcome", "expected"),
-    [("admitted", True), ("refused_busy", False), (None, None)],
+    [
+        ("admitted", True),
+        ("refused_busy", False),
+        ("refused_other", None),
+        ("future_outcome", None),
+        (None, None),
+    ],
 )
 async def test_phone_delivery_waits_for_durable_admission(
     br, directory, monkeypatch, outcome, expected

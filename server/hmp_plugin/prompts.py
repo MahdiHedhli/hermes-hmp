@@ -976,7 +976,6 @@ async def _phone_turn(
 
     prompts.remember_session(key, iid, user_id, profile, chat_id)
     prompts.release_transcript(chat_id)
-    prompts.add_observation(iid, user_id, profile, role="user", text=text, now=float(now))
     accepted = await deliver()
     if accepted is None:
         _log("phone_send", "unknown", user_id=user_id)
@@ -984,5 +983,6 @@ async def _phone_turn(
     if not accepted:
         _log("phone_send", "refused", user_id=user_id)
         return _error("api_server_unavailable", "direct send delivery is unavailable"), "rejected"
+    prompts.add_observation(iid, user_id, profile, role="user", text=text, now=float(now))
     _log("phone_send", "submitted", user_id=user_id)
     return HttpResult(202, {"state": "submitted"}), "submitted"

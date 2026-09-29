@@ -480,6 +480,7 @@ async def test_phone_replay_conflict_and_pending_approval_suppression() -> None:
     sent = await prompts.handle_phone_send(cmid="cmid-2", text="hello", **common)
     assert sent.status == 202 and sent.body == {"state": "submitted"}
     assert delivered == ["yes"]
+    assert len(store.observations(IID, USER, PROFILE)) == 1
     replay = await prompts.handle_phone_send(cmid="cmid-2", text="hello", **common)
     assert replay.body == sent.body
     assert delivered == ["yes"]
@@ -491,8 +492,13 @@ async def test_phone_replay_conflict_and_pending_approval_suppression() -> None:
     uncertain = await prompts.handle_phone_send(cmid="cmid-3", text="hello", **common)
     assert uncertain.status == 200 and uncertain.body == {"state": "unknown"}
     assert sqlite.rows[(IID, USER, PROFILE, "cmid-3")]["status"] == "unknown"
+    assert len(store.observations(IID, USER, PROFILE)) == 1
     replay = await prompts.handle_phone_send(cmid="cmid-3", text="hello", **common)
     assert replay.body == uncertain.body and delivered == ["yes", "yes"]
+    delivery_status = False
+    rejected = await prompts.handle_phone_send(cmid="cmid-4", text="hello", **common)
+    assert rejected.status == 503
+    assert len(store.observations(IID, USER, PROFILE)) == 1
 
 
 @pytest.mark.asyncio
