@@ -727,6 +727,10 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     health.add_subparsers(dest="health_command").add_parser(
         "check", help="Read the gateway's current bot-channel health snapshot"
     )
+    update = groups.add_parser("update", help="Check reviewed HMP releases without installing")
+    update.add_subparsers(dest="update_command").add_parser(
+        "check", help="Compare the installed pin with the latest published HMP release"
+    )
 
 
 # --------------------------------------------------------------------------------------------------
@@ -741,6 +745,12 @@ def _default_compat() -> Any:
         return compat.default_gate().evaluate()
     except Exception:  # the gate fails closed on its own; this guards its loader
         return compat.CompatResult(compat.CompatStatus.UNSUPPORTED)
+
+
+def _default_update_check() -> Any:
+    from .update_check import check_update
+
+    return check_update()
 
 
 def _default_qr_factory() -> Any:
@@ -758,6 +768,7 @@ class CliEnv:
     stderr: TextIO = field(default_factory=lambda: sys.stderr)
     clock: Callable[[], int] = field(default=lambda: int(time.time()))
     compat: Callable[[], Any] = _default_compat
+    update_check: Callable[[], Any] = _default_update_check
     qr_factory: Callable[[], Any] = _default_qr_factory
     pid_alive: Callable[[int], bool] = _pid_alive
     # `pair offer`'s interactive wait loop: injectable so tests never sleep for real. Tests also use
@@ -1784,6 +1795,33 @@ def _cmd_compat(env: CliEnv) -> int:
     return EXIT_OK
 
 
+def _cmd_update_check(env: CliEnv) -> int:
+    from .update_check import UpdateCheckError
+
+    try:
+        result = env.update_check()
+    except UpdateCheckError as exc:
+        env.stderr.write(f"HMP update check unavailable: {exc}\n")
+        return EXIT_ENVIRONMENT
+    out = env.stdout
+    out.write(f"Installed HMP pin: {result.installed_sha or 'unknown'}\n")
+    if result.release_sha is None:
+        out.write("Latest published HMP release: none\n")
+        return EXIT_OK
+    out.write(f"Latest published HMP release: {result.tag} ({result.release_sha})\n")
+    out.write(f"Pin status: {result.pin_status}\n")
+    out.write(f"Hermes build: {result.hermes_sha or 'unknown'}\n")
+    for feature, status in result.compatibility.items():
+        out.write(f"Candidate {feature}: {status}\n")
+    if result.pin_status == "newer release available":
+        out.write(
+            "Review the release and full SHA before installing. Keep the current pin for "
+            "rollback; then run `hermes hmp compat`, `hermes hmp health check`, and a real "
+            "client send. This check installs nothing.\n"
+        )
+    return EXIT_OK
+
+
 def _checked_setup(env: CliEnv) -> tuple[int, ListenerRecord | None]:
     """Read-only host preflight. Never opens the writable store or runs Hermes CLI."""
     from . import identity, server
@@ -1895,13 +1933,17 @@ def dispatch(args: argparse.Namespace, env: CliEnv | None = None) -> int:
     try:
         if group == "compat":
             return _cmd_compat(env)
+        if (group, action) == ("update", "check"):
+            return _cmd_update_check(env)
         if (group, action) == ("setup", "check"):
             return _cmd_setup_check(env)
         if (group, action) == ("health", "check"):
             return _cmd_health_check(env)
         handler = _STORE_COMMANDS.get((group or "", action or ""))
         if handler is None:
-            env.stderr.write("usage: hermes hmp {pair,devices,instance,compat,setup,health} ...\n")
+            env.stderr.write(
+                "usage: hermes hmp {pair,devices,instance,compat,setup,health,update} ...\n"
+            )
             return EXIT_ENVIRONMENT
         if (group, action) in MUTATING_COMMANDS:
             _check_mutation_allowed(env)
