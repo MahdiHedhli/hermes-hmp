@@ -72,7 +72,11 @@ so refresh the list before creating another job.
 
 For new jobs, the phone defaults to this bot's Bot Chat. Choose “Run history only”
 when no chat reply is wanted. Continuity lets each run see this job's previous
-output. An existing job's result destination does not change until edited.
+output. An existing job's result destination does not change until edited. On
+the qualified builds, HMP writes create/edit through Hermes's profile-scoped
+cron writer because the profile API does not persist `context_from`. This is
+bound to the exact build fingerprint and fails closed after an unqualified
+Hermes update.
 
 This preview is qualified only for the listed build bytes. Other builds fail closed.
 Installing the plugin does not enable the preview; the operator must grant the device and
@@ -93,6 +97,19 @@ an uncertain response. Do not commit device IDs, provider credentials, or API se
 The preview fails closed on other Hermes builds. Installing the plugin does not
 enable it; the operator must grant the device and enable the model flag. Existing
 `extra.owner_device_ids` entries remain a legacy fallback, subject to explicit per-device denial.
+
+## Updating a pinned HMP install
+
+`hermes update` updates Hermes core but does not advance a custom HMP Git-SHA
+pin. A pinned plugin's `hermes plugins check-updates` result also does not
+compare it with newer HMP revisions. Check the public repository and its
+release notes explicitly, keep the current installed SHA for rollback, and
+review a candidate commit before reinstalling HMP with `--ref <full-sha>`.
+Requalify the new Hermes/HMP combination with `hermes hmp compat` and
+`hermes hmp health check` after the gateway restarts, then verify a real
+client send separately. Do not infer send readiness from a read-only setup
+check. A release-aware check and explicit rollback flow are tracked in
+[issue #18](https://github.com/MahdiHedhli/hermes-hmp/issues/18).
 
 ## Local compatibility tests
 
