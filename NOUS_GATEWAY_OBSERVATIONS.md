@@ -8,6 +8,7 @@ The [unified gateway research](https://github.com/MahdiHedhli/hermes-hmp/blob/ma
 | --- | --- | --- |
 | Bot tabs | Desktop stores its bot tab list locally. A remote client cannot identify or create the same tabs. | Server-side tab metadata and list/create operations shared by Desktop and other clients. |
 | Safe sends | The canonical Bot Chat has a live-owner mailbox, but other session chat routes do not use the same active-session lease. Session chat also lacks an idempotency key. | Apply the active-session lease to session chat and support retry-safe idempotency. |
+| Forward compatibility | HMP's read bridge calls undocumented Hermes internals. It currently requires a reviewed bridge fingerprint and exact Git SHA before pairing or Bot Chat reads, so a newer but unreviewed build can be refused. The release-watch fixture suite can qualify a build, but it is not part of the runtime-only plugin. A version number or import-signature probe alone cannot establish profile isolation and authorization behavior. | Expose versioned, authenticated, profile-scoped roster, canonical Bot Chat, authorization, and history contracts with declared capability guarantees. HMP could then warn on an unvalidated newer release, exercise those supported contracts, and reserve fail-closed behavior for missing or failed capabilities rather than every new Git SHA. |
 | Bot lifecycle | Profile creation is available to Desktop's TUI gateway and dashboard, while deletion uses the profile CLI or Desktop host. The gateway platform API server has no profile lifecycle routes. A profile by itself is not a Bot Mode bot with a canonical chat. | Authenticated, owner-scoped profile create/delete routes with explicit identity, partial-delete results, and a canonical Bot Chat outcome. |
 | First Bot Chat | The API server can look up a hidden chat by exact title and create a titled session, but creation, hidden state, and profile-following behavior are not one atomic create-or-get operation. Desktop coordinates this through its own TUI RPC and adopts a concurrent winner. | A supported, idempotent create-or-get API for a bot's hidden canonical chat that preserves the profile's current runtime settings. |
 | Turn state | A client can read history but cannot reliably tell when a session is waiting for approval or clarification. | A session-scoped turn-state read or event stream. |
@@ -36,7 +37,11 @@ builds, a narrow profile-scoped Hermes writer also saves Bot Chat delivery,
 finite repeats, and previous-run continuity for create/edit. The feature works
 without an upstream change on those builds, but a complete public API contract
 for continuity would remove that version-specific writer. Delivery of mobile
-push notifications remains a separate API gap.
+push notifications remains a separate API gap. On the owner's qualified host,
+two runs of a phone-created job completed with Bot Chat delivery receipts and
+persisted replies. The second run's input contained the first answer,
+establishing previous-run continuity in this preview. This does not make the
+private writer a supported public API.
 
 Bot default-model reads and writes are also possible on a qualified build using
 Hermes's profile-scoped validation. HMP keeps this preview off by default and
