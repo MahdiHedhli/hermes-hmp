@@ -10,7 +10,8 @@
   commit is also qualified. Older v0.21.x tags need a bridge adapter; newer
   builds are watched but may need HMP updated before pairing works. See
   [the release matrix](RELEASE_COMPAT_WATCH.md).
-- A private network path between the phone and host, such as Tailscale.
+- Tailscale on the phone and host. The HMP listener accepts loopback and
+  Tailscale address ranges; an arbitrary private VPN address cannot bind it.
 - Hermes gateway profile routing configured as described in [Deployment](../server/DEPLOYMENT.md).
 
 Install the runtime plugin directory from its public repository. Hermes scans
@@ -22,9 +23,6 @@ disable the scanner or use `--allow-removed`.
 
 ```sh
 hermes plugins install 'MahdiHedhli/hermes-hmp#server/hmp_plugin' --enable
-hermes gateway restart
-hermes hmp compat
-hermes hmp pair offer
 ```
 
 If an older root-directory HMP plugin is already installed, replace it with
@@ -33,6 +31,34 @@ the old installation; it does not turn off the scanner. Later releases can be
 installed with `hermes plugins update hmp`, followed by a gateway restart.
 For a fixed, reproducible version, add `--ref <full-commit-sha>` when installing;
 a pinned installation must be explicitly reinstalled to move to another SHA.
+
+## Enable the listener
+
+Installing and enabling the plugin is not enough to start HMP. On the Hermes
+host, choose an unused port (18741 is an example) and configure the **top-level**
+`platforms.hmp` settings. The `gateway.platforms.hmp` spelling is legacy;
+Hermes's config CLI writes the canonical top-level path.
+
+```sh
+hermes config set platforms.hmp.enabled true
+hermes config set platforms.hmp.extra.bind "$(tailscale ip -4)"
+hermes config set platforms.hmp.extra.port 18741
+hermes gateway restart
+hermes hmp compat
+hermes hmp instance show
+hermes hmp pair offer
+```
+
+`hermes hmp compat` checks the Hermes build, not whether the listener ran.
+If `pair offer` says there is no current instance identity after a restart,
+check the three `platforms.hmp` keys and the gateway start log. A successfully
+started listener creates the identity. Do not copy an identity or private key
+from another host.
+
+After pairing, use [Deployment](../server/DEPLOYMENT.md) to add
+`gateway.profile_routes` for each bot profile the phone should read. The
+listener can pair before those routes exist, but Bot Chat reads will refuse
+unrouted profiles.
 
 Scan the offer in the mobile app, compare the short security code on both screens, and confirm on the host. Then approve only the profiles this device should access. Keep the offer and approval codes out of logs, screenshots, and support requests.
 
