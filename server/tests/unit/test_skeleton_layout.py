@@ -19,6 +19,7 @@ CONTRACT_MODULES = {
     "store.py",
     "compat.py",
     "bridge.py",
+    "pantheon_profiles.py",
     "pairing.py",
     "tokens.py",
     "auth.py",

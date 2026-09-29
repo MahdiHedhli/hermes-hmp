@@ -45,6 +45,9 @@ server/
     bridge.py                     # the ONLY module importing Hermes internals: read subset + P6 trigger (§12);
                                   #   also list_sessions/resolve_session (amendment A1, SES-1/SES-2);
                                   #   also resolve_bot_chat/registry_snapshot/direct_send_target (amendment F2, DS-4/DS-6)
+    pantheon_profiles.py          # pure, currently unwired strict profile resolver for the exact
+                                  #   v2026.8.31 read-adapter investigation; Hermes helpers are injected only
+                                  #   after a future exact-build gate, never imported here
     direct_send.py                # amendment F2: DS-2..DS-8 orchestration (gate order, guard, idempotency,
                                   #   the api_server loopback call, post-hoc verification). Never imports a Hermes
                                   #   internal itself -- reads bridge.py for Hermes state, and speaks api_server's
