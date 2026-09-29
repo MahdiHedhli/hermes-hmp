@@ -168,11 +168,17 @@ OPEN = WriteGate(state=WriteGateState.OPEN, reason=None)
 AN_ENDPOINT = DirectSendEndpoint(host="127.0.0.1", port=8642, api_key="k" * 20, path_prefix="")
 
 
-def test_direct_send_gate_open_wins_over_guarded() -> None:
-    """The original GU-4 OPEN state wins unchanged; OPEN_GUARDED is never returned alongside it."""
+def test_direct_send_gate_open_requires_owner_switch_and_endpoint() -> None:
+    """A full Hermes guarantee cannot bypass this route's owner switch or loopback key."""
     result = direct_send_gate(base_write_gate=OPEN, flag_enabled=True, endpoint=AN_ENDPOINT)
     assert result is OPEN
     assert result.state is WriteGateState.OPEN
+    assert direct_send_gate(
+        base_write_gate=OPEN, flag_enabled=False, endpoint=AN_ENDPOINT
+    ).state is WriteGateState.CLOSED
+    assert direct_send_gate(
+        base_write_gate=OPEN, flag_enabled=True, endpoint=None
+    ).state is WriteGateState.CLOSED
 
 
 def test_direct_send_gate_guarded_requires_both_flag_and_endpoint() -> None:

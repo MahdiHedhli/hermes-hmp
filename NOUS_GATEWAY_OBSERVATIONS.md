@@ -31,6 +31,12 @@ Bot default-model reads and writes are also possible on a qualified build using
 Hermes's profile-scoped validation. HMP keeps this preview off by default and
 does not send model credentials to the phone.
 
+Named profiles need their own API server keys under the existing multiplexed
+gateway contract. HMP now reports Bot Chat send availability per authorized bot
+and requires its owner send switch on every build. This is an HMP/client fix;
+it does not request a new Hermes API. A failed loopback connection after a
+roster read remains a send-time failure.
+
 ## Additional API parity requests
 
 - Make model overrides apply to live Desktop-owned turns as well as API-owned turns.

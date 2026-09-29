@@ -240,7 +240,7 @@ Normative keywords follow RFC 2119 and RFC 8174.
 | `no_bot_chat` (v1.2, DS-4(2)) | 409 | direct send: no canonical Bot Chat exists yet for this bot | yes | Ask the operator to open this bot once on Hermes Desktop first. |
 | `session_busy` (v1.2, DS-4(3)) | 409 | direct send: the lease-registry guard found another live writer, or the liveness read itself failed | **no** (Hermes never saw this attempt) | Restore the draft; plain retry once the busy state clears. |
 | `stale_head` (v1.2, DS-4(4)) | 409 | direct send: the client's `expected_head` does not match the Bot Chat's current head | yes | Refresh (re-read via SES-2), then retry with the fresh head. Never a silent retry with the old value. |
-| `write_gate_closed` (v1.2, DS-2(b)) | 503 | direct send while `"open_guarded"` is unavailable (dogfood flag off, `api_server` unreachable/misconfigured, or key invalid) | yes (HMP did not hand off) | Keep the draft. Composer is read-only for direct send on this instance. |
+| `write_gate_closed` (v1.2, DS-2(b)) | 503 | Bot Chat direct send lacks its owner switch, qualification, loopback configuration, or target profile key | yes (HMP did not hand off) | Keep the draft. Composer is read-only for this bot until its gate reopens. |
 | `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"` | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
 | `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, unqualified build, missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
 | `model_unavailable` (v1.5, MD-1) | 503 | mobile default model: flag off, unqualified build, missing scoped picker endpoint, or Hermes read/write failure | — | Reopen the model screen and check the current selection before another write. |
@@ -272,7 +272,8 @@ Normative keywords follow RFC 2119 and RFC 8174.
   ```
   200 {"versions":[1], "contract":"1.0", "iid":"<b32>",
        "guarantees":{"no_defer":bool, "atomic_anchor":bool, "approval_request_id":bool, "confirmed_settle":bool},
-       "write_gate":{"state":"open"|"closed", "reason":null|"guarantees_unavailable"}}
+       "write_gate":{"state":"open"|"open_guarded"|"closed",
+                     "reason":null|"guarantees_unavailable"|"write_gate_closed"}}
   ```
 
   [diverges: the spike returns `{versions, iid, capabilities, guarantees}`. `contract` and `write_gate` are missing. The extra `capabilities` field is diagnostic, and clients ignore it (V-4).]
@@ -525,6 +526,17 @@ Normative keywords follow RFC 2119 and RFC 8174.
 
   [diverges: `guarantees`/`write_gate` absent, `served_at` a float]
   - Content of bots the user is not authorized for is never exposed.
+  - **Profile send availability (additive, V-3).** Each authorized bot MAY carry
+    `"send_gate":{"state":"open"|"open_guarded"|"closed","reason":null|"write_gate_closed"}`.
+    It describes the Bot Chat send route for that bot's own profile. A closed value is returned
+    when the host switch, configured qualification check, loopback configuration, or that profile's key is
+    unavailable; neither the key nor its source is exposed. Bots without authorization omit the
+    field and do not trigger a key lookup. The send route rechecks these conditions on every POST.
+    A client that understands this field uses it for the selected bot's composer. If absent, it
+    falls back to the roster's `write_gate` for older HMP builds, while retaining a rejected
+    message as a reviewable draft. For old clients, roster `write_gate` is conservative: it is
+    closed if any authorized served bot cannot send. `/ready` remains an instance-level
+    diagnostic and does not assert that every named profile has a usable key.
 - **RO-2. Roster as state** (E-PDR-6).
   - The client re-reads the roster on every reconnect and on `roster.changed`.
   - `roster.changed` is an optimization, never the source of truth.
@@ -845,15 +857,15 @@ which no supported build advertises today (§8).
   `400 bad_request`: the guard (DS-4) requires it once this route is registered, so an old client
   that never sends it cannot reach the guarded path at all (V-4's safe default — it simply never
   advertises success here).
-- **DS-2. Gate order.** (a) The per-bot gate (ERR-3). (b) The write gate (§8): if the *original*
-  GU-4 `"open"` state holds, this route is available under that full guarantee, unchanged from
-  SUB-1..SUB-10 (§7), and DS-4's HMP-engineered guard is not needed — no supported build advertises
-  `"open"` today, so this is a future path, not the one any current build takes. Otherwise, the
-  gate is `"open_guarded"` only if **all** of: the host flag `gateway.platforms.hmp.extra.
-  direct_send` is `true` (default `false`, off; OD-F14/OD-F15 — this is the flag OD-F15's second
-  live-config approval turns on for the owner's own devices only); `api_server` is reachable,
-  enabled and loopback-bound for the target profile (DS-6); and the target profile's
-  `API_SERVER_KEY` resolves to a usable secret (DS-6). Any other case is `"closed"`:
+- **DS-2. Gate order.** (a) The per-bot gate (ERR-3). (b) The Bot Chat route requires **all** of:
+  the host flag `gateway.platforms.hmp.extra.direct_send` is `true` (default `false`, off;
+  OD-F14/OD-F15); any configured qualification check passes; `api_server` resolves to a
+  loopback-only target for the profile (DS-6); and that profile's `API_SERVER_KEY` resolves to a
+  usable secret (DS-6). A genuine GU-4 `"open"` state retains its full-guarantee label only
+  after these route prerequisites pass. Otherwise the route is `"open_guarded"` and applies
+  DS-4's HMP guard. A full Hermes guarantee never bypasses the owner switch or profile key.
+  This advertised gate does not probe the port: a later connection failure is
+  `api_server_unavailable`, with the message kept unconfirmed. Any missing prerequisite is `"closed"`:
   `POST .../chat/messages` returns `503 {"error":{"code":"write_gate_closed", ...}, "guarantees":
   {…}}` without handing anything to Hermes, mirroring GU-4's existing `guarantees_unavailable`
   shape under a new, route-specific code (added to ERR-2, never replacing it). (c) Only once (a)
@@ -1121,13 +1133,19 @@ The host flag defaults off, and the owner's live Hermes is not qualified by this
     succeeded merely because the state string is unfamiliar. `"open_guarded"` never applies to the
     original `SUB-1` route (§7) — that route's gate stays exactly GU-4's original two-flag
     derivation, unaffected by this amendment.
+    For the Bot Chat route, the host `direct_send` switch and the target profile's keyed
+    loopback endpoint remain mandatory even when GU-4's full guarantees are present (DS-2).
 - **GU-5. Where guarantees are carried.**
   - `guarantees` and `write_gate` are carried by `/ready` and `GET /bots` [diverges: `/ready` lacks `write_gate`; `GET /bots` carries neither].
   - `guarantees` is also carried at the top level of a `503 guarantees_unavailable` body.
   - Successful submit responses (`200`, `202`) do not carry `guarantees`. A write only succeeds when the write guarantees held, so the field would be redundant there. (This narrows rc2's first draft, following the SPIKE-FIX-5 conformance finding for row 6.1b.)
   - The client uses the latest value it has read.
+  - A client with RO-1's optional per-bot `send_gate` uses it for the selected Bot Chat instead
+    of the instance-wide fallback. Both are status hints; DS-2 is rechecked on POST.
 - **GU-6. Reduced-guarantee UI.**
-  - When `write_gate` is `closed`, the UI MUST show that this Hermes instance cannot accept messages from mobile safely, and the composer is read-only.
+  - When the selected bot's send gate is `closed`, the UI MUST show that this bot cannot accept
+    messages from mobile now, and its composer is read-only. An older client uses the conservative
+    instance-wide `write_gate` fallback.
   - When `approval_request_id` is `false`, approvals are read-only ("answer on another Hermes surface").
   - When `confirmed_settle` is `false`, the UI never shows "stopped" (INT-6).
   - The copy is `UX_CONTRACT_GAP` UX-6.

@@ -177,6 +177,7 @@ def open_components(adapter: Any) -> server.ServerContext:
             iid=ident.iid,
             guarantees=ctx.guarantees,
             write_gate=ctx.reported_write_gate,
+            send_gate=ctx.reported_send_gate,
             clock=ctx.now,
             on_served_profiles=on_served_profiles,
         )
