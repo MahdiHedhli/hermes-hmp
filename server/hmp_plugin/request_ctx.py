@@ -198,6 +198,9 @@ class ServerContext:
 
     def is_owner_device(self, device_id: str) -> bool:
         try:
+            decision = self.store.owner_controls_decision(device_id)
+            if decision is not None:
+                return decision
             return device_id in self.owner_device_ids()
         except Exception as exc:
             log_bridge_exception(exc)

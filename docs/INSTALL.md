@@ -53,7 +53,9 @@ keys or endpoints. Recheck after changing profile configuration and restarting
 the gateway. This is a prerequisite diagnostic: device authorization and the
 outcome of a later request are checked separately by HMP's routes.
 
-Scan the offer in the mobile app, compare the short security code on both screens, and confirm on the host. Then approve only the profiles this device should access. Keep the offer and approval codes out of logs, screenshots, and support requests.
+Scan the offer in the mobile app, compare the short security code on both screens, and confirm on the host. Then approve only the profiles this device should access. Pairing asks separately whether this phone may manage scheduled jobs and bot default models. Type `GRANT` on the host to allow those controls; any other answer leaves them off. This decision applies to that device only, even when two phones share an HMP user. Keep the offer and approval codes out of logs, screenshots, and support requests.
+
+To change that decision later, use `hermes hmp devices list` on the host to find the active device, then run `hermes hmp devices grant-controls <device-id>` or `hermes hmp devices deny-controls <device-id>`. These commands require an interactive host terminal. Revoking the device also stops its privileged access. Do not put device IDs in support reports.
 
 The plugin belongs to the Hermes instance where it is installed. Do not copy its instance keys or device store between hosts. See [Host hardening](../server/HOST_HARDENING.md) before exposing any Hermes host service.
 
@@ -61,29 +63,32 @@ The plugin belongs to the Hermes instance where it is installed. Do not copy its
 
 Scheduled jobs are disabled by default. The host must run an exact Hermes build listed in
 `server/hmp_plugin/mobile_cron_supported_builds.json`, with a working profile-scoped
-loopback API server and key. To enable a specific phone, use `hermes hmp devices list`
-locally to find its device ID, then set the HMP gateway platform's `extra.owner_device_ids`
-list and `extra.cron.enabled: true` in the host's private configuration. Do not commit
-device IDs or API server keys to this repository. A new job is always created paused;
+loopback API server and key. Grant the specific phone at pairing or with
+`hermes hmp devices grant-controls <device-id>`, then set the HMP gateway platform's
+`extra.cron.enabled: true` in private host configuration. Do not commit device IDs or API
+server keys to this repository. A new job is always created paused;
 review it in the app and choose Resume when ready. A timed-out create may have succeeded,
 so refresh the list before creating another job.
 
 This preview is qualified only for the listed build bytes. Other builds fail closed.
-Installing the plugin does not enable the preview; the operator must set both
-the owner-device allowlist and the cron flag in the private host configuration.
+Installing the plugin does not enable the preview; the operator must grant the device and
+enable the cron flag. Existing `extra.owner_device_ids` entries remain a legacy fallback;
+an explicit host denial for that device takes precedence.
 
 ## Bot default model preview
 
 Model management is disabled by default. The host must run an exact Hermes build listed in
 `server/hmp_plugin/mobile_model_supported_builds.json`, with its profile-scoped API server
-available locally. Configure an owner device in the HMP gateway platform's private
-`extra.owner_device_ids` list and set `extra.model_management.enabled: true`. The phone
+available locally. Grant the phone at pairing or with
+`hermes hmp devices grant-controls <device-id>`, then set
+`extra.model_management.enabled: true` in private host configuration. The phone
 then offers only models from Hermes's authenticated provider catalog for that bot. A model
 change affects new sessions and is never retried automatically; refresh the setting after
 an uncertain response. Do not commit device IDs, provider credentials, or API server keys.
 
 The preview fails closed on other Hermes builds. Installing the plugin does not
-enable it; the operator must set both private host controls described above.
+enable it; the operator must grant the device and enable the model flag. Existing
+`extra.owner_device_ids` entries remain a legacy fallback, subject to explicit per-device denial.
 
 ## Local compatibility tests
 
