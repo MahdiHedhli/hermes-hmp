@@ -20,6 +20,15 @@ The observed experimental Phone chat failure prevents presenting that path as qu
 independently of T7. No fixture fingerprint was added to a runtime allowlist. The owner's live
 Hermes and plugin were not changed.
 
+**Additional experimental admission risk (source-path finding, not yet established as the T8
+cause):** `bridge.deliver_phone_message` returns success from `event._gateway_accepted`. On the
+experimental build, `BasePlatformAdapter.handle_message` sets that flag when it starts a
+background task; `defer_policy="reject"` reports the later durable admission or refusal through
+`MessageEvent.admission_ticket`. HMP does not observe that outcome. A `202 submitted` can therefore
+precede a later refusal. Before experimental Phone chat can qualify, HMP must consume the exact
+admission outcome, preserve an ambiguous state on timeout, and test that a refused or unconfirmed
+event is never reported as submitted. The stock build does not expose this admission API.
+
 ## Round-5 findings and changes
 
 1. **Polling concealed failures and starved answers.** F3 reused the direct-send test helper's
