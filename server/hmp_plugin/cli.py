@@ -343,11 +343,13 @@ def _pid_alive(pid: int) -> bool:
 # that started this process," evidenced by this process's own already-resolved state rather than
 # trusted from an ambient, attacker-adjustable `$PATH`. A standard console-script sibling of this
 # interpreter (`sys.executable`'s own directory, the shape a `pip`/venv install of `hermes_cli`
-# produces) is tried next, still with no `$PATH` lookup. `shutil.which("hermes")` is the last
-# resort, and the only one of the three that even looks at `$PATH`. Every candidate, from every
-# tier, passes through `_is_safe_executable` before it is ever accepted: an absolute path outside
-# the current working directory, a regular file (never a symlink -- `lstat`, not `stat`), owned by
-# this OS user or root, and not group- or world-writable. None of this is a trust boundary by
+# produces) is tried next, still with no `$PATH` lookup. The conventional home launcher
+# (`$HOME/.local/bin/hermes`) is checked before `shutil.which("hermes")` looks at `$PATH`. Every
+# candidate passes through `_is_safe_executable` before it is accepted: an absolute regular file
+# (never a symlink -- `lstat`, not `stat`), owned by this OS user or root, and not group- or
+# world-writable. A candidate under the current working directory is accepted only when its
+# location came from the running installation or the conventional home launcher; `$PATH` results
+# under the cwd remain forbidden. None of this is a trust boundary by
 # itself (SEC-1: a same-user attacker who can plant such a file could usually also just edit this
 # module), but it closes the specific hole the review named: a lower-privileged or path-order
 # attacker's file on `$PATH`, or a relative/cwd-local one, silently standing in for Hermes's own
@@ -374,21 +376,23 @@ def _repo_root_from_sys_path() -> Path | None:
     return None
 
 
-def _is_safe_executable(path: Path, *, cwd: Path) -> bool:
+def _is_safe_executable(path: Path, *, cwd: Path, trusted_location: bool = False) -> bool:
     """Hardened acceptance for any path this module is about to exec as `hermes`, whichever of the
-    three resolution tiers found it: absolute (never a bare name resolved by the shell), not
-    inside the current working directory (a relative `$PATH` entry, or `.` on it, could otherwise
-    point an attacker-writable file here), a regular file found by `lstat` -- never a symlink,
-    which could point anywhere after this check ran -- owned by this OS user or root, and not
-    group- or world-writable."""
+    resolution paths found it: absolute (never a bare name resolved by the shell), not
+    inside the current working directory unless its location was derived from this process's own
+    installation or the user's standard launcher path (a relative `$PATH` entry, or `.` on it,
+    could otherwise point an attacker-controlled file here). The file must be regular according
+    to `lstat` (never a symlink), owned by this OS user or root, and not group- or world-writable.
+    """
     if not path.is_absolute():
         return False
-    try:
-        path.relative_to(cwd)
-    except ValueError:
-        pass
-    else:
-        return False
+    if not trusted_location:
+        try:
+            path.relative_to(cwd)
+        except ValueError:
+            pass
+        else:
+            return False
     try:
         st = path.lstat()
     except OSError:
@@ -411,9 +415,17 @@ def _default_resolve_hermes_executable() -> str | None:
         candidates.append(repo_root / ".hermes" / "bin" / "hermes")
     with contextlib.suppress(OSError):
         candidates.append(Path(sys.executable).resolve().parent / "hermes")
+    # These paths are tied to the running installation, not discovered through PATH. A normal
+    # operator shell starts in $HOME, which may contain that installation.
     for candidate in candidates:
-        if _is_safe_executable(candidate, cwd=cwd):
+        if _is_safe_executable(candidate, cwd=cwd, trusted_location=True):
             return str(candidate)
+    # Hermes also installs a standalone launcher here. In that common layout there is no
+    # repository-local launcher, and rejecting every path below the shell's $HOME made the
+    # in-terminal "allow all" step fail even though Hermes's CLI was available.
+    home_launcher = Path.home() / ".local" / "bin" / "hermes"
+    if _is_safe_executable(home_launcher, cwd=cwd, trusted_location=True):
+        return str(home_launcher)
     which = shutil.which("hermes")
     if which is not None:
         candidate = Path(which)

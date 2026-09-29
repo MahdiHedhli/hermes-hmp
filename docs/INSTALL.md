@@ -60,7 +60,17 @@ After pairing, use [Deployment](../server/DEPLOYMENT.md) to add
 listener can pair before those routes exist, but Bot Chat reads will refuse
 unrouted profiles.
 
-Scan the offer in the mobile app, compare the short security code on both screens, and confirm on the host. Then approve only the profiles this device should access. Keep the offer and approval codes out of logs, screenshots, and support requests.
+Scan the offer in the mobile app, compare the short security code on both screens,
+and confirm on the host. Selecting `y` at **Allow the phone to use all of these?**
+selects the profiles to approve; the phone must still send its bot-access
+requests. Tap **Request access to all** on the paired phone. The host then
+approves the matching pending requests. If `pair offer` prints manual approval
+commands, run `hermes -p <profile> pairing list` for each selected profile,
+confirm its pending `hmp` row belongs to the just-paired device, and run
+`hermes -p <profile> pairing approve hmp <request_id>` for that row. An empty
+pairing list means the phone has not sent that profile's request yet; it is
+not a request to approve. Never approve another device's pending row. Keep the
+offer and approval codes out of logs, screenshots, and support requests.
 
 The plugin belongs to the Hermes instance where it is installed. Do not copy its instance keys or device store between hosts. See [Host hardening](../server/HOST_HARDENING.md) before exposing any Hermes host service.
 
