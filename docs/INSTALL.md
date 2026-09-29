@@ -6,13 +6,42 @@
 - A private network path between the phone and host, such as Tailscale.
 - Hermes gateway profile routing configured as described in [Deployment](../server/DEPLOYMENT.md).
 
+On a multi-profile host, read Deployment's topology warning before setting
+`gateway.multiplex_profiles: true`. That setting can bypass Hermes's migration
+preflight and change API ingress and secret scoping on qualified builds.
+
 Install the plugin from its public repository. For reproducible deployments, add `--ref <full-commit-sha>`.
 
 ```sh
 hermes plugins install MahdiHedhli/hermes-hmp
 hermes hmp compat
+```
+
+Configure profile routing using [Deployment](../server/DEPLOYMENT.md), then
+start or restart the Hermes gateway. On a build with the setup check command,
+run it before creating a pairing offer:
+
+```sh
+hermes hmp setup check
 hermes hmp pair offer
 ```
+
+`setup check` reads HMP's build compatibility, current instance identity, and
+TLS-pinned listener readiness without changing files or running another
+Hermes command. It reports a served-bot count but cannot prove that every bot
+is routed, has a usable profile-scoped API key, or grants this device access.
+A nonzero result means pairing is not ready; inspect the gateway and the
+deployment checklist. Older HMP releases without this command can still use
+`hermes hmp compat` and the checklist.
+
+For Bot Chat sends and the scheduled-job and default-model previews, each
+named profile needs its own `API_SERVER_KEY` in that profile's private `.env`.
+Use a distinct value of at least 16 characters for each profile; the default
+profile's key does not authorize a named profile. Keep each API server bound to
+loopback, keep keys out of source control and support logs, and use the
+profile's Hermes configuration workflow to set and rotate them. A missing or
+unusable key leaves that bot's write controls unavailable; pairing and reads
+can still work.
 
 Scan the offer in the mobile app, compare the short security code on both screens, and confirm on the host. Then approve only the profiles this device should access. Keep the offer and approval codes out of logs, screenshots, and support requests.
 

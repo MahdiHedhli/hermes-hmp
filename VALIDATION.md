@@ -29,6 +29,22 @@ Ruff, the plugin-surface check, and the zero-baseline privacy scan passed.
 Gitleaks reported six existing fixture/type-check findings and none in the
 new cron implementation or docs.
 
+## Guarded-feature integration validation
+
+On `integration/available-features`, HMP's unit suite passed **1,080 tests** with
+**10 skipped**. Against the extracted stock-base Hermes build, the scheduled-job
+and default-model adapter tests passed, as did four live gateway fixture cases
+covering reads, direct send, ambiguous-send reconciliation, and pairing. Ruff,
+plugin-surface, log, zero-baseline privacy, and staged secret scans passed.
+
+At commit `fd48b2e`, an install from this repository succeeded into an isolated
+temporary `HERMES_HOME` using the extracted stock-base Hermes CLI. Plugin Doctor
+passed runtime discovery, import, manifest parsing, and registration. After
+enabling HMP in that isolated home, `hermes hmp setup check` reported the
+compatible build and correctly refused with `not initialized` before a gateway
+start. No live Hermes home was used. The installed tree's guard returned
+**CAUTION, 87 findings**, matching the source-tree scan; see the [privacy gate](PRIVACY_GATE.md).
+
 ## Local fixture builds
 
 The stock-base and experimental Hermes source clones were copied into the new root's `_refs/` directory and extracted to scratch storage outside the repository. The source revisions are `04fa849e70` and `7e8c8f07a1`, respectively. Pairing fixtures require a real PTY, so they run locally rather than in the current GitHub Actions workflow.
