@@ -60,6 +60,17 @@ isolated `HERMES_HOME` install of that exact commit and Plugin Doctor passed;
 the installer still reports the documented repository-wide CAUTION findings.
 Live host enablement is a separate operator-controlled step.
 
+## Integrated search, health, and host-grant candidate
+
+The draft `integration/release-candidate` branch combines the authorized Bot
+Chat start page with bot channel health and host-granted per-device controls.
+The full public CI selection passed **1,202 tests with 10 skipped** locally;
+Ruff, plugin surface, log scan, zero-baseline privacy scan, and the branch-diff
+secret scan passed. The only merge conflicts were documentation rows and the
+spec index. This is source and unit/tooling validation. A fresh isolated
+gateway fixture run, independent source review, and a release build remain
+open. The candidate has not been installed into the owner's live Hermes.
+
 ## Local fixture builds
 
 The stock-base and experimental Hermes source clones were copied into the new root's `_refs/` directory and extracted to scratch storage outside the repository. The source revisions are `04fa849e70` and `7e8c8f07a1`, respectively. Pairing fixtures require a real PTY, so they run locally rather than in the current GitHub Actions workflow.
