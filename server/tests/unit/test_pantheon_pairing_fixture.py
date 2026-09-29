@@ -4,6 +4,11 @@ Set ``HMP_PANTHEON_CLONE`` to a local Hermes git clone containing ``v2026.8.31``
 The test archives that immutable tag into pytest's scratch directory, leaving the clone and
 the owner's live Hermes home untouched. It exercises HMP's real compat gate and HTTP handlers;
 it does not claim that an old Hermes gateway process has been started or qualified for Bot Chat.
+
+Set ``HMP_PANTHEON_RUNTIME_PYTHON`` to an isolated interpreter populated from
+that tag's frozen base lock plus HMP's declared runtime packages to run the
+additional old-ingress authorization probe. The base pairing fixture works
+without it, using only HMP's own test environment.
 """
 
 from __future__ import annotations
@@ -106,6 +111,24 @@ def test_pantheon_allows_pairing_but_no_hermes_routes(tmp_path: Path) -> None:
         check=False,
     )
     assert import_probe.returncode == 0, import_probe.stderr[-2000:]
+
+    runtime_python = os.environ.get("HMP_PANTHEON_RUNTIME_PYTHON")
+    if runtime_python:
+        assert Path(runtime_python).is_file(), "old Hermes runtime interpreter is missing"
+        ingress_probe = subprocess.run(
+            [runtime_python, str(Path(__file__).with_name("pantheon_authz_probe.py"))],
+            cwd=root,
+            env={
+                "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
+                "PYTHONPATH": os.pathsep.join((str(root), str(server_root))),
+                "HERMES_HOME": str(tmp_path / "isolated-authz-home"),
+                "XDG_STATE_HOME": str(tmp_path / "isolated-authz-state"),
+            },
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        assert ingress_probe.returncode == 0, ingress_probe.stderr[-2000:]
 
     env = Env(tmp_path / "hmp-home", compat=result)
     assert env.ctx.bridge is None and env.ctx.reads is None
