@@ -17,8 +17,9 @@ identity. The command gives the safe next step when one check fails.
   configuration. It never runs a Hermes child command.
 - It shows no paths, keys, device IDs, profile names, or untrusted labels.
 - A stale, unsafe, or wrong-key listener record cannot produce a ready result.
-- It cannot claim that a served profile is routed or authorized. The public
-  deployment guide remains the source for those checks.
+- It cannot claim that a served profile is routed, authorized, or has a usable
+  profile-scoped API key. The public deployment guide remains the source for
+  those checks.
 - A failed check exits nonzero for scripting; an unsupported build fails closed.
 
 ## Clarification
