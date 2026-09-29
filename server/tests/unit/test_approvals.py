@@ -450,9 +450,11 @@ async def test_phone_replay_conflict_and_pending_approval_suppression() -> None:
     sqlite = Sqlite()
     approvals = ["pending"]
 
-    async def deliver() -> bool:
+    delivery_status: bool | None = True
+
+    async def deliver() -> bool | None:
         delivered.append("yes")
-        return True
+        return delivery_status
 
     def pending(key: str) -> list[dict[str, str]]:
         del key
@@ -485,6 +487,12 @@ async def test_phone_replay_conflict_and_pending_approval_suppression() -> None:
     assert conflict.status == 409
     assert conflict.body["error"]["code"] == "idempotency_conflict"
     assert delivered == ["yes"]
+    delivery_status = None
+    uncertain = await prompts.handle_phone_send(cmid="cmid-3", text="hello", **common)
+    assert uncertain.status == 200 and uncertain.body == {"state": "unknown"}
+    assert sqlite.rows[(IID, USER, PROFILE, "cmid-3")]["status"] == "unknown"
+    replay = await prompts.handle_phone_send(cmid="cmid-3", text="hello", **common)
+    assert replay.body == uncertain.body and delivered == ["yes", "yes"]
 
 
 @pytest.mark.asyncio

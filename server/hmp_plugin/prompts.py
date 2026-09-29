@@ -833,7 +833,7 @@ class AdapterHooks:
         return value
 
 
-PhoneDeliver = Callable[..., Awaitable[bool]]
+PhoneDeliver = Callable[..., Awaitable[bool | None]]
 PendingApprovals = Callable[[str], list[Mapping[str, object]]]
 
 
@@ -875,7 +875,7 @@ async def handle_phone_send(
     resolver: PromptResolver,
     session_key: Callable[[], str | None],
     pending_approvals: Callable[[str], object],
-    deliver: Callable[[], Awaitable[bool]],
+    deliver: Callable[[], Awaitable[bool | None]],
 ) -> HttpResult:
     """AP-6. Reserves the cmid before any hand-off. A replay does not call `deliver` again."""
     digest = phone_text_hash(text)
@@ -956,7 +956,7 @@ async def _phone_turn(
     resolver: PromptResolver,
     session_key: Callable[[], str | None],
     pending_approvals: Callable[[str], object],
-    deliver: Callable[[], Awaitable[bool]],
+    deliver: Callable[[], Awaitable[bool | None]],
 ) -> tuple[HttpResult, str]:
     prompts.purge(now)
     if prompts.open_clarifies(iid, user_id, profile):
@@ -978,6 +978,9 @@ async def _phone_turn(
     prompts.release_transcript(chat_id)
     prompts.add_observation(iid, user_id, profile, role="user", text=text, now=float(now))
     accepted = await deliver()
+    if accepted is None:
+        _log("phone_send", "unknown", user_id=user_id)
+        return HttpResult(200, {"state": "unknown"}), "unknown"
     if not accepted:
         _log("phone_send", "refused", user_id=user_id)
         return _error("api_server_unavailable", "direct send delivery is unavailable"), "rejected"

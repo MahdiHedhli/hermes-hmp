@@ -80,6 +80,11 @@ Hermes limitations remain visible product limitations.
 Phone chat uses the existing user's `default` HMP conversation and a server-derived session
 key. Every inbound Phone event has `internal=False` and **`allow_gateway_control=False`**.
 The optional `defer_policy` is `reject` when the pinned event shape supports it.
+On that shape, `_gateway_accepted` records task scheduling, not durable admission. HMP waits
+up to five seconds for `admission_ticket.reported`: only `admitted` yields `202 submitted`, a
+`refused_*` result refuses the send, and a missing outcome yields a durable `200 unknown` for
+that cmid. A replay never starts another turn. Stock builds without admission tickets retain
+their synchronous acceptance behavior.
 
 Source evidence at the pin:
 

@@ -833,7 +833,7 @@ async def handle_phone_send(request: web.Request) -> web.Response:
     def pending(key: str) -> object:
         return bridge.list_gateway_approvals(key)
 
-    async def deliver() -> bool:
+    async def deliver() -> bool | None:
         return await bridge.deliver_phone_message(
             user_id=who.user_id,
             profile=profile,

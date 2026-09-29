@@ -1112,8 +1112,13 @@ The explicit `direct_send.enabled` flag is mandatory even when the base gate is 
   Idempotency key `(iid, user_id, profile, cmid)`, hash of `text`, reserved before
   `handle_message`. The same text replays the stored response and does not hand off again. A
   different text is `409 idempotency_conflict`. `handle_message` is called with
-  `allow_gateway_control:false` and returns `202 {"state":"submitted"}` once Hermes has accepted
-  the event. The route does not wait for the model. While `list_gateway_approvals` for this
+  `allow_gateway_control:false`. On Hermes builds that expose a reject-policy admission ticket,
+  HMP returns `202 {"state":"submitted"}` only after Hermes reports `admitted`; an explicit
+  `refused_*` outcome is a refusal. If the ticket is absent or has no definitive outcome within
+  five seconds, HMP stores and returns `200 {"state":"unknown"}`. Replaying that cmid returns
+  the stored unknown result without a second delivery. Older stock builds have no admission
+  ticket; HMP uses their synchronous acceptance flag. The route does not wait for the model.
+  While `list_gateway_approvals` for this
   phone session is non-empty, the route does not call `handle_message` and returns
   `409 {"error":{"code":"stale",…},"applied":false}` — the composer is not a way to say yes.
   While a clarify prompt is pending, composer sends also return `409 stale`, `applied:false`.
@@ -1125,7 +1130,7 @@ The explicit `direct_send.enabled` flag is mandatory even when the base gate is 
   source HMP built for this `user_id` and the `default` chat. A client-supplied session key is
   ignored. Logging (SEC-4) is `log_event` only: outcome codes (`stored`, `resolved`,
   `stale`, `invalid_choice`, `conflict`,
-  `desktop_held`, `awaiting_text`, and for phone send `submitted`, `replay`, `conflict`, `refused`)
+  `desktop_held`, `awaiting_text`, and for phone send `submitted`, `unknown`, `replay`, `conflict`, `refused`)
   and 8-character prefixes of `user_id`, `request_id`, `run_id`. Never the command, description,
   question, chosen answer, clarify label, message text, SSE body, or `API_SERVER_KEY`.
   All successful answer logs use exactly `outcome=resolved`; no choice suffix is permitted.
