@@ -17,6 +17,25 @@ hermes plugins install MahdiHedhli/hermes-hmp
 hermes hmp compat
 ```
 
+On the Bot Mode baseline `v2026.8.31`, Hermes validates and warns about the
+plugin's `python_dependencies` but does **not** install them. A base Hermes
+environment may have `cryptography` but omit `aiohttp` and `qrcode`; HMP then
+cannot start its listener or render a pairing offer. Install the requirements
+declared in `server/hmp_plugin/plugin.yaml` into the **same Python environment
+that runs Hermes**. For a source checkout with a `.venv`, for example:
+
+```sh
+HERMES_PYTHON=/absolute/path/to/hermes-agent/.venv/bin/python
+uv pip install --python "$HERMES_PYTHON" 'aiohttp>=3.14.3,<4' 'cryptography>=50' 'qrcode>=7.4.2,<9'
+```
+
+Do not run that command against an unrelated system Python or the HMP
+development venv. Keep your Hermes lockfile and update workflow in mind when
+recreating the environment. After installation, restart the gateway and run
+`hermes hmp setup check`; it reports missing or out-of-range runtime package
+names before checking listener readiness. On other Hermes installations, use their own
+environment's package manager to satisfy the same manifest requirements.
+
 Configure profile routing using [Deployment](../server/DEPLOYMENT.md), then
 start or restart the Hermes gateway. On a build with the setup check command,
 run it before creating a pairing offer:

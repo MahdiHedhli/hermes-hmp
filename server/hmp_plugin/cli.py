@@ -1847,6 +1847,18 @@ def _cmd_update_check(env: CliEnv) -> int:
 
 def _checked_setup(env: CliEnv) -> tuple[int, ListenerRecord | None]:
     """Read-only host preflight. Never opens the writable store or runs Hermes CLI."""
+    from .compat import unmet_runtime_dependencies
+
+    unmet = unmet_runtime_dependencies()
+    if unmet:
+        env.stdout.write(
+            "HMP runtime packages missing or outside the declared version range: "
+            + ", ".join(unmet)
+            + ". Install the declared plugin dependencies into the active Hermes Python "
+            "environment, then restart the gateway.\n"
+        )
+        return EXIT_REFUSED, None
+
     from . import identity, server
 
     out = env.stdout

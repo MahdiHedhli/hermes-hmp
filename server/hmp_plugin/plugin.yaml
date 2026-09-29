@@ -8,14 +8,14 @@ kind: platform
 version: 1.0.0-f1
 description: >
   Hermes Mobile Protocol v1 platform adapter and operator CLI for Hermes Bot Mobile.
-  F1 scope is read-only: readiness, pairing, the bot roster, and the default conversation's
-  snapshot and history. It registers no conversation-write route.
+  Pairing and readiness are HMP-owned; Bot Chat reads, sends, jobs, and model controls
+  require their own qualified Hermes build and authorization gates.
 author: Hermes Bot Mobile
-# Hermes PM installs Python dependencies only from a declaration next to this manifest: a subdir
-# install (`hermes plugins install <repo>#server/hmp_plugin`) copies this folder alone, so
-# `server/pyproject.toml` does not travel. `aiohttp` and `cryptography` are Hermes core
-# dependencies. `qrcode` is the operator CLI's terminal QR renderer (T032; cli.py only). Its floor
-# is 7.4.2, the version Hermes pins for its core extras: PM locks every plugin against the union of
-# core extras, so a higher floor cannot be admitted (reviews/dependencies.md, `qrcode`).
+# A subdir install copies only this folder, not server/pyproject.toml. Hermes validates and warns
+# about these declarations but does not install them automatically on the v2026.8.31 baseline.
+# aiohttp is optional in that Hermes build; cryptography is core. The floors match its security
+# pins. qrcode is the CLI's terminal QR renderer; its floor matches Hermes's optional extras.
 python_dependencies:
+  - "aiohttp>=3.14.3,<4"
+  - "cryptography>=50"
   - "qrcode>=7.4.2,<9"
