@@ -18,6 +18,7 @@ from pathlib import Path
 
 import pytest
 
+from hmp_plugin import compat
 from hmp_plugin.compat import (
     DependencySpec,
     GitFingerprintReader,
@@ -29,6 +30,28 @@ from hmp_plugin.compat import (
 )
 
 BRIDGE_FILES = ("a.py", "sub/b.py")
+
+
+@pytest.mark.parametrize(
+    ("aiohttp_version", "crypto_version", "unmet"),
+    [
+        ("3.14.3", "50.0.0", ()),
+        ("3.14.2", "50.0.0", ("aiohttp",)),
+        ("4.0.0", "50.0.0", ("aiohttp",)),
+        ("3.14.3", "49.0.0", ("cryptography",)),
+        ("3.14.3rc1", "50.0.0", ("aiohttp",)),
+    ],
+)
+def test_runtime_dependencies_enforce_manifest_security_floors(
+    monkeypatch: pytest.MonkeyPatch,
+    aiohttp_version: str,
+    crypto_version: str,
+    unmet: tuple[str, ...],
+) -> None:
+    versions = {"aiohttp": aiohttp_version, "cryptography": crypto_version}
+    monkeypatch.setattr(compat.importlib.metadata, "version", versions.__getitem__)
+    assert compat.unmet_runtime_dependencies() == unmet
+    assert compat.runtime_dependencies_present() is (not unmet)
 
 
 def _write_bridge_files(root: Path) -> None:

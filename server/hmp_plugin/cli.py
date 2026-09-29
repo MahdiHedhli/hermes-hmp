@@ -14,7 +14,9 @@ Refusals and rules:
   gateway's adapter creates the identity. `instance rotate-key` (PR7-2) is the one explicit
   re-key, and it too requires the identity to be current here first.
 - **`pair offer` (PR1-1..PR1-4).**
-  - It is refused on a build that is not read-compatible (GU-2c; the same gate as the listener).
+  - Pairing uses HMP-owned state and may proceed when the Hermes read bridge is unqualified.
+    The operator sees a warning; bot grants and owner-control prompts are skipped, and every
+    Hermes-dependent route remains closed (GU-2c).
   - `ep` comes only from the running listener's actual bind (PR1-4). The adapter writes that bind to
     a runtime record next to the store, mode 0600, atomically, and removes it when the listener
     stops. The command refuses when the record is missing, unsafe, stale (its process is gone) or
@@ -926,9 +928,7 @@ def _cmd_offer(ctx: _Context, args: argparse.Namespace) -> int:
     from .contract import OFFER_TTL_S, PROTOCOL_VERSION, TAG_OFFER, QrOffer
 
     result = ctx.env.compat()
-    if not getattr(result, "supported", False):
-        why = getattr(getattr(result, "why", None), "value", None) or "hermes_build_unsupported"
-        raise RefusedError(f"refused: this Hermes build is not read-compatible ({why})")
+    read_compatible = bool(getattr(result, "supported", False))
     user = args.user
     if user is not None and (
         USER_ID_RE.fullmatch(user) is None or not _user_exists(ctx.store, user)
@@ -983,6 +983,13 @@ def _cmd_offer(ctx: _Context, args: argparse.Namespace) -> int:
     ctx.store.write_audit(now, "offer_create", "ok", id_prefix8=oid[:8])
     del s
     out = ctx.out
+    if not read_compatible:
+        why = getattr(getattr(result, "why", None), "value", None) or "hermes_build_unsupported"
+        out.write(
+            f"Warning: Bot Chat is unavailable on this Hermes build ({why}). "
+            "Pairing can complete, but no bot access or owner controls will be granted. "
+            "Update to a qualified HMP/Hermes combination before using the phone.\n"
+        )
     if not ctx.env.interactive():  # re-checked right before S is shown (PR1-2)
         raise RefusedError("refused: the terminal went away; the offer was created but never shown")
     qr = qr_module.QRCode(border=2)
@@ -998,7 +1005,13 @@ def _cmd_offer(ctx: _Context, args: argparse.Namespace) -> int:
     if args.no_wait:
         return EXIT_OK
     return _wait_for_scan_and_confirm(
-        ctx, oid=oid, exp=exp, label=label, user=user, grant=not args.no_grant
+        ctx,
+        oid=oid,
+        exp=exp,
+        label=label,
+        user=user,
+        grant=not args.no_grant,
+        read_compatible=read_compatible,
     )
 
 
@@ -1343,7 +1356,8 @@ def _prompt_owner_controls(ctx: _Context, *, device_id: str, label: str) -> None
 
 
 def _wait_for_scan_and_confirm(
-    ctx: _Context, *, oid: str, exp: int, label: str | None, user: str | None, grant: bool = True
+    ctx: _Context, *, oid: str, exp: int, label: str | None, user: str | None,
+    grant: bool = True, read_compatible: bool = True,
 ) -> int:
     out = ctx.out
     out.write("Waiting for the phone to scan… (Ctrl-C to cancel)\n")
@@ -1428,6 +1442,15 @@ def _wait_for_scan_and_confirm(
             # kept for any other recoverable refusal `_do_confirm` may raise).
             continue
         out.write(f"Paired ✓ {confirm_label}\n")
+        if not read_compatible:
+            # A legacy host allowlist must not silently grant a just-paired phone controls when
+            # there was no qualified bridge and therefore no owner-control consent prompt.
+            ctx.store.set_owner_controls(device_id, allowed=False, now=ctx.now())
+            out.write(
+                "This device is paired, but Bot Chat and controls remain unavailable "
+                "until the Hermes read bridge is qualified. Run hermes hmp compat after updating.\n"
+            )
+            return EXIT_OK
         if grant:
             _grant_bot_access(ctx, user_id=user_id)
         else:
@@ -1824,6 +1847,18 @@ def _cmd_update_check(env: CliEnv) -> int:
 
 def _checked_setup(env: CliEnv) -> tuple[int, ListenerRecord | None]:
     """Read-only host preflight. Never opens the writable store or runs Hermes CLI."""
+    from .compat import unmet_runtime_dependencies
+
+    unmet = unmet_runtime_dependencies()
+    if unmet:
+        env.stdout.write(
+            "HMP runtime packages missing or outside the declared version range: "
+            + ", ".join(unmet)
+            + ". Install the declared plugin dependencies into the active Hermes Python "
+            "environment, then restart the gateway.\n"
+        )
+        return EXIT_REFUSED, None
+
     from . import identity, server
 
     out = env.stdout

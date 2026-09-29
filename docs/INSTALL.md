@@ -17,6 +17,25 @@ hermes plugins install MahdiHedhli/hermes-hmp
 hermes hmp compat
 ```
 
+On the Bot Mode baseline `v2026.8.31`, Hermes validates and warns about the
+plugin's `python_dependencies` but does **not** install them. A base Hermes
+environment may have `cryptography` but omit `aiohttp` and `qrcode`; HMP then
+cannot start its listener or render a pairing offer. Install the requirements
+declared in `server/hmp_plugin/plugin.yaml` into the **same Python environment
+that runs Hermes**. For a source checkout with a `.venv`, for example:
+
+```sh
+HERMES_PYTHON=/absolute/path/to/hermes-agent/.venv/bin/python
+uv pip install --python "$HERMES_PYTHON" 'aiohttp>=3.14.3,<4' 'cryptography>=50' 'qrcode>=7.4.2,<9'
+```
+
+Do not run that command against an unrelated system Python or the HMP
+development venv. Keep your Hermes lockfile and update workflow in mind when
+recreating the environment. After installation, restart the gateway and run
+`hermes hmp setup check`; it reports missing or out-of-range runtime package
+names before checking listener readiness. On other Hermes installations, use their own
+environment's package manager to satisfy the same manifest requirements.
+
 Configure profile routing using [Deployment](../server/DEPLOYMENT.md), then
 start or restart the Hermes gateway. On a build with the setup check command,
 run it before creating a pairing offer:
@@ -30,8 +49,12 @@ hermes hmp pair offer
 TLS-pinned listener readiness without changing files or running another
 Hermes command. It reports a served-bot count but cannot prove that every bot
 is routed, has a usable profile-scoped API key, or grants this device access.
-A nonzero result means pairing is not ready; inspect the gateway and the
-deployment checklist. Older HMP releases without this command can still use
+A nonzero result means Bot Chat is not ready; inspect the gateway and the
+deployment checklist. A running listener can still pair a device when only
+Hermes read compatibility is missing, but the phone cannot use bots and the
+pairing command does not grant bot access or owner controls in that state.
+Use `hermes hmp compat` to see the reason, then update to a qualified HMP/Hermes
+combination and grant bot access separately. Older HMP releases without this command can still use
 `hermes hmp compat` and the checklist.
 
 For Bot Chat sends and the scheduled-job and default-model previews, each

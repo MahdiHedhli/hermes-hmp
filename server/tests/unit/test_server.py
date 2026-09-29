@@ -760,7 +760,9 @@ def test_error_bodies_carry_only_err1_extras() -> None:
 @pytest.mark.parametrize(
     "why", [OtherWhy.HERMES_BUILD_UNSUPPORTED, OtherWhy.HERMES_READ_DEPENDENCY_MISSING]
 )
-def test_unsupported_build_serves_only_ready(tmp_path: Path, why: OtherWhy) -> None:
+def test_unsupported_build_serves_only_device_lifecycle_and_ready(
+    tmp_path: Path, why: OtherWhy
+) -> None:
     env = Env(tmp_path, compat=CompatResult(CompatStatus.UNSUPPORTED, why))
     assert env.ctx.bridge is None and env.ctx.reads is None
 
@@ -769,12 +771,11 @@ def test_unsupported_build_serves_only_ready(tmp_path: Path, why: OtherWhy) -> N
         assert status == 200 and body["iid"] == env.iid
         assert body["write_gate"] == {"state": "closed", "reason": "guarantees_unavailable"}
         assert not any(body["guarantees"].values())
-        offer = env.offer()
         paths = [
-            ("POST", "/pair/request", env.p2_body(Device(), offer)),
-            ("POST", "/pair/complete", {}),
-            ("POST", "/auth/token", {}),
-            ("POST", "/devices/self/revoke", {}),
+            ("GET", "/pair/request", None),
+            ("GET", "/pair/complete", None),
+            ("GET", "/auth/token", None),
+            ("GET", "/devices/self/revoke", None),
             ("GET", "/bots", None),
             ("POST", "/bots/b/authorize", None),
             ("GET", "/bots/b/conversations/default", None),
@@ -795,7 +796,20 @@ def test_unsupported_build_serves_only_ready(tmp_path: Path, why: OtherWhy) -> N
                     "why": why.value,
                 }
             }, path
-        assert env.store.get_offer(offer.oid)["state"] == "open"  # nothing ran
+        dev = await pair(env, client)
+        assert dev.device_id is not None
+        status, refreshed = await post(client, "/auth/token", env.p5_body(dev))
+        assert status == 200, refreshed
+        dev.access = refreshed["access_token"]
+        status, body = await post(
+            client,
+            "/devices/self/revoke",
+            env.self_revoke_body(dev),
+            headers=env.headers(dev),
+        )
+        assert (status, body) == (200, {})
+        assert env.store.get_device(dev.device_id)["state"] == "REVOKED"
+        assert env.ctx.bridge is None and env.ctx.reads is None
 
     run(env, scenario)
 

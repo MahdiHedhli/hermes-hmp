@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import importlib.metadata
 import importlib.util
 import inspect
 import json
@@ -40,8 +41,12 @@ from .contract import OtherWhy
 READ_COMPAT_FILE = "read_compat_builds.json"  # GU-2c list (starts empty; populated by T064)
 WRITE_SUPPORTED_FILE = "write_supported_builds.json"  # GU-2a matrix (stays empty in F1)
 
-# The runtime packages the plugin needs, as Hermes provides them (research R7).
+# The runtime packages the plugin needs; older Hermes base installs may omit aiohttp.
 RUNTIME_DEPENDENCIES: tuple[str, ...] = ("aiohttp", "cryptography")
+RUNTIME_VERSION_BOUNDS: dict[str, tuple[tuple[int, int, int], tuple[int, int, int] | None]] = {
+    "aiohttp": ((3, 14, 3), (4, 0, 0)),
+    "cryptography": ((50, 0, 0), None),
+}
 
 # The module whose location marks the Hermes source root (research R8 step 1).
 HERMES_ROOT_MARKER_MODULE = "hermes_constants"
@@ -201,12 +206,35 @@ def locate_hermes_root() -> Path | None:
     return origin.parent
 
 
+def unmet_runtime_dependencies() -> tuple[str, ...]:
+    """Missing or out-of-range runtime packages, without importing them.
+
+    Hermes v2026.8.31 warns about plugin requirements but does not install or enforce them. An
+    unrecognized version format fails closed rather than admitting an older vulnerable release.
+    """
+    unmet: list[str] = []
+    for name in RUNTIME_DEPENDENCIES:
+        try:
+            if importlib.util.find_spec(name) is None:
+                unmet.append(name)
+                continue
+            installed = importlib.metadata.version(name)
+            match = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)(?:\.post\d+)?", installed)
+            if match is None:
+                unmet.append(name)
+                continue
+            parsed = tuple(int(part) for part in match.groups())
+            floor, ceiling = RUNTIME_VERSION_BOUNDS[name]
+            if parsed < floor or (ceiling is not None and parsed >= ceiling):
+                unmet.append(name)
+        except (ImportError, ValueError, importlib.metadata.PackageNotFoundError):
+            unmet.append(name)
+    return tuple(unmet)
+
+
 def runtime_dependencies_present() -> bool:
-    """Passive `check_fn` for `register_platform`: are the runtime packages importable?"""
-    try:
-        return all(importlib.util.find_spec(name) is not None for name in RUNTIME_DEPENDENCIES)
-    except (ImportError, ValueError):
-        return False
+    """Passive `check_fn` for `register_platform`: are runtime packages in safe ranges?"""
+    return not unmet_runtime_dependencies()
 
 
 # --------------------------------------------------------------------------------------------

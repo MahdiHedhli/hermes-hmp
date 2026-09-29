@@ -245,11 +245,12 @@ Normative keywords follow RFC 2119 and RFC 8174.
 | `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, unqualified build, missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
 | `model_unavailable` (v1.5, MD-1) | 503 | mobile default model: flag off, unqualified build, missing scoped picker endpoint, or Hermes read/write failure | — | Reopen the model screen and check the current selection before another write. |
 
-- **ERR-2a. Read-compatibility refusal** (GU-2c; additive `other {why}` values, no contract revision; controller clarification, 2026-09-25).
-  - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes build's identity is not on the read-compatible builds list or cannot be determined.
+- **ERR-2a. Read-compatibility refusal** (GU-2c; bridge-independent pairing amendment, 2026-09-29).
+  - `GET /ready`, `POST /pair/request`, `POST /pair/complete`, `POST /auth/token`, and `POST /devices/self/revoke` use only HMP-owned identity and device state. These exact method/path pairs remain available when the Hermes read bridge is unqualified. The TLS pin, peer policy, size and rate limits, signatures, operator confirmation, and token checks still apply.
+  - `503 other {why:"hermes_build_unsupported"}` on every other route when the running Hermes build's identity is not on the read-compatible builds list or cannot be determined. Unknown methods on the device-lifecycle paths also receive this refusal.
   - `503 other {why:"hermes_read_dependency_missing"}` when a listed build lacks a Hermes internal the read bridge needs.
-  - HMP makes no bridge call and hands nothing to Hermes. Definitive for submit: yes (nothing handed off).
-  - Client action: show "Unsupported Hermes build" for this instance; keep saved content visible and labelled; never retry against another instance.
+  - On either refusal HMP makes no bridge call and hands nothing to Hermes. Definitive for submit: yes (nothing handed off). Pairing itself does **not** imply Bot Chat readiness or bot authorization; the CLI skips grant and owner-control prompts on an unqualified build and records an explicit owner-control denial.
+  - Client action: allow the cryptographically confirmed device pairing to finish, then show "Unsupported Hermes build" for Bot Chat and controls; keep saved content visible and labelled; never retry against another instance. The operator must update to a qualified HMP/Hermes combination and authorize the bot separately.
 
 - **ERR-3. Per-bot gate.** Every `/bots/{p}/…` route except `POST …/authorize` runs Hermes's per-bot authorization query and allow-all canary first, and fails closed. Nothing reaches Hermes on refusal.
 
@@ -1315,7 +1316,7 @@ The bridge module uses these undocumented Hermes internals. Each is a `HERMES_AP
 
 **Plugin API used outside the bridge** (controller ruling, 2026-09-25). `adapter.py` imports exactly `gateway.platforms.base.BasePlatformAdapter`, `SendResult` and `gateway.config.Platform`, and `identity.py` imports exactly `hermes_constants.get_default_hermes_root` (the instance-key anchor, needed on every build because `/ready` must serve the `iid`). These are the documented platform-plugin API, not read internals, and they are the only Hermes imports allowed outside the bridge; they (and their transitive imports) load on every build, including unsupported ones. `Platform` is also a bridge dependency (above). `compat.py` locates the Hermes source root without importing it; only for a build already on the GU-2c list does it run a dependency probe (import and signature inspection, no calls). An unlisted build never has a Hermes internal imported by HMP.
 
-**GAP-1.** HMP MUST refuse writes unless the capability contract establishes both write guarantees (GU-2, GU-4). When a bridge dependency HMP needs for **reads** is missing, HMP MUST refuse every route except `/ready` with ERR-2a and make no bridge call (editorial alignment with ERR-2a, 2026-09-25).
+**GAP-1.** HMP MUST refuse Hermes writes unless the capability contract establishes the required guarantees (GU-2, GU-4). When a bridge dependency HMP needs for **reads** is missing, HMP MUST refuse every Hermes-dependent route with ERR-2a and make no bridge call. Only the exact HMP-owned readiness and device-lifecycle routes listed under ERR-2a remain available; their own authentication and policy checks stay in force.
 
 **GAP-2 (v1.2, amendment F2, §7a).** `api_server`'s `POST /api/sessions/{id}/chat` route and `GET
 /v1/capabilities`'s `session_chat` flag are a **product HTTP contract**, not a Python internal HMP

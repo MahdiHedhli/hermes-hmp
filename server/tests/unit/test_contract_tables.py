@@ -222,8 +222,16 @@ def test_err2a_refusals(doc: str) -> None:
         assert refusal.why is why
         assert (refusal.http, refusal.code) == (503, c.ErrorCode.OTHER)
         assert refusal.definitive is c.SubmitDefinitive.YES  # "Definitive for submit: yes"
-    assert "every route except `/ready`" in block
     assert c.READ_COMPAT_EXEMPT_PATH == "/hmp/v1/ready"
+    assert "every other route" in block
+    assert {
+        ("POST", "/hmp/v1/pair/request"),
+        ("POST", "/hmp/v1/pair/complete"),
+        ("POST", "/hmp/v1/auth/token"),
+        ("POST", "/hmp/v1/devices/self/revoke"),
+    } == c.READ_COMPAT_INDEPENDENT_ROUTES
+    for method, path in c.READ_COMPAT_INDEPENDENT_ROUTES:
+        assert f"`{method} {path.removeprefix(c.PATH_PREFIX)}`" in block
 
 
 def test_err3_per_bot_gate(doc: str) -> None:

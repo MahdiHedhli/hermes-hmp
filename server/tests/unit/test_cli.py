@@ -205,6 +205,18 @@ def test_setup_check_is_read_only_before_first_gateway_start(tmp_path: Path) -> 
     assert not kw["binding_root"].exists()
 
 
+def test_setup_check_reports_missing_runtime_before_importing_listener(
+    c: Cli, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from hmp_plugin import compat
+
+    monkeypatch.setattr(compat, "unmet_runtime_dependencies", lambda: ("aiohttp",))
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "runtime packages missing or outside" in c.out
+    assert "aiohttp" in c.out
+    assert "HMP instance:" not in c.out
+
+
 def test_setup_check_reports_pinned_listener_without_private_labels(c: Cli) -> None:
     c.write_record(profiles=[("alpha", "private bot label")])
     before_store = c.env.store_path.read_bytes()
@@ -406,17 +418,32 @@ def test_qrcode_declaration_admits_the_hermes_core_pin() -> None:
     `qrcode[pil]>=7.4.2,<9` pass; `packaging.requirements.Requirement.extras` closes that gap."""
     requirements = pytest.importorskip("packaging.requirements")
     declared = [requirements.Requirement(d) for d in _manifest_python_dependencies()]
-    assert [r.name for r in declared] == ["qrcode"]
-    assert declared[0].specifier.contains(HERMES_CORE_QRCODE_PIN)
-    assert declared[0].extras == set()  # plugin.yaml: no extras
+    assert [r.name for r in declared] == ["aiohttp", "cryptography", "qrcode"]
+    (manifest_qrcode,) = [r for r in declared if r.name == "qrcode"]
+    assert manifest_qrcode.specifier.contains(HERMES_CORE_QRCODE_PIN)
+    assert manifest_qrcode.extras == set()  # plugin.yaml: no extras
     # server/pyproject.toml (development and tests) declares the same range as the manifest.
     import tomllib
 
     pyproject = tomllib.loads((PLUGIN_DIR.parent / "pyproject.toml").read_text(encoding="utf-8"))
     dev = [requirements.Requirement(d) for d in pyproject["project"]["dependencies"]]
     (pyproject_qrcode,) = [r for r in dev if r.name == "qrcode"]
-    assert str(pyproject_qrcode.specifier) == str(declared[0].specifier)
+    assert str(pyproject_qrcode.specifier) == str(manifest_qrcode.specifier)
     assert pyproject_qrcode.extras == set()  # pyproject.toml: no extras either
+
+
+def test_runtime_declarations_admit_pantheon_pins() -> None:
+    """The exact Bot Mode baseline pins remain valid for the plugin runtime."""
+    requirements = pytest.importorskip("packaging.requirements")
+    declared = {r.name: r for r in map(requirements.Requirement, _manifest_python_dependencies())}
+    assert declared["aiohttp"].specifier.contains("3.14.3")
+    assert declared["cryptography"].specifier.contains("50.0.0")
+    assert all(not r.extras for r in declared.values())
+    import tomllib
+
+    pyproject = tomllib.loads((PLUGIN_DIR.parent / "pyproject.toml").read_text(encoding="utf-8"))
+    dev = {r.name: r for r in map(requirements.Requirement, pyproject["project"]["dependencies"])}
+    assert all(str(dev[name].specifier) == str(r.specifier) for name, r in declared.items())
 
 
 def test_real_qrcode_library_is_within_the_declared_range() -> None:
@@ -426,7 +453,10 @@ def test_real_qrcode_library_is_within_the_declared_range() -> None:
     requirements = pytest.importorskip("packaging.requirements")
     from importlib.metadata import version
 
-    (declared,) = [requirements.Requirement(d) for d in _manifest_python_dependencies()]
+    (declared,) = [
+        r for r in map(requirements.Requirement, _manifest_python_dependencies())
+        if r.name == "qrcode"
+    ]
     assert declared.specifier.contains(version("qrcode"))
 
 
@@ -535,12 +565,13 @@ def test_offer_never_exercises_png_or_pil(c: Cli, monkeypatch: pytest.MonkeyPatc
         sys.modules.update(saved)
 
 
-def test_offer_refused_on_an_unsupported_build(c: Cli) -> None:
+def test_offer_warns_on_an_unsupported_build(c: Cli) -> None:
     c.write_record()
     c.compat = CompatResult(CompatStatus.UNSUPPORTED, OtherWhy.HERMES_READ_DEPENDENCY_MISSING)
-    assert c.run("pair", "offer") == cli.EXIT_REFUSED
-    assert "hermes_read_dependency_missing" in c.err
-    assert _count(c.env, "offers") == 0 and c.qr.rendered == []
+    assert c.run("pair", "offer", "--no-wait") == cli.EXIT_OK
+    assert "hermes_read_dependency_missing" in c.out
+    assert "no bot access or owner controls will be granted" in c.out
+    assert _count(c.env, "offers") == 1 and len(c.qr.rendered) == 1
 
 
 def test_offer_refused_without_a_qr_renderer(c: Cli) -> None:

@@ -177,8 +177,8 @@ def test_connect_writes_served_profiles_into_listener_record(
 def test_connect_with_no_bridge_writes_no_profiles(
     adapter_module: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """An unsupported build has no bridge: the record's `profiles` stays `None`, exactly as it did
-    before OD-F8, so `pair offer` falls back to the placeholder next-steps text."""
+    """An unsupported build has no bridge or served-profile roster; pairing is allowed, but
+    `pair offer` must skip the bot grant step and warn that Bot Chat remains unavailable."""
     from hmp_plugin.compat import CompatResult, CompatStatus
 
     env = Env(tmp_path, compat=CompatResult(CompatStatus.UNSUPPORTED))

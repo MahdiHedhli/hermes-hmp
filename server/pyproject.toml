@@ -6,8 +6,8 @@ readme = "README.md"
 requires-python = ">=3.11,<3.15"
 license = "MIT"
 dependencies = [
-    "aiohttp",
-    "cryptography",
+    "aiohttp>=3.14.3,<4",
+    "cryptography>=50",
     # T032: `hermes hmp pair offer` renders the offer only as a terminal QR code (PR1-2, PR1-3).
     # Pure Python (reviews/dependencies.md). Keep in step with `python_dependencies` in
     # hmp_plugin/plugin.yaml, which is what Hermes PM actually installs.

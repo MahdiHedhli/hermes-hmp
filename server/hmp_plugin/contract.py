@@ -349,7 +349,7 @@ class OtherWhy(StrEnum):
 
 @dataclass(frozen=True)
 class ReadCompatRefusal:
-    """ERR-2a: a read-compatibility refusal, sent on every route except `/ready`."""
+    """ERR-2a: a read-compatibility refusal on Hermes-dependent routes."""
 
     http: int
     code: ErrorCode
@@ -366,8 +366,16 @@ READ_COMPAT_REFUSALS: Mapping[OtherWhy, ReadCompatRefusal] = {
         503, ErrorCode.OTHER, OtherWhy.HERMES_READ_DEPENDENCY_MISSING, SubmitDefinitive.YES
     ),
 }
-# ERR-2a: the only route an unsupported build still serves normally.
+# ERR-2a: readiness and HMP-owned device lifecycle do not call the Hermes read bridge.
 READ_COMPAT_EXEMPT_PATH = PATH_PREFIX + "/ready"
+READ_COMPAT_INDEPENDENT_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("POST", PATH_PREFIX + "/pair/request"),
+        ("POST", PATH_PREFIX + "/pair/complete"),
+        ("POST", PATH_PREFIX + "/auth/token"),
+        ("POST", PATH_PREFIX + "/devices/self/revoke"),
+    }
+)
 
 # ERR-4: the submit exit tags that make a `503 other` definitive. Kept for completeness; F1
 # registers no submit route (FR-053).

@@ -27,8 +27,9 @@ Middleware order (outermost first):
    into the `AppRunner`, so aiohttp's own internal logging of these faults — which otherwise
    includes the peer address and that same raw text via `exc_info` — never reaches the log either;
    it always emits exactly `event=http_parse_error outcome=bad_request`.
-5. `compat` (ERR-2a): on an unsupported build every path except `/hmp/v1/ready` answers
-   `503 other {why}` and nothing else runs, so no bridge call is possible.
+5. `compat` (ERR-2a): on an unsupported build only readiness and the exact HMP-owned
+   pairing/token/self-revoke routes run. All Hermes-dependent routes answer `503 other {why}`
+   before a bridge call is possible.
 
 Rate limits (TR-6) are applied inside the P2, P4 and P5 handlers, because the contract orders
 them against the body checks and keys two of them on body fields.
@@ -65,6 +66,7 @@ from .contract import (
     RATE_READ_PER_MIN_PER_DEVICE_ID,
     RATE_SESSIONS_LIST_PER_MIN_PER_DEVICE_ID,
     READ_COMPAT_EXEMPT_PATH,
+    READ_COMPAT_INDEPENDENT_ROUTES,
     READ_COMPAT_REFUSALS,
     SESSION_LIST_LIMIT_DEFAULT,
     SESSION_LIST_LIMIT_MAX,
@@ -317,9 +319,12 @@ async def limits_middleware(request: web.Request, handler: Handler) -> web.Strea
 
 @web.middleware
 async def compat_middleware(request: web.Request, handler: Handler) -> web.StreamResponse:
-    """ERR-2a: on an unsupported build, only `/hmp/v1/ready` is served (FR-044a)."""
+    """ERR-2a: permit only HMP-owned device lifecycle without a qualified read bridge."""
     ctx = context(request)
-    if not ctx.compat.supported and request.path != READ_COMPAT_EXEMPT_PATH:
+    independent = request.path == READ_COMPAT_EXEMPT_PATH or (
+        request.method, request.path
+    ) in READ_COMPAT_INDEPENDENT_ROUTES
+    if not ctx.compat.supported and not independent:
         why = ctx.compat.why or OtherWhy.HERMES_BUILD_UNSUPPORTED
         refusal = READ_COMPAT_REFUSALS.get(why)
         if refusal is None:  # never expected; fail closed on the build-unsupported refusal
