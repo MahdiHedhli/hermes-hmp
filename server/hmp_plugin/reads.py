@@ -58,6 +58,7 @@ from typing import Any
 from . import wire
 from .contract import (
     CONVERSATION_ID,
+    DIRECT_SEND_GATE_CLOSED_REASON,
     HISTORY_RESET_REASONS,
     PER_BOT_GATE_REFUSALS,
     SESSION_SOURCE_MAX_BYTES,
@@ -87,6 +88,7 @@ from .contract import (
     TurnObservedState,
     WireMessage,
     WriteGate,
+    WriteGateState,
 )
 from .logging_policy import log_bridge_exception
 
@@ -277,6 +279,7 @@ class Reads:
         iid: str,
         guarantees: Callable[[], Guarantees],
         write_gate: Callable[[], WriteGate],
+        send_gate: Callable[[str], WriteGate] | None = None,
         clock: Callable[[], int] = lambda: int(time.time()),
         epoch: str | None = None,
         on_served_profiles: Callable[[Sequence[str]], None] | None = None,
@@ -286,6 +289,7 @@ class Reads:
         self._iid = iid
         self._guarantees = guarantees
         self._write_gate = write_gate
+        self._send_gate = send_gate
         self._clock = clock
         # F1 serves no live tail (FR-053). The ring is empty, so the lower bound is `seq` 0 in
         # this process's epoch. It is still read first (RO-4), so the order holds when a tail
@@ -311,22 +315,48 @@ class Reads:
             with contextlib.suppress(Exception):  # the hook must never break a roster read
                 self._on_served_profiles(served)
         bots = []
+        authorized_gates: list[WriteGate] = []
         for profile in served:
             try:
                 authz = self._bridge.authz_state(user_id, profile)
             except Exception as exc:  # the bridge fails closed itself; this is belt and braces
                 log_bridge_exception(exc)
                 authz = AuthzState.UNVERIFIABLE
+            send_gate = None
+            if authz is AuthzState.AUTHORIZED and self._send_gate is not None:
+                try:
+                    send_gate = self._send_gate(profile)
+                except Exception as exc:
+                    log_bridge_exception(exc)
+                    send_gate = WriteGate(
+                        WriteGateState.CLOSED, DIRECT_SEND_GATE_CLOSED_REASON
+                    )
+                authorized_gates.append(send_gate)
             bots.append(
                 RosterBot(
-                    profile=profile, display_name=_fallback_display_name(profile), authz=authz
+                    profile=profile,
+                    display_name=_fallback_display_name(profile),
+                    authz=authz,
+                    send_gate=send_gate,
                 )
             )
+        roster_gate = self._write_gate()
+        if self._send_gate is not None:
+            # An older client only sees the instance-wide field. Keep it conservative when
+            # authorized bots have mixed send availability.
+            if not authorized_gates or any(
+                g.state is WriteGateState.CLOSED for g in authorized_gates
+            ):
+                roster_gate = WriteGate(WriteGateState.CLOSED, DIRECT_SEND_GATE_CLOSED_REASON)
+            elif any(g.state is WriteGateState.OPEN_GUARDED for g in authorized_gates):
+                roster_gate = WriteGate(WriteGateState.OPEN_GUARDED, None)
+            else:
+                roster_gate = WriteGate(WriteGateState.OPEN, None)
         return RosterResponse(
             instance=self._iid,
             served_at=int(self._clock()),
             guarantees=self._guarantees(),
-            write_gate=self._write_gate(),
+            write_gate=roster_gate,
             bots=tuple(bots),
         )
 

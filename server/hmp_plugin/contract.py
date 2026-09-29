@@ -506,7 +506,7 @@ class Guarantees:
 @dataclass(frozen=True)
 class WriteGate:
     state: WriteGateState
-    reason: str | None  # None or WRITE_GATE_CLOSED_REASON
+    reason: str | None  # None, guarantee floor, or Bot Chat route closed
 
 
 @dataclass(frozen=True)
@@ -620,6 +620,8 @@ class RosterBot:
     profile: str
     display_name: str
     authz: AuthzState
+    # Additive RO-1 field. Absent for a bot this device cannot open, and on older HMP builds.
+    send_gate: WriteGate | None = field(default=None, metadata={"omit_if_none": True})
 
 
 @dataclass(frozen=True)

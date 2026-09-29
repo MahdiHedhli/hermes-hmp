@@ -29,7 +29,9 @@ from hmp_plugin.contract import (
     WriteGate,
     WriteGateState,
 )
+from hmp_plugin.gate import direct_send_gate
 from hmp_plugin.reads import Reads, _fallback_display_name, _is_bot_view_session
+from hmp_plugin.request_ctx import _plain
 from hmp_plugin.store import Store
 
 from . import hmp_kit
@@ -170,6 +172,84 @@ def test_roster(h: Harness) -> None:
     assert [b.display_name for b in roster.bots] == ["Alpha", "Beta", "Lonely"]
     assert h.chats_count() == 0  # reading the roster mints nothing
     assert "conversation_ref" not in h.log  # no bot content is read for the roster
+
+
+def test_roster_reports_only_authorized_bot_send_gates(h: Harness) -> None:
+    h.world.runner.served = ["alpha", "beta", "lonely"]
+    available = True
+    seen: list[str] = []
+
+    def send_gate(profile: str) -> WriteGate:
+        seen.append(profile)
+        return WriteGate(
+            WriteGateState.OPEN_GUARDED if available else WriteGateState.CLOSED,
+            None if available else "write_gate_closed",
+        )
+
+    reads = Reads(
+        h.recorder,  # type: ignore[arg-type]
+        h.store,
+        iid="i" * 52,
+        guarantees=Guarantees,
+        write_gate=lambda: WriteGate(WriteGateState.OPEN_GUARDED, None),
+        send_gate=send_gate,
+        clock=lambda: h.now,
+    )
+    first = reads.roster(USER)
+    assert seen == ["alpha"]  # no key availability disclosure for unauthorized bots
+    assert first.bots[0].send_gate == WriteGate(WriteGateState.OPEN_GUARDED, None)
+    assert first.bots[1].send_gate is None
+    assert first.bots[2].send_gate is None
+    wire_bots = _plain(first)["bots"]
+    assert "send_gate" in wire_bots[0]
+    assert "send_gate" not in wire_bots[1]
+    assert "send_gate" not in wire_bots[2]
+    assert first.write_gate.state is WriteGateState.OPEN_GUARDED
+
+    available = False
+    second = reads.roster(USER)
+    assert seen == ["alpha", "alpha"]
+    assert second.bots[0].send_gate == WriteGate(WriteGateState.CLOSED, "write_gate_closed")
+    assert second.write_gate == WriteGate(WriteGateState.CLOSED, "write_gate_closed")
+
+
+def test_roster_uses_each_profile_key_and_recovers_after_a_key_is_added(h: Harness) -> None:
+    h.world.runner.served = ["alpha", "beta"]
+    h.world.approve(USER, "beta")
+    h.world.api.api_server_keys["alpha"] = "a" * 20
+    base = WriteGate(WriteGateState.CLOSED, "guarantees_unavailable")
+
+    def send_gate(profile: str) -> WriteGate:
+        return direct_send_gate(
+            base_write_gate=base,
+            flag_enabled=True,
+            endpoint=h.bridge.direct_send_endpoint(profile),
+        )
+
+    reads = Reads(
+        h.recorder,  # type: ignore[arg-type]
+        h.store,
+        iid="i" * 52,
+        guarantees=Guarantees,
+        write_gate=lambda: WriteGate(WriteGateState.OPEN_GUARDED, None),
+        send_gate=send_gate,
+        clock=lambda: h.now,
+    )
+    first = reads.roster(USER)
+    assert [b.send_gate.state for b in first.bots if b.send_gate] == [
+        WriteGateState.OPEN_GUARDED,
+        WriteGateState.CLOSED,
+    ]
+    assert first.write_gate.state is WriteGateState.CLOSED
+
+    h.world.api.api_server_keys["beta"] = "b" * 20
+    second = reads.roster(USER)
+    assert [b.send_gate.state for b in second.bots if b.send_gate] == [
+        WriteGateState.OPEN_GUARDED,
+        WriteGateState.OPEN_GUARDED,
+    ]
+    assert second.write_gate.state is WriteGateState.OPEN_GUARDED
+    assert h.world.runner.scope is None  # A→B→A resolution leaves no profile scope behind
 
 
 def test_roster_default_profile_falls_back_to_hermes(h: Harness) -> None:

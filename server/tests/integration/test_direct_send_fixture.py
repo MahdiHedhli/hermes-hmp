@@ -435,12 +435,8 @@ def test_flag_off_is_503(gateway: DirectSendFixture) -> None:
     must re-open it just as fast, so the rest of this suite's fixture (which relies on the flag
     being on) is left exactly as it was.
 
-    DS-2(b): on a build whose base gate is genuinely `"open"` (this round's own "additional
-    finding" against `experimental`), the flag cannot close it at all -- that is correct, not a
-    bug (`gate.direct_send_gate`'s own "OPEN wins unchanged"), so this test expects `200` there
-    instead of `503`."""
+    A full-guarantee build still requires this owner switch; no build may bypass it."""
     client = gateway.client
-    genuinely_open = gateway.base_gate_state() == "open"
     gateway.set_direct_send_flag(False)
     try:
         ref = bot_chat_ref(client, DEFAULT_PROFILE)
@@ -449,11 +445,8 @@ def test_flag_off_is_503(gateway: DirectSendFixture) -> None:
             client, DEFAULT_PROFILE, cmid=str(uuid.uuid4()), expected_head=head,
             text="closed while off",
         )
-        if genuinely_open:
-            assert status == 200, body
-        else:
-            assert status == 503, body
-            assert body["error"]["code"] == "write_gate_closed"
+        assert status == 503, body
+        assert body["error"]["code"] == "write_gate_closed"
     finally:
         gateway.set_direct_send_flag(True)
 
@@ -469,19 +462,16 @@ def test_non_loopback_bind_configured_closes_the_gate(gateway: DirectSendFixture
     """Round 2 BLOCKER #3: a configured non-loopback (or unverifiable) bind must fail closed, on
     a REAL config read against a live gateway -- not only the unit-level fake.
 
-    DS-2(b): on a build whose base gate is genuinely `"open"`, an unusable loopback endpoint does
-    not close the GATE (Hermes itself still reports full guarantees) -- it makes the one
-    delivery mechanism unavailable, `api_server_unavailable`, not `write_gate_closed`."""
+    The route closes on either a full- or reduced-guarantee build when its only
+    implemented delivery endpoint is not loopback-bound."""
     client = gateway.client
-    genuinely_open = gateway.base_gate_state() == "open"
     gateway.set_api_server_host("0.0.0.0")  # noqa: S104 -- deliberately refused, never connected
     try:
         status, body = send(
             client, DEFAULT_PROFILE, cmid=str(uuid.uuid4()), expected_head=0, text="never sent"
         )
         assert status == 503, body
-        expected_code = "api_server_unavailable" if genuinely_open else "write_gate_closed"
-        assert body["error"]["code"] == expected_code
+        assert body["error"]["code"] == "write_gate_closed"
     finally:
         gateway.set_api_server_host("127.0.0.1")  # restore for any later test in this session
 

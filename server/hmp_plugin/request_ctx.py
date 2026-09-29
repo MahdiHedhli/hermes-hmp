@@ -268,15 +268,54 @@ class ServerContext:
         return gate.write_gate(self.guarantees())
 
     def reported_write_gate(self) -> WriteGate:
-        """The gate clients see on the roster and `/ready` (it drives the composer).
+        """An instance-level diagnostic for `/ready` and legacy roster fallback.
 
-        With the owner-only `direct_send` flag on and no full-guarantee gate, sends show as
-        `open_guarded` (GU-4a, OD-F14). The send route still re-checks the flag, the endpoint
-        and every guard per request."""
+        It does not know whether each named profile has its own key. `Reads.roster` folds
+        per-profile send gates into a conservative top-level value, and newer clients use each
+        authorized bot's own `send_gate`. The route rechecks everything per request."""
         base = self.write_gate()
-        if base.state is not WriteGateState.OPEN and self.direct_send_enabled():
+        if not self.direct_send_enabled():
+            return (
+                gate.direct_send_gate(base_write_gate=base, flag_enabled=False, endpoint=None)
+                if base.state is WriteGateState.OPEN
+                else base
+            )
+        if base.state is not WriteGateState.OPEN:
             return WriteGate(state=WriteGateState.OPEN_GUARDED, reason=None)
         return base
+
+    def reported_send_gate(self, profile: str) -> WriteGate:
+        """Bot Chat send availability for one profile, using the route's actual prerequisites.
+
+        Never send the endpoint or key over the wire. A failed qualification or secret lookup
+        reports a closed gate and does not turn a global owner flag into per-profile authority.
+        The send route rechecks all prerequisites at submission time.
+        """
+        base = self.write_gate()
+        if not self.direct_send_enabled():
+            return gate.direct_send_gate(base_write_gate=base, flag_enabled=False, endpoint=None)
+        deps = self.direct_send_deps
+        bridge = self.bridge
+        if deps is None or bridge is None:
+            return gate.direct_send_gate(base_write_gate=base, flag_enabled=True, endpoint=None)
+        qualified = getattr(deps, "qualified", None)
+        if qualified is not None:
+            try:
+                if not bool(qualified()):
+                    return gate.direct_send_gate(
+                        base_write_gate=base, flag_enabled=True, endpoint=None
+                    )
+            except Exception as exc:
+                log_bridge_exception(exc)
+                return gate.direct_send_gate(base_write_gate=base, flag_enabled=True, endpoint=None)
+        try:
+            endpoint = bridge.direct_send_endpoint(profile)
+        except Exception as exc:
+            log_bridge_exception(exc)
+            endpoint = None
+        return gate.direct_send_gate(
+            base_write_gate=base, flag_enabled=True, endpoint=endpoint
+        )
 
 
 CTX_KEY: web.AppKey[ServerContext] = web.AppKey("hmp_ctx", ServerContext)
