@@ -21,11 +21,29 @@ from aiohttp import ClientSession, Fingerprint
 from gateway.config import Platform
 from gateway.platform_registry import PlatformEntry, platform_registry
 from gateway.session import SessionSource, SessionStore, build_session_key
+from hermes_cli.profiles import (
+    get_active_profile_name,
+    get_profile_dir,
+    profile_exists,
+    profile_matches_home,
+    profiles_to_serve,
+    validate_profile_name,
+)
+from hermes_constants import (
+    get_hermes_home,
+    reset_hermes_home_override,
+    set_hermes_home_override,
+)
 from hermes_state import SessionDB
 
 import hmp_plugin
 from hmp_plugin.adapter import HmpAdapter
 from hmp_plugin.compat import CompatStatus
+from hmp_plugin.pantheon_profiles import (
+    ProfileResolutionError,
+    profile_home,
+    served_profile_homes,
+)
 
 
 def _scratch_env(name: str) -> Path:
@@ -52,6 +70,60 @@ async def main() -> None:
     state = _scratch_env("XDG_STATE_HOME")
     (home / "plugin-data" / "hmp" / "instance").mkdir(parents=True, exist_ok=True)
     state.mkdir(parents=True, exist_ok=True)
+
+    # The real old profile helpers are the source of the gateway's served set.
+    # The HMP resolver must refuse a ghost name even though this Hermes tag's
+    # own _resolve_profile_home_for_source would return the root home for it.
+    (home / "profiles" / "serenity").mkdir(parents=True)
+    runner = SimpleNamespace(
+        config=SimpleNamespace(
+            multiplex_profiles=True, multiplex_profile_allowlist=["serenity"]
+        ),
+        pairing_stores={"default": object(), "serenity": object()},
+    )
+    profile_api = dict(
+        profiles_to_serve=profiles_to_serve,
+        get_active_profile_name=get_active_profile_name,
+        get_hermes_home=get_hermes_home,
+        get_profile_dir=get_profile_dir,
+        profile_exists=profile_exists,
+        profile_matches_home=profile_matches_home,
+        validate_profile_name=validate_profile_name,
+    )
+    homes = served_profile_homes(runner, **profile_api)
+    assert set(homes) == {"default", "serenity"}
+    assert profile_home("serenity", homes) == get_profile_dir("serenity")
+    try:
+        profile_home("ghost", homes)
+    except ProfileResolutionError:
+        pass
+    else:
+        raise AssertionError("unknown profile resolved to another profile's home")
+    runner.pairing_stores.pop("serenity")
+    try:
+        served_profile_homes(runner, **profile_api)
+    except ProfileResolutionError:
+        pass
+    else:
+        raise AssertionError("profile was offered before authorization state was ready")
+    runner.pairing_stores["serenity"] = object()
+    runner.config.multiplex_profile_allowlist = []
+    assert set(served_profile_homes(runner, **profile_api)) == {"default"}
+    runner.config.multiplex_profiles = False
+    assert set(served_profile_homes(runner, **profile_api)) == {"default"}
+    runner.config.multiplex_profiles = True
+    # A named primary is served by the live gateway even if the secondary
+    # allowlist omits it. The old helper returns only default in that case.
+    token = set_hermes_home_override(get_profile_dir("serenity"))
+    try:
+        assert get_active_profile_name() == "serenity"
+        assert set(served_profile_homes(runner, **profile_api)) == {"default", "serenity"}
+        runner.config.multiplex_profiles = False
+        assert set(served_profile_homes(runner, **profile_api)) == {"serenity"}
+    finally:
+        reset_hermes_home_override(token)
+    runner.config.multiplex_profiles = True
+    runner.config.multiplex_profile_allowlist = ["serenity"]
 
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
