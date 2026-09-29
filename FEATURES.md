@@ -13,7 +13,7 @@ HMP is the Hermes gateway plugin used by the [HermesBot Mobile](https://hermes-b
 | Preview, off by default | Scheduled jobs | Owner-gated list, create-paused, edit, pause, resume, and delete on an exact qualified Hermes build. |
 | Preview, off by default | Bot default model | Owner-gated catalog and validated change within the selected bot's profile. New sessions use the choice. |
 | Security blocked | Approvals and choices | Separate draft work needs a passing real-route qualification; Bot Chat lacks a Hermes session-stream prompt event. |
-| Draft read support | Phone Bot Chat search | A distinct start-of-history page for authorized sessions lets the phone match locally without passing query text to Hermes. The app handles compaction, incomplete scans, and bounded paging. |
+| Owner preview | Phone Bot Chat search | A paired phone returned live results through the start-of-history route. Query text stays on the phone; authorized session pages are bounded, and incomplete scans are labelled. The route remains in draft PR #15. |
 | Upstream gap | Hermes-wide search | Hermes logs raw query text on a slow search path; HMP cannot safely expose that full-corpus search yet. |
 | Upstream gap | Create and delete bots | The profile-scoped API server lacks a complete profile lifecycle and canonical Bot Chat create-or-get contract. |
 | Partly available | Session management | Read-only browsing exists. Metadata writes and non-destructive branching need a stable canonical remote contract. |
