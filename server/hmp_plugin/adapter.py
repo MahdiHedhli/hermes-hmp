@@ -130,12 +130,21 @@ def open_components(adapter: Any) -> server.ServerContext:
         block = live_extra.get("direct_send") if isinstance(live_extra, Mapping) else None
         return isinstance(block, Mapping) and block.get("enabled") is True
 
+    def _read_owner_device_ids() -> frozenset[str]:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        ids = live_extra.get("owner_device_ids") if isinstance(live_extra, Mapping) else None
+        if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
+            return frozenset()
+        return frozenset(ids)
+
     ctx = server.ServerContext(
         identity=ident,
         store=store,
         compat=result,
         session_browsing_enabled=session_browsing is not False,
         direct_send_flag=_read_direct_send_enabled,
+        owner_device_ids=_read_owner_device_ids,
     )
     if result.supported:
         bridge_cls, directory_cls = _bridge_classes()
@@ -146,7 +155,7 @@ def open_components(adapter: Any) -> server.ServerContext:
         # here even though `self._record`/`self._nonce` are not set until `connect()` finishes
         # further down -- neither `Reads.roster` nor `Authorize.authorize` can run before then.
         on_served_profiles = getattr(adapter, "_observe_served_profiles", None)
-        prompt_store = prompts.PromptStore()
+        prompt_store = prompts.PromptStore(clock=ctx.now)
         ctx.prompt_store = prompt_store
         ctx.reads = Reads(
             ctx.bridge,
@@ -164,11 +173,11 @@ def open_components(adapter: Any) -> server.ServerContext:
         # Amendment F2: constructed on every supported build, regardless of `direct_send_enabled`
         # -- the flag is re-checked per request (DS-2(b)), not at listener-start time, so a
         # host-side flag flip takes effect on the next request, not the next restart.
-        def _approval_timeout() -> int:
+        def _approval_timeout(profile: str) -> int:
             bridge = ctx.bridge
             if bridge is None:
                 return 300
-            return bridge.approval_timeout_s()  # type: ignore[no-any-return]
+            return bridge.approval_timeout_s(profile)  # type: ignore[no-any-return]
 
         ctx.direct_send_deps = direct_send.DirectSendDeps(
             bridge=ctx.bridge,
@@ -407,17 +416,18 @@ class HmpAdapter(BasePlatformAdapter):
         reply_to: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> SendResult:
-        """Phone-chat replies land in the snapshot observation. The inert-trigger reply does not.
+        """Phone-chat replies create bounded observations. The inert-trigger reply does not.
         Nothing here is logged (PR6-2, SEC-4)."""
         hooks = self._hooks()
         if hooks is None:
             return SendResult(success=True)
+        await hooks.reconcile_chat(chat_id)
         hooks.on_send(chat_id, content, reply_to, metadata)
         return SendResult(success=True)
 
     async def _send_exec_approval_prompt(self, prompt: Any) -> SendResult:
-        """AP-6 / §3.3. Exactly one unmatched queue entry becomes a card. Any other count fails
-        closed so a later plain-text fallback cannot become an answerable card."""
+        """AP-6 / §3.3. An exact match becomes a card; ambiguous entries get deny-only recovery.
+        Unbound text cannot become an approval answer."""
         hooks = self._hooks()
         if hooks is None:
             return SendResult(success=False)

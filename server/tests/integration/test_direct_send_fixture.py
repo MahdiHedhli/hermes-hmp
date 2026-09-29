@@ -204,7 +204,8 @@ class DirectSendFixture:
         self._lease_holders.clear()
 
     def _rewrite_config(
-        self, *, direct_send_enabled: bool = True, api_server_host: str = "127.0.0.1"
+        self, *, direct_send_enabled: bool = True, api_server_host: str = "127.0.0.1",
+        owner_device_ids: tuple[str, ...] | None = None
     ) -> None:
         dsf.write_direct_send_config(
             self.paths, (DEFAULT_PROFILE, NO_BOT_CHAT_PROFILE, "f1-pending", "f1-roles"),
@@ -212,6 +213,9 @@ class DirectSendFixture:
             model_base_url=self.fake_model.base_url,
             named_profile_keys={NO_BOT_CHAT_PROFILE: self.no_bot_chat_key},
             direct_send_enabled=direct_send_enabled, api_server_host=api_server_host,
+            owner_device_ids=(
+                (self.reference_device_id,) if owner_device_ids is None else owner_device_ids
+            ),
         )
 
     def set_api_server_host(self, host: str) -> None:
@@ -250,6 +254,12 @@ class DirectSendFixture:
 
     def restart_gateway(self) -> None:
         dsf.stop_gateway(self.gateway_proc)
+        gateway_log = self.paths.home / "logs" / "gateway.log"
+        prior_ready_count = (
+            gateway_log.read_text(encoding="utf-8", errors="replace").count("Press Ctrl+C to stop")
+            if gateway_log.exists()
+            else 0
+        )
         log_path = self.paths.out_dir / f"gateway-restart-{int(time.time())}.log"
         self.gateway_proc = dsf.start_gateway(self.build, self.paths, log_path=log_path)
         if not dsf.wait_for_port(self.hmp_port, timeout=45.0):
@@ -268,6 +278,17 @@ class DirectSendFixture:
         )
         if not found:
             raise RuntimeError(f"{DEFAULT_PROFILE!r} never reappeared in the roster after restart")
+        # Experimental Hermes rejects reject-policy messages during startup restore even after
+        # HMP's listener and profile roster are live. This marker follows the restore gate.
+        ready = wait_for(
+            lambda: gateway_log.read_text(
+                encoding="utf-8", errors="replace"
+            ).count("Press Ctrl+C to stop") > prior_ready_count,
+            timeout=30.0,
+        )
+        if not ready:
+            tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+            raise RuntimeError(f"Gateway never finished startup restore.\n{tail}")
 
 
 @pytest.fixture(params=BUILDS)
@@ -278,14 +299,14 @@ def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSe
     ).is_dir():
         pytest.skip(f"build {label!r} not extracted on this host")
     build = fc.resolve_build(BUILDS_DIR_ENV, label)
+    hmp_port = fc.find_free_port()
+    api_server_port = fc.find_free_port()
     out = tmp_path / "fixture"
     info = dsf.build_offline(label, out, builds_dir=BUILDS_DIR_ENV, instances="A")
     paths = fc.instance_paths(out, "A")
     profile_names = tuple(p["name"] for p in info["instances"][0]["profiles"])
     assert profile_names[0] == DEFAULT_PROFILE, profile_names
 
-    hmp_port = fc.find_free_port()
-    api_server_port = fc.find_free_port()
     api_key = dsf.synthetic_api_key()
     no_bot_chat_key = dsf.synthetic_api_key()
 
@@ -320,6 +341,9 @@ def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSe
                 fake_model_module=fake_model_module, client=client,
                 no_bot_chat_key=no_bot_chat_key,
             )
+            direct_send_fixture.reference_device_id = ref["device"]["device_id"]
+            direct_send_fixture._rewrite_config()
+            direct_send_fixture.restart_gateway()
             try:
                 yield direct_send_fixture
             finally:

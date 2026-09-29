@@ -216,11 +216,16 @@ REACHED_DATA_ATTRIBUTES: frozenset[str] = frozenset(
         "config",
         "extra",
         "_gateway_accepted",
+        "defer_policy",
+        "admission_ticket",
+        "reported",
+        "value",
     }
 )
 
 # HMP-originated rows carry `platform_message_id = "hmp:<chat_id>:<cmid>"` (§2, `chat_id` row).
 _CMID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+PHONE_ADMISSION_WAIT_S = 5.0
 
 
 class BridgeError(RuntimeError):
@@ -1186,18 +1191,20 @@ class HermesReadBridge:
 
         return bool(mark_awaiting_text(clarify_id))
 
-    def approval_timeout_s(self) -> int:
+    def approval_timeout_s(self, profile: str) -> int:
         from tools.approval_context import _get_approval_timeout
 
-        value = _get_approval_timeout()
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = _get_approval_timeout()
         if isinstance(value, bool) or not isinstance(value, int):
             return 300
         return value
 
-    def clarify_timeout_s(self) -> int:
+    def clarify_timeout_s(self, profile: str) -> int:
         from tools.clarify_gateway import get_clarify_timeout
 
-        value = get_clarify_timeout()
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = get_clarify_timeout()
         if isinstance(value, bool) or not isinstance(value, int):
             return 3600
         return value
@@ -1209,15 +1216,47 @@ class HermesReadBridge:
 
     async def deliver_phone_message(
         self, *, user_id: str, profile: str, text: str, message_id: str
-    ) -> bool:
+    ) -> bool | None:
         """AP-6. Builds the event off the loop (the Hermes import) and hands it to
-        `handle_message` on the loop. `allow_gateway_control` is true. Returns whether Hermes
-        accepted the event."""
+        `handle_message` on the loop. `allow_gateway_control` is false. On builds with
+        admission tickets, task scheduling is not a successful submission: wait for the
+        definitive admission outcome. None means the result is ambiguous."""
         event = await asyncio.to_thread(
             self._phone_event, user_id=user_id, profile=profile, text=text, message_id=message_id
         )
         await self._adapter.handle_message(event)
-        return bool(getattr(event, "_gateway_accepted", False))
+        if not getattr(event, "_gateway_accepted", False):
+            return False
+        if getattr(event, "defer_policy", None) != "reject":
+            # Older stock builds have no reject-policy admission ticket.
+            return True
+        ticket = getattr(event, "admission_ticket", None)
+        if ticket is None:
+            return None
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + PHONE_ADMISSION_WAIT_S
+        while True:
+            reported = getattr(ticket, "reported", None)
+            if reported is not None:
+                outcome = getattr(reported, "value", None)
+                if outcome == "admitted":
+                    return True
+                if outcome in {
+                    "refused_busy",
+                    "refused_draining",
+                    "refused_precondition_head",
+                    "refused_precondition_expired",
+                    "refused_lease_timeout",
+                    "refused_unauthorized",
+                }:
+                    return False
+                # REFUSED_OTHER includes persist_failed and unreported_exit. Its detail
+                # is not on the ticket, so this cannot safely be called definitive.
+                return None
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return None
+            await asyncio.sleep(min(0.025, remaining))
 
     def _phone_event(self, *, user_id: str, profile: str, text: str, message_id: str) -> Any:
         from gateway.platforms.event import MessageEvent, MessageType
@@ -1242,7 +1281,7 @@ class HermesReadBridge:
             kwargs["internal"] = False
         if "allow_gateway_control" not in names:
             raise BridgeError("MessageEvent lacks allow_gateway_control")
-        kwargs["allow_gateway_control"] = True
+        kwargs["allow_gateway_control"] = False
         if "defer_policy" in names:
             kwargs["defer_policy"] = "reject"
         return MessageEvent(**kwargs)

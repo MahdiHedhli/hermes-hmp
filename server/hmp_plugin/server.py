@@ -46,7 +46,7 @@ import json
 import logging
 import ssl
 from collections.abc import Awaitable, Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -63,6 +63,8 @@ from .contract import (
     MAX_HEADER_BYTES,
     PATH_PREFIX,
     RATE_AUTHORIZE_PER_MIN_PER_DEVICE_ID,
+    RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE,
+    RATE_PROMPT_READ_PER_MIN_PER_DEVICE,
     RATE_READ_PER_MIN_PER_DEVICE_ID,
     RATE_SESSIONS_LIST_PER_MIN_PER_DEVICE_ID,
     READ_COMPAT_EXEMPT_PATH,
@@ -431,6 +433,10 @@ async def handle_snapshot(request: web.Request) -> web.Response:
     ctx.limiter.check("bots_snapshot", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now())
     reads = _require(ctx.reads)
     result = await asyncio.to_thread(reads.snapshot, who.user_id, profile, limit)
+    if (not ctx.is_owner_device(who.device_id) or not ctx.direct_send_enabled()) and hasattr(
+        result, "open_requests"
+    ):
+        result = replace(result, open_requests=())
     return _result_response(result)
 
 
@@ -698,9 +704,9 @@ async def _require_approvals_gate(ctx: ServerContext, profile: str) -> Any:
     """The DS-2(b) gate for §7b routes. Raises `write_gate_closed` without a loopback or a
     Hermes resolve when the flag, the fingerprint, or the endpoint says closed."""
     flag = ctx.direct_send_enabled()
-    base = ctx.write_gate()
-    if not flag and base.state is not WriteGateState.OPEN:
+    if not flag:
         raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
+    base = ctx.write_gate()
     deps = ctx.direct_send_deps
     bridge = ctx.bridge
     if deps is None or bridge is None:
@@ -730,11 +736,23 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
     who = bearer(request)
     ctx = context(request)
     profile = request.match_info["p"]
-    require_bot_authorized(_require(ctx.bridge), who.user_id, profile)
+    if not ctx.is_owner_device(who.device_id):
+        raise HmpError(ErrorCode.NOT_FOUND)
+    ctx.limiter.check(
+        "prompt_reads", who.device_id, RATE_PROMPT_READ_PER_MIN_PER_DEVICE, ctx.now()
+    )
+    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
     await _require_approvals_gate(ctx, profile)
     store = ctx.prompt_store
     if store is None:
         return json_response({"prompts": [], "desktop_held": False})
+    rows = store.list_visible(ctx.iid, who.user_id, profile, now=ctx.now())
+    sessions = {row.session_key for row in rows if row.kind == "approval" and row.session_key}
+    for session_key in sessions:
+        pending = await asyncio.to_thread(ctx.bridge.list_gateway_approvals, session_key)
+        store.reconcile_approvals(
+            session_key, {item["request_id"] for item in pending if "request_id" in item}, ctx.now()
+        )
     return _prompt_result(
         prompts.list_prompts(
             store, iid=ctx.iid, user_id=who.user_id, profile=profile, now=ctx.now()
@@ -748,7 +766,12 @@ async def handle_prompt_answer(request: web.Request) -> web.Response:
     ctx = context(request)
     profile = request.match_info["p"]
     request_id = request.match_info["request_id"]
-    require_bot_authorized(_require(ctx.bridge), who.user_id, profile)
+    if not ctx.is_owner_device(who.device_id):
+        raise HmpError(ErrorCode.NOT_FOUND)
+    ctx.limiter.check(
+        "prompt_actions", who.device_id, RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE, ctx.now()
+    )
+    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
     endpoint = await _require_approvals_gate(ctx, profile)
     body = await read_json_body(request)
     store = ctx.prompt_store
@@ -788,7 +811,12 @@ async def handle_phone_send(request: web.Request) -> web.Response:
     who = bearer(request)
     ctx = context(request)
     profile = request.match_info["p"]
-    require_bot_authorized(_require(ctx.bridge), who.user_id, profile)
+    if not ctx.is_owner_device(who.device_id):
+        raise HmpError(ErrorCode.NOT_FOUND)
+    ctx.limiter.check(
+        "prompt_actions", who.device_id, RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE, ctx.now()
+    )
+    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
     body = await read_json_body(request)
     cmid, text = _parse_phone_body(body)
     endpoint = await _require_approvals_gate(ctx, profile)
@@ -805,7 +833,7 @@ async def handle_phone_send(request: web.Request) -> web.Response:
     def pending(key: str) -> object:
         return bridge.list_gateway_approvals(key)
 
-    async def deliver() -> bool:
+    async def deliver() -> bool | None:
         return await bridge.deliver_phone_message(
             user_id=who.user_id,
             profile=profile,
@@ -1081,6 +1109,8 @@ class HmpServer:
         # PR7-6 polls on-disk custody by design; there is no event to wait on.
         while True:
             await asyncio.sleep(self._interval)
+            if self.ctx.prompt_store is not None:
+                await asyncio.to_thread(self.ctx.prompt_store.purge, self.ctx.now())
             try:
                 current = self.ctx.identity.still_current()
             except Exception:

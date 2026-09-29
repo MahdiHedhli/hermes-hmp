@@ -429,6 +429,29 @@ READ_DEPENDENCIES: tuple[DependencySpec, ...] = (
 # `hermes_state_compression.py` -- already in `bridge_files` (required by `READ_DEPENDENCIES`'s own
 # `SessionDB.get_compression_chain` entry above). No new `bridge_files` entry needed for it either.
 DIRECT_SEND_DEPENDENCIES: tuple[DependencySpec, ...] = (
+    # F3 security behavior reached indirectly through Phone delivery and loopback HTTP.
+    # Keep the defining modules AND delegated implementations in the fingerprint; import
+    # signatures alone cannot prove these contracts. tools/compat/approval_probes.py exercises
+    # the control gate and exact-ID resolution during qualification.
+    DependencySpec("gateway.platforms.event", "MessageEvent.is_command", gap="F3 control"),
+    DependencySpec(
+        "gateway.platforms.base", "BasePlatformAdapter.handle_message", gap="F3 control"
+    ),
+    DependencySpec("gateway.run_busy", "GatewayBusySessionMixin", gap="F3 busy control"),
+    DependencySpec("gateway.run_inbound", "GatewayInboundMixin", gap="F3 clarify control"),
+    DependencySpec("gateway.run_turn_runner", "TurnRunner", gap="F3 prompt delivery"),
+    DependencySpec("tools.approval_gateway_wait", "_poll_event", gap="F3 timeout"),
+    DependencySpec("tools.approval_human_wait", "human_wait_window", gap="F3 wait lifecycle"),
+    DependencySpec("tools.interrupt", "is_interrupted", gap="F3 interrupted wait"),
+    DependencySpec("gateway.platforms.api_server", "APIServerAdapter", gap="F3 stream/auth"),
+    DependencySpec("gateway.platforms.api_server_runs", "_handle_run_approval", gap="F3 exact ID"),
+    DependencySpec("gateway.platforms.api_server_room_grants", gap="F3 run authorization"),
+    DependencySpec("gateway.platforms.api_server_run_idempotency", gap="F3 run ownership"),
+    DependencySpec("hermes_cli.profiles", gap="F3 profile scoping"),
+    DependencySpec("hermes_constants", "get_hermes_home", gap="F3 profile home"),
+    DependencySpec("gateway.pairing", "PairingStore.is_approved", gap="F3 authorization"),
+    DependencySpec("agent.secret_scope", gap="F3 scoped API key"),
+    DependencySpec("hermes_cli.auth", "has_usable_secret", gap="F3 scoped API key"),
     DependencySpec(
         "hermes_cli.active_sessions", "active_session_registry_snapshot", gap="E-GAP-6/7"
     ),

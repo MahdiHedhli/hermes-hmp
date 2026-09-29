@@ -190,6 +190,13 @@ class ServerContext:
     direct_send_deps: Any = None
     # v1.3 prompt rows (process memory). None until a supported listener builds one.
     prompt_store: Any = None
+    owner_device_ids: Callable[[], frozenset[str]] = field(default=lambda: frozenset())
+
+    def is_owner_device(self, device_id: str) -> bool:
+        try:
+            return device_id in self.owner_device_ids()
+        except Exception:
+            return False
 
     def direct_send_enabled(self) -> bool:
         try:

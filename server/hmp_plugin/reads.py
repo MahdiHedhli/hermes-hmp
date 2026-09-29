@@ -451,7 +451,7 @@ class Reads:
         store.purge(int(self._clock()))
         return tuple(
             phone_open_request(row)
-            for row in store.list_visible(self._iid, user_id, profile)
+            for row in store.list_visible(self._iid, user_id, profile, now=int(self._clock()))
             if row.surface == "phone_chat"
         )
 
@@ -463,24 +463,13 @@ class Reads:
         store = self._prompt_store
         if store is None or not user_id:
             return durable
-        remaining = [row.text for row in durable]
-        extra: list[WireMessage] = []
-        for role, text, created_at in store.observations(self._iid, user_id, profile):
-            if text in remaining:
-                remaining.remove(text)
-                continue
-            extra.append(
-                WireMessage(
-                    id=store.next_provisional_id(),
-                    role=role,
-                    text=text,
-                    client_message_id=None,
-                    created_at=float(created_at),
-                )
-            )
-        if not extra:
-            return durable
-        return durable + tuple(extra)
+        store.purge(int(self._clock()))
+        store.discard_durable_observations(
+            self._iid, user_id, profile, {(row.role, row.text) for row in durable}
+        )
+        # Observations have no durable id or lineage. Never splice them into cursor-addressed
+        # history: repeated text and a sliding fetch window cannot prove message identity.
+        return durable
 
     # ------------------------------------------------------------------------------------------
     # RO-6 history

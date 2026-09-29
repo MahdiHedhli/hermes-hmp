@@ -267,7 +267,7 @@ def test_trigger_result_carries_nothing_from_hermes(
 
 
 def _install_fake_event_module(
-    monkeypatch: pytest.MonkeyPatch, *, defer: bool, control: bool
+    monkeypatch: pytest.MonkeyPatch, *, defer: bool, control: bool, admission: bool = False
 ) -> None:
     class MessageType(enum.Enum):
         TEXT = "text"
@@ -285,6 +285,8 @@ def _install_fake_event_module(
         fields.append(("allow_gateway_control", bool, dataclasses.field(default=True)))
     if defer:
         fields.append(("defer_policy", str, dataclasses.field(default="hermes")))
+    if admission:
+        fields.append(("admission_ticket", object, dataclasses.field(default=None)))
     event_cls = dataclasses.make_dataclass("MessageEvent", fields)
     module = types.ModuleType("gateway.platforms.event")
     module.MessageEvent = event_cls  # type: ignore[attr-defined]
@@ -295,7 +297,7 @@ def _install_fake_event_module(
 
 
 def test_real_trigger_event_on_experimental_shape(monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_fake_event_module(monkeypatch, defer=True, control=True)
+    _install_fake_event_module(monkeypatch, defer=True, control=True, admission=True)
     event = HermesApi().inert_trigger_event(source="src", user_id=USER, user_name="label")
     assert event.text == INERT_TRIGGER_TEXT
     assert event.allow_gateway_control is False and event.internal is False
@@ -851,3 +853,96 @@ def test_committed_bridge_files_contain_probe_set(src: Path, tmp_path: Path) -> 
         cwd=REPO_ROOT,
     )
     assert proc.returncode == 0, proc.stderr
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["/approve always", "/deny", "/stop", "/reset", "always", "yes"])
+async def test_phone_event_cannot_control_gateway_when_waiter_appears_during_delivery(
+    br, directory, monkeypatch, text
+) -> None:
+    _install_fake_event_module(monkeypatch, defer=True, control=True, admission=True)
+    directory.chats[(USER, "alpha")] = CHAT
+    calls = []
+
+    async def deliver(event):
+        # A waiter arrived after the caller's preflight. The event itself must deny control.
+        calls.append(event)
+        assert event.allow_gateway_control is False
+        assert event.internal is False
+        assert event.defer_policy == "reject"
+        event._gateway_accepted = True
+        event.admission_ticket = types.SimpleNamespace(
+            reported=types.SimpleNamespace(value="admitted")
+        )
+
+    br._adapter.handle_message = deliver
+    assert await br.deliver_phone_message(user_id=USER, profile="alpha", text=text, message_id=CMID)
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("outcome", "expected"),
+    [
+        ("admitted", True),
+        ("refused_busy", False),
+        ("refused_other", None),
+        ("future_outcome", None),
+        (None, None),
+    ],
+)
+async def test_phone_delivery_waits_for_durable_admission(
+    br, directory, monkeypatch, outcome, expected
+) -> None:
+    _install_fake_event_module(monkeypatch, defer=True, control=True, admission=True)
+    monkeypatch.setattr(bridge, "PHONE_ADMISSION_WAIT_S", 0.03, raising=False)
+    directory.chats[(USER, "alpha")] = CHAT
+
+    async def deliver(event):
+        # Task scheduling is not a durable admission. The later ticket is authoritative.
+        event._gateway_accepted = True
+        ticket = types.SimpleNamespace(reported=None)
+        event.admission_ticket = ticket
+        if outcome is not None:
+            asyncio.get_running_loop().call_later(
+                0.01, setattr, ticket, "reported", types.SimpleNamespace(value=outcome)
+            )
+
+    br._adapter.handle_message = deliver
+    actual = await br.deliver_phone_message(
+        user_id=USER, profile="alpha", text="hello", message_id=CMID
+    )
+    assert actual is expected
+
+
+def test_prompt_timeout_hints_use_target_profile_a_b_a(br, world, monkeypatch) -> None:
+    approval = types.ModuleType("tools.approval_context")
+    clarify = types.ModuleType("tools.clarify_gateway")
+    approval._get_approval_timeout = lambda: {"alpha": 73, "beta": 241}[world.runner.scope]
+    clarify.get_clarify_timeout = lambda: {"alpha": 51, "beta": 0}[world.runner.scope]
+    monkeypatch.setitem(sys.modules, "tools.approval_context", approval)
+    monkeypatch.setitem(sys.modules, "tools.clarify_gateway", clarify)
+    for profile, expected in (("alpha", (73, 51)), ("beta", (241, 0)), ("alpha", (73, 51))):
+        assert (br.approval_timeout_s(profile), br.clarify_timeout_s(profile)) == expected
+        assert world.runner.scope is None
+
+
+@pytest.mark.skipif(
+    not BUILD_SOURCES, reason="no Hermes build: set HMP_HERMES_SRC or HMP_HERMES_BUILDS_DIR"
+)
+@pytest.mark.parametrize("src", BUILD_SOURCES, ids=lambda p: p.parent.name)
+def test_real_hermes_approval_qualification(src: Path) -> None:
+    """B3: real guards/resolvers, with pending waiters and control-enabled comparisons."""
+    python = src / ".venv" / "bin" / "python"
+    if not python.is_file():
+        pytest.skip("this build has no venv")
+    for tool_args in (
+        [str(TOOL), "--dependencies-attr", "DIRECT_SEND_DEPENDENCIES", "--target",
+         str(SERVER_DIR / "hmp_plugin" / "direct_send_supported_builds.json"), "--check"],
+        [str(REPO_ROOT / "tools" / "compat" / "approval_probes.py")],
+    ):
+        proc = subprocess.run(
+            [str(python), *tool_args, "--hermes-src", str(src)],
+            capture_output=True, text=True, check=False, cwd=REPO_ROOT,
+        )
+        assert proc.returncode == 0, proc.stderr
