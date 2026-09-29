@@ -11,6 +11,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestServer
 
 from hmp_plugin import mobile_cron
+from hmp_plugin.bridge import HermesApi
 from hmp_plugin.contract import DirectSendEndpoint
 
 _TEST_KEY = "x" * 24
@@ -66,3 +67,27 @@ async def test_real_hermes_cron_create_paused_and_manage(tmp_path, monkeypatch) 
         assert await mobile_cron.call(endpoint, method="GET") == {"jobs": []}
     finally:
         await server.close()
+
+
+def test_mobile_cron_writer_matches_desktop_delivery_and_continuity(tmp_path, monkeypatch) -> None:
+    monkeypatch.setenv("HERMES_HOME", str(tmp_path / "hermes-home"))
+    pytest.importorskip("cron.scheduler")
+    from cron.jobs import get_job
+    api = HermesApi()
+    raw = api.create_mobile_cron(mobile_cron.create_body({
+        "name": "fixture continuity", "schedule": "every 1h", "prompt": "Summarize status",
+        "deliver": "bot-chat", "continuity": True, "repeat": 3,
+    }))
+    job = mobile_cron.project_job(raw)
+    assert job["enabled"] is False
+    assert (job["deliver"], job["continuity"], job["repeat"]) == ("bot-chat", True, 3)
+    assert get_job(job["id"])["context_from"] == ["self"]
+
+    changed = api.edit_mobile_cron(job["id"], mobile_cron.edit_body({
+        "deliver": "local", "continuity": False, "repeat": 0,
+    }))
+    assert changed is not None
+    projected = mobile_cron.project_job(changed)
+    assert (projected["deliver"], projected["continuity"], projected["repeat"]) == (
+        "local", False, None,
+    )

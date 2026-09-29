@@ -70,6 +70,10 @@ server keys to this repository. A new job is always created paused;
 review it in the app and choose Resume when ready. A timed-out create may have succeeded,
 so refresh the list before creating another job.
 
+For new jobs, the phone defaults to this bot's Bot Chat. Choose “Run history only”
+when no chat reply is wanted. Continuity lets each run see this job's previous
+output. An existing job's result destination does not change until edited.
+
 This preview is qualified only for the listed build bytes. Other builds fail closed.
 Installing the plugin does not enable the preview; the operator must grant the device and
 enable the cron flag. Existing `extra.owner_device_ids` entries remain a legacy fallback;

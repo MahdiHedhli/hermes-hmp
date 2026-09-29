@@ -76,27 +76,54 @@ def _text(body: Mapping[str, Any], key: str, limit: int) -> str:
     return value.strip()
 
 
+def _options(body: Mapping[str, Any], *, editing: bool = False) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    if "deliver" in body:
+        if body["deliver"] not in ("local", "bot-chat"):
+            raise HmpError(ErrorCode.BAD_REQUEST)
+        result["deliver"] = body["deliver"]
+    if "continuity" in body:
+        if type(body["continuity"]) is not bool:
+            raise HmpError(ErrorCode.BAD_REQUEST)
+        result["continuity"] = body["continuity"]
+    if "repeat" in body:
+        floor = 0 if editing else 1
+        if type(body["repeat"]) is not int or not floor <= body["repeat"] <= 9999:
+            raise HmpError(ErrorCode.BAD_REQUEST)
+        result["repeat"] = body["repeat"] or None
+    return result
+
+
 def create_body(body: Mapping[str, Any]) -> dict[str, Any]:
-    if set(body) != {"name", "schedule", "prompt"}:
+    if not {"name", "schedule", "prompt"} <= set(body) or not set(body) <= {
+        "name", "schedule", "prompt", "deliver", "continuity", "repeat",
+    }:
         raise HmpError(ErrorCode.BAD_REQUEST)
     return {
         "name": _text(body, "name", _MAX_NAME_CHARS),
         "schedule": _text(body, "schedule", _MAX_SCHEDULE_CHARS),
         "prompt": _text(body, "prompt", _MAX_PROMPT_CHARS),
         "deliver": "local",
+        "continuity": False,
+        **_options(body),
         "paused": True,
     }
 
 
-def edit_body(body: Mapping[str, Any]) -> dict[str, str]:
-    if not body or not set(body) <= {"name", "schedule", "prompt"}:
+def edit_body(body: Mapping[str, Any]) -> dict[str, Any]:
+    if not body or not set(body) <= {
+        "name", "schedule", "prompt", "deliver", "continuity", "repeat",
+    }:
         raise HmpError(ErrorCode.BAD_REQUEST)
     limits = {
         "name": _MAX_NAME_CHARS,
         "schedule": _MAX_SCHEDULE_CHARS,
         "prompt": _MAX_PROMPT_CHARS,
     }
-    return {key: _text(body, key, limits[key]) for key in body}
+    return {
+        **{key: _text(body, key, limits[key]) for key in body if key in limits},
+        **_options(body, editing=True),
+    }
 
 
 def _optional_text(value: Any, limit: int) -> str | None:
@@ -123,6 +150,15 @@ def project_job(raw: Any) -> dict[str, Any]:
     enabled = raw.get("enabled")
     if name is None or prompt is None or schedule is None or type(enabled) is not bool:
         raise HmpError(ErrorCode.CRON_UNAVAILABLE)
+    deliver = raw.get("deliver", "local")
+    # Never echo arbitrary platform destinations, chat IDs, or URLs to a phone.
+    destination = deliver if deliver in ("local", "bot-chat") else "other"
+    refs = raw.get("context_from")
+    continuity = isinstance(refs, list) and "self" in refs
+    repeat = raw.get("repeat")
+    times = repeat.get("times") if isinstance(repeat, Mapping) else None
+    if type(times) is not int or not 1 <= times <= 9999:
+        times = None
     return {
         "id": identifier,
         "name": name,
@@ -133,6 +169,9 @@ def project_job(raw: Any) -> dict[str, Any]:
         "next_run_at": _time(raw.get("next_run_at")),
         "last_run_at": _time(raw.get("last_run_at")),
         "last_status": _status(raw.get("last_status")),
+        "deliver": destination,
+        "continuity": continuity,
+        "repeat": times,
     }
 
 

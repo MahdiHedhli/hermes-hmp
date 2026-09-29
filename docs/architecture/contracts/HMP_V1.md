@@ -1034,18 +1034,26 @@ any job data or loopback API key is used.
 | Method | Path under `/hmp/v1` | Body | Result |
 |---|---|---|---|
 | GET | `/bots/{p}/jobs` | — | `{"jobs":[job,...]}` |
-| POST | `/bots/{p}/jobs` | `{"name":string,"schedule":string,"prompt":string}` | `{"job":job}`; created paused, `deliver: local` |
-| PATCH | `/bots/{p}/jobs/{job_id}` | one or more of `name`, `schedule`, `prompt` | `{"job":job}` |
+| POST | `/bots/{p}/jobs` | `{"name":string,"schedule":string,"prompt":string,"deliver"?:"local"\|"bot-chat","continuity"?:boolean,"repeat"?:1..9999}` | `{"job":job}`; created paused |
+| PATCH | `/bots/{p}/jobs/{job_id}` | one or more of `name`, `schedule`, `prompt`, `deliver`, `continuity`, `repeat` | `{"job":job}`; `repeat:0` clears a finite run limit |
 | DELETE | `/bots/{p}/jobs/{job_id}` | — | `{"deleted":true}` |
 | POST | `/bots/{p}/jobs/{job_id}/pause` or `/resume` | — | `{"job":job}` |
 
 `job` contains only `id`, `name`, `prompt`, `schedule`, `enabled`, `state`,
-`next_run_at`, `last_run_at`, and `last_status`; optional status/time fields may be null.
+`next_run_at`, `last_run_at`, `last_status`, `deliver`, `continuity`, and `repeat`;
+optional status/time fields and `repeat` may be null. Delivery is projected only as
+`local`, `bot-chat`, or `other`, never an external channel ID or URL. `continuity`
+maps to Hermes's `context_from: ["self"]` reference, preserving any other context
+references when edited. `repeat` is the total run limit, not the remaining count.
 IDs are twelve lowercase hex characters. At most 100 jobs and one MiB of upstream JSON
 are returned. HMP never forwards scripts, workdirs, delivery targets, raw errors, or
 other Hermes job internals. Create/edit fields are length bounded; unknown fields are
-rejected. All calls use one profile-scoped, literal-loopback API server endpoint with
-the profile's own server key, disabled proxy inheritance, redirects, and automatic retries.
+rejected. Reads, pause/resume, and delete use one profile-scoped, literal-loopback API server
+endpoint with the profile's own server key, disabled proxy inheritance, redirects, and
+automatic retries. Create and edit use Hermes's profile-scoped cron writer so continuity
+is saved atomically with the job; both retain the same owner/device/bot/qualified-build gate.
+The phone may select only local run history or its own bot's Bot Chat. It cannot name an
+arbitrary delivery destination. HMP still creates jobs paused.
 Phone clients must treat a transport failure after a write as an unknown outcome and
 refresh before attempting another write. The host flag defaults off; release requires
 fixture qualification and independent security review.

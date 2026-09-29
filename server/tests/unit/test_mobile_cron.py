@@ -15,7 +15,7 @@ from hmp_plugin import mobile_cron
 from hmp_plugin.compat import compute_read_bridge_fingerprint
 from hmp_plugin.contract import AuthzState, DirectSendEndpoint, ErrorCode, HmpError
 
-from .hmp_kit import Env, get, pair, post, run
+from .hmp_kit import Env, get, pair, post, run, url
 
 _TEST_KEY = "x" * 24
 
@@ -38,21 +38,33 @@ def _job(**changes: object) -> dict[str, object]:
     return result
 
 
-def test_create_accepts_only_bounded_fields_and_forces_paused_local() -> None:
+def test_create_accepts_only_bounded_fields_and_forces_paused() -> None:
     assert mobile_cron.create_body(
         {"name": " brief ", "schedule": " every 1h ", "prompt": " summarize "}
     ) == {
         "name": "brief", "schedule": "every 1h", "prompt": "summarize",
-        "deliver": "local", "paused": True,
+        "deliver": "local", "continuity": False, "paused": True,
     }
     for body in (
         {"name": "a", "schedule": "every 1h", "prompt": "p", "script": "sh"},
         {"name": "a", "schedule": "every 1h", "prompt": " "},
         {"name": "a", "schedule": "every 1h", "prompt": "p", "deliver": "origin"},
+        {"name": "a", "schedule": "every 1h", "prompt": "p", "continuity": "yes"},
+        {"name": "a", "schedule": "every 1h", "prompt": "p", "repeat": True},
     ):
         with pytest.raises(HmpError) as exc:
             mobile_cron.create_body(body)
         assert exc.value.code is ErrorCode.BAD_REQUEST
+    assert mobile_cron.create_body({
+        "name": "brief", "schedule": "every 1h", "prompt": "p",
+        "deliver": "bot-chat", "continuity": True, "repeat": 4,
+    }) == {
+        "name": "brief", "schedule": "every 1h", "prompt": "p",
+        "deliver": "bot-chat", "continuity": True, "repeat": 4, "paused": True,
+    }
+    assert mobile_cron.edit_body({"continuity": False, "deliver": "local"}) == {
+        "continuity": False, "deliver": "local",
+    }
 
 
 def test_job_projection_omits_host_internals() -> None:
@@ -61,6 +73,7 @@ def test_job_projection_omits_host_internals() -> None:
         "id": "a" * 12, "name": "Morning brief", "prompt": "Summarize status",
         "schedule": "every 1h", "enabled": False, "state": "paused",
         "next_run_at": None, "last_run_at": None, "last_status": None,
+        "deliver": "local", "continuity": False, "repeat": None,
     }
     assert "internal secret" not in str(projected)
     poisoned = mobile_cron.project_job(_job(
@@ -69,6 +82,10 @@ def test_job_projection_omits_host_internals() -> None:
     assert poisoned["last_status"] is None
     assert poisoned["state"] is None
     assert poisoned["next_run_at"] is None
+    assert mobile_cron.project_job(_job(
+        deliver="telegram:synthetic", context_from=["self"],
+        repeat={"times": 3, "completed": 1},
+    ))["deliver"] == "other"
 
 
 def test_unqualified_build_fails_closed(tmp_path: Path) -> None:
@@ -131,6 +148,16 @@ def test_owner_route_uses_fixed_loopback_profile_and_projects_result(tmp_path: P
     env.bridge.authz_state = lambda *_: AuthzState.AUTHORIZED
     env.ctx.cron_qualified = lambda: True
     env.ctx.cron_flag = lambda: True
+    created: list[tuple[str, dict[str, object]]] = []
+    env.bridge.create_mobile_cron = lambda profile, fields: (
+        created.append((profile, fields)) or _job()
+    )
+    edited: list[tuple[str, str, dict[str, object]]] = []
+    env.bridge.edit_mobile_cron = lambda profile, job_id, fields: (
+        edited.append((profile, job_id, fields)) or _job(
+            deliver="bot-chat", context_from=["self"],
+        )
+    )
 
     async def upstream(request: web.Request) -> web.Response:
         assert request.headers["Authorization"] == f"Bearer {_TEST_KEY}"
@@ -172,11 +199,22 @@ def test_owner_route_uses_fixed_loopback_profile_and_projects_result(tmp_path: P
             assert data == {"job": mobile_cron.project_job(_job())}
             assert received == [
                 ("GET", "/p/default/api/jobs", None),
-                ("POST", "/p/default/api/jobs", {
-                    "name": "Morning brief", "schedule": "every 1h",
-                    "prompt": "Summarize status", "deliver": "local", "paused": True,
-                }),
             ]
+            assert created == [("default", {
+                "name": "Morning brief", "schedule": "every 1h",
+                "prompt": "Summarize status", "deliver": "local",
+                "continuity": False, "paused": True,
+            })]
+            response = await client.patch(
+                url("/bots/default/jobs/aaaaaaaaaaaa"),
+                json={"deliver": "bot-chat", "continuity": True, "repeat": 3},
+                headers=env.headers(dev),
+            )
+            assert response.status == 200
+            assert (await response.json())["job"]["continuity"] is True
+            assert edited == [("default", "a" * 12, {
+                "deliver": "bot-chat", "continuity": True, "repeat": 3,
+            })]
         finally:
             await upstream_server.close()
 
