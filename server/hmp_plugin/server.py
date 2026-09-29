@@ -53,7 +53,7 @@ from typing import Any
 from aiohttp import web
 from aiohttp.http_exceptions import LineTooLong
 
-from . import direct_send, mobile_cron, wire
+from . import direct_send, mobile_cron, mobile_model, wire
 from .contract import (
     CONTRACT_REVISION,
     HISTORY_LIMIT_DEFAULT,
@@ -85,6 +85,7 @@ from .identity import set_ssl_context_attr
 from .logging_policy import (
     LOGGER_NAME,
     AllowListedAccessLogger,
+    log_bridge_exception,
     log_event,
     log_handler_exception,
 )
@@ -154,6 +155,12 @@ MOBILE_CRON_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("DELETE", "/bots/{p}/jobs/{job_id}", "CR-4"),
     ("POST", "/bots/{p}/jobs/{job_id}/pause", "CR-5"),
     ("POST", "/bots/{p}/jobs/{job_id}/resume", "CR-6"),
+)
+
+MOBILE_MODEL_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/bots/{p}/model/default", "MD-1"),
+    ("GET", "/bots/{p}/model/options", "MD-2"),
+    ("PUT", "/bots/{p}/model/default", "MD-3"),
 )
 
 # aiohttp's parser limits for one request line or one header field (SEC-4: bounded at the same
@@ -626,6 +633,62 @@ async def handle_cron_resume(request: web.Request) -> web.Response:
     return json_response(result)
 
 
+async def _model_profile(request: web.Request, *, write: bool) -> str:
+    """Reject before reading a body, profile config, or model catalog."""
+    who = bearer(request)
+    ctx = context(request)
+    if not ctx.is_owner_device(who.device_id):
+        raise HmpError(ErrorCode.NOT_FOUND)
+    ctx.limiter.check(
+        "model_write" if write else "model_read", who.device_id,
+        10 if write else 30, ctx.now(),
+    )
+    profile = request.match_info["p"]
+    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
+    if not ctx.model_enabled() or not ctx.model_build_qualified():
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE)
+    return profile
+
+
+async def handle_model_current(request: web.Request) -> web.Response:
+    profile = await _model_profile(request, write=False)
+    try:
+        bridge = _require(context(request).bridge)
+        raw = await asyncio.to_thread(bridge.profile_default_model, profile)
+    except Exception as exc:
+        log_bridge_exception(exc)
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
+    return json_response(mobile_model.project_current(raw))
+
+
+async def handle_model_options(request: web.Request) -> web.Response:
+    profile = await _model_profile(request, write=False)
+    try:
+        bridge = _require(context(request).bridge)
+        endpoint = await asyncio.to_thread(bridge.direct_send_endpoint, profile)
+    except Exception as exc:
+        log_bridge_exception(exc)
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
+    if endpoint is None:
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE)
+    return json_response(await mobile_model.options(endpoint))
+
+
+async def handle_model_update(request: web.Request) -> web.Response:
+    profile = await _model_profile(request, write=True)
+    provider, model = mobile_model.selection(await read_json_body(request))
+    try:
+        raw = await asyncio.to_thread(
+            _require(context(request).bridge).set_profile_default_model, profile, provider, model
+        )
+    except Exception as exc:
+        log_bridge_exception(exc)
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
+    if raw is None:
+        raise HmpError(ErrorCode.BAD_REQUEST)
+    return json_response(mobile_model.project_current(raw))
+
+
 # DS-7's own definitive-failure codes that mean "HMP's guard refused before Hermes ever saw this
 # attempt" (or, for `write_gate_closed`/401, Hermes refused authentication before processing any
 # content) -- DS-8's `not_accepted` vocabulary. Any OTHER rejected row (`api_server_unavailable`
@@ -758,8 +821,13 @@ def build_app(ctx: ServerContext) -> web.Application:
         "/bots/{p}/jobs/{job_id}": handle_cron_edit,
         "/bots/{p}/jobs/{job_id}/pause": handle_cron_pause,
         "/bots/{p}/jobs/{job_id}/resume": handle_cron_resume,
+        "/bots/{p}/model/default": handle_model_current,
+        "/bots/{p}/model/options": handle_model_options,
     }
-    routes = list(F1_ROUTES) + list(F2_DIRECT_SEND_ROUTES) + list(MOBILE_CRON_ROUTES)
+    routes = (
+        list(F1_ROUTES) + list(F2_DIRECT_SEND_ROUTES)
+        + list(MOBILE_CRON_ROUTES) + list(MOBILE_MODEL_ROUTES)
+    )
     if ctx.session_browsing_enabled:
         # Amendment A1 kill switch: when off, SES-1/SES-2 are never added to the router at all,
         # so they 404 exactly like every other unregistered F1 route (server-modules.md).
@@ -772,6 +840,8 @@ def build_app(ctx: ServerContext) -> web.Application:
             handler = handle_cron_create
         elif path == "/bots/{p}/jobs/{job_id}" and method == "DELETE":
             handler = handle_cron_delete
+        elif path == "/bots/{p}/model/default" and method == "PUT":
+            handler = handle_model_update
         if method == "GET":
             app.router.add_get(full_path(path), handler, allow_head=False)
         else:

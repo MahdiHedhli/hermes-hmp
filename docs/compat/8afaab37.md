@@ -15,3 +15,16 @@ entry was added for archive or tarball installations.
 
 This qualifies only the compatibility gate. The preview remains off by default
 and needs its separate owner-device, bot-access, and private host-flag checks.
+
+## Default model
+
+The archived model bridge files and clean git checkout produced the same
+fingerprint:
+
+`d5d360c9ba6217f3f31843b866a3f88cb5a48f0eac53ea5b2a76ba38b1312b50`
+
+Seven Hermes profile model scope tests passed. The HMP A→B→A integration
+passed against the real profile writer using independent temporary homes.
+The model entry requires both this fingerprint and the full git SHA above.
+No fingerprint-only entry was added. The model preview still requires its
+separate owner-device, bot-access, and private host-flag checks.

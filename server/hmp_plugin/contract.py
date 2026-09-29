@@ -171,6 +171,7 @@ class ErrorCode(StrEnum):
     WRITE_GATE_CLOSED = "write_gate_closed"
     API_SERVER_UNAVAILABLE = "api_server_unavailable"
     CRON_UNAVAILABLE = "cron_unavailable"
+    MODEL_UNAVAILABLE = "model_unavailable"
 
 
 class SubmitDefinitive(StrEnum):
@@ -240,6 +241,7 @@ ERROR_TABLE: Mapping[ErrorCode, ErrorSpec] = {
         _spec(ErrorCode.WRITE_GATE_CLOSED, (503,), _Y),
         _spec(ErrorCode.API_SERVER_UNAVAILABLE, (503,), _N),
         _spec(ErrorCode.CRON_UNAVAILABLE, (503,), _NA),
+        _spec(ErrorCode.MODEL_UNAVAILABLE, (503,), _NA),
     )
 }
 
@@ -284,6 +286,7 @@ ERROR_MESSAGES: Mapping[ErrorCode, str] = {
     ErrorCode.WRITE_GATE_CLOSED: "direct send is not available on this instance",
     ErrorCode.API_SERVER_UNAVAILABLE: "direct send delivery is unavailable",
     ErrorCode.CRON_UNAVAILABLE: "scheduled jobs are unavailable",
+    ErrorCode.MODEL_UNAVAILABLE: "model management is unavailable",
 }
 
 
@@ -930,6 +933,16 @@ class ReadBridge(Protocol):
         """DS-2(b)/DS-6: the resolved `api_server` bind and per-profile `API_SERVER_KEY` for this
         profile, or `None` when either cannot be positively determined (fail closed) or the
         resolved bind is not loopback. Never logs or persists the key (SEC-4)."""
+        ...
+
+    def profile_default_model(self, profile: str) -> Mapping[str, object]:
+        """Read the routed profile's persisted provider/default model only."""
+        ...
+
+    def set_profile_default_model(
+        self, profile: str, provider: str, model: str
+    ) -> Mapping[str, object] | None:
+        """Validated Hermes write; None means the provider/model pair was refused."""
         ...
 
 

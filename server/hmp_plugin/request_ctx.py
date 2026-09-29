@@ -193,6 +193,8 @@ class ServerContext:
     owner_device_ids: Callable[[], frozenset[str]] = field(default=lambda: frozenset())
     cron_flag: Callable[[], bool] = field(default=lambda: False)
     cron_qualified: Callable[[], bool] = field(default=lambda: False)
+    model_flag: Callable[[], bool] = field(default=lambda: False)
+    model_qualified: Callable[[], bool] = field(default=lambda: False)
 
     def is_owner_device(self, device_id: str) -> bool:
         try:
@@ -211,6 +213,20 @@ class ServerContext:
     def cron_build_qualified(self) -> bool:
         try:
             return self.cron_qualified() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def model_enabled(self) -> bool:
+        try:
+            return self.model_flag() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def model_build_qualified(self) -> bool:
+        try:
+            return self.model_qualified() is True
         except Exception as exc:
             log_bridge_exception(exc)
             return False
