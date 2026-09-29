@@ -41,6 +41,7 @@ hmp_plugin = [
     "write_supported_builds.json",
     "direct_send_supported_builds.json",
     "mobile_cron_supported_builds.json",
+    "mobile_model_supported_builds.json",
 ]
 
 [tool.pytest.ini_options]

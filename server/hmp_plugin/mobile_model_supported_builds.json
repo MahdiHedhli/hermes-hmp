@@ -29,6 +29,13 @@
       "git_sha": null,
       "qualified_by": "Hermes profile model scope tests and HMP isolated A-B-A model integration",
       "qualified_at": "2026-09-28"
+    },
+    {
+      "label": "hermes-8afaab37-git",
+      "fingerprint": "d5d360c9ba6217f3f31843b866a3f88cb5a48f0eac53ea5b2a76ba38b1312b50",
+      "git_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
+      "qualified_by": "Hermes profile model scope tests (7) and HMP isolated A-B-A model integration (1) in isolated Python 3.14 environment",
+      "qualified_at": "2026-09-28"
     }
   ]
 }
