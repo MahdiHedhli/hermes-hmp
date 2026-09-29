@@ -472,7 +472,7 @@ def direct_send_build_qualified(
             DIRECT_SEND_COMPAT_FILE
         )
         qualified = load_read_compat_list(path)
-        send_files = getattr(qualified, "bridge_files")
+        send_files = getattr(qualified, "bridge_files")  # noqa: B009
         identity = GitFingerprintReader(send_files).read(root)
         if identity is None or identity.git_sha != read_identity.git_sha:
             return False
