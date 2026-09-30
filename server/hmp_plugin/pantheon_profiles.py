@@ -120,3 +120,37 @@ def profile_home(profile: str, homes: Mapping[str, Path]) -> Path:
     if not isinstance(profile, str) or profile not in homes:
         raise ProfileResolutionError("profile is not served")
     return homes[profile]
+
+
+def existing_session_id(
+    profile: str, homes: Mapping[str, Path], source: Any, session_store: Any
+) -> str | None:
+    """Look up an old-tag session without minting a key, session, or database.
+
+    The caller must separately prove that Hermes matched a real route and
+    authorized this user. The old ``build_source`` stamps the primary profile
+    even when no route matched, so its profile stamp alone is insufficient for
+    disclosure. This primitive stays unwired until that ingress-equivalence
+    gate is qualified. Use the old store's key generator: a standalone named
+    profile uses the legacy namespace, unlike a multiplexed profile.
+    """
+    profile_home(profile, homes)
+    if getattr(source, "profile", None) != profile or (
+        getattr(source, "profile_route_rejected", None) is not False
+    ):
+        raise ProfileResolutionError("source is not routed to profile")
+    try:
+        key = session_store._generate_session_key(source)
+        if not isinstance(key, str) or not key:
+            raise ProfileResolutionError("session key is unavailable")
+        entry = session_store.lookup_by_session_key(key)
+    except ProfileResolutionError:
+        raise
+    except Exception as exc:
+        raise ProfileResolutionError("session lookup is unavailable") from exc
+    if entry is None:
+        return None
+    session_id = getattr(entry, "session_id", None)
+    if not isinstance(session_id, str) or not session_id:
+        raise ProfileResolutionError("session entry is invalid")
+    return session_id

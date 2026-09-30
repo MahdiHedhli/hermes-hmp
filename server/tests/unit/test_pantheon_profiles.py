@@ -9,6 +9,7 @@ import pytest
 
 from hmp_plugin.pantheon_profiles import (
     ProfileResolutionError,
+    existing_session_id,
     profile_home,
     served_profile_homes,
 )
@@ -84,3 +85,61 @@ def test_named_profile_symlink_cannot_alias_root_home(tmp_path: Path) -> None:
     named.symlink_to(paths["default"], target_is_directory=True)
     with pytest.raises(ProfileResolutionError):
         served_profile_homes(runner, **api)
+
+
+def test_existing_session_uses_store_key_without_creating_a_session(tmp_path: Path) -> None:
+    _, _, homes = _fixture(tmp_path)
+    source = SimpleNamespace(profile="serenity", profile_route_rejected=False)
+    calls: list[str] = []
+
+    class Store:
+        def _generate_session_key(self, value: object) -> str:
+            assert value is source
+            calls.append("key")
+            return "agent:main:old-tag-key"
+
+        def lookup_by_session_key(self, key: str) -> object:
+            assert key == "agent:main:old-tag-key"
+            calls.append("lookup")
+            return SimpleNamespace(session_id="existing-session")
+
+    assert existing_session_id("serenity", homes, source, Store()) == "existing-session"
+    assert calls == ["key", "lookup"]
+
+
+def test_existing_session_refuses_unserved_and_rejected_sources_before_store_access(
+    tmp_path: Path,
+) -> None:
+    _, _, homes = _fixture(tmp_path)
+
+    class ForbiddenStore:
+        def _generate_session_key(self, _source: object) -> str:
+            raise AssertionError("untrusted source reached the store")
+
+    for profile, source in (
+        ("ghost", SimpleNamespace(profile="ghost", profile_route_rejected=False)),
+        ("serenity", SimpleNamespace(profile="default", profile_route_rejected=False)),
+        ("serenity", SimpleNamespace(profile="serenity", profile_route_rejected=True)),
+        ("serenity", SimpleNamespace(profile="serenity")),
+    ):
+        with pytest.raises(ProfileResolutionError):
+            existing_session_id(profile, homes, source, ForbiddenStore())
+
+
+def test_existing_session_distinguishes_absent_from_invalid_lookup(tmp_path: Path) -> None:
+    _, _, homes = _fixture(tmp_path)
+    source = SimpleNamespace(profile="default", profile_route_rejected=False)
+
+    class Store:
+        def __init__(self, entry: object) -> None:
+            self.entry = entry
+
+        def _generate_session_key(self, _source: object) -> str:
+            return "key"
+
+        def lookup_by_session_key(self, _key: str) -> object:
+            return self.entry
+
+    assert existing_session_id("default", homes, source, Store(None)) is None
+    with pytest.raises(ProfileResolutionError, match="session entry is invalid"):
+        existing_session_id("default", homes, source, Store(SimpleNamespace(session_id="")))

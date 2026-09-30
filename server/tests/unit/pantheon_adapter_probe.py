@@ -41,6 +41,7 @@ from hmp_plugin.adapter import HmpAdapter
 from hmp_plugin.compat import CompatStatus
 from hmp_plugin.pantheon_profiles import (
     ProfileResolutionError,
+    existing_session_id,
     profile_home,
     served_profile_homes,
 )
@@ -155,6 +156,37 @@ async def main() -> None:
     assert session_store._generate_session_key(source) == build_session_key(
         source, profile="serenity"
     )
+
+    # Exercise the unwired HMP lookup primitive against the tag's real key
+    # generator in both modes. The routing lookup is a sentinel: this probe
+    # must not create a Hermes session or touch the gateway's routing file.
+    source.profile_route_rejected = False
+
+    class Lookup:
+        def __init__(self, expected: str) -> None:
+            self.expected = expected
+
+        def _generate_session_key(self, inbound: SessionSource) -> str:
+            return session_store._generate_session_key(inbound)
+
+        def lookup_by_session_key(self, key: str) -> SimpleNamespace:
+            assert key == self.expected
+            return SimpleNamespace(session_id="existing-only")
+
+    for multiplex, namespace in ((False, None), (True, "serenity")):
+        session_store.config.multiplex_profiles = multiplex
+        expected_key = build_session_key(source, profile=namespace)
+        assert (
+            existing_session_id("serenity", homes, source, Lookup(expected_key))
+            == "existing-only"
+        )
+    source.profile_route_rejected = True
+    try:
+        existing_session_id("serenity", homes, source, Lookup("unused"))
+    except ProfileResolutionError:
+        pass
+    else:
+        raise AssertionError("rejected route reached session lookup")
 
     # The old SessionDB offers a read-only constructor. Confirm it refuses a missing file and
     # that profile-scoped history reads leave both scratch databases and sidecars byte-for-byte
