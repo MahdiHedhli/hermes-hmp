@@ -1225,11 +1225,15 @@ class HermesReadBridge:
             self._phone_event, user_id=user_id, profile=profile, text=text, message_id=message_id
         )
         await self._adapter.handle_message(event)
-        if not getattr(event, "_gateway_accepted", False):
-            return False
+        accepted = getattr(event, "_gateway_accepted", None) is True
         if getattr(event, "defer_policy", None) != "reject":
-            # Older stock builds have no reject-policy admission ticket.
-            return True
+            # Older stock builds have no admission ticket. `_gateway_accepted` is only set True on
+            # acceptance; False or missing also covers a busy-queued event that was retained but
+            # never flagged, so it is unknown, never a definitive refusal.
+            return True if accepted else None
+        # Reject policy: the reported admission ticket is authoritative. The initial scheduling
+        # flag is deliberately not consulted (busy queue debounce leaves it False while the event
+        # is retained).
         ticket = getattr(event, "admission_ticket", None)
         if ticket is None:
             return None
