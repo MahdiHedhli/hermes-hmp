@@ -24,9 +24,12 @@ Root-only correction (current, reviewed):
       drift, interrupt and privacy cases are retained; write failure before and after the rename
       and an external edit are covered. Regression check: the new tests fail against the prior
       code (29 failures) and pass with the fix.
-- [ ] C6 Open integration item: on `ca705`, whether history of a profile without its own
-      `multiplex_profiles` flag is readable through the bridge is not proved by source or fixtures;
-      check on a disposable host. Route-only is not claimed to give readable history.
+- [ ] C6 Remaining disposable-host gateway-loop and authorization qualification on `ca705`.
+      Root independently reproduced the real-store fixture: 7 passed, zero skips; history the
+      root creates for an exact routed source reads with the profile's own flag absent or false.
+      Earlier standalone-profile history stays intact and resolves by session id, but is absent
+      from the canonical read and Phone list. Route-only preparation is not a legacy-history
+      migration or a live sending guarantee. Root-reviewed evidence: `C6-EVIDENCE.md`.
 - [x] C5 Root code and documentation review of this candidate. Root CI: 1322 passed, 10 existing
       skips, one existing warning; final route tests: 138 passed; pinned Ruff, plugin surface,
       privacy and diff checks clean. Opus cleared the bounded code review and the documentation
