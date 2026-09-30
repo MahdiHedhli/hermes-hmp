@@ -1,6 +1,6 @@
 # Gateway observations for Nous Research
 
-HMP is a mobile gateway plugin for Hermes. These are proposals for upstream discussion, not claims that Hermes currently provides these APIs. Findings were checked against Hermes `main` at `81f481b2` and the qualified older `8afaab37` build on 2026-09-28. Search, bot lifecycle, and plugin installation were rechecked against `main` at `39faafb6` on 2026-09-29. The Bot Mode baseline tag `v2026.8.31` was also inspected on 2026-09-29; later releases may differ.
+HMP is a mobile gateway plugin for Hermes. These are proposals for upstream discussion, not claims that Hermes currently provides every requested API. Findings were checked against Hermes `main` at `81f481b2` and the qualified older `8afaab37` build on 2026-09-28. Search, bot lifecycle, and plugin installation were rechecked against `main` at `39faafb6` on 2026-09-29; the approval session stream was rechecked at `ac0cfa7` on 2026-09-29. The Bot Mode baseline tag `v2026.8.31` was also inspected on 2026-09-29; later releases may differ.
 
 The [unified gateway research](https://github.com/MahdiHedhli/hermes-hmp/blob/main/HermesUnifiedGatewayResearch.md) and Nous's [one-gateway PR](https://github.com/NousResearch/hermes-agent/pull/106742) support one profile-scoped execution authority. The companion [entry-point plan](https://gist.github.com/unsupportedpastels/765f9d551ce88ee01630c18367763e75) puts a future mobile client behind an authenticated gateway API but treats remote entry as follow-on work. The requests below concern that remaining remote contract; they do not ask Nous to create another session owner.
 
@@ -41,15 +41,15 @@ not overridden Hermes's WAL guard; a patched-runtime WAL test remains open.
 
 ## Approval and clarify events
 
-Desktop-owned Bot Chat turns can surface prompts only through Desktop's process-local channel. A remote client cannot answer those same prompts through session chat. We propose durable, session-scoped pending prompt identifiers, event delivery for approval and clarify requests, and authenticated response routes that enforce the same authorization and expiry rules as Hermes itself. Draft HMP security fixes do not resolve the missing Bot Chat notifier, so the interim server path remains disabled pending real-route qualification.
+Desktop-owned Bot Chat turns still surface prompts through Desktop's process-local channel; a remote client cannot answer those same prompts through session chat. The two Hermes builds used for HMP's draft approval matrix lacked a Bot Chat session-stream notifier. Current untagged Hermes `main` at [`ac0cfa7`](https://github.com/NousResearch/hermes-agent/commit/ac0cfa7db94cefa90cf3e35191f38b53888b9e17) now registers one on the session-chat stream and emits `approval.request` for the existing run-approval route. Its focused upstream notifier, wait, and interruption tests passed in an isolated environment, but HMP has not passed a real-route matrix on this commit. The latest published tag, `v2026.9.24`, predates the session-stream change. This is a candidate, not a qualified or released mobile approval contract.
 
-This is the next major HermesBot Mobile feature after beta release work. The
-minimum upstream gate is an answerable request on the canonical Bot Chat
-session stream, carrying an exact request ID, offered choices, session/profile
-ownership, and authoritative expiry and settlement. Disconnect, restart, and
-stale-answer behavior need the same Hermes-owned rules. HMP will requalify its
-draft relay only after that route exists; it must not infer approvals from tool
-text or create another execution owner.
+This is the next major HermesBot Mobile feature after beta release work. We
+request a supported, authenticated, session-scoped contract that carries exact
+request IDs, offered choices, session/profile ownership, and authoritative
+expiry and settlement across Desktop and remote clients. The current-main
+session-stream candidate is the first route to qualify, including wrong-ID,
+cross-profile, timeout, disconnect, restart, and live-owner handoff cases. HMP
+must not infer approvals from tool text or create another execution owner.
 
 ## Already usable without a new Hermes contract
 
