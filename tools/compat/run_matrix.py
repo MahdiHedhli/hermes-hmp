@@ -2,7 +2,8 @@
 """T063: the compat matrix runner (research R8, SC-007; specs/001-connect-and-browse/tasks.md).
 
 With `--target direct-send`, runs the source-containment and real-Hermes approval probes,
-then F2/F3 integration with a provisional entry installed ONLY in scratch fixture copies.
+then F2 direct-send integration with a provisional entry installed ONLY in scratch fixture
+copies. Approvals are a separate lane (`approval_matrix.py`) and never open from this receipt.
 Emits candidates only for passing builds, and `--fixture-qualification-out` only when ALL
 selected builds pass without skips. The committed lists and live owner configuration are never
 changed. Use HMP_DIRECT_SEND_QUALIFICATION=<receipt> for subsequent fixture integration.
@@ -355,6 +356,8 @@ def process_direct_build(spec: BuildSpec, builds_dir: Path, scratch: Path) -> di
     env = dict(os.environ, HMP_HERMES_BUILDS_DIR=str(builds_dir.resolve()))
     env["PYTHONDONTWRITEBYTECODE"] = "1"
     env.pop("HMP_DIRECT_SEND_QUALIFICATION", None)
+    # Approvals are a separate lane (`tools/compat/approval_matrix.py`); never inherit its receipt.
+    env.pop("HMP_APPROVAL_QUALIFICATION", None)
     commands = {
         "boundary": [str(python), str(COMPAT_DIR / "bridge_files.py"), "--hermes-src", str(src),
                      "--dependencies-attr", "DIRECT_SEND_DEPENDENCIES", "--target",
@@ -378,7 +381,7 @@ def process_direct_build(spec: BuildSpec, builds_dir: Path, scratch: Path) -> di
     report = work / "integration.xml"
     proc = subprocess.run([
         sys.executable, "-m", "pytest", "server/tests/integration/test_direct_send_fixture.py",
-        "server/tests/integration/test_approvals_fixture.py", "-k", spec.label, "-q",
+        "-k", spec.label, "-q",
         "-o", "addopts=", f"--junitxml={report.resolve()}",
         f"--basetemp={work.resolve() / 'pytest'}",
     ], cwd=REPO_ROOT, capture_output=True, text=True, check=False, env=env)

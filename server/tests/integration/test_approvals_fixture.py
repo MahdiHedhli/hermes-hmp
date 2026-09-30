@@ -13,7 +13,9 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import shlex
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -25,6 +27,8 @@ _spec = importlib.util.spec_from_file_location("f2_direct_send_fixture_tests", _
 assert _spec is not None and _spec.loader is not None
 _f2 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_f2)
+
+import approval_fixture as af  # noqa: E402 -- tools/fixtures is on sys.path once _f2 loaded
 
 Client = _f2.Client
 DirectSendFixture = _f2.DirectSendFixture
@@ -44,7 +48,13 @@ pytestmark = _f2.pytestmark
 
 @pytest.fixture(params=_f2.BUILDS)
 def gateway(request: pytest.FixtureRequest, tmp_path: Path):
-    """The F2 direct-send gateway, including its pairing pty. Reused, not reimplemented."""
+    """The F2 direct-send gateway, including its pairing pty. Reused, not reimplemented.
+
+    Approvals open only with a fixture receipt (`HMP_APPROVAL_QUALIFICATION`, written by
+    `tools/compat/approval_matrix.py` after boundary and behavior probes); the direct-send receipt
+    alone never opens them. Without it these tests skip, and the matrix rejects any skip."""
+    if not os.environ.get(af.RECEIPT_ENV):
+        pytest.skip(f"needs {af.RECEIPT_ENV} (tools/compat/approval_matrix.py fixture receipt)")
     yield from _f2.gateway.__wrapped__(request, tmp_path)
 
 
@@ -59,6 +69,17 @@ def _answer(client: Client, request_id: str, body: dict[str, Any], profile: str 
 def _phone(client: Client, *, cmid: str, text: str, profile: str = DEFAULT_PROFILE, **extra: Any):
     payload = {"client_message_id": cmid, "text": text, **extra}
     return client.post(f"/hmp/v1/bots/{profile}/phone/messages", payload)
+
+
+def _user_rows(client: Client, profile: str, cmid: str) -> list[dict[str, Any]]:
+    """Durable user rows of the profile's default conversation carrying this client_message_id."""
+    status, body = client.get(f"/hmp/v1/bots/{profile}/conversations/default")
+    assert status == 200, body
+    return [
+        row
+        for row in body.get("messages", [])
+        if row.get("role") == "user" and row.get("client_message_id") == cmid
+    ]
 
 
 def _probe_command(gateway: DirectSendFixture) -> tuple[str, Path]:
@@ -89,7 +110,7 @@ def test_t7_local_run_approval_unblocks_and_clarify_and_execute_code_do_not_card
     ref = _f2.bot_chat_ref(client, DEFAULT_PROFILE)
     head = _f2.bot_chat_head(client, DEFAULT_PROFILE, ref)
     status, body = send(
-        client, DEFAULT_PROFILE, cmid=str(uuid.uuid4()), expected_head=head, text="run the checks"
+        client, DEFAULT_PROFILE, cmid=str(uuid.uuid7()), expected_head=head, text="run the checks"
     )
     assert status == 202, (
         "Session-chat stream completed before a human answered. This Hermes route must "
@@ -141,7 +162,7 @@ def test_t7_desktop_held_has_no_phone_card(gateway: DirectSendFixture) -> None:
     status, body = send(
         client,
         DEFAULT_PROFILE,
-        cmid=str(uuid.uuid4()),
+        cmid=str(uuid.uuid7()),
         expected_head=head,
         text="while desktop holds it",
     )
@@ -171,7 +192,7 @@ def test_t7_replay_does_not_open_a_second_stream(gateway: DirectSendFixture) -> 
     client = gateway.client
     ref = _f2.bot_chat_ref(client, DEFAULT_PROFILE)
     head = _f2.bot_chat_head(client, DEFAULT_PROFILE, ref)
-    cmid = str(uuid.uuid4())
+    cmid = str(uuid.uuid7())
     before = len(gateway.fake_model.main_requests())
     first = send(client, DEFAULT_PROFILE, cmid=cmid, expected_head=head, text="once only")
     second = send(client, DEFAULT_PROFILE, cmid=cmid, expected_head=head, text="once only")
@@ -182,7 +203,13 @@ def test_t7_replay_does_not_open_a_second_stream(gateway: DirectSendFixture) -> 
 
 def test_t8_phone_approval_clarify_and_unknown_id(gateway: DirectSendFixture) -> None:
     """Phone chat is an `hmp` platform turn. The card's request_id is what unblocks it.
-    An unknown ID is 404. A session key in the body is ignored."""
+    An unknown ID is 404. A session key in the body is ignored.
+
+    Correlation, by client_message_id only (never text): after the first 202 the real HMP
+    snapshot shows exactly one durable user row with the sent cmid; the composer cmid refused
+    while clarify is awaiting text never appears in the own default transcript once the answer
+    completes; another granted profile's default conversation never holds the first cmid.
+    Evidence is booleans only, written after every assertion passes."""
     model = gateway.fake_model_module
     command, target = _probe_command(gateway)
     gateway.fake_model.push(
@@ -194,10 +221,17 @@ def test_t8_phone_approval_clarify_and_unknown_id(gateway: DirectSendFixture) ->
         model.Text("clarify done"),
     )
     client = gateway.client
-    cmid = str(uuid.uuid4())
+    cmid = str(uuid.uuid7())
     status, body = _phone(client, cmid=cmid, text="please run it", session_key="ignored")
     assert status == 202, body
     assert body == {"state": "submitted"}
+
+    def own_durable_rows() -> list[dict[str, Any]] | None:
+        rows = _user_rows(client, DEFAULT_PROFILE, cmid)
+        assert len(rows) <= 1, "a sent cmid became more than one durable user row"
+        return rows or None
+
+    assert wait_for(own_durable_rows, timeout=30), "sent cmid never became a durable user row"
 
     def approval():
         code, payload = _prompts(client)
@@ -230,14 +264,37 @@ def test_t8_phone_approval_clarify_and_unknown_id(gateway: DirectSendFixture) ->
     assert other[1]["status"] == "awaiting_text"
     assert other[1]["applied"] is False
     # Phone input has no control authority, including free text after Other.
-    status, body = _phone(client, cmid=str(uuid.uuid4()), text="neither of those")
+    refused_cmid = str(uuid.uuid7())
+    status, body = _phone(client, cmid=refused_cmid, text="neither of those")
     assert status == 409 and body["applied"] is False
     status, body = _answer(client, card["request_id"], {"text": "neither of those"})
     assert status == 200 and body["applied"] is True
 
+    def clarify_settled():
+        code, payload = _prompts(client)
+        assert code == 200, payload
+        return not [item for item in payload.get("prompts", []) if item.get("kind") == "clarify"]
+
+    assert wait_for(clarify_settled, timeout=30)
+    assert len(_user_rows(client, DEFAULT_PROFILE, cmid)) == 1
+    assert not _user_rows(client, DEFAULT_PROFILE, refused_cmid), "refused composer cmid persisted"
+    assert not _user_rows(client, OTHER_PROFILE, cmid), "sent cmid leaked to another profile"
+
     # Unknown-ID behavior; foreign-user/device isolation is covered by the route unit tests.
     status, body = _answer(client, "not-a-stored-request-id", {"choice": "once"})
     assert status == 404 and body["error"]["code"] == "not_found"
+
+    evidence_dir = os.environ.get("HMP_APPROVAL_EVIDENCE_DIR")
+    if evidence_dir:
+        Path(evidence_dir).mkdir(parents=True, exist_ok=True)
+        (Path(evidence_dir) / f"phone-correlation-{gateway.build.label}.json").write_text(
+            json.dumps(
+                {"own_durable_id": True, "other_profile_absent": True, "refused_id_absent": True},
+                indent=2,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
 
 
 def test_t8_restart_mid_wait_does_not_apply(gateway: DirectSendFixture) -> None:
@@ -250,7 +307,7 @@ def test_t8_restart_mid_wait_does_not_apply(gateway: DirectSendFixture) -> None:
         model.ToolCall(name="terminal", args={"command": command}),
     )
     client = gateway.client
-    status, body = _phone(client, cmid=str(uuid.uuid4()), text="hold for restart")
+    status, body = _phone(client, cmid=str(uuid.uuid7()), text="hold for restart")
     assert status == 202, body
 
     def approval():
@@ -284,7 +341,7 @@ def test_t8_cross_profile_exact_id_answer_is_refused(gateway: DirectSendFixture)
     status, body = _prompts(client, OTHER_PROFILE)
     assert status == 200, body
     assert not [i for i in body.get("prompts", []) if i.get("kind") == "approval"], body
-    status, body = _phone(client, cmid=str(uuid.uuid4()), text="hold for cross-profile")
+    status, body = _phone(client, cmid=str(uuid.uuid7()), text="hold for cross-profile")
     assert status == 202, body
 
     def approval():
@@ -321,25 +378,134 @@ def test_t8_cross_profile_exact_id_answer_is_refused(gateway: DirectSendFixture)
     assert target.exists() and (target / "sentinel").exists(), "denied command ran"
 
 
-@pytest.mark.parametrize("closed_by", ["owner", "flag", "qualification"])
+def _pending_approval(client: Client, request_id: str | None = None):
+    code, payload = _prompts(client)
+    assert code == 200, payload
+    cards = [item for item in payload.get("prompts", []) if item.get("kind") == "approval"]
+    if request_id is not None:
+        cards = [item for item in cards if item.get("request_id") == request_id]
+    return cards[0] if cards else None
+
+
+def test_t7_bot_chat_exact_id_deny_blocks_command(gateway: DirectSendFixture) -> None:
+    """Deny by exact ID leaves the dangerous command unrun; a wrong ID resolves nothing."""
+    model = gateway.fake_model_module
+    command, target = _probe_command(gateway)
+    gateway.fake_model.push(
+        model.ToolCall(name="terminal", args={"command": command}), model.Text("stopped")
+    )
+    client = gateway.client
+    ref = _f2.bot_chat_ref(client, DEFAULT_PROFILE)
+    head = _f2.bot_chat_head(client, DEFAULT_PROFILE, ref)
+    status, body = send(
+        client, DEFAULT_PROFILE, cmid=str(uuid.uuid7()), expected_head=head, text="run the checks"
+    )
+    assert status == 202, body
+    prompt = wait_for(
+        lambda: (lambda c: c if c and c.get("surface") == "bot_chat" else None)(
+            _pending_approval(client)),
+        timeout=30,
+    )
+    assert prompt, _prompts(client)
+    request_id = prompt["request_id"]
+    status, body = _answer(client, "not-the-request-id", {"choice": "once"})
+    assert status == 404 and body.get("applied") is not True, body
+    assert _pending_approval(client, request_id), "a wrong ID settled the approval"
+    assert (target / "sentinel").exists(), "command ran without an answer"
+
+    status, body = _answer(client, request_id, {"choice": "deny"})
+    assert status == 200 and body["applied"] is True, body
+    assert wait_for(lambda: not _pending_approval(client, request_id), timeout=30)
+    assert (target / "sentinel").exists(), "denied command ran"
+    # An already-settled ID cannot be replayed into an approval.
+    status, body = _answer(client, request_id, {"choice": "once"})
+    assert status in (404, 409) and body.get("applied") is not True, body
+    assert (target / "sentinel").exists(), "replayed answer ran the denied command"
+
+
+def test_t8_phone_text_and_slash_never_resolve_pending_approval(
+    gateway: DirectSendFixture,
+) -> None:
+    """Phone text has no control authority: plaintext approval words and slash commands sent as
+    ordinary phone messages neither settle the pending card nor run the command."""
+    model = gateway.fake_model_module
+    command, target = _probe_command(gateway)
+    gateway.fake_model.push(model.ToolCall(name="terminal", args={"command": command}))
+    client = gateway.client
+    status, body = _phone(client, cmid=str(uuid.uuid7()), text="hold for text bypass")
+    assert status == 202, body
+    prompt = wait_for(lambda: _pending_approval(client), timeout=30)
+    assert prompt, _prompts(client)
+    request_id = prompt["request_id"]
+    for text in ("/approve", "/approve always", "yes", "approve", "/deny", "/stop"):
+        status, body = _phone(client, cmid=str(uuid.uuid7()), text=text)
+        assert not (isinstance(body, dict) and body.get("applied") is True), (text, status, body)
+        assert _pending_approval(client, request_id), f"{text!r} settled the approval"
+        assert (target / "sentinel").exists(), f"{text!r} ran the command"
+    time.sleep(3)  # a bypass that acts asynchronously would show by now
+    assert _pending_approval(client, request_id), "the approval settled without an answer"
+    assert (target / "sentinel").exists()
+
+    status, body = _answer(client, request_id, {"choice": "deny"})
+    assert status == 200 and body["applied"] is True, body
+    assert wait_for(lambda: not _pending_approval(client, request_id), timeout=30)
+    assert (target / "sentinel").exists(), "denied command ran"
+
+
+def test_t7_real_timeout_expires_wait_without_running_command(gateway: DirectSendFixture) -> None:
+    """A real Hermes approval wait that outlives approvals.timeout ends fail-closed: the command
+    never runs, the card leaves the list, and a late answer by the expired ID applies nothing."""
+    gateway._rewrite_config(approval_timeout=8)
+    gateway.restart_gateway()  # Hermes reads approvals.timeout when the gateway starts
+    model = gateway.fake_model_module
+    command, target = _probe_command(gateway)
+    gateway.fake_model.push(
+        model.ToolCall(name="terminal", args={"command": command}), model.Text("timed out")
+    )
+    client = gateway.client
+    ref = _f2.bot_chat_ref(client, DEFAULT_PROFILE)
+    head = _f2.bot_chat_head(client, DEFAULT_PROFILE, ref)
+    status, body = send(
+        client, DEFAULT_PROFILE, cmid=str(uuid.uuid7()), expected_head=head, text="let it expire"
+    )
+    assert status == 202, body
+    prompt = wait_for(lambda: _pending_approval(client), timeout=30)
+    assert prompt, _prompts(client)
+    request_id = prompt["request_id"]
+    assert wait_for(lambda: not _pending_approval(client, request_id), timeout=90), (
+        "an unanswered approval never expired"
+    )
+    assert (target / "sentinel").exists(), "expired approval ran the command"
+    status, body = _answer(client, request_id, {"choice": "once"})
+    assert status in (404, 409, 410) and body.get("applied") is not True, body
+    assert (target / "sentinel").exists(), "a late answer ran the expired command"
+
+
+@pytest.mark.parametrize(
+    "closed_by", ["owner", "flag", "direct-send-list", "approval-list"]
+)
 def test_approvals_fixture_fails_closed(gateway: DirectSendFixture, closed_by: str) -> None:
-    """Fixture-only qualification never removes ACL, explicit flag or build checks."""
+    """Fixture-only qualification never removes ACL, explicit flag or build checks, and each
+    lane's list closes approvals independently (approval list empty leaves reads/sends open)."""
     if closed_by == "owner":
         gateway._rewrite_config(owner_device_ids=())
         # Hermes loads platform extras when the adapter connects, just like the flag.
         gateway.restart_gateway()
     elif closed_by == "flag":
         gateway.set_direct_send_flag(False)
-    else:
+    elif closed_by == "direct-send-list":
         path = gateway.paths.out_dir / "_hmp_plugin" / "direct_send_supported_builds.json"
         data = json.loads(path.read_text(encoding="utf-8"))
         data["builds"] = []
         path.write_text(json.dumps(data), encoding="utf-8")
         gateway.restart_gateway()
+    else:
+        af.remove_approval_fixture_entry(gateway.paths.out_dir)
+        gateway.restart_gateway()
     before = len(gateway.fake_model.main_requests())
     for status, body in (
         _prompts(gateway.client),
-        _phone(gateway.client, cmid=str(uuid.uuid4()), text="fixture must refuse"),
+        _phone(gateway.client, cmid=str(uuid.uuid7()), text="fixture must refuse"),
         _answer(gateway.client, "missing-request", {"choice": "once"}),
     ):
         assert status == (404 if closed_by == "owner" else 503), body

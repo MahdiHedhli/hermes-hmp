@@ -5,7 +5,7 @@ HMP follows the [feature list](FEATURES.md) and the [upstream requests](NOUS_GAT
 | Area | Next step | Dependency |
 | --- | --- | --- |
 | Compatibility | Requalify guarded sends on each new Hermes build. | Exact build and bridge fingerprint review |
-| Approvals and choices | Draft groundwork: a fail-closed, empty approval qualification list. Next, finish authorization, expiry, resource-bound, and log-leak security review and add behavioral qualification evidence before any release. | Security clearance; a qualified released Hermes build (the untagged `ac0cfa7` fixture pass is not one); upstream session events for full parity |
+| Approvals and choices | Draft groundwork: a fail-closed, empty approval qualification list, plus draft process-matrix tooling (`specs/005-approval-process-matrix`, baseline passed; current revised candidate awaiting rerun). Next, finish authorization, expiry, resource-bound, and log-leak security review and add behavioral qualification evidence before any release. | Security clearance; an exact Hermes build qualified against the final HMP candidate (historical fixture passes alone are insufficient); upstream session events for full parity |
 | Bot tabs | Show and create the same tabs Desktop sees. | Shared server-side tab registry |
 | Updates | Replace polling with a session change feed when available. | Hermes gateway event or long-poll API |
 | Voice and screen | Add client features when authenticated API server routes are available. | Upstream routes and access controls |

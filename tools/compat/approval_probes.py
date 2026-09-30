@@ -13,6 +13,7 @@ import asyncio
 import importlib
 import json
 import sys
+import threading
 from functools import partial
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,7 +31,7 @@ def load_api(src: Path) -> SimpleNamespace:
             "busy": "gateway.run_busy", "inbound": "gateway.run_inbound",
             "approval": "tools.approval", "wait": "tools.approval_gateway_wait",
             "clarify": "tools.clarify_gateway", "session": "gateway.session",
-            "config": "gateway.config",
+            "config": "gateway.config", "interrupt": "tools.interrupt",
         }.items()
     })
 
@@ -180,6 +181,74 @@ def exact_request_id(api: SimpleNamespace) -> None:
         api.approval._gateway_queues.pop(key, None)
 
 
+def _blocking_wait(api: SimpleNamespace, key: str, request_id: str):
+    """Run Hermes' real blocking approval wait on a worker thread, as the agent thread does.
+
+    Returns (thread, box, published). `box["tid"]` is the worker's thread id (the interrupt
+    target) and `box["result"]` the wait's decision dict once it ends.
+    """
+    box: dict = {}
+    published = threading.Event()
+    data = {"command": "true", "pattern_key": "hmp-probe", "request_id": request_id}
+
+    def notify(payload: dict) -> None:
+        box["payload"] = payload
+        published.set()
+
+    def work() -> None:
+        box["tid"] = threading.current_thread().ident
+        try:
+            box["result"] = api.wait._await_gateway_decision(key, notify, data)
+        except Exception as exc:  # surfaced to the probe, never swallowed
+            box["error"] = repr(exc)
+
+    thread = threading.Thread(target=work, daemon=True)
+    thread.start()
+    return thread, box, published
+
+
+def interrupted_wait_fails_closed(api: SimpleNamespace) -> None:
+    """An interrupt ends a pending approval wait as a deny with a cancel cause, never approval."""
+    key, request_id = "hmp-qualification-interrupt", "interrupt-one"
+    thread, box, published = _blocking_wait(api, key, request_id)
+    try:
+        assert published.wait(10), f"wait never published its prompt: {box}"
+        assert [e["request_id"] for e in api.approval.list_gateway_approvals(key)] == [request_id]
+        api.interrupt.set_interrupt(True, box["tid"], reason="fixture interrupt")
+        thread.join(15)
+        assert not thread.is_alive(), "interrupt did not end the approval wait"
+        assert "error" not in box, box
+        result = box["result"]
+        assert result["choice"] == "deny" and result.get("cancelled"), result
+        assert api.approval.list_gateway_approvals(key) == []
+        assert api.approval.resolve_gateway_approval(key, "once", request_id=request_id) == 0
+    finally:
+        api.interrupt.set_interrupt(False, box.get("tid"))
+        api.approval._gateway_queues.pop(key, None)
+
+
+def timed_out_wait_fails_closed(api: SimpleNamespace) -> None:
+    """A wait that outlives approvals.timeout ends unresolved with no choice; a late answer by
+    the expired request ID resolves nothing."""
+    key, request_id = "hmp-qualification-timeout", "timeout-one"
+    context = api.wait._ctx
+    original = context._get_approval_timeout
+    context._get_approval_timeout = lambda: 0.5
+    try:
+        thread, box, published = _blocking_wait(api, key, request_id)
+        assert published.wait(10), f"wait never published its prompt: {box}"
+        thread.join(15)
+        assert not thread.is_alive(), "approval timeout did not end the wait"
+        assert "error" not in box, box
+        result = box["result"]
+        assert result["resolved"] is False and result["choice"] is None, result
+        assert api.approval.list_gateway_approvals(key) == []
+        assert api.approval.resolve_gateway_approval(key, "once", request_id=request_id) == 0
+    finally:
+        context._get_approval_timeout = original
+        api.approval._gateway_queues.pop(key, None)
+
+
 def main() -> int:
     if not __debug__:
         raise RuntimeError("qualification requires assertions enabled")
@@ -191,7 +260,10 @@ def main() -> int:
         api = load_api(args.hermes_src)
         asyncio.run(control_disabled_input(api))
         exact_request_id(api)
-    print(json.dumps({"control_ok": True, "exact_id_ok": True}))
+        interrupted_wait_fails_closed(api)
+        timed_out_wait_fails_closed(api)
+    print(json.dumps({"control_ok": True, "exact_id_ok": True,
+                      "interrupt_ok": True, "timeout_ok": True}))
     return 0
 
 

@@ -243,6 +243,14 @@ def compute(
         # Direct send also relies on read-side identity, authorization, routing and history.
         # Derive their defining/wrapper files too, rather than trusting a hand-copied old list.
         dependencies = (*compat_module.READ_DEPENDENCIES, *dependencies)
+    elif dependencies_attr == "APPROVAL_DEPENDENCIES":
+        # The approval lane sits on top of guarded send: its file list must cover the read,
+        # send and approval-specific defining files (a strict superset of the send list).
+        dependencies = (
+            *compat_module.READ_DEPENDENCIES,
+            *compat_module.DIRECT_SEND_DEPENDENCIES,
+            *dependencies,
+        )
     this_modules = {spec.module for spec in dependencies}
     other_modules: set[str] = set()
     for attr in _ALL_DEPENDENCY_ATTRS:
@@ -282,7 +290,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--dependencies-attr",
         default="READ_DEPENDENCIES",
         help="name of the hmp_plugin.compat tuple to probe "
-        "(READ_DEPENDENCIES or DIRECT_SEND_DEPENDENCIES, amendment F2)",
+        "(READ_DEPENDENCIES, DIRECT_SEND_DEPENDENCIES or APPROVAL_DEPENDENCIES)",
     )
     args = parser.parse_args(argv)
 
