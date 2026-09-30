@@ -1,5 +1,29 @@
 # Approvals review status
 
+## Exact untagged Hermes `main` fixture matrix
+
+The isolated archive of Hermes
+`ac0cfa7db94cefa90cf3e35191f38b53888b9e17` passed HMP's boundary and
+behavior probes and the F2/F3 real gateway/PTY fixture matrix. Its JUnit report
+has **16 selected cases, 16 passed, 0 failures, 0 errors, 0 skips**: T7 Bot Chat
+approval **3/3**, T8 Phone chat approval **2/2**, and approval fail-closed
+owner/flag/qualification cases **3/3**. The fixture used loopback listeners,
+Hermes's real gateway and pairing paths, a fake model, synthetic credentials,
+and scratch homes. The source archive's approval stream and busy resolver files
+matched that exact upstream commit. The matrix produced a fixture-only receipt
+under `/private/tmp/hmp-approval-matrix-results-3`; it was not copied to a
+runtime allowlist or the owner's live Hermes.
+
+This result covers the **exact untagged archive only**. It does not qualify a
+published Hermes release, a git install, real model/tool latency, a physical
+phone, or a live multi-profile deployment. The source's lockfile required
+Python 3.14, so extraction used a scratch per-build interpreter override that
+is not part of this PR. A released build needs its own locked, reproducible
+extraction and full matrix, followed by independent release security review.
+F3 stays disabled. The test-only resolver update in this PR preserves the
+old-build path and exercises the active language's approval words plus
+slash-confirm words under `allow_gateway_control=False`.
+
 ## Untagged Hermes `main` candidate: source and handler probe only
 
 Hermes `main` at `ac0cfa7db94cefa90cf3e35191f38b53888b9e17` registers an
@@ -17,10 +41,11 @@ drop interrupted the fake agent and rejected the late answer with the **real**
 request ID. The wrapper and focused lint passed. Independent security review
 found and prompted the late-answer assertion fix before this recorded rerun.
 
-This is not the full T7/T8 real-route matrix. The fake agent sets the interrupt
-flag in its own worker thread; true agent and tool interruption, live HTTP/SSE,
-TLS and pairing, real multiplex profile secrets, smart mode, timeout, concurrent
-prompts, HMP relay, and device behavior remain untested. Upstream's API-key
+On its own, this handler probe is not the full T7/T8 real-route matrix above.
+Its fake agent sets the interrupt flag in its own worker thread. The matrix
+separately covers the loopback gateway, pairing, and HMP relay, but a physical
+device, real model/tool latency, live multiplex profile secrets, smart mode,
+timeout, and concurrent prompts remain untested. Upstream's API-key
 answer route also accepts an omitted request ID or bulk selection; **HMP must
 require and forward one exact ID and refuse bulk choices**. No runtime
 fingerprint, allowlist entry, or live plugin change was made. F3 remains off.
