@@ -140,17 +140,30 @@ def bootstrap_compat_entry(build: fc.BuildInfo, plugin_copy_dir: Path) -> None:
         )
     compat_path = plugin_copy_dir / "read_compat_builds.json"
     data = json.loads(compat_path.read_text(encoding="utf-8"))
+    # An archive extraction has no `.git` (`git_sha` None, fingerprint-only). A git-install fixture
+    # (specs/005 amendment 2) reports its own HEAD, and the runtime matches a git install only to
+    # an entry with that SHA, so the bootstrap entry must carry it.
+    git_sha = identity.get("git_sha")
+    # Never bind a HEAD the fixture merely borrows (linked worktree, pointer file, alternates): the
+    # seed's reading must equal the independence-checked one, and an archive must stay `.git`-free.
+    import approval_fixture
+
+    if approval_fixture.independent_git_head(build.src_dir) != git_sha:
+        raise fc.FixtureSafetyError(
+            f"build {build.label!r}: git identity is not an independent clone's HEAD; "
+            "refusing to bootstrap a compat entry"
+        )
     for entry in data.get("builds", []):
-        if entry.get("fingerprint") == fingerprint and entry.get("git_sha") is None:
+        if entry.get("fingerprint") == fingerprint and entry.get("git_sha") == git_sha:
             return  # already listed (a prior bootstrap run against this same copy)
     data.setdefault("builds", []).append(
         {
             "fingerprint": fingerprint,
-            "git_sha": None,
+            "git_sha": git_sha,
             "label": f"fixture-bootstrap-{build.label}",
             "qualified_by": "tools/fixtures/build_fixture.py (T060 bootstrap pending T063/T064)",
             "qualified_at": datetime.now(UTC).isoformat(),
-            "source_sha": _resolve_source_sha(build.label),
+            "source_sha": git_sha or _resolve_source_sha(build.label),
         }
     )
     compat_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")

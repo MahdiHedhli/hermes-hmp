@@ -5,8 +5,9 @@ A sibling of `run_matrix.py`, not a mode of it: read and direct-send qualificati
 and an approval receipt never widens them. For ONE extracted, archive-style Hermes build it runs,
 in order, stopping at the first failure:
 
-  identity     pinned Python 3.14, extracted tree without .git, public approval manifest empty,
-               optional read-only cross-check against the original upstream source and SHA.
+  identity     pinned Python 3.14, extracted tree without .git (or, with --git-install, an
+               independent git clone whose HEAD is the expected SHA), public approval manifest
+               empty, optional read-only cross-check against the original upstream source and SHA.
   boundary     `bridge_files.py --check` for the direct-send and the approval file lists.
   behavior     `approval_probes.py` against the real Hermes modules (control, exact ID,
                interrupt and timeout waits).
@@ -15,6 +16,12 @@ in order, stopping at the first failure:
   reconnect    the listener-reconnect harness evidence (real `adapter.open_components`).
   timing       bounded repeated cold/cached qualifier timing (local evidence only).
   stability    source and plugin bytes are unchanged from before the first stage.
+
+`--git-install` is the fixture-only git mode (specs/005 amendment 2): same stages, same required
+tests, but the build must be an isolated, independent git clone (its own `.git`, no alternates,
+hard links, symlinks or remotes) whose full 40-hex HEAD equals --expected-source-sha, before and
+after. Its receipt has a different kind and binds that SHA as `git_sha`; it is never an archive
+receipt and never release, memory or device admission.
 
 The final receipt is written only after every stage passed. It is a fixture-only artifact: never
 committed, never a manifest entry, never a device, release or security clearance.
@@ -115,7 +122,7 @@ def _is_sha256(value: object) -> bool:
 
 def check_lifecycle_evidence(
     swap: dict[str, Any], empty: dict[str, Any], admitted: dict[str, Any],
-    reconnect: dict[str, dict[str, Any]],
+    reconnect: dict[str, dict[str, Any]], git_sha: str | None = None,
 ) -> None:
     """Machine-check the saved lifecycle and reconnect values. Raises RuntimeError. A full gateway
     restart must change the PID; the admitted-start and reconnect proofs stay in one process. Route
@@ -149,6 +156,15 @@ def check_lifecycle_evidence(
         != fingerprints["direct_send_fingerprint_after"]
     ):
         raise RuntimeError("in-place swap: the read or direct-send fingerprint moved")
+    # Git fixture: the swap moved the fingerprint and nothing about the git identity. Archive: the
+    # swap evidence carries no git identity at all.
+    if swap.get("git_sha_before") != git_sha or swap.get("git_sha_after") != git_sha:
+        raise RuntimeError("in-place swap: the git HEAD is not the expected one before and after")
+    if git_sha is not None and not (
+        _is_sha256(swap.get("git_identity_before"))
+        and swap.get("git_identity_before") == swap.get("git_identity_after")
+    ):
+        raise RuntimeError("in-place swap: the .git metadata moved or was not recorded")
     if set(reconnect) != set(af.RECONNECT_EXPECTED):
         raise RuntimeError("reconnect evidence does not cover exactly the required scenarios")
     gateway_pids = {swap["pid_before"], swap["pid_after"], empty["pid_before"], empty["pid_after"],
@@ -248,6 +264,7 @@ class Matrix:
         self.state: dict[str, Any] = {}
         self.stages: dict[str, bool] = {}
         self.errors: dict[str, str] = {}
+        self.git_install: bool = bool(getattr(args, "git_install", False))
 
     # ---- identity -----------------------------------------------------------------------
 
@@ -261,6 +278,8 @@ class Matrix:
             "direct_fingerprint": compute_read_bridge_fingerprint(self.src, direct_files),
             "read_fingerprint": compute_read_bridge_fingerprint(self.src, read_files),
             "plugin_sha256": af.plugin_source_digest(PLUGIN_DIR),
+            "git_head": af.build_git_head(self.src) if self.git_install else None,
+            "git_identity": af.git_identity_digest(self.src) if self.git_install else None,
         }
 
     def stage_identity(self) -> None:
@@ -275,8 +294,14 @@ class Matrix:
             raise RuntimeError("--expected-source-sha must be a full 40-hex commit")
         fc.assert_outside_real_home(self.out, "--out")
         build = fc.resolve_build(self.builds_dir, self.label)
-        if (self.src / ".git").exists():
-            raise RuntimeError("qualifies an extracted archive fixture, not a git install")
+        has_git = (self.src / ".git").exists() or (self.src / ".git").is_symlink()
+        if self.git_install:
+            if not has_git:
+                raise RuntimeError("--git-install needs a git clone: the build has no .git")
+            self._require_independent_git_clone(source_sha)
+        elif has_git:
+            raise RuntimeError(
+                "qualifies an extracted archive fixture, not a git install (use --git-install)")
         if _python_version(build.venv_python) != PINNED_PYTHON:
             raise RuntimeError("the build interpreter must be pinned Python 3.14")
         if json.loads(APPROVAL_COMPAT_PATH.read_text(encoding="utf-8"))["builds"] != []:
@@ -289,10 +314,13 @@ class Matrix:
             raise RuntimeError("the approval boundary must cover the direct-send boundary")
         self.state.update(snap, source_sha=source_sha, build=build)
         upstream = self.args.upstream_source
+        if self.git_install and upstream is not None:
+            self._require_disjoint_from_upstream(upstream)
         if upstream is not None:
             proc = subprocess.run(
                 ["git", "-C", str(upstream), "rev-parse", "HEAD"],
                 capture_output=True, text=True, check=False, timeout=60,
+                env=dict(os.environ, GIT_OPTIONAL_LOCKS="0"),
             )
             if proc.returncode != 0 or proc.stdout.strip() != source_sha:
                 raise RuntimeError("upstream source HEAD differs from --expected-source-sha")
@@ -303,6 +331,28 @@ class Matrix:
             self.state["upstream_verified"] = True
         else:
             self.state["upstream_verified"] = False
+
+    def _require_independent_git_clone(self, source_sha: str) -> None:
+        """The build's own `.git` must be independent and resolve to exactly the expected SHA."""
+        try:
+            head = af.assert_git_fixture_clone(self.src, original=self.args.upstream_source)
+        except fc.FixtureSafetyError as exc:
+            raise RuntimeError(f"git fixture refused: {exc}") from exc
+        if head != source_sha:
+            raise RuntimeError("the git HEAD of the build differs from --expected-source-sha")
+
+    def _require_disjoint_from_upstream(self, upstream: Path) -> None:
+        """The optional original source is only ever READ: the fixture is a different tree with a
+        different `.git` (never the same inode, path, parent or child)."""
+        original = upstream.resolve()
+        if self.src.is_relative_to(original) or original.is_relative_to(self.src):
+            raise RuntimeError("the git fixture overlaps the upstream source; refusing")
+        try:
+            same = os.path.samefile(self.src / ".git", original / ".git")
+        except OSError:
+            same = False  # an upstream without .git is rejected by the rev-parse check
+        if same:
+            raise RuntimeError("the git fixture shares its .git with the upstream source")
 
     # ---- boundary / behavior -------------------------------------------------------------
 
@@ -337,9 +387,13 @@ class Matrix:
 
     # ---- receipts ------------------------------------------------------------------------
 
+    def _git_sha(self) -> str | None:
+        """The entry's git_sha: the verified HEAD in git mode, else None (fingerprint-only)."""
+        return self.state["source_sha"] if self.git_install else None
+
     def _entry(self, fingerprint: str, *, provisional: bool) -> dict[str, Any]:
         entry = run_matrix.direct_send_entry({
-            "label": self.label, "fingerprint": fingerprint, "git_sha": None,
+            "label": self.label, "fingerprint": fingerprint, "git_sha": self._git_sha(),
             "source_sha": self.state["source_sha"],
         }, provisional=provisional)
         entry["qualified_by"] = (
@@ -356,8 +410,8 @@ class Matrix:
         direct.write_text(json.dumps({
             "format": 1, "bridge_files": s["direct_files"],
             "builds": [run_matrix.direct_send_entry({
-                "label": self.label, "fingerprint": s["direct_fingerprint"], "git_sha": None,
-                "source_sha": s["source_sha"]}, provisional=True)],
+                "label": self.label, "fingerprint": s["direct_fingerprint"],
+                "git_sha": self._git_sha(), "source_sha": s["source_sha"]}, provisional=True)],
         }, indent=2) + "\n", encoding="utf-8")
         approval = self.out / "approval-provisional-fixture-only.json"
         approval.write_text(json.dumps({
@@ -424,7 +478,8 @@ class Matrix:
                 raise RuntimeError(f"lifecycle evidence missing: {path.name}")
             life[key] = json.loads(path.read_text(encoding="utf-8"))
         try:
-            check_lifecycle_evidence(life["swap"], life["empty"], life["admitted"], reports)
+            check_lifecycle_evidence(
+                life["swap"], life["empty"], life["admitted"], reports, git_sha=self._git_sha())
         except (AttributeError, KeyError, TypeError) as exc:
             raise RuntimeError(f"lifecycle evidence is malformed: {exc!r}") from exc
         self.state["lifecycle"] = {
@@ -483,7 +538,15 @@ class Matrix:
                     "plugin_sha256", "approval_files", "direct_files", "read_files"):
             if after[key] != self.state[key]:
                 raise RuntimeError(f"{key} changed during the matrix")
-        if (self.src / ".git").exists():
+        has_git = (self.src / ".git").exists() or (self.src / ".git").is_symlink()
+        if self.git_install:
+            for key in ("git_head", "git_identity"):
+                if after[key] != self.state[key]:
+                    raise RuntimeError(f"{key} changed during the matrix")
+            if after["git_head"] != self.state["source_sha"]:
+                raise RuntimeError("the git HEAD moved away from the expected source SHA")
+            self._require_independent_git_clone(self.state["source_sha"])
+        elif has_git:
             raise RuntimeError("a .git appeared in the extracted build during the matrix")
         if json.loads(APPROVAL_COMPAT_PATH.read_text(encoding="utf-8"))["builds"] != []:
             raise RuntimeError("the public approval manifest changed during the matrix")
@@ -495,7 +558,10 @@ class Matrix:
             "bridge_files": s["approval_files"],
             "builds": [self._entry(s["approval_fingerprint"], provisional=False)],
             "evidence": {
-                "kind": af.RECEIPT_KIND, "not_for_commit": True, "complete": True,
+                "kind": af.RECEIPT_KIND_GIT if self.git_install else af.RECEIPT_KIND,
+                "install_kind": "git" if self.git_install else "archive",
+                "git_sha": self._git_sha(),
+                "not_for_commit": True, "complete": True,
                 "label": self.label, "source_sha": s["source_sha"],
                 "upstream_verified": s["upstream_verified"],
                 "approval_fingerprint": s["approval_fingerprint"],
@@ -506,8 +572,11 @@ class Matrix:
                 "required_tests": [f"{m}::{t}" for m, t in required_ids(self.label)],
                 "junit_sha256": s["junit_sha256"], "behavior": s["behavior"],
                 "lifecycle": s["lifecycle"], "timing": s["timing"],
-                "git_lifecycle": "not_covered",
+                "git_lifecycle": "fixture_clone" if self.git_install else "not_covered",
                 "limits": [
+                    "independent git clone fixture; release, memory and device admission are "
+                    "not covered and the production manifest stays empty"
+                    if self.git_install else
                     "extracted archive without .git; the git SHA branch has unit coverage only",
                     "no memory attestation; already-imported modules are not re-verified",
                     "not device, release or security clearance; never a committed manifest entry",
@@ -582,6 +651,9 @@ def main(argv: Sequence[str] | None = None) -> int:
                         "a partial run never writes a receipt")
     parser.add_argument("--timing-repeats", type=int, default=5)
     parser.add_argument("--cached-calls", type=int, default=200)
+    parser.add_argument("--git-install", action="store_true",
+                        help="fixture-only git mode: the build is an isolated independent git "
+                        "clone whose HEAD equals --expected-source-sha (specs/005 amendment 2)")
     parser.add_argument("--integration-timeout", type=float, default=7200.0)
     args = parser.parse_args(argv)
     if not 1 <= args.timing_repeats <= 20:

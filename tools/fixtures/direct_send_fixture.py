@@ -451,9 +451,12 @@ def install_fixture_qualification(build: fc.BuildInfo, out: Path, qualification:
     except (TypeError, ValueError) as exc:
         raise fc.FixtureSafetyError("invalid direct-send fixture qualification schema") from exc
     fingerprint = compute_read_bridge_fingerprint(build.src_dir, data["bridge_files"])
+    # An archive (no .git) needs a fingerprint-only entry; a git-install fixture needs one bound to
+    # the build's own HEAD, exactly as the runtime matches them. `None == None` for an archive.
+    head = approval_fixture.independent_git_head(build.src_dir)
     entries = [e for e in receipt.get("builds", [])
                if e.get("label") == build.label and e.get("fingerprint") == fingerprint
-               and e.get("git_sha") is None and fingerprint is not None]
+               and e.get("git_sha") == head and fingerprint is not None]
     if len(entries) != 1:
         raise fc.FixtureSafetyError("no exact direct-send fixture qualification for this build")
     data["builds"] = entries

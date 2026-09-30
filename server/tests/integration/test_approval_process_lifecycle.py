@@ -13,7 +13,10 @@ What each test proves, and what it deliberately does not:
 - Listener-only reconnect has no public daemon path; `approval_reconnect_harness.py` drives the
   real `adapter.open_components` twice in one process instead. A full restart is never taken as
   proof of listener-only behavior.
-- No git install is used (the fixture is an extracted archive without `.git`).
+- Archive or git fixture: the build is either an extracted archive without `.git` or, for a git
+  receipt (`approval-fixture-qualification-git`), an independent git clone. The SAME required
+  tests run for both; the receipt's `git_sha` decides which, and every case asserts the build's
+  real `.git` identity equals the receipt's (the gateway's own factory reads it).
 """
 
 from __future__ import annotations
@@ -85,6 +88,19 @@ class Lifecycle:
 
     def remove(self) -> None:
         af.remove_approval_fixture_entry(self.out)
+
+
+def _assert_identity_matches_receipt(life: Lifecycle) -> str | None:
+    """The build's real git identity (None for an archive) equals the receipt's entry, and a git
+    fixture is still an independent clone. Returns the HEAD SHA."""
+    entry = json.loads(life.receipt.read_text(encoding="utf-8"))["builds"][0]
+    src = life.gw.build.src_dir
+    head = af.build_git_head(src)
+    assert head == entry.get("git_sha"), (head, entry.get("git_sha"))
+    if head is not None:
+        assert af.assert_git_fixture_clone(src) == head
+        assert entry.get("source_sha") == head
+    return head
 
 
 def _evidence(life: Lifecycle, name: str, data: dict[str, Any]) -> None:
@@ -188,6 +204,7 @@ def test_direct_send_receipt_never_opens_approvals(lifecycle: Lifecycle) -> None
     """A gateway with the direct-send receipt installed and NO approval entry keeps AP-3/4/6
     closed while reads and ordinary guarded sends work."""
     assert lifecycle.manifest_builds() == []
+    _assert_identity_matches_receipt(lifecycle)
     direct = json.loads(
         (lifecycle.out / "_hmp_plugin" / "direct_send_supported_builds.json").read_text()
     )
@@ -203,6 +220,7 @@ def test_empty_start_stays_closed_until_full_restart(lifecycle: Lifecycle) -> No
     gw = lifecycle.gw
     pid_before = lifecycle.pid
     assert lifecycle.manifest_builds() == []
+    _assert_identity_matches_receipt(lifecycle)
     _assert_reads_and_send_available(lifecycle, "empty start read and send")
     _assert_approvals_closed(lifecycle)
 
@@ -244,6 +262,8 @@ def test_admitted_start_entry_removal_closes_and_restore_reopens(admitted: Lifec
     the very next request; restoring the same startup entry can reopen, in the same process."""
     pid = admitted.pid
     assert admitted.manifest_builds(), "the gateway must start with the fixture entry"
+    head = _assert_identity_matches_receipt(admitted)
+    assert [b.get("git_sha") for b in admitted.manifest_builds()] == [head]
     _assert_approvals_open(admitted)  # a successful probe is now cached in this process
     _assert_approvals_open(admitted)
 
@@ -273,6 +293,8 @@ def test_in_place_swap_stays_closed_until_full_restart(swap: Lifecycle) -> None:
     read_before = compute(build.src_dir, read_files)
     direct_before = compute(build.src_dir, direct_files)
     pid_before = swap.pid
+    git_sha = _assert_identity_matches_receipt(swap)
+    git_before = af.git_identity_digest(build.src_dir) if git_sha else None
     _assert_approvals_open(swap)  # admitted at start; probe cached
 
     swapped = af.mutate_swap_file(build, approval_files, read_files, direct_files)
@@ -285,6 +307,10 @@ def test_in_place_swap_stays_closed_until_full_restart(swap: Lifecycle) -> None:
     assert direct_after == direct_before
     old, new = af.rebind_fixture_entry(build, swap.out, note="in-place swap")
     assert (old, new) == (approval_before, approval_after)
+    if git_sha:  # a source swap moves the fingerprint, never the git identity
+        assert af.build_git_head(build.src_dir) == git_sha
+        assert af.git_identity_digest(build.src_dir) == git_before
+        assert [b.get("git_sha") for b in swap.manifest_builds()] == [git_sha]
 
     assert swap.gw.gateway_proc.poll() is None and swap.pid == pid_before
     _assert_approvals_closed(swap)
@@ -295,8 +321,14 @@ def test_in_place_swap_stays_closed_until_full_restart(swap: Lifecycle) -> None:
     pid_after = swap.pid
     assert pid_after != pid_before
     _assert_approvals_open(swap)
+    if git_sha:
+        assert af.assert_git_fixture_clone(build.src_dir) == git_sha
+        assert af.git_identity_digest(build.src_dir) == git_before
     _evidence(swap, "in-place-swap", {
         "swapped_file": swapped, "pid_before": pid_before, "pid_after": pid_after,
+        "git_sha_before": git_sha, "git_sha_after": af.build_git_head(build.src_dir),
+        "git_identity_before": git_before,
+        "git_identity_after": af.git_identity_digest(build.src_dir) if git_sha else None,
         "approval_fingerprint_before": approval_before,
         "approval_fingerprint_after": approval_after,
         "read_fingerprint_before": read_before, "read_fingerprint_after": read_after,
@@ -323,6 +355,8 @@ def test_listener_reconnect_never_reopens_a_closed_baseline(
     entry and reopens only for the exact startup entry."""
     receipt = _receipt()
     build = fc.resolve_build(Path(_f2.BUILDS_DIR_ENV), label)
+    entry = json.loads(receipt.read_text(encoding="utf-8"))["builds"][0]
+    assert af.build_git_head(build.src_dir) == entry.get("git_sha")  # archive: both None
     work = tmp_path / "reconnect"
     (work / "home" / "plugin-data" / "hmp" / "instance").mkdir(parents=True)
     (work / "xdg").mkdir()

@@ -40,6 +40,10 @@ APPROVAL_MANIFEST = "approval_supported_builds.json"
 # Fixture tooling only (`direct_send_fixture.build_offline`). No plugin module reads it.
 RECEIPT_ENV = "HMP_APPROVAL_QUALIFICATION"
 RECEIPT_KIND = "approval-fixture-qualification"
+# The git-install matrix mode (specs/005 amendment 2). A separate kind so an archive receipt can
+# never stand in for a git one, or the reverse. Fixture tooling only; no plugin module reads it.
+RECEIPT_KIND_GIT = "approval-fixture-qualification-git"
+RECEIPT_KINDS = (RECEIPT_KIND, RECEIPT_KIND_GIT)
 PROVISIONAL = "provisional"
 REQUIRED_STAGES = (
     "identity", "boundary", "behavior", "integration", "reconnect", "timing", "stability",
@@ -149,6 +153,97 @@ def _refuse(message: str) -> fc.FixtureSafetyError:
     return fc.FixtureSafetyError(message)
 
 
+# --------------------------------------------------------------------------------------------
+# Git-install fixtures (amendment 2): an isolated, independent clone with its own `.git`.
+# --------------------------------------------------------------------------------------------
+
+# A config section that could point a clone back at another repository or pull in other config.
+_GIT_CONFIG_HAZARD = re.compile(
+    r"^\s*\[\s*(remote|include|includeif|url)\b", re.IGNORECASE | re.MULTILINE)
+# Identity metadata compared before and after a copy. `index`, logs and locks legitimately move.
+_GIT_IDENTITY_FILES = ("HEAD", "packed-refs", "config")
+
+
+def build_git_head(src: Path) -> str | None:
+    """The full 40-hex HEAD of `src` exactly as the runtime reads it (file reads only), or None
+    when `src` has no `.git` (an extracted archive). A `.git` that cannot be resolved refuses:
+    it is never treated as "no git"."""
+    try:
+        return compat.resolve_git_head_sha(src)
+    except (OSError, ValueError) as exc:
+        raise _refuse(f"the .git of {src} is present but has no resolvable HEAD") from exc
+
+
+def assert_git_fixture_clone(src: Path, *, original: Path | None = None) -> str:
+    """Refuse a `.git` that is not its own independent repository. Returns the HEAD SHA.
+
+    Independent means a real directory (never a link or a `gitdir:` pointer file), holding no
+    symlink at all, no alternates or commondir (objects are not borrowed), no hard-linked file (a
+    `git clone --local` shares inodes with its source), no remote, include or url section in its
+    config (nothing for a push or fetch to reach), and, when `original` is given, no resolution into
+    the original. Reads only; nothing is written.
+    """
+    git = Path(src) / ".git"
+    if git.is_symlink() or not git.is_dir():
+        raise _refuse(f"{git} must be a real .git directory of its own (missing, link or pointer)")
+    root = git.resolve()
+    source = Path(original).resolve() if original is not None else None
+    if source is not None and (root.is_relative_to(source) or source.is_relative_to(root)):
+        raise _refuse("the fixture .git resolves into the original source; refusing")
+    for name in ("objects/info/alternates", "commondir"):
+        if (git / name).exists() or (git / name).is_symlink():
+            raise _refuse(f"the fixture .git borrows from another repository ({name})")
+    for current, dirs, files in os.walk(git, followlinks=False):
+        for name in (*dirs, *files):
+            path = Path(current, name)
+            if path.is_symlink():
+                raise _refuse(f"the fixture .git contains a symlink: {path}")
+            if path.is_file() and path.stat().st_nlink > 1:
+                raise _refuse(
+                    f"the fixture .git shares a hard-linked file with another tree: {path} "
+                    "(clone with --no-local)")
+    config = git / "config"
+    text = config.read_text(encoding="utf-8", errors="replace") if config.is_file() else ""
+    if _GIT_CONFIG_HAZARD.search(text):
+        raise _refuse("the fixture .git config names a remote, include or url (remove it)")
+    head = build_git_head(Path(src))
+    if head is None or not SHA40_RE.fullmatch(head):
+        raise _refuse("the fixture .git HEAD is not a full 40-hex commit")
+    return head
+
+
+def independent_git_head(src: Path) -> str | None:
+    """The HEAD of `src` for binding into an entry: None for an archive (no `.git` at all), else
+    only after `assert_git_fixture_clone`, so a linked worktree, pointer file or borrowed object
+    store can never lend its HEAD. A dangling `.git` link is refused, not read as an archive."""
+    git = Path(src) / ".git"
+    if not (git.exists() or git.is_symlink()):
+        return None
+    return assert_git_fixture_clone(Path(src))
+
+
+def git_identity_digest(src: Path) -> str:
+    """SHA-256 over the clone's identity metadata: HEAD, packed-refs, config, every loose ref, and
+    the object file listing (path and size). Never the index, logs or locks, which legitimately
+    change. Two copies of one fixture have equal digests."""
+    git = Path(src) / ".git"
+    digest = hashlib.sha256()
+    names = [git / n for n in _GIT_IDENTITY_FILES]
+    if (git / "refs").is_dir():
+        names += sorted(p for p in (git / "refs").rglob("*") if p.is_file())
+    for path in names:
+        rel = path.relative_to(git).as_posix().encode("utf-8")
+        data = path.read_bytes() if path.is_file() else b"\0absent"
+        digest.update(rel + b"\0" + str(len(data)).encode("ascii") + b"\0" + data)
+    objects = git / "objects"
+    listing = sorted(
+        (p.relative_to(git).as_posix(), p.stat().st_size) for p in objects.rglob("*") if p.is_file()
+    ) if objects.is_dir() else []
+    for rel, size in listing:
+        digest.update(f"{rel}\0{size}\0".encode())
+    return digest.hexdigest()
+
+
 def plugin_source_digest(plugin_dir: Path | None = None) -> str:
     """SHA-256 over the plugin's source and manifests (relative path, length, bytes), so a final
     receipt goes stale when the plugin under test changes."""
@@ -197,12 +292,24 @@ def _lane_files(
 def _validate_evidence(
     evidence: object, entry: compat.BuildEntry, build: fc.BuildInfo, fingerprint: str,
     plugin_dir: Path | None, read_files: Sequence[str] | None,
-    direct_files: Sequence[str] | None,
+    direct_files: Sequence[str] | None, head: str | None = None,
 ) -> None:
     """Accidental-staleness checks on a FINAL receipt. A JSON file cannot authenticate that the
-    tests ran: this is trusted local evidence, not tamper-proof certification."""
-    if not isinstance(evidence, dict) or evidence.get("kind") != RECEIPT_KIND:
+    tests ran: this is trusted local evidence, not tamper-proof certification. `head` is the
+    build's resolved git HEAD (None for an extracted archive): the evidence kind must be the one
+    for that source, so an archive receipt never qualifies a git install or the reverse."""
+    expected_kind = RECEIPT_KIND if head is None else RECEIPT_KIND_GIT
+    if not isinstance(evidence, dict) or evidence.get("kind") not in RECEIPT_KINDS:
         raise _refuse("approval receipt evidence is missing or malformed")
+    if evidence.get("kind") != expected_kind:
+        source = "an archive" if head is None else "a git"
+        raise _refuse(
+            f"approval receipt kind {evidence.get('kind')} does not match {source} build")
+    if head is None:
+        if evidence.get("git_sha") is not None:
+            raise _refuse("an archive approval receipt must not carry a git_sha")
+    elif evidence.get("git_sha") != head or evidence.get("git_sha") != entry.git_sha:
+        raise _refuse("approval receipt git_sha differs from the build's git HEAD")
     stages = evidence.get("stages")
     if (
         evidence.get("complete") is not True
@@ -270,15 +377,27 @@ def validate_approval_receipt(
     if entry.label != build.label:
         raise _refuse("approval receipt is for another build label (cross-build)")
     fingerprint = compat.compute_read_bridge_fingerprint(build.src_dir, target_files)
-    if fingerprint is None or entry.fingerprint != fingerprint or entry.git_sha is not None:
+    if fingerprint is None or entry.fingerprint != fingerprint:
         raise _refuse("no exact approval fixture qualification for this build (stale source)")
+    # The runtime matches a git install only to an entry with the same git_sha, and an install
+    # without git only to a fingerprint-only one. Require exactly that here, so a mismatched
+    # archive/git receipt is refused instead of installing an entry the gate would never match.
+    git_path = build.src_dir / ".git"
+    if git_path.exists() or git_path.is_symlink():
+        head: str | None = assert_git_fixture_clone(build.src_dir)
+        if entry.git_sha != head or entry.source_sha != head:
+            raise _refuse("git receipt git_sha and source_sha must both equal the build's git HEAD")
+    else:
+        head = None
+        if entry.git_sha is not None:
+            raise _refuse("a git receipt cannot qualify a build with no .git (git_sha is set)")
     evidence = raw.get("evidence")
     is_final = (evidence is not None) if final is None else final
     if is_final:
         if PROVISIONAL in entry.qualified_by:
             raise _refuse("a final approval receipt cannot carry provisional provenance")
         _validate_evidence(
-            evidence, entry, build, fingerprint, plugin_dir, read_files, direct_files
+            evidence, entry, build, fingerprint, plugin_dir, read_files, direct_files, head
         )
     elif PROVISIONAL not in entry.qualified_by:
         raise _refuse("a provisional approval receipt must say so in qualified_by")
@@ -347,6 +466,11 @@ def rebind_fixture_entry(build: fc.BuildInfo, out: Path, *, note: str) -> tuple[
     if not isinstance(builds, list) or len(builds) != 1 or not isinstance(builds[0], dict):
         raise _refuse("rebind needs exactly one installed fixture entry")
     old = dict(builds[0])
+    # A source swap moves the fingerprint, never the git identity: the entry keeps its git_sha and
+    # the copy's HEAD must still equal it (a swap that moved HEAD is not this fixture).
+    head = independent_git_head(build.src_dir)
+    if head != old.get("git_sha"):
+        raise _refuse("rebind: the build's git HEAD no longer matches the entry's git_sha")
     fingerprint = compat.compute_read_bridge_fingerprint(build.src_dir, data["bridge_files"])
     if fingerprint is None:
         raise _refuse("cannot fingerprint the approval files of the swapped copy")
@@ -492,6 +616,22 @@ def verify_copy_isolation(build: fc.BuildInfo, original_src: Path) -> None:
         shutil.rmtree(scratch, ignore_errors=True)
 
 
+def _verify_git_copy(original: Path, dest: Path) -> None:
+    """A git fixture's copy owns a separate `.git` with the same identity metadata; an archive
+    copy must not have grown one. Runs before the copy is used (the swap only mutates a listed
+    source file, never `.git`)."""
+    original_git = (original / ".git").exists() or (original / ".git").is_symlink()
+    if not original_git:
+        if (dest / ".git").exists() or (dest / ".git").is_symlink():
+            raise _refuse("an archive copy unexpectedly contains a .git")
+        return
+    head = assert_git_fixture_clone(original)
+    if assert_git_fixture_clone(dest, original=original) != head:
+        raise _refuse("the copied .git HEAD differs from the original")
+    if git_identity_digest(dest) != git_identity_digest(original):
+        raise _refuse("the copied .git metadata differs from the original")
+
+
 def copy_build_for_mutation(
     builds_dir: Path, label: str, dest_builds_dir: Path, *, files: Sequence[str] = (),
 ) -> fc.BuildInfo:
@@ -506,6 +646,8 @@ def copy_build_for_mutation(
     fc.assert_never_real_hermes_dir(dest, "mutation copy")
     if dest.exists() or dest.is_relative_to(original) or original.is_relative_to(dest):
         raise _refuse("mutation copy must be a fresh directory disjoint from the original build")
+    if (original / ".git").exists() or (original / ".git").is_symlink():
+        assert_git_fixture_clone(original)  # an unsafe source is refused before any copy or write
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(
         original, dest, symlinks=True, ignore=shutil.ignore_patterns("__pycache__", "*.pyc")
@@ -515,6 +657,11 @@ def copy_build_for_mutation(
         _retarget_venv(dest / ".venv", original, dest)  # exactly as it was
     except fc.FixtureSafetyError:
         shutil.rmtree(dest, ignore_errors=True)  # never follows links
+        raise
+    try:
+        _verify_git_copy(original, dest)
+    except fc.FixtureSafetyError:
+        shutil.rmtree(dest, ignore_errors=True)
         raise
     build = fc.resolve_build(Path(dest_builds_dir), label)
     verify_copy_isolation(build, original)
