@@ -904,7 +904,9 @@ def test_main_candidate_refuses_symlinked_and_overlapping_directories(
     out, refs = layout(tmp_path)
     with (
         mock.patch.object(extract, "process_build") as process,
-        pytest.raises(SystemExit, match=r"symlink|overlap"),
+        # GitHub's checkout is under /home/runner, so the repository case may be
+        # refused by the home guard before the overlap guard.
+        pytest.raises(SystemExit, match=r"symlink|overlap|real user home"),
     ):
         extract.main(_candidate_main(tmp_path, out, refs))
     process.assert_not_called()
