@@ -991,12 +991,18 @@ async def _phone_turn(
     prompts.remember_session(key, iid, user_id, profile, chat_id)
     prompts.release_transcript(chat_id)
     accepted = await deliver()
-    if accepted is None:
+    if accepted is False:
+        # Only an exact False is definitive "not admitted" (bridge: gateway refusal or an
+        # explicit known ticket refusal). It is HMP's own wire answer, not an upstream gap.
+        _log("phone_send", "refused", user_id=user_id)
+        return (
+            _error("api_server_unavailable", "direct send delivery is unavailable", applied=False),
+            "rejected",
+        )
+    if accepted is not True:
+        # None and any malformed non-bool result prove neither admitted nor not-sent.
         _log("phone_send", "unknown", user_id=user_id)
         return HttpResult(200, {"state": "unknown"}), "unknown"
-    if not accepted:
-        _log("phone_send", "refused", user_id=user_id)
-        return _error("api_server_unavailable", "direct send delivery is unavailable"), "rejected"
     prompts.add_observation(iid, user_id, profile, role="user", text=text, now=float(now))
     _log("phone_send", "submitted", user_id=user_id)
     return HttpResult(202, {"state": "submitted"}), "submitted"
