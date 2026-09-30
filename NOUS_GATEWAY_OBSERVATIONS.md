@@ -102,7 +102,7 @@ another execution owner.
 
 ## Chat media and attachment parity
 
-Checked against exact Hermes `ca705dbf7ef86425b381b542712aff310f1ee52c` on 2026-09-30. This is source reading plus one owner observation; HMP did not exercise any of the paths below against a live gateway.
+Checked against exact Hermes `ca705dbf7ef86425b381b542712aff310f1ee52c` on 2026-09-30. The source census and owner observation are supplemented by isolated native primitive tests on an archive with matching `ca705dbf` provenance; that archive is not a re-attested Git install. No live gateway upload was exercised.
 
 **Display was the mobile app's gap.** The owner observed that an assistant's HTTPS Markdown image string reaches the HMP mobile app intact but was shown as literal text, because the app rendered plain text and fenced code only. That needed a mobile renderer change, not a new Hermes API. It is now addressed in draft, not released: [mobile PR #51](https://github.com/MahdiHedhli/HermesBotMobile/pull/51) at `acc9543` (root full run: app 690 passed / 3 skipped, client 967 passed / 1 skipped; clean app analysis; an independent review cleared the bounded renderer and its policy exception).
 
@@ -117,14 +117,41 @@ Checked against exact Hermes `ca705dbf7ef86425b381b542712aff310f1ee52c` on 2026-
 
 **Existing building blocks.** Hermes's `gateway/platforms/event.py` `MessageEvent` has `media_urls`, `media_types` and `media_text_inlined` plus photo, video, audio and document types. `gateway/platforms/base.py` has `cache_document_from_bytes`, `cache_image_from_bytes` and `cache_media_bytes` (`cache_media_from_bytes` is not present in that source), and native image, video, document and audio send methods. A different `cache_media_bytes` (different signature and return type) lives in `gateway/platforms/media_cache.py`, so a plugin must name the module. These are plugin building blocks. HMP's current Phone-chat inbound event is text-only and it overrides no native outbound media hook; its bridge's `_text_of` drops non-text structured parts, and `_rows` carries no media handles. A bounded native adapter delivery path, with profile-, conversation- and device-authorized opaque handles for generated local files, is needed. The current native platform extension can be investigated without a core change, but it does not by itself provide canonical Desktop media or history.
 
-**Source semantics that need qualification (archive provenance `ca705dbf`, not a re-attested Git SHA; source reading only, no run).** These are exact source findings, not exploits or live bypasses, and they describe one archive, not every build:
+**Native primitive evidence, not upload qualification.** Root reviewed and reproduced an isolated
+fixture on the `ca705dbf` archive: 73 checks across real cache helpers, `MessageEvent`, inbound
+preparation, the runner's queue-policy method and durable-row flush helpers. All 12 exercised
+source files were byte-identical before/after. Root passed 30 focused fixture tests and 315
+fixture/CI-tool tests together; this is not the full CI-equivalent suite. The private scratch home
+was removed, no Python-level IP attempt occurred and no model or full gateway was started.
+Python socket instrumentation is not an OS sandbox and does not cover DNS, C extensions or
+subprocesses. Evidence is on the unmerged discovery branch at `9d91ca1`:
+[fixture and limitations](https://github.com/MahdiHedhli/hermes-hmp/blob/test/phone-attachment-native-primitives/docs/research/phone-attachment-native-primitives-2026-09-30.md).
 
-- *Validation limits.* `cache_document_from_bytes` sanitizes the filename but has no size check, type allowlist or content sniff. `cache_image_from_bytes` checks a configurable byte cap and image magic bytes; no scoped decode, pixel-count or EXIF handling was observed in the inspected paths. A plugin that wants such limits must enforce them before calling the helper.
-- *Inline contract.* The document note treats an unset `media_text_inlined` flag on a `text/*` item as "content included below" even when the adapter inlined nothing. An adapter that does not inline must set `media_text_inlined=[False]` for that item.
-- *Busy sessions.* The base fallback can merge media into a pending event. The installed runner's `_queue_or_replace_pending_event` merges matching-security-context PHOTO/TEXT bursts, while other media follow-ups such as documents take FIFO slots. A photo merge can combine two client submissions into one later turn. The actual busy-policy and admission outcome still need an exact-build fixture; this is not a claim that every media event merges.
-- *Persisted identity.* By reading, the persisted user row is a text projection: path-bearing notes for documents and text-mode images, caption only for native-vision images, with no stable persisted attachment identity. Which projection applies in a real row is unexercised.
+- *Validation and private storage.* The document helper kept hostile names inside the profile
+  cache but accepted a document above the configured image cap. Under umask 022, the tested
+  file was 0644 and its cache directory 0755; native did not enforce private modes. Newlines
+  survived in a name and reached the document note. The image helper rejected cap+1 and invalid
+  magic, but accepted a magic prefix with an undecodable body. HMP must enforce bounds, MIME/
+  content checks, decode/pixel/metadata policy, generated names and private storage before
+  delivery. Only paths HMP created may become event media paths; inbound preparation trusted
+  an outside-cache path in this isolated test. No live exploit or universal build claim is made.
+- *Inline contract.* Absent or None text-inline flags made the same claim as True without
+  actually inlining content. False changed the note; binary notes ignored the flag. An adapter
+  that does not inline text must explicitly set `media_text_inlined=[False]`.
+- *Busy sessions.* The real base fallback merged media; the runner's tested queue method merged
+  matching-scope PHOTO/TEXT while documents used FIFO. Different scope or gateway-control flags
+  prevented merge. The merged event kept only the first client identifier. A later client send
+  therefore cannot be reconciled merely by that merged event's id. Full busy authorization, ack,
+  steering and durable admission were not exercised, and `defer_policy` was absent on this build.
+- *Persisted identity.* Actual flush helpers wrote/read real SessionDB rows with controlled agent
+  shapes. Documents stored the prepared host-path note; an image-part list plus a string override
+  projected to caption plus `[screenshot]`, without a path or attachment identity. Client ids
+  round-tripped as `platform_message_id`. This was not a real agent turn or an HMP read-back;
+  model-dependent enrichment, profile re-homing, cache sweep and audio/video remain unproven.
 
-Each needs an exact-build fixture before a plugin relies on it. This source does not support assuming Hermes validates document size or type, pixels or metadata for a plugin.
+These observations constrain our adapter design. They do not qualify a release, freeze the
+upload wire or make an attachment send available on the phone. Canonical owner handoff and
+reusable authorized media history still need the contract below.
 
 **Source constraint on this build.** `api_server.py` `_session_chat_user_message` normalizes text and `image_url`/`input_image` lists and rejects `file`/`input_file`. `_admit_to_live_bot_chat` returns `None` for non-string content, and `tools/bot_live_delivery.py` `deliver_to_live_owner` requires a string. On this source, multimodal input therefore does not take the Desktop-owned canonical Bot Chat handoff. No live attachment submit or adversarial test was performed during this investigation; this describes a source constraint, not an exercised bypass. HMP must not use this path to create a second execution owner beside Desktop.
 
