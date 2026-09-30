@@ -74,7 +74,7 @@ would close it without HMP copying Hermes's private database logic.
 
 Desktop-owned Bot Chat turns still surface prompts through Desktop's process-local channel; a remote client cannot answer those same prompts through session chat. The two older Hermes builds used for HMP's draft approval matrix lacked a Bot Chat session-stream notifier. Current untagged Hermes `main` at [`ac0cfa7`](https://github.com/NousResearch/hermes-agent/commit/ac0cfa7db94cefa90cf3e35191f38b53888b9e17) registers one on the session-chat stream and emits `approval.request` for the existing run-approval route. An [HMP socket-free handler probe and isolated gateway/PTY matrix](https://github.com/MahdiHedhli/hermes-hmp/pull/44) passed on this exact archive: 32 focused checks and 17/17 integration cases, including T7 Bot Chat, T8 Phone chat, a same-device cross-profile exact-ID refusal, and fail-closed gates. The fixture used a fake model and synthetic credentials; no runtime compatibility entry was added. The latest published tag, `v2026.9.24`, predates the session-stream change. A released build, live multiplex profiles, physical devices, and Desktop-owned cross-client prompts still need qualification or an upstream contract. This is not yet a released mobile approval capability.
 
-Current HMP status (draft, in progress, not released): an independent approval manifest, currently empty, gates prompt reads, exact-ID answers and Phone sends (AP-3, AP-4 and AP-6). Ordinary guarded sends remain independent of this additional gate. Mobile integration of both approvals and questions is in progress. The [qualification lane](https://github.com/MahdiHedhli/hermes-hmp/pull/50) and [fixture evidence](https://github.com/MahdiHedhli/hermes-hmp/pull/44) are separate from release admission. Listener-start identity binding and dependency-probe caching are under review; they do not admit a build or enable approvals.
+Current HMP status (draft, not released): an independent approval manifest, currently empty, gates prompt reads, exact-ID answers and Phone sends (AP-3, AP-4 and AP-6). Ordinary guarded sends remain independent. [Draft route-qualification PR #53](https://github.com/MahdiHedhli/hermes-hmp/pull/53) captures one source baseline at the first supported factory call, prevents listener reconnects from redefining it, and caches successful dependency probes while rechecking the manifest and source on every call. Its current local suite passed 1,364 tests with 12 skips; focused independent review cleared the process-binding fixes as closed groundwork. Ambiguous normalized clarification labels are refused rather than guessed. This does not attest already-loaded module bytes: a full gateway process restart is required after source/plugin changes. Current real gateway behavioral/restart evidence, device checks and release review remain. The [earlier ac0 fixture evidence](https://github.com/MahdiHedhli/hermes-hmp/pull/44) predates this diff and cannot qualify it. Mobile integration of both approvals and questions is in progress; no build is admitted and no live approvals are enabled.
 
 This is the next major HermesBot Mobile feature after beta release work. We
 request a supported, authenticated, session-scoped contract that carries exact
@@ -86,6 +86,18 @@ handoff qualification. HMP must not infer approvals from tool text or create
 another execution owner.
 
 ## Already usable without a new Hermes contract
+
+### Newly created profiles
+
+On the inspected `ca705dbf` build, the gateway can discover and serve a newly created profile
+without adding its exact HMP route to the root configuration. Serving, routing and phone access
+are separate states. HMP's [draft host-only routing command](https://github.com/MahdiHedhli/hermes-hmp/pull/52)
+prepares that route without granting phone access or enabling multiplexing for the whole gateway.
+The selected host's route repair and separately requested profile-scoped access approval were
+verified; a client conversation and the draft command's isolated installation remain unverified.
+This is an HMP setup/workflow finding, not evidence that Hermes must grant access automatically.
+
+### Scheduled jobs
 
 The profile-scoped API server has list, create, edit, pause, resume, and delete
 routes for scheduled jobs. HMP's mobile cron preview uses those existing
