@@ -43,6 +43,14 @@ not overridden Hermes's WAL guard; a patched-runtime WAL test remains open.
 
 Desktop-owned Bot Chat turns can surface prompts only through Desktop's process-local channel. A remote client cannot answer those same prompts through session chat. We propose durable, session-scoped pending prompt identifiers, event delivery for approval and clarify requests, and authenticated response routes that enforce the same authorization and expiry rules as Hermes itself. Draft HMP security fixes do not resolve the missing Bot Chat notifier, so the interim server path remains disabled pending real-route qualification.
 
+This is the next major HermesBot Mobile feature after beta release work. The
+minimum upstream gate is an answerable request on the canonical Bot Chat
+session stream, carrying an exact request ID, offered choices, session/profile
+ownership, and authoritative expiry and settlement. Disconnect, restart, and
+stale-answer behavior need the same Hermes-owned rules. HMP will requalify its
+draft relay only after that route exists; it must not infer approvals from tool
+text or create another execution owner.
+
 ## Already usable without a new Hermes contract
 
 The profile-scoped API server has list, create, edit, pause, resume, and delete
