@@ -14,7 +14,8 @@ fingerprint, or certify compatibility.
 Limits: the disconnect scenario only simulates the interrupt flag (a fake agent's `interrupt()`
 sets it on the fake agent thread); it does not prove a real agent thread is unblocked. Upstream
 still accepts an API-key answer without `request_id`, and `all`/`resolve_all`, so the probe does
-NOT show upstream requires an ID: HMP must enforce the exact request_id itself. Run it with the Hermes interpreter:
+NOT show upstream requires an ID: HMP must enforce the exact request_id itself.
+Run it with the Hermes interpreter:
 
     <hermes-venv>/bin/python tools/compat/session_chat_approval_probe.py --hermes-src <export>
 """
