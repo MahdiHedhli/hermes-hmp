@@ -412,3 +412,107 @@ installed and named with `--candidate-interpreter` (uv never downloads one).
 Re-extract after any change to the candidate or the interpreter; the matrix
 refuses stale metadata (including a different recorded interpreter) rather than
 reusing it. Delete `$builds_dir` and `$scratch` when you are done.
+### Reporting a passing local matrix (draft)
+
+`hermes hmp compat report --matrix <receipt>` offers to file one public GitHub
+issue saying that this host's Hermes build passed the ad-hoc candidate matrix.
+It takes the format-1 *candidate* receipt that matrix writes (a receipt with
+`mode: candidate`), and nothing else: not the listing-mode `run_matrix.py`
+output, and not a receipt with extra or missing fields. This is a draft:
+the candidate-receipt writer is in [PR #46](https://github.com/MahdiHedhli/hermes-hmp/pull/46),
+so no released matrix produces such a receipt yet.
+
+Write the receipt with the matrix's `--json-out`, which creates a private (0600)
+file directly inside its `--out` scratch directory. The matrix also prints the
+same JSON to stdout, so do not redirect that into a file with a loose umask:
+
+```sh
+python3 tools/compat/run_matrix.py --refs-dir <refs> --builds-dir <builds> \
+  --out <scratch> --candidate-sha <40 hex> \
+  --candidate-interpreter <absolute-path-to-base-python> \
+  --json-out <scratch>/candidate-receipt.json
+```
+
+Then run the report from an interactive operator shell (not a Hermes session,
+script, or pipe):
+
+```sh
+hermes hmp compat report --matrix <scratch>/candidate-receipt.json
+```
+
+The receipt must be regular, no larger than 512,000 bytes, owned by you, not
+writable by group or others, and generated within the last seven days. It must
+carry exactly the matrix's ten checks (`clone_commit_matches`,
+`extraction_metadata_valid`, `extraction_metadata_commit_matches`,
+`interpreter_matches`, `source_fingerprint_matches`, `selfcheck_passed`,
+`read_suite_passed`, `sc007_passed`, `sc007_bound_to_candidate`,
+`source_unchanged_after_run`), each exactly `true`, with no other check; the read suite must have run at least one
+test, the unsupported-path check must show the build is refused, and the HMP
+source tree it ran from must have been clean and at the version you have
+installed. Its candidate commit and read-bridge fingerprint must equal this
+host's Hermes git commit and fingerprint, and the build must not already be
+listed. It reads files only; it does not import Hermes or the read bridge.
+Anything else refuses and sends nothing.
+
+Before asking, it prints the fixed destination (a new issue in
+`MahdiHedhli/hermes-hmp` titled "HMP compatibility report"), the GitHub login
+`gh` would file it under (from one read-only `gh api user`), and the exact issue
+body, code fences included. The body holds only: an advisory marker, Hermes git
+SHA, read-bridge fingerprint, HMP version, the HMP source commit the matrix ran
+from, the receipt time, the read-suite test count, named check results, and the
+OS family and Python `major.minor` **of the matrix run** (not this shell's host;
+an undetermined or uncommon OS such as FreeBSD is reported as `other`).
+Receipt log tails, labels, paths, and hostnames are never copied.
+
+It then discards anything typed or pasted before the body finished printing, so
+input entered ahead of time can never count as consent, and asks. Type `REPORT`
+and press Enter to send it with your own authenticated `gh` login (`gh auth
+login` first). Anything else, including extra spaces, sends nothing. After you
+confirm it reads the login once more and sends nothing if it changed. If the
+terminal's pending input cannot be discarded, it sends nothing.
+
+`gh` is found by walking `PATH` like a shell. A `gh` in a relative or empty
+`PATH` entry (the current directory) is refused. An absolute one is accepted
+anywhere, including `~/.local/bin`, `~/bin`, and a snap or Homebrew symlink, if
+what it resolves to is owned by you or root and not writable by group or others.
+A missing `gh` and an unsafe one are reported separately. Only a fixed set of
+environment variables reaches `gh` (its own login and config locations, the
+Linux keyring session, and proxy and certificate settings); debug, pager,
+repository and host overrides are not passed.
+
+**Duplicates.** HMP does not search GitHub for an existing report: that request
+would tell GitHub your Hermes SHA before you agreed to send anything. Before
+answering `REPORT`, look at
+[the repository's issues](https://github.com/MahdiHedhli/hermes-hmp/issues)
+yourself for your Hermes SHA if you want to avoid a duplicate.
+
+If `gh` is missing or unsafe, not logged in, cannot report your login, the login
+changed, or you press Ctrl-C before the send starts, the command says the report
+was not sent. If `gh issue create` has started and then fails, times out, or is
+interrupted, the issue may still have been created, so the command says
+**delivery unconfirmed** and asks you to check the repository's issues before
+retrying. Neither case changes any compatibility result.
+
+Limits of this draft:
+
+- A report is a data point for maintainers. It does **not** list, enable, or
+  qualify a build; only a reviewed change to the committed compatibility lists
+  does, and `hermes hmp compat` keeps refusing an unlisted build.
+- The receipt is unsigned. The report is marked as unverified and advisory, not
+  an attestation; matching it to your host is a sanity gate, and maintainers
+  must rerun the matrix before listing anything.
+- The host match covers the Hermes `.git` HEAD commit and a hash of the
+  read-bridge files as they are on disk. An edit to a bridge file changes the
+  fingerprint and refuses, but an edit or untracked file anywhere else in the
+  Hermes tree, or an uncommitted change that leaves HEAD in place, is covered by
+  neither. It says "this commit's bridge files", not "this tree is that commit".
+- The HMP source is compared by version only. An installed HMP carries no source
+  SHA, so the source commit in the report is what the matrix recorded, not
+  something checked against your install.
+- The issue is public, is filed under your GitHub account, and cannot be
+  reliably retracted.
+- The command's receipt schema is pinned to the candidate-receipt writer in
+  [PR #46](https://github.com/MahdiHedhli/hermes-hmp/pull/46)
+  (`run_matrix.py::_run_candidate_stages`). The command is only usable once it is
+  released with a receipt in this shape. Hosts without a `.git` checkout have no
+  git SHA and cannot report.

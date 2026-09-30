@@ -80,6 +80,15 @@ Refusals and rules:
   offer and pending pairing.
 - **`compat`** prints the build identity, the list match and the probe outcome. There are no
   secrets in any of them.
+- **`compat report --matrix <receipt>`** (issue #24) offers to file one public GitHub issue for an
+  unlisted Hermes build. It refuses without a TTY (or inside a Hermes session), and unless the
+  receipt is an exact, fresh, fully passing format-1 *candidate* receipt for this host's Hermes git
+  SHA and read-bridge fingerprint. It prints the exact issue body, the fixed destination and the
+  effective GitHub login, discards any input typed before the body was shown, and sends only when
+  the operator then types `REPORT` and Enter and `gh` still reports the same login. The receipt
+  is unsigned, so the report is marked unverified and advisory. It only ever calls the operator's
+  own `gh`, never searches GitHub before consent, never changes a compatibility list, and reports
+  a create that may have landed as "delivery unconfirmed", not as unsent (`compat_report.py`).
 
 Grants that live in Hermes's own pairing stores cannot be read without a Hermes internal, and
 only `bridge.py` may import one (PR-2). So the "grants" the CLI prints are the bots this user asked
@@ -720,7 +729,13 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     instance.add_parser("show", help="Show the instance fingerprint")
     instance.add_parser("rotate-key", help="Rotate the instance key; revokes every device (PR7-2)")
 
-    groups.add_parser("compat", help="Show build identity, list match and probe result (GU-2c)")
+    compat_parser = groups.add_parser(
+        "compat", help="Show build identity, list match and probe result (GU-2c)"
+    )
+    report = compat_parser.add_subparsers(dest="compat_command").add_parser(
+        "report", help="Offer to report a passing local compatibility matrix for this build"
+    )
+    report.add_argument("--matrix", required=True, help="Local candidate-matrix JSON receipt")
     setup = groups.add_parser("setup", help="Check host readiness without changing configuration")
     setup.add_subparsers(dest="setup_command").add_parser(
         "check", help="Check the Hermes build, HMP identity, and pinned listener"
@@ -749,6 +764,56 @@ def _default_compat() -> Any:
         return compat.CompatResult(compat.CompatStatus.UNSUPPORTED)
 
 
+def _default_report_identity() -> Any:
+    """This host's Hermes build identity, by file reads only (never imports Hermes)."""
+    from . import compat
+
+    try:
+        root = compat.locate_hermes_root()
+        listed = compat.load_read_compat_list(
+            Path(compat.__file__).with_name(compat.READ_COMPAT_FILE)
+        )
+        return compat.GitFingerprintReader(listed.bridge_files).read(root) if root else None
+    except (OSError, ValueError):
+        return None
+
+
+def _default_report_builds() -> tuple[Any, ...]:
+    """The committed read-compat entries, to refuse a report for an already-listed build."""
+    from . import compat
+
+    listed = compat.load_read_compat_list(Path(compat.__file__).with_name(compat.READ_COMPAT_FILE))
+    return listed.builds
+
+
+def _default_hmp_version() -> str | None:
+    from .compat_report import hmp_version
+
+    return hmp_version()
+
+
+def _default_run_gh(
+    argv: list[str], *, timeout: float, environ: Mapping[str, str]
+) -> subprocess.CompletedProcess[str] | None:
+    from .compat_report import default_run_gh
+
+    return default_run_gh(argv, timeout=timeout, environ=environ)
+
+
+def _default_gh_executable() -> str | None:
+    """The operator's `gh` (None when absent). Raises `SubmitError` for one that is present but
+    unsafe, so the two are reported differently; see `compat_report.locate_gh`."""
+    from .compat_report import locate_gh
+
+    return locate_gh(os.environ.get("PATH"))
+
+
+def _default_discard_input(stdin: Any, stdout: Any) -> bool:
+    from .compat_report import discard_pending_input
+
+    return discard_pending_input(stdin, stdout)
+
+
 def _default_update_check() -> Any:
     from .update_check import check_update
 
@@ -771,6 +836,15 @@ class CliEnv:
     clock: Callable[[], int] = field(default=lambda: int(time.time()))
     compat: Callable[[], Any] = _default_compat
     update_check: Callable[[], Any] = _default_update_check
+    # `compat report` (issue #24): every input and the one `gh` call are injectable for tests.
+    report_identity: Callable[[], Any] = _default_report_identity
+    report_builds: Callable[[], Any] = _default_report_builds
+    hmp_version: Callable[[], str | None] = _default_hmp_version
+    gh_executable: Callable[[], str | None] = _default_gh_executable
+    run_gh: Callable[..., subprocess.CompletedProcess[str] | None] = _default_run_gh
+    # Drops terminal input typed before the disclosure was shown; False means it could not.
+    discard_input: Callable[[Any, Any], bool] = _default_discard_input
+    report_temp_dir: Path | None = None
     qr_factory: Callable[[], Any] = _default_qr_factory
     pid_alive: Callable[[int], bool] = _pid_alive
     # `pair offer`'s interactive wait loop: injectable so tests never sleep for real. Tests also use
@@ -1818,6 +1892,132 @@ def _cmd_compat(env: CliEnv) -> int:
     return EXIT_OK
 
 
+def _cmd_compat_report(env: CliEnv, args: argparse.Namespace) -> int:
+    from . import compat_report as report
+
+    _check_mutation_allowed(env)
+    if not report.host_supported():
+        raise RefusedError("compatibility reporting requires a POSIX host", EXIT_ENVIRONMENT)
+    out = env.stdout
+    try:
+        try:
+            builds = env.report_builds()
+        except (OSError, ValueError):
+            raise RefusedError(
+                "compatibility report refused: cannot read the compatibility list"
+            ) from None
+        try:
+            payload = report.build_report(
+                report.read_receipt(Path(args.matrix)),
+                env.report_identity(),
+                version=env.hmp_version(),
+                builds=builds,
+                now=int(env.clock()),
+            )
+        except report.ReportError as exc:
+            raise RefusedError(f"compatibility report refused: {exc}") from None
+        gh = env.gh_executable()
+        # One read-only `gh api user`, in the same environment as the send. It is the only request
+        # made before consent: no duplicate search, which would tell GitHub the Hermes SHA early.
+        login = report.discover_login(gh, run=env.run_gh, environ=env.environ)
+    except report.SubmitError as exc:
+        env.stderr.write(f"Report was not sent: {exc}. Compatibility is unchanged.\n")
+        return EXIT_ENVIRONMENT
+    except KeyboardInterrupt:
+        out.write("\nInterrupted. Nothing was sent.\n")
+        return EXIT_INTERRUPTED
+    body = report.issue_body(payload)  # the one string that is printed and then sent
+    out.write(
+        "Nothing has been sent yet.\n"
+        f"Destination: new public issue in {report.REPORT_REPO}, "
+        f"titled {json.dumps(report.REPORT_TITLE)}.\n"
+        f"GitHub login it would be filed under (from `gh api user`): {login}\n"
+        "Advisory only: the receipt is unsigned and unverified, not an attestation. "
+        "Sending does not change what HMP serves; a listing needs maintainer review.\n"
+        "HMP did not search for an existing report, since that would tell GitHub this Hermes SHA "
+        f"before you agreed. Check {report.REPORT_ISSUES_URL} yourself first if you want to.\n"
+        "The issue body is exactly the text between the markers, fences included:\n"
+        f"----- begin issue body -----\n{body}----- end issue body -----\n"
+    )
+    out.flush()
+    # Anything typed or pasted up to now was entered before the whole body was on screen, so it can
+    # never be consent. Without a way to drop it, nothing is offered.
+    try:
+        discarded = env.discard_input(env.stdin, out)
+    except KeyboardInterrupt:
+        out.write("\nInterrupted. Nothing was sent.\n")
+        return EXIT_INTERRUPTED
+    if not discarded:
+        env.stderr.write(
+            "Report was not sent: cannot discard input typed before the issue body was shown. "
+            "Compatibility is unchanged.\n"
+        )
+        return EXIT_ENVIRONMENT
+    out.write(
+        f"Type {report.REPORT_CONFIRM_WORD} and press Enter to send it. "
+        "Anything else, including extra spaces, sends nothing: "
+    )
+    out.flush()
+    try:
+        answer = env.stdin.readline(report.MAX_ANSWER_CHARS)
+    except KeyboardInterrupt:
+        out.write("\nInterrupted. Nothing was sent.\n")
+        return EXIT_INTERRUPTED
+    if not report.is_consent(answer):
+        out.write("Nothing was sent.\n")
+        return EXIT_OK
+    try:  # the login is re-read after consent: a changed account would file it under someone else
+        confirmed = report.discover_login(gh, run=env.run_gh, environ=env.environ)
+    except report.SubmitError as exc:
+        env.stderr.write(f"Report was not sent: {exc}. Compatibility is unchanged.\n")
+        return EXIT_ENVIRONMENT
+    except KeyboardInterrupt:
+        out.write("\nInterrupted. Nothing was sent.\n")
+        return EXIT_INTERRUPTED
+    if confirmed != login:
+        env.stderr.write(
+            f"Report was not sent: the GitHub login changed from {login} to {confirmed} after you "
+            "confirmed. Compatibility is unchanged; run the command again to review it.\n"
+        )
+        return EXIT_ENVIRONMENT
+    try:
+        if env.gh_executable() != gh:
+            env.stderr.write(
+                "Report was not sent: the GitHub CLI changed after review. "
+                "Compatibility is unchanged; run the command again.\n"
+            )
+            return EXIT_ENVIRONMENT
+    except report.SubmitError as exc:
+        env.stderr.write(f"Report was not sent: {exc}. Compatibility is unchanged.\n")
+        return EXIT_ENVIRONMENT
+    except KeyboardInterrupt:
+        out.write("\nInterrupted. Nothing was sent.\n")
+        return EXIT_INTERRUPTED
+    try:
+        url = report.submit_issue(
+            body, gh=gh, run=env.run_gh, environ=env.environ, temp_dir=env.report_temp_dir
+        )
+    except report.SubmitError as exc:
+        env.stderr.write(f"Report was not sent: {exc}. Compatibility is unchanged.\n")
+        return EXIT_ENVIRONMENT
+    except report.DeliveryUnconfirmedError:
+        env.stderr.write(
+            "Delivery unconfirmed: `gh issue create` was attempted and did not confirm success, "
+            "so the issue may already exist. Check the issues at "
+            f"{report.REPORT_ISSUES_URL} (filed as {login}) before retrying, to avoid a "
+            "duplicate. Compatibility is unchanged.\n"
+        )
+        return EXIT_ENVIRONMENT
+    if url:
+        out.write(f"Report sent: {url}\n")
+    else:
+        out.write(
+            "Report sent (gh succeeded but printed no recognizable issue URL); "
+            f"see {report.REPORT_ISSUES_URL}\n"
+        )
+    return EXIT_OK
+
+
 def _cmd_update_check(env: CliEnv) -> int:
     from .update_check import UpdateCheckError
 
@@ -1966,6 +2166,8 @@ def dispatch(args: argparse.Namespace, env: CliEnv | None = None) -> int:
     env = env if env is not None else CliEnv()
     group, action = _command(args)
     try:
+        if (group, action) == ("compat", "report"):
+            return _cmd_compat_report(env, args)
         if group == "compat":
             return _cmd_compat(env)
         if (group, action) == ("update", "check"):

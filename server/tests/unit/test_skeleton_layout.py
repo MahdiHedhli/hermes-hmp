@@ -34,6 +34,7 @@ CONTRACT_MODULES = {
     "adapter.py",
     "cli.py",
     "update_check.py",
+    "compat_report.py",
     "logging_policy.py",
 }
 DATA_FILES = {
