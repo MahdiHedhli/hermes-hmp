@@ -97,8 +97,14 @@ def test_pantheon_allows_pairing_but_no_hermes_routes(tmp_path: Path) -> None:
     # Both Hermes and XDG state stay in the scratch fixture. The parent below separately
     # exercises signed pairing and self-revoke through the same server handlers.
     server_root = Path(__file__).resolve().parents[2]
+    runtime_python = os.environ.get("HMP_PANTHEON_RUNTIME_PYTHON")
+    if runtime_python:
+        assert Path(runtime_python).is_file(), "old Hermes runtime interpreter is missing"
     import_probe = subprocess.run(
-        [sys.executable, str(Path(__file__).with_name("pantheon_adapter_probe.py"))],
+        [
+            runtime_python or sys.executable,
+            str(Path(__file__).with_name("pantheon_adapter_probe.py")),
+        ],
         cwd=root,
         env={
             "PATH": os.environ.get("PATH", "/usr/bin:/bin"),
@@ -112,9 +118,7 @@ def test_pantheon_allows_pairing_but_no_hermes_routes(tmp_path: Path) -> None:
     )
     assert import_probe.returncode == 0, import_probe.stderr[-2000:]
 
-    runtime_python = os.environ.get("HMP_PANTHEON_RUNTIME_PYTHON")
     if runtime_python:
-        assert Path(runtime_python).is_file(), "old Hermes runtime interpreter is missing"
         ingress_probe = subprocess.run(
             [runtime_python, str(Path(__file__).with_name("pantheon_authz_probe.py"))],
             cwd=root,
