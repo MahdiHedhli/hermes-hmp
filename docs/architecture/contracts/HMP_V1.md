@@ -1150,6 +1150,18 @@ unaffected by it. `hermes hmp compat` reports the approval qualification on its 
   `200 {"state":"unknown"}`. Replaying that cmid returns
   the stored unknown result without a second delivery. Older stock builds have no admission
   ticket; HMP uses their synchronous acceptance flag. The route does not wait for the model.
+  **Definitive refusal.** Only a delivery result that is exactly `False` returns
+  `503 {"error":{"code":"api_server_unavailable",…},"applied":false}` with stored status
+  `rejected`; `applied:false` means Hermes did not admit the message. The bridge returns `False`
+  only when `handle_message` left the event unaccepted or the ticket reports one of the known
+  refusals (`refused_busy`, `refused_draining`, `refused_precondition_head`,
+  `refused_precondition_expired`, `refused_lease_timeout`, `refused_unauthorized`), none of
+  which admit a user turn. Background handling may already have been scheduled. `refused_other` (persist failure, unreported exit) is `None`, not
+  `False`. Exact `True` stays `202`. `None`, any non-boolean result, a delivery exception, a
+  missing session key or a non-list approval probe are uncertain: no `applied` field (`200
+  unknown`, or `503` without `applied` for the pre-delivery and exception cases), never
+  `applied:false`. The same cmid replays the stored body without redelivery. This is HMP's own
+  wire contract, not a `HERMES_API_GAP`; it adds no error code and does not enable approvals.
   While `list_gateway_approvals` for this
   phone session is non-empty, the route does not call `handle_message` and returns
   `409 {"error":{"code":"stale",…},"applied":false}` — the composer is not a way to say yes.

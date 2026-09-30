@@ -915,6 +915,24 @@ async def test_phone_delivery_waits_for_durable_admission(
     assert actual is expected
 
 
+@pytest.mark.asyncio
+@pytest.mark.parametrize("admission", [False, True])
+async def test_phone_delivery_unaccepted_event_is_false(
+    br, directory, monkeypatch, admission
+) -> None:
+    _install_fake_event_module(monkeypatch, defer=admission, control=True, admission=admission)
+    directory.chats[(USER, "alpha")] = CHAT
+
+    async def deliver(event):
+        del event  # the gateway returned without accepting the event
+
+    br._adapter.handle_message = deliver
+    actual = await br.deliver_phone_message(
+        user_id=USER, profile="alpha", text="hello", message_id=CMID
+    )
+    assert actual is False
+
+
 def test_prompt_timeout_hints_use_target_profile_a_b_a(br, world, monkeypatch) -> None:
     approval = types.ModuleType("tools.approval_context")
     clarify = types.ModuleType("tools.clarify_gateway")
