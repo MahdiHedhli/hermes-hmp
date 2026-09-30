@@ -24,6 +24,7 @@ from hmp_plugin.compat import (
     DependencySpec,
     GitFingerprintReader,
     _resolve_gitdir,  # white-box test of the git-metadata parser
+    approval_build_qualified,
     compute_read_bridge_fingerprint,
     direct_send_build_qualified,
     load_read_compat_list,
@@ -85,6 +86,272 @@ def test_direct_send_requires_its_own_exact_build_and_probe(
         read_identity, hermes_root=source, compat_path=manifest
     )
     assert not direct_send_build_qualified(None, hermes_root=source, compat_path=manifest)
+
+
+# --------------------------------------------------------------------------------------------
+# Approval qualification lane (draft, fail closed; specs/004-approval-qualification-lane)
+# --------------------------------------------------------------------------------------------
+
+_SHA = "a" * 40
+
+
+def _approval_fixture(tmp_path: Path, *, listed: bool = True) -> tuple[Path, Path, BuildIdentity]:
+    """A fake Hermes tree with one approval file and an optional exact-build listing."""
+    source = tmp_path / "hermes"
+    (source / "tools").mkdir(parents=True)
+    (source / "tools" / "approval.py").write_text("def resolve(): pass\n", encoding="utf-8")
+    git_dir = source / ".git"
+    git_dir.mkdir()
+    (git_dir / "HEAD").write_text(_SHA + "\n", encoding="utf-8")
+    fingerprint = compute_read_bridge_fingerprint(source, ["tools/approval.py"])
+    assert fingerprint is not None
+    builds = (
+        [{
+            "label": "fixture", "fingerprint": fingerprint, "git_sha": _SHA,
+            "qualified_by": "test", "qualified_at": "2026-09-30",
+        }]
+        if listed
+        else []
+    )
+    manifest = tmp_path / "approval.json"
+    manifest.write_text(
+        json.dumps({"format": 1, "bridge_files": ["tools/approval.py"], "builds": builds}),
+        encoding="utf-8",
+    )
+    return source, manifest, BuildIdentity("f" * 64, _SHA)
+
+
+def _spy_approval_probe(
+    monkeypatch: pytest.MonkeyPatch, result: tuple[str, ...] = ()
+) -> list[tuple[Path, tuple[str, ...]]]:
+    calls: list[tuple[Path, tuple[str, ...]]] = []
+
+    def probe(*, hermes_root: Path, bridge_files: tuple[str, ...]) -> tuple[str, ...]:
+        calls.append((hermes_root, tuple(bridge_files)))
+        return result
+
+    monkeypatch.setattr(compat_mod, "probe_approval_dependencies", probe)
+    return calls
+
+
+def test_shipped_approval_list_is_empty_and_covers_the_direct_send_files() -> None:
+    package = Path(compat_mod.__file__).parent
+    shipped = load_read_compat_list(package / "approval_supported_builds.json")
+    send = load_read_compat_list(package / "direct_send_supported_builds.json")
+    assert shipped.builds == ()
+    assert set(send.bridge_files) < set(shipped.bridge_files)
+    assert list(shipped.bridge_files) == sorted(shipped.bridge_files)
+    assert all(not f.startswith("/") and ".." not in f for f in shipped.bridge_files)
+    assert {
+        f"{dependency.module.replace('.', '/')}.py"
+        for dependency in compat_mod.APPROVAL_DEPENDENCIES
+    } <= set(shipped.bridge_files)
+    assert {
+        "tools/approval_detection.py",
+        "tools/approval_floors.py",
+        "tools/approval_prompt.py",
+        "tools/approval_smart.py",
+        "tools/clarify_tool.py",
+        "gateway/session_context.py",
+        "gateway/hosted_room_execution_policy.py",
+        "agent/terminal_approval_batch.py",
+        "gateway/platforms/api_server_openai_routes.py",
+        "gateway/platforms/api_server_room_dispatch.py",
+        "gateway/status.py",
+        "hermes_cli/config.py",
+    } <= set(shipped.bridge_files)
+
+
+def test_empty_approval_list_qualifies_nothing_and_probes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path, listed=False)
+    calls = _spy_approval_probe(monkeypatch)
+    def unexpected_read(*args: object, **kwargs: object) -> None:
+        pytest.fail("an empty approval list must not inspect Hermes source")
+
+    monkeypatch.setattr(compat_mod, "locate_hermes_root", unexpected_read)
+    monkeypatch.setattr(compat_mod.GitFingerprintReader, "read", unexpected_read)
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert calls == []
+    shipped = approval_build_qualified(identity, hermes_root=source)  # the real shipped list
+    assert shipped is False
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "not json",
+        "[]",
+        json.dumps({"format": 2, "bridge_files": [], "builds": []}),
+        json.dumps({"format": 1, "bridge_files": "tools/approval.py", "builds": []}),
+        json.dumps({"format": 1, "bridge_files": ["tools/approval.py"], "builds": {}}),
+        json.dumps({
+            "format": 1,
+            "bridge_files": ["tools/approval.py"],
+            "builds": [{"label": "x"}],
+        }),
+        json.dumps({"format": 1, "bridge_files": [], "builds": []}),
+    ],
+)
+def test_malformed_approval_list_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: str
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path)
+    manifest.write_text(content, encoding="utf-8")
+    calls = _spy_approval_probe(monkeypatch)
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert calls == []
+
+
+def test_missing_approval_list_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, _, identity = _approval_fixture(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    assert not approval_build_qualified(
+        identity, hermes_root=source, compat_path=tmp_path / "absent.json"
+    )
+    assert calls == []
+
+
+def test_listed_build_with_no_bridge_files_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path)
+    manifest.write_text(
+        json.dumps({
+            "format": 1,
+            "bridge_files": [],
+            "builds": [{
+                "label": "fixture",
+                "fingerprint": "f" * 64,
+                "git_sha": _SHA,
+                "qualified_by": "test",
+                "qualified_at": "2026-09-30",
+            }],
+        }),
+        encoding="utf-8",
+    )
+    calls = _spy_approval_probe(monkeypatch)
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert calls == []
+
+
+def test_listed_build_with_passing_probe_is_qualified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    assert approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert calls == [(source, ("tools/approval.py",))]
+    assert not approval_build_qualified(None, hermes_root=source, compat_path=manifest)
+
+
+def test_missing_approval_source_file_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path)
+    (source / "tools" / "approval.py").unlink()
+    calls = _spy_approval_probe(monkeypatch)
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert calls == []
+
+
+def test_changed_approval_source_sha_mismatch_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    (source / "tools" / "approval.py").write_text("def resolve(): return 1\n", encoding="utf-8")
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert calls == []  # changed fingerprint: no exact match, so nothing was probed
+    (source / "tools" / "approval.py").write_text("def resolve(): pass\n", encoding="utf-8")
+    moved = BuildIdentity("f" * 64, "b" * 40)  # read identity at another commit
+    assert not approval_build_qualified(moved, hermes_root=source, compat_path=manifest)
+    assert calls == []
+    no_git = BuildIdentity("f" * 64, None)
+    assert not approval_build_qualified(no_git, hermes_root=source, compat_path=manifest)
+    assert calls == []
+
+
+def test_approval_probe_failure_or_error_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path)
+    _spy_approval_probe(monkeypatch, ("tools.approval.resolve_gateway_approval",))
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+
+    def boom(**_: object) -> tuple[str, ...]:
+        raise RuntimeError("probe exploded")
+
+    monkeypatch.setattr(compat_mod, "probe_approval_dependencies", boom)
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+
+
+def test_approval_probe_uses_only_approval_dependencies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[object] = []
+
+    def fake(*, hermes_root: Path | None, bridge_files: object, specs: object) -> tuple[str, ...]:
+        seen.append(specs)
+        return ()
+
+    monkeypatch.setattr(compat_mod, "probe_read_dependencies", fake)
+    compat_mod.probe_approval_dependencies(hermes_root=tmp_path, bridge_files=("x.py",))
+    compat_mod.probe_direct_send_dependencies(hermes_root=tmp_path, bridge_files=("x.py",))
+    assert seen == [compat_mod.APPROVAL_DEPENDENCIES, compat_mod.DIRECT_SEND_DEPENDENCIES]
+    assert compat_mod.APPROVAL_DEPENDENCIES is not compat_mod.DIRECT_SEND_DEPENDENCIES
+    assert {(s.module, s.qualname) for s in compat_mod.DIRECT_SEND_DEPENDENCIES} == {
+        ("hermes_cli.active_sessions", "active_session_registry_snapshot"),
+        ("hermes_state", "SessionDB.get_session_by_title"),
+        ("hermes_state", "SessionDB.get_compression_lineage"),
+    }
+
+
+def test_approval_and_guarded_send_qualification_are_independent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, approval_manifest, identity = _approval_fixture(tmp_path / "a")
+    # A guarded-send manifest over the same tree, listing the exact build.
+    send_manifest = tmp_path / "send.json"
+    send_manifest.write_text(approval_manifest.read_text(encoding="utf-8"), encoding="utf-8")
+    empty_manifest = tmp_path / "empty.json"
+    empty_manifest.write_text(
+        json.dumps({"format": 1, "bridge_files": ["tools/approval.py"], "builds": []}),
+        encoding="utf-8",
+    )
+    approval_calls = _spy_approval_probe(monkeypatch)
+    send_calls: list[str] = []
+
+    def send_probe(*, hermes_root: Path, bridge_files: tuple[str, ...]) -> tuple[str, ...]:
+        send_calls.append(str(hermes_root))
+        return ()
+
+    monkeypatch.setattr(compat_mod, "probe_direct_send_dependencies", send_probe)
+
+    # Guarded send qualified, approvals not: an empty approval list never borrows the send list.
+    assert direct_send_build_qualified(identity, hermes_root=source, compat_path=send_manifest)
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=empty_manifest)
+    assert approval_calls == []
+
+    # Approvals qualified, guarded send not.
+    assert approval_build_qualified(identity, hermes_root=source, compat_path=approval_manifest)
+    assert not direct_send_build_qualified(identity, hermes_root=source, compat_path=empty_manifest)
+    assert send_calls == [str(source)]  # only the earlier send check probed; approvals never did
+
+    # A failing approval probe leaves guarded-send qualification untouched, and vice versa.
+    _spy_approval_probe(monkeypatch, ("missing",))
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=approval_manifest)
+    assert direct_send_build_qualified(identity, hermes_root=source, compat_path=send_manifest)
+    monkeypatch.setattr(
+        compat_mod, "probe_direct_send_dependencies", lambda **_: ("missing",)
+    )
+    _spy_approval_probe(monkeypatch)
+    assert approval_build_qualified(identity, hermes_root=source, compat_path=approval_manifest)
+    assert not direct_send_build_qualified(identity, hermes_root=source, compat_path=send_manifest)
 
 
 def _write_bridge_files(root: Path) -> None:

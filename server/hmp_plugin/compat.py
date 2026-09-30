@@ -485,6 +485,94 @@ def direct_send_build_qualified(
         return False
 
 
+# Draft approval qualification lane (specs/004-approval-qualification-lane). Independent of both
+# the read and the guarded-send lanes: its own dependency table, its own list file, its own gate.
+# `approval_supported_builds.json` ships EMPTY, so `approval_build_qualified` is False for every
+# build until a human qualifies one with behavioral evidence. Nothing in HMP consumes this gate yet;
+# it is reported read-only by `hermes hmp compat`. The send dependencies remain unchanged.
+APPROVAL_COMPAT_FILE = "approval_supported_builds.json"
+
+APPROVAL_DEPENDENCIES: tuple[DependencySpec, ...] = (
+    DependencySpec("agent.secret_scope", gap="F3 scoped API key"),
+    DependencySpec("tools.approval", "resolve_gateway_approval", gap="E-GAP-9"),
+    DependencySpec("tools.approval", "list_gateway_approvals", gap="E-GAP-9"),
+    DependencySpec("tools.approval_context", "_get_approval_timeout", gap="E-GAP-9"),
+    DependencySpec("tools.approval_gateway_wait", "_poll_event", gap="F3 timeout"),
+    DependencySpec("tools.approval_human_wait", "human_wait_window", gap="F3 wait lifecycle"),
+    DependencySpec("tools.interrupt", "is_interrupted", gap="F3 interrupted wait"),
+    DependencySpec("tools.clarify_gateway", "resolve_gateway_clarify", gap="E-GAP-9/20"),
+    DependencySpec("tools.clarify_gateway", "mark_awaiting_text", gap="E-GAP-9/20"),
+    DependencySpec("tools.clarify_gateway", "get_clarify_timeout", gap="E-GAP-9/20"),
+    DependencySpec("gateway.platforms.event", "MessageEvent.is_command", gap="F3 control"),
+    DependencySpec(
+        "gateway.platforms.base", "BasePlatformAdapter.handle_message", gap="F3 control"
+    ),
+    DependencySpec("gateway.run_busy", "GatewayBusySessionMixin", gap="F3 busy control"),
+    DependencySpec("gateway.run_inbound", "GatewayInboundMixin", gap="F3 clarify control"),
+    DependencySpec("gateway.run_turn_runner", "TurnRunner", gap="F3 prompt delivery"),
+    DependencySpec("gateway.platforms.api_server", "APIServerAdapter", gap="F3 stream/auth"),
+    DependencySpec("gateway.platforms.api_server_runs", "_handle_run_approval", gap="F3 exact ID"),
+    DependencySpec("gateway.platforms.api_server_room_grants", gap="F3 run authorization"),
+    DependencySpec("gateway.platforms.api_server_run_idempotency", gap="F3 run ownership"),
+    DependencySpec("gateway.pairing", "PairingStore.is_approved", gap="F3 authorization"),
+    DependencySpec("hermes_cli.auth", "has_usable_secret", gap="F3 scoped API key"),
+    DependencySpec("hermes_cli.profiles", gap="F3 profile scoping"),
+    DependencySpec("hermes_constants", "get_hermes_home", gap="F3 profile home"),
+)
+
+
+def probe_approval_dependencies(
+    *,
+    hermes_root: Path | None = None,
+    bridge_files: Sequence[str] = (),
+) -> Sequence[str]:
+    """The shape-and-containment probe run against `APPROVAL_DEPENDENCIES`. Non-empty means the
+    approval lane stays closed for this build."""
+    return probe_read_dependencies(
+        hermes_root=hermes_root, bridge_files=bridge_files, specs=APPROVAL_DEPENDENCIES
+    )
+
+
+def approval_build_qualified(
+    read_identity: BuildIdentity | None,
+    *,
+    hermes_root: Path | None = None,
+    compat_path: Path | None = None,
+) -> bool:
+    """Admit approvals only for an exactly, independently qualified build (draft; fail closed).
+
+    Order matters: the list is loaded and checked for an entry first, so an empty list (the shipped
+    state) returns False before any Hermes file is read or module imported. The approval
+    fingerprint is then recomputed over this lane's own `bridge_files`, the Git SHA must equal the
+    read identity's, an exact list entry must match, and only then are `APPROVAL_DEPENDENCIES`
+    probed. A malformed or missing list, a missing listed file, a moved SHA, no exact match or any
+    probe error returns False. Never consults the guarded-send list or gate.
+    """
+    if not isinstance(read_identity, BuildIdentity):
+        return False
+    try:
+        path = compat_path if compat_path is not None else Path(__file__).with_name(
+            APPROVAL_COMPAT_FILE
+        )
+        qualified = load_read_compat_list(path)
+        if not qualified.builds:
+            return False
+        root = hermes_root if hermes_root is not None else locate_hermes_root()
+        if root is None:
+            return False
+        approval_files = getattr(qualified, "bridge_files")  # noqa: B009
+        if not approval_files:
+            return False
+        identity = GitFingerprintReader(approval_files).read(root)
+        if identity is None or identity.git_sha != read_identity.git_sha:
+            return False
+        if match_build(identity, qualified.builds) is None:
+            return False
+        return not probe_approval_dependencies(hermes_root=root, bridge_files=approval_files)
+    except Exception:
+        return False
+
+
 def _resolve_qualname(module: object, qualname: str) -> object:
     obj: object = module
     for part in qualname.split("."):

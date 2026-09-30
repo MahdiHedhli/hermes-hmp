@@ -1680,6 +1680,14 @@ def _cmd_compat(env: CliEnv) -> int:
 
         send_ready = compat.direct_send_build_qualified(ident)
         out.write(f"Guarded send qualification: {'qualified' if send_ready else 'unqualified'}\n")
+    # Read-only draft lane. An unsupported read build never enters approval qualification; the
+    # shipped empty approval list returns before any Hermes source read or import.
+    approval_ready = False
+    if getattr(result, "supported", False):
+        from . import compat
+
+        approval_ready = compat.approval_build_qualified(ident)
+    out.write(f"Approval qualification: {'qualified' if approval_ready else 'unqualified'}\n")
     if status != "supported":
         out.write(
             "For an older Hermes install, update to v0.21.5 (v2026.9.24). "
