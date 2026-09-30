@@ -54,7 +54,7 @@ from typing import Any
 from gateway.config import Platform
 from gateway.platforms.base import BasePlatformAdapter, SendResult
 
-from . import cli, compat, direct_send, identity, server
+from . import cli, compat, direct_send, identity, mobile_cron, server
 from .authorize import Authorize
 from .cli import listener_record_path
 from .contract import PLATFORM_NAME, OtherWhy
@@ -131,12 +131,29 @@ def open_components(adapter: Any) -> server.ServerContext:
         block = live_extra.get("direct_send") if isinstance(live_extra, Mapping) else None
         return direct_send_qualified and isinstance(block, Mapping) and block.get("enabled") is True
 
+    def _read_owner_device_ids() -> frozenset[str]:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        ids = live_extra.get("owner_device_ids") if isinstance(live_extra, Mapping) else None
+        if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
+            return frozenset()
+        return frozenset(ids)
+
+    def _read_cron_enabled() -> bool:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        block = live_extra.get("cron") if isinstance(live_extra, Mapping) else None
+        return isinstance(block, Mapping) and block.get("enabled") is True
+
     ctx = server.ServerContext(
         identity=ident,
         store=store,
         compat=result,
         session_browsing_enabled=session_browsing is not False,
         direct_send_flag=_read_direct_send_enabled,
+        owner_device_ids=_read_owner_device_ids,
+        cron_flag=_read_cron_enabled,
+        cron_qualified=lambda: result.supported and mobile_cron.qualified_build(),
     )
     if result.supported:
         bridge_cls, directory_cls = _bridge_classes()

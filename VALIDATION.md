@@ -15,6 +15,20 @@ The F1 server package in this repository matches the pre-migration private sourc
 
 The plugin installer reports **CAUTION** for the full repository because it scans test tools and documentation alongside runtime code. The [privacy gate](PRIVACY_GATE.md) records the reviewed findings.
 
+## Scheduled jobs branch validation
+
+The additive `feat/cron-mobile` branch keeps scheduled jobs off by default. The
+reviewed stock-base Hermes source at `04fa849e70165336ba73e6750257a1ebd7ff998d`
+passed 20 upstream API server jobs tests in an isolated home. HMP's own
+`test_mobile_cron_stock.py` passed create-paused, list including paused jobs, edit,
+resume, pause, and delete against that extracted build. The new cron fingerprint
+is independent of the guarded-send fingerprint. A release candidate still needs
+the planned independent security and physical-device review before enabling the flag.
+The branch's full CI test selection passed **1,170 tests** with **10 skipped**;
+Ruff, the plugin-surface check, and the zero-baseline privacy scan passed.
+Gitleaks reported six existing fixture/type-check findings and none in the
+new cron implementation or docs.
+
 ## Local fixture builds
 
 The stock-base and experimental Hermes source clones were copied into the new root's `_refs/` directory and extracted to scratch storage outside the repository. The source revisions are `04fa849e70` and `7e8c8f07a1`, respectively. Pairing fixtures require a real PTY, so they run locally rather than in the current GitHub Actions workflow.

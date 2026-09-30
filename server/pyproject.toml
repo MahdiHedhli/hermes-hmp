@@ -33,14 +33,14 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["hmp_plugin*"]
 
-# T024: the manifest and the two build lists ship inside the wheel (the compat gate and the
-# plugin loader read them next to the modules).
+# The manifest and build lists ship inside the wheel, next to their readers.
 [tool.setuptools.package-data]
 hmp_plugin = [
     "plugin.yaml",
     "read_compat_builds.json",
     "write_supported_builds.json",
     "direct_send_supported_builds.json",
+    "mobile_cron_supported_builds.json",
 ]
 
 [tool.pytest.ini_options]

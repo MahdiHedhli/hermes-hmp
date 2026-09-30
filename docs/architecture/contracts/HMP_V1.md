@@ -242,6 +242,7 @@ Normative keywords follow RFC 2119 and RFC 8174.
 | `stale_head` (v1.2, DS-4(4)) | 409 | direct send: the client's `expected_head` does not match the Bot Chat's current head | yes | Refresh (re-read via SES-2), then retry with the fresh head. Never a silent retry with the old value. |
 | `write_gate_closed` (v1.2, DS-2(b)) | 503 | direct send while `"open_guarded"` is unavailable (dogfood flag off, `api_server` unreachable/misconfigured, or key invalid) | yes (HMP did not hand off) | Keep the draft. Composer is read-only for direct send on this instance. |
 | `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"` | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
+| `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, unqualified build, missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
 
 - **ERR-2a. Read-compatibility refusal** (GU-2c; additive `other {why}` values, no contract revision; controller clarification, 2026-09-25).
   - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes build's identity is not on the read-compatible builds list or cannot be determined.
@@ -996,6 +997,34 @@ which no supported build advertises today (§8).
   behaves under a closed GU-4 gate. This is the flag OD-F15's second live-config approval turns on,
   for the owner's own paired devices only (enforced by the existing pairing trust boundary, no new
   per-device ACL needed), never a general release default.
+
+## 7c. Mobile cron management (v1.4, draft)
+
+This additive route family is disabled unless `gateway.platforms.hmp.extra.cron.enabled`
+is explicitly true, at least one `owner_device_ids` entry matches this authenticated device,
+and the running Hermes build has an independently qualified cron fingerprint. A device also
+needs the existing per-bot authorization for `{p}`. A failed gate returns `404 not_found`
+for non-owner devices or `503 cron_unavailable` for a disabled/unqualified endpoint, before
+any job data or loopback API key is used.
+
+| Method | Path under `/hmp/v1` | Body | Result |
+|---|---|---|---|
+| GET | `/bots/{p}/jobs` | — | `{"jobs":[job,...]}` |
+| POST | `/bots/{p}/jobs` | `{"name":string,"schedule":string,"prompt":string}` | `{"job":job}`; created paused, `deliver: local` |
+| PATCH | `/bots/{p}/jobs/{job_id}` | one or more of `name`, `schedule`, `prompt` | `{"job":job}` |
+| DELETE | `/bots/{p}/jobs/{job_id}` | — | `{"deleted":true}` |
+| POST | `/bots/{p}/jobs/{job_id}/pause` or `/resume` | — | `{"job":job}` |
+
+`job` contains only `id`, `name`, `prompt`, `schedule`, `enabled`, `state`,
+`next_run_at`, `last_run_at`, and `last_status`; optional status/time fields may be null.
+IDs are twelve lowercase hex characters. At most 100 jobs and one MiB of upstream JSON
+are returned. HMP never forwards scripts, workdirs, delivery targets, raw errors, or
+other Hermes job internals. Create/edit fields are length bounded; unknown fields are
+rejected. All calls use one profile-scoped, literal-loopback API server endpoint with
+the profile's own server key, disabled proxy inheritance, redirects, and automatic retries.
+Phone clients must treat a transport failure after a write as an unknown outcome and
+refresh before attempting another write. The host flag defaults off; release requires
+fixture qualification and independent security review.
 
 ## 8. Guarantees, capability contract and write gate (FZ-R-8, FZ-R-9)
 

@@ -170,6 +170,7 @@ class ErrorCode(StrEnum):
     STALE_HEAD = "stale_head"
     WRITE_GATE_CLOSED = "write_gate_closed"
     API_SERVER_UNAVAILABLE = "api_server_unavailable"
+    CRON_UNAVAILABLE = "cron_unavailable"
 
 
 class SubmitDefinitive(StrEnum):
@@ -238,6 +239,7 @@ ERROR_TABLE: Mapping[ErrorCode, ErrorSpec] = {
         _spec(ErrorCode.STALE_HEAD, (409,), _Y),
         _spec(ErrorCode.WRITE_GATE_CLOSED, (503,), _Y),
         _spec(ErrorCode.API_SERVER_UNAVAILABLE, (503,), _N),
+        _spec(ErrorCode.CRON_UNAVAILABLE, (503,), _NA),
     )
 }
 
@@ -281,6 +283,7 @@ ERROR_MESSAGES: Mapping[ErrorCode, str] = {
     ErrorCode.STALE_HEAD: "conversation view is out of date",
     ErrorCode.WRITE_GATE_CLOSED: "direct send is not available on this instance",
     ErrorCode.API_SERVER_UNAVAILABLE: "direct send delivery is unavailable",
+    ErrorCode.CRON_UNAVAILABLE: "scheduled jobs are unavailable",
 }
 
 

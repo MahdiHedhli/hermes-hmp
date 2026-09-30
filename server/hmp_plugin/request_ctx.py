@@ -188,6 +188,32 @@ class ServerContext:
     direct_send_flag: Callable[[], bool] = field(default=lambda: False)
     # `direct_send.DirectSendDeps`, only on a supported build (mirrors `reads`/`authorize` above).
     direct_send_deps: Any = None
+    # Mobile cron is a separate persistent-execution gate. Both settings are
+    # read from live HMP config for every request, and default to deny.
+    owner_device_ids: Callable[[], frozenset[str]] = field(default=lambda: frozenset())
+    cron_flag: Callable[[], bool] = field(default=lambda: False)
+    cron_qualified: Callable[[], bool] = field(default=lambda: False)
+
+    def is_owner_device(self, device_id: str) -> bool:
+        try:
+            return device_id in self.owner_device_ids()
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def cron_enabled(self) -> bool:
+        try:
+            return self.cron_flag() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def cron_build_qualified(self) -> bool:
+        try:
+            return self.cron_qualified() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
 
     def direct_send_enabled(self) -> bool:
         try:
