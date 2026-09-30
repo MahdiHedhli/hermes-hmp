@@ -41,15 +41,16 @@ not overridden Hermes's WAL guard; a patched-runtime WAL test remains open.
 
 ## Approval and clarify events
 
-Desktop-owned Bot Chat turns still surface prompts through Desktop's process-local channel; a remote client cannot answer those same prompts through session chat. The two Hermes builds used for HMP's draft approval matrix lacked a Bot Chat session-stream notifier. Current untagged Hermes `main` at [`ac0cfa7`](https://github.com/NousResearch/hermes-agent/commit/ac0cfa7db94cefa90cf3e35191f38b53888b9e17) now registers one on the session-chat stream and emits `approval.request` for the existing run-approval route. Its focused upstream tests passed in an isolated environment. An [HMP socket-free handler probe](https://github.com/MahdiHedhli/hermes-hmp/pull/44) passed 32 named checks on this exact source, including exact-ID answer and denial, a wrong-profile stand-in, simulated disconnect, and late-answer rejection. It does not exercise a live HTTP listener, real agent/tool interruption, or the full HMP relay; HMP has not passed a real-route matrix on this commit. The latest published tag, `v2026.9.24`, predates the session-stream change. This is a candidate, not a qualified or released mobile approval contract.
+Desktop-owned Bot Chat turns still surface prompts through Desktop's process-local channel; a remote client cannot answer those same prompts through session chat. The two older Hermes builds used for HMP's draft approval matrix lacked a Bot Chat session-stream notifier. Current untagged Hermes `main` at [`ac0cfa7`](https://github.com/NousResearch/hermes-agent/commit/ac0cfa7db94cefa90cf3e35191f38b53888b9e17) registers one on the session-chat stream and emits `approval.request` for the existing run-approval route. An [HMP socket-free handler probe and isolated gateway/PTY matrix](https://github.com/MahdiHedhli/hermes-hmp/pull/44) passed on this exact archive: 32 focused checks and 16/16 integration cases, including T7 Bot Chat, T8 Phone chat, and fail-closed gates. The fixture used a fake model and synthetic credentials; no runtime compatibility entry was added. The latest published tag, `v2026.9.24`, predates the session-stream change. A released build, live multiplex profiles, physical devices, and Desktop-owned cross-client prompts still need qualification or an upstream contract. This is not yet a released mobile approval capability.
 
 This is the next major HermesBot Mobile feature after beta release work. We
 request a supported, authenticated, session-scoped contract that carries exact
 request IDs, offered choices, session/profile ownership, and authoritative
 expiry and settlement across Desktop and remote clients. The current-main
-session-stream candidate is the first route to qualify, including wrong-ID,
-cross-profile, timeout, disconnect, restart, and live-owner handoff cases. HMP
-must not infer approvals from tool text or create another execution owner.
+session-stream candidate passed an isolated fixture matrix; released builds
+still need wrong-ID, cross-profile, timeout, disconnect, restart, and live-owner
+handoff qualification. HMP must not infer approvals from tool text or create
+another execution owner.
 
 ## Already usable without a new Hermes contract
 
