@@ -1663,6 +1663,19 @@ def _cmd_compat(env: CliEnv) -> int:
         else ("failed" if why == "hermes_read_dependency_missing" else "not run")
     )
     out.write(f"Dependency probe: {probe}\n")
+    # Read-only draft lane. An unsupported read build never enters approval qualification; the
+    # shipped empty approval list returns before any Hermes source read or import.
+    approval_ready = False
+    if getattr(result, "supported", False):
+        from . import compat
+
+        approval_ready = compat.approval_build_qualified(ident)
+    # Informational only: this is the source on disk now, NOT the running gateway process (which
+    # is bound to its own startup baseline and needs a full process restart after any change).
+    out.write(
+        "Approval qualification (on-disk source): "
+        f"{'qualified' if approval_ready else 'unqualified'}\n"
+    )
     return EXIT_OK
 
 

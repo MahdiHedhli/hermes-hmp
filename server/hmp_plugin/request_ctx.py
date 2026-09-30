@@ -191,6 +191,20 @@ class ServerContext:
     # v1.3 prompt rows (process memory). None until a supported listener builds one.
     prompt_store: Any = None
     owner_device_ids: Callable[[], frozenset[str]] = field(default=lambda: frozenset())
+    # Independent approval qualification (specs/004-approval-qualification-lane). Default closed.
+    # A passing guarded-send build never implies this; `adapter.py` binds it to
+    # `compat.approval_listener_qualifier(read identity)`, bound to the PROCESS-level baseline
+    # (`approval_build_qualified` is the informational CLI check, not admission). May block on file
+    # reads, so callers run it off the event loop.
+    approval_qualified: Callable[[], bool] = field(default=lambda: False)
+
+    def approval_qualification_open(self) -> bool:
+        """Only an exact `True` opens the gate; an exception, a falsy or a non-bool closes it."""
+        try:
+            return self.approval_qualified() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
 
     def is_owner_device(self, device_id: str) -> bool:
         try:

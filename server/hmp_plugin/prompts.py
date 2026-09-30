@@ -14,7 +14,7 @@ import threading
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 from .contract import IDEMPOTENCY_RETENTION_S
@@ -451,11 +451,10 @@ def list_prompts(
 
 
 def _match_choice(offered: tuple[str, ...], submitted: str) -> str | None:
+    """The single offered label the submission names; None when none or more than one match."""
     wanted = strip_recommended(submitted).casefold()
-    for label in offered:
-        if strip_recommended(label).casefold() == wanted:
-            return label
-    return None
+    matches = [label for label in offered if strip_recommended(label).casefold() == wanted]
+    return matches[0] if len(matches) == 1 else None
 
 
 def _parse_answer(body: Mapping[str, object]) -> tuple[str, object] | HttpResult:
@@ -649,6 +648,15 @@ class AdapterHooks:
     bridge: object
     now: Callable[[], int]
     iid: str
+    # Independent approval qualification, default closed. While closed, the producer hooks below
+    # neither call the bridge's approval helpers nor store an actionable row.
+    approval_qualified: Callable[[], bool] = field(default=lambda: False)
+
+    async def _approvals_open(self) -> bool:
+        try:
+            return await asyncio.to_thread(self.approval_qualified) is True
+        except Exception:
+            return False
 
     def note_inert(self, chat_id: str) -> None:
         self.store.suppress_transcript(chat_id)
@@ -677,6 +685,8 @@ class AdapterHooks:
         return True
 
     async def reconcile_chat(self, chat_id: str) -> None:
+        if not await self._approvals_open():
+            return
         with self.store._guard:
             keys = [key for key, owner in self.store._sessions.items()
                     if owner[0] == self.iid and owner[3] == chat_id]
@@ -698,6 +708,8 @@ class AdapterHooks:
         return self.store.owner_of_chat(self.iid, chat_id)
 
     async def on_exec_approval(self, prompt: object) -> bool:
+        if not await self._approvals_open():
+            return False
         session_key = str(getattr(prompt, "session_key", "") or "")
         command = getattr(prompt, "command", None)
         if not isinstance(command, str):
@@ -780,6 +792,8 @@ class AdapterHooks:
         session_key: str,
     ) -> bool:
         del chat_id
+        if not await self._approvals_open():
+            return False
         owner = self.store.owner_of_session(session_key)
         if owner is None or not clarify_id:
             return False

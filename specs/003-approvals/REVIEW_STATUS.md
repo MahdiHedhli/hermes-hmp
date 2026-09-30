@@ -1,5 +1,103 @@
 # Approvals review status
 
+## Independent approval route qualification (draft wiring)
+
+Prompt listing, exact-ID answers and Phone sends are now gated by an approval qualification
+that is separate from guarded-send qualification and closed by default. The shipped approval
+build list is empty, so approvals are not live, enabled or released on any build. The ac0
+matrix below remains fixture evidence only.
+
+Test intent (`server/tests/unit/test_approval_route_qualification.py`): a false, raising or
+non-boolean approval result closes AP-3/AP-4/AP-6 even with a valid owner device, a
+send-qualified build and an open write gate, with no endpoint, resolver, listing or delivery
+call; an explicit `True` keeps the F3 behavior; snapshot `open_requests` is stripped while
+closed; non-owners and unauthorized bots never reach the qualifier; ordinary guarded sends are
+unaffected; closed producer hooks call no approval helper and store no row; the production
+adapter binds `supported AND approval_listener_qualifier(identity)` (process-level baseline; the
+older `approval_build_qualified` binding is superseded) and passes the same callback to the send
+deps and the hooks. Older pass counts (for example 1197) belong to the original lane and are
+not current.
+
+**Controller evidence (current slice, September 30):**
+
+- Full suite after the process-binding and ambiguous-label fixes
+  (`/private/tmp/hmp-approval-route-qualification-pytest-6.log`): **1364 passed,
+  12 skipped, one existing warning, 24.40s**.
+- Focused independent Opus review cleared F1/F2/F4 as closed groundwork with no material
+  code residual. It ran no tests. L2/L5 code repairs are verified; latency under load remains
+  unmeasured and the operator restart runbook still needs real gateway evidence.
+- Ambiguous-label tests cover single/multi answers, mixed selections, case, whitespace,
+  recommendation suffixes, sharp S and sigma collisions, with no resolver call on refusal.
+
+**Earlier evidence (superseded by the current run):**
+
+- Full suite (`/private/tmp/hmp-approval-route-qualification-pytest-3.log`): 1320 passed,
+  12 skipped, one existing warning, 25.07s.
+- Pinned Ruff 0.16.9 server tools: PASS, after only `noqa` comments were corrected.
+- Surface and private checks: PASS, as previously recorded.
+
+This is draft evidence only. The release gate, current full real gateway matrix and physical-device
+gate are not satisfied. L3 remains a documented trusted-operator/in-flight limit. The historical
+L2/L5 findings and their verified repairs are recorded below.
+
+### Independent Opus review (static, no tests run) and follow-up fixes
+
+An independent read-only review of `a643341` found no security blocker (the shipped approval
+list is empty and every traced path stays closed). Fixed in this slice:
+
+- **M1:** unbinding the stream while closed changed DS-4 result classification (a
+  `run.started` → keepalive → `done` stream became unknown instead of queued). Mailbox phase
+  transitions in `consume_sse` no longer depend on `bind`; `bind` only drives prompt-store side
+  effects. Tests feed the same frame sequences bound and unbound and require identical results.
+- **L1:** the approval check now runs before the profile lock and the fresh head/lease checks
+  (only when a prompt store exists, off-loop, exact `True`, exceptions closed).
+- **L4:** the adapter callback requires a supported build as well.
+
+**Historical review findings (superseded for L2/L5 by the repairs below):**
+
+- **L2:** the qualification probe is uncached and re-runs per request, snapshot, send and
+  `reconcile_chat`. Harmless while the list is empty; a cache needs its own fingerprint and
+  revocation design and is deliberately not in this slice.
+- **L3:** the gate is checked once per AP-4/AP-6 request; a bound DS-4 stream (up to 24h) can keep
+  storing rows after qualification closes, and rows may reappear if it reopens. Rows stay
+  unactionable because AP-3 and the snapshot re-check the gate. The fingerprint and HEAD reads
+  are not atomic.
+- **L5:** on installs without git both SHAs are `None`, so the SHA comparison passes trivially and
+  only the approval fingerprint binds the read identity.
+
+**L2/L5 repair (verified by the current controller suite and focused independent review).**
+The two bullets above are the historical findings and stay as
+written. The production callback is now `compat.approval_listener_qualifier`, built once in
+`open_components` for a supported build, with a startup baseline of root, ordered approval file
+list, fingerprint and git SHA. Each callback re-reads the manifest and source and requires all to
+equal the baseline plus an exact current entry, so a disk swap to another also-listed build after
+the baseline closes, manifest removal closes at once, and an empty or malformed startup list stays
+closed without reading or importing approval files. This covers swaps after the baseline only:
+memory is not attested, and "restart" means a full gateway process restart, not a listener restart.
+**Follow-up (F1-F4 of the gate-binding review, verified in the current suite and focused review):** the
+baseline is now one process-level latch fixed by the first supported factory call (listener
+reconnect cannot redefine it; a first empty, malformed, missing or unlisted manifest closes the
+process until a full process restart), cross-checked against the read gate's fresh identity, and
+requires a matching startup entry. The CLI line is labelled "Approval qualification (on-disk
+source)" and is informational, not the running gateway. Unload/reimport of the plugin is not
+defended against; runbook: restart the whole gateway process after any Hermes, source or plugin
+change, and approvals qualification and release stay no-go until that lifecycle is verified. Only a successful probe is cached (<= 8, keyed by
+root, ordered files, fingerprint, SHA, lock-guarded, separate from the guarded-send cache); failures
+retry and there is no TTL. `approval_build_qualified` and the CLI line remain an informational
+one-shot exact-source check, not production admission. L3 is unchanged and still documented as a
+limit: a bound stream can outlive the gate and the fingerprint/HEAD reads are not atomic.
+
+**Mobile review M1 (ambiguous clarify labels; verified by the controller's current suite).** A clarify
+choice whose normalized form (`strip_recommended(...).casefold()`) matches more than one offered
+label, e.g. `Apple`/`apple` or `Straße`/`STRASSE`, is refused with `409 invalid_choice`,
+`applied:false` and no resolver or delivery call, on both the single and multi-select paths. It is
+not guessed. Unambiguous replies and the Other transition are unchanged, and nothing about the
+choice is logged.
+
+Review limits: static review only; it ran no tests, used no live Hermes home, did not verify
+real Hermes keepalive-only mailbox streams, and did not re-review F3 code outside the diff.
+Independent review is not release approval.
+
 ## Exact untagged Hermes `main` fixture matrix
 
 The isolated archive of Hermes

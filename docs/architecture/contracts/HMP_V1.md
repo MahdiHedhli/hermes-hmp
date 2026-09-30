@@ -1025,9 +1025,12 @@ fingerprint that no longer matches the running Hermes tree: each route returns
 `handle_message`, or call `resolve_gateway_approval` / `resolve_gateway_clarify` /
 `mark_awaiting_text`. Pairing is still required. The flag does not authorize a device by itself.
 
-Auth on every route: bearer, explicit owner-device membership, a shared F3 limit of 60 requests
-per minute per device, then the per-bot gate (`require_bot_authorized`, ERR-3), then the write
-gate. `{p}` is the served profile, checked against the stored row. An owner device is an active
+Auth on every route: bearer, explicit owner-device membership, the F3 rate limit, then the
+per-bot gate (`require_bot_authorized`, ERR-3), then the write gate and the approval
+qualification gate below. The rate limit is two separate per-device buckets keyed by `device_id`
+only: AP-3 reads are limited to 60 per minute per device, and AP-4 answers and AP-6 Phone sends
+share one actions bucket of 60 per minute per device. Each bucket aggregates across every profile
+and request ID the device uses. Reads do not consume the actions bucket. `{p}` is the served profile, checked against the stored row. An owner device is an active
 paired device whose exact ID appears in `gateway.platforms.hmp.extra.owner_device_ids` (list of
 strings, default empty; malformed config grants nobody). A non-owner receives `404 not_found`,
 even when bot-authorized or sharing the owner's `user_id`. The host loads changes through its
@@ -1035,6 +1038,30 @@ normal config reload/restart; HMP reads the live adapter config each request. Ow
 the same user share the existing per-request serialization and idempotency. Default-conversation
 snapshots omit `open_requests` for non-owners and while the direct-send flag is off.
 The explicit `direct_send.enabled` flag is mandatory even when the base gate is OPEN.
+
+**Independent approval qualification (additional gate).** AP-3, AP-4 and AP-6, the snapshot
+`open_requests` field, the send-stream prompt binding and the producer hooks also require
+the listener-bound qualifier `compat.approval_listener_qualifier` (its callback) to return exactly
+`True`. The qualifier is bound to a process-level baseline (resolved root, ordered read and
+approval file lists, read and approval fingerprints, git SHA) fixed by the first SUPPORTED
+factory call in the gateway process (which may follow unsupported listener opens in the same
+process; it cannot attest already-loaded Hermes module bytes, so a full gateway process restart
+remains mandatory after any source or plugin change, and this is not process-start attestation), cross-checked against the read gate's identity and requiring
+a matching startup entry. A reconnecting listener may open only on that same baseline; a first
+call with an empty, malformed, missing or unlisted manifest closes the process until a **full
+gateway process restart**, not merely a listener restart. `approval_build_qualified` and the
+`hermes hmp compat` line are an informational check of the on-disk source, not admission. This
+does not protect against in-process unload or reimport of the plugin, which resets the baseline;
+after any Hermes, source or plugin change the gateway process must be restarted. This is required
+IN ADDITION TO, never instead of, the supported/send-qualified build, the owner device, the
+per-bot authorization and the `direct_send` flag. It reads a separate allowlist,
+`approval_supported_builds.json`, independent of `direct_send_supported_builds.json`. The shipped
+list is **empty**, so approvals are closed on every build, including a send-qualified one: AP-3,
+AP-4 and AP-6 return `503 write_gate_closed` without an endpoint, resolver, listing or delivery
+call; snapshot `open_requests` is omitted; closed producer hooks call no approval helper and
+store no row. A false, raising or non-boolean result closes the gate. Passing a fixture matrix
+does not add a build to the list. Ordinary guarded sends (§7a) do not depend on this gate and are
+unaffected by it. `hermes hmp compat` reports the approval qualification on its own line.
 
 - **AP-1. Bot Chat stream (amends DS-6).** The loopback body stays `{"message":"<text>"}`. The
   path is `{path_prefix}/api/sessions/{live_tip}/chat/stream`. A missing `session_chat_streaming`
@@ -1086,7 +1113,10 @@ The explicit `direct_send.enabled` flag is mandatory even when the base gate is 
   | clarify text | `{"text":"<string>"}` | `resolve_gateway_clarify` only when the row is awaiting text or has no choices. Otherwise `409 invalid_choice`, and the Hermes entry stays pending. |
 
   A `choice` not in the stored `choices` is `409 {"error":{"code":"invalid_choice",…},"applied":false}`
-  and makes no Hermes call. Success is `200 {"status":"resolved","applied":true}`. `applied:true`
+  and makes no Hermes call. Clarify labels are compared after stripping a trailing `(Recommended)`
+  and casefolding. A submitted clarify choice (each member of `choices`) that matches more than one
+  offered label after that normalization is refused the same way, never resolved by picking the
+  first; exact unambiguous replies are unchanged and no automatic retry follows (AP-5). Success is `200 {"status":"resolved","applied":true}`. `applied:true`
   means Hermes accepted the resolution (`resolve_*` returned non-zero, or the runs endpoint
   returned `resolved` > 0). It does not mean the command finished. The UI clears the card only
   after a later poll omits it (INT-2).

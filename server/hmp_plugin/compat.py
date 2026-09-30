@@ -29,6 +29,7 @@ import json
 import os
 import re
 import sysconfig
+import threading
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from enum import StrEnum
@@ -515,6 +516,268 @@ def probe_direct_send_dependencies(
     return probe_read_dependencies(
         hermes_root=hermes_root, bridge_files=bridge_files, specs=DIRECT_SEND_DEPENDENCIES
     )
+
+
+# Draft approval qualification lane (specs/004-approval-qualification-lane). Independent of both
+# the read and the guarded-send lanes: its own dependency table, its own list file, its own gate.
+# `approval_supported_builds.json` ships EMPTY, so `approval_build_qualified` is False for every
+# build until a human qualifies one with behavioral evidence. The adapter binds this gate (with
+# `result.supported`) into the prompt routes, the send-stream binding and the producer hooks, and
+# `hermes hmp compat` reports it read-only. The send dependencies remain unchanged.
+APPROVAL_COMPAT_FILE = "approval_supported_builds.json"
+
+APPROVAL_DEPENDENCIES: tuple[DependencySpec, ...] = (
+    DependencySpec("agent.secret_scope", gap="F3 scoped API key"),
+    DependencySpec("tools.approval", "resolve_gateway_approval", gap="E-GAP-9"),
+    DependencySpec("tools.approval", "list_gateway_approvals", gap="E-GAP-9"),
+    DependencySpec("tools.approval_context", "_get_approval_timeout", gap="E-GAP-9"),
+    DependencySpec("tools.approval_gateway_wait", "_poll_event", gap="F3 timeout"),
+    DependencySpec("tools.approval_human_wait", "human_wait_window", gap="F3 wait lifecycle"),
+    DependencySpec("tools.interrupt", "is_interrupted", gap="F3 interrupted wait"),
+    DependencySpec("tools.clarify_gateway", "resolve_gateway_clarify", gap="E-GAP-9/20"),
+    DependencySpec("tools.clarify_gateway", "mark_awaiting_text", gap="E-GAP-9/20"),
+    DependencySpec("tools.clarify_gateway", "get_clarify_timeout", gap="E-GAP-9/20"),
+    DependencySpec("gateway.platforms.event", "MessageEvent.is_command", gap="F3 control"),
+    DependencySpec(
+        "gateway.platforms.base", "BasePlatformAdapter.handle_message", gap="F3 control"
+    ),
+    DependencySpec("gateway.run_busy", "GatewayBusySessionMixin", gap="F3 busy control"),
+    DependencySpec("gateway.run_inbound", "GatewayInboundMixin", gap="F3 clarify control"),
+    DependencySpec("gateway.run_turn_runner", "TurnRunner", gap="F3 prompt delivery"),
+    DependencySpec("gateway.platforms.api_server", "APIServerAdapter", gap="F3 stream/auth"),
+    DependencySpec("gateway.platforms.api_server_runs", "_handle_run_approval", gap="F3 exact ID"),
+    DependencySpec("gateway.platforms.api_server_room_grants", gap="F3 run authorization"),
+    DependencySpec("gateway.platforms.api_server_run_idempotency", gap="F3 run ownership"),
+    DependencySpec("gateway.pairing", "PairingStore.is_approved", gap="F3 authorization"),
+    DependencySpec("hermes_cli.auth", "has_usable_secret", gap="F3 scoped API key"),
+    DependencySpec("hermes_cli.profiles", gap="F3 profile scoping"),
+    DependencySpec("hermes_constants", "get_hermes_home", gap="F3 profile home"),
+)
+
+
+def probe_approval_dependencies(
+    *,
+    hermes_root: Path | None = None,
+    bridge_files: Sequence[str] = (),
+) -> Sequence[str]:
+    """The shape-and-containment probe run against `APPROVAL_DEPENDENCIES`. Non-empty means the
+    approval lane stays closed for this build."""
+    return probe_read_dependencies(
+        hermes_root=hermes_root, bridge_files=bridge_files, specs=APPROVAL_DEPENDENCIES
+    )
+
+
+def _load_approval_manifest(compat_path: Path | None) -> ReadCompatList:
+    path = (
+        compat_path if compat_path is not None else Path(__file__).with_name(APPROVAL_COMPAT_FILE)
+    )
+    return load_read_compat_list(path)
+
+
+def approval_build_qualified(
+    read_identity: BuildIdentity | None,
+    *,
+    hermes_root: Path | None = None,
+    compat_path: Path | None = None,
+) -> bool:
+    """One-shot, INFORMATIONAL exact check of the source currently on disk (`hermes hmp compat`).
+
+    This is NOT listener-bound admission: it has no startup baseline, so it cannot notice that the
+    files on disk changed after a process started. Production routes use
+    `approval_listener_qualifier` instead. Order matters: the list is loaded and checked for an
+    entry first, so an empty list (the shipped state) returns False before any Hermes file is read
+    or module imported. The approval fingerprint is then recomputed over this lane's own
+    `bridge_files`, the Git SHA must equal the read identity's, an exact list entry must match, and
+    only then are `APPROVAL_DEPENDENCIES` probed. A malformed or missing list, a missing listed
+    file, a moved SHA, no exact match or any probe error returns False. Never consults the
+    guarded-send list or gate.
+    """
+    if not isinstance(read_identity, BuildIdentity):
+        return False
+    try:
+        qualified = _load_approval_manifest(compat_path)
+        if not qualified.builds:
+            return False
+        root = hermes_root if hermes_root is not None else locate_hermes_root()
+        if root is None:
+            return False
+        approval_files = getattr(qualified, "bridge_files")  # noqa: B009
+        if not approval_files:
+            return False
+        identity = GitFingerprintReader(approval_files).read(root)
+        if identity is None or identity.git_sha != read_identity.git_sha:
+            return False
+        if match_build(identity, qualified.builds) is None:
+            return False
+        return not probe_approval_dependencies(hermes_root=root, bridge_files=approval_files)
+    except Exception:
+        return False
+
+
+@dataclass(frozen=True)
+class ApprovalProcessBaseline:
+    """What this PROCESS admitted approvals with: the exact source root, the ordered read and
+    approval file lists, the read and approval fingerprints and the git SHA. A callback opens only
+    while the CURRENT source still equals this, so an in-place change to another (even
+    also-qualified) build stays closed until the gateway process restarts."""
+
+    root: Path
+    read_files: tuple[str, ...]
+    read_fingerprint: str
+    files: tuple[str, ...]
+    fingerprint: str
+    git_sha: str | None
+
+
+# The process-level admission latch, independent of the probe cache below. `None` = not yet
+# initialised; `(None,)` = closed for the life of the process; `(baseline,)` = the one baseline any
+# later listener must equal. It is written once, under the lock, by the FIRST supported factory
+# call, so a listener reconnect can never redefine the startup source. There is deliberately no
+# public reset and no env override: only a full gateway process restart (a fresh import of this
+# module) clears it, and tests monkeypatch it. It cannot defend against an in-process unload or
+# reimport of this module, which resets it (a documented limit, not claimed protection).
+_approval_process_latch: tuple[ApprovalProcessBaseline | None] | None = None
+_approval_latch_lock = threading.Lock()
+
+
+# Successful dependency probes only, oldest first. Isolated from `_direct_send_qualified_cache`.
+# The key is the full source identity, so a changed file, SHA, list or root can never reuse a pass;
+# the manifest, fingerprint and SHA are still recomputed on EVERY callback (no TTL on revocation).
+_APPROVAL_PROBE_CACHE_MAX = 8
+_approval_probe_cache: dict[tuple[str, tuple[str, ...], str, str | None], None] = {}
+_approval_probe_lock = threading.Lock()
+
+
+def _approval_probe_passed(
+    root: Path, files: tuple[str, ...], fingerprint: str, git_sha: str | None
+) -> bool:
+    key = (str(root), files, fingerprint, git_sha)
+    with _approval_probe_lock:
+        if key in _approval_probe_cache:
+            del _approval_probe_cache[key]  # re-inserted below to refresh recency
+            _approval_probe_cache[key] = None
+            return True
+        if probe_approval_dependencies(hermes_root=root, bridge_files=files):
+            return False  # failures are never cached: the next callback probes again
+        _approval_probe_cache[key] = None
+        while len(_approval_probe_cache) > _APPROVAL_PROBE_CACHE_MAX:
+            del _approval_probe_cache[next(iter(_approval_probe_cache))]
+        return True
+
+
+def _approval_closed() -> bool:
+    return False
+
+
+def _capture_approval_baseline(
+    read_identity: BuildIdentity,
+    hermes_root: Path | None,
+    compat_path: Path | None,
+    read_compat_path: Path | None,
+) -> ApprovalProcessBaseline | None:
+    """The candidate baseline for the source on disk right now, or None when any admission
+    precondition fails. The approval list is checked for an entry BEFORE any Hermes file is
+    located, read or imported."""
+    try:
+        startup = _load_approval_manifest(compat_path)
+        files = tuple(getattr(startup, "bridge_files"))  # noqa: B009
+        if not startup.builds or not files:
+            return None
+        read_list = load_read_compat_list(
+            read_compat_path if read_compat_path is not None else _DEFAULT_READ_COMPAT_PATH
+        )
+        read_files = tuple(getattr(read_list, "bridge_files"))  # noqa: B009
+        if not read_files or not set(read_files) <= set(files):
+            return None
+        root = hermes_root if hermes_root is not None else locate_hermes_root()
+        if root is None:
+            return None
+        root = root.resolve()
+        # Cross-check the read gate's identity against the same read files read fresh now. This
+        # narrows the window since the compat evaluation; it does not make it atomic.
+        fresh_read = GitFingerprintReader(read_files).read(root)
+        if (
+            fresh_read is None
+            or fresh_read.fingerprint != read_identity.fingerprint
+            or fresh_read.git_sha != read_identity.git_sha
+        ):
+            return None
+        started = GitFingerprintReader(files).read(root)
+        if started is None or started.git_sha != read_identity.git_sha:
+            return None
+        # A source that started unlisted can never be opened by a later manifest edit.
+        if match_build(started, startup.builds) is None:
+            return None
+        return ApprovalProcessBaseline(
+            root, read_files, fresh_read.fingerprint, files, started.fingerprint, started.git_sha
+        )
+    except Exception:
+        return None
+
+
+def approval_listener_qualifier(
+    read_identity: BuildIdentity | None,
+    *,
+    hermes_root: Path | None = None,
+    compat_path: Path | None = None,
+    read_compat_path: Path | None = None,
+) -> Callable[[], bool]:
+    """Build a listener's approval admission callback, only for a supported read build (blocking:
+    it may read files).
+
+    The FIRST call in a process fixes the process-level baseline (`_approval_process_latch`); a
+    later call (a listener reconnect) opens only if the source now on disk equals that baseline
+    exactly, and never redefines it. An empty, malformed or missing manifest, an unlisted startup
+    source, an unidentifiable source, a read fingerprint or SHA that differs from `read_identity`,
+    or approval files that do not cover the read files make the first call latch the process
+    CLOSED: adding a manifest entry then needs a full gateway process restart, not a listener
+    restart. With an empty list no Hermes file is inspected or imported.
+
+    The returned callback, per call: reloads the manifest, recomputes the fingerprint and SHA,
+    requires root, ordered list, fingerprint and SHA to equal the baseline, requires a current
+    exact list entry (so removal closes at once and restoring the startup entry may reopen), then
+    runs the probe once per identity via a bounded success-only cache. Any error is False.
+    """
+    global _approval_process_latch
+    if not isinstance(read_identity, BuildIdentity):
+        return _approval_closed
+    with _approval_latch_lock:
+        latch = _approval_process_latch
+        if latch is not None and latch[0] is None:
+            return _approval_closed
+        candidate = _capture_approval_baseline(
+            read_identity, hermes_root, compat_path, read_compat_path
+        )
+        if latch is None:
+            _approval_process_latch = (candidate,)
+        if candidate is None or (latch is not None and candidate != latch[0]):
+            return _approval_closed
+        baseline = candidate
+
+    def qualified() -> bool:
+        try:
+            current = _load_approval_manifest(compat_path)
+            current_files = tuple(getattr(current, "bridge_files"))  # noqa: B009
+            if not current.builds or current_files != baseline.files:
+                return False
+            now_root = hermes_root if hermes_root is not None else locate_hermes_root()
+            if now_root is None or now_root.resolve() != baseline.root:
+                return False
+            fresh = GitFingerprintReader(current_files).read(baseline.root)
+            if (
+                fresh is None
+                or fresh.fingerprint != baseline.fingerprint
+                or fresh.git_sha != baseline.git_sha
+                or match_build(fresh, current.builds) is None
+            ):
+                return False
+            return _approval_probe_passed(
+                baseline.root, current_files, fresh.fingerprint, fresh.git_sha
+            )
+        except Exception:
+            return False
+
+    return qualified
 
 
 def _resolve_qualname(module: object, qualname: str) -> object:

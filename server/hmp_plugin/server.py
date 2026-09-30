@@ -433,10 +433,15 @@ async def handle_snapshot(request: web.Request) -> web.Response:
     ctx.limiter.check("bots_snapshot", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now())
     reads = _require(ctx.reads)
     result = await asyncio.to_thread(reads.snapshot, who.user_id, profile, limit)
-    if (not ctx.is_owner_device(who.device_id) or not ctx.direct_send_enabled()) and hasattr(
-        result, "open_requests"
-    ):
-        result = replace(result, open_requests=())
+    if hasattr(result, "open_requests"):
+        # Short-circuit: the off-loop qualification only runs for an owner with the flag on.
+        visible = (
+            ctx.is_owner_device(who.device_id)
+            and ctx.direct_send_enabled()
+            and await asyncio.to_thread(ctx.approval_qualification_open)
+        )
+        if not visible:
+            result = replace(result, open_requests=())
     return _result_response(result)
 
 
@@ -720,6 +725,10 @@ async def _require_approvals_gate(ctx: ServerContext, profile: str) -> Any:
             ok = False
         if not ok:
             raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
+    # Independent of the guarded-send result above: a send-qualified build is not approval
+    # qualified. Closed here means no endpoint resolution, listing, resolver or delivery.
+    if not await asyncio.to_thread(ctx.approval_qualification_open):
+        raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
     endpoint = await asyncio.to_thread(bridge.direct_send_endpoint, profile)
     gate = direct_send_gate(base_write_gate=base, flag_enabled=flag, endpoint=endpoint)
     if gate.state not in (WriteGateState.OPEN, WriteGateState.OPEN_GUARDED):

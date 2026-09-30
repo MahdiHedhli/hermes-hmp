@@ -47,7 +47,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import secrets
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -138,6 +138,14 @@ def open_components(adapter: Any) -> server.ServerContext:
             return frozenset()
         return frozenset(ids)
 
+    # Captured once, here (blocking), and only for a supported build: a fresh request can never
+    # redefine which source this listener was started against.
+    approval_qualified: Callable[[], bool] = (
+        compat.approval_listener_qualifier(result.identity)
+        if result.supported is True
+        else (lambda: False)
+    )
+
     ctx = server.ServerContext(
         identity=ident,
         store=store,
@@ -145,6 +153,9 @@ def open_components(adapter: Any) -> server.ServerContext:
         session_browsing_enabled=session_browsing is not False,
         direct_send_flag=_read_direct_send_enabled,
         owner_device_ids=_read_owner_device_ids,
+        # Independent of guarded send; bound to THIS listener's start identity and never open on an
+        # unsupported build. The shipped approval list is empty, so this is False for every build.
+        approval_qualified=approval_qualified,
     )
     if result.supported:
         bridge_cls, directory_cls = _bridge_classes()
@@ -187,9 +198,14 @@ def open_components(adapter: Any) -> server.ServerContext:
             prompt_store=prompt_store,
             qualified=compat.direct_send_build_qualified,
             approval_timeout=_approval_timeout,
+            approval_qualified=ctx.approval_qualification_open,
         )
         adapter._hmp_hooks = prompts.AdapterHooks(  # type: ignore[attr-defined]
-            store=prompt_store, bridge=ctx.bridge, now=ctx.now, iid=ident.iid
+            store=prompt_store,
+            bridge=ctx.bridge,
+            now=ctx.now,
+            iid=ident.iid,
+            approval_qualified=ctx.approval_qualification_open,
         )
     log_event("adapter_open", outcome=result.status.value)
     return ctx

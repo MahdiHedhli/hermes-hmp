@@ -291,7 +291,7 @@ async def test_ambiguous_binding_has_deny_only_recovery() -> None:
     class Prompt:
         session_key, command, choices = "session", "cmd", ("once", "deny")
 
-    hooks = prompts.AdapterHooks(store, Bridge(), lambda: 100, IID)
+    hooks = prompts.AdapterHooks(store, Bridge(), lambda: 100, IID, lambda: True)
     assert await hooks.on_exec_approval(Prompt()) is True
     assert {r.request_id for r in store._rows.values()} == {"a", "b"}
     assert all(r.choices == ("deny",) for r in store._rows.values())
@@ -388,7 +388,7 @@ async def test_profile_timeout_is_used_by_both_adapter_hooks():
     class Prompt:
         session_key, command, choices = "session", "cmd", ("once", "deny")
 
-    hooks = prompts.AdapterHooks(store, Bridge(), lambda: 100, IID)
+    hooks = prompts.AdapterHooks(store, Bridge(), lambda: 100, IID, lambda: True)
     assert await hooks.on_exec_approval(Prompt())
     assert store.get((IID, USER, PROFILE, REQ)).expires_at == 100
     await hooks.on_clarify(
@@ -411,7 +411,7 @@ async def test_expiry_hint_has_grace_but_authoritative_gone_expires_immediately(
         def list_gateway_approvals(self, key):
             return []
 
-    hooks = prompts.AdapterHooks(store, Bridge(), lambda: 125, IID)
+    hooks = prompts.AdapterHooks(store, Bridge(), lambda: 125, IID, lambda: True)
     await hooks.reconcile_chat("chat")
     resolver = FakeResolver()
     result = await _answer(store, resolver, {"choice": "once"}, now=125)
