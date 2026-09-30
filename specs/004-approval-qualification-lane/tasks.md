@@ -39,6 +39,8 @@
 - [x] Root verified current pytest-6 after the process binding and ambiguous-label fixes:
       1364 passed, 12 skipped, one existing warning, 24.40s. The narrow deliberate Unicode-test
       lint comment added afterwards changes no behavior. Release/behavior admission is not claimed.
+- [x] Draft tooling for the restart lifecycle and behavioral matrix is specified and implemented in
+      `specs/005-approval-process-matrix` (not yet run; no results claimed).
 - [ ] Still open: full behavioral qualification, restart lifecycle, device and release gates.
       Qualification and the goal are NOT closed. Earlier scratch paths/counts are evidence only.
 - [ ] Runbook: full gateway process restart after any Hermes/source/plugin change; approvals

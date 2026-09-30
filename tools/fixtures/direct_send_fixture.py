@@ -49,6 +49,7 @@ if str(THIS_DIR) not in sys.path:
     sys.path.insert(0, str(THIS_DIR))
 
 import _fixture_common as fc  # noqa: E402
+import approval_fixture  # noqa: E402
 
 FIXTURE_SEED = THIS_DIR / "fixture_seed.py"
 FIXTURE_PAIRING_CLI = THIS_DIR / "fixture_pairing_cli.py"
@@ -123,6 +124,7 @@ def write_direct_send_config(
     direct_send_enabled: bool = True,
     owner_device_ids: tuple[str, ...] = (),
     api_server_host: str = "127.0.0.1",
+    approval_timeout: int = 120,
 ) -> None:
     """Rewrites the instance's own `config.yaml` (the SAME shape `build_fixture.py`'s
     `_write_config_yaml` writes, plus the new blocks) and appends a matching `model:` block to
@@ -188,7 +190,7 @@ def write_direct_send_config(
         "  hmp: [terminal, clarify]\n",
         "approvals:\n",
         "  mode: manual\n",
-        "  timeout: 120\n",
+        f"  timeout: {int(approval_timeout)}\n",
         "  unattended_mode: deny\n",
         "terminal:\n",
         f"  cwd: {json.dumps(str(paths.out_dir))}\n",
@@ -415,11 +417,13 @@ def build_offline(
     result = subprocess.run(args, check=True, env=env, capture_output=True, text=True)
     info = json.loads(result.stdout)
     qualification = os.environ.get("HMP_DIRECT_SEND_QUALIFICATION")
-    if qualification:
-        install_fixture_qualification(
-            fc.resolve_build(Path(builds_dir or env["HMP_HERMES_BUILDS_DIR"]), label),
-            out, Path(qualification),
-        )
+    approval_receipt = os.environ.get(approval_fixture.RECEIPT_ENV)
+    if qualification or approval_receipt:
+        build = fc.resolve_build(Path(builds_dir or env["HMP_HERMES_BUILDS_DIR"]), label)
+        if qualification:
+            install_fixture_qualification(build, out, Path(qualification))
+        # A separate lane, manifest and receipt: the direct-send receipt above never opens it.
+        approval_fixture.install_from_env(build, out, approval_receipt)
     return info
 
 

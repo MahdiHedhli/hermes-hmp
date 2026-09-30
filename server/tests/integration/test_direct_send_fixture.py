@@ -61,7 +61,18 @@ if str(FIXTURES_DIR) not in sys.path:
 import _fixture_common as fc  # noqa: E402
 import direct_send_fixture as dsf  # noqa: E402
 
-BUILDS = ("stock-base", "experimental", "owner-local")
+
+def _extra_builds() -> tuple[str, ...]:
+    """Fixture tooling only: extra extracted build labels (e.g. an approval fixture build that is
+    not in builds.yaml), comma-separated in HMP_FIXTURE_EXTRA_BUILDS. Path-safe labels only."""
+    labels = tuple(x for x in os.environ.get("HMP_FIXTURE_EXTRA_BUILDS", "").split(",") if x)
+    for label in labels:
+        if not label.replace("-", "").replace(".", "").replace("_", "").isalnum():
+            raise ValueError(f"unsafe HMP_FIXTURE_EXTRA_BUILDS label {label!r}")
+    return labels
+
+
+BUILDS = ("stock-base", "experimental", "owner-local", *_extra_builds())
 BUILDS_DIR_ENV = os.environ.get("HMP_HERMES_BUILDS_DIR", "")
 
 DEFAULT_PROFILE = "f1-alpha"
@@ -188,6 +199,7 @@ class DirectSendFixture:
         self.client = client
         self.no_bot_chat_key = no_bot_chat_key
         self._lease_holders: list[Any] = []
+        self.approval_timeout = 120  # `approvals.timeout` seconds written by `_rewrite_config`
 
     def acquire_lease(self, profile: str, session_id: str, *, desktop_held: bool = False) -> None:
         """A synthetic lease that stays live until this fixture tears down (`stop`) -- see
@@ -205,14 +217,18 @@ class DirectSendFixture:
 
     def _rewrite_config(
         self, *, direct_send_enabled: bool = True, api_server_host: str = "127.0.0.1",
-        owner_device_ids: tuple[str, ...] | None = None
+        owner_device_ids: tuple[str, ...] | None = None,
+        approval_timeout: int | None = None,
     ) -> None:
+        if approval_timeout is not None:
+            self.approval_timeout = approval_timeout
         dsf.write_direct_send_config(
             self.paths, (DEFAULT_PROFILE, NO_BOT_CHAT_PROFILE, "f1-pending", "f1-roles"),
             hmp_port=self.hmp_port, api_server_port=self.api_server_port, api_key=self.api_key,
             model_base_url=self.fake_model.base_url,
             named_profile_keys={NO_BOT_CHAT_PROFILE: self.no_bot_chat_key},
             direct_send_enabled=direct_send_enabled, api_server_host=api_server_host,
+            approval_timeout=self.approval_timeout,
             owner_device_ids=(
                 (self.reference_device_id,) if owner_device_ids is None else owner_device_ids
             ),
