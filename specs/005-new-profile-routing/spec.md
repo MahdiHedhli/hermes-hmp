@@ -88,12 +88,17 @@ exactly one named profile and nothing else.
 
 ## Open items
 
-- History readability on `ca705` of a profile without its own `multiplex_profiles` flag is not
-  proved by the Hermes source or the fixtures (`profiles_to_serve` does not consult the flag, which
-  covers serving and routing only). Needs an integration check; route-only is not claimed to give
-  readable history. The per-profile flag stays untouched by this command. The automatic-route
-  proposal in the contextual-access card (006) needs no authority change and does not qualify every
-  `ca705` read path.
+- History readability on `ca705` of a profile without its own `multiplex_profiles` flag
+  (`profiles_to_serve` does not consult the flag, which covers serving and routing only). Root-
+  reviewed fixture evidence (`C6-EVIDENCE.md`, flag absent or false alike): history the root creates
+  for a routed source reads canonically and shows in the Phone list; earlier history of a standalone
+  profile gateway (legacy `agent:main` keys) stays intact and resolves by session id, but the
+  canonical read is empty and the Phone list omits it. Route-only preparation is not a legacy-history
+  migration; a safe fix needs a separate contract decision, and a flag change or history rewrite is
+  not an authorized repair. The per-profile flag stays untouched by this command. The disposable-host
+  gateway loop and authorization remain unqualified (`tasks.md` C6). This fixture does not qualify
+  other read paths or the automatic-preparation/access-card proposal (006); their contracts and
+  authorization review remain separate.
 
 ## Out of scope
 
