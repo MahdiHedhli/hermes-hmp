@@ -23,6 +23,19 @@ The [unified gateway research](https://github.com/MahdiHedhli/hermes-hmp/blob/ma
 | Session management | The profile-scoped API server already lists sessions, reads messages, changes title/pin/archive/hidden state, and deletes sessions. Its `/fork` ends the source session, so it cannot implement a non-destructive branch. Project moves, export, and opening a session in a terminal are not API server operations. | Preserve the existing safe metadata routes; add a non-destructive branch operation and explicit project/export capabilities where appropriate. A canonical Bot Chat must not be accidentally archived or deleted by a remote client. |
 | Canonical remote attachment | Current HMP reaches a qualified legacy Bot Chat path; the unified runtime PR is a local/gateway cutover, while remote Desktop/web/mobile entry is staged separately. | Expose authenticated, profile-scoped remote attach/submit/event/control operations with explicit capability negotiation, target-session authorization, durable request identity, and replay-or-snapshot recovery. Keep one execution owner. |
 
+## Bot Mode baseline verification
+
+The exact `v2026.8.31` source has two session-key modes: a standalone named
+profile uses the legacy `agent:main` namespace, while multiplexing uses the
+routed profile namespace. HMP's scratch fixture now verifies both through the
+old `SessionStore._generate_session_key`, cross-checks an explicit HMP route
+with Hermes's matcher, and reads synthetic compression lineage from two
+profile databases opened read-only. Database and sidecar hashes are unchanged
+by those reads. This remains unwired: the paired full-gateway fixture still
+refuses Bot Chat, and authorization plus canonical history must be proven
+through that gateway before support for this tag can be listed. A supported
+versioned read contract would eliminate these private per-build adapters.
+
 ## Approval and clarify events
 
 Desktop-owned Bot Chat turns can surface prompts only through Desktop's process-local channel. A remote client cannot answer those same prompts through session chat. We propose durable, session-scoped pending prompt identifiers, event delivery for approval and clarify requests, and authenticated response routes that enforce the same authorization and expiry rules as Hermes itself. Draft HMP security fixes do not resolve the missing Bot Chat notifier, so the interim server path remains disabled pending real-route qualification.
