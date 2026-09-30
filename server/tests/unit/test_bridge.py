@@ -645,6 +645,51 @@ def test_bot_chat_branch_parent_is_not_authorized_as_its_lineage(
     assert target.compression_chain == ("branch",)
 
 
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"_delegate_from": "other"},
+        {"_reset_from": "other"},
+        '{"_branched_from":"other"}',
+    ],
+)
+def test_bot_chat_fork_markers_stop_at_the_child(
+    world: World, br: HermesReadBridge, config: object
+) -> None:
+    db = world.dbs["alpha"]
+    db.seed_session("other", hidden=True, end_reason="compression")
+    db.seed_session("child", title="Bot Chat", hidden=True, parent_session_id="other")
+    db.sessions["child"]["model_config"] = config
+    db.append("child", "user", "hi", timestamp=1.0)
+    target = br.resolve_bot_chat("alpha")
+    assert target is not None and target.compression_chain == ("child",)
+
+
+def test_bot_chat_tool_child_does_not_inherit_parent_lineage(
+    world: World, br: HermesReadBridge
+) -> None:
+    db = world.dbs["alpha"]
+    db.seed_session("other", hidden=True, end_reason="compression")
+    db.seed_session(
+        "child", source="tool", title="Bot Chat", hidden=True, parent_session_id="other"
+    )
+    db.append("child", "user", "hi", timestamp=1.0)
+    target = br.resolve_bot_chat("alpha")
+    assert target is not None and target.compression_chain == ("child",)
+
+
+def test_bot_chat_malformed_fork_config_fails_closed(
+    world: World, br: HermesReadBridge
+) -> None:
+    db = world.dbs["alpha"]
+    db.seed_session("other", hidden=True, end_reason="compression")
+    db.seed_session("child", title="Bot Chat", hidden=True, parent_session_id="other")
+    db.sessions["child"]["model_config"] = "{bad json"
+    db.append("child", "user", "hi", timestamp=1.0)
+    with pytest.raises(BridgeError, match="compression lineage uncertain"):
+        br.resolve_bot_chat("alpha")
+
+
 def test_bot_chat_noncompression_parent_is_not_its_lineage(
     world: World, br: HermesReadBridge
 ) -> None:
@@ -670,6 +715,22 @@ def test_bot_chat_conflicting_lineage_sources_fail_closed(
     db.append("child", "user", "hi", timestamp=1.0)
     with pytest.raises(BridgeError, match="compression lineage uncertain"):
         br.resolve_bot_chat("alpha")
+
+
+def test_bot_chat_titled_middle_segment_keeps_hidden_root(
+    world: World, br: HermesReadBridge
+) -> None:
+    db = world.dbs["alpha"]
+    db.seed_session("root", hidden=True, end_reason="compression")
+    db.seed_session("middle", title="Bot Chat", parent_session_id="root", end_reason="compression")
+    db.seed_session("tip", parent_session_id="middle")
+    db.children["root"] = "middle"
+    db.children["middle"] = "tip"
+    db.append("tip", "assistant", "continued", timestamp=1.0)
+    target = br.resolve_bot_chat("alpha")
+    assert target is not None
+    assert target.compression_chain == ("root", "middle", "tip")
+    assert target.root_session_id == "root" and target.live_tip_session_id == "tip"
 
 
 def test_capability_versions(world: World, br: HermesReadBridge) -> None:
@@ -857,11 +918,11 @@ def test_direct_send_endpoint_default_profile_short_extra_key_fails_closed(
     assert br.direct_send_endpoint(profile) is None
 
 
-def test_resolve_bot_chat_unions_ancestors_when_lineage_returns_only_the_tip(
+def test_resolve_bot_chat_recovers_ancestors_when_lineage_returns_only_the_tip(
     world: World, br: HermesReadBridge
 ) -> None:
     """Review round 3: `get_compression_lineage` returning only `[session_id]` must not drop
-    ancestors. The independent `parent_session_id` walk (via `get_session`) is unioned in."""
+    ancestors. The independent verified parent walk reconstructs that chain."""
     db = world.dbs["alpha"]
     db.lineage_returns_self_only = True
     db.seed_session("root", hidden=True, end_reason="compression")
