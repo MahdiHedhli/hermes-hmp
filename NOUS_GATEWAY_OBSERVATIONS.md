@@ -135,9 +135,42 @@ prepares that route without granting phone access or enabling multiplexing for t
 The command is an unmerged draft. The correction at `4e270f0` removes every profile-config write:
 it adds only an exact root route and preserves the profile's history settings. Root passed the
 repository CI-equivalent suite (1,322 tests / 10 existing skips) and all 138 final route tests;
-Opus cleared the bounded code review. Disposable-host qualification, including history reads for
-a flag-less profile on exact `ca705`, remains open; the command itself was not verified live.
-The profile flag must stay unchanged because it selects the session-history namespace. On one selected host, a manual operator-scoped
+Opus cleared the bounded code review. The command itself was not verified live.
+The profile flag must stay unchanged because it selects the session-history namespace.
+
+History for a profile whose own multiplex flag is absent or false, on the same `ca705dbf` build
+(an archive, so no Git SHA is attestable; bound by read-bridge fingerprint `d45f9a13…f11f627` and a
+source-tree digest), was checked with a real-Hermes fixture in an isolated home: the native gateway
+runner, `SessionStore` and `SessionDB`, the real HMP read bridge and the route helper, with synthetic
+messages and no model turn, credential or Phone transport. Its Python socket instrumentation
+recorded no attempted IP connections; it is not an OS network sandbox. Authorization was not tested.
+Root independently reproduced 7 of 7 passing
+with no skips. The result is split by where the history came from, and is identical for the flag
+absent and false:
+
+- **A, created by the root for a routed source.** The canonical conversation resolves (4 of 4 rows)
+  and the conversation is visible in the Phone list. The profile's own flag is not needed.
+- **B, created earlier by a standalone gateway of that profile.** Its rows are intact and readable by
+  session id, but they sit under the legacy `agent:main` key. The canonical read is empty, not an
+  error, and the Phone list does not show them. A first routed conversation then starts a new session
+  and leaves the earlier one unlinked.
+
+The route helper left the profile tree byte-, mtime-, inode- and mode-identical and wrote no flag or
+history. Route-only preparation therefore does not make existing standalone history readable, and is
+not a migration. One origin per case, one user and chat, and this one build were covered; the real
+gateway loop, authorization and a physical device were not. Evidence:
+[`C6-EVIDENCE.md`](https://github.com/MahdiHedhli/hermes-hmp/blob/test/flagless-profile-history/specs/005-new-profile-routing/C6-EVIDENCE.md)
+on the unmerged `test/flagless-profile-history` branch. Disposable-host qualification of the full
+gateway loop stays open.
+
+**Generic upstream request.** A stable, versioned, profile-scoped read contract for legacy history:
+for an authorized profile, resolve its canonical conversation and lineage whichever session-key
+namespace created the rows, or report explicitly that legacy history exists and is not addressable.
+It should need no change to the profile's multiplex flag and no history rewrite. Until then HMP treats
+legacy history as unqualified rather than repairing it from the mobile side. This is an observation
+from one build, not a new upstream submission.
+
+On one selected host, a manual operator-scoped
 root-route repair and distinct per-profile send keys were verified for passive reads and cross-key isolation,
 and a native, explicitly requested access approval matched its request. A real owner send remains unverified.
 This is an HMP setup/workflow finding, not evidence that Hermes must grant access automatically.
