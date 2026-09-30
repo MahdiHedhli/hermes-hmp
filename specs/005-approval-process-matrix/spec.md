@@ -5,6 +5,10 @@ Status: draft test/qualification tooling. Approvals stay unreleased and closed: 
 is the frozen architecture decision for the slice; changing it needs a new spec revision.
 Amendment 1 (`amendment-1-safety-review.md`) records the later review rulings on copy safety,
 receipt tightening and lifecycle evidence; it does not change the architecture below.
+Amendment 2 (`amendment-2-git-install-fixture.md`) covers the independent Git-install fixture.
+Amendment 3 (`amendment-3-native-start-readiness.md`) makes the fixture's native listener wait
+process-aware (same 45 s deadline) and records start timing; it is tooling only and leaves the
+startup-delay cause unresolved.
 
 ## Problem
 

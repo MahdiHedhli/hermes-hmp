@@ -277,10 +277,12 @@ class DirectSendFixture:
             else 0
         )
         log_path = self.paths.out_dir / f"gateway-restart-{int(time.time())}.log"
-        self.gateway_proc = dsf.start_gateway(self.build, self.paths, log_path=log_path)
-        if not dsf.wait_for_port(self.hmp_port, timeout=45.0):
-            tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
-            raise RuntimeError(f"HMP listener did not come back up after restart.\n{tail}")
+        # Process-aware readiness under the same 45s hard deadline: a listener never counts once
+        # the spawned gateway has exited. Readiness only, not ownership. A failure stops the new
+        # process first.
+        self.gateway_proc = dsf.start_native_gateway(
+            self.build, self.paths, port=self.hmp_port, phase="restart", log_path=log_path
+        )
         # The TLS listener accepting connections does not mean Hermes's own profile-reconcile
         # scan has finished re-populating `served_profile_names()` yet -- poll the roster until
         # the default profile this suite targets is actually served again, so a request sent
@@ -337,12 +339,11 @@ def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSe
             named_profile_keys={NO_BOT_CHAT_PROFILE: no_bot_chat_key},
         )
         log_path = out / "gateway.log"
-        proc = dsf.start_gateway(build, paths, log_path=log_path)
+        proc = dsf.start_native_gateway(
+            build, paths, port=hmp_port, phase="first_start", log_path=log_path
+        )
         direct_send_fixture: DirectSendFixture | None = None
         try:
-            if not dsf.wait_for_port(hmp_port, timeout=45.0):
-                tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
-                raise RuntimeError(f"HMP listener did not come up.\nLog tail:\n{tail}")
             authorized_user_id = next(
                 p["user_id"] for p in info["instances"][0]["profiles"] if p.get("user_id")
             )
