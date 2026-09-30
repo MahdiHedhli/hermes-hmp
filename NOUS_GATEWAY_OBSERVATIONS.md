@@ -81,7 +81,7 @@ Current HMP status (draft, not released): an independent approval manifest gates
 - **Current archive (Run 10).** The root-checked archive matrix reports all seven stages passed with exact 27/27 integration JUnit cases, on exact Hermes `8afaab3703e336d72a72c812dd2dd249f04f166a` with HMP runtime `86f2a23`. It is a disposable, fixture-only run (fake model, synthetic credentials) with an unsigned receipt. It **cannot qualify a git-install**. The independent-clone Git-install matrix (Run 2) has also passed all seven stages and the exact 27 required integration cases without failures, errors or skips. Its receipt binds the independent clone's full SHA; it does not admit a live installation or the later build-identity fix. It is not live or release qualification.
 - Earlier Run 8 (source `ac0cfa7`, runtime draft `8934993`) is historical. It predates these diffs and cannot qualify them.
 - Source checks do not attest already-loaded module bytes: a full gateway process restart is required after source/plugin changes. The final combined runtime candidate, live profiles, physical devices and release review remain.
-- **Mobile.** [PR #50](https://github.com/MahdiHedhli/HermesBotMobile/pull/50) (draft) holds the combined S2/S3 store API at `a1f9515`; the root full run passed 967 client (1 skip) and 587 app (3 skips) tests. It has no composer controller or UI. S4 work is now assigned in isolation and is not complete. Nothing is released.
+- **Mobile.** [PR #50](https://github.com/MahdiHedhli/HermesBotMobile/pull/50) (draft) holds the combined S2/S3 store API at `a1f9515`; the root full run passed 967 client (1 skip) and 587 app (3 skips) tests. The separate Phone chat read controller is reviewed in [app PR #52](https://github.com/MahdiHedhli/HermesBotMobile/pull/52) at `7429b3f`: root passed the full client (1,013 / 1 existing skip), app (692 / 3 existing skips) and dev-support (8) suites before a small reconnect repair, then all 48 controller tests on the final candidate. Opus independently cleared the bounded read/concurrency surface. Reads preserve the sealed Bot Chat and Phone pending records; a stored Phone `sending` is displayed as unknown without a POST or store rewrite. Controller sending and composer UI remain open; no real-device crypto or live approval admission is claimed. Nothing is released.
 
 The [earlier ac0 fixture evidence](https://github.com/MahdiHedhli/hermes-hmp/pull/44) cannot qualify the current candidate.
 
@@ -132,9 +132,12 @@ On the inspected `ca705dbf` build, the gateway can discover and serve a newly cr
 without adding its exact HMP route to the root configuration. Serving, routing and phone access
 are separate states. HMP's [draft host-only routing command](https://github.com/MahdiHedhli/hermes-hmp/pull/52)
 prepares that route without granting phone access or enabling multiplexing for the whole gateway.
-The command is an unmerged draft. Its earlier helper incorrectly changes the profile's own multiplex flag and still needs
-correction and qualification before deployment; the command itself was not verified live. That flag must stay
-unchanged because it selects the session-history namespace. On one selected host, a manual operator-scoped
+The command is an unmerged draft. The correction at `4e270f0` removes every profile-config write:
+it adds only an exact root route and preserves the profile's history settings. Root passed the
+repository CI-equivalent suite (1,322 tests / 10 existing skips) and all 138 final route tests;
+Opus cleared the bounded code review. Disposable-host qualification, including history reads for
+a flag-less profile on exact `ca705`, remains open; the command itself was not verified live.
+The profile flag must stay unchanged because it selects the session-history namespace. On one selected host, a manual operator-scoped
 root-route repair and distinct per-profile send keys were verified for passive reads and cross-key isolation,
 and a native, explicitly requested access approval matched its request. A real owner send remains unverified.
 This is an HMP setup/workflow finding, not evidence that Hermes must grant access automatically.
