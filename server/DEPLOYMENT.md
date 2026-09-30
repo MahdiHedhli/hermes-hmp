@@ -93,6 +93,68 @@ HMP already fails closed with an explicit, documented state rather than a silent
   `test_profile_route_rejected_forces_not_routed`) and `server/tests/unit/test_reads.py`
   (parametrized `NOT_ROUTED`/`NOT_SERVED` cases for both the per-bot gate and the roster).
 
+## A bot created after installation
+
+Three separate things must be true before a phone can use a bot. Do not mistake one for another.
+
+| Layer | What it means | Who sets it |
+| --- | --- | --- |
+| Serving | Hermes lists the profile as served. An eligible profile is served only once the root gateway, with `multiplex_profiles` already on, detects and reconciles it. | Hermes |
+| Routing | HMP can resolve the bot: the root route and the profile's `multiplex_profiles`, above. | The host operator |
+| Authorization | This device may use this bot: a pending request from the phone, approved on the host. | The host operator, per device |
+
+A profile created after HMP was installed is not routed, so its roster entry shows `not_routed`.
+That refusal is correct and is not bypassed. New bots are opt-in: HMP never adds routes or grants
+on its own. The command below requires the initial setup above to be done already: the root
+`gateway.multiplex_profiles` must be boolean `true`, and the command refuses otherwise (it never
+turns on multiplexing for the whole gateway). To prepare one bot, run on the host, in an operator
+shell:
+
+```sh
+hermes hmp routes add <profile>
+hermes gateway restart
+```
+
+The command edits exactly two files, the default root `config.yaml` and that profile's
+`config.yaml`. It adds the exact route shown above to the root, and sets
+`gateway.multiplex_profiles: true` in the profile's config (the supported per-profile shape
+described above). It never authorizes a user or device, approves a request, enables an API
+server, serves or reloads anything, or restarts the gateway. An eligible profile is served only
+after the root gateway detects and reconciles it. It is safe to run again.
+
+- It refuses, changing nothing, when the root `gateway.multiplex_profiles` is not already `true`
+  (finish initial setup first), when an existing route could overlap the new one (broad,
+  user-specific, chat-specific, disabled, `enabled: null`, carrying any extra key even with a null
+  value, or pointing at another profile), when a `multiplex_profiles` value is present and is not
+  boolean `true`, when a path is a symlink or is group- or world-writable, or when a file is not
+  plain, single-document YAML with no duplicate keys or aliases. Only a route that is exactly the
+  one above, with `enabled` absent or `true`, counts as already present. Resolve the reported file
+  by hand, then run it again. Error messages are status-only and never quote config content.
+- It never edits or removes an existing route or value. Comments and layout in a file it changes
+  are not preserved. It keeps one private (mode 0600) backup per changed file,
+  `config.yaml.hmp-bak`, replaced on each change. That is a single rolling backup: a second run
+  (for another bot) replaces it with the file as the first run left it, so comments from the
+  original file survive only in a copy you make yourself.
+- **Sessions of a profile already in use.** Turning on a profile's own `multiplex_profiles` can
+  change the namespace its sessions are stored under (`agent:main` versus `agent:<profile>`, see
+  above). For a profile that already has sessions on other platforms, review them, and take your
+  own backup, before running the command. Nothing migrates transcripts silently.
+- The two files cannot be written as one transaction. Both config snapshots are compared before
+  any backup or write, and again before the first config write, since backups take time. The
+  profile file is written first and the root file second. If the root write fails, or the command
+  is interrupted after the profile write, the profile file is restored only when it still holds
+  what the command wrote, and the command says the final state of each file (an interrupt exits
+  with status 130 and the same report). It says "not changed by this command" for a file another
+  writer changed. A small same-user race between the final check and the rename remains: there is
+  no lock shared with Hermes.
+- It runs only under the default profile, from an interactive terminal, and not from a Hermes
+  session.
+
+After the restart, authorize the device for the new bot: on the paired phone, request access to
+it; then on the host run `hermes -p <profile> pairing list`, check the pending `hmp` row belongs to
+that device, and run `hermes -p <profile> pairing approve hmp <request_id>`. An empty list means
+the phone has not sent its request yet.
+
 ## Operator checklist
 
 - [ ] Root `config.yaml`: `gateway.multiplex_profiles: true`.
@@ -102,6 +164,7 @@ HMP already fails closed with an explicit, documented state rather than a silent
 - [ ] Each served profile's own `<home>/profiles/<name>/config.yaml`: also
       `gateway.multiplex_profiles: true`.
 - [ ] `plugins.enabled` includes `"hmp"`.
+- [ ] For a profile created later: `hermes hmp routes add <profile>`, then restart the gateway.
 
 If a bot's roster entry shows `"not_routed"` or `"not_served"` after pairing, re-check this
 checklist before assuming a plugin or pairing problem.

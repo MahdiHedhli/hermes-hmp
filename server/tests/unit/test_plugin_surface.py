@@ -92,6 +92,22 @@ def test_s1_qrcode_module_level_in_cli_is_flagged(pkg: Path) -> None:
     assert ("S1", "cli.py") in _rules(pkg)
 
 
+def test_s1_yaml_only_lazily_in_routes(pkg: Path) -> None:
+    """PyYAML parses the config `routes add` edits: routes.py only, and lazily."""
+    assert _rules(pkg) == []  # the shipped routes.py imports it lazily
+    for module in ("cli.py", "reads.py", "server.py", "adapter.py", "bridge.py"):
+        _append(pkg, module, "def f():\n    import yaml\n")
+    rules = _rules(pkg)
+    others = ("cli.py", "reads.py", "server.py", "adapter.py", "bridge.py")
+    assert {("S1", m) for m in others} <= set(rules)
+    assert ("S1", "routes.py") not in rules
+
+
+def test_s1_yaml_module_level_in_routes_is_flagged(pkg: Path) -> None:
+    _append(pkg, "routes.py", "import yaml\n")
+    assert ("S1", "routes.py") in _rules(pkg)
+
+
 def test_s1_qrcode_in_bridge_is_flagged(pkg: Path) -> None:
     """bridge.py is exempt from S1 for Hermes internals, but qrcode is a third-party package
     restricted to cli.py specifically -- bridge.py may not import it, module-level or lazily."""

@@ -196,6 +196,7 @@ MUTATING = [
     ("pair", "deny", "pid"),
     ("devices", "revoke", "dev_x"),
     ("instance", "rotate-key"),
+    ("routes", "add", "beta"),
 ]
 
 
@@ -301,9 +302,10 @@ def test_qrcode_declaration_admits_the_hermes_core_pin() -> None:
     `qrcode[pil]>=7.4.2,<9` pass; `packaging.requirements.Requirement.extras` closes that gap."""
     requirements = pytest.importorskip("packaging.requirements")
     declared = [requirements.Requirement(d) for d in _manifest_python_dependencies()]
-    assert [r.name for r in declared] == ["qrcode"]
+    assert [r.name for r in declared] == ["qrcode", "PyYAML"]  # PyYAML: `routes add` (routes.py)
     assert declared[0].specifier.contains(HERMES_CORE_QRCODE_PIN)
     assert declared[0].extras == set()  # plugin.yaml: no extras
+    assert declared[1].extras == set() and str(declared[1].specifier) == "<7,>=6"
     # server/pyproject.toml (development and tests) declares the same range as the manifest.
     import tomllib
 
@@ -312,6 +314,9 @@ def test_qrcode_declaration_admits_the_hermes_core_pin() -> None:
     (pyproject_qrcode,) = [r for r in dev if r.name == "qrcode"]
     assert str(pyproject_qrcode.specifier) == str(declared[0].specifier)
     assert pyproject_qrcode.extras == set()  # pyproject.toml: no extras either
+    (pyproject_yaml,) = [r for r in dev if r.name.lower() == "pyyaml"]
+    assert str(pyproject_yaml.specifier) == str(declared[1].specifier)
+    assert pyproject_yaml.extras == set()
 
 
 def test_real_qrcode_library_is_within_the_declared_range() -> None:
@@ -321,7 +326,11 @@ def test_real_qrcode_library_is_within_the_declared_range() -> None:
     requirements = pytest.importorskip("packaging.requirements")
     from importlib.metadata import version
 
-    (declared,) = [requirements.Requirement(d) for d in _manifest_python_dependencies()]
+    (declared,) = [
+        r
+        for r in (requirements.Requirement(d) for d in _manifest_python_dependencies())
+        if r.name == "qrcode"
+    ]
     assert declared.specifier.contains(version("qrcode"))
 
 

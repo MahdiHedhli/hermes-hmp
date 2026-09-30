@@ -79,6 +79,35 @@ offer and approval codes out of logs, screenshots, and support requests.
 
 The plugin belongs to the Hermes instance where it is installed. Do not copy its instance keys or device store between hosts. See [Host hardening](../server/HOST_HARDENING.md) before exposing any Hermes host service.
 
+## Adding a bot after installation
+
+Creating a Hermes profile does not route it to HMP or authorize any phone for it; a multiplexing
+gateway picks up an eligible profile, but only on its own detection and reconcile. A bot created after the steps above appears as `not_routed`
+until the host operator prepares it. New bots are opt-in. On the host, from an operator terminal:
+
+```sh
+hermes hmp routes add <profile>
+hermes gateway restart
+```
+
+Then, on the paired phone, request access to that bot, and on the host approve the pending row:
+
+```sh
+hermes -p <profile> pairing list
+hermes -p <profile> pairing approve hmp <request_id>
+```
+
+`routes add` only prepares routing: it adds the exact HMP route to the default root config and
+turns on `gateway.multiplex_profiles` for that profile. It requires the root
+`gateway.multiplex_profiles: true` from the initial setup above and refuses if it is missing; it
+never turns on multiplexing for the whole gateway. It does not serve or reload anything, restart
+the gateway, approve anything, or grant access, and it refuses rather than change an existing route
+or a conflicting setting. It keeps one rolling private backup per file it changes, so a second run
+replaces the first run's backup. If the profile already has sessions, review them first: enabling
+its `multiplex_profiles` can change where they are stored, and nothing is migrated. Confirm the pending row belongs to
+the device you just paired before approving it. See [Deployment](../server/DEPLOYMENT.md#a-bot-created-after-installation)
+for what it edits and refuses.
+
 ## Local compatibility tests
 
 Keep source clones of the public Hermes builds in a sibling `_refs/` directory, or pass an explicit path:
