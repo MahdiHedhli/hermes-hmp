@@ -47,6 +47,20 @@ disposable environment without live credentials. Its receipt is unsigned and
 can be forged by code running as the same user. Community reports therefore
 cannot replace a versioned, authenticated Hermes remote contract.
 
+## Canonical Bot Chat through compression
+
+At the qualified `8afaab37` source and the `f97608f` snapshot, Hermes's
+`publish_compression_child` inserts a continuation row without copying the
+parent's `hidden` column. The hidden canonical Bot Chat root can therefore have
+a visible child; the exact `Bot Chat` title may also move onto that child when
+Hermes transfers a title along the compression lineage. A bridge that requires
+the *titled child* to be hidden can lose the existing chat after compaction.
+[HMP's draft scope repair](https://github.com/MahdiHedhli/hermes-hmp/pull/49)
+checks the hidden lineage root and refuses inconsistent lineage answers; its
+isolated read fixture passed on two qualified build labels. A supported
+profile-scoped API that returns canonical Bot Chat identity, lineage, and
+visibility together would remove this per-build inference.
+
 ## Approval and clarify events
 
 Desktop-owned Bot Chat turns still surface prompts through Desktop's process-local channel; a remote client cannot answer those same prompts through session chat. The two older Hermes builds used for HMP's draft approval matrix lacked a Bot Chat session-stream notifier. Current untagged Hermes `main` at [`ac0cfa7`](https://github.com/NousResearch/hermes-agent/commit/ac0cfa7db94cefa90cf3e35191f38b53888b9e17) registers one on the session-chat stream and emits `approval.request` for the existing run-approval route. An [HMP socket-free handler probe and isolated gateway/PTY matrix](https://github.com/MahdiHedhli/hermes-hmp/pull/44) passed on this exact archive: 32 focused checks and 17/17 integration cases, including T7 Bot Chat, T8 Phone chat, a same-device cross-profile exact-ID refusal, and fail-closed gates. The fixture used a fake model and synthetic credentials; no runtime compatibility entry was added. The latest published tag, `v2026.9.24`, predates the session-stream change. A released build, live multiplex profiles, physical devices, and Desktop-owned cross-client prompts still need qualification or an upstream contract. This is not yet a released mobile approval capability.
