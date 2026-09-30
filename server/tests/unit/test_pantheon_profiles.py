@@ -12,6 +12,7 @@ from hmp_plugin.pantheon_profiles import (
     existing_session_id,
     profile_home,
     served_profile_homes,
+    verify_source_route,
 )
 
 
@@ -172,3 +173,62 @@ def test_standalone_named_profile_requires_unstamped_source(tmp_path: Path) -> N
     ):
         with pytest.raises(ProfileResolutionError, match="source is not routed"):
             existing_session_id("serenity", served, source, Store(), multiplex=False)
+
+
+def test_source_route_requires_exact_old_matcher_result(tmp_path: Path) -> None:
+    _, _, homes = _fixture(tmp_path)
+    runner = SimpleNamespace(config=SimpleNamespace(
+        multiplex_profiles=True, profile_routes=[object()]
+    ))
+    adapter = SimpleNamespace(gateway_runner=runner)
+    source = SimpleNamespace(
+        platform=SimpleNamespace(value="hmp"),
+        scope_id="serenity", guild_id="serenity", chat_id="chat",
+        thread_id=None, parent_chat_id=None,
+        profile="serenity", profile_route_rejected=False,
+        _transport_adapter_ref=lambda: adapter,
+    )
+    seen: list[str] = []
+
+    def match(_routes: object, **fields: object) -> object:
+        assert fields["platform"] == "hmp" and fields["guild_id"] == "serenity"
+        seen.append("matched")
+        return SimpleNamespace(profile="serenity")
+
+    verify_source_route(runner, adapter, homes, "serenity", source, match_profile_route=match)
+    assert seen == ["matched"]
+    with pytest.raises(ProfileResolutionError, match="no matching"):
+        verify_source_route(
+            runner, adapter, homes, "serenity", source,
+            match_profile_route=lambda *_a, **_kw: None,
+        )
+    source.profile = None
+    with pytest.raises(ProfileResolutionError, match="profile does not match"):
+        verify_source_route(runner, adapter, homes, "serenity", source, match_profile_route=match)
+    source.profile = "serenity"
+    source._transport_adapter_ref = lambda: object()
+    with pytest.raises(ProfileResolutionError, match="transport"):
+        verify_source_route(runner, adapter, homes, "serenity", source, match_profile_route=match)
+
+
+def test_standalone_route_requires_only_active_home(tmp_path: Path) -> None:
+    _, _, homes = _fixture(tmp_path)
+    runner = SimpleNamespace(config=SimpleNamespace(multiplex_profiles=False))
+    adapter = SimpleNamespace(gateway_runner=runner)
+    source = SimpleNamespace(
+        platform=SimpleNamespace(value="hmp"),
+        scope_id="serenity", guild_id="serenity", chat_id="chat",
+        profile=None, profile_route_rejected=False,
+        _transport_adapter_ref=lambda: adapter,
+    )
+    def unused(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("standalone gateway must not route")
+
+    verify_source_route(
+        runner, adapter, {"serenity": homes["serenity"]}, "serenity", source,
+        match_profile_route=unused,
+    )
+    with pytest.raises(ProfileResolutionError, match="standalone source"):
+        verify_source_route(
+            runner, adapter, homes, "serenity", source, match_profile_route=unused
+        )
