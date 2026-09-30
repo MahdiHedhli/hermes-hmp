@@ -5,14 +5,23 @@
 The isolated archive of Hermes
 `ac0cfa7db94cefa90cf3e35191f38b53888b9e17` passed HMP's boundary and
 behavior probes and the F2/F3 real gateway/PTY fixture matrix. Its JUnit report
-has **16 selected cases, 16 passed, 0 failures, 0 errors, 0 skips**: T7 Bot Chat
-approval **3/3**, T8 Phone chat approval **2/2**, and approval fail-closed
+has **17 selected cases, 17 passed, 0 failures, 0 errors, 0 skips**: T7 Bot Chat
+approval **3/3**, T8 Phone chat approval **3/3**, and approval fail-closed
 owner/flag/qualification cases **3/3**. The fixture used loopback listeners,
 Hermes's real gateway and pairing paths, a fake model, synthetic credentials,
 and scratch homes. The source archive's approval stream and busy resolver files
 matched that exact upstream commit. The matrix produced a fixture-only receipt
-under `/private/tmp/hmp-approval-matrix-results-3`; it was not copied to a
+under `/private/tmp/hmp-approval-matrix-results-4`; it was not copied to a
 runtime allowlist or the owner's live Hermes.
+
+The added T8 case pairs one device with two authorized fixture profiles. An
+approval request raised in the first profile stays pending when the device
+submits its exact ID and an allow choice through the second profile; only a
+deny through the issuing profile settles it, and the fixture command never
+runs. This proves the profile binding on this isolated candidate, not live
+multi-profile configuration. The fixture requires the exact scratch
+qualification receipt; running it without that receipt intentionally closes
+all guarded routes before any profile-specific check.
 
 This result covers the **exact untagged archive only**. It does not qualify a
 published Hermes release, a git install, real model/tool latency, a physical
