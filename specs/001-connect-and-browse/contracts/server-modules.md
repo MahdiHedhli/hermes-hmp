@@ -39,11 +39,12 @@ server/
                                   #   also session_refs, other_session_baselines (amendment A1, SES-1a/SES-2);
                                   #   also direct_send_idempotency (amendment F2, DS-3)
     compat.py                     # build identity (git SHA / fingerprint), read_compat_builds.json, dependency probe (GU-2c, ERR-2a);
-                                  #   READ_DEPENDENCIES also lists SessionDB.list_sessions_rich/get_session (amendment A1);
+                                  #   READ_DEPENDENCIES also lists SessionDB.get_session (amendment A1; no paged
+                                  #   list_sessions_rich scan any more);
                                   #   WRITE_DEPENDENCIES (amendment F2) lists active_session_registry_snapshot and
                                   #   find_canonical_owner, probed only when direct_send's flag is on
     bridge.py                     # the ONLY module importing Hermes internals: read subset + P6 trigger (§12);
-                                  #   also list_sessions/resolve_session (amendment A1, SES-1/SES-2);
+                                  #   also session_summary/browsing_bot_chat/resolve_session (amendment A1, SES-1/SES-2);
                                   #   also resolve_bot_chat/registry_snapshot/direct_send_target (amendment F2, DS-4/DS-6)
     direct_send.py                # amendment F2: DS-2..DS-8 orchestration (gate order, guard, idempotency,
                                   #   the api_server loopback call, post-hoc verification). Never imports a Hermes
@@ -148,7 +149,7 @@ SHA. Unresolvable git metadata or a missing listed file is unidentifiable, hence
 | POST | `/hmp/v1/bots/{p}/authorize` | PR6-1 | bearer |
 | GET | `/hmp/v1/bots/{p}/conversations/default?limit=` | RO-3 | bearer + per-bot gate (ERR-3) |
 | GET | `/hmp/v1/bots/{p}/conversations/default/messages?after=&limit=` | RO-6 | bearer + per-bot gate |
-| GET | `/hmp/v1/bots/{p}/sessions?cursor=&limit=` | SES-1 (amendment A1, v1.1) | bearer + per-bot gate; only when `gateway.platforms.hmp.extra.session_browsing` is not `false` |
+| GET | `/hmp/v1/bots/{p}/sessions?cursor=&limit=` | SES-1 (amendment A1, v1.1) | bearer + per-bot gate; only when `gateway.platforms.hmp.extra.session_browsing` is absent (default on) or exactly `true` (SES-5) |
 | GET | `/hmp/v1/bots/{p}/sessions/{ref}/messages?after=&limit=` | SES-2 (amendment A1, v1.1) | bearer + per-bot gate; same kill switch |
 | POST | `/hmp/v1/bots/{p}/chat/messages` | DS-1..DS-7 (amendment F2, v1.2) | bearer + per-bot gate; **always registered** (unlike SES-1/SES-2's kill switch), answers `503 write_gate_closed` rather than `404` when `direct_send`'s flag is off or the guard/gate otherwise fails closed |
 | GET | `/hmp/v1/bots/{p}/chat/messages/by-client-id/{cmid}` | DS-8 (amendment F2, v1.2) | bearer + per-bot gate; always registered, read-only, never re-sends |

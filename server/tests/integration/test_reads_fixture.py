@@ -240,6 +240,17 @@ def test_a1_session_browsing_multi_source_fixture(fixture_home: tuple[str, Path]
         status, body = a.get("/hmp/v1/bots/f1-alpha/sessions?limit=100")
         assert status == 200, body
         by_title = {item["title"]: item for item in body["sessions"]}
+        status, unknown = a.get("/hmp/v1/bots/f1-alpha/sessions/ses1_doesnotexist/messages")
+        assert status == 404 and unknown["error"]["code"] == "not_found"
+        # The Bot Chat lookup (`get_session_by_title`) is outside the read fingerprint, so it is
+        # reachable only on a build that also passed the exact-build direct-send qualification
+        # (SES-1i); on any other build only the phone's own session is listed (fail closed).
+        qualified = json.loads(
+            (REPO_ROOT / "server" / "hmp_plugin" / "direct_send_supported_builds.json").read_text()
+        )
+        if label not in {b["label"] for b in qualified["builds"]}:
+            assert set(by_title) == {None} and by_title[None]["is_mobile"] is True
+            return
         # OD-F11: cli-1, telegram-1, discord-1, desktop-1 (title "Desktop chat", not "Bot Chat"),
         # the compression lineage, archived-1 and hidden-1 are ALL excluded -- only the canonical
         # "Bot Chat" and the phone's own (untitled) session are listed.
@@ -254,8 +265,6 @@ def test_a1_session_browsing_multi_source_fixture(fixture_home: tuple[str, Path]
         assert status == 200 and body["session_ref"] == ref
         assert [m["role"] for m in body["messages"]] == ["user", "assistant"]
 
-        status, body = a.get("/hmp/v1/bots/f1-alpha/sessions/ses1_doesnotexist/messages")
-        assert status == 404 and body["error"]["code"] == "not_found"
     finally:
         _stop(served)
 

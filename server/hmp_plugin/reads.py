@@ -230,11 +230,11 @@ def _is_bot_view_session(summary: SessionSummary) -> bool:
     i.e. the bot's one canonical "Bot Chat"? See `_CANONICAL_BOT_CHAT_TITLE`'s docstring for the
     three independent Hermes-side sources this mirrors.
 
-    `list_sessions_rich`'s own compression-tip projection (`_project_compression_tips`,
-    `hermes_state_sessions.py`) already backfills a compressed tip's `title` from its root when
-    the tip's own title is unset, so the single `title` field `list_sessions_rich` returns already
-    plays the role Desktop's separate `root_title`/`title` pair plays -- there is nothing else to
-    check for the lineage case.
+    This is the SECOND check on a summary: `bridge.browsing_bot_chat` already found the canonical
+    chat by the one shared rule F2 direct send uses (hidden, non-archived, exact title, current
+    tip and lineage); this re-asserts it on the summary that goes on the wire. `session_summary`
+    backfills a compressed tip's `title` from its root when the tip's own is unset, so the single
+    `title` field plays the role Desktop's separate `root_title`/`title` pair plays.
 
     `hidden` is checked too, matching `_set_session_title`'s own stated identity rule exactly
     (hidden is what makes a "Bot Chat"-titled row canonical rather than an ordinary session a user
@@ -242,7 +242,7 @@ def _is_bot_view_session(summary: SessionSummary) -> bool:
     Hermes additionally enforces `sessions.title` uniqueness (`canonical-chat.ts`: "the core
     UNIQUE(title) index makes (profile, 'Bot Chat') an exact registry"), the `hidden` check is
     defense in depth here, not the only thing standing between an ordinary session and this
-    selector -- but it is cheap, already available from `list_sessions_rich`, and it is what
+    selector -- but it is cheap, already on every session row `get_session` returns, and it is what
     Hermes's own source treats as authoritative, so this checks it explicitly rather than relying
     only on the uniqueness constraint holding in every observed build.
 
@@ -250,7 +250,7 @@ def _is_bot_view_session(summary: SessionSummary) -> bool:
     excludes every channel-originated session (cli, telegram, discord, cron, ...) regardless of
     its own title, unless it happens to be the one row that is both hidden and titled "Bot Chat".
     """
-    return summary.title == _CANONICAL_BOT_CHAT_TITLE and summary.hidden
+    return summary.title == _CANONICAL_BOT_CHAT_TITLE and summary.hidden and not summary.archived
 
 
 def _decode_sessions_cursor(text: str) -> int:
@@ -502,35 +502,45 @@ class Reads:
     ) -> SessionListResponse:
         """SES-1. `sources_excluded` is a host-side narrowing on top of the client-facing default
         of "none" (controller ruling, 2026-09-27: `exclude_sources` default is empty). OD-F11
-        (owner ruling, 2026-09-27, superseding OD-F10's breadth): the bridge call itself stays the
-        generic "every session of this bot" read (`sources_excluded` is plumbing kept for a future
-        host-side config, unused by F1 today), but only the bot's own canonical chat
-        (`_is_bot_view_session`) and the caller's own session are kept in what actually goes on
-        the wire -- never a CLI, Telegram, Discord or other channel session, whatever
-        `sources_excluded` says."""
+        (owner ruling, 2026-09-27, superseding OD-F10's breadth): at most TWO sessions can ever be
+        listed -- the caller's own HMP conversation and the bot's canonical Bot Chat
+        (`bridge.browsing_bot_chat`, checked again by `_is_bot_view_session`) -- and both are
+        resolved directly by id, never by paging through Hermes's recent sessions and filtering
+        afterwards (35 newer cron sessions used to push the Bot Chat off the page). So the whole
+        candidate set is known here and pagination is over those (at most two) items: a
+        `next_cursor` appears only when `limit` cut the set short, and no other session's title or
+        id is ever read. `sources_excluded` (host-side plumbing, unused by F1 today) still narrows
+        by source label."""
         self._gate(user_id, profile)
         offset = 0 if cursor is None else _decode_sessions_cursor(cursor)
         try:
             own_ref = self._bridge.conversation_ref(user_id, profile)
-            summaries = self._bridge.list_sessions(
-                user_id, profile, sources_excluded=sources_excluded, limit=limit, offset=offset
-            )
+            candidates: list[tuple[SessionSummary, bool]] = []  # (summary, is_mobile)
+            if own_ref is not None:
+                own = self._bridge.session_summary(profile, own_ref.session_id)
+                if own is not None and not own.archived:
+                    candidates.append((own, True))
+            target = self._bridge.browsing_bot_chat(profile)
+            if target is not None:
+                chat = self._bridge.session_summary(profile, target.root_session_id)
+                # When the caller's own chat IS the Bot Chat it is listed once, as theirs.
+                if (
+                    chat is not None
+                    and _is_bot_view_session(chat)
+                    and all(seen.session_id != chat.session_id for seen, _ in candidates)
+                ):
+                    candidates.append((chat, False))
         except HmpError:
             raise
         except Exception as exc:
             raise _internal_error(exc) from exc
-        own_session_id = own_ref.session_id if own_ref is not None else None
-        fetched = len(summaries)  # SES-1e/1f pagination refers to the RAW Hermes page, not the
-        # OD-F11-filtered result below: a page can come back with zero visible rows and still
-        # have more pages after it.
-        summaries = [
-            s
-            for s in summaries
-            if s.session_id == own_session_id or _is_bot_view_session(s)
-        ]
+        excluded = set(sources_excluded)
+        candidates = [(s, mobile) for s, mobile in candidates if s.source not in excluded]
+        # Most recently active first (the order SES-1 always had); `None` last, ties stable.
+        candidates.sort(key=lambda c: -(c[0].last_active_at or 0.0))
         now = int(self._clock())
         items = []
-        for s in summaries:
+        for s, mobile in candidates[offset : offset + limit]:
             ref = self._store.mint_or_get_session_ref(
                 user_id, profile, s.session_id, _new_session_ref(), now
             )
@@ -542,15 +552,38 @@ class Reads:
                     started_at=int(s.started_at),
                     last_active_at=int(s.last_active_at) if s.last_active_at is not None else None,
                     message_count=s.message_count,
-                    is_mobile=s.session_id == own_session_id,
+                    is_mobile=mobile,
                 )
             )
-        # SES-1f: no total count is exposed. `next_cursor` is null once the raw Hermes page comes
-        # back short of `limit` -- the only signal a client gets for "no more pages". Under OD-F11
-        # most raw pages contain 0-2 visible rows; a client may need several "load more" taps on a
-        # very active profile before the next page's raw fetch is short of `limit`.
-        next_cursor = _encode_sessions_cursor(offset + limit) if fetched == limit else None
+        # SES-1f: no total count is exposed; `next_cursor` is null once the last item was served.
+        next_cursor = (
+            _encode_sessions_cursor(offset + limit) if offset + limit < len(candidates) else None
+        )
         return SessionListResponse(sessions=tuple(items), next_cursor=next_cursor)
+
+    def _authorize_session(self, user_id: str, profile: str, session_id: str) -> None:
+        """SES-2: re-check the CURRENT OD-F11 selector for a `session_id` a `session_ref` resolved
+        to. A ref is minted when a session qualifies and lives on in the store, so on its own it
+        proves nothing later: the session may since have been archived, unhidden, retitled,
+        replaced, or (a manually inserted ref) never have qualified at all. Allowed now: an id in
+        the compression lineage of the caller's own HMP conversation, or in the current canonical
+        Bot Chat's lineage (`bridge.browsing_bot_chat`: hidden, non-archived, exact title -- the
+        rule F2 direct send shares). Everything else is `404 not_found`, the same answer as an
+        unknown or foreign ref (SES-4), given before any row is read. A bridge failure is
+        `500 internal_error` (fail closed), never an allow."""
+        try:
+            own_ref = self._bridge.conversation_ref(user_id, profile)
+            if own_ref is not None:
+                own_chain = set(self._bridge.lineage(own_ref).chain) | {own_ref.session_id}
+                if session_id in own_chain:
+                    return
+            target = self._bridge.browsing_bot_chat(profile)
+        except HmpError:
+            raise
+        except Exception as exc:
+            raise _internal_error(exc) from exc
+        if target is None or session_id not in target.compression_chain:
+            raise HmpError(ErrorCode.NOT_FOUND)
 
     def _resolve_other(self, user_id: str, profile: str, session_id: str) -> ConversationRef:
         """SES-2: the ref already resolved to `session_id` in the caller's own scope (`store.py`).
@@ -579,10 +612,13 @@ class Reads:
         """The per-bot gate runs before this (both callers below), so ref resolution never runs
         for an unauthorized caller (matches RO-3/RO-6: "authorize before any lookup", FR-051). A
         `ref` unknown, or minted for a different `(user_id, profile)`, is `404 not_found` --
-        indistinguishable from a foreign ref (SES-1a: never disclosed as "exists but not yours")."""
+        indistinguishable from a foreign ref (SES-1a: never disclosed as "exists but not yours").
+        A ref that resolves in the store is then re-checked against the CURRENT selector
+        (`_authorize_session`) -- the store only remembers what once qualified."""
         session_id = self._store.resolve_session_ref(user_id, profile, session_ref)
         if session_id is None:
             raise HmpError(ErrorCode.NOT_FOUND)
+        self._authorize_session(user_id, profile, session_id)
         return session_id
 
     def session_snapshot(

@@ -109,6 +109,36 @@ def test_bad_listener_config_does_not_connect(adapter_module: types.ModuleType) 
     assert "connected" not in adapter.states
 
 
+@pytest.mark.parametrize(
+    ("extra", "expected"),
+    [
+        # Absent: the documented default is ON.
+        (None, True),
+        ({}, True),
+        ({"port": 1}, True),
+        # Configured: only the boolean True enables it.
+        ({"session_browsing": True}, True),
+        ({"session_browsing": False}, False),
+        ({"session_browsing": "false"}, False),
+        ({"session_browsing": "False"}, False),
+        ({"session_browsing": "true"}, False),
+        ({"session_browsing": "no"}, False),
+        ({"session_browsing": 0}, False),
+        ({"session_browsing": 1}, False),
+        ({"session_browsing": None}, False),
+        ({"session_browsing": []}, False),
+        ({"session_browsing": {}}, False),
+        # A malformed `extra` itself fails closed.
+        ("oops", False),
+        (["session_browsing"], False),
+    ],
+)
+def test_session_browsing_config_only_an_explicit_true_enables_it(
+    adapter_module: types.ModuleType, extra: object, expected: bool
+) -> None:
+    assert adapter_module._session_browsing_enabled(extra) is expected
+
+
 def test_lifecycle_and_zero_handoff_on_write_paths(
     adapter_module: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -95,6 +95,21 @@ def _bridge_classes() -> tuple[type[Any], type[Any]]:
     return _bridge_classes_cache
 
 
+def _session_browsing_enabled(extra: object) -> bool:
+    """Amendment A1 kill switch, `gateway.platforms.hmp.extra.session_browsing`. The documented
+    default (no `extra`, or no such key) is ON. Once the key is configured, only the boolean
+    `True` keeps it on: `false`, `"false"`, `0`, `None` or any other malformed value -- and a
+    malformed (non-mapping) `extra` -- turn it off. Never `is not False`: a string such as
+    `"false"` must not read as enabled."""
+    if extra is None:
+        return True
+    if not isinstance(extra, Mapping):
+        return False
+    if "session_browsing" not in extra:
+        return True
+    return extra["session_browsing"] is True
+
+
 def open_components(adapter: Any) -> server.ServerContext:
     """Compat gate, store, identity and (on a supported build only) the bridge. Blocking."""
     try:
@@ -113,13 +128,13 @@ def open_components(adapter: Any) -> server.ServerContext:
         raise
     config = getattr(adapter, "config", None)
     extra = getattr(config, "extra", None)
-    session_browsing = extra.get("session_browsing", True) if isinstance(extra, Mapping) else True
+    session_browsing_enabled = _session_browsing_enabled(extra)
     direct_send_qualified = result.supported and compat.direct_send_build_qualified(result.identity)
 
     # Amendment F2 (direct send, OD-F14/OD-F15): `gateway.platforms.hmp.extra.direct_send.enabled`,
     # default False. A malformed (non-mapping) `direct_send` block fails closed to disabled, never
-    # to enabled -- mirrors `session_browsing`'s own "anything but an explicit False is on" only
-    # in the safe direction (this flag's own safe default is OFF, not ON).
+    # to enabled -- the same fail-closed reading `_session_browsing_enabled` applies to
+    # `session_browsing` (only an explicit `True` enables), with this flag's safe default OFF.
     #
     # Review round 2, should-fix: a closure over `adapter`, not a one-time bool, so every request
     # re-reads the LIVE `adapter.config.extra` (`server.py`'s `handle_chat_send` calls this once
@@ -135,13 +150,15 @@ def open_components(adapter: Any) -> server.ServerContext:
         identity=ident,
         store=store,
         compat=result,
-        session_browsing_enabled=session_browsing is not False,
+        session_browsing_enabled=session_browsing_enabled,
         direct_send_flag=_read_direct_send_enabled,
     )
     if result.supported:
         bridge_cls, directory_cls = _bridge_classes()
 
-        ctx.bridge = bridge_cls(adapter, directory_cls(store))
+        ctx.bridge = bridge_cls(
+            adapter, directory_cls(store), title_lookup_qualified=direct_send_qualified
+        )
         # Live-bug fix: `adapter._observe_served_profiles` is a bound method of the adapter this
         # context belongs to (this function's own `adapter` argument), so it is safe to close over
         # here even though `self._record`/`self._nonce` are not set until `connect()` finishes

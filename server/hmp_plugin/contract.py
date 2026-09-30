@@ -14,7 +14,7 @@ which must never be imported on an unsupported build (server-modules.md "Startup
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Protocol
@@ -814,11 +814,10 @@ class LineageInfo:
 
 @dataclass(frozen=True)
 class SessionSummary:
-    """Amendment A1: one row as `SessionDB.list_sessions_rich` returns it, already narrowed to
-    what SES-1 needs (§1.1/§1.2 of the amendment). `session_id` is the Hermes-internal id (or a
-    compression lineage's tip, already projected by Hermes itself, per `list_sessions_rich`'s own
-    `project_compression_tips` default) -- it is bridge-internal, never put on the wire raw
-    (SES-1a): the caller mints an opaque `session_ref` for it (`store.py`)."""
+    """Amendment A1: one session, narrowed to what SES-1 needs (§1.1/§1.2 of the amendment).
+    `session_id` is the Hermes-internal id of the compression lineage's tip -- it is
+    bridge-internal, never put on the wire raw (SES-1a): the caller mints an opaque
+    `session_ref` for it (`store.py`)."""
 
     session_id: str
     title: str | None
@@ -828,10 +827,9 @@ class SessionSummary:
     message_count: int
     # OD-F11: Hermes's own `sessions.hidden` flag. The canonical "Bot Chat" a bot's Desktop view
     # opens is always created hidden (`hermes-agent`'s `canonical-chat.ts` `createCanonicalChat`,
-    # `hidden: true`), so `list_sessions_rich` must be called with `include_hidden=True` to see it
-    # at all; `reads.py`'s OD-F11 selector then narrows back down to just that row (plus the
-    # phone's own), never disclosing an arbitrary hidden session.
+    # `hidden: true`); `reads.py`'s OD-F11 selector requires it, together with `archived` False.
     hidden: bool = False
+    archived: bool = False
 
 
 @dataclass(frozen=True)
@@ -883,27 +881,30 @@ class ReadBridge(Protocol):
     # Amendment A1 (OD-F9/OD-F10): read-only session browsing across every source of a bot.
     # ------------------------------------------------------------------------------------------
 
-    def list_sessions(
-        self,
-        user_id: str,
-        profile: str,
-        *,
-        sources_excluded: Sequence[str],
-        limit: int,
-        offset: int,
-    ) -> list[SessionSummary]:
-        """§1.1 `list_sessions_rich`, narrowed to SES-1's needs. Ordered most-recently-active
-        first. Raises on a read failure (never degrades to an empty list -- reads.py's own rule,
-        RO-8/RO-6 precedent)."""
+    def session_summary(self, profile: str, session_id: str) -> SessionSummary | None:
+        """SES-1: the summary of ONE session, read directly by id (`get_session`, the active
+        message ids and the newest row of its compression tip) -- never a paged scan of recent
+        sessions, so unrelated newer sessions cannot crowd the two allowed ones out. The result's
+        `session_id` is the lineage tip. `None` when the session does not exist. Raises on a read
+        failure or an uncertain `hidden`/`archived` flag (never degrades to an empty answer)."""
+        ...
+
+    def browsing_bot_chat(self, profile: str) -> BotChatTarget | None:
+        """SES-1/SES-2: the canonical Bot Chat under the SAME rule `resolve_bot_chat` uses
+        (hidden, non-archived, exact title, current compression tip and lineage), or `None`.
+        Also `None` -- fail closed -- on a build whose exact-build direct-send probe has not
+        passed, because the title lookup is outside the read fingerprint. Raises on an uncertain
+        lineage."""
         ...
 
     def resolve_session(
         self, user_id: str, profile: str, session_id: str
     ) -> ConversationRef | None:
-        """SES-2: existence + scoping check only for an arbitrary session of this profile (never
-        restricted to the id `conversation_ref()` resolves) -- no new lineage/history bridge
+        """SES-2: existence check for a session of this profile -- no new lineage/history bridge
         method is needed; `head`/`latest`/`after`/`lineage` already take any `ConversationRef`.
-        `None` when `session_id` does not exist in this profile's session database."""
+        It is NOT an authorization: `reads.py` re-checks the current OD-F11 selector first.
+        `None` when `session_id` does not exist in this profile's session database or is
+        archived."""
         ...
 
     # ------------------------------------------------------------------------------------------
@@ -911,10 +912,10 @@ class ReadBridge(Protocol):
     # ------------------------------------------------------------------------------------------
 
     def resolve_bot_chat(self, profile: str) -> BotChatTarget | None:
-        """DS-4(2): the same primitive SES-1's OD-F11 selector and
-        `tools.bot_live_delivery.find_canonical_owner` both already use (`get_session_by_title`,
-        then the live compression tip). `None` when no Bot Chat exists yet for this profile --
-        never created here (DS-9)."""
+        """DS-4(2): the canonical Bot Chat -- hidden, non-archived, titled exactly `"Bot Chat"`
+        (`get_session_by_title`), then the live compression tip and lineage. `None` when no
+        canonical Bot Chat exists yet for this profile (a visible or archived session that merely
+        carries the title is not one) -- never created here (DS-9)."""
         ...
 
     def lease_snapshot(self, profile: str) -> list[Mapping[str, object]] | None:

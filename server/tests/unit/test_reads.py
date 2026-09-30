@@ -29,7 +29,12 @@ from hmp_plugin.contract import (
     WriteGate,
     WriteGateState,
 )
-from hmp_plugin.reads import Reads, _fallback_display_name, _is_bot_view_session
+from hmp_plugin.reads import (
+    Reads,
+    _encode_sessions_cursor,
+    _fallback_display_name,
+    _is_bot_view_session,
+)
 from hmp_plugin.store import Store
 
 from . import hmp_kit
@@ -73,6 +78,7 @@ class Harness:
             self.world.adapter,
             StoreDirectory(self.store),
             hermes=self.world.api,  # type: ignore[arg-type]
+            title_lookup_qualified=True,
         )
         self.recorder = Recorder(self.bridge, self.log)
         self.reads = Reads(
@@ -565,17 +571,156 @@ def test_list_sessions_ref_is_stable_across_calls(h: Harness) -> None:
     assert ref1 == ref2 and ref1.startswith("ses1_")
 
 
-def test_list_sessions_pagination_refers_to_the_raw_hermes_page(h: Harness) -> None:
-    """SES-1e/1f pagination is unchanged by OD-F11's filtering: the RAW Hermes page decides
-    `next_cursor`, even though none of these three ordinary sessions is ever shown (none is the
-    canonical Bot Chat or the caller's own session)."""
+def test_list_sessions_ordinary_sessions_are_never_read_or_paged(h: Harness) -> None:
+    """None of these three ordinary sessions is the canonical Bot Chat or the caller's own: the
+    page is empty with no `next_cursor`, and no bridge call names any of them."""
     db = h.world.dbs["alpha"]
     for i, source in enumerate(("cli", "telegram", "discord")):
-        db.seed_session(f"s{i}", source=source, started_at=float(i))
-    page1 = h.reads.list_sessions(USER, "alpha", cursor=None, limit=2)
-    assert page1.sessions == () and page1.next_cursor is not None  # raw fetched == limit (2)
-    page2 = h.reads.list_sessions(USER, "alpha", cursor=page1.next_cursor, limit=2)
-    assert page2.sessions == () and page2.next_cursor is None  # raw fetched == 1 < limit
+        db.seed_session(f"s{i}", source=source, title=f"secret-{i}", started_at=float(i))
+        db.append(f"s{i}", "user", "private")
+    page = h.reads.list_sessions(USER, "alpha", cursor=None, limit=2)
+    assert page.sessions == () and page.next_cursor is None
+    assert "list_sessions" not in h.log and "session_summary" not in h.log
+
+
+def _bot_chat(h: Harness, session_id: str = "bc", **kw: Any) -> None:
+    kw.setdefault("source", "desktop")
+    kw.setdefault("title", "Bot Chat")
+    kw.setdefault("hidden", True)
+    kw.setdefault("started_at", 1.0)
+    h.world.dbs["alpha"].seed_session(session_id, **kw)
+    h.world.dbs["alpha"].append(session_id, "user", "canonical turn", timestamp=10.0)
+
+
+def test_visible_titled_compression_child_keeps_bot_chat_list_and_ref(h: Harness) -> None:
+    """Hermes's compression INSERT does not copy hidden; the root remains the identity."""
+    _bot_chat(h)
+    old_ref = h.reads.list_sessions(USER, "alpha", cursor=None, limit=30).sessions[0].session_ref
+    db = h.world.dbs["alpha"]
+    db.sessions["bc"]["title"] = None
+    db.sessions["bc"]["end_reason"] = "compression"
+    db.seed_session("tip", source="desktop", title="Bot Chat", parent_session_id="bc")
+    db.children["bc"] = "tip"
+    new_id = db.append("tip", "assistant", "continued", timestamp=20.0)
+
+    page = h.reads.list_sessions(USER, "alpha", cursor=None, limit=30)
+    assert [(item.title, item.is_mobile) for item in page.sessions] == [("Bot Chat", False)]
+    assert page.sessions[0].session_ref.startswith("ses1_")
+    # The list may mint a new ref for the projected tip; the old root ref remains readable.
+    snap = h.reads.session_snapshot(USER, "alpha", old_ref, 50)
+    assert any(message.id == new_id for message in snap.messages)
+
+
+def test_list_sessions_35_newer_cron_sessions_do_not_hide_the_bot_chat(h: Harness) -> None:
+    """SES-1 used to fetch a raw recent page and filter after paginating, so enough newer
+    sessions pushed the Bot Chat off it. It is now resolved directly: exactly it comes back, and
+    nothing about the 35 others is read or shown."""
+    _bot_chat(h)
+    before = h.reads.list_sessions(USER, "alpha", cursor=None, limit=30)
+    db = h.world.dbs["alpha"]
+    for i in range(35):
+        db.seed_session(
+            f"cron-{i}", source="cron", title=f"cron-title-{i}", started_at=100.0 + i
+        )
+        db.append(f"cron-{i}", "user", f"cron-body-{i}", timestamp=1000.0 + i)
+    h.log.clear()
+    page = h.reads.list_sessions(USER, "alpha", cursor=None, limit=30)
+    assert [(i.title, i.source, i.is_mobile) for i in page.sessions] == [
+        ("Bot Chat", "desktop", False)
+    ]
+    assert page.next_cursor is None  # no extra page: nothing but the two allowed sessions exists
+    assert page.sessions[0].session_ref == before.sessions[0].session_ref  # refs stay stable
+    assert "cron" not in repr(page)
+    assert "list_sessions" not in h.log and h.log.count("session_summary") <= 2
+    # Even with a smaller page size the cursor only ever points at the (<= 2) allowed sessions.
+    small = h.reads.list_sessions(USER, "alpha", cursor=None, limit=1)
+    assert len(small.sessions) == 1 and small.next_cursor is None
+
+
+def test_list_sessions_own_and_bot_chat_page_through_at_most_two_items(h: Harness) -> None:
+    _bot_chat(h)
+    h.world.dbs["alpha"].seed_session("s-mine", source="local", started_at=2.0)
+    h.start("s-mine")
+    for i in range(35):
+        h.world.dbs["alpha"].seed_session(f"cron-{i}", source="cron", started_at=100.0 + i)
+    page1 = h.reads.list_sessions(USER, "alpha", cursor=None, limit=1)
+    assert len(page1.sessions) == 1 and page1.next_cursor is not None
+    page2 = h.reads.list_sessions(USER, "alpha", cursor=page1.next_cursor, limit=1)
+    assert len(page2.sessions) == 1 and page2.next_cursor is None
+    both = {page1.sessions[0].source, page2.sessions[0].source}
+    assert both == {"local", "desktop"}
+    full = h.reads.list_sessions(USER, "alpha", cursor=None, limit=30)
+    assert len(full.sessions) == 2 and full.next_cursor is None
+    past_the_end = h.reads.list_sessions(USER, "alpha", cursor=_encode_sessions_cursor(2), limit=1)
+    assert past_the_end.sessions == () and past_the_end.next_cursor is None
+
+
+def test_list_sessions_visible_only_bot_chat_is_not_listed(h: Harness) -> None:
+    """A visible session that merely carries the title is not the canonical Bot Chat (A1 needs
+    hidden) -- and neither is a hidden but archived one."""
+    _bot_chat(h, hidden=False)
+    assert h.reads.list_sessions(USER, "alpha", cursor=None, limit=30).sessions == ()
+    h.world.dbs["alpha"].sessions["bc"]["hidden"] = True
+    assert len(h.reads.list_sessions(USER, "alpha", cursor=None, limit=30).sessions) == 1
+    h.world.dbs["alpha"].sessions["bc"]["archived"] = True
+    assert h.reads.list_sessions(USER, "alpha", cursor=None, limit=30).sessions == ()
+
+
+def test_list_sessions_compressed_bot_chat_lists_the_tip_once(h: Harness) -> None:
+    db = h.world.dbs["alpha"]
+    db.seed_session("root", source="desktop", hidden=True, end_reason="compression")
+    db.seed_session(
+        "tip", source="desktop", title="Bot Chat", hidden=True, parent_session_id="root"
+    )
+    db.children["root"] = "tip"
+    db.append("root", "user", "before", timestamp=1.0)
+    db.append("tip", "assistant", "after", timestamp=2.0)
+    page = h.reads.list_sessions(USER, "alpha", cursor=None, limit=30)
+    assert [(i.title, i.message_count) for i in page.sessions] == [("Bot Chat", 1)]
+    snap = h.reads.session_snapshot(USER, "alpha", page.sessions[0].session_ref, 50)
+    assert [m.text for m in snap.messages] == ["after"]
+
+
+def test_list_sessions_unqualified_build_lists_only_the_own_conversation(h: Harness) -> None:
+    """The title lookup is outside the read fingerprint: on a build without the exact-build
+    direct-send qualification no Bot Chat is listed, though the caller's own session still is."""
+    _bot_chat(h)
+    h.world.dbs["alpha"].seed_session("s-mine", source="local", started_at=2.0)
+    h.start("s-mine")
+    reads = _unqualified_reads(h)
+    page = reads.list_sessions(USER, "alpha", cursor=None, limit=30)
+    assert [i.source for i in page.sessions] == ["local"]
+    assert "get_session_by_title" not in h.world.dbs["alpha"].calls
+
+
+def _unqualified_reads(h: Harness) -> Reads:
+    bridge = HermesReadBridge(
+        h.world.adapter,
+        StoreDirectory(h.store),  # type: ignore[arg-type]
+        hermes=h.world.api,  # type: ignore[arg-type]
+    )
+    return Reads(
+        bridge,
+        h.store,
+        iid="i" * 52,
+        guarantees=Guarantees,
+        write_gate=lambda: WriteGate(WriteGateState.CLOSED, "guarantees_unavailable"),
+        clock=lambda: h.now,
+    )
+
+
+def test_is_bot_view_session_rejects_archived() -> None:
+    archived = SessionSummary(
+        session_id="s",
+        title="Bot Chat",
+        source="desktop",
+        started_at=0.0,
+        last_active_at=None,
+        message_count=0,
+        hidden=True,
+        archived=True,
+    )
+    assert _is_bot_view_session(archived) is False
 
 
 def test_list_sessions_malformed_cursor_is_bad_request(h: Harness) -> None:
@@ -637,9 +782,11 @@ def test_session_history_pages_and_resets(h: Harness) -> None:
 def test_session_history_lineage_changed_on_compression(h: Harness) -> None:
     db = h.world.dbs["alpha"]
     ref = _session_ref(h, "s-root")
+    db.sessions["s-root"]["end_reason"] = "compression"
     db.append("s-root", "user", "first")
     h.reads.session_snapshot(USER, "alpha", ref, 200)  # baseline at the root
     db.append("s-tip", "assistant", "second")
+    db.seed_session("s-tip", source="desktop", parent_session_id="s-root")
     db.children["s-root"] = "s-tip"
     reset = h.reads.session_history(USER, "alpha", ref, 1, 100)
     assert reset == HistoryReset(reason=ResetReason.LINEAGE_CHANGED)
@@ -655,6 +802,157 @@ def test_session_baseline_never_mixes_with_default_conversation_baseline(h: Harn
     h.reads.session_snapshot(USER, "alpha", ref, 200)
     page = h.reads.history(USER, "alpha", mine[0], 100)
     assert isinstance(page, HistoryPage) and _ids(page) == mine[1:]
+
+
+# --------------------------------------------------------------------------------------------------
+# SES-2 re-checks the CURRENT OD-F11 selector: a ref minted while a session qualified is not a
+# standing capability.
+# --------------------------------------------------------------------------------------------------
+
+
+def _shape(err: HmpError) -> tuple[Any, int, dict[str, object]]:
+    return (err.code, err.http, dict(err.extras))
+
+
+def _both_refused(h: Harness, ref: str, *, user: str = USER, profile: str = "alpha") -> list[Any]:
+    out = []
+    for call in (
+        lambda: h.reads.session_snapshot(user, profile, ref, 50),
+        lambda: h.reads.session_history(user, profile, ref, 0, 50),
+    ):
+        with pytest.raises(HmpError) as err:
+            call()
+        out.append(_shape(err.value))
+    return out
+
+
+def _assert_dead_ref(h: Harness, ref: str, **kw: str) -> None:
+    """`404 not_found` for both SES-2 routes, before any row is read, and byte-for-byte the answer
+    an unknown ref gets -- so a stale or foreign ref cannot be told apart from a made-up one."""
+    h.log.clear()
+    got = _both_refused(h, ref, **kw)
+    assert not {"latest", "after", "head"} & set(h.log)  # no row content was ever read
+    assert got == _both_refused(h, "ses1_unguessable", **kw)
+    assert got[0][0] == ErrorCode.NOT_FOUND and got[0][1] == 404
+
+
+def _listed_bot_chat_ref(h: Harness) -> str:
+    _bot_chat(h)
+    page = h.reads.list_sessions(USER, "alpha", cursor=None, limit=30)
+    ref = page.sessions[0].session_ref
+    assert h.reads.session_snapshot(USER, "alpha", ref, 50).messages  # alive while canonical
+    return ref
+
+
+def test_session_ref_dies_when_the_bot_chat_is_archived(h: Harness) -> None:
+    ref = _listed_bot_chat_ref(h)
+    h.world.dbs["alpha"].sessions["bc"]["archived"] = True
+    _assert_dead_ref(h, ref)
+
+
+def test_session_ref_dies_when_the_bot_chat_is_unhidden(h: Harness) -> None:
+    ref = _listed_bot_chat_ref(h)
+    h.world.dbs["alpha"].sessions["bc"]["hidden"] = False
+    _assert_dead_ref(h, ref)
+
+
+def test_session_ref_dies_when_the_bot_chat_is_retitled(h: Harness) -> None:
+    ref = _listed_bot_chat_ref(h)
+    h.world.dbs["alpha"].sessions["bc"]["title"] = "Something else"
+    _assert_dead_ref(h, ref)
+
+
+def test_session_ref_dies_when_the_bot_chat_is_replaced(h: Harness) -> None:
+    """A different session becomes the canonical Bot Chat (not a compression of the old one): the
+    old ref no longer names it, and the new one is readable under its own ref."""
+    ref = _listed_bot_chat_ref(h)
+    h.world.dbs["alpha"].sessions["bc"]["title"] = None
+    _bot_chat(h, "bc2")
+    _assert_dead_ref(h, ref)
+    new_ref = h.reads.list_sessions(USER, "alpha", cursor=None, limit=30).sessions[0].session_ref
+    assert new_ref != ref and h.reads.session_snapshot(USER, "alpha", new_ref, 50).messages
+
+
+def test_session_ref_follows_compression_of_the_bot_chat(h: Harness) -> None:
+    """Compression is not replacement: a ref for an ancestor id stays valid, reading the tip."""
+    ref = _listed_bot_chat_ref(h)
+    db = h.world.dbs["alpha"]
+    db.sessions["bc"]["end_reason"] = "compression"
+    db.seed_session("bc-tip", source="desktop", parent_session_id="bc", hidden=True)
+    db.children["bc"] = "bc-tip"
+    db.append("bc-tip", "assistant", "post-compression", timestamp=20.0)
+    snap = h.reads.session_snapshot(USER, "alpha", ref, 50)
+    assert [m.text for m in snap.messages] == ["post-compression"]
+
+
+def test_manually_inserted_channel_session_ref_is_not_found(h: Harness) -> None:
+    """A row planted in the ref table for a Telegram session (a store written by another build,
+    a bug, a restore) was never eligible: it is dead with or without a canonical Bot Chat."""
+    db = h.world.dbs["alpha"]
+    db.seed_session("s-telegram", source="telegram", title="private chat")
+    db.append("s-telegram", "user", "telegram-secret")
+    ref = h.store.mint_or_get_session_ref(USER, "alpha", "s-telegram", "ses1_planted", T0)
+    _assert_dead_ref(h, ref)
+    _bot_chat(h)  # a canonical chat existing changes nothing for the planted ref
+    _assert_dead_ref(h, ref)
+    # Nor does a hidden, non-canonical session titled something else.
+    db.seed_session("s-hidden", source="desktop", title="Hidden thing", hidden=True)
+    db.append("s-hidden", "user", "hidden-secret")
+    _assert_dead_ref(
+        h, h.store.mint_or_get_session_ref(USER, "alpha", "s-hidden", "ses1_planted2", T0)
+    )
+
+
+def test_session_ref_profile_isolation(h: Harness) -> None:
+    h.world.approve(USER, "beta")
+    ref = _listed_bot_chat_ref(h)
+    # The alpha ref presented under beta: unknown in beta's scope.
+    _assert_dead_ref(h, ref, profile="beta")
+    # A beta-scoped ref planted for alpha's canonical session id: beta has no such session.
+    planted = h.store.mint_or_get_session_ref(USER, "beta", "bc", "ses1_beta_planted", T0)
+    _assert_dead_ref(h, planted, profile="beta")
+    # And beta's OWN canonical Bot Chat is unreachable through an alpha-scoped ref.
+    beta = h.world.dbs["beta"]
+    beta.seed_session("bcb", source="desktop", title="Bot Chat", hidden=True)
+    beta.append("bcb", "user", "beta-secret")
+    alpha_planted = h.store.mint_or_get_session_ref(USER, "alpha", "bcb", "ses1_alpha_planted", T0)
+    _assert_dead_ref(h, alpha_planted)
+
+
+def test_own_conversation_ref_dies_when_replaced_or_archived(h: Harness) -> None:
+    h.world.dbs["alpha"].seed_session("s-mine", source="local", started_at=2.0)
+    mine = h.start("s-mine")
+    ref = h.reads.list_sessions(USER, "alpha", cursor=None, limit=30).sessions[0].session_ref
+    assert len(h.reads.session_snapshot(USER, "alpha", ref, 50).messages) == len(mine)
+    h.world.dbs["alpha"].sessions["s-mine"]["archived"] = True
+    _assert_dead_ref(h, ref)
+    h.world.dbs["alpha"].sessions["s-mine"]["archived"] = False
+    h.world.dbs["alpha"].seed_session("s-mine2", source="local", started_at=3.0)
+    h.world.start_conversation("alpha", h.chat(), "s-mine2")  # the conversation moved on
+    _assert_dead_ref(h, ref)
+
+
+def test_session_ref_on_an_unqualified_build_is_not_found(h: Harness) -> None:
+    ref = _listed_bot_chat_ref(h)
+    reads = _unqualified_reads(h)
+    with pytest.raises(HmpError) as err:
+        reads.session_snapshot(USER, "alpha", ref, 50)
+    assert err.value.code == ErrorCode.NOT_FOUND
+
+
+def test_session_ref_selector_failure_is_an_error_never_rows(h: Harness) -> None:
+    ref = _listed_bot_chat_ref(h)
+    h.log.clear()
+    h.world.dbs["alpha"].fail = True
+    with pytest.raises(HmpError) as err:
+        h.reads.session_snapshot(USER, "alpha", ref, 50)
+    assert err.value.code == ErrorCode.OTHER and err.value.http == 500
+    assert not {"latest", "after", "head"} & set(h.log)
+    h.world.dbs["alpha"].fail = False
+    h.world.dbs["alpha"].sessions["bc"]["archived"] = None  # flag cannot be established
+    with pytest.raises(HmpError) as err:
+        h.reads.session_history(USER, "alpha", ref, 0, 50)
+    assert err.value.code == ErrorCode.OTHER and err.value.http == 500
 
 
 # --------------------------------------------------------------------------------------------------
@@ -874,7 +1172,12 @@ def test_p6_instance_wide_note(h: Harness) -> None:
 def _wire_env(tmp_path: Path) -> tuple[hmp_kit.Env, World]:
     env = hmp_kit.Env(tmp_path / "hmp")
     world = World(tmp_path / "hermes")
-    bridge = HermesReadBridge(world.adapter, StoreDirectory(env.store), hermes=world.api)  # type: ignore[arg-type]
+    bridge = HermesReadBridge(
+        world.adapter,
+        StoreDirectory(env.store),
+        hermes=world.api,  # type: ignore[arg-type]
+        title_lookup_qualified=True,
+    )
     env.ctx.bridge = bridge
     env.ctx.reads = Reads(
         bridge,
