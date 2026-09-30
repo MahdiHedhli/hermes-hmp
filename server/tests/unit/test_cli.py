@@ -974,6 +974,31 @@ def test_compat_output(c: Cli) -> None:
     assert c.run("compat") == 0
     assert "hermes_build_unsupported" in c.out and "unidentifiable" in c.out
     assert "not run" in c.out
+    assert "Approval qualification: unqualified" in c.out
+
+
+def test_compat_reports_approvals_unqualified_while_the_list_is_empty(
+    c: Cli, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from hmp_plugin import compat as compat_mod
+
+    monkeypatch.setattr(compat_mod, "direct_send_build_qualified", lambda _: True)
+    assert c.run("compat") == 0
+    assert "Guarded send qualification: qualified" in c.out
+    assert "Approval qualification: unqualified" in c.out
+    assert "Approval qualification: qualified" not in c.out
+    monkeypatch.setattr(compat_mod, "direct_send_build_qualified", lambda _: False)
+    assert c.run("compat") == 0
+    assert "Guarded send qualification: unqualified" in c.out
+    assert "Approval qualification: unqualified" in c.out
+
+    # An unsupported build never reaches the approval gate (no file read, no Hermes import).
+    seen: list[object] = []
+    monkeypatch.setattr(compat_mod, "approval_build_qualified", lambda i, **_: seen.append(i))
+    c.compat = CompatResult(CompatStatus.UNSUPPORTED, OtherWhy.HERMES_BUILD_UNSUPPORTED)
+    assert c.run("compat") == 0
+    assert "Approval qualification: unqualified" in c.out
+    assert seen == []
 
 
 def test_no_subcommand_is_usage(c: Cli) -> None:

@@ -41,6 +41,7 @@ hmp_plugin = [
     "read_compat_builds.json",
     "write_supported_builds.json",
     "direct_send_supported_builds.json",
+    "approval_supported_builds.json",
 ]
 
 [tool.pytest.ini_options]
