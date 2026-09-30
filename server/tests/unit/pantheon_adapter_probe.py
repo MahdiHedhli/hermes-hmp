@@ -157,8 +157,8 @@ async def main() -> None:
     )
 
     # The old SessionDB offers a read-only constructor. Confirm it refuses a missing file and
-    # that one ordinary history read leaves an existing scratch database and sidecars byte-for-
-    # byte unchanged. This is a primitive check, not profile routing or Bot Chat qualification.
+    # that profile-scoped history reads leave both scratch databases and sidecars byte-for-byte
+    # unchanged. This is a storage/profile primitive, not full Bot Chat qualification.
     missing_db = state / "missing-state.db"
     try:
         SessionDB(missing_db, read_only=True)
@@ -168,26 +168,37 @@ async def main() -> None:
         raise AssertionError("read-only SessionDB opened a missing database")
     assert not missing_db.exists()
 
-    read_home = state / "read-only-profile"
-    read_home.mkdir()
-    read_db = read_home / "state.db"
-    writer = SessionDB(read_db)
-    writer.close()
-
-    def contents() -> dict[str, str]:
+    def contents(profile_home: Path) -> dict[str, str]:
         return {
             path.name: hashlib.sha256(path.read_bytes()).hexdigest()
-            for path in read_home.iterdir()
-            if path.is_file()
+            for path in profile_home.iterdir()
+            if path.is_file() and path.name.startswith("state.db")
         }
 
-    before = contents()
-    reader = SessionDB(read_db, read_only=True)
-    try:
-        assert reader.list_sessions_rich(limit=2) == []
-    finally:
-        reader.close()
-    assert contents() == before
+    expected = {
+        "default": "synthetic primary history row",
+        "serenity": "synthetic named history row",
+    }
+    for profile, text in expected.items():
+        read_db = profile_home(profile, homes) / "state.db"
+        writer = SessionDB(read_db)
+        try:
+            writer.create_session("shared-session", source="hmp")
+            writer.append_message("shared-session", "assistant", text)
+        finally:
+            writer.close()
+
+    before = {profile: contents(profile_home(profile, homes)) for profile in expected}
+    assert all(files for files in before.values())
+    for profile, text in expected.items():
+        read_db = profile_home(profile, homes) / "state.db"
+        reader = SessionDB(read_db, read_only=True)
+        try:
+            rows = reader.get_messages("shared-session")
+            assert [row["content"] for row in rows] == [text]
+        finally:
+            reader.close()
+    assert {profile: contents(profile_home(profile, homes)) for profile in expected} == before
 
     adapter = platform_registry.create_adapter(
         "hmp", SimpleNamespace(extra={"bind": "127.0.0.1", "port": port})
