@@ -149,8 +149,8 @@ SHA. Unresolvable git metadata or a missing listed file is unidentifiable, hence
 | POST | `/hmp/v1/bots/{p}/authorize` | PR6-1 | bearer |
 | GET | `/hmp/v1/bots/{p}/conversations/default?limit=` | RO-3 | bearer + per-bot gate (ERR-3) |
 | GET | `/hmp/v1/bots/{p}/conversations/default/messages?after=&limit=` | RO-6 | bearer + per-bot gate |
-| GET | `/hmp/v1/bots/{p}/sessions?cursor=&limit=` | SES-1 (amendment A1, v1.1) | bearer + per-bot gate; only when `gateway.platforms.hmp.extra.session_browsing` is absent (default on) or exactly `true` (SES-5) |
-| GET | `/hmp/v1/bots/{p}/sessions/{ref}/messages?after=&limit=` | SES-2 (amendment A1, v1.1) | bearer + per-bot gate; same kill switch |
+| GET | `/hmp/v1/bots/{p}/sessions?cursor=&limit=` | SES-1 (amendment A1, v1.1) | bearer + per-bot gate; only when `gateway.platforms.hmp.extra.session_browsing` is exactly boolean `true` (default off; SES-5). Residual gap: SES-2's selector re-check and message read are separate `SessionDB` calls on separate read connections, not an atomic snapshot; an upstream profile-scoped read transaction or atomic selector-plus-messages method is requested |
+| GET | `/hmp/v1/bots/{p}/sessions/{ref}/messages?after=&limit=` | SES-2 (amendment A1, v1.1) | bearer + per-bot gate; same opt-in (default off) and same non-atomic residual gap |
 | POST | `/hmp/v1/bots/{p}/chat/messages` | DS-1..DS-7 (amendment F2, v1.2) | bearer + per-bot gate; **always registered** (unlike SES-1/SES-2's kill switch), answers `503 write_gate_closed` rather than `404` when `direct_send`'s flag is off or the guard/gate otherwise fails closed |
 | GET | `/hmp/v1/bots/{p}/chat/messages/by-client-id/{cmid}` | DS-8 (amendment F2, v1.2) | bearer + per-bot gate; always registered, read-only, never re-sends |
 

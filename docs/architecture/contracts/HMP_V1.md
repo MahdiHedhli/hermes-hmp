@@ -702,10 +702,20 @@ authorized`, SES-3) is unchanged.
   for authz refusal; the ERR-2a compat refusal when the running build lacks the
   `READ_DEPENDENCIES` entry (below); `400 bad_request` for a malformed `cursor` or `after`.
 
-- **SES-5. Host-side kill switch.** `gateway.platforms.hmp.extra.session_browsing` (default on
-  when the key is absent). Once configured, **only the boolean `true` enables it**: `false`,
-  `"false"`, `0`, `null` or any other malformed value — and a malformed `extra` itself — disable
-  it (fail closed; `"false"` must never read as on). When disabled, SES-1 and SES-2 are **not
+- **SES-5. Host-side opt-in.** `gateway.platforms.hmp.extra.session_browsing` (**default off**
+  when the key is absent). **Only the boolean `true` enables it**: an absent key, `false`,
+  `"false"`, `"true"`, `0`, `1`, `null` or any other malformed value — and an absent or
+  malformed `extra` itself — leave it disabled (fail closed). The explicit `true` path exists for
+  isolated tests and deliberate host opt-in; the app's session picker stays dormant and gains
+  no new UI exposure. **Residual gap (SES-2 consistency).** SES-2 re-checks the *current* OD-F11
+  selector and later reads messages through separate Hermes `SessionDB` method calls, each with
+  its own read connection, so there is no atomic snapshot: a selector change between the check
+  and the read is not observed, and revocation is not immediate or atomic. This gap is open.
+  HMP requests an upstream profile-scoped read transaction, or one atomic
+  selector-plus-messages method (`NOUS_GATEWAY_OBSERVATIONS.md`). Mirroring the selector and
+  message projection in one standalone read-only SQL transaction could give that copy a consistent
+  snapshot, but couples HMP to Hermes' private schema and behavior; it has not been qualified as
+  a safe substitute. When disabled, SES-1 and SES-2 are **not
   registered** at all — the same "not registered, `404`" pattern F1 already uses for
   submit/SSE/approvals/clarify/stop (`server-modules.md` "F1 route table"). A future
   higher-sensitivity or multi-user host can turn session browsing off entirely without a client

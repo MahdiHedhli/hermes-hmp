@@ -665,6 +665,38 @@ def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
     assert len(expected) == 11
 
 
+def test_a1_session_routes_are_off_for_direct_context_construction(tmp_path: Path) -> None:
+    env = Env(tmp_path, session_browsing=True)
+    ctx = server.ServerContext(
+        identity=env.identity,
+        store=env.store,
+        compat=env.ctx.compat,
+        bridge=env.bridge,
+        reads=env.ctx.reads,
+    )
+    app = server.build_app(ctx)
+    routes = {(r.method, r.resource.canonical) for r in app.router.routes()}
+    assert ctx.session_browsing_enabled is False
+    assert all(
+        (method, server.full_path(path)) not in routes
+        for method, path, _ in server.A1_SESSION_ROUTES
+    )
+
+
+@pytest.mark.parametrize("value, enabled", [(True, True), (1, False), ("true", False)])
+def test_a1_route_registration_requires_literal_true(
+    tmp_path: Path, value: object, enabled: bool
+) -> None:
+    env = Env(tmp_path, session_browsing=False)
+    env.ctx.session_browsing_enabled = value  # type: ignore[assignment]
+    app = env.app()
+    routes = {(r.method, r.resource.canonical) for r in app.router.routes()}
+    assert all(
+        ((method, server.full_path(path)) in routes) is enabled
+        for method, path, _ in server.A1_SESSION_ROUTES
+    )
+
+
 def test_write_paths_are_404_with_zero_bridge_calls(tmp_path: Path) -> None:
     env = Env(tmp_path)
 

@@ -10,6 +10,7 @@ HMP is a mobile gateway plugin for Hermes. These requests come from implementing
 | Turn state | A client can read history but cannot reliably tell when a session is waiting for approval or clarification. | A session-scoped turn-state read or event stream. |
 | Pairing access | A platform plugin currently synthesizes an inert inbound message to create a standard pairing request. | A documented plugin API to request access for a platform user. |
 | Message origin | Session rows do not identify the client surface that submitted a turn. | An optional, non-model-visible client/surface field stored with user rows. |
+| Session read consistency | `SessionDB` offers no way to check a session's current selector and read its messages in one snapshot. Each method opens its own read connection, so a scope change can land between the check and the read. HMP keeps the extra session routes off by default and the phone picker hidden; it cannot claim atomicity or immediate revocation. | A profile-scoped read transaction, or one atomic method returning selector state plus messages. A plugin-owned SQL transaction could make its copied selector and projection consistent, but mirroring Hermes' private schema and behavior is unqualified and risks drift. |
 | Updates | A mobile client discovers new rows by polling. | A session change feed or bounded long poll. |
 
 ## Approval and clarify events
