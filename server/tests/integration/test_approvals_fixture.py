@@ -29,6 +29,7 @@ _spec.loader.exec_module(_f2)
 Client = _f2.Client
 DirectSendFixture = _f2.DirectSendFixture
 DEFAULT_PROFILE = _f2.DEFAULT_PROFILE
+OTHER_PROFILE = _f2.NO_BOT_CHAT_PROFILE
 BOT_CHAT_SESSION_ID = _f2.BOT_CHAT_SESSION_ID
 send = _f2.send
 
@@ -270,6 +271,54 @@ def test_t8_restart_mid_wait_does_not_apply(gateway: DirectSendFixture) -> None:
         assert body["applied"] is False
     else:
         assert body["error"]["code"] == "not_found"
+
+
+def test_t8_cross_profile_exact_id_answer_is_refused(gateway: DirectSendFixture) -> None:
+    """The paired device may use both profiles, but a request ID belongs to the profile that
+    raised it. Answering it through the other profile must neither run nor settle the command."""
+    model = gateway.fake_model_module
+    command, target = _probe_command(gateway)
+    gateway.fake_model.push(model.ToolCall(name="terminal", args={"command": command}))
+    client = gateway.client
+    # Prove the refusal below is not just missing access to the other profile.
+    status, body = _prompts(client, OTHER_PROFILE)
+    assert status == 200, body
+    assert not [i for i in body.get("prompts", []) if i.get("kind") == "approval"], body
+    status, body = _phone(client, cmid=str(uuid.uuid4()), text="hold for cross-profile")
+    assert status == 202, body
+
+    def approval():
+        code, payload = _prompts(client)
+        assert code == 200, payload
+        cards = [item for item in payload.get("prompts", []) if item.get("kind") == "approval"]
+        return cards[0] if cards else None
+
+    prompt = wait_for(approval, timeout=30)
+    assert prompt, _prompts(client)
+    request_id = prompt["request_id"]
+    assert target.exists(), "command ran without an answer"
+
+    # "once" is the choice that would execute, so a leak cannot hide behind a harmless choice.
+    status, body = _answer(client, request_id, {"choice": "once"}, profile=OTHER_PROFILE)
+    assert status in (403, 404, 409), body
+    assert body.get("applied") is not True, body
+
+    code, payload = _prompts(client)
+    assert code == 200, payload
+    pending = [item.get("request_id") for item in payload.get("prompts", [])]
+    assert request_id in pending, "wrong-profile answer settled the approval"
+    assert target.exists(), "wrong-profile answer executed the command"
+
+    status, body = _answer(client, request_id, {"choice": "deny"})
+    assert status == 200 and body["applied"] is True, body
+
+    def settled():
+        code, payload = _prompts(client)
+        assert code == 200, payload
+        return request_id not in [item.get("request_id") for item in payload.get("prompts", [])]
+
+    assert wait_for(settled, timeout=30)
+    assert target.exists() and (target / "sentinel").exists(), "denied command ran"
 
 
 @pytest.mark.parametrize("closed_by", ["owner", "flag", "qualification"])
