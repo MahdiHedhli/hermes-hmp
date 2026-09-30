@@ -12,13 +12,15 @@ dependencies = [
     # Pure Python (reviews/dependencies.md). Keep in step with `python_dependencies` in
     # hmp_plugin/plugin.yaml, which is what Hermes PM actually installs.
     "qrcode>=7.4.2,<9",
+    # `hermes hmp routes add` (routes.py only) parses and re-emits Hermes config files.
+    # Keep in step with `python_dependencies` in hmp_plugin/plugin.yaml.
+    "PyYAML>=6,<7",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-asyncio",
-    "PyYAML>=6,<7",
     "jsonschema>=4,<5",
     # Test-only: tests/unit/test_tls_trust_injection.py reproduces a host's process-wide
     # client-trust injection (`truststore.inject_into_ssl()`, which some Hermes builds call at

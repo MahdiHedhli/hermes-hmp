@@ -17,5 +17,8 @@ author: Hermes Bot Mobile
 # dependencies. `qrcode` is the operator CLI's terminal QR renderer (T032; cli.py only). Its floor
 # is 7.4.2, the version Hermes pins for its core extras: PM locks every plugin against the union of
 # core extras, so a higher floor cannot be admitted (reviews/dependencies.md, `qrcode`).
+# `PyYAML` is the parser of `hermes hmp routes add` (routes.py only); Hermes core already
+# depends on it.
 python_dependencies:
   - "qrcode>=7.4.2,<9"
+  - "PyYAML>=6,<7"
