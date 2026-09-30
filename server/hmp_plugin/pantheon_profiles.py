@@ -123,20 +123,35 @@ def profile_home(profile: str, homes: Mapping[str, Path]) -> Path:
 
 
 def existing_session_id(
-    profile: str, homes: Mapping[str, Path], source: Any, session_store: Any
+    profile: str,
+    homes: Mapping[str, Path],
+    source: Any,
+    session_store: Any,
+    *,
+    multiplex: bool,
 ) -> str | None:
     """Look up an old-tag session without minting a key, session, or database.
 
-    The caller must separately prove that Hermes matched a real route and
-    authorized this user. The old ``build_source`` stamps the primary profile
-    even when no route matched, so its profile stamp alone is insufficient for
-    disclosure. This primitive stays unwired until that ingress-equivalence
-    gate is qualified. Use the old store's key generator: a standalone named
-    profile uses the legacy namespace, unlike a multiplexed profile.
+    The caller must separately prove the live gateway's mode, that Hermes
+    matched a real route in multiplex mode, and that it authorized this user.
+    The old ``build_source`` can fall back when no route matched, so its profile
+    stamp alone is insufficient for disclosure. This primitive stays unwired
+    until that ingress-equivalence gate is qualified. Use the old store's key
+    generator: a standalone named profile uses the legacy namespace, unlike a
+    multiplexed profile.
     """
     profile_home(profile, homes)
-    if getattr(source, "profile", None) != profile or (
+    if type(multiplex) is not bool:
+        raise ProfileResolutionError("multiplex mode is unavailable")
+    stamped = getattr(source, "profile", None)
+    # In a standalone gateway, Hermes disables profile routing and leaves the
+    # source stamp unset, even when its active profile has a non-default name.
+    # In multiplex mode an exact route stamp is required; proof that a matching
+    # rule produced it is a separate, still-unqualified authorization gate.
+    if (
         getattr(source, "profile_route_rejected", None) is not False
+        or (multiplex and stamped != profile)
+        or (not multiplex and (len(homes) != 1 or stamped is not None))
     ):
         raise ProfileResolutionError("source is not routed to profile")
     try:

@@ -175,14 +175,18 @@ async def main() -> None:
 
     for multiplex, namespace in ((False, None), (True, "serenity")):
         session_store.config.multiplex_profiles = multiplex
+        source.profile = "serenity" if multiplex else None
+        served = homes if multiplex else {"serenity": homes["serenity"]}
         expected_key = build_session_key(source, profile=namespace)
         assert (
-            existing_session_id("serenity", homes, source, Lookup(expected_key))
+            existing_session_id(
+                "serenity", served, source, Lookup(expected_key), multiplex=multiplex
+            )
             == "existing-only"
         )
     source.profile_route_rejected = True
     try:
-        existing_session_id("serenity", homes, source, Lookup("unused"))
+        existing_session_id("serenity", homes, source, Lookup("unused"), multiplex=True)
     except ProfileResolutionError:
         pass
     else:

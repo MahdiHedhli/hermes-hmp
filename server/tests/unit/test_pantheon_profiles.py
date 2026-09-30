@@ -103,7 +103,10 @@ def test_existing_session_uses_store_key_without_creating_a_session(tmp_path: Pa
             calls.append("lookup")
             return SimpleNamespace(session_id="existing-session")
 
-    assert existing_session_id("serenity", homes, source, Store()) == "existing-session"
+    assert (
+        existing_session_id("serenity", homes, source, Store(), multiplex=True)
+        == "existing-session"
+    )
     assert calls == ["key", "lookup"]
 
 
@@ -123,7 +126,7 @@ def test_existing_session_refuses_unserved_and_rejected_sources_before_store_acc
         ("serenity", SimpleNamespace(profile="serenity")),
     ):
         with pytest.raises(ProfileResolutionError):
-            existing_session_id(profile, homes, source, ForbiddenStore())
+            existing_session_id(profile, homes, source, ForbiddenStore(), multiplex=True)
 
 
 def test_existing_session_distinguishes_absent_from_invalid_lookup(tmp_path: Path) -> None:
@@ -140,6 +143,32 @@ def test_existing_session_distinguishes_absent_from_invalid_lookup(tmp_path: Pat
         def lookup_by_session_key(self, _key: str) -> object:
             return self.entry
 
-    assert existing_session_id("default", homes, source, Store(None)) is None
+    assert existing_session_id("default", homes, source, Store(None), multiplex=True) is None
     with pytest.raises(ProfileResolutionError, match="session entry is invalid"):
-        existing_session_id("default", homes, source, Store(SimpleNamespace(session_id="")))
+        existing_session_id(
+            "default", homes, source, Store(SimpleNamespace(session_id="")), multiplex=True
+        )
+
+
+def test_standalone_named_profile_requires_unstamped_source(tmp_path: Path) -> None:
+    _, _, homes = _fixture(tmp_path)
+    named_only = {"serenity": homes["serenity"]}
+
+    class Store:
+        def _generate_session_key(self, _source: object) -> str:
+            return "agent:main:legacy"
+
+        def lookup_by_session_key(self, _key: str) -> object:
+            return SimpleNamespace(session_id="existing")
+
+    unstamped = SimpleNamespace(profile=None, profile_route_rejected=False)
+    assert (
+        existing_session_id("serenity", named_only, unstamped, Store(), multiplex=False)
+        == "existing"
+    )
+    for source, served in (
+        (SimpleNamespace(profile="serenity", profile_route_rejected=False), named_only),
+        (unstamped, homes),
+    ):
+        with pytest.raises(ProfileResolutionError, match="source is not routed"):
+            existing_session_id("serenity", served, source, Store(), multiplex=False)
