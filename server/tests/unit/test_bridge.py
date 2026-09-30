@@ -915,22 +915,82 @@ async def test_phone_delivery_waits_for_durable_admission(
     assert actual is expected
 
 
+_MISSING = object()
+
+
 @pytest.mark.asyncio
-@pytest.mark.parametrize("admission", [False, True])
-async def test_phone_delivery_unaccepted_event_is_false(
-    br, directory, monkeypatch, admission
+@pytest.mark.parametrize("admission", [False, True], ids=["no_ticket_build", "ticket_build"])
+@pytest.mark.parametrize("flag", [False, _MISSING, None, 0, 1, "yes", "True", [True]])
+async def test_phone_delivery_unaccepted_flag_is_unknown_never_refusal(
+    br, directory, monkeypatch, admission, flag
 ) -> None:
+    """A False/missing/non-boolean `_gateway_accepted` also describes a busy event that Hermes
+    retained (queue debounce never sets it). It is unknown, never a definitive refusal."""
     _install_fake_event_module(monkeypatch, defer=admission, control=True, admission=admission)
     directory.chats[(USER, "alpha")] = CHAT
 
     async def deliver(event):
-        del event  # the gateway returned without accepting the event
+        if flag is not _MISSING:
+            event._gateway_accepted = flag
 
     br._adapter.handle_message = deliver
     actual = await br.deliver_phone_message(
         user_id=USER, profile="alpha", text="hello", message_id=CMID
     )
-    assert actual is False
+    assert actual is None
+
+
+@pytest.mark.asyncio
+async def test_phone_delivery_no_ticket_build_exact_true_flag_is_accepted(
+    br, directory, monkeypatch
+) -> None:
+    _install_fake_event_module(monkeypatch, defer=False, control=True)
+    directory.chats[(USER, "alpha")] = CHAT
+
+    async def deliver(event):
+        event._gateway_accepted = True
+
+    br._adapter.handle_message = deliver
+    actual = await br.deliver_phone_message(
+        user_id=USER, profile="alpha", text="hello", message_id=CMID
+    )
+    assert actual is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("flag", "outcome", "expected"),
+    [
+        (False, "admitted", True),  # a False scheduling flag is not a refusal when admitted
+        (False, "refused_busy", False),
+        (False, "refused_other", None),
+        (False, None, None),  # no report in time
+        (True, "refused_busy", False),  # the ticket, not the flag, decides
+        (True, "refused_other", None),
+        (True, None, None),
+        (_MISSING, "admitted", True),
+        (_MISSING, "refused_lease_timeout", False),
+    ],
+)
+async def test_phone_delivery_ticket_outcome_overrides_scheduling_flag(
+    br, directory, monkeypatch, flag, outcome, expected
+) -> None:
+    _install_fake_event_module(monkeypatch, defer=True, control=True, admission=True)
+    monkeypatch.setattr(bridge, "PHONE_ADMISSION_WAIT_S", 0.03, raising=False)
+    directory.chats[(USER, "alpha")] = CHAT
+
+    async def deliver(event):
+        if flag is not _MISSING:
+            event._gateway_accepted = flag
+        event.admission_ticket = types.SimpleNamespace(
+            reported=None if outcome is None else types.SimpleNamespace(value=outcome)
+        )
+
+    br._adapter.handle_message = deliver
+    actual = await br.deliver_phone_message(
+        user_id=USER, profile="alpha", text="hello", message_id=CMID
+    )
+    assert actual is expected
 
 
 def test_prompt_timeout_hints_use_target_profile_a_b_a(br, world, monkeypatch) -> None:
@@ -955,12 +1015,21 @@ def test_real_hermes_approval_qualification(src: Path) -> None:
     if not python.is_file():
         pytest.skip("this build has no venv")
     for tool_args in (
-        [str(TOOL), "--dependencies-attr", "DIRECT_SEND_DEPENDENCIES", "--target",
-         str(SERVER_DIR / "hmp_plugin" / "direct_send_supported_builds.json"), "--check"],
+        [
+            str(TOOL),
+            "--dependencies-attr",
+            "DIRECT_SEND_DEPENDENCIES",
+            "--target",
+            str(SERVER_DIR / "hmp_plugin" / "direct_send_supported_builds.json"),
+            "--check",
+        ],
         [str(REPO_ROOT / "tools" / "compat" / "approval_probes.py")],
     ):
         proc = subprocess.run(
             [str(python), *tool_args, "--hermes-src", str(src)],
-            capture_output=True, text=True, check=False, cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=REPO_ROOT,
         )
         assert proc.returncode == 0, proc.stderr

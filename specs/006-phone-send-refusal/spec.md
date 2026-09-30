@@ -25,14 +25,28 @@ the refusal body lacked `applied:false`. A client could not tell "not sent" from
 
 ## Why `False` is definitive
 
-`Bridge.deliver_phone_message` returns `False` only if `handle_message` returned with the event's
-`_gateway_accepted` unset, or the admission ticket reported a known refusal (busy, draining,
-precondition head/expired, lease timeout, unauthorized). None of those admit a user turn.
-Background handling may already have been scheduled before a later admission refusal; this
-marker proves not admitted, not that no worker ever started.
+`Bridge.deliver_phone_message` returns `False` only when a reject-policy admission ticket reported
+a known refusal (busy, draining, precondition head/expired, lease timeout, unauthorized). None of
+those admit a user turn. Background handling may already have been scheduled before a later
+admission refusal; this marker proves not admitted, not that no worker ever started.
 `refused_other` covers `persist_failed` and `unreported_exit`, whose detail is not on the ticket,
-so it returns `None`. Missing ticket, unclassified outcome and the five-second timeout are also
-`None`. Older builds without a reject-policy ticket use the synchronous flag (`True` or `False`).
+so it returns `None`. A missing ticket, unclassified outcome and the five-second timeout are also
+`None`. With a ticket, the initial `_gateway_accepted` flag is never consulted.
+
+### The scheduling flag is not a refusal
+
+Hermes `8afa3703` `BasePlatformAdapter.handle_message` sets `_gateway_accepted = False` first. On a
+busy session with `busy_text_mode=queue`, the text-debounce path (`base.py` ~4074-4078) retains the
+event and never sets the flag `True`, yet the event runs later. Mapping that `False` to a
+definitive refusal made the phone report `applied:false` and invited a duplicate resend. Builds
+without a ticket now return `True` only for an exact `True` flag; `False`, missing or non-boolean
+is `None` (unknown). AP-6 stores `unknown`; a replay returns it and never redelivers.
+
+Evidence: `server/tests/unit/test_bridge.py` (flag/ticket matrix) and
+`server/tests/unit/test_phone_admission_real_hermes.py`, which drives the real 8afa
+`handle_message` (busy session, queue mode, isolated `HERMES_HOME`, synthetic profile) in the
+build's own interpreter. Limitations: that fixture has no gateway runner, model turn or
+reject-policy ticket, and runs only on builds whose `MessageEvent` has no `defer_policy`.
 
 ## Out of scope
 
