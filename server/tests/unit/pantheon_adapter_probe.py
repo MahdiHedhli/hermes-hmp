@@ -232,9 +232,53 @@ async def main() -> None:
         try:
             rows = reader.get_messages("shared-session")
             assert [row["content"] for row in rows] == [text]
+            assert reader.get_session("shared-session")["id"] == "shared-session"
+            assert reader.resolve_resume_session_id("shared-session") == "shared-session"
+            assert reader.get_compression_lineage("shared-session") == ["shared-session"]
+            assert reader.get_active_message_ids("shared-session") == [rows[0]["id"]]
+            listed = reader.list_sessions_rich(
+                limit=10, include_hidden=True, order_by_last_active=True,
+                project_compression_tips=True,
+            )
+            assert [row["id"] for row in listed] == ["shared-session"]
         finally:
             reader.close()
     assert {profile: contents(profile_home(profile, homes)) for profile in expected} == before
+
+    # A real compression parent/child tests the old lineage and tip APIs,
+    # which are different from the current split SessionDB's API. This still
+    # runs wholly in disposable profile databases and must not alter them on
+    # the read pass.
+    for profile in expected:
+        read_db = profile_home(profile, homes) / "state.db"
+        writer = SessionDB(read_db)
+        try:
+            writer.create_session("compressed-root", source="hmp")
+            writer.append_message("compressed-root", "user", "synthetic before")
+            writer.end_session("compressed-root", "compression")
+            writer.create_session(
+                "compressed-child", source="hmp", parent_session_id="compressed-root"
+            )
+            writer.append_message("compressed-child", "assistant", "synthetic after")
+        finally:
+            writer.close()
+    before_lineage = {
+        profile: contents(profile_home(profile, homes)) for profile in expected
+    }
+    for profile in expected:
+        read_db = profile_home(profile, homes) / "state.db"
+        reader = SessionDB(read_db, read_only=True)
+        try:
+            assert reader.get_compression_lineage("compressed-root") == [
+                "compressed-root", "compressed-child"
+            ]
+            assert reader.resolve_resume_session_id("compressed-root") == "compressed-child"
+            assert reader.get_active_message_ids("compressed-child")
+        finally:
+            reader.close()
+    assert {
+        profile: contents(profile_home(profile, homes)) for profile in expected
+    } == before_lineage
 
     adapter = platform_registry.create_adapter(
         "hmp", SimpleNamespace(extra={"bind": "127.0.0.1", "port": port})
