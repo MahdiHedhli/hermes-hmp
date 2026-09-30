@@ -689,7 +689,7 @@ def build_app(ctx: ServerContext) -> web.Application:
         "/bots/{p}/chat/messages/by-client-id/{cmid}": handle_chat_lookup,
     }
     routes = list(F1_ROUTES) + list(F2_DIRECT_SEND_ROUTES)
-    if ctx.session_browsing_enabled:
+    if ctx.session_browsing_enabled is True:
         # Amendment A1 kill switch: when off, SES-1/SES-2 are never added to the router at all,
         # so they 404 exactly like every other unregistered F1 route (server-modules.md).
         handlers["/bots/{p}/sessions"] = handle_sessions_list

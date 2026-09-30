@@ -96,18 +96,14 @@ def _bridge_classes() -> tuple[type[Any], type[Any]]:
 
 
 def _session_browsing_enabled(extra: object) -> bool:
-    """Amendment A1 kill switch, `gateway.platforms.hmp.extra.session_browsing`. The documented
-    default (no `extra`, or no such key) is ON. Once the key is configured, only the boolean
-    `True` keeps it on: `false`, `"false"`, `0`, `None` or any other malformed value -- and a
-    malformed (non-mapping) `extra` -- turn it off. Never `is not False`: a string such as
-    `"false"` must not read as enabled."""
-    if extra is None:
-        return True
+    """Amendment A1 opt-in, `gateway.platforms.hmp.extra.session_browsing`. Default OFF: SES-2
+    re-checks the current OD-F11 selector and then reads messages through separate SessionDB
+    calls (separate read connections, no atomic snapshot), so browsing stays dormant until
+    explicitly enabled. Only the boolean `True` enables it; an absent key, absent or malformed
+    (non-mapping) `extra`, `"true"`, `1` or any other value disables it. Never truthiness."""
     if not isinstance(extra, Mapping):
         return False
-    if "session_browsing" not in extra:
-        return True
-    return extra["session_browsing"] is True
+    return extra.get("session_browsing") is True
 
 
 def open_components(adapter: Any) -> server.ServerContext:

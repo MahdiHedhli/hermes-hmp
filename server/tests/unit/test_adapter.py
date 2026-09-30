@@ -112,10 +112,10 @@ def test_bad_listener_config_does_not_connect(adapter_module: types.ModuleType) 
 @pytest.mark.parametrize(
     ("extra", "expected"),
     [
-        # Absent: the documented default is ON.
-        (None, True),
-        ({}, True),
-        ({"port": 1}, True),
+        # Absent: the default is OFF (opt-in).
+        (None, False),
+        ({}, False),
+        ({"port": 1}, False),
         # Configured: only the boolean True enables it.
         ({"session_browsing": True}, True),
         ({"session_browsing": False}, False),
