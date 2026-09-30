@@ -19,11 +19,12 @@ from agent.secret_scope import (
 )
 from gateway.pairing import PairingStore
 from gateway.platform_registry import PlatformEntry, platform_registry
-from gateway.profile_routing import ProfileRoute
+from gateway.profile_routing import ProfileRoute, match_profile_route
 from gateway.run import GatewayRunner, _profile_runtime_scope
 
 import hmp_plugin
 from hmp_plugin.adapter import HmpAdapter
+from hmp_plugin.pantheon_profiles import ProfileResolutionError, verify_source_route
 
 
 def _scratch_home() -> Path:
@@ -98,11 +99,36 @@ def main() -> None:
     assert root.profile == "default" and root.profile_route_rejected is False
     assert named.profile == "serenity" and named.profile_route_rejected is False
     assert rejected.profile is None and rejected.profile_route_rejected is True
+    homes = {"default": home, "serenity": serenity}
+    verify_source_route(
+        runner, adapter, homes, "default", root, match_profile_route=match_profile_route
+    )
+    verify_source_route(
+        runner, adapter, homes, "serenity", named, match_profile_route=match_profile_route
+    )
+    try:
+        verify_source_route(
+            runner, adapter, homes, "serenity", rejected,
+            match_profile_route=match_profile_route,
+        )
+    except ProfileResolutionError:
+        pass
+    else:
+        raise AssertionError("rejected route passed HMP route verifier")
     routes = runner.config.profile_routes
     runner.config.profile_routes = []
     unrouted = _source(adapter, "serenity", "named-user")
     assert unrouted.profile is None and unrouted.profile_route_rejected is False
     runner.config.profile_routes = routes
+    try:
+        verify_source_route(
+            runner, adapter, homes, "serenity", unrouted,
+            match_profile_route=match_profile_route,
+        )
+    except ProfileResolutionError:
+        pass
+    else:
+        raise AssertionError("unmatched source passed HMP route verifier")
 
     _grant(runner.pairing_stores["default"], "root-user")
     _grant(runner.pairing_stores["serenity"], "named-user")

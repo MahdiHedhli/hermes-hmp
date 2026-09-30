@@ -41,6 +41,7 @@ from hmp_plugin.adapter import HmpAdapter
 from hmp_plugin.compat import CompatStatus
 from hmp_plugin.pantheon_profiles import (
     ProfileResolutionError,
+    existing_session_id,
     profile_home,
     served_profile_homes,
 )
@@ -156,6 +157,41 @@ async def main() -> None:
         source, profile="serenity"
     )
 
+    # Exercise the unwired HMP lookup primitive against the tag's real key
+    # generator in both modes. The routing lookup is a sentinel: this probe
+    # must not create a Hermes session or touch the gateway's routing file.
+    source.profile_route_rejected = False
+
+    class Lookup:
+        def __init__(self, expected: str) -> None:
+            self.expected = expected
+
+        def _generate_session_key(self, inbound: SessionSource) -> str:
+            return session_store._generate_session_key(inbound)
+
+        def lookup_by_session_key(self, key: str) -> SimpleNamespace:
+            assert key == self.expected
+            return SimpleNamespace(session_id="existing-only")
+
+    for multiplex, namespace in ((False, None), (True, "serenity")):
+        session_store.config.multiplex_profiles = multiplex
+        source.profile = "serenity" if multiplex else None
+        served = homes if multiplex else {"serenity": homes["serenity"]}
+        expected_key = build_session_key(source, profile=namespace)
+        assert (
+            existing_session_id(
+                "serenity", served, source, Lookup(expected_key), multiplex=multiplex
+            )
+            == "existing-only"
+        )
+    source.profile_route_rejected = True
+    try:
+        existing_session_id("serenity", homes, source, Lookup("unused"), multiplex=True)
+    except ProfileResolutionError:
+        pass
+    else:
+        raise AssertionError("rejected route reached session lookup")
+
     # The old SessionDB offers a read-only constructor. Confirm it refuses a missing file and
     # that profile-scoped history reads leave both scratch databases and sidecars byte-for-byte
     # unchanged. This is a storage/profile primitive, not full Bot Chat qualification.
@@ -196,9 +232,82 @@ async def main() -> None:
         try:
             rows = reader.get_messages("shared-session")
             assert [row["content"] for row in rows] == [text]
+            assert reader.get_session("shared-session")["id"] == "shared-session"
+            assert reader.resolve_resume_session_id("shared-session") == "shared-session"
+            assert reader.get_compression_lineage("shared-session") == ["shared-session"]
+            assert reader.get_active_message_ids("shared-session") == [rows[0]["id"]]
+            listed = reader.list_sessions_rich(
+                limit=10, include_hidden=True, order_by_last_active=True,
+                project_compression_tips=True,
+            )
+            assert [row["id"] for row in listed] == ["shared-session"]
         finally:
             reader.close()
     assert {profile: contents(profile_home(profile, homes)) for profile in expected} == before
+
+    # A real compression parent/child tests the old lineage and tip APIs,
+    # which are different from the current split SessionDB's API. This still
+    # runs wholly in disposable profile databases and must not alter them on
+    # the read pass.
+    for profile in expected:
+        read_db = profile_home(profile, homes) / "state.db"
+        writer = SessionDB(read_db)
+        try:
+            writer.create_session("compressed-root", source="hmp")
+            writer.append_message("compressed-root", "user", "synthetic before")
+            writer.end_session("compressed-root", "compression")
+            writer.create_session(
+                "compressed-child", source="hmp", parent_session_id="compressed-root"
+            )
+            writer.append_message("compressed-child", "assistant", "synthetic after")
+        finally:
+            writer.close()
+    before_lineage = {
+        profile: contents(profile_home(profile, homes)) for profile in expected
+    }
+    for profile in expected:
+        read_db = profile_home(profile, homes) / "state.db"
+        reader = SessionDB(read_db, read_only=True)
+        try:
+            assert reader.get_compression_lineage("compressed-root") == [
+                "compressed-root", "compressed-child"
+            ]
+            assert reader.resolve_resume_session_id("compressed-root") == "compressed-child"
+            assert reader.get_active_message_ids("compressed-child")
+        finally:
+            reader.close()
+    assert {
+        profile: contents(profile_home(profile, homes)) for profile in expected
+    } == before_lineage
+
+    # Keep the primary writer open while the read-only handle browses, then
+    # commit another row and read again. The pinned interpreter's SQLite may
+    # use Hermes's safe DELETE fallback rather than WAL; never override that
+    # security decision just to exercise a WAL fixture. This checks the
+    # live-writer mode actually selected here, without opening the named
+    # profile as a fallback. Journal sidecars may change legitimately during
+    # this interleave, so byte hashes cover only the quiescent reads above.
+    primary_db = profile_home("default", homes) / "state.db"
+    named_db = profile_home("serenity", homes) / "state.db"
+    writer = SessionDB(primary_db)
+    try:
+        assert isinstance(writer._wal_active, bool)
+        primary_reader = SessionDB(primary_db, read_only=True)
+        named_reader = SessionDB(named_db, read_only=True)
+        try:
+            primary_before = primary_reader.get_messages("shared-session")
+            named_before = named_reader.get_messages("shared-session")
+            writer.append_message("shared-session", "assistant", "synthetic live WAL row")
+            primary_after = primary_reader.get_messages("shared-session")
+            named_after = named_reader.get_messages("shared-session")
+            assert len(primary_after) == len(primary_before) + 1
+            assert primary_after[-1]["content"] == "synthetic live WAL row"
+            assert named_after == named_before
+        finally:
+            primary_reader.close()
+            named_reader.close()
+    finally:
+        writer.close()
 
     adapter = platform_registry.create_adapter(
         "hmp", SimpleNamespace(extra={"bind": "127.0.0.1", "port": port})

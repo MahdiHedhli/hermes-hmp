@@ -9,8 +9,10 @@ import pytest
 
 from hmp_plugin.pantheon_profiles import (
     ProfileResolutionError,
+    existing_session_id,
     profile_home,
     served_profile_homes,
+    verify_source_route,
 )
 
 
@@ -84,3 +86,149 @@ def test_named_profile_symlink_cannot_alias_root_home(tmp_path: Path) -> None:
     named.symlink_to(paths["default"], target_is_directory=True)
     with pytest.raises(ProfileResolutionError):
         served_profile_homes(runner, **api)
+
+
+def test_existing_session_uses_store_key_without_creating_a_session(tmp_path: Path) -> None:
+    _, _, homes = _fixture(tmp_path)
+    source = SimpleNamespace(profile="serenity", profile_route_rejected=False)
+    calls: list[str] = []
+
+    class Store:
+        def _generate_session_key(self, value: object) -> str:
+            assert value is source
+            calls.append("key")
+            return "agent:main:old-tag-key"
+
+        def lookup_by_session_key(self, key: str) -> object:
+            assert key == "agent:main:old-tag-key"
+            calls.append("lookup")
+            return SimpleNamespace(session_id="existing-session")
+
+    assert (
+        existing_session_id("serenity", homes, source, Store(), multiplex=True)
+        == "existing-session"
+    )
+    assert calls == ["key", "lookup"]
+
+
+def test_existing_session_refuses_unserved_and_rejected_sources_before_store_access(
+    tmp_path: Path,
+) -> None:
+    _, _, homes = _fixture(tmp_path)
+
+    class ForbiddenStore:
+        def _generate_session_key(self, _source: object) -> str:
+            raise AssertionError("untrusted source reached the store")
+
+    for profile, source in (
+        ("ghost", SimpleNamespace(profile="ghost", profile_route_rejected=False)),
+        ("serenity", SimpleNamespace(profile="default", profile_route_rejected=False)),
+        ("serenity", SimpleNamespace(profile="serenity", profile_route_rejected=True)),
+        ("serenity", SimpleNamespace(profile="serenity")),
+    ):
+        with pytest.raises(ProfileResolutionError):
+            existing_session_id(profile, homes, source, ForbiddenStore(), multiplex=True)
+
+
+def test_existing_session_distinguishes_absent_from_invalid_lookup(tmp_path: Path) -> None:
+    _, _, homes = _fixture(tmp_path)
+    source = SimpleNamespace(profile="default", profile_route_rejected=False)
+
+    class Store:
+        def __init__(self, entry: object) -> None:
+            self.entry = entry
+
+        def _generate_session_key(self, _source: object) -> str:
+            return "key"
+
+        def lookup_by_session_key(self, _key: str) -> object:
+            return self.entry
+
+    assert existing_session_id("default", homes, source, Store(None), multiplex=True) is None
+    with pytest.raises(ProfileResolutionError, match="session entry is invalid"):
+        existing_session_id(
+            "default", homes, source, Store(SimpleNamespace(session_id="")), multiplex=True
+        )
+
+
+def test_standalone_named_profile_requires_unstamped_source(tmp_path: Path) -> None:
+    _, _, homes = _fixture(tmp_path)
+    named_only = {"serenity": homes["serenity"]}
+
+    class Store:
+        def _generate_session_key(self, _source: object) -> str:
+            return "agent:main:legacy"
+
+        def lookup_by_session_key(self, _key: str) -> object:
+            return SimpleNamespace(session_id="existing")
+
+    unstamped = SimpleNamespace(profile=None, profile_route_rejected=False)
+    assert (
+        existing_session_id("serenity", named_only, unstamped, Store(), multiplex=False)
+        == "existing"
+    )
+    for source, served in (
+        (SimpleNamespace(profile="serenity", profile_route_rejected=False), named_only),
+        (unstamped, homes),
+    ):
+        with pytest.raises(ProfileResolutionError, match="source is not routed"):
+            existing_session_id("serenity", served, source, Store(), multiplex=False)
+
+
+def test_source_route_requires_exact_old_matcher_result(tmp_path: Path) -> None:
+    _, _, homes = _fixture(tmp_path)
+    runner = SimpleNamespace(config=SimpleNamespace(
+        multiplex_profiles=True, profile_routes=[object()]
+    ))
+    adapter = SimpleNamespace(gateway_runner=runner)
+    source = SimpleNamespace(
+        platform=SimpleNamespace(value="hmp"),
+        scope_id="serenity", guild_id="serenity", chat_id="chat",
+        thread_id=None, parent_chat_id=None,
+        profile="serenity", profile_route_rejected=False,
+        _transport_adapter_ref=lambda: adapter,
+    )
+    seen: list[str] = []
+
+    def match(_routes: object, **fields: object) -> object:
+        assert fields["platform"] == "hmp" and fields["guild_id"] == "serenity"
+        seen.append("matched")
+        return SimpleNamespace(profile="serenity")
+
+    verify_source_route(runner, adapter, homes, "serenity", source, match_profile_route=match)
+    assert seen == ["matched"]
+    with pytest.raises(ProfileResolutionError, match="no matching"):
+        verify_source_route(
+            runner, adapter, homes, "serenity", source,
+            match_profile_route=lambda *_a, **_kw: None,
+        )
+    source.profile = None
+    with pytest.raises(ProfileResolutionError, match="profile does not match"):
+        verify_source_route(runner, adapter, homes, "serenity", source, match_profile_route=match)
+    source.profile = "serenity"
+    source._transport_adapter_ref = lambda: object()
+    with pytest.raises(ProfileResolutionError, match="transport"):
+        verify_source_route(runner, adapter, homes, "serenity", source, match_profile_route=match)
+
+
+def test_standalone_route_requires_only_active_home(tmp_path: Path) -> None:
+    _, _, homes = _fixture(tmp_path)
+    runner = SimpleNamespace(config=SimpleNamespace(multiplex_profiles=False))
+    adapter = SimpleNamespace(gateway_runner=runner)
+    source = SimpleNamespace(
+        platform=SimpleNamespace(value="hmp"),
+        scope_id="serenity", guild_id="serenity", chat_id="chat",
+        profile=None, profile_route_rejected=False,
+        _transport_adapter_ref=lambda: adapter,
+    )
+    def unused(*_args: object, **_kwargs: object) -> object:
+        raise AssertionError("standalone gateway must not route")
+
+    verify_source_route(
+        runner, adapter, {"serenity": homes["serenity"]}, "serenity", source,
+        match_profile_route=unused,
+    )
+    with pytest.raises(ProfileResolutionError, match="standalone source"):
+        verify_source_route(
+            runner, adapter, homes, "serenity", source, match_profile_route=unused
+        )

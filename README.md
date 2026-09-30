@@ -11,14 +11,16 @@ HMP runs inside your own Hermes gateway. It pairs each phone to an instance, ser
 
 ```sh
 hermes plugins install MahdiHedhli/hermes-hmp
+hermes gateway restart
+hermes hmp setup check
 hermes hmp pair offer
 ```
 
-Hermes may ask you to confirm its community-plugin scan findings; the full-tree verdict is recorded in the [privacy gate](PRIVACY_GATE.md). The operator confirms the matching code shown on the phone and host, then chooses whether that device can manage jobs and default models. See the [install and host configuration guide](docs/INSTALL.md) before connecting a device. Use `--ref <full-commit-sha>` to pin a reviewed revision.
+Hermes may ask you to confirm its community-plugin scan findings; the full-tree verdict is recorded in the [privacy gate](PRIVACY_GATE.md). Enable and configure the plugin before restarting the gateway, as described in the [install and host configuration guide](docs/INSTALL.md). HMP cannot create a pairing offer until the gateway has started it and created an instance identity. The operator confirms the matching code shown on the phone and host, then chooses whether that device can manage jobs and default models. Use `--ref <full-commit-sha>` to pin a reviewed revision.
 
-After configuring and starting the gateway, draft `hermes hmp setup check`
+After configuring and starting the gateway, `hermes hmp setup check`
 checks build and listener readiness without changing host configuration.
-Draft `hermes hmp health check` additionally reports each served bot's enabled
+`hermes hmp health check` additionally reports each served bot's enabled
 send, jobs, and model prerequisites without exposing keys.
 
 | Start here | Purpose |

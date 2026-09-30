@@ -1,6 +1,6 @@
 # Gateway observations for Nous Research
 
-HMP is a mobile gateway plugin for Hermes. These are proposals for upstream discussion, not claims that Hermes currently provides these APIs. Findings were checked against Hermes `main` at `81f481b2` and the qualified older `8afaab37` build on 2026-09-28. Search, bot lifecycle, and plugin installation were rechecked against `main` at `39faafb6` on 2026-09-29. The Bot Mode baseline tag `v2026.8.31` was also inspected on 2026-09-29; later releases may differ.
+HMP is a mobile gateway plugin for Hermes. These are proposals for upstream discussion, not claims that Hermes currently provides every requested API. Findings were checked against Hermes `main` at `81f481b2` and the qualified older `8afaab37` build on 2026-09-28. Search, bot lifecycle, and plugin installation were rechecked against `main` at `39faafb6` on 2026-09-29; the approval session stream was rechecked at `ac0cfa7` on 2026-09-29. The Bot Mode baseline tag `v2026.8.31` was also inspected on 2026-09-29; later releases may differ.
 
 The [unified gateway research](https://github.com/MahdiHedhli/hermes-hmp/blob/main/HermesUnifiedGatewayResearch.md) and Nous's [one-gateway PR](https://github.com/NousResearch/hermes-agent/pull/106742) support one profile-scoped execution authority. The companion [entry-point plan](https://gist.github.com/unsupportedpastels/765f9d551ce88ee01630c18367763e75) puts a future mobile client behind an authenticated gateway API but treats remote entry as follow-on work. The requests below concern that remaining remote contract; they do not ask Nous to create another session owner.
 
@@ -23,9 +23,34 @@ The [unified gateway research](https://github.com/MahdiHedhli/hermes-hmp/blob/ma
 | Session management | The profile-scoped API server already lists sessions, reads messages, changes title/pin/archive/hidden state, and deletes sessions. Its `/fork` ends the source session, so it cannot implement a non-destructive branch. Project moves, export, and opening a session in a terminal are not API server operations. | Preserve the existing safe metadata routes; add a non-destructive branch operation and explicit project/export capabilities where appropriate. A canonical Bot Chat must not be accidentally archived or deleted by a remote client. |
 | Canonical remote attachment | Current HMP reaches a qualified legacy Bot Chat path; the unified runtime PR is a local/gateway cutover, while remote Desktop/web/mobile entry is staged separately. | Expose authenticated, profile-scoped remote attach/submit/event/control operations with explicit capability negotiation, target-session authorization, durable request identity, and replay-or-snapshot recovery. Keep one execution owner. |
 
+## Bot Mode baseline verification
+
+The exact `v2026.8.31` source has two session-key modes: a standalone named
+profile uses the legacy `agent:main` namespace, while multiplexing uses the
+routed profile namespace. HMP's scratch fixture now verifies both through the
+old `SessionStore._generate_session_key`, cross-checks an explicit HMP route
+with Hermes's matcher, and reads synthetic compression lineage from two
+profile databases opened read-only. Database and sidecar hashes are unchanged
+by those reads. This remains unwired: the paired full-gateway fixture still
+refuses Bot Chat, and authorization plus canonical history must be proven
+through that gateway before support for this tag can be listed. A supported
+versioned read contract would eliminate these private per-build adapters.
+The pinned old runtime uses Hermes's safe DELETE journal fallback for its
+SQLite 3.50.4, and a writer-open read interleave passes in that mode. HMP has
+not overridden Hermes's WAL guard; a patched-runtime WAL test remains open.
+
 ## Approval and clarify events
 
-Desktop-owned Bot Chat turns can surface prompts only through Desktop's process-local channel. A remote client cannot answer those same prompts through session chat. We propose durable, session-scoped pending prompt identifiers, event delivery for approval and clarify requests, and authenticated response routes that enforce the same authorization and expiry rules as Hermes itself. Draft HMP security fixes do not resolve the missing Bot Chat notifier, so the interim server path remains disabled pending real-route qualification.
+Desktop-owned Bot Chat turns still surface prompts through Desktop's process-local channel; a remote client cannot answer those same prompts through session chat. The two older Hermes builds used for HMP's draft approval matrix lacked a Bot Chat session-stream notifier. Current untagged Hermes `main` at [`ac0cfa7`](https://github.com/NousResearch/hermes-agent/commit/ac0cfa7db94cefa90cf3e35191f38b53888b9e17) registers one on the session-chat stream and emits `approval.request` for the existing run-approval route. An [HMP socket-free handler probe and isolated gateway/PTY matrix](https://github.com/MahdiHedhli/hermes-hmp/pull/44) passed on this exact archive: 32 focused checks and 17/17 integration cases, including T7 Bot Chat, T8 Phone chat, a same-device cross-profile exact-ID refusal, and fail-closed gates. The fixture used a fake model and synthetic credentials; no runtime compatibility entry was added. The latest published tag, `v2026.9.24`, predates the session-stream change. A released build, live multiplex profiles, physical devices, and Desktop-owned cross-client prompts still need qualification or an upstream contract. This is not yet a released mobile approval capability.
+
+This is the next major HermesBot Mobile feature after beta release work. We
+request a supported, authenticated, session-scoped contract that carries exact
+request IDs, offered choices, session/profile ownership, and authoritative
+expiry and settlement across Desktop and remote clients. The current-main
+session-stream candidate passed an isolated fixture matrix; released builds
+still need wrong-ID, cross-profile, timeout, disconnect, restart, and live-owner
+handoff qualification. HMP must not infer approvals from tool text or create
+another execution owner.
 
 ## Already usable without a new Hermes contract
 
