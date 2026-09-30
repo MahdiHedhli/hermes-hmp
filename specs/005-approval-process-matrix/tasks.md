@@ -59,3 +59,27 @@
 - [ ] Physical device gate: not done.
 - [ ] Loaded-memory attestation: not provided.
 - [ ] Release gate and security review: not done. No manifest entry is added.
+
+## Addendum: native start readiness (amendment 3, scoped; does not close or reopen any gate above)
+
+- [x] `direct_send_fixture.wait_for_native_listener` / `require_native_listener` /
+      `start_native_gateway`: same loopback connect and 45 s hard deadline, exact-process check
+      before and after connect, deadline re-checked after a successful connect (at or after it is
+      `deadline`, never `ready`), connect/sleep bounded by the remaining deadline, classified
+      errors (new metadata content-free; existing private log tail preserved, unredacted),
+      cleanup on failure. Both native starts (first start, restart) use it.
+- [x] Minimal per-start record `native_start_readiness.jsonl` (phase, outcome, elapsed, attempts,
+      exit code).
+- [x] Causal unit tests and real synthetic loopback smoke:
+      `tools/fixtures/tests/test_native_start_readiness.py`.
+- [x] Opus recommendations addressed (amendment 3 R6): process_exit precedence after a failed
+      connect, cleanup tests, doc accuracy. Focused readiness 55 passed; fixture suite 262 passed;
+      ruff and privacy scan clean. Worker evidence only.
+- [ ] **Unresolved:** why the native listener did not start within 45 s in two setups of one
+      combined-tree run while an isolated probe started in about 23.7 s. Slow import or plugin
+      load is an unconfirmed hypothesis. Not diagnosed, not fixed, deadline not changed.
+- [x] Root reviewed the final tooling plus focused Opus report and ran the locked local suite:
+      1,613 passed, 13 existing skips, one existing aiohttp warning; pinned Ruff, plugin-surface,
+      changed-file privacy and diff checks passed. No production plugin diff.
+- [ ] Root: a fresh 27-test real-gateway matrix run on the final combined runtime. Nothing in
+      the tooling/unit evidence is a receipt or closes the still-open gates above.

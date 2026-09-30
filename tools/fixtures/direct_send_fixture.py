@@ -40,6 +40,8 @@ import socket
 import subprocess
 import sys
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -291,6 +293,8 @@ def seed_bot_chat(
 
 
 def wait_for_port(port: int, *, timeout: float) -> bool:
+    """Legacy generic TCP wait for callers that own no process. The native gateway starts use
+    `require_native_listener`, which also watches the spawned process."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -302,6 +306,170 @@ def wait_for_port(port: int, *, timeout: float) -> bool:
                 continue
             return True
     return False
+
+
+# The one hard deadline for a native HMP listener, from spawn. Unchanged from the former
+# `wait_for_port(..., timeout=45.0)` calls; nothing below extends or resets it.
+NATIVE_LISTENER_DEADLINE_SECONDS = 45.0
+_CONNECT_TIMEOUT_SECONDS = 1.0
+_RETRY_SLEEP_SECONDS = 0.5
+NATIVE_START_RECORD = "native_start_readiness.jsonl"
+NATIVE_START_PHASES = ("first_start", "restart")
+_LOG_TAIL_CHARS = 4000
+
+
+@dataclass(frozen=True)
+class ReadinessResult:
+    """Content-free outcome of one native listener wait. `outcome` is exactly one of `ready`,
+    `process_exit` or `deadline`; `exit_code` is set only for `process_exit`."""
+
+    outcome: str
+    elapsed: float
+    attempts: int
+    exit_code: int | None = None
+
+
+class NativeStartError(RuntimeError):
+    """A native gateway start that did not reach readiness. `classification` is `process_exit`
+    or `deadline`; the new metadata in the message (phase, exit code, deadline) is content-free.
+    The message also carries the existing, unredacted local gateway log tail the fixture has
+    always emitted (bounded, private fixture material, not a public artifact)."""
+
+    classification = "native_start"
+
+    def __init__(self, message: str, result: ReadinessResult) -> None:
+        super().__init__(message)
+        self.result = result
+
+
+class NativeProcessExitError(NativeStartError):
+    classification = "process_exit"
+
+
+class NativeListenerDeadlineError(NativeStartError):
+    classification = "deadline"
+
+
+def _connect_loopback(port: int, timeout: float) -> None:
+    """One loopback TCP connect. Raises OSError (incl. timeout) on failure."""
+    with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+        pass
+
+
+def wait_for_native_listener(
+    proc: subprocess.Popen[bytes],
+    port: int,
+    *,
+    timeout: float = NATIVE_LISTENER_DEADLINE_SECONDS,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+    connect: Callable[[int, float], None] | None = None,
+) -> ReadinessResult:
+    """Process-aware readiness: the SAME loopback TCP connect as `wait_for_port`, under one hard
+    monotonic deadline measured from this call (the caller invokes it right after spawn), no
+    sliding extension.
+
+    The exact spawned `proc` is polled before each connect and again after a connect succeeds; an
+    exited process is `process_exit` immediately, so a listener that appears on the port while
+    `proc` is dead (or belongs to something else) never qualifies. After that poll the deadline is
+    checked once more: a connect that succeeds at or after it is `deadline`, not `ready`. Each
+    connect timeout and each sleep is clamped to the time left, so requested waits cannot exceed
+    `timeout`; the OS may still return later than requested, but no success at or after the
+    ceiling can qualify. This is readiness only, not listener ownership or authority: pairing/TLS
+    and the later gates stay authoritative. A connect failure of any kind counts as not ready."""
+    # The deadline is a ceiling, never widened: a caller may only shorten it.
+    if not 0 <= timeout <= NATIVE_LISTENER_DEADLINE_SECONDS:
+        raise ValueError("native listener timeout must be within 0..45 seconds")
+    connect = connect or _connect_loopback
+    start = clock()
+    deadline = start + timeout
+    attempts = 0
+
+    def result(outcome: str, code: int | None = None, now: float | None = None) -> ReadinessResult:
+        return ReadinessResult(
+            outcome, max(0.0, (clock() if now is None else now) - start), attempts, code
+        )
+
+    while True:
+        code = proc.poll()
+        if code is not None:
+            return result("process_exit", code)
+        remaining = deadline - clock()
+        if remaining <= 0:
+            return result("deadline")
+        attempts += 1
+        try:
+            connect(port, min(_CONNECT_TIMEOUT_SECONDS, remaining))
+        except OSError:
+            connected = False
+        else:
+            connected = True
+        if connected:
+            # The connect may have reached a listener that is not this process's.
+            code = proc.poll()
+            if code is not None:
+                return result("process_exit", code)
+            # A connect that returns at or after the ceiling (a last-moment success, or the OS
+            # delaying this thread) never qualifies; the clock is read after the poll so a slow
+            # poll counts too. One read serves both the check and the reported elapsed.
+            now = clock()
+            if now >= deadline:
+                return result("deadline", now=now)
+            return result("ready", now=now)
+        remaining = deadline - clock()
+        if remaining <= 0:
+            continue  # the top-of-loop poll decides process_exit before deadline
+        sleep(min(_RETRY_SLEEP_SECONDS, remaining))
+
+
+def _require_known_phase(phase: str) -> None:
+    if phase not in NATIVE_START_PHASES:
+        raise ValueError(f"native start phase must be one of {NATIVE_START_PHASES}")
+
+
+def record_native_start(out_dir: Path, phase: str, result: ReadinessResult) -> None:
+    """Appends one minimal line to the fixture artifact: phase, outcome, elapsed seconds, attempt
+    count and exit code. No environment, argv, prompt, key, identifier or transcript."""
+    line = {
+        "phase": phase,
+        "outcome": result.outcome,
+        "elapsed_seconds": round(result.elapsed, 3),
+        "attempts": result.attempts,
+        "exit_code": result.exit_code,
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with (out_dir / NATIVE_START_RECORD).open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(line, sort_keys=True) + "\n")
+
+
+def require_native_listener(
+    proc: subprocess.Popen[bytes],
+    port: int,
+    *,
+    phase: str,
+    out_dir: Path,
+    log_path: Path,
+    timeout: float = NATIVE_LISTENER_DEADLINE_SECONDS,
+    **boundaries: Any,
+) -> ReadinessResult:
+    """`wait_for_native_listener`, recorded for `phase` (`first_start` or `restart`); raises a
+    classified `NativeStartError` (with the local log tail, as before) unless ready."""
+    _require_known_phase(phase)
+    result = wait_for_native_listener(proc, port, timeout=timeout, **boundaries)
+    record_native_start(out_dir, phase, result)
+    if result.outcome == "ready":
+        return result
+    tail = log_path.read_text(encoding="utf-8", errors="replace")[-_LOG_TAIL_CHARS:]
+    if result.outcome == "process_exit":
+        raise NativeProcessExitError(
+            f"{phase}: gateway process exited (code {result.exit_code}) before the HMP "
+            f"listener was ready.\nLog tail:\n{tail}",
+            result,
+        )
+    raise NativeListenerDeadlineError(
+        f"{phase}: HMP listener did not come up within {timeout:g}s.\nLog tail:\n{tail}",
+        result,
+    )
 
 
 def start_gateway(
@@ -328,6 +496,29 @@ def stop_gateway(proc: subprocess.Popen[bytes]) -> None:
     except Exception:
         proc.kill()
         proc.wait(timeout=5)
+
+
+def start_native_gateway(
+    build: fc.BuildInfo,
+    paths: fc.InstancePaths,
+    *,
+    port: int,
+    phase: str,
+    log_path: Path,
+) -> subprocess.Popen[bytes]:
+    """Spawns the gateway and waits for its listener under the process-aware deadline. On any
+    failure the spawned process is stopped before the classified error propagates, so a caller
+    never inherits (or leaks) a half-started process."""
+    _require_known_phase(phase)  # before any spawn
+    proc = start_gateway(build, paths, log_path=log_path)
+    try:
+        require_native_listener(
+            proc, port, phase=phase, out_dir=paths.out_dir, log_path=log_path
+        )
+    except BaseException:
+        stop_gateway(proc)
+        raise
+    return proc
 
 
 def start_lease_holder(
@@ -451,9 +642,12 @@ def install_fixture_qualification(build: fc.BuildInfo, out: Path, qualification:
     except (TypeError, ValueError) as exc:
         raise fc.FixtureSafetyError("invalid direct-send fixture qualification schema") from exc
     fingerprint = compute_read_bridge_fingerprint(build.src_dir, data["bridge_files"])
+    # An archive (no .git) needs a fingerprint-only entry; a git-install fixture needs one bound to
+    # the build's own HEAD, exactly as the runtime matches them. `None == None` for an archive.
+    head = approval_fixture.independent_git_head(build.src_dir)
     entries = [e for e in receipt.get("builds", [])
                if e.get("label") == build.label and e.get("fingerprint") == fingerprint
-               and e.get("git_sha") is None and fingerprint is not None]
+               and e.get("git_sha") == head and fingerprint is not None]
     if len(entries) != 1:
         raise fc.FixtureSafetyError("no exact direct-send fixture qualification for this build")
     data["builds"] = entries
