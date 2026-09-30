@@ -280,6 +280,35 @@ async def main() -> None:
         profile: contents(profile_home(profile, homes)) for profile in expected
     } == before_lineage
 
+    # Keep the primary writer open while the read-only handle browses, then
+    # commit another row and read again. The pinned interpreter's SQLite may
+    # use Hermes's safe DELETE fallback rather than WAL; never override that
+    # security decision just to exercise a WAL fixture. This checks the
+    # live-writer mode actually selected here, without opening the named
+    # profile as a fallback. Journal sidecars may change legitimately during
+    # this interleave, so byte hashes cover only the quiescent reads above.
+    primary_db = profile_home("default", homes) / "state.db"
+    named_db = profile_home("serenity", homes) / "state.db"
+    writer = SessionDB(primary_db)
+    try:
+        assert isinstance(writer._wal_active, bool)
+        primary_reader = SessionDB(primary_db, read_only=True)
+        named_reader = SessionDB(named_db, read_only=True)
+        try:
+            primary_before = primary_reader.get_messages("shared-session")
+            named_before = named_reader.get_messages("shared-session")
+            writer.append_message("shared-session", "assistant", "synthetic live WAL row")
+            primary_after = primary_reader.get_messages("shared-session")
+            named_after = named_reader.get_messages("shared-session")
+            assert len(primary_after) == len(primary_before) + 1
+            assert primary_after[-1]["content"] == "synthetic live WAL row"
+            assert named_after == named_before
+        finally:
+            primary_reader.close()
+            named_reader.close()
+    finally:
+        writer.close()
+
     adapter = platform_registry.create_adapter(
         "hmp", SimpleNamespace(extra={"bind": "127.0.0.1", "port": port})
     )

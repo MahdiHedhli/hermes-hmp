@@ -35,6 +35,9 @@ by those reads. This remains unwired: the paired full-gateway fixture still
 refuses Bot Chat, and authorization plus canonical history must be proven
 through that gateway before support for this tag can be listed. A supported
 versioned read contract would eliminate these private per-build adapters.
+The pinned old runtime uses Hermes's safe DELETE journal fallback for its
+SQLite 3.50.4, and a writer-open read interleave passes in that mode. HMP has
+not overridden Hermes's WAL guard; a patched-runtime WAL test remains open.
 
 ## Approval and clarify events
 
