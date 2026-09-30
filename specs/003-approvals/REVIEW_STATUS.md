@@ -1,8 +1,68 @@
 # Approvals review status
 
-**Round 5: HMP rate limiting and fixture defects fixed on `feat/approvals`, base `e1ddb28`.
-Bot Chat approval qualification is still blocked by a missing Hermes session-stream approval
-lifecycle. This is not a complete F3 qualification.** This section supersedes earlier handoffs.
+## Exact untagged Hermes `main` fixture matrix
+
+The isolated archive of Hermes
+`ac0cfa7db94cefa90cf3e35191f38b53888b9e17` passed HMP's boundary and
+behavior probes and the F2/F3 real gateway/PTY fixture matrix. Its JUnit report
+has **17 selected cases, 17 passed, 0 failures, 0 errors, 0 skips**: T7 Bot Chat
+approval **3/3**, T8 Phone chat approval **3/3**, and approval fail-closed
+owner/flag/qualification cases **3/3**. The fixture used loopback listeners,
+Hermes's real gateway and pairing paths, a fake model, synthetic credentials,
+and scratch homes. The source archive's approval stream and busy resolver files
+matched that exact upstream commit. The matrix produced a fixture-only receipt
+under `/private/tmp/hmp-approval-matrix-results-4`; it was not copied to a
+runtime allowlist or the owner's live Hermes.
+
+The added T8 case pairs one device with two authorized fixture profiles. An
+approval request raised in the first profile stays pending when the device
+submits its exact ID and an allow choice through the second profile; only a
+deny through the issuing profile settles it, and the fixture command never
+runs. This proves the profile binding on this isolated candidate, not live
+multi-profile configuration. The fixture requires the exact scratch
+qualification receipt; running it without that receipt intentionally closes
+all guarded routes before any profile-specific check.
+
+This result covers the **exact untagged archive only**. It does not qualify a
+published Hermes release, a git install, real model/tool latency, a physical
+phone, or a live multi-profile deployment. The source's lockfile required
+Python 3.14, so extraction used a scratch per-build interpreter override that
+is not part of this PR. A released build needs its own locked, reproducible
+extraction and full matrix, followed by independent release security review.
+F3 stays disabled. The test-only resolver update in this PR preserves the
+old-build path and exercises the active language's approval words plus
+slash-confirm words under `allow_gateway_control=False`.
+
+## Untagged Hermes `main` candidate: source and handler probe only
+
+Hermes `main` at `ac0cfa7db94cefa90cf3e35191f38b53888b9e17` registers an
+approval notifier on the Bot Chat session stream. This is newer than the
+published `v2026.9.24` tag and supersedes the missing-notifier finding below
+**for this exact untagged source only**. It does not qualify a released build.
+
+The evidence-only `tools/compat/session_chat_approval_probe.py` ran against
+that pinned source with a disposable `HERMES_HOME`, fake model and SSE response,
+and no socket or command execution. Its 32 named checks passed: a nonempty
+request ID and offered choices were emitted; wrong request/run IDs, key, and
+profile were rejected; exact-ID denial kept the fake executor idle; replay
+failed; exact-ID `once` released only the fake executor; and a simulated stream
+drop interrupted the fake agent and rejected the late answer with the **real**
+request ID. The wrapper and focused lint passed. Independent security review
+found and prompted the late-answer assertion fix before this recorded rerun.
+
+On its own, this handler probe is not the full T7/T8 real-route matrix above.
+Its fake agent sets the interrupt flag in its own worker thread. The matrix
+separately covers the loopback gateway, pairing, and HMP relay, but a physical
+device, real model/tool latency, live multiplex profile secrets, smart mode,
+timeout, and concurrent prompts remain untested. Upstream's API-key
+answer route also accepts an omitted request ID or bulk selection; **HMP must
+require and forward one exact ID and refuse bulk choices**. No runtime
+fingerprint, allowlist entry, or live plugin change was made. F3 remains off.
+
+**Historical round 5:** HMP rate limiting and fixture defects were fixed on
+`feat/approvals`, base `e1ddb28`. The two builds tested then lacked the Bot Chat
+session-stream approval lifecycle. Neither build qualified F3. The newer,
+untagged source finding above does not change those results.
 
 ## Controller fixture run after round 5
 

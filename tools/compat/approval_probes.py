@@ -35,15 +35,52 @@ def load_api(src: Path) -> SimpleNamespace:
     })
 
 
+def plaintext_approval_resolver(mixin: type) -> tuple[dict, dict]:
+    """Read the active approval words from either known Hermes resolver shape."""
+    method = getattr(mixin, "_plaintext_approval_words", None)
+    if method is not None:
+        names = ("_PLAINTEXT_APPROVAL_EXTRA_WORDS", "_PLAINTEXT_APPROVAL_INPUT_KEYS")
+        missing = [name for name in names if not hasattr(mixin, name)]
+        if missing or not callable(method):
+            raise RuntimeError(f"approval resolver method unusable; missing {missing}")
+        attrs = {name: getattr(mixin, name) for name in names}
+        words = method(SimpleNamespace(**attrs))
+        attrs["_plaintext_approval_words"] = method
+    elif hasattr(mixin, "_PLAINTEXT_APPROVAL_WORDS"):
+        words = mixin._PLAINTEXT_APPROVAL_WORDS
+        attrs = {"_PLAINTEXT_APPROVAL_WORDS": words}
+    else:
+        raise RuntimeError("no known plaintext approval resolver in target build")
+    if not isinstance(words, dict) or not words:
+        raise RuntimeError("plaintext approval word set is empty or not a mapping")
+    for word, match in words.items():
+        if (not isinstance(word, str) or not word.strip() or not isinstance(match, tuple)
+                or len(match) != 2 or not all(isinstance(part, str) for part in match)
+                or match[0] not in ("approve", "deny")):
+            raise RuntimeError("plaintext approval word set is malformed")
+    return dict(words), attrs
+
+
+def make_runner(attrs: dict, **handlers) -> SimpleNamespace:
+    """Bind a method-style resolver to the fake runner without changing its source."""
+    runner = SimpleNamespace(**{k: v for k, v in attrs.items()
+                                if k != "_plaintext_approval_words"}, **handlers)
+    if "_plaintext_approval_words" in attrs:
+        runner._plaintext_approval_words = partial(attrs["_plaintext_approval_words"], runner)
+    return runner
+
+
 async def control_disabled_input(api: SimpleNamespace) -> None:
-    """Slash, every bare approval word, and choice/free-text clarify stay pending."""
+    """Slash, active-language approval words, and clarify text stay pending."""
     key = "hmp-qualification-session"
     source = api.session.SessionSource(
         platform=api.config.Platform.LOCAL, chat_id="fixture-chat", user_id="fixture-user",
     )
-    words = list(api.busy.GatewayBusySessionMixin._PLAINTEXT_APPROVAL_WORDS)
+    words, resolver_attrs = plaintext_approval_resolver(api.busy.GatewayBusySessionMixin)
+    words = list(words)
+    slash_confirm_words = ["ok", "confirm", "cancel", "remember", "nevermind"]
     inputs = ["/approve", "/approve all", "/approve always", "/deny", "/stop", "/reset",
-              *words, "1", "A", "Other", "fixture free text"]
+              *words, *slash_confirm_words, "1", "A", "Other", "fixture free text"]
     for choices in (["A", "B"], None):
         for text in inputs:
             entry = api.wait._ApprovalEntry({"request_id": "approval-one"})
@@ -56,8 +93,8 @@ async def control_disabled_input(api: SimpleNamespace) -> None:
             async def approve(event):
                 api.approval.resolve_gateway_approval(key, "once")
 
-            runner = SimpleNamespace(
-                _PLAINTEXT_APPROVAL_WORDS=api.busy.GatewayBusySessionMixin._PLAINTEXT_APPROVAL_WORDS,
+            runner = make_runner(
+                resolver_attrs,
                 _handle_approve_command=approve, _handle_deny_command=approve,
                 _delivery_adapter_for=lambda source: None,
                 _hm_update_prompt_reply=lambda *args: None,
@@ -102,7 +139,7 @@ async def control_disabled_input(api: SimpleNamespace) -> None:
                 assert event.text == text
                 # Positive controls: same real busy and clarify paths can resolve these entries.
                 event.allow_gateway_control = True
-                event.text = "yes"
+                event.text = text if text in words else "yes"
                 assert await api.busy.GatewayBusySessionMixin._route_plaintext_approval_while_busy(
                     runner, event, key)
                 assert entry.event.is_set() and entry.result == "once"
