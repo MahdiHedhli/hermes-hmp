@@ -34,7 +34,12 @@ CONTRACT_MODULES = {
     "cli.py",
     "logging_policy.py",
 }
-DATA_FILES = {"plugin.yaml", "read_compat_builds.json", "write_supported_builds.json"}
+DATA_FILES = {
+    "plugin.yaml",
+    "read_compat_builds.json",
+    "write_supported_builds.json",
+    "approval_supported_builds.json",
+}
 
 
 def test_module_set_is_exactly_the_contract_tree() -> None:

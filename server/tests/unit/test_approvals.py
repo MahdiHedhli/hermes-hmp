@@ -220,6 +220,50 @@ async def test_multi_select_dumps_labels() -> None:
     assert resolver.calls[-1][2] == json.dumps(["A", "B"], ensure_ascii=False)
 
 
+AMBIGUOUS_OFFERS = [
+    ("Apple", "apple"),
+    ("Apple", " apple "),
+    ("Apple (Recommended)", "apple"),
+    ("Apple", "apple (RECOMMENDED)"),
+    ("Straße", "STRASSE"),
+    ("σ", "ς"),  # noqa: RUF001 - deliberate Greek sigma collision vector
+    ("Σ", "ς"),
+]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("first", "second"), AMBIGUOUS_OFFERS)
+@pytest.mark.parametrize("multi", [False, True])
+async def test_ambiguous_normalized_choice_is_refused(first: str, second: str, multi: bool) -> None:
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
+    _store_clarify(store, choices=(first, second, "Other"), multi_select=multi)
+    for submitted in (first, second, first.casefold()):
+        body = {"choices": [submitted]} if multi else {"choice": submitted}
+        result = await _answer(store, resolver, body)
+        assert result.status == 409 and result.body["applied"] is False
+        assert result.body["error"]["code"] == "invalid_choice"
+    assert resolver.calls == []
+    assert store.get((IID, USER, PROFILE, REQ)).status == "open"  # type: ignore[union-attr]
+
+
+@pytest.mark.asyncio
+async def test_multi_ambiguous_member_refuses_whole_answer() -> None:
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
+    _store_clarify(store, choices=("Apple", "apple", "B"), multi_select=True)
+    result = await _answer(store, resolver, {"choices": ["B", "APPLE"]})
+    assert result.status == 409 and result.body["applied"] is False
+    assert resolver.calls == []
+
+
+@pytest.mark.asyncio
+async def test_unambiguous_normalized_choice_still_resolves() -> None:
+    store, resolver = PromptStore(clock=lambda: 1), FakeResolver()
+    _store_clarify(store, choices=("Straße (Recommended)", "B"))
+    result = await _answer(store, resolver, {"choice": " STRASSE "})
+    assert result.body == {"status": "resolved", "applied": True}
+    assert resolver.calls[-1] == ("clarify", REQ, "Straße")
+
+
 @pytest.mark.asyncio
 async def test_two_in_flight_answers_share_one_resolver_call() -> None:
     store = PromptStore(clock=lambda: 1)
@@ -560,7 +604,9 @@ async def test_binder_requires_exactly_one_match_and_text_fallback_is_not_a_card
         description = "why"
         choices = ("once", "deny")
 
-    hooks = AdapterHooks(store=store, bridge=Bridge([]), now=lambda: 9, iid=IID)
+    hooks = AdapterHooks(
+        store=store, bridge=Bridge([]), now=lambda: 9, iid=IID, approval_qualified=lambda: True
+    )
     assert await hooks.on_exec_approval(Prompt()) is False
     hooks.bridge = Bridge(  # type: ignore[assignment]
         [
@@ -594,6 +640,9 @@ def test_inert_reply_is_not_stored() -> None:
 def _arm(env: Env, *, flag: bool) -> None:
     env.bridge.authz_state = lambda *_a, **_k: AuthzState.AUTHORIZED  # type: ignore[method-assign]
     env.ctx.direct_send_flag = lambda: flag
+    # Test-only premise: these fixtures exercise F3 behavior on an approval-qualified build. The
+    # shipped production default is closed (see test_approval_route_qualification.py).
+    env.ctx.approval_qualified = lambda: True
     env.ctx.prompt_store = PromptStore(clock=lambda: 1)
     env.bridge.direct_send_endpoint = lambda *_a, **_k: DirectSendEndpoint(  # type: ignore[method-assign]
         host="127.0.0.1", port=9, api_key="k" * 20, path_prefix=""

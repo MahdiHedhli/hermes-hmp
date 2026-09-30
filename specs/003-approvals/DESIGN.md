@@ -46,6 +46,63 @@ existing authorization rules.
 **Owner decision required before enablement:** accept this device allowlist definition and
 provision the owner's actual device IDs locally. No device is automatically grandfathered in.
 
+## Independent approval qualification (draft wiring)
+
+Guarded-send qualification never implies approval qualification. `ServerContext` carries an
+injectable `approval_qualified` callable that defaults to closed. The listener binds it to the
+callback from `compat.approval_listener_qualifier` (see the process-baseline bullet below), which
+checks `approval_supported_builds.json`. That list ships **empty**, so every build is unqualified:
+no runtime entry exists, nothing is live, and no approval is released. Only an exact `True`
+opens the gate; an exception, a falsy value or a non-bool closes it. It is evaluated off the
+event loop and never reuses the cached guarded-send result.
+
+- AP-3, AP-4 and AP-6 require this gate in addition to every gate above, and reject with
+  `write_gate_closed` before endpoint resolution, prompt listing, resolver or Phone delivery.
+- Snapshots stay readable but omit `open_requests` while the gate is closed, even for an owner
+  device with the send flag on. Ordinary DS-4 sends are unchanged.
+- Producer paths stay inert while closed: the adapter prompt hooks and the send-stream binding
+  neither call the bridge's approval helpers nor store an actionable row.
+- The send-stream decision is made before the profile lock and head/lease checks. Send-outcome
+  classification (local, mailbox/queued, refused) does not depend on whether the stream is
+  bound: `bind` only controls prompt-store side effects, so a closed lane keeps
+  `run.started` → keepalive → `done` as queued.
+- The production adapter binds `compat.approval_listener_qualifier(read identity)`, called in
+  `open_components` for a supported build. The FIRST call in the gateway process fixes ONE
+  process-level baseline (resolved root, ordered read and approval file lists, read and approval
+  fingerprints, git SHA) in a lock-guarded latch, kept separate from the probe cache. The factory
+  loads the same `read_compat_builds.json`, requires the approval file list to cover the read
+  files, requires a fresh read fingerprint and SHA to equal the read gate's identity, and requires
+  a matching startup entry. A listener reconnect may open only on the identical baseline and never
+  redefines it. Each callback re-reads the manifest and source and opens only while all equal the
+  baseline and an exact current entry matches: an in-place swap to another also-qualified build
+  (git or no-git) stays closed, removal closes immediately, and an empty, malformed, missing or
+  unlisted first manifest latches the process closed without inspecting or importing any approval
+  file. Adding an entry, or adopting an upgraded Hermes, needs a **full gateway process restart**;
+  a listener restart is not enough.
+- Limits: there is no public reset or env override, and an in-process plugin unload/reimport resets
+  module state, so no protection against arbitrary module unload is claimed. The baseline is fixed
+  at the first SUPPORTED factory use, which may follow unsupported listener opens in the same
+  process; it cannot attest the Hermes module bytes already loaded, so a full gateway process
+  restart remains mandatory after any source or plugin change (this is not process-start
+  attestation). The baseline assumes the read gate was supported before the first capture; the fresh read cross-check narrows the
+  startup window but source writes and imports are not atomic (trusted-operator restriction, L3).
+  No-git builds may be qualified only in a fresh gateway process; this is not a ban on no-git or
+  Docker deployments and the code does not attest loaded modules. Runbook: restart the whole
+  gateway process after any Hermes, source or plugin change; approvals qualification and release
+  are no-go until that lifecycle is verified.
+- `approval_build_qualified` and the `hermes hmp compat` line are a one-shot informational
+  exact-source check with no startup baseline; they are not production admission.
+- Only a successful dependency probe is cached (<= 8 entries, keyed by root, ordered files,
+  fingerprint, SHA; lock-guarded; separate from the guarded-send cache). Failures are never cached
+  and there is no TTL; fingerprint and SHA are recomputed every callback.
+- Remaining limits: a bound stream can outlive qualification and the fingerprint/HEAD reads are
+  not atomic (L3). The L2/L5 code repair passed controller tests and focused independent review;
+  full gateway restart evidence and latency measurement remain before admission. Review is not
+  release approval.
+
+Regression intent is in `test_approval_route_qualification.py`; see `REVIEW_STATUS.md` for
+which checks have actually been run.
+
 ## Two prompt producers
 
 ### Bot Chat

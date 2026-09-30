@@ -258,9 +258,10 @@ def _apply_sse_frame(
 ) -> None:
     """Fold one frame into `state` and, when bound, the prompt store. No prompt text is logged."""
     if comment and payload is None:
-        if state.phase == "after_start" and bind is not None:
+        if state.phase == "after_start":
             state.phase = "mailbox"
-            bind.store.set_desktop_held(bind.iid, bind.user_id, bind.profile)  # type: ignore[attr-defined]
+            if bind is not None:
+                bind.store.set_desktop_held(bind.iid, bind.user_id, bind.profile)  # type: ignore[attr-defined]
         return
     if not name:
         return
@@ -331,9 +332,10 @@ def _apply_sse_frame(
         session_id = payload.get("session_id")
         if isinstance(session_id, str):
             state.session_id = session_id
-        if state.phase != "local" and not state.saw_approval and bind is not None:
+        if state.phase != "local" and not state.saw_approval:
             state.phase = "mailbox"
-            bind.store.set_desktop_held(bind.iid, bind.user_id, bind.profile)  # type: ignore[attr-defined]
+            if bind is not None:
+                bind.store.set_desktop_held(bind.iid, bind.user_id, bind.profile)  # type: ignore[attr-defined]
         return
     if (name in {"run.completed", "run.failed", "run.cancelled", "error", "done"}
             and bind is not None and state.run_id is not None):
@@ -699,6 +701,10 @@ class DirectSendDeps:
     # None skips the fingerprint check (unit fakes). Production sets the compat predicate.
     qualified: Callable[[], bool] | None = None
     approval_timeout: Callable[[str], int] | None = None
+    # Independent approval qualification, default closed. While closed, an ordinary send neither
+    # asks Hermes for an approval timeout nor binds the stream to the prompt store, so no
+    # actionable row is collected. The send outcome itself is unchanged.
+    approval_qualified: Callable[[], bool] = field(default=lambda: False)
 
 
 def _cmid_key(iid: str, user_id: str, profile: str, cmid: str) -> tuple[str, str, str, str]:
@@ -931,6 +937,15 @@ async def _execute(
             )
             raise _refuse(ErrorCode.NO_BOT_CHAT, retryable=False)
 
+        # Evaluated before the profile lock and the fresh head/lease checks so a slow qualification
+        # probe never widens the window between those checks and the send. Exact True, fail closed.
+        approvals_open = False
+        if deps.prompt_store is not None:
+            try:
+                approvals_open = await asyncio.to_thread(deps.approval_qualified) is True
+            except Exception as exc:  # fail closed
+                log_bridge_exception(exc)
+
         root_id = _lineage_root(target)
         lock = deps.locks.get(profile, root_id)
         acquired = False
@@ -979,7 +994,7 @@ async def _execute(
 
                 sent_at = deps.now()
                 bind_token = None
-                if deps.prompt_store is not None:
+                if approvals_open:
                     timeout_s = 300
                     if deps.approval_timeout is not None:
                         try:

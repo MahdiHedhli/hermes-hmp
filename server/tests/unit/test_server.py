@@ -1100,6 +1100,7 @@ def test_built_wheel_contains_package_data(tmp_path: Path) -> None:
         "read_compat_builds.json",
         "write_supported_builds.json",
         "direct_send_supported_builds.json",
+        "approval_supported_builds.json",
     ):
         assert f"hmp_plugin/{data}" in names
 
