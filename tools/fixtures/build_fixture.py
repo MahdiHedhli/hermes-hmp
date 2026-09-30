@@ -36,6 +36,17 @@ Usage:
 
 `--builds-dir` defaults to `$HMP_HERMES_BUILDS_DIR` (same default `tools/ci/check_all.sh` uses:
 `${TMPDIR:-/tmp}/hermes_bot_mobile_hermes_builds`), a T004 `extract.py --out` directory.
+
+UNSAFE DEVELOPER TOOL for the ad-hoc `--build candidate`: this (like `mutate.py` and
+`selfcheck.py`) executes the candidate's Python and verifies nothing about its extracted tree.
+It refuses `--build candidate` unless `HMP_ENABLE_CANDIDATE_BUILD=1` is set, which
+`tools/compat/run_matrix.py --candidate-sha` does only after proving the tree is exactly the
+requested commit; setting it by hand is your statement that you checked the tree yourself,
+inside an isolated VM, container or user account. Scrubbing the environment is not a sandbox:
+the candidate's code can still read the real home (a live `~/.hermes` included) by absolute path.
+The candidate is recognised by what `--builds-dir/<label>` leads to, not by spelling: a malformed
+label (`candidate/`, `./candidate`, `Candidate`) or any other label whose tree is the candidate's
+(a symlink or renamed copy) is refused, so the gate and scrubbed environment always apply.
 """
 
 from __future__ import annotations
@@ -61,6 +72,7 @@ FIXTURE_PAIRING_CLI = THIS_DIR / "fixture_pairing_cli.py"
 HERMES_BUILDS_DIR_TOOL = fc.REPO_ROOT / "tools" / "hermes_builds"
 DEFAULT_CONVERSATION_ID = "default"
 DEFAULT_BUILDS_DIR_ENV = "HMP_HERMES_BUILDS_DIR"
+_MAX_CANDIDATE_METADATA_BYTES = 1 << 20
 
 
 def fixture_plugin_dir(out_dir: Path) -> Path:
@@ -86,13 +98,39 @@ def refresh_fixture_plugin_copy(out_dir: Path) -> Path:
     return dest
 
 
-def _resolve_source_sha(build_label: str) -> str | None:
+def _resolve_source_sha(build_label: str, build_dir: Path | None = None) -> str | None:
     """The extraction's commit (fixture-format.md rule 8: "provenance only"), read the same
     read-only way `tools/hermes_builds/extract.py` (T004) does: no fetch, no working-tree touch.
-    Returns `None` if it cannot be determined -- `source_sha` is optional."""
+    Returns `None` if it cannot be determined -- `source_sha` is optional.
+
+    The ad-hoc `candidate` build is not in builds.yaml; its commit is what its own extraction
+    recorded in `<build_dir>/build-metadata.json` (only trusted if it names the `candidate`
+    label and a full 40-hex commit). A metadata file that is a symlink, FIFO or other non-regular
+    file, or is oversized, is refused with `FixtureSafetyError` (never followed or waited on); a
+    missing or malformed one just yields `None`. Provenance only: same-user code can rewrite it."""
     if str(HERMES_BUILDS_DIR_TOOL) not in sys.path:
         sys.path.insert(0, str(HERMES_BUILDS_DIR_TOOL))
     import extract as extract_mod
+
+    if build_label == extract_mod.CANDIDATE_LABEL:
+        if build_dir is None:
+            return None
+        try:
+            raw = fc.safety.read_regular_file(
+                build_dir / extract_mod.METADATA_NAME, _MAX_CANDIDATE_METADATA_BYTES
+            )
+        except fc.safety.SafetyError as exc:
+            raise fc.FixtureSafetyError(f"candidate metadata: {exc}") from exc
+        if raw is None:
+            return None
+        try:
+            meta = json.loads(raw.decode("utf-8"))
+            commit = meta["commit"]
+        except (UnicodeDecodeError, ValueError, KeyError, TypeError):
+            return None
+        if meta.get("label") != build_label or not isinstance(commit, str):
+            return None
+        return commit if extract_mod.FULL_SHA_RE.fullmatch(commit) else None
 
     try:
         builds = extract_mod.load_builds()
@@ -148,7 +186,7 @@ def bootstrap_compat_entry(build: fc.BuildInfo, plugin_copy_dir: Path) -> None:
             "label": f"fixture-bootstrap-{build.label}",
             "qualified_by": "tools/fixtures/build_fixture.py (T060 bootstrap pending T063/T064)",
             "qualified_at": datetime.now(UTC).isoformat(),
-            "source_sha": _resolve_source_sha(build.label),
+            "source_sha": _resolve_source_sha(build.label, build.src_dir.parent),
         }
     )
     compat_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -670,10 +708,25 @@ def write_fixture_meta(out_dir: Path, build: fc.BuildInfo, built: list[dict[str,
 
 
 def build_info_from_meta(meta: dict[str, Any]) -> fc.BuildInfo:
+    """The build a fixture was made from, re-resolved (`fc.resolve_build`) from the recorded
+    `<builds_dir>/<label>/src`, so a re-entering tool (`mutate.py`) applies the same label and
+    candidate-identity rules as the builder: the record must be exactly that shape for its label,
+    and a listed label whose tree is the candidate's is refused. For the candidate, the caller
+    must have enabled isolation first (`resolve_build` refuses otherwise)."""
     b = meta["build"]
-    return fc.BuildInfo(
-        label=b["label"], src_dir=Path(b["src_dir"]), venv_python=Path(b["venv_python"])
-    )
+    label = fc.check_build_label(b.get("label"))
+    src_dir = Path(str(b.get("src_dir", "")))
+    if (
+        not src_dir.is_absolute()
+        or src_dir.name != "src"
+        or src_dir.parent.name != label
+        or Path(str(b.get("venv_python", ""))) != src_dir / ".venv" / "bin" / "python3"
+    ):
+        raise fc.FixtureSafetyError(
+            f"refusing: fixture_meta.json's build record is not <builds-dir>/{label}/src with its "
+            "own .venv/bin/python3; rebuild the fixture with build_fixture.py"
+        )
+    return fc.resolve_build(src_dir.parent.parent, label)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -708,6 +761,15 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"--builds-dir is required (or set ${DEFAULT_BUILDS_DIR_ENV})")
 
     fc.assert_outside_real_home(args.out, "--out")
+    # By identity, not spelling: a malformed label, or any other name that leads to the
+    # candidate's tree (a symlink, `candidate/`, a case variant), is refused here.
+    if fc.classify_build(builds_dir, args.build):
+        # The ad-hoc candidate's code runs in everything below (`hermes`, the seed scripts, the
+        # gateway, `uv pip`): scrub the environment and make every file private, whoever
+        # launched this process and with whatever environment. Refused unless the explicit
+        # opt-in is set; this is the entry point that builds, so it starts from a fresh scratch
+        # environment (no stale bytecode, caches or HOME).
+        fc.enable_candidate_isolation(args.out, fresh=True)
 
     manifest = fc.load_and_validate_manifest(args.manifest, args.schema)
     build = fc.resolve_build(builds_dir, args.build)

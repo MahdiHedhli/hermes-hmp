@@ -53,7 +53,13 @@ MUTATE = REPO_ROOT / "tools" / "fixtures" / "mutate.py"
 # Machine-local optional builds (tools/hermes_builds/builds.yaml `optional: true`) join the read
 # suite only where they have actually been extracted, so `-k <label>` for one of them selects real
 # tests there and nothing is parametrized over a build absent from this machine.
-_OPTIONAL_BUILDS = ("owner-local",)
+# `candidate` is the ad-hoc exact-SHA build (`extract.py --candidate-sha`); it is never in
+# builds.yaml, and `tools/compat/run_matrix.py --candidate-sha` selects its tests by exact node id.
+# Running the candidate executes its Python, so it is parametrized ONLY on an explicit opt-in that
+# `run_matrix.py --candidate-sha` sets for its scrubbed pytest; merely having a `candidate` build
+# in the builds directory never makes any other pytest run start it.
+_CANDIDATE_OPT_IN = os.environ.get("HMP_ENABLE_CANDIDATE_BUILD") == "1"
+_OPTIONAL_BUILDS = ("owner-local", *(("candidate",) if _CANDIDATE_OPT_IN else ()))
 _BUILDS_DIR_ENV = os.environ.get("HMP_HERMES_BUILDS_DIR", "")
 BUILDS = (
     "stock-base",
