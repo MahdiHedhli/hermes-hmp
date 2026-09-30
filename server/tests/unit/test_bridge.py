@@ -433,75 +433,84 @@ def test_missing_database_is_never_created(
 # --------------------------------------------------------------------------------------------------
 
 
-def test_list_sessions_narrows_to_ses1_fields(world: World, br: HermesReadBridge) -> None:
+def test_session_summary_narrows_to_ses1_fields(world: World, br: HermesReadBridge) -> None:
     db = world.dbs["alpha"]
     db.seed_session("s-cli", source="cli", title="a CLI session", started_at=100.0)
-    db.append("s-cli", "user", "hi")
-    summaries = br.list_sessions(USER, "alpha", sources_excluded=(), limit=10, offset=0)
-    assert len(summaries) == 1
-    s = summaries[0]
+    db.append("s-cli", "user", "hi", timestamp=150.0)
+    s = br.session_summary("alpha", "s-cli")
+    assert s is not None
     got = (s.session_id, s.title, s.source, s.message_count)
     assert got == ("s-cli", "a CLI session", "cli", 1)
-    assert s.started_at == 100.0 and s.last_active_at is not None
+    assert s.started_at == 100.0 and s.last_active_at == 150.0
+    assert s.hidden is False and s.archived is False
 
 
-def test_list_sessions_multi_source_and_pagination(world: World, br: HermesReadBridge) -> None:
-    db = world.dbs["alpha"]
-    for i in range(5):
-        db.seed_session(f"s{i}", source="cli" if i % 2 == 0 else "desktop", started_at=float(i))
-    page1 = br.list_sessions(USER, "alpha", sources_excluded=(), limit=2, offset=0)
-    page2 = br.list_sessions(USER, "alpha", sources_excluded=(), limit=2, offset=2)
-    assert len(page1) == 2 and len(page2) == 2
-    assert {s.session_id for s in page1} != {s.session_id for s in page2}
-
-
-def test_list_sessions_archived_excluded_hidden_included(
+def test_session_summary_unknown_session_is_none_and_never_crosses_profiles(
     world: World, br: HermesReadBridge
 ) -> None:
-    """The bridge call itself stays generic (OD-F11): archived stays excluded, but hidden is now
-    included -- the canonical Bot Chat is always hidden, so `reads.py`'s own selector, not this
-    bridge call, is what narrows the result back down."""
+    world.dbs["alpha"].seed_session("s1", source="cli")
+    assert br.session_summary("alpha", "unknown-session") is None
+    assert br.session_summary("beta", "s1") is None
+
+
+def test_session_summary_reports_hidden_and_archived(world: World, br: HermesReadBridge) -> None:
     db = world.dbs["alpha"]
-    db.seed_session("s-visible", source="cli")
-    db.seed_session("s-archived", source="cli", archived=True)
-    db.seed_session("s-hidden", source="cli", hidden=True)
-    summaries = br.list_sessions(USER, "alpha", sources_excluded=(), limit=10, offset=0)
-    assert {s.session_id for s in summaries} == {"s-visible", "s-hidden"}
-    assert next(s for s in summaries if s.session_id == "s-hidden").hidden is True
-    assert next(s for s in summaries if s.session_id == "s-visible").hidden is False
+    db.seed_session("s-hidden", hidden=True)
+    db.seed_session("s-archived", archived=True)
+    hidden = br.session_summary("alpha", "s-hidden")
+    archived = br.session_summary("alpha", "s-archived")
+    assert hidden is not None and hidden.hidden is True and hidden.archived is False
+    assert archived is not None and archived.archived is True and archived.hidden is False
 
 
-def test_list_sessions_collapses_compression_lineage_to_one_row(
+def test_session_summary_collapses_compression_lineage_to_the_tip(
     world: World, br: HermesReadBridge
 ) -> None:
-    """§1.1 of the amendment: a compression chain surfaces as one row, at the tip's content."""
+    """A compression chain is one summary, at the tip's content (root's `source`/`started_at`)."""
     db = world.dbs["alpha"]
     db.seed_session("s-root", source="cli", title="old title", started_at=1.0)
     db.append("s-root", "user", "first")
-    db.seed_session("s-tip", source="cli", title="new title", started_at=2.0)
+    db.seed_session("s-tip", source="other", title="new title", started_at=2.0)
     db.append("s-tip", "assistant", "second")
     db.children["s-root"] = "s-tip"
-    summaries = br.list_sessions(USER, "alpha", sources_excluded=(), limit=10, offset=0)
-    assert len(summaries) == 1  # never two rows for one lineage
-    s = summaries[0]
+    s = br.session_summary("alpha", "s-root")
+    assert s is not None
     assert s.session_id == "s-tip" and s.title == "new title" and s.message_count == 1
+    assert s.source == "cli" and s.started_at == 1.0
 
 
-def test_list_sessions_exclude_sources(world: World, br: HermesReadBridge) -> None:
+def test_session_summary_tip_without_title_falls_back_to_the_root_title(
+    world: World, br: HermesReadBridge
+) -> None:
     db = world.dbs["alpha"]
-    db.seed_session("s-cli", source="cli")
-    db.seed_session("s-tool", source="tool")
-    summaries = br.list_sessions(USER, "alpha", sources_excluded=("tool",), limit=10, offset=0)
-    assert [s.session_id for s in summaries] == ["s-cli"]
-    everything = br.list_sessions(USER, "alpha", sources_excluded=(), limit=10, offset=0)
-    assert {s.session_id for s in everything} == {"s-cli", "s-tool"}
+    db.seed_session("s-root", title="root title")
+    db.seed_session("s-tip", parent_session_id="s-root")
+    db.children["s-root"] = "s-tip"
+    s = br.session_summary("alpha", "s-root")
+    assert s is not None and s.session_id == "s-tip" and s.title == "root title"
 
 
-def test_list_sessions_fails_loudly_never_empty(world: World, br: HermesReadBridge) -> None:
+def test_session_summary_fails_loudly_never_empty(world: World, br: HermesReadBridge) -> None:
     world.dbs["alpha"].seed_session("s1", source="cli")
     world.dbs["alpha"].fail = True
     with pytest.raises(BridgeError):
-        br.list_sessions(USER, "alpha", sources_excluded=(), limit=10, offset=0)
+        br.session_summary("alpha", "s1")
+
+
+@pytest.mark.parametrize("bad", [None, "false", "yes", 2, 1.0])
+def test_session_summary_uncertain_flag_fails_closed(
+    world: World, br: HermesReadBridge, bad: object
+) -> None:
+    """`archived`/`hidden` must be a bool or 0/1; anything else cannot be trusted either way."""
+    db = world.dbs["alpha"]
+    db.seed_session("s1")
+    db.sessions["s1"]["archived"] = bad
+    with pytest.raises(BridgeError):
+        br.session_summary("alpha", "s1")
+    db.sessions["s1"]["archived"] = False
+    db.sessions["s1"]["hidden"] = bad
+    with pytest.raises(BridgeError):
+        br.session_summary("alpha", "s1")
 
 
 def test_resolve_session_existence_and_scoping(world: World, br: HermesReadBridge) -> None:
@@ -511,6 +520,217 @@ def test_resolve_session_existence_and_scoping(world: World, br: HermesReadBridg
     assert br.resolve_session(USER, "alpha", "unknown-session") is None
     # Never mints, never crosses profiles: the same id under a different (unrouted) profile.
     assert br.resolve_session(USER, "beta", "s1") is None
+
+
+def test_resolve_session_archived_is_none(world: World, br: HermesReadBridge) -> None:
+    world.dbs["alpha"].seed_session("s-archived", archived=True)
+    assert br.resolve_session(USER, "alpha", "s-archived") is None
+
+
+def _canonical_chat(world: World, session_id: str = "bc", **kw: Any) -> None:
+    kw.setdefault("title", "Bot Chat")
+    kw.setdefault("hidden", True)
+    world.dbs["alpha"].seed_session(session_id, **kw)
+    world.dbs["alpha"].append(session_id, "user", "hi", timestamp=1.0)
+
+
+def _qualified_bridge(world: World, directory: FakeDirectory) -> HermesReadBridge:
+    return HermesReadBridge(
+        world.adapter,
+        directory,  # type: ignore[arg-type]
+        hermes=world.api,  # type: ignore[arg-type]
+        title_lookup_qualified=True,
+    )
+
+
+def test_browsing_bot_chat_requires_the_direct_send_qualification(
+    world: World, br: HermesReadBridge, directory: FakeDirectory
+) -> None:
+    """`get_session_by_title` is outside the read fingerprint: without the exact-build direct-send
+    probe having passed, browsing sees NO Bot Chat, however canonical the row is."""
+    _canonical_chat(world)
+    assert br.browsing_bot_chat("alpha") is None  # `br` is built unqualified
+    assert "get_session_by_title" not in world.dbs["alpha"].calls
+    target = _qualified_bridge(world, directory).browsing_bot_chat("alpha")
+    assert target is not None and target.compression_chain == ("bc",)
+
+
+def test_browsing_and_direct_send_agree_on_the_canonical_chat(
+    world: World, directory: FakeDirectory
+) -> None:
+    """One helper decides both: every variant answers identically for the two entry points."""
+    qualified = _qualified_bridge(world, directory)
+    db = world.dbs["alpha"]
+
+    def both() -> tuple[object, object]:
+        send = qualified.resolve_bot_chat("alpha")
+        browse = qualified.browsing_bot_chat("alpha")
+        return (
+            send and (send.root_session_id, send.live_tip_session_id, send.compression_chain),
+            browse
+            and (browse.root_session_id, browse.live_tip_session_id, browse.compression_chain),
+        )
+
+    assert both() == (None, None)
+    _canonical_chat(world)
+    assert both() == (("bc", "bc", ("bc",)),) * 2
+    db.sessions["bc"]["hidden"] = False
+    assert both() == (None, None)
+    db.sessions["bc"]["hidden"] = True
+    db.sessions["bc"]["archived"] = True
+    assert both() == (None, None)
+    db.sessions["bc"]["archived"] = False
+    db.sessions["bc"]["title"] = "Renamed"
+    assert both() == (None, None)
+
+
+def test_visible_bot_chat_is_not_canonical(world: World, br: HermesReadBridge) -> None:
+    """A visible session merely titled "Bot Chat" is not a send target (A1 requires hidden)."""
+    _canonical_chat(world, hidden=False)
+    assert br.resolve_bot_chat("alpha") is None
+
+
+def test_archived_bot_chat_is_not_canonical(world: World, br: HermesReadBridge) -> None:
+    _canonical_chat(world, archived=True)
+    assert br.resolve_bot_chat("alpha") is None
+
+
+def test_bot_chat_with_an_uncertain_flag_fails_closed(world: World, br: HermesReadBridge) -> None:
+    _canonical_chat(world)
+    world.dbs["alpha"].sessions["bc"]["archived"] = None
+    with pytest.raises(BridgeError):
+        br.resolve_bot_chat("alpha")
+    world.dbs["alpha"].sessions["bc"]["archived"] = False
+    world.dbs["alpha"].sessions["bc"]["hidden"] = "true"
+    with pytest.raises(BridgeError):
+        br.resolve_bot_chat("alpha")
+
+
+def test_bot_chat_compressed_needs_hidden_root_and_unarchived_tip(
+    world: World, br: HermesReadBridge
+) -> None:
+    """The titled child may be visible: Hermes does not copy `hidden` on compression. The
+    lineage ROOT must remain hidden, and neither end may be archived."""
+    db = world.dbs["alpha"]
+    db.seed_session("root", hidden=True, end_reason="compression")
+    db.seed_session("child", title="Bot Chat", hidden=False, parent_session_id="root")
+    db.children["root"] = "child"
+    db.append("child", "user", "hi", timestamp=1.0)
+    target = br.resolve_bot_chat("alpha")
+    assert target is not None
+    assert (target.root_session_id, target.live_tip_session_id) == ("root", "child")
+
+    db.sessions["root"]["hidden"] = False  # a visible ancestor: not the canonical lineage
+    assert br.resolve_bot_chat("alpha") is None
+    db.sessions["root"]["hidden"] = True
+    db.sessions["root"]["archived"] = True
+    assert br.resolve_bot_chat("alpha") is None
+    db.sessions["root"]["archived"] = False
+    db.sessions["child"]["archived"] = True
+    assert br.resolve_bot_chat("alpha") is None
+
+
+def test_bot_chat_branch_parent_is_not_authorized_as_its_lineage(
+    world: World, br: HermesReadBridge
+) -> None:
+    """A branch with a compressed parent is its own session, not the parent's continuation."""
+    db = world.dbs["alpha"]
+    db.seed_session("other", hidden=True, end_reason="compression")
+    db.seed_session("branch", title="Bot Chat", hidden=True, parent_session_id="other")
+    db.sessions["branch"]["model_config"] = {"_branched_from": "other"}
+    db.append("branch", "user", "hi", timestamp=1.0)
+    target = br.resolve_bot_chat("alpha")
+    assert target is not None
+    assert target.root_session_id == "branch"
+    assert target.compression_chain == ("branch",)
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        {"_delegate_from": "other"},
+        {"_reset_from": "other"},
+        '{"_branched_from":"other"}',
+    ],
+)
+def test_bot_chat_fork_markers_stop_at_the_child(
+    world: World, br: HermesReadBridge, config: object
+) -> None:
+    db = world.dbs["alpha"]
+    db.seed_session("other", hidden=True, end_reason="compression")
+    db.seed_session("child", title="Bot Chat", hidden=True, parent_session_id="other")
+    db.sessions["child"]["model_config"] = config
+    db.append("child", "user", "hi", timestamp=1.0)
+    target = br.resolve_bot_chat("alpha")
+    assert target is not None and target.compression_chain == ("child",)
+
+
+def test_bot_chat_tool_child_does_not_inherit_parent_lineage(
+    world: World, br: HermesReadBridge
+) -> None:
+    db = world.dbs["alpha"]
+    db.seed_session("other", hidden=True, end_reason="compression")
+    db.seed_session(
+        "child", source="tool", title="Bot Chat", hidden=True, parent_session_id="other"
+    )
+    db.append("child", "user", "hi", timestamp=1.0)
+    target = br.resolve_bot_chat("alpha")
+    assert target is not None and target.compression_chain == ("child",)
+
+
+def test_bot_chat_malformed_fork_config_fails_closed(
+    world: World, br: HermesReadBridge
+) -> None:
+    db = world.dbs["alpha"]
+    db.seed_session("other", hidden=True, end_reason="compression")
+    db.seed_session("child", title="Bot Chat", hidden=True, parent_session_id="other")
+    db.sessions["child"]["model_config"] = "{bad json"
+    db.append("child", "user", "hi", timestamp=1.0)
+    with pytest.raises(BridgeError, match="compression lineage uncertain"):
+        br.resolve_bot_chat("alpha")
+
+
+def test_bot_chat_noncompression_parent_is_not_its_lineage(
+    world: World, br: HermesReadBridge
+) -> None:
+    db = world.dbs["alpha"]
+    db.seed_session("other", hidden=True, end_reason="branched")
+    db.seed_session("branch", title="Bot Chat", hidden=True, parent_session_id="other")
+    db.append("branch", "user", "hi", timestamp=1.0)
+    target = br.resolve_bot_chat("alpha")
+    assert target is not None
+    assert target.compression_chain == ("branch",)
+
+
+def test_bot_chat_conflicting_lineage_sources_fail_closed(
+    world: World, br: HermesReadBridge
+) -> None:
+    """Do not union a Hermes-reported parent into a chain the verified edge walk rejects."""
+    db = world.dbs["alpha"]
+    db.seed_session("unrelated", hidden=False)
+    db.seed_session(
+        "child", title="Bot Chat", hidden=True, parent_session_id="unrelated"
+    )
+    db.children["unrelated"] = "child"  # fake lineage claims it is compression
+    db.append("child", "user", "hi", timestamp=1.0)
+    with pytest.raises(BridgeError, match="compression lineage uncertain"):
+        br.resolve_bot_chat("alpha")
+
+
+def test_bot_chat_titled_middle_segment_keeps_hidden_root(
+    world: World, br: HermesReadBridge
+) -> None:
+    db = world.dbs["alpha"]
+    db.seed_session("root", hidden=True, end_reason="compression")
+    db.seed_session("middle", title="Bot Chat", parent_session_id="root", end_reason="compression")
+    db.seed_session("tip", parent_session_id="middle")
+    db.children["root"] = "middle"
+    db.children["middle"] = "tip"
+    db.append("tip", "assistant", "continued", timestamp=1.0)
+    target = br.resolve_bot_chat("alpha")
+    assert target is not None
+    assert target.compression_chain == ("root", "middle", "tip")
+    assert target.root_session_id == "root" and target.live_tip_session_id == "tip"
 
 
 def test_capability_versions(world: World, br: HermesReadBridge) -> None:
@@ -698,16 +918,16 @@ def test_direct_send_endpoint_default_profile_short_extra_key_fails_closed(
     assert br.direct_send_endpoint(profile) is None
 
 
-def test_resolve_bot_chat_unions_ancestors_when_lineage_returns_only_the_tip(
+def test_resolve_bot_chat_recovers_ancestors_when_lineage_returns_only_the_tip(
     world: World, br: HermesReadBridge
 ) -> None:
     """Review round 3: `get_compression_lineage` returning only `[session_id]` must not drop
-    ancestors. The independent `parent_session_id` walk (via `get_session`) is unioned in."""
+    ancestors. The independent verified parent walk reconstructs that chain."""
     db = world.dbs["alpha"]
     db.lineage_returns_self_only = True
-    db.seed_session("root", end_reason="compression")
+    db.seed_session("root", hidden=True, end_reason="compression")
     db.seed_session("mid", parent_session_id="root", end_reason="compression")
-    db.seed_session("child", title="Bot Chat", parent_session_id="mid")
+    db.seed_session("child", title="Bot Chat", hidden=True, parent_session_id="mid")
     db.children["root"] = "mid"
     db.children["mid"] = "child"
     db.append("child", "user", "hi", timestamp=1.0)
@@ -727,7 +947,7 @@ def test_resolve_bot_chat_fails_closed_when_the_parent_chain_is_uncertain(
     (the send path maps this to `session_busy`), never a chain that omits the missing ancestor."""
     db = world.dbs["alpha"]
     db.lineage_returns_self_only = True
-    db.seed_session("tip", title="Bot Chat", parent_session_id="gone")
+    db.seed_session("tip", title="Bot Chat", hidden=True, parent_session_id="gone")
     db.append("tip", "user", "hi", timestamp=1.0)
     with pytest.raises(BridgeError, match="compression lineage uncertain"):
         br.resolve_bot_chat("alpha")

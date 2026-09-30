@@ -8,6 +8,7 @@ HMP is the Hermes gateway plugin used by the [HermesBot Mobile](https://hermes-b
 | Available | Private transport | TLS with instance key pinning over a Tailscale connection. |
 | Available | Bot roster and Bot Chat reads | Profile list, snapshots, history, and access state through the root Hermes gateway. |
 | Preview | Bot Chat sends | Explicit owner gate, supported-build fingerprint, freshness check, and retry-safe handling. Unsupported builds fail closed. |
+| Draft hardening | Scoped session browsing | [PR #49](https://github.com/MahdiHedhli/hermes-hmp/pull/49) narrows listing to the caller's own conversation and the canonical Bot Chat and rechecks stored refs on reads. The phone's session picker stays dormant while release consistency is reviewed. |
 | Planned | Approvals and choices | Design and security review are in progress. No approvals implementation is part of the released migration. |
 
 See the [roadmap](ROADMAP.md), [wire contract](docs/architecture/contracts/HMP_V1.md), and [upstream requests for Nous Research](NOUS_GATEWAY_OBSERVATIONS.md).

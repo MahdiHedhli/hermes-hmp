@@ -588,7 +588,7 @@ OD-F10's bot-level authorization gate.
 **OD-F11.** "Bot chats are only done in one channel at a time... our app should not communicate
 with terminal and Discord/Telegram channels... just the ones from the bot view." SES-1 lists only
 the bot's own canonical "Bot Chat" (Hermes Desktop Bots view's forever-chat, identified by Hermes
-itself as the session titled exactly "Bot Chat" and always hidden — cross-checked against
+itself as the session titled exactly "Bot Chat" with a hidden lineage root — cross-checked against
 `apps/desktop/src/plugins/hermes-bots/canonical-chat.ts`, `tools/bot_mode_probe.py` and
 `hermes_state.py`'s `SessionDB.CANONICAL_BOT_CHAT_TITLE`, all in `~/.hermes/hermes-agent`) plus the
 caller's own session (`is_mobile`, SES-1d). No CLI, Telegram, Discord, cron or other channel
@@ -624,20 +624,36 @@ authorized`, SES-3) is unchanged.
     `GET …/conversations/default` resolves today for this `(user_id, profile)`. That route stays
     unchanged; the session list simply also contains this same session, flagged `is_mobile:true`.
   - **SES-1e. Ordering, pagination, cursor.** Rows are most-recently-active first. `next_cursor` is
-    an opaque base64 of `{"o": <offset>, "v":1}` (an **offset** cursor, not a keyset one): a
-    session created, updated or re-sorted between two page fetches can shift offsets, which may
-    show a duplicate row (harmless — rows are keyed by `session_ref`) or transiently omit one
-    until the next full refresh. A cursor is never signed: tampering with it can only change which
-    offset is read within the caller's own already-authorized, already-profile-scoped query. A
-    malformed cursor is `400 bad_request`.
+    an opaque base64 of `{"o": <offset>, "v":1}` (an **offset** cursor, not a keyset one) over the
+    candidate set, which holds **at most two** sessions (SES-1h), so it is present only when
+    `limit` cut that set short. A cursor is never signed: tampering with it can only change which
+    offset is read within the caller's own already-authorized, already-profile-scoped candidate
+    set. A malformed cursor is `400 bad_request`.
   - **SES-1f. Size and default exclusions.** `limit` default 30, max 100. The route never returns a
     total session count beyond what's paged (no `total`/`count` field) — exposing an exact count
     would let any authorized device cheaply fingerprint host activity across all its users.
     `next_cursor: null` signals "no more pages".
+  - **SES-1h. The candidate set is resolved directly, never by paging Hermes's recent sessions.**
+    The two allowed sessions — the caller's own conversation session and the canonical Bot Chat
+    (below) — are each read by id. No page of recent sessions is fetched and filtered afterwards,
+    so any number of newer sessions (cron, Telegram, CLI, ...) can neither crowd the Bot Chat out
+    of the listing nor have their titles or ids read by HMP at all. `session_ref`s are unchanged:
+    still minted per `(user_id, profile, session_id)` for the lineage tip.
+  - **SES-1i. The canonical Bot Chat, one rule for listing and direct send.** The session titled
+    exactly `"Bot Chat"` that is **hidden** and **not archived**, resolved to its current
+    compression tip and lineage (a compressed chat moves the title onto the child; the lineage
+    root must be hidden and neither end may be archived). F2's `resolve_bot_chat` and SES-1/SES-2
+    call the same helper, so they cannot disagree: a visible session that merely carries the
+    title, or an archived one, is neither listed nor a direct-send target (`409 no_bot_chat`).
+    If the flags or the lineage cannot be established (a `hidden`/`archived` value that is not a
+    bool or 0/1, an unresolvable parent, a read failure) the answer is an error, never "canonical".
+    The title lookup is outside the read fingerprint (`hermes_state_titles.py`), so listing and
+    reading the Bot Chat are available only on a build that passed the exact-build direct-send
+    qualification (SES-6); elsewhere only the caller's own session is listed.
   - **SES-1g. `exclude_sources` default is empty** (owner ruling, 2026-09-27, OD-F10's original
     wording): "all sessions of approved bots". **Superseded in effect by OD-F11** (§6a intro,
-    above): the plugin applies a bot-view selector after the Hermes call regardless of
-    `exclude_sources`, so a channel session is excluded whatever that setting says.
+    above): the plugin only ever resolves the two sessions of SES-1h, so a channel session is
+    excluded whatever that setting says.
     `exclude_sources` remains unused plumbing for a possible future host-side narrowing, not how
     OD-F11 is enforced.
 
@@ -646,6 +662,15 @@ authorized`, SES-3) is unchanged.
   reparameterization of the existing bridge, never a new read path: `head`/`latest`/`after`/
   `lineage` already take an arbitrary `ConversationRef`, not only the one `conversation_ref()`
   resolves.
+  - **A `session_ref` is not a standing capability.** After the per-bot gate and the scoped
+    `ref → session_id` lookup, and before any row is read, the *current* OD-F11 selector is
+    re-checked on every call (snapshot and paged): the id must be in the compression lineage of
+    the caller's own HMP conversation, or in the current canonical Bot Chat's lineage (SES-1i).
+    A ref whose session has since been archived, unhidden, retitled or replaced, a ref for a
+    session that never qualified (a planted or foreign-source row), and a ref on a build without
+    the direct-send qualification all answer `404 not_found` — the same body as an unknown ref,
+    so they cannot be told apart. A selector read failure is `500 other {why:"internal_error"}`,
+    never rows. A ref for an ancestor id of a compressed Bot Chat stays valid and reads the tip.
   - **Snapshot-equivalent (no `after`, or `after=0`):** `200 {"session_ref", "messages":[…],
     "head_message_id", "truncated":bool}`, via the same `limit` default/max as RO-3
     (`SNAPSHOT_LIMIT_DEFAULT`/`_MAX`). No `turn`, `partial`, `partial_lost`, `open_requests` or
@@ -673,23 +698,32 @@ authorized`, SES-3) is unchanged.
     new caps.
 
 - **SES-4. Errors.** No new `ErrorCode` values. SES-1/SES-2 reuse ERR-2/ERR-2a wholesale:
-  `not_found` for an unknown or foreign `session_ref`; the standard ERR-3 table for authz refusal;
-  the ERR-2a compat refusal when the running build lacks the two new `READ_DEPENDENCIES` entries
-  (below); `400 bad_request` for a malformed `cursor` or `after`.
+  `not_found` for an unknown, foreign, **or stale** `session_ref` (SES-2); the standard ERR-3 table
+  for authz refusal; the ERR-2a compat refusal when the running build lacks the
+  `READ_DEPENDENCIES` entry (below); `400 bad_request` for a malformed `cursor` or `after`.
 
-- **SES-5. Host-side kill switch.** `gateway.platforms.hmp.extra.session_browsing` (bool, default
-  `true`). When `false`, SES-1 and SES-2 are **not registered** at all — the same "not registered,
-  `404`" pattern F1 already uses for submit/SSE/approvals/clarify/stop (`server-modules.md` "F1
-  route table"). A future higher-sensitivity or multi-user host can turn session browsing off
-  entirely without a client update. The app hides its sessions entry whenever these routes answer
-  `404` for a bot it can otherwise read.
+- **SES-5. Host-side kill switch.** `gateway.platforms.hmp.extra.session_browsing` (default on
+  when the key is absent). Once configured, **only the boolean `true` enables it**: `false`,
+  `"false"`, `0`, `null` or any other malformed value — and a malformed `extra` itself — disable
+  it (fail closed; `"false"` must never read as on). When disabled, SES-1 and SES-2 are **not
+  registered** at all — the same "not registered, `404`" pattern F1 already uses for
+  submit/SSE/approvals/clarify/stop (`server-modules.md` "F1 route table"). A future
+  higher-sensitivity or multi-user host can turn session browsing off entirely without a client
+  update. The app hides its sessions entry whenever these routes answer `404` for a bot it can
+  otherwise read.
 
-- **SES-6. New §12 internals.** `hermes_state.SessionDB.list_sessions_rich` and `.get_session`,
-  both resolving to `hermes_state_sessions.py` (already in `bridge_files`; no fingerprint change).
-  Gap: E-GAP-6/7, the same family as every other `SessionDB` read this contract already lists.
+- **SES-6. §12 internals.** SES-1/SES-2 read one session by id with `hermes_state.SessionDB.
+  get_session` (plus the message/lineage reads F1 already probes), resolving to
+  `hermes_state_sessions.py` (already in `bridge_files`; no fingerprint change). They no longer
+  call `SessionDB.list_sessions_rich`, which is dropped from `READ_DEPENDENCIES`. The canonical
+  Bot Chat lookup (SES-1i) uses `SessionDB.get_session_by_title` and `.get_compression_lineage`,
+  probed by `DIRECT_SEND_DEPENDENCIES` only — `get_session_by_title` lives in
+  `hermes_state_titles.py`, which is not in the read fingerprint, so browsing reaches it only when
+  the same exact-build direct-send qualification F2 requires has passed (`read_compat_builds.json`
+  is unchanged). Gap: E-GAP-6/7, the same family as every other `SessionDB` read.
 
 - **SES-7. The OD-F11 bot-view selector adds no new `READ_DEPENDENCIES` entry.** It reads only
-  `title` and `hidden`, both plain fields `list_sessions_rich` already returns under SES-6. The
+  `title`, `hidden` and `archived`, plain fields of the `sessions` row. The
   literal it compares against ("Bot Chat") is not read live from any Hermes symbol —
   `SessionDB.CANONICAL_BOT_CHAT_TITLE` is a string constant, not a class or callable, so it does
   not fit the compat probe's shape check — and is instead asserted by HMP itself, cross-checked
@@ -872,10 +906,15 @@ which no supported build advertises today (§8).
      session id)` serializes HMP's own concurrent attempts against each other (two devices, a
      double-tap, a retry racing a first attempt). It says nothing about a writer outside HMP's own
      process — (2)-(4) below cover that.
-  2. **Bot Chat resolution.** Resolve `(profile, "Bot Chat")` via the same primitive SES-1's OD-F11
-     selector and `tools/bot_live_delivery.py`'s `find_canonical_owner` both already use
-     (`get_session_by_title`, then the live compression tip). **No Bot Chat exists for this
-     profile → `409 {"error":{"code":"no_bot_chat", ...}}`.** HMP never creates one on the send
+  2. **Bot Chat resolution.** Resolve `(profile, "Bot Chat")` with the one canonical rule of SES-1i
+     — the same helper SES-1/SES-2 use — built on the primitive `tools/bot_live_delivery.py`'s
+     `find_canonical_owner` also uses (`get_session_by_title`, then the live compression tip and
+     lineage): **hidden lineage root, not archived**, exact title. A compression child can be
+     visible because Hermes does not copy `hidden` to the child, even if the title later moves
+     there. **No canonical Bot Chat exists for this
+     profile (including a visible or archived session that merely carries the title) → `409
+     {"error":{"code":"no_bot_chat", ...}}`;** an uncertain flag or lineage fails closed as
+     `session_busy`. HMP never creates one on the send
      path (§DS-9 records the evidence for why: no plugin-reachable supported creation path
      exists). This is definitive: the client's action is to open the bot once on Hermes Desktop
      first (copy is a `UX_CONTRACT_GAP`).
@@ -1204,7 +1243,8 @@ The bridge module uses these undocumented Hermes internals. Each is a `HERMES_AP
 | `runner._authorization_home_for_source(source)` | evidence only | E-GAP-22 |
 | `gateway.run._profile_runtime_scope`, and its async twin | reads in profile scope | E-GAP-14 |
 | `hermes_state_registry.acquire(<home>/state.db)` → `SessionDB` reads (`get_compression_chain`, message reads, `platform_message_id` lookup, resume-tip resolution) | head, history, snapshot, lookup | E-GAP-6/7 |
-| `SessionDB.list_sessions_rich`, `SessionDB.get_session` (v1.1, amendment A1) | SES-1 session list, SES-2 `session_ref` resolution | E-GAP-6/7 |
+| `SessionDB.get_session` (v1.1, amendment A1) | SES-1 per-session summary, SES-2 `session_ref` resolution (no paged `list_sessions_rich` scan) | E-GAP-6/7 |
+| `SessionDB.get_session_by_title`, `SessionDB.get_compression_lineage` (v1.2, amendments F2 and A1) | the one canonical Bot Chat rule (SES-1i) for DS-4(2) and SES-1/SES-2; probed only with the exact-build direct-send qualification | E-GAP-6/7 |
 | `hermes_cli.active_sessions.active_session_registry_snapshot` (v1.2, amendment F2) | DS-4(3) liveness/lease-registry guard | E-GAP-6/7 family; public and exported, used by three independent Hermes surfaces (`cli.py`, `tui_gateway`, `gateway/run_busy.py`) for the same kind of liveness check, but outside the documented plugin contract |
 | `tools.bot_live_delivery.find_canonical_owner` (v1.2, amendment F2) | DS-4(2) Bot Chat resolution (same primitive SES-1/OD-F11 already relies on) | E-GAP-6/7 family |
 | `adapter._session_store.lookup_by_session_key` | the session resolved at submit | E-GAP-6 |

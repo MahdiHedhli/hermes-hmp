@@ -403,28 +403,27 @@ READ_DEPENDENCIES: tuple[DependencySpec, ...] = (
     DependencySpec("hermes_state", "SessionDB.get_active_message_ids", gap="E-GAP-6/7"),
     DependencySpec("hermes_state", "SessionDB.resolve_resume_session_id", gap="E-GAP-6/7"),
     DependencySpec("hermes_state", "SessionDB.get_compression_chain", gap="E-GAP-6/7"),
-    # Amendment A1 (session browsing, OD-F9/OD-F10; SES-1/SES-2). Both resolve, via
-    # `inspect.getsourcefile`, to `hermes_state_sessions.py` -- already in `bridge_files` (it is
-    # what `SessionDB.get_compression_chain`, `resolve_resume_session_id` and `get_active_message_
-    # ids` above already require containment of via the sibling-mixin argument, and it is where
-    # `get_compression_chain` itself and `get_session`/`list_sessions_rich` are all defined). No
-    # file needs to be added to `bridge_files` for these two entries (A1 design doc §1.5): CS-21
-    # containment is a property of `inspect.getsourcefile`, not of which entries name a file, and
-    # this file is already listed. Fingerprints are therefore unchanged by this addition.
-    DependencySpec("hermes_state", "SessionDB.list_sessions_rich", gap="E-GAP-6/7"),
+    # Amendment A1 (session browsing, OD-F9/OD-F10; SES-1/SES-2). `get_session` resolves, via
+    # `inspect.getsourcefile`, to `hermes_state_sessions.py` -- already in `bridge_files` (A1
+    # design doc §1.5): CS-21 containment is a property of `inspect.getsourcefile`, not of which
+    # entries name a file, and this file is already listed. Fingerprints are therefore unchanged.
+    # SES-1 no longer reaches `list_sessions_rich` (a paged scan that unrelated newer sessions
+    # could crowd), so it is no longer probed; browsing reads exactly one session by id. The
+    # canonical Bot Chat lookup (`get_session_by_title`, `get_compression_lineage`) is deliberately
+    # NOT here -- `hermes_state_titles.py` is outside the read fingerprint -- and is reached by
+    # browsing only on a build that also passed `DIRECT_SEND_DEPENDENCIES` (see below).
     DependencySpec("hermes_state", "SessionDB.get_session", gap="E-GAP-6/7"),
 )
 
 # Amendment F2 (direct send, HMP_V1.md §7a DS-4/GAP-2): probed only when the owner-dogfood
 # `direct_send` flag is on (gate.py's own `direct_send_gate`), never as part of the F1 startup
 # gate above -- `CompatGate.evaluate()` itself is unchanged (server-modules.md "Startup order").
-# `get_session_by_title` resolves, via `inspect.getsourcefile`, to the same `hermes_state_sessions.
-# py` `get_session`/`list_sessions_rich` above already require containment of (A1's own
-# reasoning, reused verbatim here) -- no NEW `bridge_files` entry for it. Only
-# `active_session_registry_snapshot` is genuinely new: `hermes_cli/active_sessions.py` is not in
-# the committed `bridge_files` list and must be added there for this probe to ever pass containment
-# (`direct_send_supported_builds.json`, not `read_compat_builds.json` -- this is a write-path
-# dependency, never needed for F1's reads).
+# `direct_send_supported_builds.json`'s `bridge_files` is the read list PLUS
+# `hermes_cli/active_sessions.py` (`active_session_registry_snapshot`) and
+# `hermes_state_titles.py` (`get_session_by_title`); neither is in `read_compat_builds.json`, so
+# the read fingerprint does not cover them. Anything that reaches these two methods -- F2 direct
+# send, and A1 session browsing's canonical Bot Chat lookup -- is therefore honest only on a build
+# that passed `direct_send_build_qualified` (`bridge.HermesReadBridge(title_lookup_qualified=...)`).
 # Review BLOCKER #2 (round 2): `get_compression_lineage` resolves, via `inspect.getsourcefile`, to
 # `hermes_state_compression.py` -- already in `bridge_files` (required by `READ_DEPENDENCIES`'s own
 # `SessionDB.get_compression_chain` entry above). No new `bridge_files` entry needed for it either.

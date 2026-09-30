@@ -43,7 +43,7 @@ import json
 import os
 import re
 import secrets
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
@@ -121,16 +121,17 @@ def _has_usable_secret(value: object, *, min_length: int = _MIN_USABLE_KEY_LENGT
 
 
 def _parent_chain(db: Any, start_id: str) -> tuple[str, ...] | None:
-    """Walk `parent_session_id` upward from `start_id`.
+    """Walk only verified compression parents upward from `start_id`.
 
     Supported read: `SessionDB.get_session` (`hermes_state_sessions.py:786`), already in
     `REACHED_METHODS` / `compat.READ_DEPENDENCIES`. The row carries `parent_session_id`, the column
     `get_compression_lineage` itself walks (`hermes_state_compression.py:689-719`) before it can
     return only `[session_id]` when its forward spine omits the start id.
 
-    Root-first, including `start_id`. `None` when the chain cannot be established with certainty
-    (missing row, a parent id that does not resolve, a non-string parent, a cycle, or the walk
-    bound is hit while a parent is still set)."""
+    A branch, delegate, tool child or reset fork is a different conversation even when its parent
+    ended by compression. These markers mirror the narrow edge predicate Hermes uses in
+    `hermes_state_compression.py`; an uncertain marker fails closed. Root-first, including
+    `start_id`. `None` when the chain cannot be established with certainty."""
     upward: list[str] = []
     current = start_id
     seen: set[str] = set()
@@ -154,25 +155,32 @@ def _parent_chain(db: Any, start_id: str) -> tuple[str, ...] | None:
             return tuple(upward)
         if not isinstance(parent, str):
             return None
+        if row.get("source") == "tool":
+            upward.reverse()
+            return tuple(upward)
+        config = row.get("model_config")
+        if isinstance(config, str):
+            try:
+                config = json.loads(config)
+            except ValueError:
+                return None
+        if config is not None and not isinstance(config, Mapping):
+            return None
+        if isinstance(config, Mapping) and parent in (
+            config.get("_branched_from"),
+            config.get("_delegate_from"),
+            config.get("_reset_from"),
+        ):
+            upward.reverse()
+            return tuple(upward)
+        parent_row = db.get_session(parent)
+        if not isinstance(parent_row, Mapping) or parent_row.get("id") != parent:
+            return None
+        if parent_row.get("end_reason") != "compression":
+            upward.reverse()
+            return tuple(upward)
         current = parent
     return None
-
-
-def _union_session_ids(*groups: object) -> tuple[str, ...]:
-    """Stable union. A group that is not a list/tuple of ids is skipped by the caller; this only
-    accepts sequences and drops non-strings."""
-    out: list[str] = []
-    for group in groups:
-        if isinstance(group, str):
-            items: tuple[object, ...] | list[object] = (group,)
-        elif isinstance(group, (list, tuple)):
-            items = group
-        else:
-            continue
-        for sid in items:
-            if isinstance(sid, str) and sid and sid not in out:
-                out.append(sid)
-    return tuple(out)
 
 
 # Attribute names this module calls on Hermes objects, by receiver (see the module docstring).
@@ -190,8 +198,9 @@ REACHED_METHODS: Mapping[str, frozenset[str]] = {
             "get_active_message_ids",
             "resolve_resume_session_id",
             "get_compression_chain",
-            # Amendment A1 (session browsing, OD-F9/OD-F10; SES-1/SES-2).
-            "list_sessions_rich",
+            # Amendment A1 (session browsing; SES-1/SES-2): one session by id. There is no paged
+            # `list_sessions_rich` scan any more -- unrelated newer sessions could crowd the two
+            # allowed ones off the page.
             "get_session",
             # Amendment F2 (direct send, HMP_V1.md §7a DS-4(2)).
             "get_session_by_title",
@@ -529,17 +538,32 @@ def _row_id(value: object) -> int:
 
 
 def _session_id_of(value: object) -> str:
-    """Amendment A1: a `sessions.id` value from a `list_sessions_rich`/`get_session` row. Never
+    """Amendment A1: a `sessions.id` value from a `get_session` row. Never
     empty -- Hermes's own `sessions.id` column is `TEXT PRIMARY KEY`, never null or blank."""
     if not isinstance(value, str) or not value:
         raise BridgeError("session id is not a non-empty string")
     return value
 
 
-def _message_count_of(value: object) -> int:
-    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
-        raise BridgeError("session message_count is not a non-negative integer")
-    return value
+def _session_flag(row: Mapping[str, object], key: str) -> bool:
+    """A `sessions.hidden` / `sessions.archived` column. Only a bool or the integers 0/1 count; an
+    absent or any other value means the flag cannot be established, and the caller fails closed
+    (`BridgeError`) rather than guessing "not archived" or "hidden"."""
+    value = row.get(key)
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in (0, 1):
+        return bool(value)
+    raise BridgeError(f"session {key} flag uncertain")
+
+
+@dataclasses.dataclass(frozen=True)
+class _CanonicalBotChat:
+    """`_canonical_bot_chat`'s result: the one rule F2 direct send and A1 browsing both use."""
+
+    root_session_id: str
+    live_tip_session_id: str
+    chain: tuple[str, ...]  # root first
 
 
 def _cmid(platform_message_id: object, chat_id: str | None) -> str | None:
@@ -562,10 +586,17 @@ class HermesReadBridge:
         directory: Directory,
         *,
         hermes: HermesApi | None = None,
+        title_lookup_qualified: bool = False,
     ) -> None:
         self._adapter = adapter
         self._directory = directory
         self._hermes = hermes if hermes is not None else HermesApi()
+        # `get_session_by_title` / `get_compression_lineage` are probed only by
+        # `compat.DIRECT_SEND_DEPENDENCIES` (their file, `hermes_state_titles.py`, is outside the
+        # read fingerprint). Session browsing may reach them only when that exact-build probe
+        # passed; otherwise `browsing_bot_chat` answers "no Bot Chat" (fail closed). F2 direct
+        # send is already gated on the same probe before it ever reaches `resolve_bot_chat`.
+        self._title_lookup_qualified = title_lookup_qualified is True
         # Always `concurrent.futures.Future` now (SR-4): `request_authorization` schedules the
         # P6 hand-off with `run_coroutine_threadsafe`, which returns that type regardless of
         # which thread calls it from.
@@ -909,61 +940,77 @@ class HermesReadBridge:
     # Amendment A1 (session browsing, OD-F9/OD-F10): SES-1 list, SES-2 resolve
     # ------------------------------------------------------------------------------------------
 
-    def _session_summaries(self, raw: object) -> list[SessionSummary]:
-        if not isinstance(raw, list):
-            raise BridgeError("session rows are not a list")
-        out: list[SessionSummary] = []
-        for item in raw:
-            if not isinstance(item, Mapping):
-                raise BridgeError("session row is not a mapping")
-            title = item.get("title")
-            source = item.get("source")
-            last_active = item.get("last_active")
-            out.append(
-                SessionSummary(
-                    session_id=_session_id_of(item.get("id")),
-                    title=title if isinstance(title, str) else None,
-                    source=source if isinstance(source, str) else "",
-                    started_at=_created_at(item.get("started_at")),
-                    last_active_at=_created_at(last_active) if last_active is not None else None,
-                    message_count=_message_count_of(item.get("message_count")),
-                    hidden=bool(item.get("hidden")),
-                )
-            )
-        return out
+    @staticmethod
+    def _session_row(db: Any, session_id: str) -> Mapping[str, object] | None:
+        """`get_session` for exactly `session_id`; `None` when it does not exist. A row that is
+        not a mapping, or names another id, cannot be trusted and raises."""
+        row = db.get_session(session_id)
+        if row is None:
+            return None
+        if not isinstance(row, Mapping) or row.get("id") != session_id:
+            raise BridgeError("session row is not a mapping")
+        return row
 
-    def list_sessions(
-        self,
-        user_id: str,
-        profile: str,
-        *,
-        sources_excluded: Sequence[str],
-        limit: int,
-        offset: int,
-    ) -> list[SessionSummary]:
-        """§1.1 `list_sessions_rich`. `include_hidden=True` (OD-F11 amendment ruling, 2026-09-27):
-        the canonical "Bot Chat" a bot's Desktop view opens is always created hidden
-        (`hermes-agent`'s `apps/desktop/src/plugins/hermes-bots/canonical-chat.ts`,
-        `createCanonicalChat`'s `session.create` call, `hidden: true`), so it would never appear
-        at all under the previous `include_hidden=False`. This bridge call stays a generic,
-        unfiltered session list -- exactly what OD-F9/OD-F10 originally asked for; `reads.py`'s
-        `_is_bot_view_session` selector (OD-F11) narrows the result down to the bot's own chat
-        plus the caller's, never disclosing an arbitrary hidden session to the wire."""
-        del user_id  # the read is profile-scoped; no per-user Hermes-side filter exists (OD-F10)
+    def session_summary(self, profile: str, session_id: str) -> SessionSummary | None:
+        """SES-1, one session by id -- see `contract.ReadBridge.session_summary`. The shape mirrors
+        what `list_sessions_rich`'s compression-tip projection used to hand back for a lineage
+        root: the root row's `source`/`started_at`/`hidden`, the tip's title (falling back to the
+        root's), message count and last activity, and the tip as `session_id`."""
 
-        def run() -> list[SessionSummary]:
+        def run() -> SessionSummary | None:
             with self._db(profile) as db:
-                raw = db.list_sessions_rich(
-                    exclude_sources=list(sources_excluded) or None,
-                    limit=limit,
-                    offset=offset,
-                    include_children=False,
-                    include_archived=False,
-                    include_hidden=True,
-                    order_by_last_active=True,
-                    project_compression_tips=True,
-                )
-            return self._session_summaries(raw)
+                row = self._session_row(db, session_id)
+                if row is None:
+                    return None
+                tip = self._tip(db, session_id)
+                tip_row = row if tip == session_id else self._session_row(db, tip)
+                if tip_row is None:
+                    raise BridgeError("compression tip does not exist")
+                ids_raw = db.get_active_message_ids(tip)
+                last_rows = db.get_messages(tip, latest=True, limit=1)
+            if not isinstance(ids_raw, list) or not isinstance(last_rows, list):
+                raise BridgeError("message rows are not a list")
+            hidden = _session_flag(row, "hidden")
+            archived = _session_flag(row, "archived") or _session_flag(tip_row, "archived")
+            title = tip_row.get("title")
+            if not isinstance(title, str):
+                title = row.get("title")
+            source = row.get("source")
+            started_at = _created_at(row.get("started_at"))
+            last_active_at = started_at
+            if last_rows:
+                newest = last_rows[-1]
+                if not isinstance(newest, Mapping):
+                    raise BridgeError("message row is not a mapping")
+                last_active_at = _created_at(newest.get("timestamp"))
+            return SessionSummary(
+                session_id=_session_id_of(tip),
+                title=title if isinstance(title, str) else None,
+                source=source if isinstance(source, str) else "",
+                started_at=started_at,
+                last_active_at=last_active_at,
+                message_count=len(ids_raw),
+                hidden=hidden,
+                archived=archived,
+            )
+
+        return self._read(run)
+
+    def browsing_bot_chat(self, profile: str) -> BotChatTarget | None:
+        if not self._title_lookup_qualified:
+            return None
+
+        def run() -> BotChatTarget | None:
+            with self._db(profile) as db:
+                canonical = self._canonical_bot_chat(db)
+            if canonical is None:
+                return None
+            return BotChatTarget(
+                root_session_id=canonical.root_session_id,
+                live_tip_session_id=canonical.live_tip_session_id,
+                head_message_id=None,  # not needed to browse; F2 reads it in `resolve_bot_chat`
+                compression_chain=canonical.chain,
+            )
 
         return self._read(run)
 
@@ -972,11 +1019,9 @@ class HermesReadBridge:
     ) -> ConversationRef | None:
         def run() -> ConversationRef | None:
             with self._db(profile) as db:
-                row = db.get_session(session_id)
-            if row is None:
+                row = self._session_row(db, session_id)
+            if row is None or _session_flag(row, "archived"):
                 return None
-            if not isinstance(row, Mapping) or not isinstance(row.get("id"), str):
-                raise BridgeError("session row is not a mapping")
             return ConversationRef(user_id=user_id, profile=profile, session_id=session_id)
 
         return self._read(run)
@@ -1001,42 +1046,91 @@ class HermesReadBridge:
     # Amendment F2 (direct send, HMP_V1.md §7a DS-4/DS-6)
     # ------------------------------------------------------------------------------------------
 
-    def resolve_bot_chat(self, profile: str) -> BotChatTarget | None:
-        """DS-4(2): the canonical Bot Chat's live compression tip, its current head, and its FULL
-        compression lineage (for DS-4(3)'s "every id in the chain" busy check). `None` when no row
-        titled exactly `"Bot Chat"` exists for this profile yet -- never created here (DS-9).
+    def _canonical_bot_chat(self, db: Any) -> _CanonicalBotChat | None:
+        """THE canonical Bot Chat rule, used by both F2 direct send (`resolve_bot_chat`) and A1
+        session browsing (`browsing_bot_chat`), so the two can never disagree: the session titled
+        exactly `"Bot Chat"` whose compression lineage ROOT is **hidden** and **not archived**
+        (Hermes's own identity rule, `SessionDB._set_session_title`). A compression child can be
+        visible: `publish_compression_child` does not copy the parent's `hidden` column, and the
+        title may move onto that child. Then resolve its current compression tip and full lineage.
+
+        `None` when there is no such session: no row with the title, or its lineage root is visible
+        or archived (a lookalike is never a send target and never listed). `BridgeError` when the
+        answer cannot be established -- a malformed row, a `hidden`/`archived` flag that is not a
+        bool/0/1, or an uncertain lineage -- so every caller fails closed.
 
         Review BLOCKER #2: compression moves the title onto the child and clears it from the
         ancestor, so `get_session_by_title` can hand back an id anywhere in the lineage.
         `get_compression_lineage` (`hermes_state_compression.py:689-719`) walks parents only while
         `_is_compression_child_row`, and returns `[session_id]` alone when its forward spine omits
         the start id (line 719). Review round 3: independently walk `parent_session_id` upward from
-        the live tip via `SessionDB.get_session` (`hermes_state_sessions.py:786`, a supported read)
-        and union those ids with the lineage result. If that walk cannot be established with
-        certainty, raise `BridgeError` — the send path fails closed as `session_busy`."""
+        the live tip via `SessionDB.get_session` (`hermes_state_sessions.py:786`, a supported read),
+        following verified compression edges only, and compare them with the lineage result.
+        The lineage ROOT must be hidden and neither the titled row, root nor tip may be archived."""
+        row = db.get_session_by_title(_CANONICAL_BOT_CHAT_TITLE)
+        if row is None:
+            return None
+        if not isinstance(row, Mapping) or not isinstance(row.get("id"), str):
+            raise BridgeError("session row is not a mapping")
+        if row.get("title") != _CANONICAL_BOT_CHAT_TITLE:
+            raise BridgeError("titled session does not carry the exact title")
+        titled_id = row["id"]
+        if _session_flag(row, "archived"):
+            return None
+        tip = self._tip(db, titled_id)
+        lineage_raw = db.get_compression_lineage(titled_id)
+        if not isinstance(lineage_raw, (list, tuple)):
+            raise BridgeError("compression lineage uncertain")
+        from_tip = _parent_chain(db, tip)
+        if from_tip is None:
+            raise BridgeError("compression lineage uncertain")
+        from_titled = from_tip if titled_id == tip else _parent_chain(db, titled_id)
+        if from_titled is None:
+            raise BridgeError("compression lineage uncertain")
+        if (
+            not from_tip
+            or from_tip[-1] != tip
+            or not from_titled
+            or from_tip[: len(from_titled)] != from_titled
+            or titled_id not in from_tip
+            or not lineage_raw
+            or any(not isinstance(sid, str) or not sid for sid in lineage_raw)
+        ):
+            raise BridgeError("compression lineage uncertain")
+        # Hermes returns the full chain when its forward spine contains the requested id. Its
+        # documented edge case returns only `[requested_id]`; our verified parent walk recovers
+        # that ancestry. Any OTHER disagreement is an authorization uncertainty, never a union.
+        if len(lineage_raw) == 1:
+            if lineage_raw[0] != titled_id:
+                raise BridgeError("compression lineage uncertain")
+        elif tuple(lineage_raw) != from_tip:
+            raise BridgeError("compression lineage uncertain")
+        chain = from_tip
+        # Lineage root (chain is root-first), stable across compression. The titled id can be the
+        # tip after the title moves; the lock, the lease check and the flags all need the root.
+        for member, must_be_hidden in ((chain[0], True), (tip, False)):
+            member_row = row if member == titled_id else self._session_row(db, member)
+            if member_row is None:
+                raise BridgeError("compression lineage uncertain")
+            if _session_flag(member_row, "archived"):
+                return None
+            if must_be_hidden and not _session_flag(member_row, "hidden"):
+                return None
+        return _CanonicalBotChat(root_session_id=chain[0], live_tip_session_id=tip, chain=chain)
+
+    def resolve_bot_chat(self, profile: str) -> BotChatTarget | None:
+        """DS-4(2): the canonical Bot Chat's live compression tip, its current head, and its FULL
+        compression lineage (for DS-4(3)'s "every id in the chain" busy check). `None` when no
+        canonical Bot Chat exists for this profile yet -- never created here (DS-9). What counts as
+        canonical, and every fail-closed case, is `_canonical_bot_chat`; an uncertain lineage
+        raises `BridgeError` -- the send path fails closed as `session_busy`."""
 
         def run() -> BotChatTarget | None:
             with self._db(profile) as db:
-                row = db.get_session_by_title(_CANONICAL_BOT_CHAT_TITLE)
-                if row is None:
+                canonical = self._canonical_bot_chat(db)
+                if canonical is None:
                     return None
-                if not isinstance(row, Mapping) or not isinstance(row.get("id"), str):
-                    raise BridgeError("session row is not a mapping")
-                titled_id = row["id"]
-                tip = self._tip(db, titled_id)
-                lineage_raw = db.get_compression_lineage(titled_id)
-                if not isinstance(lineage_raw, (list, tuple)):
-                    raise BridgeError("compression lineage uncertain")
-                from_tip = _parent_chain(db, tip)
-                if from_tip is None:
-                    raise BridgeError("compression lineage uncertain")
-                from_titled = from_tip if titled_id == tip else _parent_chain(db, titled_id)
-                if from_titled is None:
-                    raise BridgeError("compression lineage uncertain")
-                chain = _union_session_ids(from_tip, from_titled, lineage_raw, titled_id, tip)
-                if not chain or tip not in chain or titled_id not in chain:
-                    raise BridgeError("compression lineage uncertain")
-                head_rows = db.get_messages(tip, latest=True, limit=1)
+                head_rows = db.get_messages(canonical.live_tip_session_id, latest=True, limit=1)
             if not isinstance(head_rows, list):
                 raise BridgeError("message rows are not a list")
             head_message_id = (
@@ -1045,12 +1139,10 @@ class HermesReadBridge:
                 else None
             )
             return BotChatTarget(
-                # Lineage root (chain is root-first), stable across compression. The titled id can
-                # be the tip after the title moves; the lock and the lease check both need the root.
-                root_session_id=chain[0],
-                live_tip_session_id=tip,
+                root_session_id=canonical.root_session_id,
+                live_tip_session_id=canonical.live_tip_session_id,
                 head_message_id=head_message_id,
-                compression_chain=chain,
+                compression_chain=canonical.chain,
             )
 
         return self._read(run)
