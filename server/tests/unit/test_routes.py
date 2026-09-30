@@ -67,7 +67,7 @@ class Tty(io.StringIO):
 
 class Home:
     """An isolated default root with an `alpha` profile already routed and a `beta` profile that
-    was created afterwards (no route, no multiplex)."""
+    was created afterwards (no route)."""
 
     def __init__(self, base: Path) -> None:
         self.base = base
@@ -101,14 +101,15 @@ class Home:
     def load(self, rel: str) -> Any:
         return yaml.safe_load(self.path(*rel.split("/")).read_text(encoding="utf-8"))
 
-    def snapshot(self) -> dict[str, tuple[bytes, int, int]]:
-        """Every file under the root: bytes, mode, inode. Equal snapshots = nothing was touched."""
-        out: dict[str, tuple[bytes, int, int]] = {}
+    def snapshot(self) -> dict[str, tuple[bytes, int, int, int]]:
+        """Every file under the root: bytes, mode, inode, mtime. Equal snapshots = nothing was
+        touched."""
+        out: dict[str, tuple[bytes, int, int, int]] = {}
         for p in sorted(self.root.rglob("*")):
             if p.is_file() and not p.is_symlink():
                 st = p.stat()
                 rel = str(p.relative_to(self.root))
-                out[rel] = (p.read_bytes(), stat.S_IMODE(st.st_mode), st.st_ino)
+                out[rel] = (p.read_bytes(), stat.S_IMODE(st.st_mode), st.st_ino, st.st_mtime_ns)
         return out
 
     # ---- running the CLI ------------------------------------------------------------------------
@@ -172,6 +173,7 @@ def test_new_bot_created_after_initial_routing(home: Home) -> None:
     home.path("config.yaml").chmod(0o640)
     before_root = home.load("config.yaml")
     alpha_before = home.snapshot()["profiles/alpha/config.yaml"]
+    beta_before = home.snapshot()["profiles/beta/config.yaml"]
 
     assert home.run("beta") == cli.EXIT_OK, home.err
     after_root = home.load("config.yaml")
@@ -181,26 +183,19 @@ def test_new_bot_created_after_initial_routing(home: Home) -> None:
     expected["gateway"] = {**before_root["gateway"], "profile_routes": routes_of(after_root)}
     assert after_root == expected  # every other value preserved, in the same key order
     assert list(after_root) == list(before_root)
-    assert home.load("profiles/beta/config.yaml") == {
-        "agent": {"name": "beta"},
-        "gateway": {"multiplex_profiles": True},
-    }
+    assert home.snapshot()["profiles/beta/config.yaml"] == beta_before  # never touched
+    assert home.path("profiles", "beta", "config.yaml").read_bytes() == BETA_YAML.encode()
     assert home.snapshot()["profiles/alpha/config.yaml"] == alpha_before  # untouched, same inode
     assert stat.S_IMODE(home.path("config.yaml").stat().st_mode) == 0o640
 
-    # Private backups of the originals, one per changed file, and nothing else new.
-    for rel, original in (
-        ("config.yaml.hmp-bak", ROOT_YAML),
-        ("profiles/beta/config.yaml.hmp-bak", BETA_YAML),
-    ):
-        assert home.path(*rel.split("/")).read_text(encoding="utf-8") == original
-        assert stat.S_IMODE(home.path(*rel.split("/")).stat().st_mode) == 0o600
+    # One private backup of the original root, and nothing else new (no profile backup).
+    assert home.path("config.yaml.hmp-bak").read_text(encoding="utf-8") == ROOT_YAML
+    assert stat.S_IMODE(home.path("config.yaml.hmp-bak").stat().st_mode) == 0o600
     assert sorted(home.snapshot()) == [
         "config.yaml",
         "config.yaml.hmp-bak",
         "profiles/alpha/config.yaml",
         "profiles/beta/config.yaml",
-        "profiles/beta/config.yaml.hmp-bak",
     ]
     assert not list(home.root.rglob("*.tmp"))
 
@@ -212,6 +207,11 @@ def test_output_states_the_sequence_and_the_limits(home: Home) -> None:
     assert "request access to beta" in out
     assert "hermes -p beta pairing approve hmp <request_id>" in out
     assert "did not restart the gateway, authorize any phone" in out
+    assert "on disk only" in out
+    assert "did not activate it" in out
+    assert "not served or send-ready" not in out
+    assert "(manual)" in out
+    assert "multiplex" not in out.lower()  # no claim about a profile setting
     assert str(home.root) not in out and str(home.base) not in out  # no absolute paths
 
 
@@ -219,16 +219,16 @@ def test_second_run_is_a_successful_no_op(home: Home) -> None:
     assert home.run("beta") == cli.EXIT_OK
     first = home.snapshot()
     assert home.run("beta") == cli.EXIT_OK
-    assert "already prepared; nothing was changed" in home.out
+    assert "already in the root config.yaml; nothing was changed" in home.out
     assert "hermes gateway restart" in home.out
     assert home.snapshot() == first  # same bytes, modes, inodes: nothing rewritten, no backup
 
 
 def test_a_profile_that_is_already_prepared_is_not_rewritten(home: Home) -> None:
-    # alpha is already routed and multiplexed by the fixture's initial state.
+    # alpha is already routed by the fixture's initial state.
     before = home.snapshot()
     assert home.run("alpha") == cli.EXIT_OK
-    assert "already prepared" in home.out
+    assert "already in the root config.yaml" in home.out
     assert home.snapshot() == before
 
 
@@ -247,21 +247,50 @@ def test_root_multiplex_is_never_turned_on(home: Home, shape: str) -> None:
     assert home.snapshot() == before  # no write, no backup
 
 
-def test_profile_that_already_multiplexes_keeps_its_file(home: Home) -> None:
-    home.write("profiles/beta/config.yaml", ALPHA_YAML)
+PROFILE_FLAG_SHAPES = {
+    "absent": BETA_YAML,
+    "no-gateway-mapping": "gateway:\n",
+    "nested-false": "gateway:\n  multiplex_profiles: false\n",
+    "nested-true": "gateway:\n  multiplex_profiles: true\n",
+    "nested-string": "gateway:\n  multiplex_profiles: 'true'\n",
+    "nested-null": "gateway:\n  multiplex_profiles:\n",
+    "top-false": "multiplex_profiles: false\n",
+    "top-true": "multiplex_profiles: true\n",
+    "top-string": "multiplex_profiles: 'yes'\n",
+    "top-true-nested-false": "multiplex_profiles: true\ngateway:\n  multiplex_profiles: false\n",
+    "comment-only": "# only a comment\n",
+    "empty": "",
+}
+
+
+@pytest.mark.parametrize("shape", sorted(PROFILE_FLAG_SHAPES))
+def test_profile_config_is_never_touched_whatever_its_flag(home: Home, shape: str) -> None:
+    """Root route only: the profile's own flag is not read, required, refused or written. Bytes,
+    mode, inode and mtime are identical, and no profile backup appears."""
+    home.write("profiles/beta/config.yaml", PROFILE_FLAG_SHAPES[shape])
+    os.utime(home.path("profiles", "beta", "config.yaml"), ns=(1_000_000_000, 1_000_000_000))
     before = home.snapshot()["profiles/beta/config.yaml"]
-    assert home.run("beta") == cli.EXIT_OK
+    assert home.run("beta") == cli.EXIT_OK, home.err
+    assert BETA_ROUTE in routes_of(home.load("config.yaml"))
     assert home.snapshot()["profiles/beta/config.yaml"] == before
     assert not home.path("profiles", "beta", "config.yaml.hmp-bak").exists()
+    assert not list((home.root / "profiles").rglob("*.hmp-bak"))
+    assert not list(home.root.rglob("*.tmp"))
 
 
-def test_top_level_true_with_nested_absent_gets_nested_true(home: Home) -> None:
-    home.write("profiles/beta/config.yaml", "multiplex_profiles: true\n")
-    assert home.run("beta") == cli.EXIT_OK
-    assert home.load("profiles/beta/config.yaml") == {
-        "multiplex_profiles": True,
-        "gateway": {"multiplex_profiles": True},
-    }
+def test_profile_with_existing_sessions_is_allowed_and_untouched(home: Home) -> None:
+    """Nonzero history is not a reason to refuse, and nothing under the profile moves."""
+    sessions = home.path("profiles", "beta", "sessions")
+    sessions.mkdir(mode=0o700)
+    (sessions / "s1.json").write_bytes(b'{"fixture": "history"}')
+    (sessions / "s1.json").chmod(0o600)
+    home.write("profiles/beta/state.db", b"not-a-real-db")
+    home.write("profiles/beta/config.yaml", PROFILE_FLAG_SHAPES["nested-false"])
+    before = {k: v for k, v in home.snapshot().items() if k.startswith("profiles/beta/")}
+    assert home.run("beta") == cli.EXIT_OK, home.err
+    after = {k: v for k, v in home.snapshot().items() if k.startswith("profiles/beta/")}
+    assert after == before
+    assert "sessions" not in home.out.lower()  # no history warning or refusal
 
 
 def test_null_gateway_and_null_routes_are_treated_as_unset(home: Home) -> None:
@@ -270,12 +299,13 @@ def test_null_gateway_and_null_routes_are_treated_as_unset(home: Home) -> None:
         "gateway:\n  multiplex_profiles: true\n  profile_routes:\nplugins:\n  enabled: [hmp]\n",
     )
     home.write("profiles/beta/config.yaml", "gateway:\n")
+    before = home.snapshot()["profiles/beta/config.yaml"]
     assert home.run("beta") == cli.EXIT_OK, home.err
     assert home.load("config.yaml")["gateway"] == {
         "multiplex_profiles": True,
         "profile_routes": [BETA_ROUTE],
     }
-    assert home.load("profiles/beta/config.yaml") == {"gateway": {"multiplex_profiles": True}}
+    assert home.snapshot()["profiles/beta/config.yaml"] == before
 
 
 def test_route_for_another_platform_with_same_guild_is_not_a_conflict(home: Home) -> None:
@@ -296,7 +326,7 @@ def test_backup_is_one_rolling_file(home: Home) -> None:
 
 
 # --------------------------------------------------------------------------------------------------
-# No side effect beyond the two files
+# No side effect beyond the root config and its backup
 # --------------------------------------------------------------------------------------------------
 
 
@@ -500,12 +530,6 @@ def test_unsafe_yaml_is_refused_and_nothing_changes(home: Home, which: str, case
     assert home.snapshot() == before
 
 
-def test_empty_profile_config_is_a_valid_empty_mapping(home: Home) -> None:
-    home.write("profiles/beta/config.yaml", "# only a comment\n")
-    assert home.run("beta") == cli.EXIT_OK
-    assert home.load("profiles/beta/config.yaml") == {"gateway": {"multiplex_profiles": True}}
-
-
 # --------------------------------------------------------------------------------------------------
 # Never widen: route overlaps and multiplex conflicts are refused
 # --------------------------------------------------------------------------------------------------
@@ -557,14 +581,13 @@ def test_exact_route_next_to_a_conflicting_one_is_still_refused(home: Home) -> N
     assert home.snapshot() == before
 
 
-def test_existing_exact_route_is_accepted_and_only_multiplex_is_added(home: Home) -> None:
+def test_existing_exact_route_is_a_no_op(home: Home) -> None:
     doc = home.load("config.yaml")
     routes_of(doc).append({**BETA_ROUTE, "enabled": True})
     home.write("config.yaml", yaml.safe_dump(doc, sort_keys=False))
-    root_before = home.snapshot()["config.yaml"]
+    before = home.snapshot()
     assert home.run("beta") == cli.EXIT_OK
-    assert home.snapshot()["config.yaml"] == root_before  # route already there: root untouched
-    assert home.load("profiles/beta/config.yaml")["gateway"] == {"multiplex_profiles": True}
+    assert home.snapshot() == before  # nothing written, no backup, profile untouched
 
 
 @pytest.mark.parametrize(
@@ -586,7 +609,6 @@ def test_malformed_route_shapes_are_refused(home: Home, mutate: Any) -> None:
     assert home.snapshot() == before
 
 
-@pytest.mark.parametrize("which", ["root", "profile"])
 @pytest.mark.parametrize(
     "text",
     [
@@ -608,13 +630,10 @@ def test_malformed_route_shapes_are_refused(home: Home, mutate: Any) -> None:
         "top-false-nested-true",
     ],
 )
-def test_multiplex_conflicts_are_refused(home: Home, which: str, text: str) -> None:
-    if which == "root":
-        doc = yaml.safe_load(text)
-        doc["gateway"] = {**(doc.get("gateway") or {}), "profile_routes": []}
-        home.write("config.yaml", yaml.safe_dump(doc, sort_keys=False))
-    else:
-        home.write("profiles/beta/config.yaml", text)
+def test_root_multiplex_conflicts_are_refused(home: Home, text: str) -> None:
+    doc = yaml.safe_load(text)
+    doc["gateway"] = {**(doc.get("gateway") or {}), "profile_routes": []}
+    home.write("config.yaml", yaml.safe_dump(doc, sort_keys=False))
     before = home.snapshot()
     assert home.run("beta") == cli.EXIT_REFUSED
     assert "multiplex_profiles" in home.err
@@ -646,103 +665,89 @@ def test_file_changed_between_read_and_write_is_refused(
     assert not list(home.root.rglob("*.hmp-bak"))  # refused before any backup
 
 
-def _fail_root_write(monkeypatch: pytest.MonkeyPatch, home: Home, *, also_restore: bool) -> None:
+def _root_write_hook(monkeypatch: pytest.MonkeyPatch, home: Home, hook: Any) -> None:
+    """Route only the root config's own write through `hook(real_write, data, mode)`."""
     real = routes._atomic_write
     root_cfg = home.path("config.yaml")
-    profile_cfg = home.path("profiles", "beta", "config.yaml")
-    state = {"profile_writes": 0}
 
-    def flaky(path: Path, data: bytes, mode: int) -> None:
+    def wrapped(path: Path, data: bytes, mode: int) -> None:
         if path == root_cfg:
-            raise OSError("disk full")
-        if path == profile_cfg:
-            state["profile_writes"] += 1
-            if also_restore and state["profile_writes"] > 1:
-                raise OSError("disk still full")
-        real(path, data, mode)
+            hook(lambda: real(path, data, mode), data, mode)
+        else:
+            real(path, data, mode)
 
-    monkeypatch.setattr(routes, "_atomic_write", flaky)
+    monkeypatch.setattr(routes, "_atomic_write", wrapped)
 
 
-def test_root_write_failure_restores_the_profile_and_says_so(
+def test_root_write_failure_before_rename_is_confirmed_unchanged(
     home: Home, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    def fail(_write: Any, _data: bytes, _mode: int) -> None:
+        raise OSError("disk full secret-detail")
+
+    _root_write_hook(monkeypatch, home, fail)
     before = home.snapshot()
-    _fail_root_write(monkeypatch, home, also_restore=False)
     assert home.run("beta") == cli.EXIT_REFUSED
     assert "root config.yaml was not changed by this command" in home.err
-    assert "restored to its original content" in home.err
-    assert home.path("config.yaml").read_bytes() == before["config.yaml"][0]
-    assert home.path("profiles", "beta", "config.yaml").read_bytes() == BETA_YAML.encode()
+    assert "profile config.yaml was not changed by this command" in home.err
+    assert "secret-detail" not in home.err + home.out
+    snap = home.snapshot()
+    assert snap["config.yaml"] == before["config.yaml"]
+    assert snap["profiles/beta/config.yaml"] == before["profiles/beta/config.yaml"]
     assert not list(home.root.rglob("*.tmp"))
 
 
-def test_failed_restore_is_reported_not_hidden(home: Home, monkeypatch: pytest.MonkeyPatch) -> None:
-    _fail_root_write(monkeypatch, home, also_restore=True)
-    assert home.run("beta") == cli.EXIT_ENVIRONMENT  # partial state: distinct exit code
-    assert "root config.yaml was not changed by this command" in home.err
-    assert "not restored" in home.err
-    assert "config.yaml.hmp-bak" in home.err
-    assert "restored to its original" not in home.err
-    assert home.load("profiles/beta/config.yaml")["gateway"] == {"multiplex_profiles": True}
-    assert home.path("profiles", "beta", "config.yaml.hmp-bak").read_text() == BETA_YAML
-    assert home.path("config.yaml").read_text() == ROOT_YAML
-
-
-def test_restore_does_not_clobber_a_file_edited_since(
+def test_failure_after_rename_is_reported_as_updated_on_disk(
     home: Home, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    real = routes._atomic_write
-    profile_cfg = home.path("profiles", "beta", "config.yaml")
+    def rename_then_fail(write: Any, _data: bytes, _mode: int) -> None:
+        write()
+        raise OSError("directory sync failed secret-detail")
 
-    def edit_then_fail(path: Path, data: bytes, mode: int) -> None:
-        if path == home.path("config.yaml"):
-            profile_cfg.write_text("agent:\n  name: edited-by-someone\n")
-            raise OSError("boom")
-        real(path, data, mode)
+    _root_write_hook(monkeypatch, home, rename_then_fail)
+    assert home.run("beta") == cli.EXIT_ENVIRONMENT  # partial state: distinct exit code
+    assert "root config.yaml now holds the new route" in home.err
+    assert "running gateway is unchanged" in home.err
+    assert "config.yaml.hmp-bak" in home.err
+    assert "secret-detail" not in home.err + home.out
+    assert BETA_ROUTE in routes_of(home.load("config.yaml"))
+    assert home.path("profiles", "beta", "config.yaml").read_bytes() == BETA_YAML.encode()
 
-    monkeypatch.setattr(routes, "_atomic_write", edit_then_fail)
+
+def test_failure_then_external_edit_is_unconfirmed_and_never_restored(
+    home: Home, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def edit_then_fail(_write: Any, _data: bytes, _mode: int) -> None:
+        home.write("config.yaml", ROOT_YAML + "someone: else\n")
+        raise OSError("boom")
+
+    _root_write_hook(monkeypatch, home, edit_then_fail)
     assert home.run("beta") == cli.EXIT_ENVIRONMENT
-    assert "not restored" in home.err and "changed again" in home.err
-    assert "edited-by-someone" in profile_cfg.read_text()
+    assert "state could not be confirmed" in home.err
+    assert "config.yaml.hmp-bak" in home.err
+    assert "someone: else" in home.path("config.yaml").read_text()  # their edit is left alone
+    assert home.path("profiles", "beta", "config.yaml").read_bytes() == BETA_YAML.encode()
 
 
-def test_profile_write_failure_changes_nothing(home: Home, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_only_config_write_is_the_root(home: Home, monkeypatch: pytest.MonkeyPatch) -> None:
     real = routes._atomic_write
-    profile_cfg = home.path("profiles", "beta", "config.yaml")
-
-    def fail_profile(path: Path, data: bytes, mode: int) -> None:
-        if path == profile_cfg:
-            raise OSError("boom")
-        real(path, data, mode)
-
-    monkeypatch.setattr(routes, "_atomic_write", fail_profile)
-    before = home.snapshot()
-    assert home.run("beta") == cli.EXIT_REFUSED
-    assert "nothing was changed" in home.err
-    snap = home.snapshot()
-    assert snap["config.yaml"] == before["config.yaml"]  # root never written: profile goes first
-    assert snap["profiles/beta/config.yaml"] == before["profiles/beta/config.yaml"]
-
-
-def test_profile_is_written_before_root(home: Home, monkeypatch: pytest.MonkeyPatch) -> None:
-    real = routes._atomic_write
-    order: list[str] = []
+    written: list[Path] = []
 
     def spy(path: Path, data: bytes, mode: int) -> None:
-        if path.name == "config.yaml":
-            order.append("root" if path.parent == home.root else "profile")
+        written.append(path)
         real(path, data, mode)
 
     monkeypatch.setattr(routes, "_atomic_write", spy)
     assert home.run("beta") == cli.EXIT_OK
-    assert order == ["profile", "root"]
+    # the private backup, then the root itself; never anything under the profile
+    assert written == [home.path("config.yaml.hmp-bak"), home.path("config.yaml")]
 
 
-def test_written_files_keep_their_modes(home: Home) -> None:
-    home.path("profiles", "beta", "config.yaml").chmod(0o644)
+def test_written_root_keeps_its_mode(home: Home) -> None:
+    home.path("config.yaml").chmod(0o644)
     assert home.run("beta") == cli.EXIT_OK
-    assert stat.S_IMODE(home.path("profiles", "beta", "config.yaml").stat().st_mode) == 0o644
+    assert stat.S_IMODE(home.path("config.yaml").stat().st_mode) == 0o644
+    assert stat.S_IMODE(home.path("config.yaml.hmp-bak").stat().st_mode) == 0o600
 
 
 # --------------------------------------------------------------------------------------------------
@@ -751,19 +756,17 @@ def test_written_files_keep_their_modes(home: Home) -> None:
 
 
 def test_route_shape_matches_the_documented_deployment_shape() -> None:
-    result = routes.plan({"gateway": {"multiplex_profiles": True}}, {}, "beta")
+    result = routes.plan({"gateway": {"multiplex_profiles": True}}, "beta")
     assert result.root_doc == {
         "gateway": {"multiplex_profiles": True, "profile_routes": [BETA_ROUTE]}
     }
-    assert result.profile_doc == {"gateway": {"multiplex_profiles": True}}
+    assert result.route_added
 
 
 def test_plan_does_not_mutate_its_inputs() -> None:
     root = {"gateway": {"multiplex_profiles": True, "profile_routes": []}}
-    profile = {"gateway": None}
-    routes.plan(root, profile, "beta")
+    routes.plan(root, "beta")
     assert root == {"gateway": {"multiplex_profiles": True, "profile_routes": []}}
-    assert profile == {"gateway": None}
 
 
 def test_environment_is_not_printed_or_needed(home: Home) -> None:
@@ -778,32 +781,27 @@ def test_environment_is_not_printed_or_needed(home: Home) -> None:
 # --------------------------------------------------------------------------------------------------
 
 
-def _exact_route_in_root(home: Home) -> None:
-    doc = home.load("config.yaml")
-    routes_of(doc).append(BETA_ROUTE)
-    home.write("config.yaml", yaml.safe_dump(doc, sort_keys=False))
-
-
-def test_root_edited_concurrently_blocks_a_profile_only_write(
+def test_file_changed_between_read_and_write_is_refused_for_the_profile_too(
     home: Home, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    _exact_route_in_root(home)  # only the profile file would change
+    """The profile config is only inspected, but drift in it since the read still refuses."""
     original = routes._verified_emit
 
-    def emit_then_edit_root(doc: Any, snap: Any) -> bytes:
+    def emit_then_edit_profile(doc: Any, snap: Any) -> bytes:
         data = original(doc, snap)
-        home.write("config.yaml", "gateway:\n  multiplex_profiles: false\n")
+        home.write("profiles/beta/config.yaml", BETA_YAML + "concurrent: edit\n")
         return data
 
-    monkeypatch.setattr(routes, "_verified_emit", emit_then_edit_root)
-    profile_before = home.snapshot()["profiles/beta/config.yaml"]
+    monkeypatch.setattr(routes, "_verified_emit", emit_then_edit_profile)
+    root_before = home.snapshot()["config.yaml"]
     assert home.run("beta") == cli.EXIT_REFUSED
     assert "changed while this command ran" in home.err
-    assert home.snapshot()["profiles/beta/config.yaml"] == profile_before
+    assert home.snapshot()["config.yaml"] == root_before
+    assert "concurrent: edit" in home.path("profiles", "beta", "config.yaml").read_text()
     assert not list(home.root.rglob("*.hmp-bak"))
 
 
-def test_edit_during_backup_writes_is_caught_before_the_profile_write(
+def test_edit_during_backup_write_is_caught_before_the_rename(
     home: Home, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     real = routes._write_backup
@@ -819,106 +817,102 @@ def test_edit_during_backup_writes_is_caught_before_the_profile_write(
     assert "no config file was changed by this command" in home.err
     assert home.snapshot()["profiles/beta/config.yaml"] == profile_before
     assert "concurrent: edit" in home.path("config.yaml").read_text()
+    assert "beta-route" not in home.path("config.yaml").read_text()
 
 
-def test_root_edited_by_someone_else_is_reported_as_not_changed_by_this_command(
+def test_profile_edited_during_backup_write_is_caught_before_the_rename(
     home: Home, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    real = routes._atomic_write
-    profile_cfg = home.path("profiles", "beta", "config.yaml")
+    real = routes._write_backup
 
-    def edit_root_after_profile(path: Path, data: bytes, mode: int) -> None:
-        real(path, data, mode)
-        if path == profile_cfg and data != BETA_YAML.encode():
-            home.write("config.yaml", ROOT_YAML + "someone: else\n")
+    def backup_then_edit(snap: Any, target: Path) -> str:
+        label = real(snap, target)
+        home.write("profiles/beta/config.yaml", BETA_YAML + "concurrent: edit\n")
+        return label
 
-    monkeypatch.setattr(routes, "_atomic_write", edit_root_after_profile)
+    monkeypatch.setattr(routes, "_write_backup", backup_then_edit)
+    root_before = home.path("config.yaml").read_bytes()
     assert home.run("beta") == cli.EXIT_REFUSED
-    assert "root config.yaml was not changed by this command" in home.err
-    assert "restored to its original content" in home.err
-    assert "someone: else" in home.path("config.yaml").read_text()
-    assert home.path("profiles", "beta", "config.yaml").read_text() == BETA_YAML
+    assert home.path("config.yaml").read_bytes() == root_before
 
 
-def _interrupt_write(
-    monkeypatch: pytest.MonkeyPatch, home: Home, *, at: str, after: bool, exc: BaseException
+def _interrupt_root_write(
+    monkeypatch: pytest.MonkeyPatch, home: Home, *, after: bool, exc: BaseException
 ) -> None:
-    real = routes._atomic_write
-    rel = ("config.yaml",) if at == "root" else ("profiles", "beta", "config.yaml")
-    target = home.path(*rel)
-    seen = {"n": 0}
+    def hook(write: Any, _data: bytes, _mode: int) -> None:
+        if after:
+            write()
+        raise exc
 
-    def hook(path: Path, data: bytes, mode: int) -> None:
-        if path == target:
-            seen["n"] += 1
-            if seen["n"] == 1:
-                if after:
-                    real(path, data, mode)
-                raise exc
-        real(path, data, mode)
-
-    monkeypatch.setattr(routes, "_atomic_write", hook)
+    _root_write_hook(monkeypatch, home, hook)
 
 
 @pytest.mark.parametrize("exc", [KeyboardInterrupt(), SystemExit(2)], ids=["ctrl-c", "exit"])
-def test_interrupt_after_profile_write_before_root_replace_restores_and_reports(
+def test_interrupt_before_root_rename_changes_nothing_and_says_so(
     home: Home, monkeypatch: pytest.MonkeyPatch, exc: BaseException
 ) -> None:
-    # The interrupt lands on the root write itself, before any root replace happens.
-    _interrupt_write(monkeypatch, home, at="root", after=False, exc=exc)
-    before_root = home.path("config.yaml").read_bytes()
+    _interrupt_root_write(monkeypatch, home, after=False, exc=exc)
+    before = home.snapshot()
     assert home.run("beta") == cli.EXIT_INTERRUPTED
     assert "interrupted" in home.err
-    assert "profile config.yaml restored to its original content" in home.err
     assert "root config.yaml was not changed by this command" in home.err
-    assert home.path("config.yaml").read_bytes() == before_root
-    assert home.path("profiles", "beta", "config.yaml").read_text() == BETA_YAML
+    assert "profile config.yaml was not changed by this command" in home.err
+    snap = home.snapshot()
+    assert snap["config.yaml"] == before["config.yaml"]
+    assert snap["profiles/beta/config.yaml"] == before["profiles/beta/config.yaml"]
+    assert home.calls == []
 
 
-def test_interrupt_right_after_the_profile_replace_is_reported(
-    home: Home, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("exc", [KeyboardInterrupt(), SystemExit(2)], ids=["ctrl-c", "exit"])
+def test_interrupt_after_root_rename_reports_route_on_disk(
+    home: Home, monkeypatch: pytest.MonkeyPatch, exc: BaseException
 ) -> None:
-    _interrupt_write(monkeypatch, home, at="profile", after=True, exc=KeyboardInterrupt())
+    _interrupt_root_write(monkeypatch, home, after=True, exc=exc)
     assert home.run("beta") == cli.EXIT_INTERRUPTED
     assert "interrupted" in home.err
-    assert "profile config.yaml restored to its original content" in home.err
-    assert home.path("profiles", "beta", "config.yaml").read_text() == BETA_YAML
-    assert home.path("config.yaml").read_text() == ROOT_YAML
-
-
-def test_interrupt_after_root_replace_reports_both_files_updated(
-    home: Home, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    _interrupt_write(monkeypatch, home, at="root", after=True, exc=KeyboardInterrupt())
-    assert home.run("beta") == cli.EXIT_INTERRUPTED
-    assert "root config.yaml was updated" in home.err
-    assert "profile config.yaml was updated" in home.err
+    assert "root config.yaml now holds the new route" in home.err
+    assert "profile config.yaml was not changed by this command" in home.err
     assert BETA_ROUTE in routes_of(home.load("config.yaml"))
-    assert home.load("profiles/beta/config.yaml")["gateway"] == {"multiplex_profiles": True}
+    assert home.path("profiles", "beta", "config.yaml").read_bytes() == BETA_YAML.encode()
+    assert home.calls == []
 
 
-def test_interrupt_during_rollback_is_reported_with_the_backup(
+def test_interrupt_inside_the_real_rename_window_is_reported_from_file_content(
     home: Home, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    real = routes._atomic_write
+    """Interrupt in the directory sync that follows the real rename (keyed on content: the backup
+    phase also syncs a directory, before the root changes)."""
     root_cfg = home.path("config.yaml")
-    profile_cfg = home.path("profiles", "beta", "config.yaml")
-    seen = {"profile_writes": 0}
 
-    def hook(path: Path, data: bytes, mode: int) -> None:
-        if path == root_cfg:
-            raise OSError("disk full")
-        if path == profile_cfg:
-            seen["profile_writes"] += 1
-            if seen["profile_writes"] > 1:
-                raise KeyboardInterrupt
-        real(path, data, mode)
+    def fsync_then_interrupt(_path: Path) -> None:
+        if "beta-route" in root_cfg.read_text():
+            raise KeyboardInterrupt
 
-    monkeypatch.setattr(routes, "_atomic_write", hook)
-    assert home.run("beta") == cli.EXIT_ENVIRONMENT
-    assert "restore itself was interrupted" in home.err
-    assert "config.yaml.hmp-bak" in home.err
-    assert home.path("profiles", "beta", "config.yaml.hmp-bak").read_text() == BETA_YAML
+    monkeypatch.setattr(routes, "_fsync_dir", fsync_then_interrupt)
+    assert home.run("beta") == cli.EXIT_INTERRUPTED
+    assert "root config.yaml now holds the new route" in home.err
+    assert BETA_ROUTE in routes_of(home.load("config.yaml"))
+    assert home.calls == []
+
+
+def test_interrupt_at_the_real_replace_leaves_root_unchanged(
+    home: Home, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root_cfg = home.path("config.yaml")
+    real = os.replace
+
+    def replace(src: Any, dst: Any, *a: Any, **k: Any) -> None:
+        if Path(dst) == root_cfg:
+            raise KeyboardInterrupt
+        real(src, dst, *a, **k)
+
+    monkeypatch.setattr(routes.os, "replace", replace)
+    before_root = root_cfg.read_bytes()
+    assert home.run("beta") == cli.EXIT_INTERRUPTED
+    assert "root config.yaml was not changed by this command" in home.err
+    assert root_cfg.read_bytes() == before_root
+    assert not list(home.root.rglob("*.tmp"))
+    assert home.calls == []
 
 
 @pytest.mark.parametrize(
@@ -956,56 +950,6 @@ def test_backup_target_stat_failure_is_a_clean_refusal(
     assert home.run("beta") == cli.EXIT_REFUSED
     assert "nothing was changed" in home.err and "secret-detail" not in home.err
     assert home.snapshot() == before
-
-
-# ---- root-only interrupts (the profile is already multiplexed, so only the root file changes) ----
-
-BETA_MULTIPLEXED = "agent:\n  name: beta\ngateway:\n  multiplex_profiles: true\n"
-
-
-def test_root_only_interrupt_after_root_replace_reports_final_state(
-    home: Home, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    home.write("profiles/beta/config.yaml", BETA_MULTIPLEXED)
-    root_cfg = home.path("config.yaml")
-
-    def fsync_then_interrupt(_path: Path) -> None:
-        # Keyed on content: the backup phase also syncs a directory, before the root changes.
-        if "beta-route" in root_cfg.read_text():
-            raise KeyboardInterrupt
-
-    monkeypatch.setattr(routes, "_fsync_dir", fsync_then_interrupt)
-    before_profile = home.snapshot()["profiles/beta/config.yaml"]
-    assert home.run("beta") == cli.EXIT_INTERRUPTED
-    assert "interrupted" in home.err
-    assert "root config.yaml was updated; profile config.yaml was not changed by this command" in (
-        home.err
-    )
-    assert "Both files carry the change" not in home.err
-    assert BETA_ROUTE in routes_of(home.load("config.yaml"))
-    assert home.snapshot()["profiles/beta/config.yaml"] == before_profile
-    assert home.calls == []
-
-
-def test_root_only_interrupt_before_root_replace_changes_nothing(
-    home: Home, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    home.write("profiles/beta/config.yaml", BETA_MULTIPLEXED)
-    root_cfg = home.path("config.yaml")
-    real = os.replace
-
-    def replace(src: Any, dst: Any, *a: Any, **k: Any) -> None:
-        if Path(dst) == root_cfg:
-            raise KeyboardInterrupt
-        real(src, dst, *a, **k)
-
-    monkeypatch.setattr(routes.os, "replace", replace)
-    before_root = root_cfg.read_bytes()
-    assert home.run("beta") == cli.EXIT_INTERRUPTED
-    assert "root config.yaml was not changed by this command" in home.err
-    assert "profile config.yaml still holds its original content" in home.err
-    assert root_cfg.read_bytes() == before_root
-    assert home.calls == []
 
 
 def test_emission_failure_before_any_write_is_a_status_only_refusal(

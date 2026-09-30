@@ -1,19 +1,24 @@
-"""`hermes hmp routes add <profile>`: prepare routing for one bot created after installation.
+"""`hermes hmp routes add <profile>`: prepare the root route for one bot created after installation.
 
 HMP can only reach a named profile once the default root `config.yaml` has an exact
-`gateway.profile_routes` entry for it and the profile's own `config.yaml` has
-`gateway.multiplex_profiles: true` (server/DEPLOYMENT.md). Without them the bridge correctly
-answers `not_routed`. This module is the explicit, host-only way to prepare both files for one
-selected profile. It does not serve or reload anything: an eligible profile is served only after
-the root gateway, which must already multiplex profiles, detects it. See
-specs/005-new-profile-routing/.
+`gateway.profile_routes` entry for it. Without it the bridge correctly answers `not_routed`. This
+module is the explicit, host-only way to write that one route. It edits ONE file, the default root
+`config.yaml`. It does not serve, reload or restart anything: the route is on disk afterwards, and
+the gateway must be restarted before it can be in effect. See specs/005-new-profile-routing/.
+
+The profile's own `config.yaml` is never written, backed up or touched. On the inspected Hermes
+build (`ca705dbf7ef86425b381b542712aff310f1ee52c`), a multiplexing root serves every live named
+profile without consulting that profile's own `gateway.multiplex_profiles`, and that per-profile
+flag changes the profile's session namespace, so this command must not set it. The profile config
+is still read and must be safe, plain YAML (a prerequisite inspection), and it must not change
+while the command runs, but none of its values is required, interpreted or refused.
 
 What it does not do, by design: authorize a user or device, create or approve a pairing request,
 enable an API server, restart the gateway, contact Hermes, open the HMP store, change an existing
 route, or turn on multiplexing at the root (the root `gateway.multiplex_profiles` must already be
 boolean true; that is initial setup). It refuses, changing nothing, whenever an existing route or
-a `multiplex_profiles` value could conflict with the one it would add, instead of widening any
-policy.
+a root `multiplex_profiles` value could conflict with the one it would add, instead of widening
+any policy.
 
 The module imports only the standard library at import time. PyYAML is imported lazily and only
 here (tools/ci/check_plugin_surface.py S1). No Hermes import: the caller passes the custody-
@@ -22,7 +27,8 @@ resolved root (`identity.resolve_custody`).
 Limits (SEC-1): same-user code can already edit these files. The checks below stop mistakes,
 other-user symlink swaps and hostile config shapes; they are not a boundary against same-user code,
 and there is no lock shared with Hermes, so a concurrent editor can still race the small window
-between the final unchanged-check and the rename.
+between the final unchanged-check and the rename. A failure or interrupt once the rename may have
+happened is reported from what the file holds afterwards; an edit by someone else is never undone.
 """
 
 from __future__ import annotations
@@ -55,9 +61,10 @@ _ABSENT = object()
 
 
 class RoutesError(RuntimeError):
-    """A refusal, or a failure with a stated final state. `partial` is True when a file may have
-    been left changed (the message says which); `interrupted` when Ctrl-C or an exit request
-    arrived after the first config write. Messages are status-only, never config content."""
+    """A refusal, or a failure with a stated final state. `partial` is True when the root file may
+    have been left changed or in an unconfirmed state (the message says which); `interrupted` when
+    Ctrl-C or an exit request arrived once the write had started. Messages are status-only, never
+    config content."""
 
     def __init__(self, message: str, *, partial: bool = False, interrupted: bool = False) -> None:
         super().__init__(message)
@@ -71,12 +78,11 @@ class Outcome:
 
     profile: str
     route_added: bool
-    profile_multiplex_added: bool
     backups: tuple[str, ...]
 
     @property
     def changed(self) -> bool:
-        return self.route_added or self.profile_multiplex_added
+        return self.route_added
 
 
 @dataclass(frozen=True)
@@ -294,18 +300,19 @@ def _verified_emit(doc: dict[Any, Any], snap: _Snapshot) -> bytes:
 # --------------------------------------------------------------------------------------------------
 
 
-def _multiplex_is_enabled(doc: dict[Any, Any], label: str) -> bool:
-    """True when `gateway.multiplex_profiles` is already `true`. Refuses any present top-level or
-    nested value that is not boolean `true`."""
+def _root_multiplex_is_enabled(doc: dict[Any, Any]) -> bool:
+    """True when the root `gateway.multiplex_profiles` is already boolean `true`. Refuses any
+    present top-level or nested value that is not boolean `true`. Only the root is ever asked: a
+    profile's own value is neither read nor required."""
     gateway = doc.get("gateway")
     if gateway is not None and not isinstance(gateway, dict):
-        raise RoutesError(f"{label}: `gateway` must be a mapping")
+        raise RoutesError("root config.yaml: `gateway` must be a mapping")
     nested = gateway.get("multiplex_profiles", _ABSENT) if gateway else _ABSENT
     top = doc.get("multiplex_profiles", _ABSENT)
     for value in (top, nested):
         if value is not _ABSENT and value is not True:
             raise RoutesError(
-                f"{label}: multiplex_profiles is present and is not boolean true "
+                "root config.yaml: multiplex_profiles is present and is not boolean true "
                 f"({type(value).__name__}); resolve it by hand, then retry"
             )
     return nested is True
@@ -359,27 +366,24 @@ def _classify_route(route: Any, profile: str) -> str:
 @dataclass(frozen=True)
 class _Plan:
     root_doc: dict[Any, Any]
-    profile_doc: dict[Any, Any]
     route_added: bool
-    profile_multiplex_added: bool
 
 
-def plan(root: dict[Any, Any], profile_cfg: dict[Any, Any], profile: str) -> _Plan:
-    """Compute both new documents from deep copies, or refuse. Never widens a policy."""
+def plan(root: dict[Any, Any], profile: str) -> _Plan:
+    """Compute the new root document from a deep copy, or refuse. Never widens a policy, and
+    never produces a change to anything but the root's `gateway.profile_routes`."""
     if "profile_routes" in root:
         raise RoutesError(
             "root config.yaml has a top-level profile_routes; its location is ambiguous, "
             "resolve it by hand, then retry"
         )
-    if not _multiplex_is_enabled(root, "root config.yaml"):
+    if not _root_multiplex_is_enabled(root):
         raise RoutesError(
             "root config.yaml does not have gateway.multiplex_profiles: true; this command does "
             "not turn on multiplexing. Complete the initial setup in server/DEPLOYMENT.md first"
         )
-    profile_enabled = _multiplex_is_enabled(profile_cfg, "profile config.yaml")
 
     new_root = copy.deepcopy(root)
-    new_profile = copy.deepcopy(profile_cfg)
     root_gateway = _ensure_gateway(new_root)
 
     routes = root_gateway.get("profile_routes")
@@ -399,7 +403,7 @@ def plan(root: dict[Any, Any], profile_cfg: dict[Any, Any], profile: str) -> _Pl
     if route_added:
         if any(isinstance(r, dict) and r.get("name") == route_name for r in routes):
             raise RoutesError(f"a route named {route_name} already exists with other settings")
-        routes = [
+        root_gateway["profile_routes"] = [
             *routes,
             {
                 "name": route_name,
@@ -408,13 +412,8 @@ def plan(root: dict[Any, Any], profile_cfg: dict[Any, Any], profile: str) -> _Pl
                 "guild_id": profile,
             },
         ]
-        root_gateway["profile_routes"] = routes
 
-    profile_multiplex_added = not profile_enabled
-    if profile_multiplex_added:
-        _ensure_gateway(new_profile)["multiplex_profiles"] = True
-
-    return _Plan(new_root, new_profile, route_added, profile_multiplex_added)
+    return _Plan(new_root, route_added)
 
 
 # --------------------------------------------------------------------------------------------------
@@ -429,81 +428,44 @@ def _current_bytes(snap: _Snapshot) -> bytes | None:
         return None
 
 
-def _restore_profile(profile_snap: _Snapshot, written: bytes) -> tuple[str, bool]:
-    """Put the profile config back, but only if it still holds exactly what this run wrote.
-    Returns a status phrase and whether the file now holds its original content. An interrupt
-    during the restore is reported, not swallowed."""
-    try:
-        current = _current_bytes(profile_snap)
-        if current == profile_snap.data:
-            return "still holds its original content", True
-        if current != written:
-            return "not restored: it changed again after this command wrote it", False
-        _atomic_write(profile_snap.path, profile_snap.data, profile_snap.mode)
-    except BaseException as exc:
-        if isinstance(exc, Exception):
-            return "not restored: the restore itself failed", False
-        return "not restored: the restore itself was interrupted", False
-    return "restored to its original content", True
-
-
-def _failure(
-    exc: BaseException,
-    profile_snap: _Snapshot,
-    new_profile: bytes,
-    root_snap: _Snapshot,
-    new_root: bytes,
-    *,
-    root_started: bool,
-    profile_changed: bool,
-) -> RoutesError:
-    """After the profile write may have happened: attempt the conditional restore and describe
-    the final state of both files. Never includes config content or exception details."""
+def _write_failure(exc: BaseException, root_snap: _Snapshot, new_root: bytes) -> RoutesError:
+    """The root rename may have happened. Report what the file holds now, from its content alone.
+    Nothing is restored: a file that holds neither the original nor this command's content was
+    changed by someone else and is left exactly as found. Never includes config content or
+    exception details."""
     interrupted = not isinstance(exc, Exception)
-    if interrupted:
-        reason = "interrupted"
-    elif isinstance(exc, RoutesError):
-        reason = str(exc)
-    elif isinstance(exc, OSError):
-        reason = "root config.yaml could not be written"
+    current = _current_bytes(root_snap)
+    if current == new_root:
+        state, partial = (
+            "now holds the new route (it is on disk; the running gateway is unchanged)",
+            True,
+        )
+    elif current == root_snap.data:
+        state, partial = "was not changed by this command", False
     else:
-        reason = "an unexpected error stopped the command"
-
-    root_written = False
-    root_state = "was not changed by this command"
-    if root_started:
-        current = _current_bytes(root_snap)
-        if current == new_root:
-            root_written = True
-            root_state = "was updated"
-        elif current != root_snap.data:
-            root_state = "state could not be confirmed (it does not hold this command's content)"
-
-    if root_written:
-        restored = False
-        if profile_changed:
-            profile_state = "was updated"
-            note = " Both files carry the change; run the command again to confirm."
-        else:
-            profile_state = "was not changed by this command"
-            note = " Run the command again to confirm."
-    else:
-        profile_state, restored = _restore_profile(profile_snap, new_profile)
+        state, partial = (
+            "state could not be confirmed (neither its original nor this command's content)",
+            True,
+        )
+    reason = "interrupted" if interrupted else "root config.yaml could not be written"
+    note = ""
+    if partial:
         note = (
-            ""
-            if restored
-            else f" Its previous content is in {profile_snap.path.name}{BACKUP_SUFFIX} beside it."
-            " On its own the new setting creates no route."
+            f" Its previous content is in {root_snap.path.name}{BACKUP_SUFFIX} beside it."
+            " Run the command again to confirm."
         )
     return RoutesError(
-        f"{reason}. root config.yaml {root_state}; profile config.yaml {profile_state}.{note}",
-        partial=root_written or not restored,
+        f"{reason}. root config.yaml {state}. profile config.yaml was not changed by this "
+        f"command.{note}",
+        partial=partial,
         interrupted=interrupted,
     )
 
 
 def _prepare(hermes_root: Path, name: str) -> tuple[_Snapshot, _Snapshot, _Plan]:
-    """Everything before the first write. A failure here changed nothing."""
+    """Everything before the first write. A failure here changed nothing. The profile config is
+    read and parsed as a prerequisite inspection only (path, owner, mode, size, strict YAML); no
+    value in it is interpreted."""
     root = Path(os.path.realpath(hermes_root))
     profile_home = root / PROFILES_DIRNAME / name
     _check_dir(root, "the Hermes root")
@@ -511,29 +473,25 @@ def _prepare(hermes_root: Path, name: str) -> tuple[_Snapshot, _Snapshot, _Plan]
     _check_dir(profile_home, f"profile {name}")
     root_snap = _read_config(root / CONFIG_FILENAME, "root config.yaml")
     profile_snap = _read_config(profile_home / CONFIG_FILENAME, "profile config.yaml")
-    return root_snap, profile_snap, plan(_parse(root_snap), _parse(profile_snap), name)
+    _parse(profile_snap)
+    return root_snap, profile_snap, plan(_parse(root_snap), name)
 
 
 def add_route(hermes_root: Path, profile: str) -> Outcome:
-    """Prepare routing for `profile`, or refuse. `hermes_root` comes from
+    """Prepare the root route for `profile`, or refuse. `hermes_root` comes from
     `identity.resolve_custody` (the default root; a named profile never gets here)."""
     name = validate_profile_name(profile)
     try:
         root_snap, profile_snap, result = _prepare(hermes_root, name)
         # Emission is still before any write, so the same status-only refusal covers it.
         new_root = _verified_emit(result.root_doc, root_snap) if result.route_added else b""
-        new_profile = (
-            _verified_emit(result.profile_doc, profile_snap)
-            if result.profile_multiplex_added
-            else b""
-        )
     except (OSError, RecursionError, ImportError):
         # Nothing was written yet. Details are withheld: they can quote private config.
         raise RoutesError(
             "the configuration could not be read or processed (details withheld); "
             "nothing was changed"
         ) from None
-    return _apply(name, root_snap, profile_snap, result, new_root, new_profile)
+    return _apply(name, root_snap, profile_snap, result, new_root)
 
 
 def _apply(
@@ -542,70 +500,29 @@ def _apply(
     profile_snap: _Snapshot,
     result: _Plan,
     new_root: bytes,
-    new_profile: bytes,
 ) -> Outcome:
-    root_changed = result.route_added
-    profile_changed = result.profile_multiplex_added
-    outcome = {
-        "profile": name,
-        "route_added": result.route_added,
-        "profile_multiplex_added": result.profile_multiplex_added,
-    }
-    if not (root_changed or profile_changed):
-        return Outcome(backups=(), **outcome)
+    if not result.route_added:
+        return Outcome(profile=name, route_added=False, backups=())
 
-    both = (profile_snap, root_snap)
-    changing = [s for s, c in ((profile_snap, profile_changed), (root_snap, root_changed)) if c]
+    # The profile config is never written, but it is part of what was inspected: drift in either
+    # file since the read refuses the run.
+    both = (root_snap, profile_snap)
     if not all(_unchanged(s) for s in both):
         raise RoutesError("a config file changed while this command ran; nothing was changed")
     try:
-        targets = [_backup_target(s) for s in changing]  # refuse before writing anything
+        target = _backup_target(root_snap)  # refuse before writing anything
     except OSError:
         raise RoutesError("a backup location cannot be inspected; nothing was changed") from None
-    backups = tuple(_write_backup(s, t) for s, t in zip(changing, targets, strict=True))
+    backup = _write_backup(root_snap, target)
 
-    # Backup writes give a concurrent editor time: recheck both before the first config write.
+    # The backup write gives a concurrent editor time: recheck both immediately before the rename.
     if not all(_unchanged(s) for s in both):
         raise RoutesError(
             "a config file changed while this command ran; no config file was changed "
             "by this command"
         )
-
-    profile_maybe_written = False
-    root_started = False
     try:
-        if profile_changed:
-            profile_maybe_written = True
-            try:
-                _atomic_write(profile_snap.path, new_profile, profile_snap.mode)
-            except OSError:
-                profile_maybe_written = False
-                raise RoutesError(
-                    "profile config.yaml could not be written; nothing was changed"
-                ) from None
-        if root_changed:
-            if profile_changed and not _unchanged(root_snap):
-                raise RoutesError("root config.yaml changed while this command ran")
-            root_started = True
-            try:
-                _atomic_write(root_snap.path, new_root, root_snap.mode)
-            except OSError:
-                root_started = False
-                if not profile_changed:
-                    raise RoutesError(
-                        "root config.yaml could not be written; nothing was changed"
-                    ) from None
-                raise
+        _atomic_write(root_snap.path, new_root, root_snap.mode)
     except BaseException as exc:
-        if not (profile_maybe_written or root_started):
-            raise
-        raise _failure(
-            exc,
-            profile_snap,
-            new_profile,
-            root_snap,
-            new_root,
-            root_started=root_started,
-            profile_changed=profile_changed,
-        ) from None
-    return Outcome(backups=backups, **outcome)
+        raise _write_failure(exc, root_snap, new_root) from None
+    return Outcome(profile=name, route_added=True, backups=(backup,))

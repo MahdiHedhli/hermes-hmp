@@ -97,16 +97,19 @@ hermes -p <profile> pairing list
 hermes -p <profile> pairing approve hmp <request_id>
 ```
 
-`routes add` only prepares routing: it adds the exact HMP route to the default root config and
-turns on `gateway.multiplex_profiles` for that profile. It requires the root
-`gateway.multiplex_profiles: true` from the initial setup above and refuses if it is missing; it
-never turns on multiplexing for the whole gateway. It does not serve or reload anything, restart
-the gateway, approve anything, or grant access, and it refuses rather than change an existing route
-or a conflicting setting. It keeps one rolling private backup per file it changes, so a second run
-replaces the first run's backup. If the profile already has sessions, review them first: enabling
-its `multiplex_profiles` can change where they are stored, and nothing is migrated. Confirm the pending row belongs to
-the device you just paired before approving it. See [Deployment](../server/DEPLOYMENT.md#a-bot-created-after-installation)
-for what it edits and refuses.
+`routes add` only writes the route: it adds the exact HMP route to the default root config and
+nothing else. The profile's own config is never changed, and its `multiplex_profiles` value does not
+matter to the command. It requires the root `gateway.multiplex_profiles: true` from the initial
+setup above and refuses if it is missing; it never turns on multiplexing for the whole gateway.
+The route is then on disk only: it does not serve or reload anything, restart the gateway,
+approve anything, or grant access. It did not activate the route in the running gateway; reload
+requires a gateway restart on the inspected build, and sending also needs its separate
+prerequisites. It refuses rather than change an existing route or a conflicting root setting. It keeps
+one rolling private backup of the root config, so a second run replaces the first run's backup.
+Existing sessions do not block the command and are not moved. Approval stays manual: confirm the
+pending row belongs to the device you just paired before approving it. See
+[Deployment](../server/DEPLOYMENT.md#a-bot-created-after-installation) for what it edits and
+refuses.
 
 ## Local compatibility tests
 

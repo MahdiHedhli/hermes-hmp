@@ -48,10 +48,11 @@ address for phone access; plugin installation alone does not start it.
 A profile created after installation is not routed to HMP, and no phone is authorized for it. A
 multiplexing gateway picks up an eligible profile only on its own detection; HMP does not serve or
 reload anything. On the host, run `hermes hmp routes add <profile>`, restart the gateway, then request access from the
-phone and approve that device's pending row. The command only prepares routing for one named
-profile, needs the root `gateway.multiplex_profiles: true` from initial setup (it refuses rather
-than enable it), refuses instead of changing existing routes, and grants nothing. Review a used
-profile's existing sessions first; see the Deployment link for the details and limits.
+phone and approve that device's pending row. The command writes one exact route into the root
+config only (the route is on disk only; reload requires a gateway restart), leaves the profile's own
+config untouched, needs the root `gateway.multiplex_profiles: true` from initial setup (it
+refuses rather than enable it), refuses instead of changing existing routes, and grants nothing.
+Existing sessions neither block it nor move; see the Deployment link for the details and limits.
 See [Deployment](server/DEPLOYMENT.md#a-bot-created-after-installation).
 
 ## Repository
