@@ -5,14 +5,15 @@ Thanks for helping improve HMP. Please open an issue for behavior or contract ch
 ## Local checks
 
 ```sh
-uv run --frozen --project server --extra dev pytest server/tests/unit tools/ci/tests tools/fixtures/tests tools/hermes_builds/tests tools/vectors/tests tools/acceptance/tests
+uv run --frozen --project server --extra dev pytest server/tests/unit
+(cd tools && uv run --frozen --project ../server --extra dev pytest ci/tests compat/tests fixtures/tests hermes_builds/tests vectors/tests acceptance/tests)
 uvx ruff==0.16.9 check --config server/pyproject.toml server tools
 python3 tools/ci/check_plugin_surface.py
 python3 tools/ci/scan_private.py
 python3 tools/ci/scan_logs.py
 ```
 
-Fixture and compatibility tests need extracted Hermes source builds and a real PTY for pairing. They are local-only in this migration because CI does not yet provision those pinned build snapshots and a PTY fixture. See [the install guide](docs/INSTALL.md) for `_refs/` setup. Use an isolated `HERMES_HOME` for any plugin install test.
+Fixture and compatibility tests need extracted Hermes source builds and a real PTY for pairing. They are local-only in this migration because CI does not yet provision those pinned build snapshots and a PTY fixture. See [the install guide](docs/INSTALL.md) for `_refs/` setup. Use an isolated `HERMES_HOME` for any plugin install test. The ad-hoc `--candidate-sha` check executes the candidate's Python and locked dependencies; run an unreviewed candidate only in an isolated VM, container or user account (see the install guide).
 
 ## Review rules
 

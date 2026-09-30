@@ -16,8 +16,11 @@ jobs:
           python-version: '3.11'
       - name: Lint
         run: uvx ruff==0.16.9 check --config server/pyproject.toml server tools
-      - name: Unit and tool tests
-        run: uv run --frozen --project server --extra dev pytest server/tests/unit tools/ci/tests tools/fixtures/tests tools/hermes_builds/tests tools/vectors/tests tools/acceptance/tests -q
+      - name: Plugin unit tests
+        run: uv run --frozen --project server --extra dev pytest server/tests/unit -q
+      - name: Tool tests
+        working-directory: tools
+        run: uv run --frozen --project ../server --extra dev pytest ci/tests compat/tests fixtures/tests hermes_builds/tests vectors/tests acceptance/tests -q
       - name: Closed plugin surface
         run: python3 tools/ci/check_plugin_surface.py
       - name: Log hygiene

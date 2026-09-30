@@ -19,6 +19,12 @@ Usage:
     python3 tools/fixtures/mutate.py --out ... --instance A --mutation rewrite
     python3 tools/fixtures/mutate.py --out ... --instance A --mutation new_session
     python3 tools/fixtures/mutate.py --out ... --instance A --mutation all
+
+UNSAFE DEVELOPER TOOL for a fixture built from the ad-hoc `candidate` build: it executes the
+candidate's Python and verifies nothing about the tree, so it refuses a `candidate` fixture unless
+`HMP_ENABLE_CANDIDATE_BUILD=1` is set (see `build_fixture.py`; `run_matrix.py --candidate-sha`
+sets it only after verifying the tree). The recorded build is re-resolved with the builder's
+rules: a malformed record, or another label whose tree is the candidate's, is refused.
 """
 
 from __future__ import annotations
@@ -244,6 +250,11 @@ def main(argv: list[str] | None = None) -> int:
             f"{fixture_meta_path(args.out)} does not exist -- run build_fixture.py --build <label> "
             f"--out {args.out} first (T060)"
         )
+    record = meta.get("build")
+    label = fc.check_build_label(record.get("label") if isinstance(record, dict) else None)
+    if label == fc.CANDIDATE_LABEL:  # same gate and scrubbed, private environment as the build
+        fc.enable_candidate_isolation(args.out)
+    # Re-resolved from the record: any other label whose tree is the candidate's is refused.
     build = build_info_from_meta(meta)
     fc.ensure_runtime_deps(build)
 

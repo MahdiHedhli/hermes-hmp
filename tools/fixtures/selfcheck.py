@@ -20,12 +20,19 @@ check exists so the self-check still degrades gracefully in a worktree that has 
 Usage:
     python3 tools/fixtures/selfcheck.py --build stock-base --out /path/to/scratch/f1_selfcheck
 `--builds-dir` defaults to `$HMP_HERMES_BUILDS_DIR`, same as `build_fixture.py`.
+
+UNSAFE DEVELOPER TOOL for the ad-hoc `--build candidate`: it starts the candidate's gateway and
+verifies nothing about its extracted tree, so it refuses `candidate` unless
+`HMP_ENABLE_CANDIDATE_BUILD=1` is set (see `build_fixture.py`; `run_matrix.py --candidate-sha`
+sets it only after verifying the tree). Any other label that leads to the candidate's tree, and
+any malformed label, is refused before anything starts.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
 import ssl
 import subprocess
 import sys
@@ -35,7 +42,7 @@ from pathlib import Path
 from typing import Any
 
 import _fixture_common as fc
-from build_fixture import _generate_conversation_messages
+from build_fixture import DEFAULT_BUILDS_DIR_ENV, _generate_conversation_messages
 
 THIS_DIR = Path(__file__).resolve().parent
 BUILD_FIXTURE = THIS_DIR / "build_fixture.py"
@@ -142,10 +149,34 @@ def run_selfcheck(
         # `$HMP_HERMES_BUILDS_DIR` env fallback: `--builds-dir` on THIS script's own CLI must
         # actually take effect, not merely be accepted and ignored.
         argv += ["--builds-dir", str(builds_dir)]
+    env = None  # the caller's environment, as for every listed build
+    # By identity, not spelling: a malformed label, or any other name that leads to the
+    # candidate's tree (a symlink, `candidate/`, a case variant), is refused before anything
+    # starts. Without a builds directory only the label can be checked here; the builder this
+    # starts re-classifies against the directory it is given.
+    effective_builds = builds_dir or os.environ.get(DEFAULT_BUILDS_DIR_ENV)
+    if effective_builds:
+        is_candidate = fc.classify_build(effective_builds, build_label)
+    else:
+        is_candidate = fc.check_build_label(build_label) == fc.CANDIDATE_LABEL
+    if is_candidate:
+        # Nothing of the caller's environment (credentials, proxies, PYTHON*/GIT_* variables,
+        # the real HOME) reaches the process that builds and serves the candidate's fixture.
+        fc.require_candidate_gate("selfcheck.py")
+        scratch_root = Path(out_dir).resolve() / "_selfcheck_env"
+        try:
+            fc.safety.reset_scratch_env(scratch_root)  # a fresh HOME/cache/tmp/bytecode every run
+            env = fc.safety.scrubbed_env(scratch_root)
+        except fc.safety.SafetyError as exc:
+            raise fc.FixtureSafetyError(str(exc)) from exc
+        env[fc.CANDIDATE_OPT_IN_ENV] = "1"  # the gate above passed; the builder it starts re-checks
+        if builds_dir is None and os.environ.get(DEFAULT_BUILDS_DIR_ENV):
+            env[DEFAULT_BUILDS_DIR_ENV] = os.environ[DEFAULT_BUILDS_DIR_ENV]
     proc = subprocess.Popen(
         argv,
         stdout=subprocess.PIPE,
         text=True,
+        env=env,
     )
     assert proc.stdout is not None
     all_failures: list[str] = []
