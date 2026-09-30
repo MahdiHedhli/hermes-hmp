@@ -1,8 +1,34 @@
 # Approvals review status
 
-**Round 5: HMP rate limiting and fixture defects fixed on `feat/approvals`, base `e1ddb28`.
-Bot Chat approval qualification is still blocked by a missing Hermes session-stream approval
-lifecycle. This is not a complete F3 qualification.** This section supersedes earlier handoffs.
+## Untagged Hermes `main` candidate: source and handler probe only
+
+Hermes `main` at `ac0cfa7db94cefa90cf3e35191f38b53888b9e17` registers an
+approval notifier on the Bot Chat session stream. This is newer than the
+published `v2026.9.24` tag and supersedes the missing-notifier finding below
+**for this exact untagged source only**. It does not qualify a released build.
+
+The evidence-only `tools/compat/session_chat_approval_probe.py` ran against
+that pinned source with a disposable `HERMES_HOME`, fake model and SSE response,
+and no socket or command execution. Its 32 named checks passed: a nonempty
+request ID and offered choices were emitted; wrong request/run IDs, key, and
+profile were rejected; exact-ID denial kept the fake executor idle; replay
+failed; exact-ID `once` released only the fake executor; and a simulated stream
+drop interrupted the fake agent and rejected the late answer with the **real**
+request ID. The wrapper and focused lint passed. Independent security review
+found and prompted the late-answer assertion fix before this recorded rerun.
+
+This is not the full T7/T8 real-route matrix. The fake agent sets the interrupt
+flag in its own worker thread; true agent and tool interruption, live HTTP/SSE,
+TLS and pairing, real multiplex profile secrets, smart mode, timeout, concurrent
+prompts, HMP relay, and device behavior remain untested. Upstream's API-key
+answer route also accepts an omitted request ID or bulk selection; **HMP must
+require and forward one exact ID and refuse bulk choices**. No runtime
+fingerprint, allowlist entry, or live plugin change was made. F3 remains off.
+
+**Historical round 5:** HMP rate limiting and fixture defects were fixed on
+`feat/approvals`, base `e1ddb28`. The two builds tested then lacked the Bot Chat
+session-stream approval lifecycle. Neither build qualified F3. The newer,
+untagged source finding above does not change those results.
 
 ## Controller fixture run after round 5
 
