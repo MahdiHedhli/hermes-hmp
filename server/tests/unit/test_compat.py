@@ -1048,6 +1048,70 @@ def test_reader_unresolvable_git_is_unidentifiable(tmp_path: Path) -> None:
     assert reader.read(tmp_path) is None
 
 
+def test_dangling_git_symlink_is_not_no_git(tmp_path: Path) -> None:
+    (tmp_path / ".git").symlink_to(tmp_path / "missing-target")
+    with pytest.raises(ValueError):
+        resolve_git_head_sha(tmp_path)
+
+
+def test_git_symlink_to_valid_dir_still_resolves(tmp_path: Path) -> None:
+    real = tmp_path / "real-git"
+    real.mkdir()
+    (real / "HEAD").write_text("b" * 40 + "\n")
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / ".git").symlink_to(real)
+    assert resolve_git_head_sha(root) == "b" * 40
+
+
+@pytest.mark.parametrize("target_kind", ["file", "dir"])
+def test_reader_dangling_git_link_is_unidentifiable(tmp_path: Path, target_kind: str) -> None:
+    _write_bridge_files(tmp_path)
+    (tmp_path / ".git").symlink_to(tmp_path / f"nonexistent-{target_kind}")
+    assert GitFingerprintReader(BRIDGE_FILES).read(tmp_path) is None
+
+
+def test_reader_inaccessible_git_metadata_is_unidentifiable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_bridge_files(tmp_path)
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "HEAD").write_text("c" * 40 + "\n")  # valid, so only the denial can fail
+    real_lstat = Path.lstat
+
+    def denied(self: Path, *args: object, **kwargs: object) -> os.stat_result:
+        if self.name == ".git":
+            raise PermissionError(13, "denied")
+        return real_lstat(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "lstat", denied)
+    with pytest.raises(PermissionError):
+        resolve_git_head_sha(tmp_path)
+    assert GitFingerprintReader(BRIDGE_FILES).read(tmp_path) is None
+
+
+def test_reader_malformed_git_pointer_is_unidentifiable(tmp_path: Path) -> None:
+    _write_bridge_files(tmp_path)
+    (tmp_path / ".git").write_text("not a pointer\n")
+    assert GitFingerprintReader(BRIDGE_FILES).read(tmp_path) is None
+
+
+def test_reader_valid_archive_without_git_is_unchanged(tmp_path: Path) -> None:
+    _write_bridge_files(tmp_path)
+    identity = GitFingerprintReader(BRIDGE_FILES).read(tmp_path)
+    assert identity is not None and identity.git_sha is None
+
+
+def test_matching_manifest_cannot_qualify_dangling_git_build(tmp_path: Path) -> None:
+    source, manifest, identity, _ = _listener(tmp_path, git=False)
+    # The archive manifest lists this exact fingerprint with no git SHA and the genuine archive
+    # reads as fingerprint-only; a dangling `.git` must not be read as that archive.
+    assert identity.git_sha is None
+    assert compat_mod.match_build(identity, load_read_compat_list(manifest).builds) is not None
+    (source / ".git").symlink_to(source / "nowhere")
+    assert GitFingerprintReader(["tools/approval.py"]).read(source) is None
+
+
 def test_reader_is_stable_across_calls(tmp_path: Path) -> None:
     _write_bridge_files(tmp_path)
     reader = GitFingerprintReader(BRIDGE_FILES)
