@@ -45,6 +45,7 @@ CONTRACT_MODULES = {
     "local_media_file_safety.py",
     "local_media_raster_structure.py",
     "local_media_result.py",
+    "local_media_registry.py",  # process-local ref registry (LM-9); inert, stdlib only
 }
 DATA_FILES = {
     "plugin.yaml",

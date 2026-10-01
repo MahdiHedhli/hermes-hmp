@@ -105,6 +105,9 @@ server/
     local_media_result.py         # OPTIONAL, inert: bounded result parser wrapping local_media_active_scan; no caller yet.
                                   #   No production module (start-up, reads, compat, server, adapter, registration)
                                   #   imports any local_media_* module; a test pins this
+    local_media_registry.py       # OPTIONAL, inert: process-local image ref registry (LM-9; stdlib only, no hmp_plugin imports):
+                                  #   lock, TTL 1800 s, 512/4096 LRU, idempotent mint, first-served digest CAS. A registry
+                                  #   hit never authorizes a fetch. No production caller, route or module-level instance yet
     read_compat_builds.json       # GU-2c list (starts empty). Entries: {git_sha|null, fingerprint, source_sha?
                                   #   (provenance only), label, qualified_by, qualified_at}; matching per research
                                   #   R8 steps 4-6 (CS-19); plus "bridge_files", the mechanically computed superset
