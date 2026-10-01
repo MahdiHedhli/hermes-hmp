@@ -34,6 +34,13 @@
       "git_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
       "qualified_by": "Hermes cron API and HMP scoped writer fixture, delivery/continuity/repeat tests",
       "qualified_at": "2026-09-28"
+    },
+    {
+      "label": "hermes-ca705dbf-git",
+      "fingerprint": "382a68a0ad0a0b65fa8e0cc7f75fa30b7b7b27661694dd62a3c2944464c889d2",
+      "git_sha": "ca705dbf7ef86425b381b542712aff310f1ee52c",
+      "qualified_by": "Scoped native paused-job CRUD, permission, key, and corrupt-store fixtures; read and direct-send regression checks",
+      "qualified_at": "2026-10-01"
     }
   ]
 }

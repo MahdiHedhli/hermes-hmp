@@ -22,8 +22,9 @@ hermes hmp pair offer
 For an existing root-directory installation, replace the first command with
 `hermes plugins install 'MahdiHedhli/hermes-hmp#server/hmp_plugin' --force --enable`.
 `--force` permits replacement; it does not disable the security scanner. The
-runtime-only scan was SAFE on an earlier runtime tree; it has not been measured
-on the current merged runtime until the installer scan is re-run.
+scanner result: runtime plugin source `248784b`, scanned by the Hermes `ca705dbf` plugin-guard-v8
+scanner, returned safe with two medium fixed-argument subprocess findings. The
+current candidate installation is scanned again by the normal installer.
 Pinned plugins (`--ref <full-commit-sha>`) need an explicit reinstall to update.
 Choose an unused port in place of 18741. The listener requires a Tailscale
 address for phone access; plugin installation alone does not start it.

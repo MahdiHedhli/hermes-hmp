@@ -126,6 +126,13 @@ cron writer because the profile API does not persist `context_from`. This is
 bound to the exact build fingerprint and fails closed after an unqualified
 Hermes update.
 
+Build `hermes-ca705dbf-git` is newly qualified for the paused-job writer and
+routes only: create, list, edit, and delete of paused jobs, profile isolation,
+key and permission gates, and corrupt-store failure. See the
+[evidence](compat/ca705dbf-mobile-jobs.md). Actual scheduler delivery and
+previous-run continuity are not verified on that build; the earlier qualified
+builds keep the delivery and continuity checks recorded in their own evidence.
+
 This preview is qualified only for the listed build bytes. Other builds fail closed.
 Installing the plugin does not enable the preview; the operator must grant the device and
 enable the cron flag. Existing `extra.owner_device_ids` entries remain a legacy fallback;
