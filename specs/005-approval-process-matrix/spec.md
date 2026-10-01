@@ -9,6 +9,8 @@ Amendment 2 (`amendment-2-git-install-fixture.md`) covers the independent Git-in
 Amendment 3 (`amendment-3-native-start-readiness.md`) makes the fixture's native listener wait
 process-aware (same 45 s deadline) and records start timing; it is tooling only and leaves the
 startup-delay cause unresolved.
+Amendment 4 (`amendment-4-setup-diagnostics.md`) scopes the offline build's environment and retains
+its failure output privately; the run-4 setup-error cause is UNCONFIRMED.
 
 ## Problem
 

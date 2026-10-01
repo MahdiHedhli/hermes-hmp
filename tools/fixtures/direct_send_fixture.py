@@ -32,11 +32,13 @@ unmodified, through the SAME `_fixture_common.py` helpers `build_fixture.py` its
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import json
 import os
 import secrets
 import socket
+import stat
 import subprocess
 import sys
 import time
@@ -590,6 +592,160 @@ def pair_reference_device(
     return json.loads(result.stdout)
 
 
+# The offline build needs only a runnable toolchain: `build_fixture.py` and every child it spawns
+# (`hermes profile create`, the seed scripts, git) re-derive HERMES_*/XDG_* themselves, and nothing
+# under tools/fixtures or server/hmp_plugin reads another variable. The caller's credentials and
+# Hermes/live-home variables are therefore NOT forwarded. `PYTHONDONTWRITEBYTECODE` is the matrix's
+# own test control; `HMP_HERMES_BUILDS_DIR` is added explicitly from `builds_dir`. The receipt
+# variables (`HMP_DIRECT_SEND_QUALIFICATION`, `RECEIPT_ENV`) are read by THIS process after the
+# build and are never needed, or forwarded, to it.
+BUILD_ENV_ALLOWLIST = (
+    "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "PYTHONDONTWRITEBYTECODE",
+)
+BUILD_FAILURE_OUTPUT = "build_offline_failure.log"
+BUILD_FAILURE_STREAM_CAP = 64 * 1024  # bytes kept per stream (the tail); the rest is dropped
+
+
+def offline_build_env(builds_dir: str | None) -> dict[str, str]:
+    env = {k: os.environ[k] for k in BUILD_ENV_ALLOWLIST if k in os.environ}
+    builds = builds_dir or os.environ.get("HMP_HERMES_BUILDS_DIR")
+    if builds:
+        env["HMP_HERMES_BUILDS_DIR"] = builds
+    return env
+
+
+# Only the two known macOS aliases are normalized (`/tmp` -> `/private/tmp`, `/var` ->
+# `/private/var`), and only while the alias really is a root-owned symlink with exactly that
+# target. Any other symlink in the path is refused, never resolved.
+_PLATFORM_ALIASES = {"/tmp": "private/tmp", "/var": "private/var"}  # noqa: S108 - alias table
+_DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+# The one sticky shared directory an ancestor may be: the root-owned temp base, by canonical name.
+_SHARED_TEMP_BASES = ("/private/tmp", "/tmp")  # noqa: S108 - the known shared temp base
+BUILD_FAILURE_NOT_RETAINED = ("not_retained_unsafe_destination", "not_retained_write_failed")
+
+
+def _normalize_platform_alias(path: str) -> str:
+    for alias, target in _PLATFORM_ALIASES.items():
+        if path == alias or path.startswith(alias + "/"):
+            try:
+                st = os.lstat(alias)
+                if stat.S_ISLNK(st.st_mode) and st.st_uid == 0 and os.readlink(alias) == target:
+                    return "/" + target + path[len(alias):]
+            except OSError:
+                pass
+            break
+    return path
+
+
+def _ancestor_is_trusted(st: os.stat_result, canonical: str) -> bool:
+    """An ancestor may only be renamed/replaced by its owner, so it must be owned by root or this
+    user and not group/other-writable. The one exception is the known shared temp base, accepted
+    only when its real metadata is a root-owned sticky directory; no other sticky or foreign
+    directory is trusted."""
+    if not stat.S_ISDIR(st.st_mode):
+        return False
+    if canonical in _SHARED_TEMP_BASES:
+        return st.st_uid == 0 and bool(st.st_mode & stat.S_ISVTX)
+    if st.st_uid not in (0, os.geteuid()):
+        return False
+    return not st.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+
+
+def _open_private_output_dir(out: Path) -> int | None:
+    """Returns a directory fd for `out`, or None when it is not a safe private destination.
+
+    The absolute path is walked one component at a time with `openat(O_NOFOLLOW|O_DIRECTORY)` from
+    `/`, so a symlink in ANY component (not just the last) is refused and nothing is resolved. Only
+    the final component may be created (mode 0700, never `parents=True`, nothing else is made or
+    chmod-ed); its parent must already exist. Every ancestor must be owned by root or this user and
+    not group/other-writable (the root-owned sticky temp base excepted), so no one else can rename
+    the directory out from under the path. The final directory must be owned by this user with
+    mode exactly 0700. The caller keeps the fd, so a later write goes to this inode, never to
+    whatever the path names afterwards."""
+    try:
+        fc.assert_outside_real_home(out, "fixture build output")
+        raw = os.fspath(out)
+        if not os.path.isabs(raw):
+            raw = os.path.join(os.getcwd(), raw)
+        parts = [p for p in _normalize_platform_alias(raw).split("/") if p not in ("", ".")]
+        if not parts or ".." in parts:
+            return None
+        fd = os.open("/", _DIR_FLAGS)
+        try:
+            if not _ancestor_is_trusted(os.fstat(fd), "/"):
+                raise OSError
+            for i, name in enumerate(parts):
+                try:
+                    nxt = os.open(name, _DIR_FLAGS, dir_fd=fd)
+                except FileNotFoundError:
+                    if i != len(parts) - 1:
+                        raise
+                    os.mkdir(name, 0o700, dir_fd=fd)
+                    nxt = os.open(name, _DIR_FLAGS, dir_fd=fd)
+                os.close(fd)
+                fd = nxt
+                if i != len(parts) - 1 and not _ancestor_is_trusted(
+                    os.fstat(fd), "/" + "/".join(parts[: i + 1])
+                ):
+                    raise OSError
+            st = os.fstat(fd)
+            if st.st_uid != os.geteuid() or stat.S_IMODE(st.st_mode) != 0o700:
+                raise OSError
+        except BaseException:
+            os.close(fd)
+            raise
+        return fd
+    except (OSError, ValueError, fc.FixtureSafetyError):
+        return None
+
+
+def _retain_build_failure_output(dir_fd: int | None, stdout: bytes, stderr: bytes) -> str:
+    """Writes the build's raw output (unfiltered, tail-bounded) into the private directory behind
+    `dir_fd` as a new 0600 file and returns a closed status word; it never raises. The file is
+    created `O_EXCL|O_NOFOLLOW` relative to the fd, so it cannot be redirected or replace anything.
+    On a write/close failure the partial file is unlinked only if the name still refers to the
+    inode this call created (checked against the open fd); a failed cleanup is not retried and
+    nothing about the failure (exception text, paths) is returned or kept. The raw output is
+    fixture-private diagnostic material for the root reviewer and is never put in an exception."""
+    if dir_fd is None:
+        return BUILD_FAILURE_NOT_RETAINED[0]
+    try:
+        st = os.fstat(dir_fd)
+        if st.st_uid != os.geteuid() or stat.S_IMODE(st.st_mode) != 0o700:
+            return BUILD_FAILURE_NOT_RETAINED[0]
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        fd = os.open(BUILD_FAILURE_OUTPUT, flags, 0o600, dir_fd=dir_fd)
+    except OSError:
+        return BUILD_FAILURE_NOT_RETAINED[0]
+    status = "retained"
+    created = None
+    try:
+        created = os.fstat(fd)
+        parts = []
+        for name, data in (("stdout", stdout), ("stderr", stderr)):
+            kept = data[-BUILD_FAILURE_STREAM_CAP:]
+            parts.append(f"== {name}: {len(data)} bytes, last {len(kept)} kept ==\n".encode())
+            parts.append(kept + b"\n")
+        view = memoryview(b"".join(parts))
+        while view:
+            written = os.write(fd, view)
+            if type(written) is not int or not 0 < written <= len(view):
+                raise OSError  # no progress (or nonsense): closed, never retried or spun on
+            view = view[written:]
+    except Exception:  # a diagnostic must never replace the native failure
+        status = BUILD_FAILURE_NOT_RETAINED[1]
+    try:
+        os.close(fd)
+    except Exception:
+        status = BUILD_FAILURE_NOT_RETAINED[1]
+    if status != "retained" and created is not None:
+        with contextlib.suppress(Exception):  # one attempt; a failed cleanup is not retried
+            now = os.stat(BUILD_FAILURE_OUTPUT, dir_fd=dir_fd, follow_symlinks=False)
+            if (now.st_dev, now.st_ino) == (created.st_dev, created.st_ino):
+                os.unlink(BUILD_FAILURE_OUTPUT, dir_fd=dir_fd)
+    return status
+
+
 def build_offline(
     label: str, out: Path, *, builds_dir: str | None = None, instances: str | None = None
 ) -> dict[str, Any]:
@@ -598,19 +754,59 @@ def build_offline(
     also captures and parses the JSON `main()` prints on the non-`--serve` path (`{"ok", "build",
     "instances": [...]}`), which carries each profile's `user_id`/`authorized` metadata this
     module needs to pair a fresh reference device without going through `--serve`. `instances`
-    (comma-separated keys, e.g. `"A"`) narrows the build to just what a test needs."""
-    env = dict(os.environ)
-    if builds_dir:
-        env["HMP_HERMES_BUILDS_DIR"] = builds_dir
+    (comma-separated keys, e.g. `"A"`) narrows the build to just what a test needs.
+
+    The child gets `offline_build_env`, not the caller's environment. A nonzero exit raises a
+    closed `FixtureSafetyError` (phase and exit code only: no argv, environment or output) and the
+    raw output is kept only in `BUILD_FAILURE_OUTPUT` under `out`, mode 0600, when `out` is a
+    private (0700, this user's) directory reached without a symlink. So does a zero exit whose
+    stdout is not one JSON object (the body is never in the error). Never retried.
+
+    An `out` that is not such a destination (symlinked ancestor, missing parent, `..`, wrong owner
+    or mode) is refused BEFORE any child is started, with a closed `FixtureSafetyError`
+    (`phase=build_offline_destination`, no path); nothing is created or chmod-ed for it."""
+    env = offline_build_env(builds_dir)
     args = [sys.executable, str(BUILD_FIXTURE), "--build", label, "--out", str(out)]
     if instances:
         args += ["--instances", instances]
-    result = subprocess.run(args, check=True, env=env, capture_output=True, text=True)
-    info = json.loads(result.stdout)
+    # Private output is arranged BEFORE the build (created 0700 if absent, nothing else made or
+    # chmod-ed) and the fd is held, so a failure is retained into that same inode.
+    out_fd = _open_private_output_dir(Path(out))
+    if out_fd is None:
+        raise fc.FixtureSafetyError(
+            "offline fixture build refused: phase=build_offline_destination "
+            "private_output=not_retained_unsafe_destination"
+        ) from None
+    failure: str | None = None
+    try:
+        result = subprocess.run(args, check=False, env=env, capture_output=True)
+        info = None
+        if result.returncode == 0:
+            # Parsed inline, not through a helper taking the body: pytest's long traceback prints
+            # each frame's arguments, so `json.loads(s=<child stdout>)` would put the body in a
+            # failure report. Only flagged here; the raise is outside any except block.
+            with contextlib.suppress(ValueError):
+                info = json.loads(result.stdout.decode("utf-8"))
+            if not isinstance(info, dict):
+                failure = (
+                    f"phase=build_offline_output exit_code=0 stdout_bytes={len(result.stdout)}"
+                )
+        else:
+            failure = f"phase=build_offline exit_code={result.returncode}"
+        if failure is not None:
+            retained = _retain_build_failure_output(out_fd, result.stdout, result.stderr)
+    finally:
+        with contextlib.suppress(OSError):  # owned fd only; never replaces the native result
+            os.close(out_fd)
+    if failure is not None:
+        raise fc.FixtureSafetyError(
+            f"offline fixture build failed: {failure} private_output={retained}"
+        ) from None
     qualification = os.environ.get("HMP_DIRECT_SEND_QUALIFICATION")
     approval_receipt = os.environ.get(approval_fixture.RECEIPT_ENV)
     if qualification or approval_receipt:
-        build = fc.resolve_build(Path(builds_dir or env["HMP_HERMES_BUILDS_DIR"]), label)
+        builds = builds_dir or os.environ["HMP_HERMES_BUILDS_DIR"]
+        build = fc.resolve_build(Path(builds), label)
         if qualification:
             install_fixture_qualification(build, out, Path(qualification))
         # A separate lane, manifest and receipt: the direct-send receipt above never opens it.
