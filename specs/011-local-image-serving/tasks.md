@@ -5,7 +5,7 @@
 ## M0 Documents
 
 - [x] **P0** Additive public contract revision: HMP v1 §7e, `media_unavailable` row, optional `media` on tool rows, constants, residual, conformance rows (this change). Root reviewed the additive transcription against the frozen design and the independent Opus pre-code PASS (2026-10-01). No serving or code gate is certified.
-- [ ] **E1** Native-generated bounded fixture: producer `image` string versus the routed-home lexical prefix on the target build. Admission gate (`EVIDENCE_GAP`); blocks any manifest entry.
+- [x] **E1** Native-generated bounded fixture: producer `image` string versus the routed-home lexical prefix on exact Hermes `8afaab3703e336d72a72c812dd2dd249f04f166a`. Root passed three isolated positive native flows and 37 focused string/helper tests (research `f9c542b`). Limited to the real `save_b64_image` producer and stated scratch layout; no live route or manifest admission is granted.
 
 ## M1 Host (after P0 review)
 
@@ -35,7 +35,7 @@ These four modules remain inert; no production caller or route imports them. The
 | `local_media_raster_structure.py` | `f293d0c1e379d20ec5d466e9a92e9c0e6b961a2a2b7009b5aac3705410b47610` |
 | `local_media_result.py` | `04d011cf8b805c2b285297e18f99a4ec1691f0133320948d2680d564c29b4336` |
 
-Independent review found only the prior exact-tree contract mismatch; the reviewed wrapper had no defect. Root verified the repaired layout and wrapper (70 tests), configured Ruff 0.16.9, plugin-surface check and privacy scan. Earlier adapted research tests passed (289); no broad native matrix was rerun. S2, S4-S6, Linux, producer-string evidence, qualification and device tests remain open.
+Independent review found only the prior exact-tree contract mismatch; the reviewed wrapper had no defect. Root verified the repaired layout and wrapper (70 tests), configured Ruff 0.16.9, plugin-surface check and privacy scan. Earlier adapted research tests passed (289); no broad native matrix was rerun. S2, S4-S6, Linux, serving qualification and device tests remain open.
 
 ## S3 reviewed registry (2026-10-01)
 
@@ -48,3 +48,9 @@ Independent review cleared the foreign-snapshot/caller CAS guard, exact types, l
 | `local_media_registry.py` | `b49e6e6205805f38144e769f742f6e3ee918536aa6dd5f66e6c8096d8f77c2b2` |
 
 S2, S4-S6, native serving qualification and device acceptance remain open.
+
+## E1 bounded producer evidence (2026-10-01)
+
+[Research evidence](https://github.com/MahdiHedhli/hermes-hmp/blob/f9c542b/docs/research/local-media-lexical-evidence-2026-10-01.md) compares the uncapped persisted producer string against the actual native routed-home helper's string, without normalizing the candidate. Desktop, Phone stand-in and deferred-tool flows matched the selected prefix and one flat 128-byte-bounded name; the foreign profile prefix did not match. The native pin, clean source and source fingerprints were checked before/after. Root retained the private native report and reviewed 37 focused lexical/helper tests.
+
+This evidence is not a live HMP route, other-provider path proof, Linux qualification or device acceptance. All other serving gates remain open.
