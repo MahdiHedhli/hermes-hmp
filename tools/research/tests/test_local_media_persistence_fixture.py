@@ -569,3 +569,186 @@ def test_all_scenarios_closed_metadata(tmp_path: Path) -> None:
     assert (
         deferred["tool_row_names"] == ["image_generate"] and deferred["tool_name_matches_call_name"]
     )
+
+
+# --------------------------------------------------------------------------------------------
+# Lexical image-prefix evidence (distinct from the older Path(parent) comparison)
+# --------------------------------------------------------------------------------------------
+
+HOME_A = "/scratch/hermes/profiles/alpha"
+HOME_B = "/scratch/hermes/profiles/beta"
+PREFIX_A = fx.lexical_prefix(HOME_A)
+PREFIX_B = fx.lexical_prefix(HOME_B)
+
+
+def _observe(raw: object, selected: str | None = PREFIX_A) -> dict[str, object]:
+    return fx.lexical_image_observation(raw, selected, PREFIX_B)
+
+
+def test_lexical_prefix_is_plain_string_concatenation() -> None:
+    assert PREFIX_A == HOME_A + "/cache/images/"
+    assert fx.lexical_prefix(Path(HOME_A)) == PREFIX_A
+    assert fx.lexical_prefix("relative/home") is None
+    assert fx.lexical_prefix(object()) is None
+    assert fx.lexical_prefix(None) is None
+
+
+def test_lexical_accepts_exact_prefix_with_one_flat_name() -> None:
+    result = _observe(PREFIX_A + "g1synth_1234.png")
+    assert result["accepted"] is True
+    assert result["starts_with_selected_prefix"] is True
+    assert result["starts_with_other_prefix"] is False
+    assert result["suffix_is_single_flat_bounded_name"] is True
+    assert set(result) >= {"raw_sha256", "expected_prefix_sha256"}
+    assert "scratch" not in repr({k: v for k, v in result.items() if k.endswith("sha256")})
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        # prefix spelling mismatches
+        "/scratch/hermes/profiles/alpha/cache/images" + "g1.png",  # missing separator
+        "/scratch/hermes/profiles/alpha//cache/images/g1.png",  # doubled separator
+        "/scratch//hermes/profiles/alpha/cache/images/g1.png",
+        "/scratch/hermes/./profiles/alpha/cache/images/g1.png",
+        "/scratch/hermes/profiles/alpha/../alpha/cache/images/g1.png",
+        "/scratch/hermes/profiles/alpha/cache/images/./g1.png",
+        "/SCRATCH/hermes/profiles/alpha/cache/images/g1.png",  # case
+        "scratch/hermes/profiles/alpha/cache/images/g1.png",  # relative
+        "/private/scratch/hermes/profiles/alpha/cache/images/g1.png",  # symlink-resolved spelling
+        "/scratch/hermes/profiles/alpha/cache/images/",  # empty name
+        "/scratch/hermes/profiles/alpha/cache",
+        "",
+    ],
+)
+def test_lexical_refuses_prefix_spelling_mismatch(raw: str) -> None:
+    assert _observe(raw)["accepted"] is False
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        "sub/g1.png",  # nested
+        "a/b/c.png",
+        "../g1.png",
+        "..",
+        ".",
+        "g1.png/",
+        "back\\slash.png",
+        "nul\x00.png",
+        "ctl\n.png",
+        "x" * 129,
+    ],
+)
+def test_lexical_refuses_nested_or_unbounded_suffix(suffix: str) -> None:
+    result = _observe(PREFIX_A + suffix)
+    assert result["starts_with_selected_prefix"] is True
+    assert result["suffix_is_single_flat_bounded_name"] is False
+    assert result["accepted"] is False
+
+
+def test_lexical_suffix_bound_is_pinned_to_frozen_leaf_literal() -> None:
+    # frozen local_media_file_safety.MAX_NAME_BYTES / spec 011; raising the bound must fail here
+    assert fx.LEXICAL_MAX_NAME_BYTES == 128
+
+
+def test_lexical_suffix_bound_is_inclusive() -> None:
+    assert _observe(PREFIX_A + "x" * 128)["accepted"] is True
+    assert _observe(PREFIX_A + "x" * 129)["accepted"] is False
+    # bound counts encoded bytes, not characters: 64 x 2 bytes = 128 accepted, 65 refused
+    assert _observe(PREFIX_A + "é" * 64)["accepted"] is True
+    assert _observe(PREFIX_A + "é" * 65)["accepted"] is False
+
+
+def test_lexical_refuses_foreign_profile_image() -> None:
+    result = _observe(PREFIX_B + "g1.png")
+    assert result["accepted"] is False
+    assert result["starts_with_selected_prefix"] is False
+    assert result["starts_with_other_prefix"] is True
+
+
+def test_lexical_never_normalizes_to_accept(tmp_path: Path) -> None:
+    real = tmp_path / "home"
+    (real / "cache" / "images").mkdir(parents=True)
+    link = tmp_path / "link"
+    link.symlink_to(real)
+    selected = fx.lexical_prefix(str(real))
+    # a symlink spelling and a dot-dot spelling resolve to the same directory but are refused
+    assert (
+        fx.lexical_image_observation(str(link / "cache/images/g.png"), selected, None)["accepted"]
+        is False
+    )
+    dotted = f"{real}/cache/../cache/images/g.png"
+    assert os.path.realpath(dotted) == os.path.realpath(f"{real}/cache/images/g.png")
+    assert fx.lexical_image_observation(dotted, selected, None)["accepted"] is False
+    assert fx.lexical_image_observation(f"{real}/cache/images/g.png", selected, None)["accepted"]
+
+
+@pytest.mark.parametrize("raw", [None, 5, b"/x", ["/x"]])
+def test_lexical_non_string_raw_is_not_accepted(raw: object) -> None:
+    assert _observe(raw)["accepted"] is False
+
+
+def test_lexical_missing_expected_prefix_is_a_gap_not_a_pass() -> None:
+    result = fx.lexical_image_observation(PREFIX_A + "g.png", None, PREFIX_B)
+    assert result["accepted"] is False and result["prefix_available"] is False
+
+
+def test_lexical_does_not_use_the_raw_value_to_derive_the_expectation() -> None:
+    source = Path(fx.__file__).read_text()
+    start = source.index("def lexical_image_observation")
+    body = source[start : source.index("def native_lexical_prefixes")]
+    for forbidden in ("resolve(", "normpath", "realpath", "abspath", "Path("):
+        assert forbidden not in body
+
+
+def test_native_prefix_helper_failure_is_a_recorded_gap(monkeypatch: pytest.MonkeyPatch) -> None:
+    # No native import is possible in this interpreter: the gap is recorded, never guessed.
+    monkeypatch.setitem(sys.modules, "gateway.run", None)
+    result = fx.native_lexical_prefixes()
+    assert result["gap"] and result["gap"].startswith("helper_error:")
+    assert result["selected"] is None and result["other"] is None
+
+
+def test_native_prefix_helper_sentinel_is_a_gap(monkeypatch: pytest.MonkeyPatch) -> None:
+    import types
+
+    sentinel = object()
+    runner = types.SimpleNamespace(_routed_profile_home=staticmethod(lambda name: sentinel))
+    module = types.ModuleType("gateway.run")
+    module.GatewayRunner = runner  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "gateway.run", module)
+    result = fx.native_lexical_prefixes()
+    assert result["gap"] == "helper_result_not_absolute_path"
+    assert result["selected"] is None
+
+
+def test_native_prefix_helper_matches_bridge_shape(monkeypatch: pytest.MonkeyPatch) -> None:
+    import types
+
+    homes = {fx.PROFILE: Path(HOME_A), fx.OTHER_PROFILE: Path(HOME_B)}
+    runner = types.SimpleNamespace(_routed_profile_home=staticmethod(lambda name: homes[name]))
+    module = types.ModuleType("gateway.run")
+    module.GatewayRunner = runner  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "gateway.run", module)
+    result = fx.native_lexical_prefixes()
+    assert result["gap"] is None
+    assert result["selected"] == PREFIX_A and result["other"] == PREFIX_B
+    assert result["bridge_shape_equals_native_str"] and result["homes_differ"]
+
+
+@native
+def test_lexical_evidence_positive_scenarios(tmp_path: Path) -> None:
+    scenarios = ("desktop", "phone", "desktop_deferred")
+    report = fx.run_parent(fx.DEFAULT_NATIVE_SRC, scenarios, tmp_path / "evidence")
+    assert report["source_unchanged"] and report["native_tree_clean_after"]
+    for name in scenarios:
+        sc = report["scenarios"][name]
+        assert sc["status"] == "COMPLETED", name
+        assert sc["lexical_helper"]["gap"] is None, name
+        assert sc["lexical_helper"]["bridge_shape_equals_native_str"], name
+        assert sc["lexical_helper"]["homes_differ"], name
+        lexical = sc["rows_alpha_db"]["tool_row_meta"][0]["lexical"]
+        assert lexical["accepted"] and lexical["starts_with_selected_prefix"], name
+        assert not lexical["starts_with_other_prefix"], name
+        assert lexical["suffix_is_single_flat_bounded_name"], name

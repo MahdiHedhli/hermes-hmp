@@ -954,6 +954,92 @@ def install_db_observer(recorder: Recorder, *, fail_tool_batch: bool) -> None:
 # --------------------------------------------------------------------------------------------
 
 
+LEXICAL_CACHE_SUBPATH = "/cache/images/"
+LEXICAL_MAX_NAME_BYTES = 128
+
+
+def lexical_suffix_is_flat_name(suffix: object) -> bool:
+    """True only for one non-empty bounded file name: no separator, NUL, control character,
+    `.`/`..`. Pure string logic; nothing is normalized or resolved."""
+    if not isinstance(suffix, str) or not suffix or suffix in (".", ".."):
+        return False
+    if "/" in suffix or "\\" in suffix or any(ord(ch) < 0x20 or ord(ch) == 0x7F for ch in suffix):
+        return False
+    try:
+        return len(suffix.encode("utf-8")) <= LEXICAL_MAX_NAME_BYTES
+    except UnicodeEncodeError:
+        return False
+
+
+def lexical_prefix(home: object) -> str | None:
+    """`str(home) + '/cache/images/'` for a native helper result that is a str/PathLike with an
+    absolute spelling (the shape `Bridge._profile_home` accepts), else None. No resolve."""
+    if not isinstance(home, str | os.PathLike):
+        return None
+    text = os.fspath(home)
+    if not isinstance(text, str) or not text.startswith("/"):
+        return None
+    return text + LEXICAL_CACHE_SUBPATH
+
+
+def lexical_image_observation(
+    raw: object, selected_prefix: str | None, other_prefix: str | None
+) -> dict[str, Any]:
+    """Closed booleans and hashes for one RAW producer image string against the lexical prefix of
+    the selected profile's home (and the other profile's). The expected prefixes come only from the
+    native helper, never from the producer string, `Path.resolve` or normalization."""
+    out: dict[str, Any] = {"prefix_available": selected_prefix is not None}
+    if not isinstance(raw, str) or selected_prefix is None:
+        out["accepted"] = False
+        return out
+    selected = raw.startswith(selected_prefix)
+    other = other_prefix is not None and raw.startswith(other_prefix)
+    suffix = raw[len(selected_prefix) :] if selected else ""
+    flat = selected and lexical_suffix_is_flat_name(suffix)
+    out.update(
+        {
+            "starts_with_selected_prefix": selected,
+            "starts_with_other_prefix": other,
+            "suffix_is_single_flat_bounded_name": flat,
+            "suffix_len": len(suffix),
+            "accepted": bool(selected and flat and not other),
+            "raw_sha256": sha256_bytes(raw.encode("utf-8", "surrogatepass")),
+            "expected_prefix_sha256": sha256_bytes(
+                selected_prefix.encode("utf-8", "surrogatepass")
+            ),
+        }
+    )
+    return out
+
+
+def native_lexical_prefixes() -> dict[str, Any]:
+    """Call the real native `GatewayRunner._routed_profile_home` (a staticmethod, the call
+    `Bridge._profile_home` makes) for the selected and the other profile. Any import or call
+    failure is an evidence gap (closed type name), never a guessed value."""
+    out: dict[str, Any] = {"gap": None}
+    try:
+        from gateway.run import GatewayRunner
+
+        selected = GatewayRunner._routed_profile_home(PROFILE)
+        other = GatewayRunner._routed_profile_home(OTHER_PROFILE)
+    except Exception as exc:
+        out["gap"] = f"helper_error:{type(exc).__name__}"
+        out["selected"] = out["other"] = None
+        return out
+    out["selected_helper_type"] = type(selected).__name__
+    out["selected"] = lexical_prefix(selected)
+    out["other"] = lexical_prefix(other)
+    out["bridge_shape_equals_native_str"] = out["selected"] is not None and (
+        str(Path(os.fspath(selected))) + LEXICAL_CACHE_SUBPATH == out["selected"]
+    )
+    out["homes_differ"] = out["selected"] is not None and out["selected"] != out["other"]
+    if out["selected"] is None or out["other"] is None:
+        out["gap"] = "helper_result_not_absolute_path"
+    elif not out["bridge_shape_equals_native_str"]:
+        out["gap"] = "bridge_shape_differs_from_native_str"
+    return out
+
+
 def inspect_rows(
     db_path: Path,
     session_ids: list[str],
@@ -961,6 +1047,7 @@ def inspect_rows(
     other_cache: Path,
     produced: list[dict[str, Any]],
     cap: int | None,
+    prefixes: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from hermes_state import SessionDB
 
@@ -1066,6 +1153,13 @@ def inspect_rows(
                     p = Path(image)
                     meta["image_in_selected_profile_cache"] = p.parent == profile_cache
                     meta["image_in_other_profile_cache"] = p.parent == other_cache
+                    if prefixes is not None:
+                        meta["lexical"] = lexical_image_observation(
+                            image, prefixes.get("selected"), prefixes.get("other")
+                        )
+                        meta["lexical"]["old_parent_evidence_agrees"] = meta[
+                            "image_in_selected_profile_cache"
+                        ] == meta["lexical"].get("accepted")
                     meta["image_equals_provider_saved_path"] = any(
                         image == pr["path"] for pr in produced
                     )
@@ -1546,6 +1640,10 @@ def run_child(native_src: Path, root: Path, scenario: str) -> dict[str, Any]:
         )
         report["beta_db_sessions"] = len(session_inventory(ctx.layout["beta"] / "state.db")["ids"])
         sids = [s for s in ctx.sids if s] or report["alpha_db"]["ids"]  # type: ignore[attr-defined]
+        prefixes = native_lexical_prefixes()
+        report["lexical_helper"] = {
+            k: v for k, v in prefixes.items() if k not in ("selected", "other")
+        }
         report["rows_alpha_db"] = inspect_rows(
             alpha / "state.db",
             sids,
@@ -1553,6 +1651,7 @@ def run_child(native_src: Path, root: Path, scenario: str) -> dict[str, Any]:
             ctx.layout["beta"] / "cache" / "images",
             ctx.produced,
             ctx.cap,
+            prefixes,
         )
         root_sids = session_inventory(ctx.layout["hermes_root"] / "state.db")["ids"]
         if root_sids:
@@ -1563,6 +1662,7 @@ def run_child(native_src: Path, root: Path, scenario: str) -> dict[str, Any]:
                 ctx.layout["beta"] / "cache" / "images",
                 ctx.produced,
                 ctx.cap,
+                prefixes,
             )
         rec = ctx.recorder
         flush_tool = rec.first("db_batch", has_tool=True)
