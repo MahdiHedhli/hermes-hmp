@@ -49,6 +49,7 @@ CONTRACT_MODULES = {
     "local_media_sidecar.py",  # non-wire read-result carriers (LM-8); inert, stdlib + contract
     "local_media_candidate.py",  # bounded candidate extraction (LM-8); inert, accepted modules only
     "local_media_active_batch.py",  # request-scoped active batch (C6a); inert, scanner + candidate
+    "local_media_gate.py",  # process qualification gate (S6a); inert, compat + stdlib only
 }
 DATA_FILES = {
     "plugin.yaml",
@@ -57,6 +58,7 @@ DATA_FILES = {
     "approval_supported_builds.json",
     "mobile_cron_supported_builds.json",
     "mobile_model_supported_builds.json",
+    "local_media_supported_builds.json",
 }
 
 

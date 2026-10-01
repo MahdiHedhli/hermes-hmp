@@ -119,6 +119,14 @@ server/
                                   #   selectors with one bracketed scan; imports only the accepted scanner and candidate
                                   #   modules (module scope) and stdlib; no I/O, no logging, no caller yet. Closed
                                   #   verdicts only, never a path, name, digest, call id or content; grants no authority
+    local_media_gate.py           # OPTIONAL, inert (S6a): local-media process qualification gate; imports only compat and the
+                                  #   standard library. Strict hmp-local-media-1 manifest, bounded no-follow source reads,
+                                  #   sys-anchored first-factory baseline that survives module reloads, optional adapter-owned
+                                  #   preload for origin checks. Returns a closed callback for every input while the shipped
+                                  #   manifest has no entries; no caller, flag or route yet; grants no authority
+    local_media_supported_builds.json  # S6a media qualification list: exact {format, native_files, hmp_files, builds}; ships
+                                  #   with builds empty. Entries bind native and HMP fingerprints plus the Git SHA; never read
+                                  #   by the read, approval or direct-send parsers
     read_compat_builds.json       # GU-2c list (starts empty). Entries: {git_sha|null, fingerprint, source_sha?
                                   #   (provenance only), label, qualified_by, qualified_at}; matching per research
                                   #   R8 steps 4-6 (CS-19); plus "bridge_files", the mechanically computed superset

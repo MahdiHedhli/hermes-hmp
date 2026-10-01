@@ -13,6 +13,7 @@
 - [x] **S2** Read-result sidecar and lexical name derivation; golden proof that closed-gate bytes are unchanged (T1). Root accepted S2a–S2d after independent reviews and 833 focused tests (three preexisting Hermes-build skips). Optional media twins remain unused by production handlers; no serving claim.
 - [x] **S3** Registry: lock, TTL, LRU, idempotent mint, first-digest CAS (T2, T8). Root accepted the inert slice after independent Opus delta review, causal foreign-snapshot/caller tests, and 152 focused registry/layout tests on 2026-10-01. No fetch authority or serving claim.
 - [ ] **S6** `local_media.enabled` default-off flag, empty manifest, dedicated media file list, start baseline plus fresh disk equality, off-loop (T18).
+- [x] **S6a** Inert process qualification gate and empty manifest. Root accepted source after independent Opus original review, Sonnet hardening delta review and 392 focused tests. No listener, flag, entry or admission; S6 remains open.
 - [x] **C6a** Request-scoped active-history batch module and independent security review, following the C6 freeze; accepted single scanner unchanged. Source acceptance only; native cost/memory and C6b remain open.
 - [ ] **C6b** Bind that reviewed batch to the same native database/home capture, then root exact-native cost, concurrent-writer and mint-memory evidence. C6 remains open.
 - [ ] **S4** Descriptor emission in handlers, 128 cap (T1, T5, T6, T7). Needs S2, S3, S6 and C6 admission.
@@ -193,3 +194,36 @@ independent Opus design amendments: persistent process-wide primitive baseline a
 short anchor locking outside imports/I/O, free-threaded closure, this-load module-origin checks,
 import-shadowing refusal and bounded fd-relative source reads. No gate module, listener binding,
 manifest entry, live flag, media route or approval-gate change is accepted by this design.
+
+## S6a reviewed inert gate (2026-10-01)
+
+Source acceptance only; **S6 stays unchecked**. `local_media_gate.py` is
+inert: nothing imports it, there is no flag, route, adapter or bridge binding, and the shipped
+`local_media_supported_builds.json` has `builds: []` (preliminary native inventory of 22 files, every
+top-level HMP `.py`). With no entry every call returns the constant closed callback and reads only the
+media manifest. It implements the frozen S6 design: strict `hmp-local-media-1` parser, bounded
+fd-relative no-follow source reads, directory-set equality for importable forms, the `sys` anchor
+with its exact primitive layout, optional adapter-owned `preload` with this-load origin checks
+(`preload=None` can never admit), and a fresh dependency probe on every check. The media probe table is
+`READ_DEPENDENCIES` plus `SessionDB.get_session_by_title` and `SessionDB.get_compression_lineage`.
+No qualification entry, native execution, callee-closure trace, cost measurement, Linux, T12 or
+device result exists. Independent Opus review cleared the gate/manifest and required one test
+repair: explicitly create the cache before testing its FIFO refusal, independent of bytecode
+writing. Root also adopted precise origin hardening: refuse leaf-symlink aliases, preserve valid
+whole-directory aliases, and bind the loader's own name/path to its spec. The factory now requires
+an exact BuildIdentity and documents S6b's separate supported-read precondition. Independent
+Sonnet delta review accepted the repaired source; root passed 392 gate/layout cases with `-B`,
+configured Ruff 0.16.9, explicit privacy/diff and plugin-surface checks. The manifest remains empty.
+
+S6b must bind only under `CompatResult.supported is True`, prove unsupported/missing-dependency
+states leave the cell untouched, and supply the static required-module preload. Preliminary
+native callee/producer coverage, bytecode/ABA, same-account tampering, public test seams,
+BaseException propagation, blocking lock/kernel/Git latency and per-check cost remain residuals.
+No approval gate, live plugin, source qualification entry or device build changed.
+
+| File | SHA-256 |
+| --- | --- |
+| `local_media_gate.py` | `fb8ae21e8a67dfe382de2e283d5672044828b4c316bc33bce4e12fb1302439c4` |
+| `local_media_supported_builds.json` | `4efc1f0a44fcd844d77a64320bd6fd92781604368cc018d6adbe8cdbb5db4f46` |
+| `test_local_media_gate.py` | `4f3f02ae7a28f6a13ced3b5d0ff7ce85d0795fb0fdf864471b815f4a9841c416` |
+| `test_skeleton_layout.py` | `52f19ad67250c3efda1d780b300afb5cd7dcc4fb2e77d8f2c01566fe1fde59ed` |
