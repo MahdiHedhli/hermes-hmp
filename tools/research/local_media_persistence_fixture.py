@@ -24,6 +24,11 @@ child's own loopback synthetic model server, then drives one scenario:
   phone_flushfail     as above with the injected tool-row batch write failure.
   desktop_deferred    as `desktop`, but with Hermes's default tool search on: `image_generate` is
                 deferred, so the synthetic model calls the native `tool_call` bridge naming it.
+  {desktop,phone}_deferred_calls   default tool search on; the model emits the modern bridge shape
+                `tool_call {calls: [{name: image_generate, arguments}]}` with one entry.
+  {desktop,phone}_deferred_batch   as above with two entries (distinct synthetic prompts) in one
+                parent `tool_call`. The native outcome (accepted, rejected, limited) is observed,
+                never forced.
 
 Replaced: the model (loopback OpenAI-compatible synthetic server) and the image provider (synthetic
 `ImageGenProvider`, registered in-process, returning `success_response` with a path from the real
@@ -68,6 +73,24 @@ TAIL_BYTES = 64 * 1024
 SCAN_CHUNK = 64 * 1024
 CHILD_FILE_SIZE_LIMIT = 256 * 1024 * 1024
 SCENARIOS = ("desktop", "phone", "desktop_flushfail", "phone_flushfail", "desktop_deferred")
+# Modern `tool_call {calls: [...]}` bridge scenarios (default tool search on). Not part of
+# SCENARIOS: the accepted five are not repeated by default.
+MODERN_SCENARIOS = (
+    "desktop_deferred_calls",
+    "phone_deferred_calls",
+    "desktop_deferred_batch",
+    "phone_deferred_batch",
+)
+ALL_SCENARIOS = SCENARIOS + MODERN_SCENARIOS
+# Per-scenario bridge shape: None = direct call, "legacy" = `{name, arguments}`, "calls" = the
+# modern `{calls: [{name, arguments}, ...]}` array, with the number of underlying entries.
+BRIDGE_SHAPES: dict[str, tuple[str, int] | None] = {
+    "desktop_deferred": ("legacy", 1),
+    "desktop_deferred_calls": ("calls", 1),
+    "phone_deferred_calls": ("calls", 1),
+    "desktop_deferred_batch": ("calls", 2),
+    "phone_deferred_batch": ("calls", 2),
+}
 HERE = Path(__file__).resolve()
 HMP_CONTRACT = HERE.parents[2] / "server" / "hmp_plugin" / "contract.py"
 
@@ -94,6 +117,7 @@ REAL_HERMES_MARKER = Path("~/.hermes").expanduser()
 PROFILE = "alpha"
 OTHER_PROFILE = "beta"
 CALL_ID = "call_synth_0001"
+BATCH_PROMPT_TAGS = ("alpha", "beta")
 CHAT_ID = "chat-synthetic"
 USER_ID = "user-synthetic"
 LONG_PROMPT_CHARS = 6000
@@ -642,8 +666,8 @@ def install_ip_denial() -> None:
 class SyntheticModel:
     """Loopback OpenAI-compatible chat-completions server with a two-step script."""
 
-    def __init__(self, bridge: bool = False) -> None:
-        self.bridge = bridge
+    def __init__(self, shape: tuple[str, int] | None = None) -> None:
+        self.shape = shape
         self.requests = 0
         self.tool_call_responses = 0
         self.final_responses = 0
@@ -692,11 +716,13 @@ class SyntheticModel:
                 if call_tool:
                     model.tool_call_responses += 1
                     name, arguments = "image_generate", {"prompt": LONG_PROMPT}
-                    if model.bridge:
-                        name, arguments = (
-                            "tool_call",
-                            {"name": "image_generate", "arguments": arguments},
-                        )
+                    if model.shape is not None:
+                        kind, count = model.shape
+                        if kind == "legacy":
+                            arguments = {"name": "image_generate", "arguments": arguments}
+                        else:
+                            arguments = {"calls": batch_entries(count)}
+                        name = "tool_call"
                     message: dict[str, Any] = {
                         "role": "assistant",
                         "content": None,
@@ -778,6 +804,18 @@ class SyntheticModel:
     def stop(self) -> None:
         if self._server is not None:
             self._server.shutdown()
+
+
+def batch_entries(count: int) -> list[dict[str, Any]]:
+    """Underlying `image_generate` entries for the modern bridge array. One entry keeps the long
+    prompt (comparable with the accepted scenarios); a batch uses distinct short synthetic prompts,
+    each carrying a tag the synthetic provider turns into a distinct filename prefix."""
+    if count == 1:
+        return [{"name": "image_generate", "arguments": {"prompt": LONG_PROMPT}}]
+    return [
+        {"name": "image_generate", "arguments": {"prompt": f"synthetic-batch-{tag}-prompt"}}
+        for tag in BATCH_PROMPT_TAGS[:count]
+    ]
 
 
 def write_config(home: Path, port: int, *, routes: bool, tool_search_off: bool = True) -> None:
@@ -864,7 +902,8 @@ def register_synthetic_provider(recorder: Recorder, produced: list[dict[str, Any
         ) -> dict[str, Any]:
             from hermes_constants import get_hermes_home
 
-            path = save_b64_image(png_b64, prefix="g1synth")
+            tag = next((t for t in BATCH_PROMPT_TAGS if f"-batch-{t}-" in prompt), None)
+            path = save_b64_image(png_b64, prefix="g1synth" + (f"-{tag}" if tag else ""))
             produced.append(
                 {
                     "path": str(path),
@@ -882,6 +921,11 @@ def register_synthetic_provider(recorder: Recorder, produced: list[dict[str, Any
             )
 
     image_gen_registry.register_provider(SyntheticProvider())
+
+
+def closed_tool_name(name: Any) -> str:
+    """Closed class of a tool name; an unexpected name is never recorded verbatim."""
+    return name if name in ("image_generate", "tool_call") else "other"
 
 
 def classify_send(text: str) -> str:
@@ -952,6 +996,165 @@ def install_db_observer(recorder: Recorder, *, fail_tool_batch: bool) -> None:
 # --------------------------------------------------------------------------------------------
 # Child: closed-metadata inspection (never returns content)
 # --------------------------------------------------------------------------------------------
+
+
+MAX_WALK_NODES = 200
+MAX_WALK_DEPTH = 4
+MAX_PATH_CHARS = 60
+
+
+def parse_json_or_none(raw: Any) -> Any:
+    if isinstance(raw, (dict, list)):
+        return raw
+    try:
+        return json.loads(raw) if isinstance(raw, str) else None
+    except json.JSONDecodeError:
+        return None
+
+
+def outer_call_shape(call: dict[str, Any]) -> dict[str, Any]:
+    """Closed description of one persisted assistant call: outer name class, bridge shape and the
+    underlying entry names. Prompts are only compared (distinct count), never recorded."""
+    function = call.get("function") or {}
+    outer_name = function.get("name")
+    args = parse_json_or_none(function.get("arguments"))
+    shape = "direct"
+    entries: list[Any] = []
+    if outer_name == "tool_call":
+        if isinstance(args, dict) and isinstance(args.get("calls"), list):
+            shape, entries = "calls_array", args["calls"]
+        elif isinstance(args, dict) and "name" in args:
+            shape, entries = "legacy_single", [args]
+        else:
+            shape = "other"
+    entry_names = [e.get("name") if isinstance(e, dict) else None for e in entries]
+    entry_args = [
+        parse_json_or_none(e.get("arguments")) if isinstance(e, dict) else None for e in entries
+    ]
+    prompts = [a.get("prompt") for a in entry_args if isinstance(a, dict)]
+    return {
+        "id": call.get("id"),
+        "outer_name_class": closed_tool_name(outer_name),
+        "shape": shape,
+        "entry_count": len(entries) if shape != "direct" else 1,
+        "entry_names_closed": [closed_tool_name(n) for n in entry_names],
+        "entry_prompts_distinct": len({p for p in prompts if isinstance(p, str)}),
+        "entry_ids_present": any(isinstance(e, dict) and "id" in e for e in entries),
+    }
+
+
+def walk_image_fields(
+    node: Any, path: str = "", depth: int = 0, budget: list[int] | None = None
+) -> list[dict[str, Any]]:
+    """Bounded walk of a parsed tool result: every string value under a key named like `*image`,
+    as key-path (list positions as `[]`), type and value only as a string for the caller to
+    classify. The caller never publishes the value."""
+    budget = budget if budget is not None else [MAX_WALK_NODES]
+    found: list[dict[str, Any]] = []
+    if budget[0] <= 0 or depth > MAX_WALK_DEPTH:
+        return found
+    budget[0] -= 1
+    if isinstance(node, dict):
+        for key, value in node.items():
+            child = f"{path}.{key}" if path else str(key)
+            if str(key).endswith("image") and isinstance(value, str):
+                found.append({"path": child[:MAX_PATH_CHARS], "value": value})
+            else:
+                found.extend(walk_image_fields(value, child, depth + 1, budget))
+    elif isinstance(node, list):
+        for value in node:
+            found.extend(walk_image_fields(value, f"{path}[]", depth + 1, budget))
+    return found
+
+
+def error_class(parsed: Any) -> str | None:
+    """Closed class of a native tool error object; the message text is never recorded."""
+    if not isinstance(parsed, dict) or not isinstance(parsed.get("error"), str):
+        return None
+    text = parsed["error"]
+    if "takes exactly one entry for local tools" in text:
+        return "local_batch_rejected"
+    if "is not available in this session" in text:
+        return "not_in_session_scope"
+    return "other_error"
+
+
+def describe_bridge_shape(
+    assistants: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    profile_cache: Path,
+    produced: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Array-aware linkage observations (additive to the single-entry observations)."""
+    outer: list[dict[str, Any]] = []
+    for row in assistants:
+        parsed = parse_json_or_none(row.get("tool_calls"))
+        outer.extend(outer_call_shape(c) for c in (parsed or []) if isinstance(c, dict))
+    outer_ids = {o["id"] for o in outer if o["id"]}
+    rows_meta: list[dict[str, Any]] = []
+    image_values: list[str] = []
+    for row in tools:
+        content = row.get("content")
+        parsed = parse_json_or_none(content)
+        fields = walk_image_fields(parsed)
+        image_values.extend(f["value"] for f in fields)
+        rows_meta.append(
+            {
+                "tool_name_class": closed_tool_name(row.get("tool_name")),
+                "id_is_outer_call": row.get("tool_call_id") in outer_ids,
+                "json_type": type(parsed).__name__ if parsed is not None else "unparseable",
+                "top_level_keys": sorted(str(k)[:40] for k in parsed)[:20]
+                if isinstance(parsed, dict)
+                else [],
+                "error_class": error_class(parsed),
+                "image_field_paths": [f["path"] for f in fields],
+                "image_field_count": len(fields),
+                "image_fields_are_str": all(isinstance(f["value"], str) for f in fields),
+                "image_fields_absolute": [f["value"].startswith("/") for f in fields],
+                "image_fields_are_provider_saved": [
+                    any(f["value"] == pr["path"] for pr in produced) for f in fields
+                ],
+            }
+        )
+    cache_names = (
+        sorted(p.name for p in profile_cache.iterdir() if p.is_file())
+        if profile_cache.is_dir()
+        else []
+    )
+    referenced = {Path(v).name for v in image_values}
+    saved_names = [Path(pr["path"]).name for pr in produced]
+    return {
+        "outer_call_count": len(outer),
+        "outer_calls": outer,
+        "underlying_call_count": sum(o["entry_count"] for o in outer),
+        "tool_row_count": len(tools),
+        "tool_rows_per_outer_call": {
+            str(i): sum(1 for r in tools if r.get("tool_call_id") == o["id"])
+            for i, o in enumerate(outer)
+        },
+        "one_wrapper_result": len(outer) == 1 and len(tools) == 1,
+        "multiple_tool_rows": len(tools) > 1,
+        "all_tool_rows_share_one_id": len({r.get("tool_call_id") for r in tools}) == 1
+        if tools
+        else False,
+        # More underlying entries than distinct tool-row ids: an id cannot attribute a result to
+        # an entry, so a shared id is not evidence of native per-entry execution.
+        "shared_id_ambiguous": sum(o["entry_count"] for o in outer)
+        > len({r.get("tool_call_id") for r in tools}),
+        "tool_rows": rows_meta,
+        "image_field_total": len(image_values),
+        "image_values_unique": len(set(image_values)),
+        "cache_file_count": len(cache_names),
+        "cache_names_distinct": len(set(cache_names)),
+        "cache_files_referenced_by_rows": len(referenced & set(cache_names)),
+        "cache_files_unreferenced_by_rows": len(set(cache_names) - referenced),
+        "provider_saved_distinct_names": len(set(saved_names)),
+        "provider_saved_in_cache": sum(1 for n in saved_names if n in cache_names),
+        "cache_names_carry_batch_tags": [
+            any(f"-{t}-" in n or n.startswith(f"g1synth-{t}") for n in cache_names)
+            for t in BATCH_PROMPT_TAGS
+        ],
+    }
 
 
 def inspect_rows(
@@ -1115,6 +1318,7 @@ def inspect_rows(
             r.get("content") == FINAL_TEXT for r in assistants
         )
         out["user_rows"] = sum(1 for r in rows if r.get("role") == "user")
+        out["bridge_shape"] = describe_bridge_shape(assistants, tools, profile_cache, produced)
     finally:
         db.close()
     return out
@@ -1170,13 +1374,13 @@ def session_inventory(db_path: Path) -> dict[str, Any]:
 
 
 class Ctx:
-    def __init__(self, root: Path, native_src: Path, bridge: bool = False) -> None:
+    def __init__(self, root: Path, native_src: Path, shape: tuple[str, int] | None = None) -> None:
         self.root = root
         self.native_src = native_src
         self.layout = scratch_layout(root)
         self.recorder = Recorder()
         self.produced: list[dict[str, Any]] = []
-        self.model = SyntheticModel(bridge=bridge)
+        self.model = SyntheticModel(shape=shape)
         self.cap = hmp_tool_output_cap()
 
 
@@ -1295,7 +1499,14 @@ def drive_desktop(ctx: Ctx, report: dict[str, Any], *, fail: bool) -> None:
             )
             params = obj.get("params") if isinstance(obj.get("params"), dict) else {}
             etype = params.get("type") if isinstance(params, dict) else None
-            ctx.recorder.add("desktop_frame", method=str(kind), etype=str(etype))
+            payload = params.get("payload") if isinstance(params, dict) else None
+            fields: dict[str, Any] = {}
+            if etype == "tool.complete" and isinstance(payload, dict):
+                fields = {
+                    "tool_name_class": closed_tool_name(payload.get("name")),
+                    "tool_id_is_outer_call": payload.get("tool_id") == CALL_ID,
+                }
+            ctx.recorder.add("desktop_frame", method=str(kind), etype=str(etype), **fields)
             self.frames.put(obj)
             return True
 
@@ -1430,7 +1641,11 @@ def drive_phone(ctx: Ctx, report: dict[str, Any], *, fail: bool) -> None:
             return await super().send_image_file(chat_id, image_path, *a, **k)
 
         async def send_multiple_images(self, *a: Any, **k: Any) -> Any:
-            recorder.add("adapter_send_multiple_images")
+            images = a[1] if len(a) > 1 else k.get("images")
+            recorder.add(
+                "adapter_send_multiple_images",
+                n_images=len(images) if isinstance(images, list) else None,
+            )
             return await super().send_multiple_images(*a, **k)
 
         async def send_document(self, *a: Any, **k: Any) -> Any:
@@ -1511,8 +1726,9 @@ def drive_phone(ctx: Ctx, report: dict[str, Any], *, fail: bool) -> None:
 def run_child(native_src: Path, root: Path, scenario: str) -> dict[str, Any]:
     sys.path.insert(0, str(native_src))
     os.chdir(os.environ.get("PWD", str(root / "cwd")))
-    bridge = scenario == "desktop_deferred"
-    ctx = Ctx(root, native_src, bridge=bridge)
+    shape = BRIDGE_SHAPES.get(scenario)
+    bridge = shape is not None
+    ctx = Ctx(root, native_src, shape=shape)
     ctx.sids = []  # type: ignore[attr-defined]
     ctx.db_home = ctx.layout["alpha"]  # type: ignore[attr-defined]
     os.umask(0o022)  # native default mode is observed, not the harness's inherited umask
@@ -1587,6 +1803,16 @@ def run_child(native_src: Path, root: Path, scenario: str) -> dict[str, Any]:
                 if e["kind"] == "desktop_frame" and e.get("etype") == "tool.complete"
             ]
             report["order"]["desktop_tool_completed_frames"] = len(tool_completed)
+            report["order"]["desktop_tool_completed_name_classes"] = [
+                e.get("tool_name_class")
+                for e in rec.events
+                if e["kind"] == "desktop_frame" and e.get("etype") == "tool.complete"
+            ]
+            report["order"]["desktop_tool_completed_id_is_outer_call"] = [
+                e.get("tool_id_is_outer_call")
+                for e in rec.events
+                if e["kind"] == "desktop_frame" and e.get("etype") == "tool.complete"
+            ]
             report["order"]["tool_row_batch_before_first_tool_completed_frame"] = (
                 flush_tool is not None and bool(tool_completed) and flush_tool < min(tool_completed)
             )
@@ -1595,6 +1821,13 @@ def run_child(native_src: Path, root: Path, scenario: str) -> dict[str, Any]:
             media_seqs = [e["seq"] for e in rec.events if e["kind"].startswith("adapter_send_")]
             report["order"]["adapter_sends"] = len(send_seqs)
             report["order"]["adapter_media_calls"] = len(media_seqs)
+            report["order"]["adapter_send_multiple_images_calls"] = rec.count(
+                "adapter_send_multiple_images"
+            )
+            report["order"]["adapter_send_multiple_images_n_images"] = [
+                e.get("n_images") for e in rec.events if e["kind"] == "adapter_send_multiple_images"
+            ]
+            report["order"]["adapter_send_image_file_calls"] = rec.count("adapter_send_image_file")
             report["order"]["tool_row_batch_before_first_adapter_send"] = (
                 flush_tool is not None and bool(send_seqs) and flush_tool < min(send_seqs)
             )
@@ -1648,12 +1881,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="cmd", required=True)
     run = sub.add_parser("run")
     run.add_argument("--native-src", type=Path, default=DEFAULT_NATIVE_SRC)
-    run.add_argument("--scenario", action="append", choices=SCENARIOS)
+    run.add_argument("--scenario", action="append", choices=ALL_SCENARIOS)
     run.add_argument("--evidence", type=Path)
     child = sub.add_parser("child")
     child.add_argument("--native-src", type=Path, required=True)
     child.add_argument("--root", type=Path, required=True)
-    child.add_argument("--scenario", choices=SCENARIOS, required=True)
+    child.add_argument("--scenario", choices=ALL_SCENARIOS, required=True)
     args = parser.parse_args(argv)
     if args.cmd == "child":
         try:  # validated before sys.path changes or any native import

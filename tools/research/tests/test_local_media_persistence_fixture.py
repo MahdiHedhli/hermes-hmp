@@ -8,6 +8,7 @@ tests). All data is synthetic; only closed metadata is asserted.
 from __future__ import annotations
 
 import ast
+import json
 import os
 import struct
 import subprocess
@@ -569,3 +570,283 @@ def test_all_scenarios_closed_metadata(tmp_path: Path) -> None:
     assert (
         deferred["tool_row_names"] == ["image_generate"] and deferred["tool_name_matches_call_name"]
     )
+
+
+# --------------------------------------------------------------------------------------------
+# Modern `tool_call {calls: [...]}` coverage (additive to the accepted five scenarios)
+# --------------------------------------------------------------------------------------------
+
+
+def _assistant(calls: list[dict[str, object]], row_id: int = 1) -> dict[str, object]:
+    return {"id": row_id, "role": "assistant", "content": None, "tool_calls": calls}
+
+
+def _bridge_call(call_id: str, entries: list[dict[str, object]]) -> dict[str, object]:
+    return {
+        "id": call_id,
+        "type": "function",
+        "function": {"name": "tool_call", "arguments": json.dumps({"calls": entries})},
+    }
+
+
+def _tool_row(call_id: str, name: str, content: object, row_id: int = 2) -> dict[str, object]:
+    return {
+        "id": row_id,
+        "role": "tool",
+        "tool_call_id": call_id,
+        "tool_name": name,
+        "content": content if isinstance(content, str) else json.dumps(content),
+    }
+
+
+def test_modern_scenarios_are_additive_and_do_not_repeat_the_accepted_five() -> None:
+    assert not set(fx.MODERN_SCENARIOS) & set(fx.SCENARIOS)
+    assert fx.ALL_SCENARIOS == fx.SCENARIOS + fx.MODERN_SCENARIOS
+    assert len(fx.SCENARIOS) == 5 and len(fx.MODERN_SCENARIOS) == 4
+    for name in fx.MODERN_SCENARIOS:
+        assert fx.BRIDGE_SHAPES[name][0] == "calls"
+        assert fx.BRIDGE_SHAPES[name][1] == (2 if name.endswith("batch") else 1)
+    assert fx.BRIDGE_SHAPES["desktop_deferred"] == ("legacy", 1)  # the accepted shape is unchanged
+    surfaces = {n.split("_")[0] for n in fx.MODERN_SCENARIOS}
+    assert surfaces == {"desktop", "phone"}
+
+
+def test_batch_entries_use_distinct_synthetic_prompts_and_one_entry_keeps_the_long_prompt() -> None:
+    one = fx.batch_entries(1)
+    assert len(one) == 1 and one[0]["arguments"]["prompt"] == fx.LONG_PROMPT
+    two = fx.batch_entries(2)
+    assert [e["name"] for e in two] == ["image_generate", "image_generate"]
+    prompts = [e["arguments"]["prompt"] for e in two]
+    assert len(set(prompts)) == 2
+    for tag, prompt in zip(fx.BATCH_PROMPT_TAGS, prompts, strict=True):
+        assert f"-batch-{tag}-" in prompt
+
+
+def test_synthetic_model_emits_the_requested_bridge_shape() -> None:
+    assert fx.SyntheticModel().shape is None
+    assert fx.SyntheticModel(shape=("calls", 2)).shape == ("calls", 2)
+    assert fx.Ctx(Path("/nonexistent"), Path("/nonexistent"), shape=("calls", 1)).model.shape == (
+        "calls",
+        1,
+    )
+
+
+def test_cli_accepts_the_modern_scenarios_and_default_run_stays_the_accepted_five(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: list[tuple[str, ...]] = []
+
+    def fake_parent(src: Path, scenarios: tuple[str, ...], evidence: Path | None) -> dict:
+        seen.append(scenarios)
+        return {}
+
+    monkeypatch.setattr(fx, "run_parent", fake_parent)
+    assert fx.main(["run", "--scenario", "phone_deferred_batch"]) == 0
+    assert fx.main(["run"]) == 0
+    assert seen == [("phone_deferred_batch",), fx.SCENARIOS]
+
+
+def test_shape_one_entry_array_and_legacy_single_are_distinguished(tmp_path: Path) -> None:
+    entry = {"name": "image_generate", "arguments": {"prompt": "p"}}
+    legacy = {
+        "id": "c2",
+        "type": "function",
+        "function": {"name": "tool_call", "arguments": json.dumps(entry)},
+    }
+    shaped = fx.describe_bridge_shape(
+        [_assistant([_bridge_call("c1", [entry]), legacy])], [], tmp_path / "none", []
+    )
+    by_id = {o["id"]: o for o in shaped["outer_calls"]}
+    assert by_id["c1"]["shape"] == "calls_array" and by_id["c1"]["entry_count"] == 1
+    assert by_id["c2"]["shape"] == "legacy_single" and by_id["c2"]["entry_count"] == 1
+    assert by_id["c1"]["entry_names_closed"] == ["image_generate"]
+
+
+def test_shape_batch_with_one_shared_id_is_flagged_ambiguous_not_proof(tmp_path: Path) -> None:
+    cache = tmp_path / "images"
+    cache.mkdir()
+    entries = [
+        {"name": "image_generate", "arguments": {"prompt": f"synthetic-{i}"}} for i in range(2)
+    ]
+    rejected = {"error": "tool_call takes exactly one entry for local tools; you sent 2."}
+    shaped = fx.describe_bridge_shape(
+        [_assistant([_bridge_call("c1", entries)])],
+        [_tool_row("c1", "tool_call", rejected)],
+        cache,
+        [],
+    )
+    assert shaped["underlying_call_count"] == 2 and shaped["outer_call_count"] == 1
+    assert shaped["one_wrapper_result"] and not shaped["multiple_tool_rows"]
+    assert shaped["shared_id_ambiguous"] is True
+    assert shaped["tool_rows"][0]["error_class"] == "local_batch_rejected"
+    assert shaped["tool_rows"][0]["image_field_count"] == 0 and shaped["image_field_total"] == 0
+    assert shaped["outer_calls"][0]["entry_prompts_distinct"] == 2
+
+
+def test_shape_counts_image_fields_anywhere_with_uniqueness_and_cache_membership(
+    tmp_path: Path,
+) -> None:
+    cache = tmp_path / "images"
+    cache.mkdir()
+    saved = [str(cache / f"g1synth-{t}-1.png") for t in fx.BATCH_PROMPT_TAGS]
+    for path in saved:
+        Path(path).write_bytes(fx.synthetic_png())
+    (cache / "stray.png").write_bytes(fx.synthetic_png())
+    entries = [{"name": "image_generate", "arguments": {}}] * 2
+    result = {"results": [{"image": saved[0]}, {"image": saved[1]}, {"image": saved[1]}]}
+    shaped = fx.describe_bridge_shape(
+        [_assistant([_bridge_call("c1", entries)])],
+        [_tool_row("c1", "tool_call", result)],
+        cache,
+        [{"path": p} for p in saved],
+    )
+    row = shaped["tool_rows"][0]
+    assert row["image_field_paths"] == ["results[].image"] * 3
+    assert shaped["image_field_total"] == 3 and shaped["image_values_unique"] == 2
+    assert row["image_fields_absolute"] == [True] * 3 and row["image_fields_are_str"]
+    assert shaped["cache_file_count"] == 3 and shaped["cache_files_referenced_by_rows"] == 2
+    assert shaped["cache_files_unreferenced_by_rows"] == 1
+    assert shaped["provider_saved_in_cache"] == 2 and shaped["provider_saved_distinct_names"] == 2
+    assert shaped["cache_names_carry_batch_tags"] == [True, True]
+
+
+def test_shape_multiple_tool_rows_with_distinct_ids_are_not_ambiguous(tmp_path: Path) -> None:
+    entry = {"name": "image_generate", "arguments": {}}
+    shaped = fx.describe_bridge_shape(
+        [_assistant([_bridge_call("c1", [entry]), _bridge_call("c2", [entry])])],
+        [_tool_row("c1", "image_generate", {"success": True}), _tool_row("c2", "x", {}, 3)],
+        tmp_path / "none",
+        [],
+    )
+    assert shaped["multiple_tool_rows"] and not shaped["one_wrapper_result"]
+    assert shaped["shared_id_ambiguous"] is False
+    assert shaped["tool_rows"][1]["tool_name_class"] == "other"
+
+
+def test_shape_output_never_carries_prompts_paths_or_error_text(tmp_path: Path) -> None:
+    secret_path = str(tmp_path / "private-dir" / "secret-name.png")
+    entry = {"name": "image_generate", "arguments": {"prompt": "PRIVATE-PROMPT-TEXT"}}
+    shaped = fx.describe_bridge_shape(
+        [_assistant([_bridge_call("c1", [entry])])],
+        [
+            _tool_row(
+                "c1",
+                "image_generate",
+                {"success": True, "image": secret_path, "prompt": "PRIVATE-PROMPT-TEXT"},
+            )
+        ],
+        tmp_path / "private-dir",
+        [{"path": secret_path}],
+    )
+    dumped = json.dumps(shaped)
+    for needle in ("PRIVATE-PROMPT-TEXT", "private-dir", "secret-name"):
+        assert needle not in dumped
+
+
+def test_single_entry_observations_are_preserved_for_legacy_rows() -> None:
+    names = ast.parse(Path(fx.__file__).read_text())
+    inspect = next(
+        n for n in ast.walk(names) if isinstance(n, ast.FunctionDef) and n.name == "inspect_rows"
+    )
+    keys = {
+        c.slice.value
+        for c in ast.walk(inspect)
+        if isinstance(c, ast.Subscript)
+        and isinstance(c.value, ast.Name)
+        and c.value.id == "out"
+        and isinstance(c.slice, ast.Constant)
+    }
+    assert {
+        "assistant_call_names",
+        "assistant_call_bridge_underlying_is_image_generate",
+        "tool_row_meta",
+        "tool_name_matches_call_name",
+        "tool_row_names",
+        "bridge_shape",
+    } <= keys
+
+
+@native
+def test_modern_calls_array_scenarios_closed_metadata(tmp_path: Path) -> None:
+    """Runs exactly the four new native cases (the accepted five are not repeated here).
+
+    Pins the observed native outcome of build 8afa: a one-entry `calls` array is unwrapped to one
+    `image_generate` execution; a two-entry local batch is rejected by the native bridge before any
+    provider call. If the native behavior differs this fails; the fixture is not bent to match."""
+    report = fx.run_parent(fx.DEFAULT_NATIVE_SRC, fx.MODERN_SCENARIOS, tmp_path / "evidence")
+    assert report["native_head_matches_expected"] and report["source_unchanged"]
+    assert report["native_tree_clean_before"] and report["native_tree_clean_after"]
+    assert set(report["scenarios"]) == set(fx.MODERN_SCENARIOS)
+    for name, sc in report["scenarios"].items():
+        # Unchanged guard contracts.
+        assert sc["status"] == "COMPLETED", name
+        assert all(sc["isolation"].values()), name
+        identity = sc["runtime_identity"]
+        assert all(identity["native_modules_from_independent_src"].values()), name
+        assert identity["modules_from_real_hermes_home_outside_interpreter_base"] == 0, name
+        assert sc["scratch_removed"] and not sc["child_stderr_mentions_scratch"], name
+        assert sc["network"]["unix_contacts_blocked"] == 0, name
+        assert sc["network"]["ip_connects_blocked"] == 0 or name.startswith("desktop"), name
+        assert sc["root_db_sessions"] == 0 and sc["beta_db_sessions"] == 0, name
+        assert sc["cache_files"]["root"]["count"] == 0 and sc["cache_files"]["beta"]["count"] == 0
+        assert sc["synthetic_model"]["tool_call_responses"] == 1, name
+        # Causal observations common to both shapes: the model emitted one outer bridge call.
+        shape = sc["rows_alpha_db"]["bridge_shape"]
+        assert shape["outer_call_count"] == 1, name
+        outer = shape["outer_calls"][0]
+        assert outer["shape"] == "calls_array" and outer["outer_name_class"] == "tool_call", name
+        assert outer["id"] == fx.CALL_ID and not outer["entry_ids_present"], name
+        assert sc["rows_alpha_db"]["assistant_call_names"] == ["tool_call"], name
+        assert shape["all_tool_rows_share_one_id"] and shape["tool_rows"][0]["id_is_outer_call"]
+        # Provider saves, cache membership and tool-row evidence must agree with each other.
+        assert shape["provider_saved_in_cache"] == sc["provider_saves"], name
+        assert shape["cache_file_count"] == sc["cache_files"]["alpha"]["count"], name
+        assert shape["image_field_total"] == sc["provider_saves"], name
+    for name in ("desktop_deferred_calls", "phone_deferred_calls"):
+        sc = report["scenarios"][name]
+        shape = sc["rows_alpha_db"]["bridge_shape"]
+        row = shape["tool_rows"][0]
+        assert shape["underlying_call_count"] == 1 and shape["one_wrapper_result"], name
+        assert not shape["shared_id_ambiguous"], name
+        assert row["tool_name_class"] == "image_generate" and row["error_class"] is None, name
+        assert row["json_type"] == "dict" and "image" in row["top_level_keys"], name
+        assert row["image_field_paths"] == ["image"] and row["image_fields_are_str"], name
+        assert row["image_fields_absolute"] == [True], name
+        assert row["image_fields_are_provider_saved"] == [True], name
+        assert sc["provider_saves"] == 1 and sc["cache_files"]["alpha"]["count"] == 1, name
+        assert shape["cache_files_referenced_by_rows"] == 1, name
+        assert sc["order"]["provider_before_tool_row_batch"], name
+        assert sc["provider_saved_in_tool_thread_context"] == [
+            {"home_is_alpha": True, "home_is_root": False, "thread_is_main": False}
+        ], name
+    desktop = report["scenarios"]["desktop_deferred_calls"]["order"]
+    assert desktop["tool_row_batch_before_first_tool_completed_frame"]
+    assert desktop["desktop_tool_completed_name_classes"] == ["image_generate"]
+    assert desktop["desktop_tool_completed_id_is_outer_call"] == [True]
+    phone = report["scenarios"]["phone_deferred_calls"]["order"]
+    assert phone["tool_row_batch_before_first_reply_send"]
+    # Native media delivery is keyed on the outer assistant call name, so the bridged call is not
+    # auto-appended: no native media sender ran (contrast with the accepted direct Phone scenario).
+    assert phone["adapter_media_calls"] == 0 and not phone["any_send_text_has_media_tag"]
+    for name in ("desktop_deferred_batch", "phone_deferred_batch"):
+        sc = report["scenarios"][name]
+        shape = sc["rows_alpha_db"]["bridge_shape"]
+        row = shape["tool_rows"][0]
+        outer = shape["outer_calls"][0]
+        assert outer["entry_count"] == 2 and outer["entry_prompts_distinct"] == 2, name
+        assert outer["entry_names_closed"] == ["image_generate"] * 2, name
+        assert shape["underlying_call_count"] == 2 and shape["tool_row_count"] == 1, name
+        assert shape["one_wrapper_result"] and not shape["multiple_tool_rows"], name
+        assert shape["shared_id_ambiguous"] is True, name
+        assert row["tool_name_class"] == "tool_call", name
+        assert row["error_class"] == "local_batch_rejected", name
+        assert row["top_level_keys"] == ["error"] and row["image_field_count"] == 0, name
+        assert sc["provider_saves"] == 0 and sc["cache_files"]["alpha"]["count"] == 0, name
+        assert shape["image_values_unique"] == 0, name
+    assert report["scenarios"]["desktop_deferred_batch"]["order"][
+        "tool_row_batch_before_first_tool_completed_frame"
+    ]
+    assert report["scenarios"]["desktop_deferred_batch"]["order"][
+        "desktop_tool_completed_name_classes"
+    ] == ["tool_call"]
+    assert report["scenarios"]["phone_deferred_batch"]["order"]["adapter_media_calls"] == 0
