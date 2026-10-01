@@ -1,6 +1,7 @@
 """Non-wire read-result carriers for host-local generated images (HMP v1 §7e, LM-8).
 
-INERT: nothing at start-up, in a route, in the bridge or in `reads.py` imports this module yet.
+INERT: nothing at start-up, in a route or in `reads.py` imports this module; the bridge loads it
+only inside its unused media-aware read methods.
 It imports only the standard library and `contract` (for the `Row`, `ConversationRef`,
 `ResetReason` and public wire types). It imports no parser, scanner, registry or other
 `local_media_*` module.
@@ -334,11 +335,14 @@ class MediaReadResult(_Carrier, Generic[P]):
 class MediaReadBridge(Protocol):
     """Optional bridge extension, selected by an explicit class-level opt-in (never probed).
 
-    `ReadBridge` itself is unchanged. The opt-in marker and the methods have no caller yet.
+    `ReadBridge` itself is unchanged. The methods have no caller yet. A bridge that cannot represent
+    the query metadata (or a page over `MAX_ROWS`) returns the exact old text-row list instead.
     """
 
-    def latest_with_media(self, ref: ConversationRef, limit: int) -> BridgeMediaRows: ...
+    def latest_with_media(
+        self, ref: ConversationRef, limit: int
+    ) -> BridgeMediaRows | list[Row]: ...
 
     def after_with_media(
         self, ref: ConversationRef, after_id: int, limit: int
-    ) -> BridgeMediaRows | ResetReason: ...
+    ) -> BridgeMediaRows | list[Row] | ResetReason: ...

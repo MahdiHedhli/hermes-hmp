@@ -101,3 +101,19 @@ first input occurrence winning; native pages have unique ids. Count the newest 1
 returned `image_generate` attempts before parsing, including rejected content; no older backfill.
 Mapping access runs in trusted host code and exceptions close the candidate result. This is not
 isolation or authority: S4 must independently rescan and compare the canonical tool digest.
+
+S2c.1 media-only downgrade disposition: independent Opus review confirms native session/tip
+strings have no 256-character bound, although the carrier and registry do. Preserve the successful
+old text read when media metadata cannot be represented. After `_rows` succeeds, catch only
+`MediaCarrierRefusal` from `MediaRowsQuery` and return the same exact parsed list; also return that
+list for a page over the carrier's existing 1000-row bound. Both checks precede extraction. Do not
+catch native/conversion errors, other metadata exceptions or candidate invariant errors. Construct
+`BridgeMediaRows` outside the catch. The optional media protocol explicitly permits this list
+fallback; production `ReadBridge` and wire types remain unchanged. Only its return annotations and
+stale inertness prose may change in the accepted carrier; its functional guards remain frozen.
+
+S2d must recognize the exact list as unchanged text plus an empty `UNSUPPORTED_BRIDGE` sidecar
+with all session/tip fields null. If a separately read lineage tip cannot fit the sidecar, apply
+the same empty null-metadata downgrade. Never retry the native query, truncate rows or tip strings,
+or let this optional metadata failure turn a working text read into a 500. Golden-byte tests must
+cover these cases. No downgrade grants media authority or opens a serving gate.

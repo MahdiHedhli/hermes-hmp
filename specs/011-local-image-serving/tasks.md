@@ -87,3 +87,29 @@ tool row id and the accepted scanner's canonical digest. A candidate grants no f
 Exact shapes, bounded descending row-id order and duplicate behavior are recorded in
 `ROOT_DECISIONS.md`. Native query/read plumbing, golden-byte proof, active-set rescan cost,
 serving, qualification, Linux and device acceptance remain open; S2 is not complete.
+
+## S2c reviewed bridge (2026-10-01)
+
+Root accepts shared native query plumbing and its media-only downgrade after independent Opus
+source review and independent Sonnet delta review. Root passed 473 focused bridge, carrier,
+candidate and layout cases (three preexisting Hermes-build skips), configured Ruff 0.16.9 and
+explicit privacy/diff checks. Old methods keep their query/release/conversion behavior.
+The media twins are inert: no production reader or route selects them yet.
+
+Native session/tip strings are unbounded. A carrier-only metadata refusal, or a native page above
+the existing 1000-row carrier bound, returns the same exact old parsed list before extraction.
+Native/conversion errors, other metadata exceptions and candidate invariant failures remain errors.
+Carrier changes are return annotations and prose only; extraction changes are prose only.
+
+| Module | SHA-256 |
+|---|---|
+| `bridge.py` | `a72b77634604c0598fa074edc990d3f0cb577091000636580034a632103b5736` |
+| `local_media_candidate.py` | `4656d83b6adfa1a05a068f63c68111ad2147c5ce0b76b5414ad8082d4d9789d1` |
+| `local_media_sidecar.py` | `e3872f8f013fc51f9e4f682d3ad96024817aa1585075433ede980649857410bf` |
+
+Review residuals: the candidate import test currently allows any scope rather than module scope
+only; tighten it in the S2d import-pin update. Syntactic pins do not detect arbitrary dynamic
+imports. Narrow named-exception catch-widening mutants survive the test suite, although root
+and independent review verify the exact catch in source. Native uncapped materialization and
+non-atomic snapshots remain explicit residuals. S2 remains open for read cores and golden bytes.
+Serving, cost qualification, Linux, memory, installation and device acceptance remain open.

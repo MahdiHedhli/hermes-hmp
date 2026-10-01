@@ -92,11 +92,14 @@ def test_write_supported_list_shape() -> None:
 
 # --- local_media_* import inertness ---------------------------------------------------------------
 # The four optional modules are not wired in. Only local_media_result.py (the optional wrapper) may
-# import the optional scanner; nothing else may import any local_media_* module.
+# import the optional scanner; the bridge may import the candidate and sidecar modules only inside
+# function bodies (pinned below); nothing else may import any local_media_* module.
 
 OPTIONAL_MODULES = sorted(m[:-3] for m in CONTRACT_MODULES if m.startswith("local_media_"))
 ALLOWED_OPTIONAL_IMPORTS = {
     "local_media_result": {"local_media_active_scan"},
+    # S2c: the bridge may load exactly these two, only below a function boundary (pinned below).
+    "bridge": {"local_media_candidate", "local_media_sidecar"},
     "local_media_candidate": {
         "local_media_active_scan",
         "local_media_file_safety",
@@ -131,6 +134,34 @@ def test_only_optional_wrapper_imports_optional_modules() -> None:
 def test_wrapper_allowance_is_actually_used() -> None:
     wrapper = (PACKAGE / "local_media_result.py").read_text(encoding="utf-8")
     assert _local_media_imports(wrapper) == {"local_media_active_scan"}
+
+
+def _module_scope_local_media_imports(source: str) -> set[str]:
+    """local_media_* imports that run at import time: outside every function body."""
+    found: set[str] = set()
+
+    def visit(node: ast.AST) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda)):
+                continue
+            if isinstance(child, (ast.Import, ast.ImportFrom)):
+                found.update(_local_media_imports(ast.unparse(child)))
+            visit(child)
+
+    visit(ast.parse(source))
+    return found
+
+
+def test_bridge_media_imports_are_function_local_and_exact() -> None:
+    bridge = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
+    assert _local_media_imports(bridge) == {"local_media_candidate", "local_media_sidecar"}
+    assert not _module_scope_local_media_imports(bridge)
+    # The detector sees a module-scope import (guards the pin itself).
+    assert _module_scope_local_media_imports("from . import local_media_sidecar\n")
+    assert _module_scope_local_media_imports("if True:\n    from .local_media_sidecar import X\n")
+    assert not _module_scope_local_media_imports(
+        "def f():\n    from . import local_media_sidecar\n"
+    )
 
 
 @pytest.mark.parametrize(

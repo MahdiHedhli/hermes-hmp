@@ -1,6 +1,7 @@
 """Bounded extraction of local image candidates from one returned page of native rows (LM-8).
 
-INERT: nothing at start-up, in a route, in the bridge or in `reads.py` imports this module yet.
+INERT: nothing at start-up, in a route or in `reads.py` imports this module; the bridge loads it
+only inside its unused media-aware read methods.
 It imports only the accepted result parser, the accepted flat-name grammar, the accepted scanner's
 digest and id helpers, and the carrier module. It does no I/O of any kind.
 

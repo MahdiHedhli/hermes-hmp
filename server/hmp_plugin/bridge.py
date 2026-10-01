@@ -45,7 +45,7 @@ import re
 import secrets
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 from urllib.parse import quote
 
 from .compat import direct_send_build_qualified
@@ -890,17 +890,24 @@ class HermesReadBridge:
         return ConversationRef(user_id=user_id, profile=profile, session_id=session_id)
 
     @contextlib.contextmanager
-    def _db(self, profile: str) -> Iterator[Any]:
-        """The profile's own `SessionDB` (E-PRV-9), acquired from Hermes's shared registry and
-        released afterwards. A missing database file is an error, never created here."""
-        db_path = self._profile_home(profile) / STATE_DB_FILENAME
+    def _db_home(self, profile: str) -> Iterator[tuple[Path, Any]]:
+        """The profile home captured by this one `_profile_home` call, and that profile's own
+        `SessionDB` (E-PRV-9), acquired from Hermes's shared registry and released afterwards. A
+        missing database file is an error, never created here."""
+        home = self._profile_home(profile)
+        db_path = home / STATE_DB_FILENAME
         if not db_path.is_file():
             raise BridgeError("session database missing")
         db = self._hermes.acquire(db_path)
         try:
-            yield db
+            yield home, db
         finally:
             self._hermes.release(db)
+
+    @contextlib.contextmanager
+    def _db(self, profile: str) -> Iterator[Any]:
+        with self._db_home(profile) as (_, db):
+            yield db
 
     @staticmethod
     def _tip(db: Any, session_id: str) -> str:
@@ -964,11 +971,38 @@ class HermesReadBridge:
 
         return self._read(run)
 
+    def _latest_query(self, ref: ConversationRef, limit: int) -> tuple[Path, str, object]:
+        """The native latest-page query: the captured home, the exact tip queried, the raw rows."""
+        with self._db_home(ref.profile) as (home, db):
+            tip = self._tip(db, ref.session_id)
+            rows = db.get_messages(tip, latest=True, limit=limit)
+        return home, tip, rows
+
+    def _after_query(
+        self, ref: ConversationRef, after_id: int, limit: int
+    ) -> tuple[Path, str, object] | ResetReason:
+        """The native after-cursor query: as `_latest_query`, or the reset the cursor calls for."""
+        with self._db_home(ref.profile) as (home, db):
+            tip = self._tip(db, ref.session_id)
+            if after_id > 0:
+                probe = db.get_messages(tip, include_inactive=True, after_id=after_id - 1, limit=1)
+                if not isinstance(probe, list):
+                    raise BridgeError("message rows are not a list")
+                if not probe or not isinstance(probe[0], Mapping):
+                    return ResetReason.CURSOR_NOT_RESOLVABLE
+                if probe[0].get("id") != after_id:
+                    return ResetReason.CURSOR_NOT_RESOLVABLE
+                active = probe[0].get("active")
+                if active not in (0, 1):
+                    raise BridgeError("row activity flag missing")
+                if active == 0:
+                    return ResetReason.HISTORY_REWRITTEN
+            rows = db.get_messages(tip, after_id=after_id, limit=limit)
+        return home, tip, rows
+
     def latest(self, ref: ConversationRef, limit: int) -> list[Row]:
         def run() -> list[Row]:
-            with self._db(ref.profile) as db:
-                tip = self._tip(db, ref.session_id)
-                rows = db.get_messages(tip, latest=True, limit=limit)
+            _, _, rows = self._latest_query(ref, limit)
             return self._rows(ref, rows)
 
         return self._read(run)
@@ -979,25 +1013,57 @@ class HermesReadBridge:
         (RO-8 (a)). One that does not exist in the lineage tip cannot be resolved."""
 
         def run() -> list[Row] | ResetReason:
-            with self._db(ref.profile) as db:
-                tip = self._tip(db, ref.session_id)
-                if after_id > 0:
-                    probe = db.get_messages(
-                        tip, include_inactive=True, after_id=after_id - 1, limit=1
-                    )
-                    if not isinstance(probe, list):
-                        raise BridgeError("message rows are not a list")
-                    if not probe or not isinstance(probe[0], Mapping):
-                        return ResetReason.CURSOR_NOT_RESOLVABLE
-                    if probe[0].get("id") != after_id:
-                        return ResetReason.CURSOR_NOT_RESOLVABLE
-                    active = probe[0].get("active")
-                    if active not in (0, 1):
-                        raise BridgeError("row activity flag missing")
-                    if active == 0:
-                        return ResetReason.HISTORY_REWRITTEN
-                rows = db.get_messages(tip, after_id=after_id, limit=limit)
-            return self._rows(ref, rows)
+            query = self._after_query(ref, after_id, limit)
+            if isinstance(query, ResetReason):
+                return query
+            return self._rows(ref, query[2])
+
+        return self._read(run)
+
+    # S2c: the media-aware twins of `latest` and `after`. They run the same native queries, then
+    # derive non-wire candidates from the UNCAPPED raw rows. Nothing calls them yet (the class
+    # marker is the only selector a later slice may read; it never probes attributes).
+    LOCAL_MEDIA_SIDECAR: ClassVar[bool] = True
+
+    def _media_rows(self, ref: ConversationRef, query: tuple[Path, str, object]) -> Any:
+        home, tip, raw = query
+        parsed = self._rows(ref, raw)  # fails exactly like the old path, before any media code
+        # Function-local: start-up and the old read methods never load the local media modules.
+        from .local_media_candidate import collect_candidates
+        from .local_media_sidecar import (
+            MAX_ROWS,
+            BridgeMediaRows,
+            MediaCarrierRefusal,
+            MediaRowsQuery,
+        )
+
+        # Media-only downgrade: metadata the carrier cannot represent (native ids and tips have no
+        # bound of their own) or an oversized page returns the SAME parsed list, as the old method
+        # would. Only this refusal is caught; nothing else, and not the construction below.
+        try:
+            media_query = MediaRowsQuery(ref.profile, ref.session_id, tip)
+        except MediaCarrierRefusal:
+            return parsed
+        if len(parsed) > MAX_ROWS:
+            return parsed
+        tool_ids = frozenset(
+            r.id for r in parsed if r.role == "tool" and type(r.id) is int and r.id >= 1
+        )
+        candidates = collect_candidates(raw, os.fspath(home), tool_ids)  # type: ignore[arg-type]
+        return BridgeMediaRows(tuple(parsed), media_query, candidates)
+
+    def latest_with_media(self, ref: ConversationRef, limit: int) -> Any:
+        def run() -> Any:
+            return self._media_rows(ref, self._latest_query(ref, limit))
+
+        return self._read(run)
+
+    def after_with_media(self, ref: ConversationRef, after_id: int, limit: int) -> Any:
+        def run() -> Any:
+            query = self._after_query(ref, after_id, limit)
+            if isinstance(query, ResetReason):
+                return query
+            return self._media_rows(ref, query)
 
         return self._read(run)
 
