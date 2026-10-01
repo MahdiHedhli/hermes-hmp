@@ -158,6 +158,68 @@ standalone profile's existing history canonical or readable. History readability
 profile on `ca705` remains an open integration item. The Hermes `8afaab3703` topology notice from
 the approval line is kept.
 
+## Boundary-tool repair after the first failed native matrix
+
+First native matrix on `ffe55bb` (`approval-dogfood-8afa-git-public`, Git install): identity **true**,
+boundary **false**, no receipt, nothing admitted. The failure was in the checker, not in the product:
+
+1. `tools/compat/bridge_files.py` mapped `fastapi` (lazily imported in `HermesApi.write_profile_model`
+   only to recognise the native writer's validation refusal) to a Hermes source file. `fastapi` is now
+   classified as an external, non-Hermes package alongside the plugin's runtime packages. That is a
+   classification, not an attestation of the installed package.
+2. With that fixed, the direct-send check reported 6 AST files missing. The tool's AST walk covers all
+   of `bridge.py`, and all 6 modules are imported only inside four `HermesApi` methods: `model_config`
+   (`hermes_cli.config`), `write_profile_model` (`hermes_cli.web_routers.profiles`),
+   `create_mobile_cron` (`cron.scheduler`, `tools.cronjob_prompt_scan`) and `edit_mobile_cron`
+   (`cron.jobs`, `cron.lifecycle_guard`, `cron.scheduler`, `tools.cronjob_prompt_scan`). Traced callers:
+   they are reached only through `HermesReadBridge.profile_default_model` / `set_profile_default_model` /
+   `create_mobile_cron` / `edit_mobile_cron`, which `server.py` calls only from the model and cron route
+   handlers, behind `model_qualified` / `cron_qualified`. None of the 6 modules is in the READ, DIRECT or
+   APPROVAL dependency tuples, and no read, direct-send or approval path reaches them. The separate
+   read/direct/approval vs cron/model qualification boundaries are kept: neither the 34-file direct list
+   nor the 46-file approval list was extended.
+
+Scoped checker change (`tools/compat/bridge_files.py` only): an audited, exact
+`(class, method) -> (feature manifest, modules)` table, `FEATURE_METHOD_IMPORTS`, and a scope-aware
+import visit. An import is feature-classified only at one of those four method sites and only for a
+listed module. Each classified module must map to a real Hermes source file (path lookup, nothing
+imported) and that file must be in its own feature's `bridge_files` (`mobile_model_supported_builds.json`
+or `mobile_cron_supported_builds.json`); an unreadable or malformed manifest, a missing file or an
+uncovered file fails. The same module anywhere else (another method, a nested function, another class,
+module level) stays in the target AST set. A module in the selected target's own typed
+READ/DIRECT/APPROVAL tuple is never feature-classified. An unmapped unknown import still fails as
+before. The READ-vs-DIRECT cross-target exclude and the approval superset are unchanged. The
+feature results are reported under `feature:*` and are not part of the target union, so `--write`
+cannot merge them into a target list.
+Limit: this proves declared source-file coverage of the imports the AST scan sees. It is not a complete
+call graph and not an attestation of installed third-party packages. No manifest, build list, table,
+product, runtime or compat file changed.
+
+Tests (synthetic bridge source, temporary Hermes trees and manifests; no wording assertions): own-feature
+coverage verified; a file covered only by the other feature's manifest refused; missing Hermes file,
+missing/invalid-JSON/non-object/bad-list manifest refused; the same modules outside the reviewed
+methods (including nested, wrong class, wrong method) stay in the target set; a module not listed for
+that method is not classified; a typed-tuple module is retained; the real bridge's feature set is
+exactly the six modules above. The three earlier fastapi tests are kept (one assertion updated: the
+native writer module is now in the model feature set instead of the target set).
+`test_bridge.py`: 112 passed, 3 skipped (Python 3.14.6). Ruff 0.16.9 (CI command), `check_plugin_surface`
+and `scan_private`: clean.
+
+Real boundary check, `--check` only, never `--write`, with the 8afa build's own interpreter
+(`.venv/bin/python`, `approval-dogfood-8afa-git-public/src`), `env -i`, fresh private scratch
+`HOME`/`TMPDIR`/`XDG_CONFIG_HOME`/`HERMES_HOME`:
+
+| Target | AST set | Probe set | Union | Committed | Result | Feature boundary (model / cron) |
+| --- | --- | --- | --- | --- | --- | --- |
+| read | 7 | 14 | 14 | 16 | pass | 2 / 4 files, all covered |
+| direct send | 11 | 34 | 34 | 34 | pass | 2 / 4 files, all covered |
+| approval | 11 | 34 | 34 | 46 | pass | 2 / 4 files, all covered |
+
+The 8afa tree was not modified. This is the boundary stage only: the matrix itself was not re-run, no
+native approval receipt exists, and nothing is admitted. The runtime plugin digest is unchanged:
+`45a188f2450669a2bd06bf5dffb72ea5a3fada9f053b5d4eda6548b15e87dfe3`. A fresh native matrix is still
+required after independent review of this checker change.
+
 ## Limits
 
 - No real Hermes fixture, gateway or approval matrix ran. Integration with real Hermes is not
