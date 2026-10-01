@@ -33,6 +33,7 @@ are never renumbered; always refer to a spec by its full directory name.
 | `008-bot-health-check` | Read-only bot channel health |
 | `009-owner-pairing-controls` | Per-device jobs and model controls decision |
 | `010-bot-chat-history-start` | Bot Chat history paging (SES-2a) |
+| `011-local-image-serving` | Host-local generated images (§7e draft, not implemented) |
 
 Per-bot send, per-device controls, and approval gates are separate: a controls grant never opens an
 approval route (see `docs/architecture/contracts/HMP_V1.md` §7b). A future owner-admission spec

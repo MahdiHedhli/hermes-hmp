@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Status | **APPROVED implementation baseline (OD-F1, 2026-09-25).** The owner ruled on `R0_FREEZE_REVIEW.md` (`R0_OWNER_DECISIONS.md` § "Freeze decisions (2026-09-25)"), subject to the bounded amendments listed there. This does **not** approve a nonconformant implementation, and it does not waive any transport or security requirement. It authorizes implementation work only in the scope OD-L2 ruled on: Feature F1 "Connect and browse", as amended (`FIRST_FEATURE_PLAN.md`). It does not by itself authorize upstream submission or any push (`R0_FREEZE_REVIEW.md` §11). |
-| Contract revision | `1.0` (approved 2026-09-25). History: `1.0-rc1` (commit `8657ae5`) was found incomplete by the independent freeze-package review (FZ-R-1..19); `1.0-rc2` (2026-09-24) was the ADVANCED contract-author correction pass that the owner then approved as revision `1.0`. Additive amendments, still served as `/ready` `contract` `"1.0"` (V-3's freeze string; 1.x clients ignore routes they do not call, V-4): **1.1** session browsing (§6a), **1.2** direct send (§7a), **1.3** approvals and Phone chat (§7b, OD-F16). |
+| Contract revision | `1.0` (approved 2026-09-25). History: `1.0-rc1` (commit `8657ae5`) was found incomplete by the independent freeze-package review (FZ-R-1..19); `1.0-rc2` (2026-09-24) was the ADVANCED contract-author correction pass that the owner then approved as revision `1.0`. Additive amendments, still served as `/ready` `contract` `"1.0"` (V-3's freeze string; 1.x clients ignore routes they do not call, V-4): **1.1** session browsing (§6a), **1.2** direct send (§7a), **1.3** approvals and Phone chat (§7b, OD-F16); **1.6 (draft, not implemented)** host-local generated images (§7e). |
 | Scope | The wire contract between the Hermes Bot Mobile client and the HMP plugin inside one Hermes gateway process. Hermes internals are out of scope, except where a clause states a dependency on a Hermes capability. |
 | Implementation and evidence status | **Stated only in [`HMP_V1_CONFORMANCE.md`](HMP_V1_CONFORMANCE.md).** This document defines required behaviour. Approval of this contract text does not state that behaviour is implemented or proven; that is the conformance matrix's sole role. |
 
@@ -245,6 +245,7 @@ Normative keywords follow RFC 2119 and RFC 8174.
 | `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"` | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
 | `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, unqualified build, missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
 | `model_unavailable` (v1.5, MD-1) | 503 | mobile default model: flag off, unqualified build, missing scoped picker endpoint, or Hermes read/write failure | — | Reopen the model screen and check the current selection before another write. |
+| `media_unavailable` (v1.6 draft, LM-3) | 503 | host-local image fetch: the caller is an owner device but the media gate is closed. Message: "image delivery is unavailable" | — | Show "Image unavailable". Do not retry automatically. |
 
 - **ERR-2a. Read-compatibility refusal** (GU-2c; additive `other {why}` values, no contract revision; controller clarification, 2026-09-25).
   - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes build's identity is not on the read-compatible builds list or cannot be determined.
@@ -560,6 +561,7 @@ Normative keywords follow RFC 2119 and RFC 8174.
     - Hermes `messages` columns (`~/.hermes/hermes-agent/hermes_state_common.py`, the `messages` table): `tool_calls` TEXT (JSON) on assistant rows, `tool_name` TEXT and `tool_call_id` TEXT on tool rows. `SessionDB.get_messages` (`hermes_state_messages.py`) returns those columns and decodes `tool_calls` from JSON text to a list before HMP sees the row. Only `bridge.py` reads them. HMP never logs the text, the arguments, or the tool name (SEC-4).
     - On an `assistant` row, `tool_calls` is an array of `{"id", "name", "arguments", "arguments_truncated"}`. `arguments` is the call's arguments rendered as compact JSON (no insignificant whitespace), cut to 500 characters. `arguments_truncated` is true when that cut happened. The field is omitted when the row has no tool calls. `id` is the Hermes tool-call id (empty string when the row had none) and matches a tool row's `tool_call_id`.
     - On a `tool` row, `tool_name` and `tool_call_id` are those columns, omitted when null. `text` is the tool output cut to 4000 characters. The full output is never sent above that cap. `truncated` is present and `true` only when that cut happened; absent means the output was not cut. `role` stays `"tool"`.
+    - **Optional `media` (v1.6 draft, §7e).** A `tool` row MAY carry `media`: `{"kind":"image","ref":"<43-char base64url>"}`, only when the §7e gate is open. When the gate is closed the field is absent and the response bytes are identical to those of a server without §7e.
   - `turn` and `partial` are HMP **observations** (PR-1).
   - `open_requests` are scoped to this user's session.
   - **v1.3 (§7b).** While the direct-send flag is on, this snapshot's `open_requests` lists the
@@ -1304,6 +1306,181 @@ unknown result: refresh the current model and never automatically retry. The per
 default applies to new sessions; this route does not switch a running Desktop-owned turn.
 The host flag defaults off, and the owner's live Hermes is not qualified by this draft.
 
+## 7e. Host-local generated images (v1.6, draft; not implemented)
+
+Additive under V-3. **Status: draft contract only.** No code, route, manifest entry, qualification
+or release exists for it. The product manifest of supported builds is **empty**; this section never
+claims that any build, platform or device is qualified. Design record and open gates:
+[`specs/011-local-image-serving`](../../../specs/011-local-image-serving/spec.md). A client on an
+earlier `1.x` build ignores `media` and the route (V-4). The numeric constants below (20 s, 30 s,
+1800 s, 512 per device, 4096 total, 128, 2 per device, 4 per instance, 120 per minute) are **new
+choices for this feature**, not existing Hermes or HMP constants.
+
+Scope: an image the host's `image_generate` tool already wrote to that profile's image cache,
+shown on the tool row that produced it. Not upload, video, audio, file browsing, arbitrary host
+paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
+
+- **LM-1. Gate.** Default **off**. A device may use this feature only when all hold:
+  1. the device passes `is_approval_owner_device` (configured owner allowlist and no explicit
+     controls denial; unrelated owner privilege never implies this);
+  2. the live host flag `local_media.enabled` is exactly `true`;
+  3. the process-qualified manifest has an entry for this exact build. The shipped manifest has
+     `builds: []`; no entry exists until an actual qualification.
+
+  Otherwise no `media` field is emitted and read response bytes are **identical** to those of a
+  server without this section. The gate does not affect compat, roster, send or approvals and
+  adds no upper version bound on the install. Approval gates are never waived by it.
+- **LM-2. Qualification.** Requires the loaded/start baseline **and** fresh on-disk equality over a
+  dedicated media file list and the exact native/HMP dependencies. The startup baseline is
+  immutable: a mismatched startup baseline needs a restart. A later disk mismatch closes the gate
+  while it persists, and restoration to the startup baseline can reopen it. Disk and dependency
+  work runs off the event loop on the shared default executor. A full approval run is not required
+  for media reads.
+- **LM-3. Closed-gate responses.** A non-owner device gets `404 not_found` before the gate is
+  consulted. An owner device with a closed gate gets `503 media_unavailable`, message "image
+  delivery is unavailable" (the only new ERR-2 code). User-visible text elsewhere is unchanged.
+- **LM-4. Descriptor.** `media` appears only on `role:"tool"` rows in RO-3, RO-6, SES-2 and SES-2a,
+  only when the gate is open:
+
+  ```
+  "media": {"kind":"image", "ref":"<43-char base64url of 32 random bytes>"}
+  ```
+
+  and nothing else: no MIME, size, dimensions, name, path, digest, expiry or native id. The `ref`
+  matches `^[A-Za-z0-9_-]{43}$`. A host never emits extra keys. Client rules: ignore unknown extra
+  keys on an otherwise valid descriptor; an unknown `kind` is ignored (row renders, no card); a
+  malformed `media` is dropped and the row remains. A descriptor never comes from an assistant row.
+- **LM-5. Mint preconditions (candidate only; no file access, scan or stat at mint).** The row is in
+  an eligible session of the right kind (LM-6); `tool_name == "image_generate"`; the raw tool-result
+  content, before the 4000-character display cut, is a `str` of at most 64 KiB UTF-8 that parses
+  to an object with `success` equal to `true`, no `error` key, and `image` a `str` of 1..4096
+  characters without NUL; and the lexical name derivation passes. One shared result function serves
+  mint and fetch. Name derivation is lexical only: `image` must start with the routed profile home
+  string plus `/cache/images/`, and the remainder must be a flat, bounded name. There is no
+  `resolve()`, no legacy `image_cache`, no legacy-preferring or mkdir helper. A symlinked or
+  differently spelled home refuses.
+- **LM-6. Session kind.** Fixed at mint, rechecked at fetch. `phone` iff the session equals the
+  caller's own Phone conversation session. `bot_chat` iff it is in the canonical Bot Chat
+  compression chain and its tip is the live tip. Any other session gets no descriptor.
+- **LM-7. Authority.** Authority comes **only** from a strict same-profile `image_generate` tool
+  result row. Assistant `MEDIA:` text and Markdown are never parsed for authority.
+- **LM-8. Non-wire sidecar.** The raw candidate is internal. It is carried to the server handler in
+  an explicit read-result sidecar (or an equivalent reviewed non-wire carrier). It never enters a
+  wire-serialized dataclass and is never promoted blindly into serialized message fields.
+- **LM-9. Handle.** The `ref` carries no path. It is process-local state: lock-protected, no
+  durable bytes, cleared on restart. Entry binds device, user, instance, profile, session kind,
+  bound session, tip, tool row id, raw-content digest, monotonic mint time and the first-served
+  sha256. TTL 1800 s, 512 per device, 4096 total, LRU; expired or evicted entries are deleted. Mint
+  is idempotent: an unexpired entry with the same binding returns the same ref and never extends
+  its TTL. At most 128 descriptors per response, newest first; older rows get none. Possessing a
+  ref authorizes nothing: every fetch re-authenticates and rescans. Existing capped tool text can
+  already contain the `image` string; that exposure is unchanged and rows are **not** claimed
+  pathless.
+- **LM-10. Route `GET /hmp/v1/bots/{profile}/media/{ref}`.** Always registered. HEAD and other
+  methods get the existing `404 not_found`. Order is normative and no image byte is sent before the
+  final synchronous check (LM-12):
+  1. bearer, existing `Authenticator`;
+  2. non-owner device `404 not_found`, **before** the gate;
+  3. any query, body or transfer-encoding: `400 bad_request`;
+  4. rate limit 120 per minute per device: `429 rate_limited`;
+  5. initial per-bot grant via the existing per-bot gate (ERR-3, unchanged), run off the loop on the
+     shared default executor;
+  6. gate closed: `503 media_unavailable`;
+  7. ref grammar and binding lookup: one `404 not_found` shape;
+  8. nonblocking permits (2 per device, 4 per instance): else `429 rate_limited`, no `why`. The
+     instance permit is the buffer permit of LM-13 and the device permit shares its lifetime.
+
+  Existing outer middleware (peer `403`, `413 too_large`, compat `503`) is unchanged and runs first.
+- **LM-11. Two off-loop phases.** Both run on one dedicated 4-worker executor, never on the event
+  loop, with the caller's profile `ContextVar`s copied into each phase.
+  - *Phase one:* fresh same-kind eligibility and tip match; native per-bot authorization; scan of
+    the exact tool row in the active set; name derivation; leaf file read; raster structure check
+    (fixes the MIME as PNG, JPEG or WebP); sha256; history recheck; returns the buffer. Every
+    phase-one refusal is `404 not_found`.
+  - *Phase two (post-worker final native check):* a second bounded off-loop call runs fresh native
+    per-bot authorization, current same-kind eligibility and tip. It takes a worker permit
+    **without queueing**; if none is free the request is `429 rate_limited` (no `why`), zero bytes,
+    no retry. A revocation or tip/eligibility change seen by it is `404 not_found`, zero bytes.
+  - One 20 s worker-wait deadline is **shared** by both phases, not doubled. A wait beyond it is
+    `404 not_found`.
+  - **No native check runs on the event loop.**
+- **LM-12. Final synchronous section.** After the phase-two future returns, on the loop, with no
+  `await` between these steps and response `prepare`: fresh bearer authentication (existing `401`
+  codes), approval-owner flag (`404`), gate flag and registry existence/TTL (`404`), and the
+  first-served digest compare-and-set under the registry lock (set if absent; if different, delete
+  the entry and refuse `404`). A causal change between the phase-one recheck/return and the
+  phase-two check refuses. **Residual (unavoidable, stated):** a grant or tip change after the last
+  native check and before `prepare` is **not** promised to refuse, because no atomic native API
+  exists. This contract makes **no atomic snapshot guarantee**. Bearer, owner, gate, TTL and CAS
+  changes on the loop still causally refuse.
+- **LM-13. Lifetimes under cancellation.** Each phase's worker permit counts actual concurrent
+  future completion, including cancellation, and is released only by that future's done callback.
+  The buffer permit survives both futures and is released only when both are done (or phase two
+  never started) **and** the handler's `finally` has passed. Cancelling the awaiting coroutine
+  releases neither early; a late worker keeps its permits until it really finishes.
+- **LM-14. Success response.** `200` with `Content-Type` exactly the structural MIME
+  (`image/png`, `image/jpeg` or `image/webp`), `Content-Length`, `Cache-Control: no-store, private`,
+  `X-Content-Type-Options: nosniff` and the existing `Server` header. No `Content-Disposition`,
+  filename, `ETag`, `Last-Modified` or `Accept-Ranges`; `Range` is ignored. Body at most 8 MiB.
+  The body is streamed in 64 KiB slices, each within the remaining **30 s total** write deadline
+  including EOF. After `prepare`, timeout, cancellation or error aborts the transport; the handler
+  returns only after EOF or abort.
+- **LM-15. Error table.** Every body is the ERR-1 shape with the existing messages.
+
+  | Stage | Condition | Status | `code` | Extras |
+  |---|---|---|---|---|
+  | Initial bearer | wrong or non-ASCII `HMP-Instance` | 401 | `wrong_instance` | none |
+  | | missing, bad, unknown or expired token, or device not `ACTIVE` | 401 | `unauthenticated` | none |
+  | | device or token family revoked | 401 | `revoked` | none |
+  | Non-owner | not an approval-owner device (before the gate) | 404 | `not_found` | none |
+  | Shape | query, body or transfer-encoding | 400 | `bad_request` | none |
+  | Rate | over 120 per minute per device | 429 | `rate_limited` | none |
+  | Initial per-bot grant (ERR-3) | `pending_operator`, `refused_allow_all` | 403 | `forbidden` | `authz` |
+  | | `not_routed`, `not_served` | 409 | `not_routed` | `authz` |
+  | | `unverifiable`, bridge error, unmapped state | 503 | `other` | `authz:"unverifiable"`, `why:"unverifiable"` |
+  | Gate | owner device, gate closed | 503 | `media_unavailable` | none |
+  | Ref/binding | bad grammar, unknown, expired, evicted, foreign device/user/instance/profile/kind | 404 | `not_found` | none |
+  | Permits | device 2 or instance 4 exceeded | 429 | `rate_limited` | none |
+  | Phase one | candidate invalid, eligibility or tip changed, file missing or unsafe, raster rejected, digest mismatch, worker error, 20 s shared wait | 404 | `not_found` | none; no oracle between causes |
+  | Phase two | grant revoked or changed, eligibility or tip changed, phase-two error, shared 20 s wait | 404 | `not_found` | none; same body as phase one |
+  | | no worker permit free (no queue, no retry) | 429 | `rate_limited` | none |
+  | Final bearer | token expired, device revoked, wrong instance | 401 | `unauthenticated` / `revoked` / `wrong_instance` | none |
+  | Final synchronous | owner flag, gate, TTL, entry or CAS no longer holds | 404 | `not_found` | none |
+  | Unexpected | any other exception | 500 | `other` | `why:"internal_error"` |
+
+  The phase-two per-bot refusal is deliberately `404`, not the ERR-3 mapping; ERR-3 applies only at
+  the initial grant stage. After `prepare` there is no status to send, so failure aborts the
+  transport.
+- **LM-16. Logging.** Logs and access logs carry closed-enum reasons only: never a ref, path, name,
+  size, digest, body or exception text (SEC-4).
+- **LM-17. Client rules.** The phone parses `media` only on tool rows with the exact ref grammar. It
+  fetches through a separate binary load path to the active binding only: raw response, existing
+  single `401` refresh, no JSON success parser, no DNS, redirect, public CDN call, disk cache or
+  fallback. Success requires `200`, a `Content-Type` of PNG, JPEG or WebP, a byte sniff equal to
+  that type, and at most 8 MiB. Decode uses a bounded static-raster decoder. On `404` the client may
+  re-read once; if the same row id now carries a ref it may fetch once more, otherwise it shows
+  "Image unavailable" with a user retry. `404` is unavailable or expired, `429` busy, `503
+  media_unavailable` unavailable. The existing phone transport timeout is 15 s, so a slow fetch may
+  show unavailable before the host's 20 s and 30 s deadlines; this contract authorizes no transport
+  change.
+- **LM-18. Memory ceilings (provisional).** Verification ceilings for four concurrent 8 MiB fetches
+  are a traced allocation peak of 96 MiB and an incremental RSS of 128 MiB. They are provisional,
+  not a native-allocation bound; a failure changes the implementation, not the ceiling.
+- **LM-19. Admission gates (open).** Before any manifest entry exists, and before any shipping or
+  platform claim:
+  - **E1 (lexical producer string):** a bounded native-generated fixture must show the producer's
+    `image` string starts lexically with the routed home string plus `/cache/images/`. Existing
+    evidence uses path-object equality and `resolve()` and does not prove this. Until E1 passes, a
+    mismatch refuses.
+  - **Linux errno qualification (`PLATFORM_GAP`):** the file-leaf errno mapping evidence is macOS
+    only; it must be run on Linux before any Linux claim.
+  - Independent security review of the exact candidate, owner-authorized qualification and device
+    acceptance. `SECURITY_REVIEW_REQUIRED` for the handle, route, gate and process qualification.
+- **LM-20. Residuals carried.** No atomic snapshot (including ABA on unrelated rows); change after
+  the last native check and before `prepare` (LM-12); a coarse-timestamp torn buffer is left to the
+  phone codec; out-of-tree image providers are not fingerprinted; same-account host code is not
+  contained; deadlines and memory ceilings are provisional.
+
 ## 8. Guarantees, capability contract and write gate (FZ-R-8, FZ-R-9)
 
 - **GU-1. Guarantee flags.**
@@ -1599,6 +1776,14 @@ until a human requalifies the build. Reads do not import those three files, and
 | `DEVICE_NAME_MAX_BYTES` | 64 | |
 | Snapshot `limit` | default 50, max 500 | |
 | History `limit` | default 100, max 1 000 | |
+| `MEDIA_REF_TTL_S` (v1.6 draft) | 1 800 | §7e LM-9; new feature choice |
+| `MEDIA_REFS_PER_DEVICE` / `MEDIA_REFS_TOTAL` (v1.6 draft) | 512 / 4 096 | LRU |
+| `MEDIA_DESCRIPTORS_PER_RESPONSE` (v1.6 draft) | 128 | newest first |
+| `MEDIA_FETCH_PER_MIN` (v1.6 draft) | 120 per device | |
+| `MEDIA_PERMITS_PER_DEVICE` / `_PER_INSTANCE` (v1.6 draft) | 2 / 4 | instance permit is the buffer permit |
+| `MEDIA_WORKERS` (v1.6 draft) | 4 | dedicated executor |
+| `MEDIA_WORKER_WAIT_S` / `MEDIA_WRITE_DEADLINE_S` (v1.6 draft) | 20 (shared by both phases) / 30 (including EOF) | |
+| `MEDIA_MAX_BYTES` (v1.6 draft) | 8 388 608 | |
 
 ## 14. Residuals this contract accepts explicitly
 
@@ -1614,3 +1799,4 @@ until a human requalifies the build. Reads do not import those three files, and
 - **RES-6.** Roster names are visible to every enrolled device (SEC-2).
 - **RES-7.** `head_message_id` may include non-conversational rows until P6 exists (RO-7).
 - **RES-8.** Continuity is limited to HMP-originated sessions until P7 exists (§11).
+- **RES-13 (v1.6 draft).** §7e makes no atomic snapshot guarantee; a grant or tip change after the last native check and before response `prepare` is not promised to refuse (LM-12, LM-20).
