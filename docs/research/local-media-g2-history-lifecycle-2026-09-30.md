@@ -105,8 +105,8 @@ addition to the 16 listed in the modern note: `hermes_state_common.py` `54ad9c5d
 
 - Own Python 3.14 virtual environment with pytest 9.1.1: the file collects 60 tests (57 non-native plus 3
   native aggregates). Focused run of the new tests only (2 new non-native tests and the new native
-  test `test_history_lifecycle_native_observations`, selected by exact node id): 3 passed. The 3 old native
-  aggregates (including the five- and four-case ones) were not run by the worker; the root ran them in a broad
+  test `test_history_lifecycle_native_observations`, selected by exact node id): 3 passed. The 2 old native
+  aggregates (the five- and four-case ones) were not run by the worker; the root ran them in a broad
   selection before this repair (58 passing at an earlier source hash, not this one) and then ran 56 passing
   (55 non-native plus the new native test, 2 old aggregates deselected) in 9.55s, also before this repair. Those
   root counts are historical, not for the current hashes.
