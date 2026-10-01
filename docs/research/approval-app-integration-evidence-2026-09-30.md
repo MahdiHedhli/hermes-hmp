@@ -4,6 +4,31 @@ Date: 2026-09-30. Status: integrated candidate, frozen for independent review af
 draft `821ddcb`, the root-only routing addition and the CI/documentation corrections below. Nothing here qualifies, admits or
 packages a Hermes build, and no live host, device, bot or provider was touched.
 
+## Current full fixture checkpoint (2026-10-01)
+
+Root verified the fresh full Git-install matrix at candidate
+`f584b91c5b5b157444b3875528ec034c6b83c4f9` against independent Hermes
+`8afaab3703e336d72a72c812dd2dd249f04f166a`, using that build's Python 3.14.7.
+All seven stages passed: identity, boundary, behavior, integration, reconnect, timing and
+stability. The actual JUnit contains exactly the 27 required cases, with no missing, extra,
+duplicate, failed, errored or skipped case. The final receipt passed its current-source
+validator independently. This supersedes the failed `f1841b3` run for this candidate; the failed
+run remains historical evidence below.
+
+| Binding | SHA-256 |
+| --- | --- |
+| Runtime plugin source | `45a188f2450669a2bd06bf5dffb72ea5a3fada9f053b5d4eda6548b15e87dfe3` |
+| Full JUnit | `77da14f22e9f6bddfe573d4f1ae228957ca83aff716573774c5c4333e8467bab` |
+| Final fixture receipt | `e252c49d3e5d469c2a3c96ee703e23e4f427cb5311ba81f1e73ea81ac5ff4fef` |
+| Approval native boundary | `a13e619b86e700df255d462d1b65c26a0cc39a63dcb179ea53d978f67f4f34f0` |
+| Direct-send native boundary | `5d075e916ad26d244b980d0aa504f05526f423e4d879bf4f0e29a4c09c1f9c99` |
+
+These are unsigned isolated-fixture results. Raw fixture logs and the receipt remain private,
+outside the repository. Both production write build lists remain empty. No package, live host,
+device, memory or release admission is implied; a separately reviewed owner-local package and
+real-device acceptance remain necessary. This documentation-only checkpoint does not change
+the verified runtime plugin digest.
+
 ## Inputs
 
 - Tested approval revision `f4730ebb901933f34c69c609e718f3984c6e62d9`.
