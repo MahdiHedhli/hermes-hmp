@@ -5,5 +5,6 @@
 3. Add host-only `devices grant-controls` and `devices deny-controls` commands for correction and revocation.
 4. Read the decision at the shared jobs/model route gate on each request. Preserve bearer, profile authorization, exact-build, and feature-flag checks.
 5. Verify positive and negative routes, migration, persistence, and per-device isolation; run the public privacy gate before publishing.
+6. Share one static, bounded output helper between the pairing prompt and `devices grant-controls` so a grant reports "permission saved for this phone" and the separate activation requirements. No new option, health record field, or side effect.
 
 No new network route or Hermes-core import is needed. This branch does not alter the live host's existing device decisions.

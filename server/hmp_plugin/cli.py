@@ -1312,6 +1312,16 @@ def _grant_bot_access(ctx: _Context, *, user_id: str) -> None:
         out.write(f"  {_combined_approve_command(list(remaining), user_id)}\n")
 
 
+def _write_controls_saved(out: Any) -> None:
+    """Static, informational text after a saved grant. A permission is not an activation."""
+    out.write(
+        "Permission saved for this phone. It does not activate the previews: scheduled jobs "
+        "and default models each also need the host feature flag, a supported build, the "
+        "profile API and key, and bot authorization.\n"
+        "Check host prerequisites with: hermes hmp health check (see docs/INSTALL.md)\n"
+    )
+
+
 def _prompt_owner_controls(ctx: _Context, *, device_id: str, label: str) -> None:
     """Ask the host for a separate, per-device privileged-control decision.
 
@@ -1332,11 +1342,10 @@ def _prompt_owner_controls(ctx: _Context, *, device_id: str, label: str) -> None
         out.write("\n")
     allowed = answer.strip() == "GRANT"
     if ctx.store.set_owner_controls(device_id, allowed=allowed, now=ctx.now()):
-        out.write(
-            "Jobs and default-model control granted to this phone.\n"
-            if allowed
-            else "Jobs and default-model control stays off for this phone.\n"
-        )
+        if allowed:
+            _write_controls_saved(out)
+        else:
+            out.write("Jobs and default-model control stays off for this phone.\n")
     else:
         out.write("The phone is no longer active; privileged control was not granted.\n")
     if not allowed:
@@ -1722,11 +1731,10 @@ def _cmd_devices_revoke(ctx: _Context, args: argparse.Namespace) -> int:
 def _cmd_devices_controls(ctx: _Context, args: argparse.Namespace, *, allowed: bool) -> int:
     if not ctx.store.set_owner_controls(args.device_id, allowed=allowed, now=ctx.now()):
         raise RefusedError("refused: device does not exist or is not active")
-    ctx.out.write(
-        "Jobs and default-model control granted.\n"
-        if allowed
-        else "Jobs and default-model control removed.\n"
-    )
+    if allowed:
+        _write_controls_saved(ctx.out)
+    else:
+        ctx.out.write("Jobs and default-model control removed.\n")
     return EXIT_OK
 
 
