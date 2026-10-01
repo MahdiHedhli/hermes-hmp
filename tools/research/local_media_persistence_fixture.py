@@ -26,6 +26,11 @@ child's own loopback synthetic model server, then drives one scenario:
                 deferred, so the synthetic model calls the native `tool_call` bridge naming it.
   {desktop,phone}_deferred_calls   default tool search on; the model emits the modern bridge shape
                 `tool_call {calls: [{name: image_generate, arguments}]}` with one entry.
+  history_lifecycle   no model, provider or surface: real SessionDB writes (append_messages_batch,
+                archive_and_compact, replace_messages, rewind, deactivate, clear, compression child,
+                Desktop branch helper, export/import) and the native same-inode backup restore,
+                observed on one synthetic image tool-call/result pair. Storage-API characterization
+                only.
   {desktop,phone}_deferred_batch   as above with two entries (distinct synthetic prompts) in one
                 parent `tool_call`. The native outcome (accepted, rejected, limited) is observed,
                 never forced.
@@ -81,7 +86,10 @@ MODERN_SCENARIOS = (
     "desktop_deferred_batch",
     "phone_deferred_batch",
 )
-ALL_SCENARIOS = SCENARIOS + MODERN_SCENARIOS
+# G2 native history lifecycle: SessionDB mutation/branch/compaction/import/restore APIs only, no
+# model or provider. Not part of SCENARIOS or MODERN_SCENARIOS: neither earlier set is repeated.
+HISTORY_SCENARIOS = ("history_lifecycle",)
+ALL_SCENARIOS = SCENARIOS + MODERN_SCENARIOS + HISTORY_SCENARIOS
 # Per-scenario bridge shape: None = direct call, "legacy" = `{name, arguments}`, "calls" = the
 # modern `{calls: [{name, arguments}, ...]}` array, with the number of underlying entries.
 BRIDGE_SHAPES: dict[str, tuple[str, int] | None] = {
@@ -111,6 +119,20 @@ OWNING_FILES = (
     "tui_gateway/methods_session.py",
     "tui_gateway/methods_prompt.py",
     "tui_gateway/prompt_turn.py",
+)
+
+# Additional native files whose bytes decide the history observations; fingerprinted before and
+# after only when a history scenario is requested.
+HISTORY_EXTRA_FILES = (
+    "hermes_state_common.py",
+    "hermes_state_errors.py",
+    "hermes_state_sessions.py",
+    "hermes_state_compression.py",
+    "hermes_state_portability.py",
+    "hermes_state_rewind.py",
+    "hermes_cli/backup_restore.py",
+    "hermes_cli/backup_sqlite.py",
+    "gateway/slash_commands_session.py",
 )
 
 REAL_HERMES_MARKER = Path("~/.hermes").expanduser()
@@ -153,8 +175,8 @@ def synthetic_png() -> bytes:
     return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", idat) + chunk(b"IEND", b"")
 
 
-def fingerprint(native_src: Path) -> dict[str, str]:
-    return {name: sha256_file(native_src / name) for name in OWNING_FILES}
+def fingerprint(native_src: Path, names: tuple[str, ...] = OWNING_FILES) -> dict[str, str]:
+    return {name: sha256_file(native_src / name) for name in names}
 
 
 def hmp_cap(name: str) -> int | None:
@@ -579,7 +601,8 @@ def run_parent(
     )  # refuses before any evidence write, child launch or native import
     validate_interpreter(native_src)
     evidence = prepare_evidence_dir(evidence, native_src)
-    before = fingerprint(native_src)
+    names = OWNING_FILES + (HISTORY_EXTRA_FILES if set(scenarios) & set(HISTORY_SCENARIOS) else ())
+    before = fingerprint(native_src, names)
     report: dict[str, Any] = {
         "native_head_matches_expected": True,
         "native_tree_clean_before": True,
@@ -590,7 +613,7 @@ def run_parent(
     }
     for scenario in dict.fromkeys(scenarios):
         report["scenarios"][scenario] = run_scenario(native_src, scenario, evidence)
-    after = fingerprint(native_src)
+    after = fingerprint(native_src, names)
     report["source_fingerprints"] = before
     report["source_unchanged"] = before == after
     report["native_tree_clean_after"] = native_clean(native_src)
@@ -1723,7 +1746,865 @@ def drive_phone(ctx: Ctx, report: dict[str, Any], *, fail: bool) -> None:
     ctx.db_home = ctx.layout["alpha"]  # type: ignore[attr-defined]
 
 
+# --------------------------------------------------------------------------------------------
+# Child: G2 history lifecycle (native SessionDB APIs only; no model, provider, route or token)
+# --------------------------------------------------------------------------------------------
+
+RESTORE_DIR_NAME = "restore_probe"
+HISTORY_SUMMARY = {
+    "role": "user",
+    "content": "synthetic compaction summary",
+    "_compressed_summary": True,
+}
+
+
+def call_id_carriers(row: dict[str, Any]) -> list[dict[str, Any]]:
+    calls = row.get("tool_calls")
+    if not isinstance(calls, list):
+        return []
+    return [c for c in calls if isinstance(c, dict) and c.get("id") == CALL_ID]
+
+
+def row_identity(row: dict[str, Any]) -> str:
+    """Short hash over the payload fields a clone keeps byte-exact (never the text itself)."""
+    material = json.dumps(
+        [
+            row.get("role"),
+            row.get("content"),
+            row.get("tool_calls"),
+            row.get("tool_call_id"),
+            row.get("tool_name"),
+        ],
+        sort_keys=True,
+        default=str,
+    )
+    return sha256_bytes(material.encode())[:12]
+
+
+def summarize_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Closed per-row facts: id, role, flags, payload identity, call-id carriage."""
+    return [
+        {
+            "id": r.get("id"),
+            "role": r.get("role"),
+            "active": bool(r.get("active")),
+            "compacted": bool(r.get("compacted")),
+            "identity": row_identity(r),
+            "call_id_in_tool_calls": len(call_id_carriers(r)),
+            "tool_call_id_is_expected": r.get("tool_call_id") == CALL_ID,
+        }
+        for r in rows
+    ]
+
+
+def call_carrier_counts(rows: list[dict[str, Any]]) -> dict[str, int]:
+    """Rows carrying the synthetic call id, whatever their active state."""
+    return {
+        "assistant_rows_with_call": sum(
+            1 for r in rows if r.get("role") == "assistant" and call_id_carriers(r)
+        ),
+        "tool_rows_with_call_id": sum(
+            1 for r in rows if r.get("role") == "tool" and r.get("tool_call_id") == CALL_ID
+        ),
+    }
+
+
+def pair_observation(rows: list[dict[str, Any]], expected_image: str) -> dict[str, Any]:
+    """What an active-only reader would see for the synthetic call, as closed counts and booleans.
+
+    Observation only: it states no eligibility policy and is not a candidate extractor or the
+    reference interface. Pass active rows; inactive rows in `rows` are ignored."""
+    active = [r for r in rows if r.get("active", True)]
+    assistants = [r for r in active if r.get("role") == "assistant" and call_id_carriers(r)]
+    tools = [r for r in active if r.get("role") == "tool" and r.get("tool_call_id") == CALL_ID]
+    shape: dict[str, Any] | None = None
+    if len(assistants) == 1 and len(call_id_carriers(assistants[0])) == 1:
+        shape = outer_call_shape(call_id_carriers(assistants[0])[0])
+    parsed = parse_json_or_none(tools[0].get("content")) if len(tools) == 1 else None
+    result_ok = isinstance(parsed, dict) and parsed.get("success") is True
+    image = parsed.get("image") if isinstance(parsed, dict) else None
+    one_entry = (
+        shape is not None
+        and shape["shape"] == "calls_array"
+        and shape["entry_count"] == 1
+        and shape["entry_names_closed"] == ["image_generate"]
+    )
+    return {
+        "active_assistant_rows_with_call": len(assistants),
+        "active_tool_rows_with_call_id": len(tools),
+        "assistant_call_is_one_entry_image_generate": one_entry,
+        "tool_name_is_image_generate": len(tools) == 1
+        and tools[0].get("tool_name") == "image_generate",
+        "result_success_true": result_ok,
+        "result_image_matches_expected": image == expected_image,
+        "complete": bool(
+            one_entry
+            and len(tools) == 1
+            and tools[0].get("tool_name") == "image_generate"
+            and result_ok
+            and image == expected_image
+        ),
+    }
+
+
+def pair_messages(image_path: str, extra_turn: bool = False) -> list[dict[str, Any]]:
+    """Fresh synthetic rows: user, one-entry bridge call, successful result, final answer."""
+    call = {
+        "id": CALL_ID,
+        "type": "function",
+        "function": {
+            "name": "tool_call",
+            "arguments": json.dumps(
+                {
+                    "calls": [
+                        {
+                            "name": "image_generate",
+                            "arguments": {"prompt": "synthetic prompt"},
+                        }
+                    ]
+                }
+            ),
+        },
+    }
+    result = {
+        "success": True,
+        "image": image_path,
+        "model": "synthetic",
+        "prompt": "synthetic prompt",
+        "aspect_ratio": "square",
+        "modality": "image",
+        "provider": "synthetic",
+    }
+    rows: list[dict[str, Any]] = [
+        {"role": "user", "content": "synthetic request one"},
+        {"role": "assistant", "content": None, "tool_calls": [call]},
+        {
+            "role": "tool",
+            "tool_call_id": CALL_ID,
+            "tool_name": "image_generate",
+            "content": json.dumps(result),
+        },
+        {"role": "assistant", "content": FINAL_TEXT},
+    ]
+    if extra_turn:
+        rows += [
+            {"role": "user", "content": "synthetic request two"},
+            {"role": "assistant", "content": "synthetic answer two"},
+        ]
+    return rows
+
+
+def validate_restore_target(target: Path, root: Path, primary_db: Path) -> None:
+    """The only database `_safe_restore_db` may write: `<scratch>/.../restore_probe/state.db`,
+    a real file, never the scenario's primary database, never in or holding a live Hermes home."""
+    resolved_root = root.resolve()
+    if (
+        not target.is_absolute()
+        or target.name != "state.db"
+        or target.parent.name != RESTORE_DIR_NAME
+    ):
+        raise FixtureSafetyError("restore_target_shape")
+    for part in (target, target.parent):
+        try:
+            mode = part.lstat().st_mode
+        except OSError:
+            raise FixtureSafetyError("restore_target_missing") from None
+        if stat.S_ISLNK(mode):
+            raise FixtureSafetyError("restore_target_is_symlink")
+    if not stat.S_ISREG(target.lstat().st_mode):
+        raise FixtureSafetyError("restore_target_not_regular")
+    resolved = target.resolve()
+    if resolved_root not in resolved.parents:
+        raise FixtureSafetyError("restore_target_outside_scratch")
+    refuse_inside_real_hermes(resolved, "restore_target_inside_real_hermes_home", containing=True)
+    if resolved == primary_db.resolve():
+        raise FixtureSafetyError("restore_target_is_primary_db")
+
+
+def tool_image_in_dir(rows: list[dict[str, Any]], directory: Path) -> bool:
+    """Whether every active result row's top-level `image` names a file directly inside `directory`
+    (a path comparison only; nothing is opened)."""
+    images = [
+        parse_json_or_none(r.get("content"))
+        for r in rows
+        if r.get("active") and r.get("role") == "tool"
+    ]
+    return bool(images) and all(
+        isinstance(i, dict)
+        and isinstance(i.get("image"), str)
+        and Path(i["image"]).parent == directory
+        for i in images
+    )
+
+
+def file_facts(path: Path) -> dict[str, Any]:
+    info = path.stat()
+    return {"dev_ino": [info.st_dev, info.st_ino], "mode": oct(info.st_mode & 0o777)}
+
+
+def run_step(steps: dict[str, Any], name: str, fn: Any) -> None:
+    """One observation. A native API raising is itself an observation (closed type name only)."""
+    try:
+        steps[name] = fn()
+    except FixtureSafetyError as exc:
+        steps[name] = {"status": "fixture_safety_refusal", "reason": str(exc)}
+    except Exception as exc:
+        tb = traceback.extract_tb(exc.__traceback__)
+        lines = [f.lineno for f in tb if f.filename == str(HERE)]
+        steps[name] = {
+            "status": "api_error",
+            "error_type": type(exc).__name__,
+            "fixture_line": lines[-1] if lines else None,
+        }
+
+
+class HistoryLab:
+    """Disposable synthetic sessions in one scratch SessionDB, mutated only through native APIs."""
+
+    def __init__(self, db: Any, image: str, layout: dict[str, Path]) -> None:
+        self.db, self.image, self.layout = db, image, layout
+        self.private: dict[str, Any] = {}
+
+    def rows(self, sid: str) -> list[dict[str, Any]]:
+        return self.db.get_messages(sid, include_inactive=True)
+
+    def active(self, sid: str) -> list[dict[str, Any]]:
+        return self.db.get_messages(sid)
+
+    def seed(self, sid: str, *, extra_turn: bool = False, **session_kwargs: Any) -> list[int]:
+        self.db.create_session(sid, source="synthetic", **session_kwargs)
+        self.db.append_messages_batch(sid, pair_messages(self.image, extra_turn))
+        return [int(r["id"]) for r in self.rows(sid)]
+
+    def view(self, sid: str) -> dict[str, Any]:
+        rows = self.rows(sid)
+        self.private.setdefault("rows", {}).setdefault(sid, []).append(rows)
+        active = [r for r in rows if r.get("active")]
+        return {
+            "rows": summarize_rows(rows),
+            "active_read_ids": [int(r["id"]) for r in self.active(sid)],
+            "carriers_all_rows": call_carrier_counts(rows),
+            "pair_active": pair_observation(active, self.image),
+        }
+
+    def counts(self, sid: str) -> dict[str, Any]:
+        session = self.db.get_session(sid) or {}
+        return {k: session.get(k) for k in ("message_count", "tool_call_count", "rewind_count")}
+
+
+def clone_facts(before: dict[str, Any], after: dict[str, Any]) -> dict[str, Any]:
+    """Compare two `HistoryLab.view` results of one session around a native mutation."""
+    was_active = {r["id"]: r["active"] for r in before["rows"]}
+    carriers = {
+        r["id"]
+        for r in before["rows"]
+        if r["call_id_in_tool_calls"] or r["tool_call_id_is_expected"]
+    }
+    old_pair = [r for r in after["rows"] if r["id"] in carriers]
+    fresh = [r for r in after["rows"] if r["active"] and r["id"] not in was_active]
+    fresh_pair = [r for r in fresh if r["call_id_in_tool_calls"] or r["tool_call_id_is_expected"]]
+    before_pair = [r for r in before["rows"] if r["id"] in carriers]
+    return {
+        "old_pair_flags": [[r["active"], r["compacted"]] for r in old_pair],
+        "old_pair_all_inactive": all(not r["active"] for r in old_pair),
+        "fresh_active_rows": len(fresh),
+        "fresh_active_pair_rows": len(fresh_pair),
+        "fresh_ids_above_previous_max": all(r["id"] > max(was_active) for r in fresh),
+        "inactive_rows_reactivated": sum(
+            1 for r in after["rows"] if r["active"] and was_active.get(r["id"]) is False
+        ),
+        "fresh_pair_identities_equal_old": (
+            sorted(r["identity"] for r in fresh_pair) == sorted(r["identity"] for r in before_pair)
+            if fresh_pair
+            else None
+        ),
+    }
+
+
+def step_baseline(lab: HistoryLab) -> dict[str, Any]:
+    ids = lab.seed("s_base")
+    view = lab.view("s_base")
+    return {
+        "seeded_ids": ids,
+        "view": view,
+        "counts": lab.counts("s_base"),
+        "default_read_equals_active_rows": view["active_read_ids"]
+        == [r["id"] for r in view["rows"] if r["active"]],
+    }
+
+
+def step_compaction_full(lab: HistoryLab) -> dict[str, Any]:
+    """`archive_and_compact` with the pair as the concurrent tail (watermark below the call row)."""
+    sid = "s_cmp_full"
+    ids = lab.seed(sid)
+    before = lab.view(sid)
+    tip_before = lab.db.resolve_resume_session_id(sid)
+    count = lab.db.archive_and_compact(sid, [dict(HISTORY_SUMMARY)], watermark=ids[0])
+    tip_after = lab.db.resolve_resume_session_id(sid)
+    after = lab.view(sid)
+    return {
+        "returned_active_count": count,
+        "view": after,
+        "facts": clone_facts(before, after),
+        "counts": lab.counts(sid),
+        "carriers_before": before["carriers_all_rows"],
+        "tip_id_unchanged_while_active_ids_changed": tip_before == tip_after == sid
+        and before["active_read_ids"] != after["active_read_ids"],
+        "display_view_pair_carriers": call_carrier_counts(
+            lab.db.get_messages(sid, include_compacted=True)
+        ),
+    }
+
+
+def step_compaction_half(lab: HistoryLab) -> dict[str, Any]:
+    """Watermark between the call row and its result: only the result (and later rows) is cloned."""
+    sid = "s_cmp_half"
+    ids = lab.seed(sid)
+    before = lab.view(sid)
+    count = lab.db.archive_and_compact(sid, [dict(HISTORY_SUMMARY)], watermark=ids[1])
+    after = lab.view(sid)
+    return {
+        "returned_active_count": count,
+        "view": after,
+        "facts": clone_facts(before, after),
+        "counts": lab.counts(sid),
+        "display_view_pair_carriers": call_carrier_counts(
+            lab.db.get_messages(sid, include_compacted=True)
+        ),
+    }
+
+
+def step_replace_archive(lab: HistoryLab) -> dict[str, Any]:
+    sid = "s_rep_arch"
+    lab.seed(sid)
+    before = lab.view(sid)
+    lab.db.replace_messages(
+        sid,
+        [
+            pair_messages(lab.image)[0],
+            {"role": "assistant", "content": "synthetic replacement"},
+        ],
+        archive_dropped=True,
+    )
+    after = lab.view(sid)
+    keep = "s_rep_keep"
+    keep_ids = lab.seed(keep)
+    keep_before = lab.view(keep)
+    lab.db.replace_messages(
+        keep,
+        [*pair_messages(lab.image), {"role": "assistant", "content": "synthetic appended"}],
+        archive_dropped=True,
+    )
+    keep_after = lab.view(keep)
+    return {
+        "diverging": {
+            "view": after,
+            "facts": clone_facts(before, after),
+            "counts": lab.counts(sid),
+        },
+        "identical_prefix": {
+            "view": keep_after,
+            "facts": clone_facts(keep_before, keep_after),
+            "original_ids_still_active": [
+                r["active"] for r in keep_after["rows"] if r["id"] in keep_ids
+            ],
+            "counts": lab.counts(keep),
+        },
+    }
+
+
+def step_replace_delete(lab: HistoryLab) -> dict[str, Any]:
+    sid = "s_rep_del"
+    old_ids = lab.seed(sid)
+    before = lab.view(sid)
+    lab.db.replace_messages(
+        sid,
+        [
+            pair_messages(lab.image)[0],
+            {"role": "assistant", "content": "synthetic replacement"},
+        ],
+    )
+    mid = lab.view(sid)
+    lab.db.append_messages_batch(sid, pair_messages(lab.image)[1:])
+    again = lab.view(sid)
+    again_ids = [r["id"] for r in again["rows"]]
+    return {
+        "after_replace": mid,
+        "old_row_ids_still_present_in_audit_read": sorted(
+            set(old_ids) & {r["id"] for r in mid["rows"]}
+        ),
+        "pair_carriers_after_replace": mid["carriers_all_rows"],
+        "after_reappend": again,
+        "reappended_pair_active_ids_reuse_deleted_ids": bool(
+            set(old_ids[1:]) & set(again_ids[-3:])
+        ),
+        "reappended_identities_equal_deleted": sorted(r["identity"] for r in again["rows"][-3:])
+        == sorted(r["identity"] for r in before["rows"][1:]),
+        "counts": lab.counts(sid),
+    }
+
+
+def step_rewind(lab: HistoryLab) -> dict[str, Any]:
+    early, late = "s_rew_early", "s_rew_late"
+    ids = lab.seed(early, extra_turn=True)
+    before = lab.view(early)
+    result = lab.db.rewind_to_message(early, ids[0])
+    after = lab.view(early)
+    late_ids = lab.seed(late, extra_turn=True)
+    late_before = lab.view(late)
+    late_result = lab.db.rewind_to_message(late, late_ids[4])
+    late_after = lab.view(late)
+    return {
+        "rewind_to_first_user": {
+            "result_keys": sorted(result),
+            "rewound_count": result.get("rewound_count"),
+            "view": after,
+            "facts": clone_facts(before, after),
+            "counts": lab.counts(early),
+        },
+        "rewind_to_second_user": {
+            "rewound_count": late_result.get("rewound_count"),
+            "pair_survives": late_after["pair_active"]["complete"],
+            "pair_ids_unchanged": [r["id"] for r in late_before["rows"] if r["active"]][:4]
+            == [r["id"] for r in late_after["rows"] if r["active"]][:4],
+            "view": late_after,
+            "counts": lab.counts(late),
+        },
+    }
+
+
+def step_deactivate(lab: HistoryLab) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for label, index in (("result_row", 2), ("call_row", 1)):
+        sid = f"s_deact_{label}"
+        ids = lab.seed(sid)
+        first = lab.db.deactivate_message(sid, ids[index])
+        second = lab.db.deactivate_message(sid, ids[index])
+        out[label] = {
+            "first_returned": first,
+            "second_returned": second,
+            "view": lab.view(sid),
+            "counts": lab.counts(sid),
+        }
+    return out
+
+
+def step_clear(lab: HistoryLab) -> dict[str, Any]:
+    sid = "s_clear"
+    old_ids = lab.seed(sid)
+    before = lab.view(sid)
+    lab.db.clear_messages(sid)
+    cleared = lab.view(sid)
+    lab.db.append_messages_batch(sid, pair_messages(lab.image))
+    again = lab.view(sid)
+    return {
+        "rows_after_clear_audit_read": len(cleared["rows"]),
+        "reseeded_ids_reuse_cleared_ids": bool(set(old_ids) & {r["id"] for r in again["rows"]}),
+        "reseeded_pair_complete": again["pair_active"]["complete"],
+        "reseeded_identities_equal_cleared": sorted(r["identity"] for r in again["rows"])
+        == sorted(r["identity"] for r in before["rows"]),
+    }
+
+
+def step_child_compression(lab: HistoryLab) -> dict[str, Any]:
+    """`publish_compression_child` with the pair as the parent's concurrent tail, plus the
+    tip-then-read interleave: a tip chosen before publication, rows read after it."""
+    parent, child = "s_cc_parent", "s_cc_child"
+    ids = lab.seed(parent)
+    before = lab.view(parent)
+    tip_before = lab.db.resolve_resume_session_id(parent)
+    lab.db.publish_compression_child(
+        parent_session_id=parent,
+        child_session_id=child,
+        source="synthetic",
+        messages=[dict(HISTORY_SUMMARY)],
+        watermark=ids[0],
+        require_compression_lease=False,
+    )
+    stale = lab.view(tip_before)
+    fresh_tip = lab.db.resolve_resume_session_id(parent)
+    fresh = lab.view(fresh_tip)
+    model_history, display_history = lab.db.get_resume_conversations(parent)
+    parent_session = lab.db.get_session(parent) or {}
+    return {
+        "tip_before_publish_is_parent": tip_before == parent,
+        "fresh_tip_is_child": fresh_tip == child,
+        "compression_tip_matches": lab.db.get_compression_tip(parent) == child,
+        "parent_end_reason": parent_session.get("end_reason"),
+        "parent_rows_unchanged_after_publish": stale["rows"] == before["rows"],
+        "stale_tip_pair_still_active": stale["pair_active"]["complete"],
+        "fresh_tip_pair_active": fresh["pair_active"]["complete"],
+        "stale_and_fresh_active_ids_disjoint": not set(stale["active_read_ids"])
+        & set(fresh["active_read_ids"]),
+        "child_view": fresh,
+        "child_counts": lab.counts(child),
+        "resume_conversations_given_parent": {
+            "model_history_rows": len(model_history),
+            "display_history_rows": len(display_history),
+            "model_history_has_call_pair": any(
+                isinstance(m.get("tool_calls"), list) and m.get("tool_calls") for m in model_history
+            ),
+        },
+    }
+
+
+def step_branch(lab: HistoryLab) -> dict[str, Any]:
+    """Desktop branch via the native `_persist_branch`; gateway-shaped copy via the native
+    `_branch_row` helper applied through public SessionDB calls (the async `/branch` handler is
+    NOT run)."""
+    parent = "s_br_parent"
+    lab.seed(parent)
+    history = lab.active(parent)
+    out: dict[str, Any] = {}
+    from tui_gateway.methods_session import _BRANCH_COPY_FIELDS, _persist_branch
+
+    _persist_branch(
+        lab.db,
+        "s_br_desktop",
+        parent,
+        "synthetic branch",
+        history,
+        source="synthetic",
+        cwd=str(lab.layout["cwd"]),
+        profile_name=PROFILE,
+        model="synthetic-model",
+        copy_fields=_BRANCH_COPY_FIELDS,
+    )
+    desktop = lab.view("s_br_desktop")
+    out["desktop_persist_branch"] = {
+        "view": desktop,
+        "tool_rows_copied": sum(1 for r in desktop["rows"] if r["role"] == "tool"),
+        "tool_call_id_columns_copied": sum(
+            1 for r in desktop["rows"] if r["tool_call_id_is_expected"]
+        ),
+        "assistant_call_columns_copied": sum(r["call_id_in_tool_calls"] for r in desktop["rows"]),
+    }
+    from gateway.slash_commands_session import _branch_row
+
+    conversation = lab.db.get_messages_as_conversation(parent)
+    lab.db.create_session(
+        "s_br_gateway_shape",
+        source="synthetic",
+        model_config={"_branched_from": parent},
+        parent_session_id=parent,
+    )
+    lab.db.append_messages_batch(
+        "s_br_gateway_shape", [_branch_row(m) for m in conversation], chunk_rows=500
+    )
+    gateway = lab.view("s_br_gateway_shape")
+    out["gateway_branch_row_helper_via_public_api"] = {
+        "history_input": "get_messages_as_conversation (not the handler's load_transcript)",
+        "view": gateway,
+    }
+    out["parent_resume_unchanged_by_branch_children"] = (
+        lab.db.resolve_resume_session_id(parent) == parent
+        and lab.db.get_compression_tip(parent) == parent
+    )
+    out["branched_from_marker_on_desktop_child"] = "_branched_from" in str(
+        (lab.db.get_session("s_br_desktop") or {}).get("model_config")
+    )
+    return out
+
+
+def step_import(lab: HistoryLab) -> dict[str, Any]:
+    parent = "s_imp_parent"
+    lab.seed(parent)
+    exported = lab.db.export_session(parent) or {}
+    foreign = str(lab.layout["tmp"] / "outside_profile_cache.png")
+
+    def payload(sid: str, *, parent_id: str | None, image: Any = None) -> dict[str, Any]:
+        data = json.loads(json.dumps(exported, default=str))
+        data["id"], data["parent_session_id"] = sid, parent_id
+        if image is not None:
+            for message in data["messages"]:
+                if message.get("role") == "tool":
+                    body = json.loads(message["content"])
+                    body["image"] = image
+                    message["content"] = json.dumps(body)
+        return data
+
+    out: dict[str, Any] = {"exported_message_rows": len(exported.get("messages", []))}
+    source_ids = {r["id"] for r in lab.rows(parent)}
+    variants = (
+        ("same_profile_root", "s_imp_root", None, None, lab.image),
+        ("with_parent_edge", "s_imp_child", parent, None, lab.image),
+        ("foreign_path", "s_imp_foreign", None, foreign, foreign),
+        ("non_string_image", "s_imp_invalid", None, 12345, 12345),
+    )
+    for label, sid, parent_id, override, expected in variants:
+        result = lab.db.import_sessions([payload(sid, parent_id=parent_id, image=override)])
+        view = lab.view(sid)
+        images = [
+            (parse_json_or_none(r.get("content")) or {}).get("image")
+            for r in lab.rows(sid)
+            if r.get("active") and r.get("role") == "tool"
+        ]
+        out[label] = {
+            "import_ok": result.get("ok"),
+            "imported": result.get("imported"),
+            "errors": len(result.get("errors", [])),
+            "detached": result.get("detached"),
+            "view": view,
+            "ids_disjoint_from_source": not source_ids & {r["id"] for r in view["rows"]},
+            "image_value_stored_verbatim": images == [expected],
+            "image_in_selected_profile_cache": tool_image_in_dir(
+                lab.rows(sid), Path(lab.image).parent
+            ),
+        }
+    out["resume_selector_follows_imported_parent_edge_child"] = (
+        lab.db.resolve_resume_session_id(parent) == "s_imp_child"
+    )
+    out["compression_tip_follows_imported_parent_edge_child"] = (
+        lab.db.get_compression_tip(parent) == "s_imp_child"
+    )
+    out["imported_session_source_and_origin"] = {
+        "source_preserved": (lab.db.get_session("s_imp_root") or {}).get("source") == "synthetic",
+        "origin_json_empty": not (lab.db.get_session("s_imp_root") or {}).get("origin_json"),
+    }
+    return out
+
+
+def restore_state(lab: HistoryLab, target: Path, primary_sids: tuple[str, ...]) -> dict[str, Any]:
+    """Everything the restore probe compares, read through the lab's SessionDB handle."""
+    from hermes_state_errors import _STATE_DB_GENERATION_KEY
+
+    db = lab.db
+    sessions = {sid: db.get_session(sid) or {} for sid in primary_sids}
+    return {
+        "views": {sid: lab.view(sid) for sid in primary_sids},
+        "session_fields": {
+            sid: {
+                k: sessions[sid].get(k)
+                for k in (
+                    "message_count",
+                    "tool_call_count",
+                    "rewind_count",
+                    "end_reason",
+                )
+            }
+            for sid in primary_sids
+        },
+        "conversation_generation": db.latest_conversation_boundary("synth-key-b", "synthetic"),
+        "file_stamp_sha": sha256_bytes((db.get_meta(_STATE_DB_GENERATION_KEY) or "").encode())[:12],
+        "application_id": getattr(db, "_db_file_application_id", None),
+        "file": file_facts(target),
+        "sidecars": {
+            suffix: Path(str(target) + suffix).exists() for suffix in ("-wal", "-shm", "-journal")
+        },
+    }
+
+
+def guarded_restore(restore: Any, snapshot: Path, target: Path, root: Path, primary: Path) -> Any:
+    """Re-validate the target at the restore boundary, then call the native restore."""
+    validate_restore_target(target, root, primary)
+    return restore(snapshot, target)
+
+
+def public_restore_state(state: dict[str, Any]) -> dict[str, Any]:
+    """The report copy of a restore state: raw device/inode numbers stay out of it."""
+    return {
+        **state,
+        "file": {k: v for k, v in state["file"].items() if k != "dev_ino"},
+    }
+
+
+def step_restore(lab: HistoryLab, root: Path) -> dict[str, Any]:
+    """Same-inode backup restore into a dedicated disposable profile database, using the native
+    `_safe_copy_db` snapshot and the native `_safe_restore_db` page copy. Nothing else is
+    written."""
+    from hermes_cli.backup_restore import _safe_restore_db
+    from hermes_cli.backup_sqlite import _safe_copy_db
+    from hermes_state import SessionDB
+
+    rdir = lab.layout["alpha"] / RESTORE_DIR_NAME
+    rdir.mkdir(mode=0o700)
+    target, snapshot = rdir / "state.db", rdir / "snapshot.db"
+    primary = lab.layout["alpha"] / "state.db"
+    old = SessionDB(target)
+    rl = HistoryLab(old, lab.image, lab.layout)
+    rl.seed("rs_a", session_key="synth-key-a")
+    old.create_session("rs_b", source="synthetic", session_key="synth-key-b")
+    rl.seed("rs_c", extra_turn=True)
+    validate_restore_target(target, root, primary)
+    sids = ("rs_a", "rs_b", "rs_c")
+    at_snapshot = restore_state(rl, target, sids)
+    copied = _safe_copy_db(target, snapshot)
+    snapshot_sha = sha256_file(snapshot)[:12]
+
+    # Later history on the same handle: compaction retires the pair, a reset boundary advances the
+    # conversation generation, a rewind bumps rewind_count, and a new row takes a new id.
+    first_id = int(rl.rows("rs_a")[0]["id"])
+    old.archive_and_compact("rs_a", [dict(HISTORY_SUMMARY)], watermark=first_id)
+    old.end_session("rs_b", "session_reset")
+    c_ids = [int(r["id"]) for r in rl.rows("rs_c")]
+    old.rewind_to_message("rs_c", c_ids[0])
+    later = restore_state(rl, target, sids)
+    later_max_id = max(int(r["id"]) for sid in sids for r in rl.rows(sid))
+    later_ids = {int(r["id"]) for sid in sids for r in rl.rows(sid)}
+    restored = guarded_restore(_safe_restore_db, snapshot, target, root, primary)
+
+    reader = SessionDB(target)  # a fresh handle, as a new process would open
+    fresh = HistoryLab(reader, lab.image, lab.layout)
+    after_fresh = restore_state(fresh, target, sids)
+    after_old = restore_state(rl, target, sids)  # the pre-restore handle, never closed
+    replaced_probe = getattr(old, "_db_file_was_replaced", None)
+    old_write: dict[str, Any]
+    try:
+        old.append_messages_batch("rs_a", [{"role": "user", "content": "synthetic after restore"}])
+        old_write = {"ok": True}
+    except Exception as exc:
+        old_write = {"ok": False, "error_type": type(exc).__name__}
+    new_id = max(int(r["id"]) for r in fresh.rows("rs_a"))
+    reader.close()
+    old.close()
+
+    def same(left: dict[str, Any], right: dict[str, Any], key: str) -> bool:
+        return left[key] == right[key]
+
+    # Compare on the raw states first; the raw numbers go to the private evidence only.
+    same_inode_and_device = at_snapshot["file"]["dev_ino"] == after_fresh["file"]["dev_ino"]
+    inode_unchanged_across_later_and_restore = (
+        later["file"]["dev_ino"] == after_fresh["file"]["dev_ino"]
+    )
+    PRIVATE["restore_file_identity"] = {
+        "at_snapshot": at_snapshot["file"]["dev_ino"],
+        "later": later["file"]["dev_ino"],
+        "after_restore_fresh_handle": after_fresh["file"]["dev_ino"],
+    }
+
+    return {
+        "snapshot_copied": copied,
+        "snapshot_sha12": snapshot_sha,
+        "restore_returned": restored,
+        "at_snapshot": public_restore_state(at_snapshot),
+        "later": public_restore_state(later),
+        "after_restore_fresh_handle": public_restore_state(after_fresh),
+        "after_restore_old_handle": public_restore_state(after_old),
+        "restored_views_equal_snapshot_views": same(at_snapshot, after_fresh, "views"),
+        "restored_views_differ_from_later_views": later["views"] != after_fresh["views"],
+        "old_handle_converges_with_fresh_handle": after_old["views"] == after_fresh["views"],
+        "same_inode_and_device": same_inode_and_device,
+        "inode_unchanged_across_later_and_restore": inode_unchanged_across_later_and_restore,
+        "pair_active_at_snapshot": at_snapshot["views"]["rs_a"]["pair_active"]["complete"],
+        "pair_active_after_later_compaction_original_ids": any(
+            r["active"] and r["call_id_in_tool_calls"]
+            for r in later["views"]["rs_a"]["rows"]
+            if r["id"] in {x["id"] for x in at_snapshot["views"]["rs_a"]["rows"]}
+        ),
+        "pair_active_after_restore_original_ids": after_fresh["views"]["rs_a"]["pair_active"][
+            "complete"
+        ],
+        "conversation_generation": {
+            "at_snapshot": at_snapshot["conversation_generation"],
+            "later": later["conversation_generation"],
+            "after_restore": after_fresh["conversation_generation"],
+        },
+        "rewind_count_rs_c": {
+            "at_snapshot": at_snapshot["session_fields"]["rs_c"]["rewind_count"],
+            "later": later["session_fields"]["rs_c"]["rewind_count"],
+            "after_restore": after_fresh["session_fields"]["rs_c"]["rewind_count"],
+        },
+        "file_stamp_unchanged_by_restore": same(at_snapshot, after_fresh, "file_stamp_sha"),
+        "application_id_unchanged_by_restore": same(at_snapshot, after_fresh, "application_id"),
+        "old_handle_reports_file_replaced": replaced_probe() if callable(replaced_probe) else None,
+        "old_handle_write_after_restore": old_write,
+        "id_taken_after_restore_was_used_in_later_timeline": new_id in later_ids,
+        "later_timeline_max_id_above_snapshot_max": later_max_id
+        > max(int(r["id"]) for sid in sids for r in at_snapshot["views"][sid]["rows"]),
+    }
+
+
+def drive_history(ctx: Ctx) -> dict[str, Any]:
+    from hermes_state import SessionDB
+
+    layout = ctx.layout
+    cache = layout["alpha"] / "cache" / "images"
+    cache.mkdir(parents=True, mode=0o700)
+    image = cache / "synthetic_history_0001.png"
+    png = synthetic_png()
+    with os.fdopen(open_private_exclusive(image), "wb") as handle:
+        handle.write(png)
+    db = SessionDB(layout["alpha"] / "state.db")
+    lab = HistoryLab(db, str(image), layout)
+    steps: dict[str, Any] = {
+        "cache_file_is_synthetic_png": image.read_bytes() == png,
+        "cache_file_sha_matches_helper": sha256_file(image) == sha256_bytes(png),
+    }
+    for name, fn in (
+        ("baseline", lambda: step_baseline(lab)),
+        ("compaction_full_tail_clone", lambda: step_compaction_full(lab)),
+        ("compaction_half_tail_clone", lambda: step_compaction_half(lab)),
+        ("replace_messages_archive", lambda: step_replace_archive(lab)),
+        ("replace_messages_delete", lambda: step_replace_delete(lab)),
+        ("rewind", lambda: step_rewind(lab)),
+        ("deactivate_message", lambda: step_deactivate(lab)),
+        ("clear_messages", lambda: step_clear(lab)),
+        ("child_compression", lambda: step_child_compression(lab)),
+        ("branch", lambda: step_branch(lab)),
+        ("import", lambda: step_import(lab)),
+        ("backup_restore", lambda: step_restore(lab, ctx.root)),
+    ):
+        run_step(steps, name, fn)
+    steps["cache_file_unchanged_after_all_steps"] = image.read_bytes() == png
+    steps["not_run"] = [
+        "gateway_branch_handler",  # async handler needs a live runner; helper-level copy only
+        "cli_branch",  # HermesCLI._handle_branch_command needs a live CLI object
+        "api_server_branch",
+        "rewind_user_turn",
+        "compaction_with_covered_ids",
+        "restore_of_snapshot_from_a_different_database_file",
+        "swapped_file_new_inode",
+        "concurrent_second_process",
+    ]
+    db.close()
+    PRIVATE["history_rows"] = lab.private
+    steps["native_sources"] = {
+        name: sha256_file(ctx.native_src / name)[:12] for name in OWNING_FILES + HISTORY_EXTRA_FILES
+    }
+    return steps
+
+
+def run_history_child(native_src: Path, root: Path, scenario: str) -> dict[str, Any]:
+    sys.path.insert(0, str(native_src))
+    os.chdir(os.environ.get("PWD", str(root / "cwd")))
+    ctx = Ctx(root, native_src)
+    os.umask(0o022)  # native default mode is observed, not the harness's inherited umask
+    install_ip_denial()  # no loopback port is allowed: this scenario has no model server
+    report: dict[str, Any] = {
+        "scenario": scenario,
+        "surface": "session_db_only",
+        "fault_injected": False,
+        "isolation": isolation_checks(ctx),
+    }
+
+    def finish() -> None:
+        report["runtime_identity"] = runtime_identity(ctx)
+        report["network"] = {
+            "ip_connects_blocked": _BLOCKED["ip_blocked"],
+            "unix_contacts_blocked": _BLOCKED["unix_blocked"],
+            "loopback_synthetic_connects_allowed": _BLOCKED["loopback_synthetic_allowed"],
+        }
+
+    try:
+        report["steps"] = drive_history(ctx)
+        finish()
+        report["status"] = "COMPLETED"
+    except Exception as exc:  # closed type name and fixture line only
+        tb = traceback.extract_tb(exc.__traceback__)
+        fixture_lines = [f.lineno for f in tb if f.filename == str(HERE)]
+        report["status"] = "ERROR"
+        report["error_type"] = type(exc).__name__
+        report["error_fixture_line"] = fixture_lines[-1] if fixture_lines else None
+        try:  # noqa: SIM105 - best-effort cleanup; swallowing is intended
+            finish()
+        except Exception:  # noqa: S110 - best-effort cleanup; swallowing is intended
+            pass
+    return report
+
+
 def run_child(native_src: Path, root: Path, scenario: str) -> dict[str, Any]:
+    if scenario in HISTORY_SCENARIOS:
+        return run_history_child(native_src, root, scenario)
     sys.path.insert(0, str(native_src))
     os.chdir(os.environ.get("PWD", str(root / "cwd")))
     shape = BRIDGE_SHAPES.get(scenario)

@@ -18,6 +18,7 @@ import time
 import tracemalloc
 import zlib
 from pathlib import Path
+from typing import Any
 
 import local_media_persistence_fixture as fx
 import pytest
@@ -601,7 +602,7 @@ def _tool_row(call_id: str, name: str, content: object, row_id: int = 2) -> dict
 
 def test_modern_scenarios_are_additive_and_do_not_repeat_the_accepted_five() -> None:
     assert not set(fx.MODERN_SCENARIOS) & set(fx.SCENARIOS)
-    assert fx.ALL_SCENARIOS == fx.SCENARIOS + fx.MODERN_SCENARIOS
+    assert fx.ALL_SCENARIOS == fx.SCENARIOS + fx.MODERN_SCENARIOS + fx.HISTORY_SCENARIOS
     assert len(fx.SCENARIOS) == 5 and len(fx.MODERN_SCENARIOS) == 4
     for name in fx.MODERN_SCENARIOS:
         assert fx.BRIDGE_SHAPES[name][0] == "calls"
@@ -850,3 +851,616 @@ def test_modern_calls_array_scenarios_closed_metadata(tmp_path: Path) -> None:
         "desktop_tool_completed_name_classes"
     ] == ["tool_call"]
     assert report["scenarios"]["phone_deferred_batch"]["order"]["adapter_media_calls"] == 0
+
+
+# --------------------------------------------------------------------------------------------
+# G2 history lifecycle: helpers, guards and the native observations (additive; the accepted five and
+# the four modern cases are not run here)
+# --------------------------------------------------------------------------------------------
+
+HISTORY_IMAGE = "/synthetic/profile/cache/images/one.png"
+
+
+def _hrow(
+    row_id: int, role: str, *, active: bool = True, compacted: bool = False, **fields: object
+) -> dict[str, object]:
+    return {"id": row_id, "role": role, "active": active, "compacted": compacted, **fields}
+
+
+def _good_pair(first_id: int = 1, **flags: object) -> list[dict[str, object]]:
+    call = _bridge_call(
+        fx.CALL_ID, [{"name": "image_generate", "arguments": {"prompt": "synthetic prompt"}}]
+    )
+    result = json.dumps({"success": True, "image": HISTORY_IMAGE})
+    return [
+        _hrow(first_id, "assistant", content=None, tool_calls=[call], **flags),
+        _hrow(
+            first_id + 1,
+            "tool",
+            tool_call_id=fx.CALL_ID,
+            tool_name="image_generate",
+            content=result,
+            **flags,
+        ),
+    ]
+
+
+def test_history_scenario_is_additive_and_default_run_does_not_include_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert fx.HISTORY_SCENARIOS == ("history_lifecycle",)
+    assert not set(fx.HISTORY_SCENARIOS) & (set(fx.SCENARIOS) | set(fx.MODERN_SCENARIOS))
+    assert len(fx.SCENARIOS) == 5 and len(fx.MODERN_SCENARIOS) == 4
+    seen: list[tuple[str, ...]] = []
+    monkeypatch.setattr(fx, "run_parent", lambda src, scen, evidence: seen.append(scen) or {})
+    assert fx.main(["run", "--scenario", "history_lifecycle"]) == 0
+    assert fx.main(["run"]) == 0
+    assert seen == [("history_lifecycle",), fx.SCENARIOS]
+
+
+def test_history_scenario_adds_owning_files_to_the_fingerprint_only_when_requested(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls: list[tuple[str, ...]] = []
+    monkeypatch.setattr(fx, "validate_native_src", lambda src: None)
+    monkeypatch.setattr(fx, "validate_interpreter", lambda src: None)
+    monkeypatch.setattr(fx, "native_clean", lambda src: True)
+    monkeypatch.setattr(fx, "run_scenario", lambda src, name, evidence: {"status": "COMPLETED"})
+
+    def spy(src: Path, names: tuple[str, ...] = fx.OWNING_FILES) -> dict[str, str]:
+        calls.append(names)
+        return dict.fromkeys(names, "x")
+
+    monkeypatch.setattr(fx, "fingerprint", spy)
+    src = tmp_path / "src"
+    fx.run_parent(src, ("desktop",), tmp_path / "e1")
+    fx.run_parent(src, ("history_lifecycle",), tmp_path / "e2")
+    assert calls[:2] == [fx.OWNING_FILES, fx.OWNING_FILES]
+    wanted = fx.OWNING_FILES + fx.HISTORY_EXTRA_FILES
+    assert calls[2:] == [wanted, wanted]
+    for name in (
+        "hermes_state_messages.py",
+        "hermes_state_portability.py",
+        "hermes_state_compression.py",
+        "hermes_state_sessions.py",
+        "hermes_cli/backup_restore.py",
+    ):
+        assert name in wanted
+    assert not set(fx.OWNING_FILES) & set(fx.HISTORY_EXTRA_FILES)
+
+
+def test_pair_observation_requires_the_whole_active_pair() -> None:
+    assert fx.pair_observation(_good_pair(), HISTORY_IMAGE)["complete"]
+    call_row, tool_row = _good_pair()
+    for rows in ([call_row], [tool_row], []):
+        assert not fx.pair_observation(rows, HISTORY_IMAGE)["complete"]
+    # A result whose call row was retired (the half tail clone) is not a complete pair.
+    retired_call = {**call_row, "active": False, "compacted": True}
+    half = fx.pair_observation([retired_call, tool_row], HISTORY_IMAGE)
+    assert half["active_assistant_rows_with_call"] == 0 and not half["complete"]
+    assert half["active_tool_rows_with_call_id"] == 1 and half["result_success_true"]
+
+
+def test_pair_observation_ignores_retired_duplicates_but_not_active_ones() -> None:
+    call_row, tool_row = _good_pair(1)
+    clone_call, clone_tool = _good_pair(11)
+    retired = [{**r, "active": False} for r in (call_row, tool_row)]
+    assert fx.pair_observation([*retired, clone_call, clone_tool], HISTORY_IMAGE)["complete"]
+    ambiguous = fx.pair_observation([call_row, tool_row, clone_call, clone_tool], HISTORY_IMAGE)
+    assert ambiguous["active_assistant_rows_with_call"] == 2 and not ambiguous["complete"]
+
+
+def test_pair_observation_rejects_wrong_shape_name_result_and_image() -> None:
+    call_row, tool_row = _good_pair()
+    two_entries = _bridge_call(fx.CALL_ID, fx.batch_entries(2))
+    batch = {**call_row, "tool_calls": [two_entries]}
+    assert not fx.pair_observation([batch, tool_row], HISTORY_IMAGE)["complete"]
+    wrapper_named = {**tool_row, "tool_name": "tool_call"}
+    assert not fx.pair_observation([call_row, wrapper_named], HISTORY_IMAGE)["complete"]
+    failed = {**tool_row, "content": json.dumps({"success": False, "image": HISTORY_IMAGE})}
+    assert not fx.pair_observation([call_row, failed], HISTORY_IMAGE)["complete"]
+    elsewhere = {**tool_row, "content": json.dumps({"success": True, "image": "/other.png"})}
+    assert not fx.pair_observation([call_row, elsewhere], HISTORY_IMAGE)["complete"]
+    not_json = {**tool_row, "content": "not json"}
+    assert not fx.pair_observation([call_row, not_json], HISTORY_IMAGE)["complete"]
+    other_id = {**tool_row, "tool_call_id": "call_other"}
+    assert not fx.pair_observation([call_row, other_id], HISTORY_IMAGE)["complete"]
+
+
+def test_pair_observation_states_no_eligibility_policy() -> None:
+    keys = set(fx.pair_observation(_good_pair(), HISTORY_IMAGE))
+    assert not {"eligible", "authorized", "grant", "token", "candidate"} & keys
+
+
+def test_pair_messages_are_a_one_entry_bridge_call_with_a_linked_result() -> None:
+    rows = fx.pair_messages(HISTORY_IMAGE)
+    assert [r["role"] for r in rows] == ["user", "assistant", "tool", "assistant"]
+    shape = fx.outer_call_shape(rows[1]["tool_calls"][0])
+    assert shape["id"] == fx.CALL_ID and shape["shape"] == "calls_array"
+    assert shape["entry_count"] == 1 and shape["entry_names_closed"] == ["image_generate"]
+    assert rows[2]["tool_call_id"] == fx.CALL_ID and rows[2]["tool_name"] == "image_generate"
+    assert len(fx.pair_messages(HISTORY_IMAGE, extra_turn=True)) == 6
+    # Fresh dicts every call: native appends write ids and timestamps into the dicts they receive.
+    assert fx.pair_messages(HISTORY_IMAGE)[0] is not rows[0]
+
+
+def test_row_summaries_carry_no_text_paths_or_call_arguments() -> None:
+    rows = [
+        {**r, "id": i + 1, "active": True, "compacted": False}
+        for i, r in enumerate(fx.pair_messages(HISTORY_IMAGE))
+    ]
+    text = json.dumps(
+        {
+            "rows": fx.summarize_rows(rows),
+            "carriers": fx.call_carrier_counts(rows),
+            "pair": fx.pair_observation(rows, HISTORY_IMAGE),
+        }
+    )
+    for raw in (
+        "synthetic request",
+        "synthetic prompt",
+        HISTORY_IMAGE,
+        fx.FINAL_TEXT,
+        "/synthetic",
+    ):
+        assert raw not in text
+    summary = fx.summarize_rows(rows)
+    assert [r["role"] for r in summary] == ["user", "assistant", "tool", "assistant"]
+    assert summary[1]["call_id_in_tool_calls"] == 1 and summary[2]["tool_call_id_is_expected"]
+    # Identical payloads share an identity; the id does not enter it; a changed payload differs.
+    clone = {**rows[2], "id": 99}
+    assert fx.row_identity(clone) == fx.row_identity(rows[2])
+    assert fx.row_identity({**rows[2], "content": "{}"}) != fx.row_identity(rows[2])
+
+
+def _view(rows: list[dict[str, object]]) -> dict[str, object]:
+    return {"rows": fx.summarize_rows(rows)}
+
+
+def test_clone_facts_separate_new_active_rows_from_reactivated_ones() -> None:
+    before_rows = _good_pair(1)
+    after_clone = [
+        *({**r, "active": False} for r in before_rows),
+        *_good_pair(11),
+    ]
+    facts = fx.clone_facts(_view(before_rows), _view(after_clone))
+    assert facts["old_pair_all_inactive"] and facts["fresh_active_pair_rows"] == 2
+    assert facts["fresh_pair_identities_equal_old"] is True
+    assert facts["inactive_rows_reactivated"] == 0 and facts["fresh_ids_above_previous_max"]
+    retired = [{**r, "active": False} for r in before_rows]
+    reactivated = fx.clone_facts(_view(retired), _view(before_rows))
+    assert reactivated["inactive_rows_reactivated"] == 2 and reactivated["fresh_active_rows"] == 0
+    cleared = fx.clone_facts(_view(before_rows), _view([]))
+    assert cleared["fresh_pair_identities_equal_old"] is None
+
+
+def test_tool_image_in_dir_compares_paths_only(tmp_path: Path) -> None:
+    inside = tmp_path / "cache"
+    row = _tool_row(fx.CALL_ID, "image_generate", {"success": True, "image": str(inside / "a.png")})
+    row["active"] = True
+    assert fx.tool_image_in_dir([row], inside)
+    assert not fx.tool_image_in_dir([row], tmp_path / "other")
+    assert not (inside / "a.png").exists()  # nothing was created or opened
+    row["content"] = json.dumps({"success": True, "image": 7})
+    assert not fx.tool_image_in_dir([row], inside)
+    assert not fx.tool_image_in_dir([], inside)
+
+
+def _restore_layout(root: Path) -> tuple[Path, Path]:
+    primary = root / "hermes" / "profiles" / fx.PROFILE / "state.db"
+    target = primary.parent / fx.RESTORE_DIR_NAME / "state.db"
+    target.parent.mkdir(parents=True)
+    target.write_bytes(b"")
+    primary.write_bytes(b"")
+    return primary, target
+
+
+def test_restore_target_accepts_only_the_dedicated_scratch_database(tmp_path: Path) -> None:
+    primary, target = _restore_layout(tmp_path)
+    fx.validate_restore_target(target, tmp_path, primary)
+
+
+def test_restore_target_refuses_every_other_database(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    primary, target = _restore_layout(tmp_path)
+
+    def reason(candidate: Path, root: Path = tmp_path, prim: Path = primary) -> str:
+        with pytest.raises(fx.FixtureSafetyError) as info:
+            fx.validate_restore_target(candidate, root, prim)
+        return info.value.reason
+
+    assert reason(primary) == "restore_target_shape"  # the primary profile database
+    assert reason(target.parent / "snapshot.db") == "restore_target_shape"
+    assert reason(Path("relative") / fx.RESTORE_DIR_NAME / "state.db") == "restore_target_shape"
+    assert reason(target.parent / "gone" / fx.RESTORE_DIR_NAME / "state.db") == (
+        "restore_target_missing"
+    )
+    assert reason(target, tmp_path / "elsewhere") == "restore_target_outside_scratch"
+    assert reason(target, tmp_path, target) == "restore_target_is_primary_db"
+    link = tmp_path / "link"
+    link.symlink_to(target)
+    linked_dir = tmp_path / "x" / fx.RESTORE_DIR_NAME
+    linked_dir.parent.mkdir()
+    (linked_dir).symlink_to(target.parent)
+    assert reason(linked_dir / "state.db") == "restore_target_is_symlink"
+    (target.parent / "fake").mkdir()
+    live = tmp_path / "live_home"
+    live_target = live / fx.RESTORE_DIR_NAME / "state.db"
+    live_target.parent.mkdir(parents=True)
+    live_target.write_bytes(b"")
+    monkeypatch.setenv("HMP_G1_REAL_HERMES_MARKER", str(live))
+    assert reason(live_target, live.parent, primary) == "restore_target_inside_real_hermes_home"
+
+
+def test_restore_target_refuses_a_symlinked_database_file(tmp_path: Path) -> None:
+    primary, target = _restore_layout(tmp_path)
+    real = tmp_path / "real.db"
+    real.write_bytes(b"")
+    target.unlink()
+    target.symlink_to(real)
+    with pytest.raises(fx.FixtureSafetyError) as info:
+        fx.validate_restore_target(target, tmp_path, primary)
+    assert info.value.reason == "restore_target_is_symlink"
+
+
+def test_restore_boundary_validates_immediately_before_the_native_restore(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    primary, target = _restore_layout(tmp_path)
+    events: list[str] = []
+    real_validate = fx.validate_restore_target
+
+    def spy(*args: Path) -> None:
+        events.append("validate")
+        real_validate(*args)
+
+    def restore(snapshot: Path, dest: Path) -> str:
+        events.append("restore")
+        return "done"
+
+    monkeypatch.setattr(fx, "validate_restore_target", spy)
+    snapshot = target.parent / "snapshot.db"
+    assert fx.guarded_restore(restore, snapshot, target, tmp_path, primary) == "done"
+    assert events == ["validate", "restore"]
+
+    events.clear()
+    with pytest.raises(fx.FixtureSafetyError):
+        fx.guarded_restore(restore, snapshot, primary, tmp_path, primary)
+    assert events == ["validate"]  # a refused target never reaches the native restore
+
+
+def test_public_restore_state_drops_raw_device_inode_but_keeps_other_file_facts() -> None:
+    state = {"views": {}, "file": {"dev_ino": [16777231, 4242], "mode": "0o600"}}
+    public = fx.public_restore_state(state)
+    assert public["file"] == {"mode": "0o600"}
+    assert "16777231" not in json.dumps(public) and "4242" not in json.dumps(public)
+    assert state["file"]["dev_ino"] == [16777231, 4242]  # the raw state is untouched
+
+
+def test_run_step_labels_a_safety_refusal_apart_from_an_api_error() -> None:
+    steps: dict[str, Any] = {}
+
+    def refuse() -> None:
+        raise fx.FixtureSafetyError("restore_target_outside_scratch")
+
+    def boom() -> None:
+        raise ValueError("x")
+
+    fx.run_step(steps, "refused", refuse)
+    fx.run_step(steps, "broken", boom)
+    assert steps["refused"] == {
+        "status": "fixture_safety_refusal",
+        "reason": "restore_target_outside_scratch",
+    }
+    assert steps["broken"]["status"] == "api_error"
+
+
+HISTORY_FUNCTIONS = (
+    "call_id_carriers",
+    "row_identity",
+    "summarize_rows",
+    "call_carrier_counts",
+    "pair_observation",
+    "pair_messages",
+    "validate_restore_target",
+    "guarded_restore",
+    "tool_image_in_dir",
+    "file_facts",
+    "run_step",
+    "HistoryLab",
+    "clone_facts",
+    "step_baseline",
+    "step_compaction_full",
+    "step_compaction_half",
+    "step_replace_archive",
+    "step_replace_delete",
+    "step_rewind",
+    "step_deactivate",
+    "step_clear",
+    "step_child_compression",
+    "step_branch",
+    "step_import",
+    "restore_state",
+    "step_restore",
+    "drive_history",
+    "run_history_child",
+)
+
+
+def _fixture_tree() -> ast.Module:
+    return ast.parse(Path(fx.__file__).read_text())
+
+
+def _history_nodes() -> list[ast.AST]:
+    return [
+        n
+        for n in _fixture_tree().body
+        if isinstance(n, ast.FunctionDef | ast.ClassDef) and n.name in HISTORY_FUNCTIONS
+    ]
+
+
+def test_history_code_writes_only_through_native_apis_never_copied_sqlite() -> None:
+    nodes = _history_nodes()
+    assert {n.name for n in nodes} == set(HISTORY_FUNCTIONS)
+    for node in nodes:
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.Attribute):
+                assert sub.attr not in {"execute", "executemany", "executescript", "cursor"}, (
+                    node.name
+                )
+            if isinstance(sub, ast.Import | ast.ImportFrom):
+                modules = (
+                    [sub.module] if isinstance(sub, ast.ImportFrom) else [a.name for a in sub.names]
+                )
+                assert "sqlite3" not in modules, node.name
+            if isinstance(sub, ast.Constant) and isinstance(sub.value, str):
+                upper = sub.value.upper()
+                assert not any(w in upper for w in ("INSERT INTO", "UPDATE ", "DELETE FROM")), (
+                    node.name
+                )
+
+
+def test_history_native_imports_are_function_local() -> None:
+    top = {
+        (a.name if isinstance(n, ast.Import) else n.module or "").split(".")[0]
+        for n in _fixture_tree().body
+        if isinstance(n, ast.Import | ast.ImportFrom)
+        for a in (n.names if isinstance(n, ast.Import) else [None])
+    }
+    assert not top & {"hermes_cli", "hermes_state_errors", "tui_gateway", "gateway", "hermes_state"}
+
+
+def _call_names_in_order(func: ast.FunctionDef) -> list[str]:
+    calls = [(n.lineno, n.col_offset, n.func) for n in ast.walk(func) if isinstance(n, ast.Call)]
+    names = []
+    for _, _, f in sorted(calls, key=lambda c: (c[0], c[1])):
+        if isinstance(f, ast.Name):
+            names.append(f.id)
+        elif isinstance(f, ast.Attribute):
+            names.append(f.attr)
+    return names
+
+
+def test_history_child_denies_network_before_any_native_work_and_keeps_validated_entry() -> None:
+    funcs = {n.name: n for n in _fixture_tree().body if isinstance(n, ast.FunctionDef)}
+    order = _call_names_in_order(funcs["run_history_child"])
+    assert order.index("insert") < order.index("install_ip_denial") < order.index("drive_history")
+    assert order.index("isolation_checks") < order.index("drive_history")
+    # The history child is reached only through run_child, which main() reaches only after both
+    # validators; run_child dispatches before any model server, config write or surface import.
+    main_calls = _call_names_in_order(funcs["main"])
+    assert main_calls.index("validate_native_src") < main_calls.index("validate_scratch_root")
+    assert main_calls.index("validate_scratch_root") < main_calls.index("run_child")
+    child_calls = _call_names_in_order(funcs["run_child"])
+    assert child_calls[0] == "run_history_child"
+
+
+def test_history_child_allows_no_loopback_port() -> None:
+    # No SyntheticModel server is started for this scenario, so the allowed-port list stays empty
+    # and every IP connect, not just external ones, is denied.
+    source = ast.get_source_segment(
+        Path(fx.__file__).read_text(),
+        next(n for n in _history_nodes() if n.name == "run_history_child"),
+    )
+    assert source is not None and ".start(" not in source and "write_config" not in source
+
+
+@native
+def test_history_lifecycle_native_observations(tmp_path: Path) -> None:
+    """Runs only the new native case. Pins what build 8afa's own SessionDB APIs did to one
+    synthetic image tool-call/result pair; if native behavior differs this fails and the fixture
+    is not bent."""
+    evidence = tmp_path / "evidence"
+    report = fx.run_parent(fx.DEFAULT_NATIVE_SRC, fx.HISTORY_SCENARIOS, evidence)
+    assert report["native_head_matches_expected"] and report["source_unchanged"]
+    assert report["native_tree_clean_before"] and report["native_tree_clean_after"]
+    assert set(report["source_fingerprints"]) == set(fx.OWNING_FILES + fx.HISTORY_EXTRA_FILES)
+    sc = report["scenarios"]["history_lifecycle"]
+    # Unchanged guard contracts.
+    assert sc["status"] == "COMPLETED" and sc["child_exit_code"] == 0
+    assert all(sc["isolation"].values())
+    identity = sc["runtime_identity"]
+    assert all(identity["native_modules_from_independent_src"].values())
+    assert identity["native_modules_from_independent_src"]["hermes_state"] is True
+    assert identity["modules_from_real_hermes_home_outside_interpreter_base"] == 0
+    assert sc["scratch_removed"] and not sc["child_stderr_mentions_scratch"]
+    assert sc["child_stdout_bytes"] == 0 and sc["child_stderr_bytes"] == 0
+    assert sc["network"] == {
+        "ip_connects_blocked": 0,
+        "unix_contacts_blocked": 0,
+        "loopback_synthetic_connects_allowed": 0,
+    }
+    # Evidence files: private, fresh, raw synthetic text only in the 0600 private file.
+    assert oct(evidence.stat().st_mode & 0o777) == "0o700"
+    for entry in evidence.iterdir():
+        assert oct(entry.stat().st_mode & 0o777) == "0o600", entry.name
+    private = (evidence / "history_lifecycle.private.json").read_text()
+    public = (evidence / "report.json").read_text() + json.dumps(report)
+    assert "synthetic request one" in private
+    for raw in ("synthetic request", "synthetic prompt", fx.FINAL_TEXT, "synthetic_history_0001"):
+        assert raw not in public
+    steps = sc["steps"]
+    assert not [k for k, v in steps.items() if isinstance(v, dict) and v.get("status")]
+
+    def keys_and_numbers(node: Any, found: set[str]) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                found.add(key)
+                keys_and_numbers(value, found)
+        elif isinstance(node, list):
+            for value in node:
+                keys_and_numbers(value, found)
+
+    public_keys: set[str] = set()
+    keys_and_numbers(report, public_keys)
+    keys_and_numbers(json.loads((evidence / "report.json").read_text()), public_keys)
+    assert "dev_ino" not in public_keys and "st_ino" not in public_keys
+    identity_private = json.loads(private)["restore_file_identity"]
+    for stage in ("at_snapshot", "later", "after_restore_fresh_handle"):
+        dev, ino = identity_private[stage]
+        assert isinstance(dev, int) and isinstance(ino, int) and ino > 0
+        assert f"[{dev}, {ino}]" not in public and f'"{ino}"' not in public
+        assert "dev_ino" not in steps["backup_restore"][stage]["file"]
+    assert identity_private["at_snapshot"] == identity_private["after_restore_fresh_handle"]
+    assert steps["cache_file_is_synthetic_png"] and steps["cache_file_unchanged_after_all_steps"]
+    assert steps["native_sources"].keys() == set(fx.OWNING_FILES + fx.HISTORY_EXTRA_FILES)
+
+    base = steps["baseline"]
+    assert base["view"]["pair_active"]["complete"] and len(base["seeded_ids"]) == 4
+    assert base["view"]["carriers_all_rows"] == {
+        "assistant_rows_with_call": 1,
+        "tool_rows_with_call_id": 1,
+    }
+    assert base["default_read_equals_active_rows"]
+
+    full = steps["compaction_full_tail_clone"]
+    assert full["facts"]["old_pair_flags"] == [[False, False], [False, False]]
+    assert (
+        full["facts"]["fresh_active_pair_rows"] == 2
+        and full["facts"]["fresh_ids_above_previous_max"]
+    )
+    assert full["facts"]["fresh_pair_identities_equal_old"] is True
+    assert full["facts"]["inactive_rows_reactivated"] == 0
+    assert full["view"]["pair_active"]["complete"]
+    assert full["view"]["carriers_all_rows"] == {
+        "assistant_rows_with_call": 2,
+        "tool_rows_with_call_id": 2,
+    }
+    assert full["tip_id_unchanged_while_active_ids_changed"]
+
+    half = steps["compaction_half_tail_clone"]
+    assert half["facts"]["old_pair_flags"] == [[False, True], [False, False]]
+    assert half["view"]["pair_active"]["active_assistant_rows_with_call"] == 0
+    assert half["view"]["pair_active"]["active_tool_rows_with_call_id"] == 1
+    assert not half["view"]["pair_active"]["complete"]
+    assert half["view"]["carriers_all_rows"] == {
+        "assistant_rows_with_call": 1,
+        "tool_rows_with_call_id": 2,
+    }
+
+    archive = steps["replace_messages_archive"]
+    assert archive["diverging"]["facts"]["old_pair_flags"] == [[False, False], [False, False]]
+    assert not archive["diverging"]["view"]["pair_active"]["complete"]
+    assert archive["identical_prefix"]["original_ids_still_active"] == [True] * 4
+    assert archive["identical_prefix"]["view"]["pair_active"]["complete"]
+    assert archive["identical_prefix"]["facts"]["fresh_active_rows"] == 1
+
+    delete = steps["replace_messages_delete"]
+    assert delete["old_row_ids_still_present_in_audit_read"] == []
+    assert delete["pair_carriers_after_replace"] == {
+        "assistant_rows_with_call": 0,
+        "tool_rows_with_call_id": 0,
+    }
+    assert not delete["reappended_pair_active_ids_reuse_deleted_ids"]
+    assert (
+        delete["reappended_identities_equal_deleted"]
+        and delete["after_reappend"]["pair_active"]["complete"]
+    )
+
+    rewind = steps["rewind"]
+    assert rewind["rewind_to_first_user"]["rewound_count"] == 6
+    assert rewind["rewind_to_first_user"]["counts"]["rewind_count"] == 1
+    assert rewind["rewind_to_first_user"]["facts"]["old_pair_flags"] == [
+        [False, False],
+        [False, False],
+    ]
+    assert (
+        rewind["rewind_to_first_user"]["view"]["carriers_all_rows"]["tool_rows_with_call_id"] == 1
+    )
+    assert rewind["rewind_to_second_user"]["pair_survives"]
+    assert rewind["rewind_to_second_user"]["pair_ids_unchanged"]
+
+    for label, missing in (
+        ("result_row", "active_tool_rows_with_call_id"),
+        ("call_row", "active_assistant_rows_with_call"),
+    ):
+        deact = steps["deactivate_message"][label]
+        assert deact["first_returned"] == 1 and deact["second_returned"] == 1
+        assert (
+            deact["view"]["pair_active"][missing] == 0
+            and not deact["view"]["pair_active"]["complete"]
+        )
+
+    clear = steps["clear_messages"]
+    assert clear["rows_after_clear_audit_read"] == 0 and not clear["reseeded_ids_reuse_cleared_ids"]
+    assert clear["reseeded_pair_complete"] and clear["reseeded_identities_equal_cleared"]
+
+    child = steps["child_compression"]
+    assert child["tip_before_publish_is_parent"] and child["fresh_tip_is_child"]
+    assert child["compression_tip_matches"] and child["parent_end_reason"] == "compression"
+    assert child["parent_rows_unchanged_after_publish"] and child["stale_tip_pair_still_active"]
+    assert child["fresh_tip_pair_active"] and child["stale_and_fresh_active_ids_disjoint"]
+
+    branch = steps["branch"]
+    desktop = branch["desktop_persist_branch"]
+    assert desktop["tool_rows_copied"] == 1 and desktop["tool_call_id_columns_copied"] == 0
+    assert desktop["assistant_call_columns_copied"] == 0
+    assert not desktop["view"]["pair_active"]["complete"]
+    assert branch["gateway_branch_row_helper_via_public_api"]["view"]["pair_active"]["complete"]
+    assert branch["parent_resume_unchanged_by_branch_children"]
+    assert branch["branched_from_marker_on_desktop_child"]
+
+    imported = steps["import"]
+    for label in ("same_profile_root", "with_parent_edge", "foreign_path", "non_string_image"):
+        item = imported[label]
+        assert item["import_ok"] and item["imported"] == 1 and item["errors"] == 0, label
+        assert item["ids_disjoint_from_source"] and item["image_value_stored_verbatim"], label
+    assert imported["same_profile_root"]["view"]["pair_active"]["complete"]
+    assert not imported["foreign_path"]["image_in_selected_profile_cache"]
+    assert not imported["non_string_image"]["image_in_selected_profile_cache"]
+    assert not imported["foreign_path"]["view"]["pair_active"]["complete"]
+    assert imported["resume_selector_follows_imported_parent_edge_child"]
+    assert not imported["compression_tip_follows_imported_parent_edge_child"]
+    assert imported["imported_session_source_and_origin"] == {
+        "source_preserved": True,
+        "origin_json_empty": True,
+    }
+
+    restore = steps["backup_restore"]
+    assert restore["snapshot_copied"] and restore["restore_returned"]
+    assert restore["same_inode_and_device"] and restore["inode_unchanged_across_later_and_restore"]
+    assert (
+        restore["pair_active_at_snapshot"]
+        and not restore["pair_active_after_later_compaction_original_ids"]
+    )
+    assert restore["pair_active_after_restore_original_ids"]
+    assert (
+        restore["restored_views_equal_snapshot_views"]
+        and restore["restored_views_differ_from_later_views"]
+    )
+    assert restore["conversation_generation"] == {
+        "at_snapshot": None,
+        "later": 1,
+        "after_restore": None,
+    }
+    assert restore["rewind_count_rs_c"] == {"at_snapshot": 0, "later": 1, "after_restore": 0}
+    assert (
+        restore["file_stamp_unchanged_by_restore"]
+        and restore["application_id_unchanged_by_restore"]
+    )
+    assert restore["old_handle_converges_with_fresh_handle"]
+    assert restore["old_handle_reports_file_replaced"] is False
+    assert restore["old_handle_write_after_restore"] == {"ok": True}
+    assert restore["id_taken_after_restore_was_used_in_later_timeline"]
+    assert restore["later_timeline_max_id_above_snapshot_max"]
