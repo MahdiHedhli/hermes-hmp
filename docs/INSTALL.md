@@ -2,37 +2,73 @@
 
 ## Requirements
 
-- A current Hermes Agent installation on the host.
-- A private network path between the phone and host, such as Tailscale.
+- Hermes Agent `v0.21.5` (`v2026.9.24`) is the earliest public tag with both
+  Bot Chat reads and guarded sends verified. `v0.21.4` (`v2026.9.21`) passed
+  the read checks, but its send path has not been qualified. Installing HMP
+  is not blocked by the Hermes version. Pairing and
+  Bot Chat access require a qualified bridge build. The exact Omarchy Y520
+  commit is also qualified. Older v0.21.x tags need a bridge adapter; newer
+  builds are watched but may need HMP updated before pairing works. See
+  [the release matrix](RELEASE_COMPAT_WATCH.md).
+- Tailscale on the phone and host. The HMP listener accepts loopback and
+  Tailscale address ranges; an arbitrary private VPN address cannot bind it.
 - Hermes gateway profile routing configured as described in [Deployment](../server/DEPLOYMENT.md).
 
 On a multi-profile host, read Deployment's topology warning before setting
 `gateway.multiplex_profiles: true`. That setting can bypass Hermes's migration
 preflight and change API ingress and secret scoping on qualified builds.
 
-Install the plugin from its public repository. For reproducible deployments, add `--ref <full-commit-sha>`.
+Install the runtime plugin directory from its public repository. Hermes scans
+the selected directory, so this avoids scanning research documents and test
+fixtures as executable plugin content. The current runtime scan has two
+medium findings for subprocess calls; both use fixed argument lists, no shell,
+and bounded timeouts. Review any scanner warning before accepting it. Never
+disable the scanner or use `--allow-removed`.
 
 ```sh
-hermes plugins install MahdiHedhli/hermes-hmp
-hermes hmp compat
+hermes plugins install 'MahdiHedhli/hermes-hmp#server/hmp_plugin' --enable
 ```
 
-Configure profile routing using [Deployment](../server/DEPLOYMENT.md), then
-start or restart the Hermes gateway. On a build with the setup check command,
-run it before creating a pairing offer:
+If an older root-directory HMP plugin is already installed, replace it with
+the runtime-only source using the same command with `--force`. This replaces
+the old installation; it does not turn off the scanner. Later releases can be
+installed with `hermes plugins update hmp`, followed by a gateway restart.
+For a fixed, reproducible version, add `--ref <full-commit-sha>` when installing;
+a pinned installation must be explicitly reinstalled to move to another SHA.
+
+## Enable the listener
+
+Installing and enabling the plugin is not enough to start HMP. On the Hermes
+host, choose an unused port (18741 is an example) and configure the **top-level**
+`platforms.hmp` settings. The `gateway.platforms.hmp` spelling is legacy;
+Hermes's config CLI writes the canonical top-level path.
 
 ```sh
+hermes config set platforms.hmp.enabled true
+hermes config set platforms.hmp.extra.bind "$(tailscale ip -4)"
+hermes config set platforms.hmp.extra.port 18741
+```
+
+Before restarting, configure `gateway.multiplex_profiles` and
+`gateway.profile_routes` for every bot the phone should use, following
+[Deployment](../server/DEPLOYMENT.md). Pairing can succeed without routes,
+but the phone's bot-access requests will be refused as `not_routed`; selecting
+"Allow all" on the host cannot approve requests that were never created.
+Once routing is configured, continue:
+
+```sh
+hermes gateway restart
+hermes hmp compat
 hermes hmp setup check
+hermes hmp instance show
 hermes hmp pair offer
 ```
 
-`setup check` reads HMP's build compatibility, current instance identity, and
-TLS-pinned listener readiness without changing files or running another
-Hermes command. It reports a served-bot count but cannot prove that every bot
-is routed, has a usable profile-scoped API key, or grants this device access.
-A nonzero result means pairing is not ready; inspect the gateway and the
-deployment checklist. Older HMP releases without this command can still use
-`hermes hmp compat` and the checklist.
+`hermes hmp compat` checks the Hermes build, not whether the listener ran.
+If `pair offer` says there is no current instance identity after a restart,
+check the three `platforms.hmp` keys and the gateway start log. A successfully
+started listener creates the identity. Do not copy an identity or private key
+from another host.
 
 For Bot Chat sends and the scheduled-job and default-model previews, each
 named profile needs its own `API_SERVER_KEY` in that profile's private `.env`.
@@ -53,7 +89,19 @@ keys or endpoints. Recheck after changing profile configuration and restarting
 the gateway. This is a prerequisite diagnostic: device authorization and the
 outcome of a later request are checked separately by HMP's routes.
 
-Scan the offer in the mobile app, compare the short security code on both screens, and confirm on the host. Then approve only the profiles this device should access. Pairing asks separately whether this phone may manage scheduled jobs and bot default models. Type `GRANT` on the host to allow those controls; any other answer leaves them off. This decision applies to that device only, even when two phones share an HMP user. Keep the offer and approval codes out of logs, screenshots, and support requests.
+Scan the offer in the mobile app, compare the short security code on both screens,
+and confirm on the host. Selecting `y` at **Allow the phone to use all of these?**
+selects the profiles to approve; the phone must still send its bot-access
+requests. Tap **Request access to all** on the paired phone. The host then
+approves the matching pending requests. If `pair offer` prints manual approval
+commands, run `hermes -p <profile> pairing list` for each selected profile,
+confirm its pending `hmp` row belongs to the just-paired device, and run
+`hermes -p <profile> pairing approve hmp <request_id>` for that row. An empty
+pairing list means the phone has not sent that profile's request yet; it is
+not a request to approve. Never approve another device's pending row. Keep the
+offer and approval codes out of logs, screenshots, and support requests.
+
+Pairing asks separately whether this phone may manage scheduled jobs and bot default models. Type `GRANT` on the host to allow those controls; any other answer leaves them off. This decision applies to that device only, even when two phones share an HMP user.
 
 To change that decision later, use `hermes hmp devices list` on the host to find the active device, then run `hermes hmp devices grant-controls <device-id>` or `hermes hmp devices deny-controls <device-id>`. These commands require an interactive host terminal. Revoking the device also stops its privileged access. Do not put device IDs in support reports.
 

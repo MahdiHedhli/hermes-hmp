@@ -61,8 +61,12 @@ if str(FIXTURES_DIR) not in sys.path:
 import _fixture_common as fc  # noqa: E402
 import direct_send_fixture as dsf  # noqa: E402
 
-BUILDS = ("stock-base", "experimental", "owner-local")
+_DEFAULT_BUILDS = ("stock-base", "experimental", "owner-local")
 BUILDS_DIR_ENV = os.environ.get("HMP_HERMES_BUILDS_DIR", "")
+# Opt-in: one extra, uniquely named candidate build (never an alias of a default label).
+BUILDS = _DEFAULT_BUILDS + dsf.candidate_build_labels(
+    os.environ.get(dsf.CANDIDATE_LABEL_ENV, ""), BUILDS_DIR_ENV, _DEFAULT_BUILDS
+)
 
 DEFAULT_PROFILE = "f1-alpha"
 NO_BOT_CHAT_PROFILE = "f1-empty"

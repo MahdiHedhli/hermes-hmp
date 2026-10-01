@@ -36,12 +36,16 @@ read and populate the committed list from.
 Usage:
     python3 tools/compat/run_matrix.py --builds-dir <dir> --out <scratch dir> [--builds LABEL,...]
         [--refs-dir <dir>]
+    python3 tools/compat/run_matrix.py --builds-dir <dir> --out <scratch dir>
+        --candidate-label LABEL --candidate-sha FULL_40_HEX_SHA
 
 `--builds-dir` defaults to `$HMP_HERMES_BUILDS_DIR`. `--out` is a scratch directory for the
 self-check and read-suite fixture homes (never the real Hermes home; see `_fixture_common.py`'s
 isolation rules, which every subprocess this tool launches also obeys). At most one fixture
 gateway runs at a time (host load): builds are processed one at a time, never in parallel, and
 `-o addopts=` / no xdist is passed to every pytest invocation.
+The candidate form runs the same checks on an already extracted upstream release whose source
+tree is `<builds-dir>/<LABEL>/src`; its SHA records provenance without granting runtime support.
 """
 
 from __future__ import annotations
@@ -49,6 +53,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from dataclasses import dataclass
@@ -82,6 +87,7 @@ class BuildSpec:
     ref: str
     optional: bool
     git_install: bool = False
+    source_sha: str | None = None
 
 
 def load_build_specs() -> list[BuildSpec]:
@@ -124,6 +130,8 @@ def resolve_source_sha(spec: BuildSpec) -> str | None:
     """The archived ref's own resolved commit, read-only, from the `_refs` clone -- the same
     resolution `extract.py` does, never a fetch. `None` for an optional build whose ref does not
     resolve locally (never an error)."""
+    if spec.source_sha is not None:
+        return spec.source_sha
     clone = _refs_dir() / spec.clone
     if not (clone / ".git").exists():
         return None
@@ -154,6 +162,7 @@ def run_selfcheck(label: str, out_dir: Path, builds_dir: Path) -> tuple[bool, st
 def run_read_suite(label: str, tmp_home: Path) -> tuple[bool, str]:
     env = dict(os.environ)
     env["HMP_HERMES_BUILDS_DIR"] = str(tmp_home)
+    env["HMP_COMPAT_CANDIDATE_LABEL"] = label
     proc = subprocess.run(
         [
             sys.executable, "-m", "pytest", str(READ_SUITE),
@@ -273,7 +282,12 @@ def unsupported_path_check(builds_dir: Path, qualified_label: str, scratch: Path
     mutated_root = scratch / "unsupported_mutant"
     if mutated_root.exists():
         shutil.rmtree(mutated_root)
-    shutil.copytree(src, mutated_root)
+    # The gate refuses the mutation before it imports Hermes. Copy only the files its
+    # fingerprint reads; a complete source tree may contain a multi-gigabyte .venv.
+    for rel in bridge_files:
+        target = mutated_root / rel
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(src / rel, target)
     altered = mutated_root / bridge_files[0]
     altered.write_bytes(altered.read_bytes() + b"\n# SC-007 mutation\n")
 
@@ -316,10 +330,25 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--builds", default=None, help="comma-separated labels (default: all)")
     parser.add_argument("--json-out", type=Path, default=None, help="write the full matrix JSON")
     parser.add_argument(
+        "--candidate-label", default=None,
+        help="label of an externally extracted Hermes release in --builds-dir",
+    )
+    parser.add_argument(
+        "--candidate-sha", default=None,
+        help="full source commit SHA of that candidate (provenance, not a compatibility grant)",
+    )
+    parser.add_argument(
         "--refs-dir", type=Path, default=None,
         help="override the located _refs dir (the one given to extract.py --refs-dir)",
     )
     args = parser.parse_args(argv)
+    if (args.candidate_label is None) != (args.candidate_sha is None):
+        parser.error("--candidate-label and --candidate-sha must be supplied together")
+    if args.candidate_label is not None:
+        if not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}", args.candidate_label):
+            parser.error("--candidate-label must be a simple build label")
+        if not re.fullmatch(r"[0-9a-f]{40}", args.candidate_sha):
+            parser.error("--candidate-sha must be a full lowercase commit SHA")
     global _REFS_DIR_OVERRIDE
     _REFS_DIR_OVERRIDE = args.refs_dir
 
@@ -330,7 +359,11 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     args.out.mkdir(parents=True, exist_ok=True)
 
-    specs = load_build_specs()
+    specs = (
+        [BuildSpec(args.candidate_label, "", args.candidate_sha, False,
+                   source_sha=args.candidate_sha)]
+        if args.candidate_label is not None else load_build_specs()
+    )
     if args.builds:
         wanted = set(args.builds.split(","))
         specs = [s for s in specs if s.label in wanted]

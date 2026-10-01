@@ -935,6 +935,11 @@ def test_is_safe_executable_rejects_a_path_inside_the_cwd(tmp_path: Path) -> Non
     assert cli._is_safe_executable(launcher, cwd=tmp_path) is False
 
 
+def test_is_safe_executable_accepts_trusted_installation_inside_cwd(tmp_path: Path) -> None:
+    launcher = _make_launcher(tmp_path / ".local" / "bin" / "hermes")
+    assert cli._is_safe_executable(launcher, cwd=tmp_path, trusted_location=True) is True
+
+
 def test_is_safe_executable_rejects_world_writable(tmp_path: Path) -> None:
     outside = tmp_path / "outside"
     launcher = _make_launcher(outside / "hermes", mode=0o777)
@@ -1006,6 +1011,39 @@ def test_resolve_hermes_executable_prefers_the_launcher_from_sys_path(
     assert cli._default_resolve_hermes_executable() == str(launcher)
 
 
+def test_resolve_hermes_executable_finds_home_launcher_from_home_cwd(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A normal operator shell starts in $HOME; the standard launcher is still safe to run."""
+    home = tmp_path / "home"
+    launcher = _make_launcher(home / ".local" / "bin" / "hermes")
+    monkeypatch.setenv("HOME", str(home))
+    monkeypatch.chdir(home)
+    monkeypatch.setattr(cli.sys, "path", ["/nonexistent"])
+    monkeypatch.setattr(cli.sys, "executable", "/nonexistent/python3")
+
+    def boom_which(_name: str) -> str | None:
+        raise AssertionError("must not consult $PATH when the home launcher exists")
+
+    monkeypatch.setattr(cli.shutil, "which", boom_which)
+    assert cli._default_resolve_hermes_executable() == str(launcher)
+
+
+def test_resolve_hermes_executable_rejects_cwd_path_lookup(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A project-local hermes found only through PATH must not get the trusted-path exception."""
+    monkeypatch.setenv("HOME", str(tmp_path / "home"))
+    monkeypatch.setattr(cli.sys, "path", ["/nonexistent"])
+    monkeypatch.setattr(cli.sys, "executable", "/nonexistent/python3")
+    cwd = tmp_path / "project"
+    cwd.mkdir()
+    monkeypatch.chdir(cwd)
+    launcher = _make_launcher(cwd / "hermes")
+    monkeypatch.setattr(cli.shutil, "which", lambda _name: str(launcher))
+    assert cli._default_resolve_hermes_executable() is None
+
+
 def test_resolve_hermes_executable_falls_back_to_sys_executable_sibling(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1037,6 +1075,7 @@ def test_resolve_hermes_executable_rejects_an_unsafe_path_lookup(
     an unsafe path."""
     monkeypatch.setattr(cli.sys, "path", ["/nonexistent"])
     monkeypatch.setattr(cli.sys, "executable", "/nonexistent/python3")
+    monkeypatch.setenv("HOME", str(tmp_path / "absent-home"))
     cwd = tmp_path / "cwd"
     cwd.mkdir()
     monkeypatch.chdir(cwd)
@@ -1051,6 +1090,7 @@ def test_resolve_hermes_executable_accepts_a_safe_path_lookup(
 ) -> None:
     monkeypatch.setattr(cli.sys, "path", ["/nonexistent"])
     monkeypatch.setattr(cli.sys, "executable", "/nonexistent/python3")
+    monkeypatch.setenv("HOME", str(tmp_path / "absent-home"))
     cwd = tmp_path / "cwd"
     cwd.mkdir()
     monkeypatch.chdir(cwd)

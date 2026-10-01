@@ -1088,6 +1088,7 @@ def test_rotate_key_checks_currency_under_the_custody_lock(
 def test_compat_output(c: Cli) -> None:
     assert c.run("compat") == 0
     assert "supported" in c.out and FP in c.out and "stock-base" in c.out and "passed" in c.out
+    assert "Guarded send qualification:" in c.out
     c.compat = CompatResult(CompatStatus.UNSUPPORTED, OtherWhy.HERMES_BUILD_UNSUPPORTED)
     assert c.run("compat") == 0
     assert "hermes_build_unsupported" in c.out and "unidentifiable" in c.out

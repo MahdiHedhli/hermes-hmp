@@ -28,6 +28,30 @@
       "source_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
       "qualified_by": "direct-send probe + tests/integration/test_direct_send_fixture.py (8/8, owner-local)",
       "qualified_at": "2026-09-27"
+    },
+    {
+      "label": "v924-archive",
+      "fingerprint": "734cca4f86ac628376863ecb634bf6970d4405534d9f3d1b83d3fc1b0f648bd5",
+      "git_sha": null,
+      "source_sha": "f97608f178d1ffeca59860195ab7da295f7c8e5f",
+      "qualified_by": "isolated tests/integration/test_direct_send_fixture.py (8/8, 2026-09-29)",
+      "qualified_at": "2026-09-29"
+    },
+    {
+      "label": "v924-git",
+      "fingerprint": "734cca4f86ac628376863ecb634bf6970d4405534d9f3d1b83d3fc1b0f648bd5",
+      "git_sha": "f97608f178d1ffeca59860195ab7da295f7c8e5f",
+      "source_sha": "f97608f178d1ffeca59860195ab7da295f7c8e5f",
+      "qualified_by": "isolated tests/integration/test_direct_send_fixture.py (8/8, 2026-09-29)",
+      "qualified_at": "2026-09-29"
+    },
+    {
+      "label": "omarchy-y520-git",
+      "fingerprint": "d717f077b161938af0e9e7d89c6ebf5f43f7604a1229518ad64b314c19e76d78",
+      "git_sha": "ca705dbf7ef86425b381b542712aff310f1ee52c",
+      "source_sha": "ca705dbf7ef86425b381b542712aff310f1ee52c",
+      "qualified_by": "isolated tests/integration/test_direct_send_fixture.py (8/8, 2026-09-29)",
+      "qualified_at": "2026-09-29"
     }
   ]
 }

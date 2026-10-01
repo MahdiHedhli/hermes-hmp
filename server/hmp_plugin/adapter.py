@@ -116,6 +116,7 @@ def open_components(adapter: Any) -> server.ServerContext:
     config = getattr(adapter, "config", None)
     extra = getattr(config, "extra", None)
     session_browsing = extra.get("session_browsing", True) if isinstance(extra, Mapping) else True
+    direct_send_qualified = result.supported and compat.direct_send_build_qualified(result.identity)
 
     # Amendment F2 (direct send, OD-F14/OD-F15): `gateway.platforms.hmp.extra.direct_send.enabled`,
     # default False. A malformed (non-mapping) `direct_send` block fails closed to disabled, never
@@ -130,7 +131,7 @@ def open_components(adapter: Any) -> server.ServerContext:
         live_config = getattr(adapter, "config", None)
         live_extra = getattr(live_config, "extra", None)
         block = live_extra.get("direct_send") if isinstance(live_extra, Mapping) else None
-        return isinstance(block, Mapping) and block.get("enabled") is True
+        return direct_send_qualified and isinstance(block, Mapping) and block.get("enabled") is True
 
     def _read_owner_device_ids() -> frozenset[str]:
         live_config = getattr(adapter, "config", None)

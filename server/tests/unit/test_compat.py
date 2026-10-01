@@ -18,17 +18,73 @@ from pathlib import Path
 
 import pytest
 
+from hmp_plugin import compat as compat_mod
 from hmp_plugin.compat import (
+    BuildIdentity,
     DependencySpec,
     GitFingerprintReader,
     _resolve_gitdir,  # white-box test of the git-metadata parser
     compute_read_bridge_fingerprint,
+    direct_send_build_qualified,
     load_read_compat_list,
     probe_read_dependencies,
     resolve_git_head_sha,
 )
 
 BRIDGE_FILES = ("a.py", "sub/b.py")
+
+
+def test_direct_send_requires_its_own_exact_build_and_probe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "hermes"
+    source.mkdir()
+    (source / "send.py").write_text("def send(): pass\n", encoding="utf-8")
+    git_dir = source / ".git"
+    git_dir.mkdir()
+    sha = "a" * 40
+    (git_dir / "HEAD").write_text(sha + "\n", encoding="utf-8")
+    fingerprint = compute_read_bridge_fingerprint(source, ["send.py"])
+    assert fingerprint is not None
+    manifest = tmp_path / "direct-send.json"
+    manifest.write_text(json.dumps({
+        "format": 1,
+        "bridge_files": ["send.py"],
+        "builds": [{
+            "label": "fixture", "fingerprint": fingerprint, "git_sha": sha,
+            "qualified_by": "test", "qualified_at": "2026-09-29",
+        }],
+    }), encoding="utf-8")
+    calls: list[str] = []
+
+    def probe(*, hermes_root: Path, bridge_files: tuple[str, ...]) -> tuple[str, ...]:
+        calls.append(str(hermes_root))
+        assert bridge_files == ("send.py",)
+        return ()
+
+    monkeypatch.setattr(compat_mod, "probe_direct_send_dependencies", probe)
+    read_identity = BuildIdentity("f" * 64, sha)
+    assert direct_send_build_qualified(
+        read_identity, hermes_root=source, compat_path=manifest
+    )
+    assert len(calls) == 1
+    assert not direct_send_build_qualified(
+        BuildIdentity("f" * 64, "b" * 40), hermes_root=source, compat_path=manifest
+    )
+    assert len(calls) == 1  # no Hermes probe for another Git commit
+    (source / "send.py").write_text("def send(): return 1\n", encoding="utf-8")
+    assert not direct_send_build_qualified(
+        read_identity, hermes_root=source, compat_path=manifest
+    )
+    assert len(calls) == 1  # no probe for a changed write surface
+    (source / "send.py").write_text("def send(): pass\n", encoding="utf-8")
+    monkeypatch.setattr(
+        compat_mod, "probe_direct_send_dependencies", lambda **_: ("missing dependency",)
+    )
+    assert not direct_send_build_qualified(
+        read_identity, hermes_root=source, compat_path=manifest
+    )
+    assert not direct_send_build_qualified(None, hermes_root=source, compat_path=manifest)
 
 
 def _write_bridge_files(root: Path) -> None:
@@ -579,7 +635,10 @@ _BUILDS_DIR = Path(os.environ.get("HMP_HERMES_BUILDS_DIR", str(_DEFAULT_BUILDS_D
 _STOCK_SRC = _BUILDS_DIR / "stock-base" / "src"
 _EXPERIMENTAL_SRC = _BUILDS_DIR / "experimental" / "src"
 # Machine-local optional builds (tools/hermes_builds/builds.yaml); see the T064 reproduction test.
-_MACHINE_LOCAL_LABELS = ("owner-local",)
+_MACHINE_LOCAL_LABELS = (
+    "owner-local", "upstream", "v921-git", "v924-archive", "v924-git",
+    "omarchy-y520-git",
+)
 
 _extracted_builds_reason = (
     f"no T004 extraction at {_BUILDS_DIR} "

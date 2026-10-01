@@ -10,9 +10,23 @@ HMP runs inside your own Hermes gateway. It pairs each phone to an instance, ser
 ## Install
 
 ```sh
-hermes plugins install MahdiHedhli/hermes-hmp
+hermes plugins install 'MahdiHedhli/hermes-hmp#server/hmp_plugin' --enable
+hermes config set platforms.hmp.enabled true
+hermes config set platforms.hmp.extra.bind "$(tailscale ip -4)"
+hermes config set platforms.hmp.extra.port 18741
+hermes gateway restart
+hermes hmp compat
 hermes hmp pair offer
 ```
+
+For an existing root-directory installation, replace the first command with
+`hermes plugins install 'MahdiHedhli/hermes-hmp#server/hmp_plugin' --force --enable`.
+`--force` permits replacement; it does not disable the security scanner. The
+runtime-only scan was SAFE on an earlier runtime tree; it has not been measured
+on the current merged runtime until the installer scan is re-run.
+Pinned plugins (`--ref <full-commit-sha>`) need an explicit reinstall to update.
+Choose an unused port in place of 18741. The listener requires a Tailscale
+address for phone access; plugin installation alone does not start it.
 
 Hermes may ask you to confirm its community-plugin scan findings; the full-tree verdict is recorded in the [privacy gate](PRIVACY_GATE.md). The operator confirms the matching code shown on the phone and host, then chooses whether that device can manage jobs and default models. See the [install and host configuration guide](docs/INSTALL.md) before connecting a device. Use `--ref <full-commit-sha>` to pin a reviewed revision.
 
@@ -34,10 +48,16 @@ send, jobs, and model prerequisites without exposing keys.
 | [Feature specs](specs/README.md) | Spec Kit workflow and migration plan |
 | [Privacy gate](PRIVACY_GATE.md) | Public migration scan and installer verdict |
 | [Validation](VALIDATION.md) | Test counts and isolated install result |
+| [Release security](docs/RELEASE_SECURITY.md) | Exact-commit source review and runtime qualification gates |
 
 ## Repository
 
-`plugin.yaml` and `__init__.py` at the root are the install entry point. The unchanged HMP implementation and tests are in `server/`; fixture, vector, and compatibility tools are in `tools/`. Hermes installs the repository root for the bare command above.
+`server/hmp_plugin/` is the install entry point. The root `plugin.yaml` remains
+for repository development, but installing the whole repository makes Hermes
+scan research and test fixtures as plugin content. Tests are in `server/`, and
+fixture, vector, and compatibility tools are in `tools/`. See the
+[release compatibility watch](docs/RELEASE_COMPAT_WATCH.md) for tested Hermes
+tags and future-release checks.
 
 HMP registers one platform adapter and one operator CLI. It does not register agent tools or hooks. Unsupported Hermes builds fail closed for guarded operations. See [SECURITY.md](SECURITY.md) for reporting and the threat model.
 

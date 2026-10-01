@@ -35,6 +35,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import re
 import secrets
 import socket
 import subprocess
@@ -231,6 +232,92 @@ def write_named_profile_keys(paths: fc.InstancePaths, named_profile_keys: dict[s
         profile_dir = paths.home / "profiles" / name
         profile_dir.mkdir(parents=True, exist_ok=True)
         (profile_dir / ".env").write_text(f"API_SERVER_KEY={key}\n", encoding="utf-8")
+
+
+def remove_named_profile_key(paths: fc.InstancePaths, profile: str) -> None:
+    """Drops a NAMED profile's scoped `API_SERVER_KEY` (its fixture-written `.env`), leaving the
+    instance-level `platforms.api_server.extra.key` in place. A named profile must NOT fall back to
+    that shared key; this lets a test prove it."""
+    (paths.home / "profiles" / profile / ".env").unlink(missing_ok=True)
+
+
+# --------------------------------------------------------------------------------------------------
+# Test-only jobs admission. `mobile_cron.qualified_build()` is a production gate: it passes only
+# for a build whose cron fingerprint is listed in `mobile_cron_supported_builds.json`. A fixture
+# against a build with no such entry (for example a candidate Hermes not yet qualified) therefore
+# stays closed. This edits ONLY the fixture's scratch plugin copy (`build_fixture.py`'s
+# `_hmp_plugin`), never `server/hmp_plugin`, and is never a production qualification.
+# --------------------------------------------------------------------------------------------------
+
+JOBS_TEST_ADMISSION_LABEL = "fixture-test-only-jobs-admission"
+
+
+def scratch_plugin_dir(paths: fc.InstancePaths) -> Path:
+    """The scratch plugin copy this instance loads, refused unless it lives under `--out` and
+    outside the tracked `server/` tree."""
+    real = (paths.home / "plugins" / "hmp").resolve()
+    if paths.out_dir.resolve() not in real.parents or fc.SERVER_DIR.resolve() in (
+        real, *real.parents,
+    ):
+        raise fc.FixtureSafetyError(f"refusing to edit a non-scratch plugin directory: {real}")
+    return real
+
+
+def set_jobs_test_admission(
+    build: fc.BuildInfo, paths: fc.InstancePaths, *, admitted: bool
+) -> None:
+    """Set the scratch copy's cron manifest to exactly one test-only entry (`admitted`) or to no
+    entries at all (closed, even where the production manifest would list the build). Re-read on
+    every request, so no gateway restart is needed. The entry binds to the fingerprint and git SHA
+    of THIS build's own 11 cron-manifest files, computed by the same `GitFingerprintReader` the
+    gate uses; it is not evidence about any native callee outside those files."""
+    manifest = scratch_plugin_dir(paths) / "mobile_cron_supported_builds.json"
+    data = json.loads(manifest.read_text(encoding="utf-8"))
+    data["builds"] = []
+    if admitted:
+        if str(fc.SERVER_DIR) not in sys.path:
+            sys.path.insert(0, str(fc.SERVER_DIR))
+        from hmp_plugin import compat
+
+        identity = compat.GitFingerprintReader(data["bridge_files"]).read(build.src_dir)
+        if identity is None:
+            raise fc.FixtureSafetyError(f"build {build.label!r}: cron files not fingerprintable")
+        data["builds"].append({
+            "label": JOBS_TEST_ADMISSION_LABEL,
+            "fingerprint": identity.fingerprint,
+            "git_sha": identity.git_sha,
+            "qualified_by": "test-only scratch admission; not a production qualification",
+            "qualified_at": "fixture",
+        })
+    manifest.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+# --------------------------------------------------------------------------------------------------
+# Opt-in candidate build label. Collection only: this reads directory names, never imports or runs
+# Hermes. Mirrors `test_reads_fixture.py`'s `HMP_COMPAT_CANDIDATE_LABEL` rule (not a default label,
+# its `src` extracted), plus a harmless-name check so the value can never be a path.
+# --------------------------------------------------------------------------------------------------
+
+CANDIDATE_LABEL_ENV = "HMP_DIRECT_SEND_CANDIDATE_LABEL"
+_CANDIDATE_LABEL_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}")
+
+
+def candidate_build_labels(
+    candidate: str, builds_dir: str, defaults: tuple[str, ...]
+) -> tuple[str, ...]:
+    """`(candidate,)` only for an exact harmless label that is not already a default build and whose
+    `<builds_dir>/<label>/src` exists; otherwise `()`.
+    The default labels are never aliased to it."""
+    if (
+        not candidate
+        or not builds_dir
+        or candidate in defaults
+        or _CANDIDATE_LABEL_RE.fullmatch(candidate) is None
+        or ".." in candidate
+        or not (Path(builds_dir) / candidate / "src").is_dir()
+    ):
+        return ()
+    return (candidate,)
 
 
 _FAKE_MODEL_ID = "fake-model"  # `tests.fakes.fake_llm_provider.MODEL_ID`, mirrored as a literal

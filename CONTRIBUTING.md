@@ -5,7 +5,7 @@ Thanks for helping improve HMP. Please open an issue for behavior or contract ch
 ## Local checks
 
 ```sh
-uv run --frozen --project server --extra dev pytest server/tests/unit tools/ci/tests tools/fixtures/tests tools/hermes_builds/tests tools/vectors/tests tools/acceptance/tests
+uv run --frozen --project server --extra dev pytest server/tests/unit tools/ci/tests tools/compat/tests tools/fixtures/tests tools/hermes_builds/tests tools/vectors/tests tools/acceptance/tests --import-mode=importlib
 uvx ruff==0.16.9 check --config server/pyproject.toml server tools
 python3 tools/ci/check_plugin_surface.py
 python3 tools/ci/scan_private.py
@@ -23,3 +23,5 @@ Fixture and compatibility tests need extracted Hermes source builds and a real P
 - Keep app code and private research evidence out of this repository.
 
 The [Spec Kit constitution](.specify/memory/constitution.md) records the project-wide rules. A feature PR should include a focused specification, plan, and verification tasks under `specs/`.
+
+Routine PRs use the deterministic CI checks above. At feature freeze, maintainers use the [release security gate](docs/RELEASE_SECURITY.md) on an exact `release/*` commit; it is not run on every development push.
