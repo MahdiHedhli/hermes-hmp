@@ -5,12 +5,25 @@
 Follow-up owner screenshots confirm the public CDN image renders while generated
 host-local `MEDIA:` remains text. The independently reviewed local-image design is
 now [recorded as an additive HMP draft contract](https://github.com/MahdiHedhli/hermes-hmp/blob/6186e55/docs/architecture/contracts/HMP_V1.md#7e-host-local-generated-images-v16-draft-not-implemented).
-Reviewed components are published in [HMP draft #70](https://github.com/MahdiHedhli/hermes-hmp/pull/70) (`747339f`) and [app draft #63](https://github.com/MahdiHedhli/HermesBotMobile/pull/63) (`8d32657`): bounded scanner/file/raster guards, a result parser, temporary reference registry, non-wire read carrier, typed descriptors, pinned reads and a tap-to-load card. Bot Chat screen source now binds that loader to a captured instance/epoch; root passed 12 screen cases and 120 carrier/layout cases after independent bounded reviews. Candidate extraction is accepted with 215 root cases: only the newest 128 returned image-tool attempts are parsed, with no older backfill. The app's one-refresh retry is accepted with 99 root card/screen cases and clean scoped analysis. Equal handles from idempotent minting are valid only on a freshly replaced target row under the unchanged binding; cancellation never auto-resumes. Shared native-read plumbing still needs the reviewed media-only text fallback, so unsupported metadata cannot break a working text read. No serving route, qualified media entry, new phone build or public release is claimed. The design derives device/profile/session-bound opaque handles from
-scoped successful tool results; assistant paths never authorize file reads. Native
-checks stay off the event loop, with a final native authorization/tip check followed
-by fresh bearer/owner checks before bytes. The gap after the last native check is
-explicit because no atomic native authorization/session snapshot API exists. Native
-lexical-path evidence is accepted for the exact-build synthetic producer/layout below; Linux filesystem qualification, serving and device acceptance remain open.
+Reviewed components are published in [HMP draft #70](https://github.com/MahdiHedhli/hermes-hmp/pull/70) (`c0f2343`) and [app draft #63](https://github.com/MahdiHedhli/HermesBotMobile/pull/63) (`8d32657`): bounded scanner/file/raster guards, a result parser, temporary reference registry, non-wire read carriers and candidate extraction, shared native query/read cores, typed descriptors, pinned reads and a tap-to-load card. Root and an independent reviewer each passed 833 focused HMP cases with three preexisting no-Hermes-build skips. Golden text bodies, native call events, baseline tables and observation sets were independently regenerated from `575a9bc`; unsupported media metadata preserves successful text. Production handlers do not select these optional media twins yet. The app's bounded one-refresh retry is accepted with 99 root card/screen cases and clean scoped analysis. Equal handles from idempotent minting require a freshly replaced target row under the unchanged instance/epoch binding; cancellation never auto-resumes. No serving route, qualified media entry, new phone build or public release is claimed.
+
+The design derives device/profile/session-bound opaque handles from scoped successful tool
+results; assistant paths never authorize file reads. Native checks stay off the event loop,
+with a final native authorization/tip check followed by fresh bearer/owner checks before bytes.
+The gap after the last native check is explicit because no atomic native authorization/session
+snapshot API exists. Native lexical-path evidence is accepted for the exact-build synthetic
+producer/layout below. Root's [Linux file-leaf run](https://github.com/MahdiHedhli/hermes-hmp/blob/c0f2343/docs/research/local-media-linux-leaf-evidence-2026-10-01.md)
+passed 89 accepted tests and 91 supplemental real-kernel checks on non-root Linux CPython
+3.14.7/tmpfs, with unchanged source and isolated cleanup. This qualifies only that file-reader
+slice, not native serving, other filesystems or kernels, raster decoding or a phone build.
+
+Descriptor-mint cost remains open. A private exact `8afaab37` disposable fixture measured 128
+individual active-history scans at median 9.11 seconds for 4096 near-budget rows; native reads
+also materialize uncharged content, so this is not an upper bound or request qualification.
+The [conditional C6 design](https://github.com/MahdiHedhli/hermes-hmp/blob/2c5bcbb/specs/011-local-image-serving/ROOT_DECISIONS.md#c6-descriptor-mint-batch-freeze-2026-10-01)
+uses one fresh request-scoped batch before minting, while keeping each fetch's single scan and
+recheck unchanged. Batch review, native cost, concurrent writing, mint-memory, process and
+device admission remain open. No cache, registry hit or assistant path grants authority.
 
 The [bounded producer fixture](https://github.com/MahdiHedhli/hermes-hmp/blob/f9c542b/docs/research/local-media-lexical-evidence-2026-10-01.md) now compares the raw persisted `image` string with the actual native routed-home helper's string plus `/cache/images/`, without normalizing the candidate. Root repeated three positive native flows on exact `8afaab37` (Desktop, Phone stand-in, deferred tool), retained private evidence, and passed 37 focused string/helper cases. All matched the selected profile prefix and one flat 128-byte-bounded name, not the foreign prefix; native source was clean and unchanged. This is one synthetic provider using real `save_b64_image`, one scratch layout and no live HMP media endpoint. Other producers/home spellings remain uncharacterized.
 
