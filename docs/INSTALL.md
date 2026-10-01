@@ -103,6 +103,8 @@ offer and approval codes out of logs, screenshots, and support requests.
 
 Pairing asks separately whether this phone may manage scheduled jobs and bot default models. Type `GRANT` on the host to allow those controls; any other answer leaves them off. This decision applies to that device only, even when two phones share an HMP user.
 
+A saved grant is only a permission for that phone. It does not enable scheduled jobs or default models, which also need their host feature flags, a supported build, the profile API and key, and bot authorization. Use `hermes hmp health check` and the preview sections below to check host prerequisites. Health checks do not verify this phone's permission or its bot authorization.
+
 To change that decision later, use `hermes hmp devices list` on the host to find the active device, then run `hermes hmp devices grant-controls <device-id>` or `hermes hmp devices deny-controls <device-id>`. These commands require an interactive host terminal. Revoking the device also stops its privileged access. Do not put device IDs in support reports.
 
 The plugin belongs to the Hermes instance where it is installed. Do not copy its instance keys or device store between hosts. See [Host hardening](../server/HOST_HARDENING.md) before exposing any Hermes host service.
@@ -114,7 +116,13 @@ Scheduled jobs are disabled by default. The host must run an exact Hermes build 
 loopback API server and key. Grant the specific phone at pairing or with
 `hermes hmp devices grant-controls <device-id>`, then set the HMP gateway platform's
 `extra.cron.enabled: true` in private host configuration. Do not commit device IDs or API
-server keys to this repository. A new job is always created paused;
+server keys to this repository. Saving the permission does not
+turn the preview on. Enable the host flag with
+`hermes config set platforms.hmp.extra.cron.enabled true`, then restart the gateway with
+`hermes gateway restart`; if jobs or chats are running, wait for the gateway to drain first
+so active work is not interrupted. Run `hermes hmp health check` afterward. A phone that
+still gets a service-unavailable answer is missing the flag, a supported build, the profile
+API and key, or bot authorization. A new job is always created paused;
 review it in the app and choose Resume when ready. A timed-out create may have succeeded,
 so refresh the list before creating another job.
 
@@ -144,7 +152,9 @@ Model management is disabled by default. The host must run an exact Hermes build
 `server/hmp_plugin/mobile_model_supported_builds.json`, with its profile-scoped API server
 available locally. Grant the phone at pairing or with
 `hermes hmp devices grant-controls <device-id>`, then set
-`extra.model_management.enabled: true` in private host configuration. The phone
+`extra.model_management.enabled: true` in private host configuration.
+This is separate from scheduled jobs: enabling one does not enable the other, and model
+management is offered only on a qualified build. The phone
 then offers only models from Hermes's authenticated provider catalog for that bot. A model
 change affects new sessions and is never retried automatically; refresh the setting after
 an uncertain response. Do not commit device IDs, provider credentials, or API server keys.

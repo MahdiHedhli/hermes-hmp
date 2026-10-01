@@ -1041,6 +1041,37 @@ def test_host_can_change_owner_controls_for_one_active_device(c: Cli) -> None:
     assert c.env.store.owner_controls_decision(device) is False
 
 
+def test_grant_controls_output_is_informational_and_only_on_success(c: Cli) -> None:
+    pairing_id, sas = _pending(c.env)
+    assert c.confirm(pairing_id, "--sas", sas, "--label", "f1-fixture-label-1") == 0
+    device = _device_id(pairing_id)
+    assert c.env.store.owner_controls_decision(device) is False
+    assert "Permission saved" not in c.out  # EOF denial at pairing prints no success
+    assert c.run("devices", "grant-controls", device) == 0
+    added = c.out
+    assert "Permission saved for this phone" in added
+    assert "does not activate the previews" in added
+    assert "feature flag" in added and "bot authorization" in added
+    assert "hermes hmp health check" in added and "docs/INSTALL.md" in added
+    assert "control granted" not in added
+    assert c.env.store.owner_controls_decision(device) is True
+    assert c.run("devices", "revoke", device) == 0
+    assert c.run("devices", "grant-controls", device) == 1
+    assert "Permission saved" not in c.out + c.err
+    assert c.env.store.owner_controls_decision(device) is True  # revoked device: row untouched
+
+
+def test_grant_controls_changes_only_the_selected_device(c: Cli) -> None:
+    first, sas1 = _pending(c.env, name="f1-fixture-device-1")
+    assert c.confirm(first, "--sas", sas1, "--label", "f1-fixture-label-1") == 0
+    second, sas2 = _pending(c.env, name="f1-fixture-device-2")
+    assert c.confirm(second, "--sas", sas2, "--label", "f1-fixture-label-2") == 0
+    a, b = _device_id(first), _device_id(second)
+    assert c.run("devices", "grant-controls", a) == 0
+    assert c.env.store.owner_controls_decision(a) is True
+    assert c.env.store.owner_controls_decision(b) is False
+
+
 def _device_id(pairing_id: str) -> str:
     from hmp_plugin.pairing import device_id_for_pairing
 

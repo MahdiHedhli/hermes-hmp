@@ -258,7 +258,11 @@ def test_host_grants_owner_controls_only_after_explicit_word(c: Cli) -> None:
     row = _device_row(c.env)
     assert c.env.store.owner_controls_decision(row["device_id"]) is True
     assert "separate from Bot Chat access" in c.out
-    assert "control granted" in c.out
+    assert "Permission saved for this phone" in c.out
+    assert "does not activate the previews" in c.out
+    assert "hermes hmp health check" in c.out and "docs/INSTALL.md" in c.out
+    assert "ready" not in c.out.lower().replace("readiness", "")
+    assert "control granted" not in c.out
 
 
 def test_old_yes_answer_cannot_grant_owner_controls(c: Cli) -> None:
@@ -277,6 +281,7 @@ def test_old_yes_answer_cannot_grant_owner_controls(c: Cli) -> None:
     row = _device_row(c.env)
     assert c.env.store.owner_controls_decision(row["device_id"]) is False
     assert "control stays off" in c.out
+    assert "Permission saved" not in c.out
 
 
 def test_offer_for_the_intended_user_shares_without_a_second_prompt(c: Cli) -> None:
