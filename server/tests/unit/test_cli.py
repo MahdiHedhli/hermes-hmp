@@ -148,9 +148,12 @@ class Cli:
         port: int = 18920,
         iid: str | None = None,
         profiles: list[tuple[str, str]] | None = None,
+        health_checked_at: int | None = None,
+        health: list[tuple[str, str, str, str]] | None = None,
     ) -> None:
         cli.write_listener_record(
-            self.record_path(), host=host, port=port, iid=iid or self.env.iid, profiles=profiles
+            self.record_path(), host=host, port=port, iid=iid or self.env.iid, profiles=profiles,
+            health_checked_at=health_checked_at, health=health,
         )
 
 
@@ -186,6 +189,106 @@ def _pending(
     return accepted.pairing_id, accepted.device_sas
 
 
+def test_setup_check_is_read_only_before_first_gateway_start(tmp_path: Path) -> None:
+    kw = hmp_kit.identity_kwargs(tmp_path)
+    out = io.StringIO()
+    cli_env = cli.CliEnv(
+        environ=kw["env"], stdout=out, stderr=io.StringIO(),
+        compat=lambda: SUPPORTED, identity_kwargs=kw,
+    )
+    parser = argparse.ArgumentParser(prog="hermes hmp")
+    cli.setup_parser(parser)
+
+    assert cli.dispatch(parser.parse_args(["setup", "check"]), cli_env) == cli.EXIT_REFUSED
+    assert "not initialized" in out.getvalue()
+    assert not kw["hermes_root"].exists()
+    assert not kw["binding_root"].exists()
+
+
+def test_setup_check_reports_pinned_listener_without_private_labels(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "private bot label")])
+    before_store = c.env.store_path.read_bytes()
+    before_binding = c.env.custody.binding_path.read_bytes()
+
+    assert c.run("setup", "check") == cli.EXIT_OK
+    assert "read compatibility: supported" in c.out
+    assert "expected TLS identity" in c.out
+    assert "Served bot count: 1" in c.out
+    assert "private bot label" not in c.out
+    assert "alpha" not in c.out
+    assert c.env.store_path.read_bytes() == before_store
+    assert c.env.custody.binding_path.read_bytes() == before_binding
+
+
+def test_setup_check_fails_closed_on_stale_or_wrong_listener(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "synthetic")])
+    c.alive.clear()
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "unavailable or unsafe" in c.out
+
+    c.alive.add(os.getpid())
+    c.listener_live = False
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "TLS identity or readiness check failed" in c.out
+
+
+def test_setup_check_requires_compatible_build_and_served_bot(c: Cli) -> None:
+    c.write_record(profiles=[])
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "Served bot count: 0" in c.out
+
+    c.write_record(profiles=[("alpha", "synthetic")])
+    c.compat = CompatResult(CompatStatus.UNSUPPORTED, OtherWhy.HERMES_BUILD_UNSUPPORTED)
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "read compatibility: unsupported" in c.out
+
+
+def test_health_check_fails_for_one_blocked_bot_without_disclosing_endpoint(c: Cli) -> None:
+    rows = [
+        ("alpha", "ready", "disabled", "disabled"),
+        ("beta", "unavailable", "disabled", "disabled"),
+    ]
+    c.write_record(
+        profiles=[("alpha", "Alpha"), ("beta", "Beta")],
+        health_checked_at=c.env.clock.now,
+        health=rows,
+    )
+    assert c.run("health", "check") == cli.EXIT_REFUSED
+    assert 'Bot "alpha": send=ready' in c.out
+    assert 'Bot "beta": send=unavailable' in c.out
+    assert c.record_path().stat().st_mode & 0o777 == 0o600
+    assert "API_SERVER_KEY" not in c.out
+    assert "127.0.0.1" not in c.out
+
+
+def test_health_check_accepts_disabled_channels_and_rejects_stale_snapshot(c: Cli) -> None:
+    rows = [("alpha", "disabled", "disabled", "disabled")]
+    c.write_record(
+        profiles=[("alpha", "Alpha")], health_checked_at=c.env.clock.now, health=rows
+    )
+    assert c.run("health", "check") == cli.EXIT_OK
+    c.write_record(
+        profiles=[("alpha", "Alpha")],
+        health_checked_at=c.env.clock.now - cli.HEALTH_MAX_AGE_S - 1,
+        health=rows,
+    )
+    assert c.run("health", "check") == cli.EXIT_REFUSED
+    assert "stale" in c.out
+
+
+def test_health_check_rejects_incomplete_record_and_old_gateway(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "Alpha")])
+    assert c.run("health", "check") == cli.EXIT_REFUSED
+    assert "unavailable or stale" in c.out
+    c.write_record(
+        profiles=[("alpha", "Alpha"), ("beta", "Beta")],
+        health_checked_at=c.env.clock.now,
+        health=[("alpha", "ready", "disabled", "disabled")],
+    )
+    assert c.run("health", "check") == cli.EXIT_REFUSED
+    assert "unavailable or unsafe" in c.out
+
+
 # --------------------------------------------------------------------------------------------------
 # Mutation refusals (PR1-2, PR3-2) and ID-2
 # --------------------------------------------------------------------------------------------------
@@ -195,6 +298,8 @@ MUTATING = [
     ("pair", "confirm", "pid", "--sas", "S", "--label", "f1-fixture-label-1"),
     ("pair", "deny", "pid"),
     ("devices", "revoke", "dev_x"),
+    ("devices", "grant-controls", "dev_x"),
+    ("devices", "deny-controls", "dev_x"),
     ("instance", "rotate-key"),
 ]
 
@@ -920,6 +1025,20 @@ def test_devices_list_and_revoke_last_device_hint(c: Cli) -> None:
     assert c.env.store.get_device(device)["state"] == "REVOKED"
     assert f"hermes -p alpha pairing revoke hmp {user}" in c.out
     assert c.run("devices", "revoke", "dev_missing") == 1
+
+
+def test_host_can_change_owner_controls_for_one_active_device(c: Cli) -> None:
+    pairing_id, sas = _pending(c.env)
+    assert c.confirm(pairing_id, "--sas", sas, "--label", "f1-fixture-label-1") == 0
+    device = _device_id(pairing_id)
+    assert c.env.store.owner_controls_decision(device) is False  # EOF defaults to no grant
+    assert c.run("devices", "grant-controls", device) == 0
+    assert c.env.store.owner_controls_decision(device) is True
+    assert c.run("devices", "deny-controls", device) == 0
+    assert c.env.store.owner_controls_decision(device) is False
+    assert c.run("devices", "revoke", device) == 0
+    assert c.run("devices", "grant-controls", device) == 1
+    assert c.env.store.owner_controls_decision(device) is False
 
 
 def _device_id(pairing_id: str) -> str:

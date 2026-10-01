@@ -53,7 +53,7 @@ from typing import Any
 from aiohttp import web
 from aiohttp.http_exceptions import LineTooLong
 
-from . import direct_send, wire
+from . import direct_send, mobile_cron, mobile_model, wire
 from .contract import (
     CONTRACT_REVISION,
     HISTORY_LIMIT_DEFAULT,
@@ -85,6 +85,7 @@ from .identity import set_ssl_context_attr
 from .logging_policy import (
     LOGGER_NAME,
     AllowListedAccessLogger,
+    log_bridge_exception,
     log_event,
     log_handler_exception,
 )
@@ -136,6 +137,7 @@ F1_ROUTES: tuple[tuple[str, str, str], ...] = (
 A1_SESSION_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("GET", "/bots/{p}/sessions", "SES-1"),
     ("GET", "/bots/{p}/sessions/{ref}/messages", "SES-2"),
+    ("GET", "/bots/{p}/sessions/{ref}/messages/from-start", "SES-2a"),
 )
 
 # Amendment F2 (direct send, HMP_V1.md §7a): DS-1/DS-8. Unlike A1_SESSION_ROUTES, these are
@@ -145,6 +147,21 @@ A1_SESSION_ROUTES: tuple[tuple[str, str, str], ...] = (
 F2_DIRECT_SEND_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("POST", "/bots/{p}/chat/messages", "DS-1"),
     ("GET", "/bots/{p}/chat/messages/by-client-id/{cmid}", "DS-8"),
+)
+
+MOBILE_CRON_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/bots/{p}/jobs", "CR-1"),
+    ("POST", "/bots/{p}/jobs", "CR-2"),
+    ("PATCH", "/bots/{p}/jobs/{job_id}", "CR-3"),
+    ("DELETE", "/bots/{p}/jobs/{job_id}", "CR-4"),
+    ("POST", "/bots/{p}/jobs/{job_id}/pause", "CR-5"),
+    ("POST", "/bots/{p}/jobs/{job_id}/resume", "CR-6"),
+)
+
+MOBILE_MODEL_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/bots/{p}/model/default", "MD-1"),
+    ("GET", "/bots/{p}/model/options", "MD-2"),
+    ("PUT", "/bots/{p}/model/default", "MD-3"),
 )
 
 # aiohttp's parser limits for one request line or one header field (SEC-4: bounded at the same
@@ -480,6 +497,27 @@ async def handle_session_messages(request: web.Request) -> web.Response:
     return _result_response(result)
 
 
+async def handle_session_history_start(request: web.Request) -> web.Response:
+    """SES-2a: the first active page, distinct from SES-2's latest snapshot.
+
+    The route is deliberately distinct so an older HMP returns 404 instead of silently treating
+    `after=0` as a latest snapshot and making phone search appear complete when it is not.
+    """
+    who = bearer(request)
+    ctx = context(request)
+    profile = request.match_info["p"]
+    ref = request.match_info["ref"]
+    if any(key != "limit" for key in request.query):
+        raise HmpError(ErrorCode.BAD_REQUEST)
+    limit = _query_int(request, "limit", default=HISTORY_LIMIT_DEFAULT, lo=1, hi=HISTORY_LIMIT_MAX)
+    ctx.limiter.check(
+        "bots_session_messages", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now()
+    )
+    reads = _require(ctx.reads)
+    result = await asyncio.to_thread(reads.session_history, who.user_id, profile, ref, 0, limit)
+    return _result_response(result)
+
+
 _CMID_MAX_BYTES = 128  # generous bound for a UUIDv7 or any reasonable client-generated id
 _TEXT_MAX_BYTES = MAX_BODY_BYTES  # the body-size limit is the real bound; no separate text cap
 
@@ -557,6 +595,140 @@ async def handle_chat_send(request: web.Request) -> web.Response:
         raise HmpError(exc.failure.code) from exc
     guarded = base_gate.state is not WriteGateState.OPEN
     return _direct_send_outcome_response(outcome, guarded=guarded)
+
+
+async def _cron_endpoint(request: web.Request, *, write: bool) -> Any:
+    """No job data or loopback call before device and profile authorization."""
+    who = bearer(request)
+    ctx = context(request)
+    if not ctx.is_owner_device(who.device_id):
+        raise HmpError(ErrorCode.NOT_FOUND)
+    ctx.limiter.check(
+        "cron_write" if write else "cron_read", who.device_id,
+        20 if write else 60, ctx.now(),
+    )
+    profile = request.match_info["p"]
+    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
+    if not ctx.cron_enabled() or not ctx.cron_build_qualified():
+        raise HmpError(ErrorCode.CRON_UNAVAILABLE)
+    endpoint = await asyncio.to_thread(ctx.bridge.direct_send_endpoint, profile)
+    if endpoint is None:
+        raise HmpError(ErrorCode.CRON_UNAVAILABLE)
+    return endpoint
+
+
+async def handle_cron_list(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=False)
+    return json_response(await mobile_cron.call(endpoint, method="GET"))
+
+
+async def handle_cron_create(request: web.Request) -> web.Response:
+    await _cron_endpoint(request, write=True)
+    body = mobile_cron.create_body(await read_json_body(request))
+    try:
+        raw = await asyncio.to_thread(
+            _require(context(request).bridge).create_mobile_cron,
+            request.match_info["p"], body,
+        )
+    except ValueError as exc:
+        raise HmpError(ErrorCode.BAD_REQUEST) from exc
+    except Exception as exc:
+        raise HmpError(ErrorCode.CRON_UNAVAILABLE) from exc
+    return json_response({"job": mobile_cron.project_job(raw)})
+
+
+async def handle_cron_edit(request: web.Request) -> web.Response:
+    await _cron_endpoint(request, write=True)
+    job_id = mobile_cron.job_id(request.match_info["job_id"])
+    body = mobile_cron.edit_body(await read_json_body(request))
+    try:
+        raw = await asyncio.to_thread(
+            _require(context(request).bridge).edit_mobile_cron,
+            request.match_info["p"], job_id, body,
+        )
+    except ValueError as exc:
+        raise HmpError(ErrorCode.BAD_REQUEST) from exc
+    except Exception as exc:
+        raise HmpError(ErrorCode.CRON_UNAVAILABLE) from exc
+    if raw is None:
+        raise HmpError(ErrorCode.NOT_FOUND)
+    return json_response({"job": mobile_cron.project_job(raw)})
+
+
+async def handle_cron_delete(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=True)
+    job_id = mobile_cron.job_id(request.match_info["job_id"])
+    return json_response(await mobile_cron.call(endpoint, method="DELETE", job=job_id))
+
+
+async def handle_cron_pause(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=True)
+    job_id = mobile_cron.job_id(request.match_info["job_id"])
+    result = await mobile_cron.call(endpoint, method="POST", job=job_id, action="pause")
+    return json_response(result)
+
+
+async def handle_cron_resume(request: web.Request) -> web.Response:
+    endpoint = await _cron_endpoint(request, write=True)
+    job_id = mobile_cron.job_id(request.match_info["job_id"])
+    result = await mobile_cron.call(endpoint, method="POST", job=job_id, action="resume")
+    return json_response(result)
+
+
+async def _model_profile(request: web.Request, *, write: bool) -> str:
+    """Reject before reading a body, profile config, or model catalog."""
+    who = bearer(request)
+    ctx = context(request)
+    if not ctx.is_owner_device(who.device_id):
+        raise HmpError(ErrorCode.NOT_FOUND)
+    ctx.limiter.check(
+        "model_write" if write else "model_read", who.device_id,
+        10 if write else 30, ctx.now(),
+    )
+    profile = request.match_info["p"]
+    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
+    if not ctx.model_enabled() or not ctx.model_build_qualified():
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE)
+    return profile
+
+
+async def handle_model_current(request: web.Request) -> web.Response:
+    profile = await _model_profile(request, write=False)
+    try:
+        bridge = _require(context(request).bridge)
+        raw = await asyncio.to_thread(bridge.profile_default_model, profile)
+    except Exception as exc:
+        log_bridge_exception(exc)
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
+    return json_response(mobile_model.project_current(raw))
+
+
+async def handle_model_options(request: web.Request) -> web.Response:
+    profile = await _model_profile(request, write=False)
+    try:
+        bridge = _require(context(request).bridge)
+        endpoint = await asyncio.to_thread(bridge.direct_send_endpoint, profile)
+    except Exception as exc:
+        log_bridge_exception(exc)
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
+    if endpoint is None:
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE)
+    return json_response(await mobile_model.options(endpoint))
+
+
+async def handle_model_update(request: web.Request) -> web.Response:
+    profile = await _model_profile(request, write=True)
+    provider, model = mobile_model.selection(await read_json_body(request))
+    try:
+        raw = await asyncio.to_thread(
+            _require(context(request).bridge).set_profile_default_model, profile, provider, model
+        )
+    except Exception as exc:
+        log_bridge_exception(exc)
+        raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
+    if raw is None:
+        raise HmpError(ErrorCode.BAD_REQUEST)
+    return json_response(mobile_model.project_current(raw))
 
 
 # DS-7's own definitive-failure codes that mean "HMP's guard refused before Hermes ever saw this
@@ -687,19 +859,36 @@ def build_app(ctx: ServerContext) -> web.Application:
         # switch below -- the gate is re-checked per request, inside the handler.
         "/bots/{p}/chat/messages": handle_chat_send,
         "/bots/{p}/chat/messages/by-client-id/{cmid}": handle_chat_lookup,
+        "/bots/{p}/jobs": handle_cron_list,
+        "/bots/{p}/jobs/{job_id}": handle_cron_edit,
+        "/bots/{p}/jobs/{job_id}/pause": handle_cron_pause,
+        "/bots/{p}/jobs/{job_id}/resume": handle_cron_resume,
+        "/bots/{p}/model/default": handle_model_current,
+        "/bots/{p}/model/options": handle_model_options,
     }
-    routes = list(F1_ROUTES) + list(F2_DIRECT_SEND_ROUTES)
+    routes = (
+        list(F1_ROUTES) + list(F2_DIRECT_SEND_ROUTES)
+        + list(MOBILE_CRON_ROUTES) + list(MOBILE_MODEL_ROUTES)
+    )
     if ctx.session_browsing_enabled:
         # Amendment A1 kill switch: when off, SES-1/SES-2 are never added to the router at all,
         # so they 404 exactly like every other unregistered F1 route (server-modules.md).
         handlers["/bots/{p}/sessions"] = handle_sessions_list
         handlers["/bots/{p}/sessions/{ref}/messages"] = handle_session_messages
+        handlers["/bots/{p}/sessions/{ref}/messages/from-start"] = handle_session_history_start
         routes += list(A1_SESSION_ROUTES)
     for method, path, _clause in routes:
+        handler = handlers[path]
+        if path == "/bots/{p}/jobs" and method == "POST":
+            handler = handle_cron_create
+        elif path == "/bots/{p}/jobs/{job_id}" and method == "DELETE":
+            handler = handle_cron_delete
+        elif path == "/bots/{p}/model/default" and method == "PUT":
+            handler = handle_model_update
         if method == "GET":
-            app.router.add_get(full_path(path), handlers[path], allow_head=False)
+            app.router.add_get(full_path(path), handler, allow_head=False)
         else:
-            app.router.add_route(method, full_path(path), handlers[path])
+            app.router.add_route(method, full_path(path), handler)
     return app
 
 

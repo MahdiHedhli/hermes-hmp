@@ -16,6 +16,7 @@ import ast
 import asyncio
 import dataclasses
 import enum
+import json
 import os
 import subprocess
 import sys
@@ -789,7 +790,20 @@ def test_every_reached_internal_is_probed() -> None:
     probed = {(d.module, d.qualname) for d in compat.READ_DEPENDENCIES} | {
         (d.module, d.qualname) for d in compat.DIRECT_SEND_DEPENDENCIES
     }
-    optional = {("gateway.platforms.base", "PLATFORM_ADAPTER_CAPABILITIES")}  # absent on stock
+    # Model and cron writers have independent exact-build fingerprints and
+    # isolated Hermes integration checks. FastAPI is a declared dependency.
+    optional = {
+        ("gateway.platforms.base", "PLATFORM_ADAPTER_CAPABILITIES"),  # absent on stock
+        ("hermes_cli.config", "load_config"),
+        ("hermes_cli.web_routers.profiles", "_write_profile_model"),
+        ("fastapi", "HTTPException"),
+        ("cron.jobs", "get_job"),
+        ("cron.jobs", "update_job"),
+        ("cron.scheduler", "create_job_with_scheduler_registration"),
+        ("cron.scheduler", "_notify_provider_jobs_changed"),
+        ("cron.lifecycle_guard", "check_gateway_lifecycle"),
+        ("tools.cronjob_prompt_scan", "_scan_cron_prompt"),
+    }
     assert _hermes_imports() - optional <= probed
     probed_names = {q.rsplit(".", 1)[-1] for _m, q in probed if q}
     for methods in bridge.REACHED_METHODS.values():
@@ -816,6 +830,198 @@ def _build_sources() -> list[Path]:
 
 BUILD_SOURCES = _build_sources()
 TOOL = REPO_ROOT / "tools" / "compat" / "bridge_files.py"
+
+
+def _load_bridge_files_tool() -> types.ModuleType:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("hmp_bridge_files_tool", TOOL)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_ast_scan_excludes_known_external_fastapi_but_maps_hermes_write_router() -> None:
+    tool = _load_bridge_files_tool()
+    source = (
+        "def f():\n"
+        "    from fastapi import HTTPException\n"
+        "    from hermes_cli.web_routers.profiles import _write_profile_model\n"
+    )
+    assert tool.ast_imported_modules(source) == ["hermes_cli.web_routers.profiles"]
+    # The real bridge: fastapi never reaches the Hermes file mapping; the native writer module is
+    # classified to the model feature boundary, not silently dropped.
+    real_source = tool.BRIDGE_PATH.read_text(encoding="utf-8")
+    target, feature = tool.split_ast_imports(real_source)
+    assert not any(m.split(".", 1)[0] == "fastapi" for m in target)
+    assert "hermes_cli.web_routers.profiles" not in target
+    assert "hermes_cli.web_routers.profiles" in feature["model"]
+
+
+def test_ast_scan_still_fails_source_mapping_for_arbitrary_unknown_module(tmp_path: Path) -> None:
+    tool = _load_bridge_files_tool()
+    bridge_copy = tmp_path / "bridge.py"
+    bridge_copy.write_text("import some_unknown_third_party\n", encoding="utf-8")
+    assert tool.ast_imported_modules(bridge_copy.read_text(encoding="utf-8")) == [
+        "some_unknown_third_party"
+    ]
+    with pytest.raises(tool.BridgeFilesError, match="not found under the Hermes tree"):
+        tool.ast_set(tmp_path, bridge_copy)
+
+
+def test_write_profile_model_router_maps_to_hermes_file(tmp_path: Path) -> None:
+    tool = _load_bridge_files_tool()
+    router = tmp_path / "hermes_cli" / "web_routers" / "profiles.py"
+    router.parent.mkdir(parents=True)
+    router.write_text("", encoding="utf-8")
+    assert tool.module_file(tmp_path, "hermes_cli.web_routers.profiles") == (
+        "hermes_cli/web_routers/profiles.py"
+    )
+
+
+_FEATURE_BRIDGE = (
+    "class HermesApi:\n"
+    "    def model_config(self):\n"
+    "        from hermes_cli.config import load_config\n"
+    "    def create_mobile_cron(self, f):\n"
+    "        from cron.scheduler import create_job_with_scheduler_registration\n"
+)
+
+
+def _feature_tree(tmp_path: Path, *, model_files: object, cron_files: object) -> tuple[Path, dict]:
+    src = tmp_path / "hermes"
+    for rel in ("hermes_cli/config.py", "cron/scheduler.py"):
+        (src / rel).parent.mkdir(parents=True, exist_ok=True)
+        (src / rel).write_text("", encoding="utf-8")
+    paths = {}
+    for key, files in (("model", model_files), ("cron", cron_files)):
+        paths[key] = tmp_path / f"{key}.json"
+        paths[key].write_text(json.dumps({"bridge_files": files}), encoding="utf-8")
+    return src, paths
+
+
+def _feature_bridge(tmp_path: Path, source: str = _FEATURE_BRIDGE) -> Path:
+    bridge = tmp_path / "bridge.py"
+    bridge.write_text(source, encoding="utf-8")
+    return bridge
+
+
+def test_feature_imports_are_checked_against_their_own_manifests(tmp_path: Path) -> None:
+    tool = _load_bridge_files_tool()
+    src, paths = _feature_tree(
+        tmp_path, model_files=["hermes_cli/config.py"], cron_files=["cron/scheduler.py"]
+    )
+    bridge = _feature_bridge(tmp_path)
+    assert tool.ast_set(src, bridge) == set()  # not leaked into the target set
+    assert tool.feature_boundaries(src, bridge, manifest_paths=paths) == {
+        "cron": ["cron/scheduler.py"],
+        "model": ["hermes_cli/config.py"],
+    }
+
+
+def test_feature_import_missing_from_its_own_manifest_is_refused(tmp_path: Path) -> None:
+    tool = _load_bridge_files_tool()
+    # Covered only by the OTHER feature's manifest: not accepted.
+    src, paths = _feature_tree(
+        tmp_path, model_files=["cron/scheduler.py"], cron_files=["hermes_cli/config.py"]
+    )
+    with pytest.raises(tool.BridgeFilesError, match="lacks"):
+        tool.feature_boundaries(src, _feature_bridge(tmp_path), manifest_paths=paths)
+
+
+def test_feature_import_with_no_hermes_file_is_refused(tmp_path: Path) -> None:
+    tool = _load_bridge_files_tool()
+    src, paths = _feature_tree(
+        tmp_path, model_files=["hermes_cli/config.py"], cron_files=["cron/scheduler.py"]
+    )
+    (src / "cron" / "scheduler.py").unlink()
+    with pytest.raises(tool.BridgeFilesError, match="not found under the Hermes tree"):
+        tool.feature_boundaries(src, _feature_bridge(tmp_path), manifest_paths=paths)
+
+
+@pytest.mark.parametrize("bad", ["missing", "not-json", "not-object", "bad-list"])
+def test_malformed_or_missing_feature_manifest_is_refused(tmp_path: Path, bad: str) -> None:
+    tool = _load_bridge_files_tool()
+    src, paths = _feature_tree(
+        tmp_path, model_files=["hermes_cli/config.py"], cron_files=["cron/scheduler.py"]
+    )
+    target = paths["model"]
+    if bad == "missing":
+        target.unlink()
+    else:
+        target.write_text(
+            {"not-json": "{", "not-object": "[]", "bad-list": '{"bridge_files": [1]}'}[bad],
+            encoding="utf-8",
+        )
+    with pytest.raises(tool.BridgeFilesError):
+        tool.feature_boundaries(src, _feature_bridge(tmp_path), manifest_paths=paths)
+
+
+def test_same_feature_module_outside_the_reviewed_method_stays_in_the_target_set(
+    tmp_path: Path,
+) -> None:
+    tool = _load_bridge_files_tool()
+    src, paths = _feature_tree(
+        tmp_path, model_files=["hermes_cli/config.py"], cron_files=["cron/scheduler.py"]
+    )
+    moved = (
+        "class HermesApi:\n"
+        "    def profile_runtime_scope(self):\n"
+        "        from hermes_cli.config import load_config\n"
+        "def helper():\n"
+        "    from cron.scheduler import x\n"
+        "class Other:\n"
+        "    def model_config(self):\n"
+        "        from hermes_cli.config import load_config\n"
+        "class HermesApi2:\n"
+        "    def create_mobile_cron(self):\n"
+        "        from cron.scheduler import x\n"
+        "class HermesApi:\n"
+        "    def model_config(self):\n"
+        "        def nested():\n"
+        "            from hermes_cli.config import load_config\n"
+    )
+    bridge = _feature_bridge(tmp_path, moved)
+    assert tool.ast_set(src, bridge) == {"hermes_cli/config.py", "cron/scheduler.py"}
+    assert tool.feature_boundaries(src, bridge, manifest_paths=paths) == {}
+
+
+def test_a_known_module_in_a_reviewed_method_but_not_listed_for_it_is_not_classified(
+    tmp_path: Path,
+) -> None:
+    tool = _load_bridge_files_tool()
+    source = (
+        "class HermesApi:\n"
+        "    def model_config(self):\n"
+        "        from cron.scheduler import x\n"  # a cron module in a model method
+    )
+    target, feature = tool.split_ast_imports(source)
+    assert target == ["cron.scheduler"] and feature == {}
+
+
+def test_a_module_in_the_selected_typed_tuple_is_retained_despite_feature_classification(
+    tmp_path: Path,
+) -> None:
+    tool = _load_bridge_files_tool()
+    src, paths = _feature_tree(tmp_path, model_files=[], cron_files=[])
+    bridge = _feature_bridge(tmp_path)
+    typed = frozenset({"hermes_cli.config"})
+    assert tool.ast_set(src, bridge, typed_modules=typed) == {"hermes_cli/config.py"}
+    # The cron import is still a feature import; the retained one is not demanded of a manifest.
+    with pytest.raises(tool.BridgeFilesError, match="cron feature manifest lacks"):
+        tool.feature_boundaries(src, bridge, typed_modules=typed, manifest_paths=paths)
+
+
+def test_real_bridge_feature_modules_are_the_six_reviewed_and_no_others() -> None:
+    tool = _load_bridge_files_tool()
+    _, feature = tool.split_ast_imports(tool.BRIDGE_PATH.read_text(encoding="utf-8"))
+    assert feature == {
+        "model": {"hermes_cli.config", "hermes_cli.web_routers.profiles"},
+        "cron": {
+            "cron.jobs", "cron.lifecycle_guard", "cron.scheduler", "tools.cronjob_prompt_scan",
+        },
+    }
 
 
 @pytest.mark.skipif(

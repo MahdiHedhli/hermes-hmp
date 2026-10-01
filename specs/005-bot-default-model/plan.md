@@ -1,0 +1,9 @@
+# Plan: bot default model
+
+The source inspected is Nous Hermes `04fa849e70165336ba73e6750257a1ebd7ff998d`. Its profile-scoped API server exposes `GET /api/model/options`. Its Desktop and dashboard use `hermes_cli.web_routers.profiles._write_profile_model`, which scopes secrets and validates a model through Hermes's model switcher before saving the profile config. HMP may call this exact-version internal only behind a separate fingerprint. It does not edit `config.yaml` itself.
+
+HMP registers `GET /bots/{p}/model/default`, `GET /bots/{p}/model/options`, and `PUT /bots/{p}/model/default`. Every handler authenticates, checks owner ID and per-bot authorization, rate-limits, then rechecks `model_management.enabled` and the build fingerprint. The options call uses a fixed loopback path, the profile's own API key, no proxy, no redirect, and bounded time/bytes. The response is an allowlisted projection. The write runs off the event loop, calls the existing validated Hermes helper for that routed profile home, and returns the stored provider/model. Only a provider/model pair is accepted. The app presents a cost confirmation before writing and never supplies a URL or credential.
+
+The app client adds typed methods. Its controller binds results to the current active-instance epoch and bot ID. A network failure after PUT is uncertain; the app refreshes the current value and does not retry automatically. The UI is a bot-level model picker, opened from Bot Chat actions.
+
+Threat tests cover non-owner/bot denial, wrong instance, profile A→B→A isolation, malformed choices, disabled/changed flag, source update, oversized/slow options, proxy/redirect attempts, raw-catalog field leakage, and ambiguous write recovery. A real isolated Hermes home proves persistence. Release still requires the feature-freeze review and owner opt-in.
