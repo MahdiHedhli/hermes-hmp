@@ -241,8 +241,10 @@ Normative keywords follow RFC 2119 and RFC 8174.
 | `no_bot_chat` (v1.2, DS-4(2)) | 409 | direct send: no canonical Bot Chat exists yet for this bot | yes | Ask the operator to open this bot once on Hermes Desktop first. |
 | `session_busy` (v1.2, DS-4(3)) | 409 | direct send: the lease-registry guard found another live writer, or the liveness read itself failed | **no** (Hermes never saw this attempt) | Restore the draft; plain retry once the busy state clears. |
 | `stale_head` (v1.2, DS-4(4)) | 409 | direct send: the client's `expected_head` does not match the Bot Chat's current head | yes | Refresh (re-read via SES-2), then retry with the fresh head. Never a silent retry with the old value. |
-| `write_gate_closed` (v1.2, DS-2(b)) | 503 | direct send while `"open_guarded"` is unavailable (dogfood flag off, `api_server` unreachable/misconfigured, or key invalid) | yes (HMP did not hand off) | Keep the draft. Composer is read-only for direct send on this instance. |
+| `write_gate_closed` (v1.2, DS-2(b)) | 503 | Bot Chat direct send lacks its owner switch, qualification, loopback configuration, or target profile key | yes (HMP did not hand off) | Keep the draft. Composer is read-only for this bot until its gate reopens. |
 | `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"` | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
+| `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, unqualified build, missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
+| `model_unavailable` (v1.5, MD-1) | 503 | mobile default model: flag off, unqualified build, missing scoped picker endpoint, or Hermes read/write failure | — | Reopen the model screen and check the current selection before another write. |
 
 - **ERR-2a. Read-compatibility refusal** (GU-2c; additive `other {why}` values, no contract revision; controller clarification, 2026-09-25).
   - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes build's identity is not on the read-compatible builds list or cannot be determined.
@@ -271,7 +273,8 @@ Normative keywords follow RFC 2119 and RFC 8174.
   ```
   200 {"versions":[1], "contract":"1.0", "iid":"<b32>",
        "guarantees":{"no_defer":bool, "atomic_anchor":bool, "approval_request_id":bool, "confirmed_settle":bool},
-       "write_gate":{"state":"open"|"closed", "reason":null|"guarantees_unavailable"}}
+       "write_gate":{"state":"open"|"open_guarded"|"closed",
+                     "reason":null|"guarantees_unavailable"|"write_gate_closed"}}
   ```
 
   [diverges: the spike returns `{versions, iid, capabilities, guarantees}`. `contract` and `write_gate` are missing. The extra `capabilities` field is diagnostic, and clients ignore it (V-4).]
@@ -524,6 +527,17 @@ Normative keywords follow RFC 2119 and RFC 8174.
 
   [diverges: `guarantees`/`write_gate` absent, `served_at` a float]
   - Content of bots the user is not authorized for is never exposed.
+  - **Profile send availability (additive, V-3).** Each authorized bot MAY carry
+    `"send_gate":{"state":"open"|"open_guarded"|"closed","reason":null|"write_gate_closed"}`.
+    It describes the Bot Chat send route for that bot's own profile. A closed value is returned
+    when the host switch, configured qualification check, loopback configuration, or that profile's key is
+    unavailable; neither the key nor its source is exposed. Bots without authorization omit the
+    field and do not trigger a key lookup. The send route rechecks these conditions on every POST.
+    A client that understands this field uses it for the selected bot's composer. If absent, it
+    falls back to the roster's `write_gate` for older HMP builds, while retaining a rejected
+    message as a reviewable draft. For old clients, roster `write_gate` is conservative: it is
+    closed if any authorized served bot cannot send. `/ready` remains an instance-level
+    diagnostic and does not assert that every named profile has a usable key.
 - **RO-2. Roster as state** (E-PDR-6).
   - The client re-reads the roster on every reconnect and on `roster.changed`.
   - `roster.changed` is an optimization, never the source of truth.
@@ -666,6 +680,17 @@ authorized`, SES-3) is unchanged.
     64 KiB display cut and "Message shortened on mobile" note. `role` is passed through
     unfiltered. A `tool` row renders as the collapsible result in S7. Every other role besides
     `user` and `assistant`, including `session_meta` and `system`, stays a neutral note.
+
+- **SES-2a. `GET /hmp/v1/bots/{p}/sessions/{ref}/messages/from-start?limit=`.** This distinct
+  read-only route returns the earliest available active rows in the existing RO-6 paged shape:
+  `200 {"messages":[…], "head_message_id":<int|null>}` or the same `reset` as SES-2. It calls
+  SES-2's `session_history` with cursor zero, then the client continues with SES-2's
+  `after=<last-id>` pages. It uses the same bearer, per-bot gate, opaque ref resolution,
+  per-device read limiter, history limit default/max, and session-browsing kill switch as SES-2.
+  Only `limit` is accepted; unknown or repeated query fields are `400 bad_request`. An older HMP
+  release has no route and returns 404, so a client cannot mistake SES-2's `after=0` latest
+  snapshot for complete history. No search term is sent to HMP or Hermes. Rows removed by Hermes
+  compaction are outside the available active history; clients must not claim to recover them.
 
 - **SES-3. Authz, rate limits, size caps.**
   - **Authz.** Identical per-bot gate to every existing `/bots/{p}/…` route (ERR-3), re-run on
@@ -849,15 +874,15 @@ which no supported build advertises today (§8).
   `400 bad_request`: the guard (DS-4) requires it once this route is registered, so an old client
   that never sends it cannot reach the guarded path at all (V-4's safe default — it simply never
   advertises success here).
-- **DS-2. Gate order.** (a) The per-bot gate (ERR-3). (b) The write gate (§8): if the *original*
-  GU-4 `"open"` state holds, this route is available under that full guarantee, unchanged from
-  SUB-1..SUB-10 (§7), and DS-4's HMP-engineered guard is not needed — no supported build advertises
-  `"open"` today, so this is a future path, not the one any current build takes. Otherwise, the
-  gate is `"open_guarded"` only if **all** of: the host flag `gateway.platforms.hmp.extra.
-  direct_send` is `true` (default `false`, off; OD-F14/OD-F15 — this is the flag OD-F15's second
-  live-config approval turns on for the owner's own devices only); `api_server` is reachable,
-  enabled and loopback-bound for the target profile (DS-6); and the target profile's
-  `API_SERVER_KEY` resolves to a usable secret (DS-6). Any other case is `"closed"`:
+- **DS-2. Gate order.** (a) The per-bot gate (ERR-3). (b) The Bot Chat route requires **all** of:
+  the host flag `gateway.platforms.hmp.extra.direct_send` is `true` (default `false`, off;
+  OD-F14/OD-F15); any configured qualification check passes; `api_server` resolves to a
+  loopback-only target for the profile (DS-6); and that profile's `API_SERVER_KEY` resolves to a
+  usable secret (DS-6). A genuine GU-4 `"open"` state retains its full-guarantee label only
+  after these route prerequisites pass. Otherwise the route is `"open_guarded"` and applies
+  DS-4's HMP guard. A full Hermes guarantee never bypasses the owner switch or profile key.
+  This advertised gate does not probe the port: a later connection failure is
+  `api_server_unavailable`, with the message kept unconfirmed. Any missing prerequisite is `"closed"`:
   `POST .../chat/messages` returns `503 {"error":{"code":"write_gate_closed", ...}, "guarantees":
   {…}}` without handing anything to Hermes, mirroring GU-4's existing `guarantees_unavailable`
   shape under a new, route-specific code (added to ERR-2, never replacing it). (c) Only once (a)
@@ -1034,7 +1059,11 @@ and request ID the device uses. Reads do not consume the actions bucket. `{p}` i
 paired device whose exact ID appears in `gateway.platforms.hmp.extra.owner_device_ids` (list of
 strings, default empty; malformed config grants nobody). A non-owner receives `404 not_found`,
 even when bot-authorized or sharing the owner's `user_id`. The host loads changes through its
-normal config reload/restart; HMP reads the live adapter config each request. Owner devices of
+normal config reload/restart; HMP reads the live adapter config each request. The separate
+per-device jobs/model controls decision (§7c, §7d) never makes a device an approval owner: an
+explicit grant without an `owner_device_ids` entry still receives `404 not_found` on every
+AP-3/AP-4/AP-6 route and omits `open_requests`, and an explicit host denial closes an
+allowlisted device. An unreadable decision denies. Owner devices of
 the same user share the existing per-request serialization and idempotency. Default-conversation
 snapshots omit `open_requests` for non-owners and while the direct-send flag is off.
 The explicit `direct_send.enabled` flag is mandatory even when the base gate is OPEN.
@@ -1208,6 +1237,73 @@ unaffected by it. `hermes hmp compat` reports the approval qualification on its 
   never reaches Hermes. Path 1 (Bot Chat stream) still has no clarify. Reads do not import the
   clarify module; the symbols below are direct-send bridge dependencies only.
 
+## 7c. Mobile cron management (v1.4, draft)
+
+This additive route family is disabled unless `gateway.platforms.hmp.extra.cron.enabled`
+is explicitly true, this authenticated device holds the host's controls decision (an explicit
+grant, or a legacy `owner_device_ids` entry when no decision exists; an explicit denial wins),
+and the running Hermes build has an independently qualified cron fingerprint. A device also
+needs the existing per-bot authorization for `{p}`. A failed gate returns `404 not_found`
+for non-owner devices or `503 cron_unavailable` for a disabled/unqualified endpoint, before
+any job data or loopback API key is used.
+
+| Method | Path under `/hmp/v1` | Body | Result |
+|---|---|---|---|
+| GET | `/bots/{p}/jobs` | — | `{"jobs":[job,...]}` |
+| POST | `/bots/{p}/jobs` | `{"name":string,"schedule":string,"prompt":string,"deliver"?:"local"\|"bot-chat","continuity"?:boolean,"repeat"?:1..9999}` | `{"job":job}`; created paused |
+| PATCH | `/bots/{p}/jobs/{job_id}` | one or more of `name`, `schedule`, `prompt`, `deliver`, `continuity`, `repeat` | `{"job":job}`; `repeat:0` clears a finite run limit |
+| DELETE | `/bots/{p}/jobs/{job_id}` | — | `{"deleted":true}` |
+| POST | `/bots/{p}/jobs/{job_id}/pause` or `/resume` | — | `{"job":job}` |
+
+`job` contains only `id`, `name`, `prompt`, `schedule`, `enabled`, `state`,
+`next_run_at`, `last_run_at`, `last_status`, `deliver`, `continuity`, and `repeat`;
+optional status/time fields and `repeat` may be null. Delivery is projected only as
+`local`, `bot-chat`, or `other`, never an external channel ID or URL. `continuity`
+maps to Hermes's `context_from: ["self"]` reference, preserving any other context
+references when edited. `repeat` is the total run limit, not the remaining count.
+IDs are twelve lowercase hex characters. At most 100 jobs and one MiB of upstream JSON
+are returned. HMP never forwards scripts, workdirs, delivery targets, raw errors, or
+other Hermes job internals. Create/edit fields are length bounded; unknown fields are
+rejected. Reads, pause/resume, and delete use one profile-scoped, literal-loopback API server
+endpoint with the profile's own server key, disabled proxy inheritance, redirects, and
+automatic retries. Create and edit use Hermes's profile-scoped cron writer so continuity
+is saved atomically with the job; both retain the same owner/device/bot/qualified-build gate.
+The phone may select only local run history or its own bot's Bot Chat. It cannot name an
+arbitrary delivery destination. HMP still creates jobs paused.
+Phone clients must treat a transport failure after a write as an unknown outcome and
+refresh before attempting another write. The host flag defaults off; release requires
+fixture qualification and independent security review.
+
+## 7d. Bot default model (v1.5, draft)
+
+This additive route family is disabled unless `gateway.platforms.hmp.extra.model_management.enabled`
+is explicitly true, this authenticated device holds the host's controls decision (as in §7c), the selected bot
+passes the existing per-bot access check, and the running Hermes model writer is an exact
+qualified build. Non-owner devices receive `404 not_found`; a disabled or unqualified
+feature receives `503 model_unavailable`. These checks happen before a config read, model
+catalog request, or write.
+
+| Method | Path under `/hmp/v1` | Body | Result |
+|---|---|---|---|
+| GET | `/bots/{p}/model/default` | — | `{"provider":string,"model":string}` |
+| GET | `/bots/{p}/model/options` | — | `{"providers":[{"provider":string,"name":string,"models":[string,...]},...]}` |
+| PUT | `/bots/{p}/model/default` | `{"provider":string,"model":string}` | Stored provider/model, which Hermes may normalize |
+
+The current model read uses only Hermes's routed profile home and returns no other config.
+The options read uses the fixed profile-scoped loopback `/api/model/options` route and the
+profile's own API key. HMP never accepts a URL, key, base path, raw config patch, or provider
+configuration from the phone. Only authenticated providers with nonempty models are projected;
+all other catalog fields are discarded. HMP caps the response at eight MiB, 256 provider rows,
+10,000 model IDs, and fixed string lengths. It disables proxy inheritance and redirects.
+
+The PUT calls Hermes's existing validated profile-model writer rather than writing YAML from
+HMP. It accepts only provider and model, both bounded. A validation refusal is `400
+bad_request`; other write failures are `503 model_unavailable`. A model selection may affect
+billing. The phone must confirm the named bot and model before PUT. A lost response is an
+unknown result: refresh the current model and never automatically retry. The persisted
+default applies to new sessions; this route does not switch a running Desktop-owned turn.
+The host flag defaults off, and the owner's live Hermes is not qualified by this draft.
+
 ## 8. Guarantees, capability contract and write gate (FZ-R-8, FZ-R-9)
 
 - **GU-1. Guarantee flags.**
@@ -1280,13 +1376,19 @@ unaffected by it. `hermes hmp compat` reports the approval qualification on its 
     succeeded merely because the state string is unfamiliar. `"open_guarded"` never applies to the
     original `SUB-1` route (§7) — that route's gate stays exactly GU-4's original two-flag
     derivation, unaffected by this amendment.
+    For the Bot Chat route, the host `direct_send` switch and the target profile's keyed
+    loopback endpoint remain mandatory even when GU-4's full guarantees are present (DS-2).
 - **GU-5. Where guarantees are carried.**
   - `guarantees` and `write_gate` are carried by `/ready` and `GET /bots` [diverges: `/ready` lacks `write_gate`; `GET /bots` carries neither].
   - `guarantees` is also carried at the top level of a `503 guarantees_unavailable` body.
   - Successful submit responses (`200`, `202`) do not carry `guarantees`. A write only succeeds when the write guarantees held, so the field would be redundant there. (This narrows rc2's first draft, following the SPIKE-FIX-5 conformance finding for row 6.1b.)
   - The client uses the latest value it has read.
+  - A client with RO-1's optional per-bot `send_gate` uses it for the selected Bot Chat instead
+    of the instance-wide fallback. Both are status hints; DS-2 is rechecked on POST.
 - **GU-6. Reduced-guarantee UI.**
-  - When `write_gate` is `closed`, the UI MUST show that this Hermes instance cannot accept messages from mobile safely, and the composer is read-only.
+  - When the selected bot's send gate is `closed`, the UI MUST show that this bot cannot accept
+    messages from mobile now, and its composer is read-only. An older client uses the conservative
+    instance-wide `write_gate` fallback.
   - When `approval_request_id` is `false`, approvals HMP cannot bind to a stored `request_id` are
     read-only ("answer on another Hermes surface"). v1.3 (§7b) answers a prompt only when HMP
     itself holds that id. The capability flag does not gate the §7b routes.

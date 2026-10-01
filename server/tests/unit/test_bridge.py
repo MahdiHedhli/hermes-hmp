@@ -791,7 +791,20 @@ def test_every_reached_internal_is_probed() -> None:
     probed = {(d.module, d.qualname) for d in compat.READ_DEPENDENCIES} | {
         (d.module, d.qualname) for d in compat.DIRECT_SEND_DEPENDENCIES
     }
-    optional = {("gateway.platforms.base", "PLATFORM_ADAPTER_CAPABILITIES")}  # absent on stock
+    # Model and cron writers have independent exact-build fingerprints and
+    # isolated Hermes integration checks. FastAPI is a declared dependency.
+    optional = {
+        ("gateway.platforms.base", "PLATFORM_ADAPTER_CAPABILITIES"),  # absent on stock
+        ("hermes_cli.config", "load_config"),
+        ("hermes_cli.web_routers.profiles", "_write_profile_model"),
+        ("fastapi", "HTTPException"),
+        ("cron.jobs", "get_job"),
+        ("cron.jobs", "update_job"),
+        ("cron.scheduler", "create_job_with_scheduler_registration"),
+        ("cron.scheduler", "_notify_provider_jobs_changed"),
+        ("cron.lifecycle_guard", "check_gateway_lifecycle"),
+        ("tools.cronjob_prompt_scan", "_scan_cron_prompt"),
+    }
     assert _hermes_imports() - optional <= probed
     probed_names = {q.rsplit(".", 1)[-1] for _m, q in probed if q}
     for methods in bridge.REACHED_METHODS.values():

@@ -634,7 +634,7 @@ def test_rate_limiter_is_lru_bounded() -> None:
 # --------------------------------------------------------------------------------------------------
 
 
-def test_route_table_is_exactly_f1(tmp_path: Path) -> None:
+def test_route_table_matches_declared_routes(tmp_path: Path) -> None:
     app = Env(tmp_path).app()
     routes = sorted((r.method, r.resource.canonical) for r in app.router.routes())
     expected = sorted(
@@ -644,10 +644,12 @@ def test_route_table_is_exactly_f1(tmp_path: Path) -> None:
             *server.A1_SESSION_ROUTES,
             *server.F2_DIRECT_SEND_ROUTES,
             *server.F3_APPROVAL_ROUTES,
+            *server.MOBILE_CRON_ROUTES,
+            *server.MOBILE_MODEL_ROUTES,
         )
     )
     assert routes == expected
-    assert len(expected) == 16
+    assert len(expected) == 26
 
 
 def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
@@ -665,10 +667,12 @@ def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
             *server.F1_ROUTES,
             *server.F2_DIRECT_SEND_ROUTES,
             *server.F3_APPROVAL_ROUTES,
+            *server.MOBILE_CRON_ROUTES,
+            *server.MOBILE_MODEL_ROUTES,
         )
     )
     assert routes == expected
-    assert len(expected) == 14
+    assert len(expected) == 23
 
 
 def test_write_paths_are_404_with_zero_bridge_calls(tmp_path: Path) -> None:
@@ -1432,9 +1436,8 @@ def test_chat_lookup_surfaces_interleave_detected(tmp_path: Path) -> None:
 
 
 def test_reported_write_gate_follows_the_owner_only_direct_send_flag(tmp_path: Path) -> None:
-    """The roster and `/ready` gate drives the client's composer: closed with the flag off,
-    `open_guarded` with it on (GU-4a, OD-F14). The base F1 gate itself is unchanged."""
-    from hmp_plugin.contract import WriteGateState
+    """The `/ready` diagnostic follows the flag; roster bot gates resolve profiles separately."""
+    from hmp_plugin.contract import Guarantees, WriteGateState
 
     env = Env(tmp_path)
     env.ctx.direct_send_flag = lambda: False
@@ -1448,3 +1451,38 @@ def test_reported_write_gate_follows_the_owner_only_direct_send_flag(tmp_path: P
 
     env.ctx.direct_send_flag = broken  # a broken flag reader fails closed
     assert env.ctx.reported_write_gate().state is WriteGateState.CLOSED
+
+    env.ctx.guarantee_cache = Guarantees(no_defer=True, atomic_anchor=True)
+    env.ctx.direct_send_flag = lambda: False
+    assert env.ctx.write_gate().state is WriteGateState.OPEN
+    assert env.ctx.reported_write_gate().state is WriteGateState.CLOSED
+
+
+def test_reported_send_gate_is_profile_scoped_and_switch_gated(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from hmp_plugin.contract import DirectSendEndpoint, WriteGateState
+
+    env = Env(tmp_path)
+    seen: list[str] = []
+    endpoint = DirectSendEndpoint("127.0.0.1", 8642, "synthetic-key-for-tests", "")
+
+    def resolve(profile: str):
+        seen.append(profile)
+        return endpoint if profile == "alpha" else None
+
+    env.bridge.direct_send_endpoint = resolve
+    env.ctx.direct_send_deps = SimpleNamespace(qualified=lambda: True)
+    env.ctx.direct_send_flag = lambda: False
+    assert env.ctx.reported_send_gate("alpha").state is WriteGateState.CLOSED
+    assert seen == []
+
+    env.ctx.direct_send_flag = lambda: True
+    assert env.ctx.reported_send_gate("alpha").state is WriteGateState.OPEN_GUARDED
+    assert env.ctx.reported_send_gate("beta").state is WriteGateState.CLOSED
+    assert env.ctx.reported_send_gate("alpha").state is WriteGateState.OPEN_GUARDED
+    assert seen == ["alpha", "beta", "alpha"]
+
+    env.ctx.direct_send_deps = SimpleNamespace(qualified=lambda: False)
+    assert env.ctx.reported_send_gate("alpha").state is WriteGateState.CLOSED
+    assert seen == ["alpha", "beta", "alpha"]

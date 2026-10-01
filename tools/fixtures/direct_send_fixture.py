@@ -127,6 +127,8 @@ def write_direct_send_config(
     named_profile_keys: dict[str, str] | None = None,
     direct_send_enabled: bool = True,
     owner_device_ids: tuple[str, ...] = (),
+    cron_enabled: bool = False,
+    model_enabled: bool = False,
     api_server_host: str = "127.0.0.1",
     approval_timeout: int = 120,
 ) -> None:
@@ -155,6 +157,8 @@ def write_direct_send_config(
     round 2 should-fix: the flag is re-read fresh per request, `adapter.py`'s
     `_read_direct_send_enabled` closure, so flipping it here and re-sending takes effect on the
     very next request -- no gateway restart needed)."""
+    # The optional cron/model flags are used by the owner-controls gateway
+    # case; all other direct-send fixtures keep those host features off.
     lines = [
         "plugins:\n",
         '  enabled: ["hmp"]\n',
@@ -179,6 +183,12 @@ def write_direct_send_config(
         f"        owner_device_ids: {json.dumps(list(owner_device_ids))}\n",
         "        direct_send:\n",
         f"          enabled: {'true' if direct_send_enabled else 'false'}\n",
+    ]
+    if cron_enabled:
+        lines += ["        cron:\n", "          enabled: true\n"]
+    if model_enabled:
+        lines += ["        model_management:\n", "          enabled: true\n"]
+    lines += [
         "    api_server:\n",
         "      enabled: true\n",
         "      extra:\n",
@@ -571,16 +581,21 @@ def stop_lease_holder(proc: subprocess.Popen[str]) -> None:
 
 
 def pair_reference_device(
-    build: fc.BuildInfo, paths: fc.InstancePaths, *, port: int, user_id: str, label: str
+    build: fc.BuildInfo, paths: fc.InstancePaths, *, port: int, user_id: str, label: str,
+    grant_owner_controls: bool = False,
 ) -> dict[str, Any]:
-    """Exactly `build_fixture.py`'s own `serve_instances` reference-client pairing, called through
-    the SAME `fixture_pairing_cli.py` script, unmodified."""
+    """Pair a fixture device through the real host CLI in an isolated home.
+
+    The default explicitly declines owner controls. Set `grant_owner_controls`
+    only when the test is checking that separate host decision.
+    """
     common = ["--home", str(paths.home), "--xdg-state", str(paths.xdg_state)]
     endpoint = f"https://127.0.0.1:{port}"
     result = subprocess.run(
         [
             str(build.venv_python), str(FIXTURE_PAIRING_CLI), "pair-reference-client",
             *common, "--endpoint", endpoint, "--user", user_id, "--label", label,
+            *(["--grant-owner-controls"] if grant_owner_controls else []),
         ],
         env=fc.clean_hermes_env(), capture_output=True, text=True, timeout=60, check=False,
     )

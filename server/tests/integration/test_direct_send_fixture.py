@@ -187,6 +187,7 @@ class DirectSendFixture:
         fake_model_module,
         client: Client,
         no_bot_chat_key: str,
+        user_id: str,
     ) -> None:
         self.build = build
         self.paths = paths
@@ -198,6 +199,7 @@ class DirectSendFixture:
         self.fake_model_module = fake_model_module
         self.client = client
         self.no_bot_chat_key = no_bot_chat_key
+        self.user_id = user_id
         self._lease_holders: list[Any] = []
         self.approval_timeout = 120  # `approvals.timeout` seconds written by `_rewrite_config`
 
@@ -219,6 +221,7 @@ class DirectSendFixture:
         self, *, direct_send_enabled: bool = True, api_server_host: str = "127.0.0.1",
         owner_device_ids: tuple[str, ...] | None = None,
         approval_timeout: int | None = None,
+        cron_enabled: bool = False, model_enabled: bool = False,
     ) -> None:
         if approval_timeout is not None:
             self.approval_timeout = approval_timeout
@@ -232,6 +235,7 @@ class DirectSendFixture:
             owner_device_ids=(
                 (self.reference_device_id,) if owner_device_ids is None else owner_device_ids
             ),
+            cron_enabled=cron_enabled, model_enabled=model_enabled,
         )
 
     def set_api_server_host(self, host: str) -> None:
@@ -356,7 +360,7 @@ def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSe
                 build, paths, hmp_port=hmp_port, api_server_port=api_server_port,
                 api_key=api_key, gateway_proc=proc, fake_model=fake_model,
                 fake_model_module=fake_model_module, client=client,
-                no_bot_chat_key=no_bot_chat_key,
+                no_bot_chat_key=no_bot_chat_key, user_id=authorized_user_id,
             )
             direct_send_fixture.reference_device_id = ref["device"]["device_id"]
             direct_send_fixture._rewrite_config()
@@ -477,12 +481,8 @@ def test_flag_off_is_503(gateway: DirectSendFixture) -> None:
     must re-open it just as fast, so the rest of this suite's fixture (which relies on the flag
     being on) is left exactly as it was.
 
-    DS-2(b): on a build whose base gate is genuinely `"open"` (this round's own "additional
-    finding" against `experimental`), the flag cannot close it at all -- that is correct, not a
-    bug (`gate.direct_send_gate`'s own "OPEN wins unchanged"), so this test expects `200` there
-    instead of `503`."""
+    A full-guarantee build still requires this owner switch; no build may bypass it."""
     client = gateway.client
-    genuinely_open = gateway.base_gate_state() == "open"
     gateway.set_direct_send_flag(False)
     try:
         ref = bot_chat_ref(client, DEFAULT_PROFILE)
@@ -491,11 +491,8 @@ def test_flag_off_is_503(gateway: DirectSendFixture) -> None:
             client, DEFAULT_PROFILE, cmid=str(uuid.uuid4()), expected_head=head,
             text="closed while off",
         )
-        if genuinely_open:
-            assert status == 200, body
-        else:
-            assert status == 503, body
-            assert body["error"]["code"] == "write_gate_closed"
+        assert status == 503, body
+        assert body["error"]["code"] == "write_gate_closed"
     finally:
         gateway.set_direct_send_flag(True)
 
@@ -511,19 +508,16 @@ def test_non_loopback_bind_configured_closes_the_gate(gateway: DirectSendFixture
     """Round 2 BLOCKER #3: a configured non-loopback (or unverifiable) bind must fail closed, on
     a REAL config read against a live gateway -- not only the unit-level fake.
 
-    DS-2(b): on a build whose base gate is genuinely `"open"`, an unusable loopback endpoint does
-    not close the GATE (Hermes itself still reports full guarantees) -- it makes the one
-    delivery mechanism unavailable, `api_server_unavailable`, not `write_gate_closed`."""
+    The route closes on either a full- or reduced-guarantee build when its only
+    implemented delivery endpoint is not loopback-bound."""
     client = gateway.client
-    genuinely_open = gateway.base_gate_state() == "open"
     gateway.set_api_server_host("0.0.0.0")  # noqa: S104 -- deliberately refused, never connected
     try:
         status, body = send(
             client, DEFAULT_PROFILE, cmid=str(uuid.uuid4()), expected_head=0, text="never sent"
         )
         assert status == 503, body
-        expected_code = "api_server_unavailable" if genuinely_open else "write_gate_closed"
-        assert body["error"]["code"] == expected_code
+        assert body["error"]["code"] == "write_gate_closed"
     finally:
         gateway.set_api_server_host("127.0.0.1")  # restore for any later test in this session
 
@@ -560,3 +554,45 @@ def test_timeout_then_lookup_reaches_accepted_without_a_resend(gateway: DirectSe
     # turn (the response is exactly the finalized outcome, no network call).
     status, body = send(client, DEFAULT_PROFILE, cmid=cmid, expected_head=head, text="be slow")
     assert status == 200 and body["state"] == "accepted", body
+
+
+def test_host_grant_is_per_device_on_real_gateway(gateway: DirectSendFixture) -> None:
+    """Pairing one privileged phone must not elevate a sibling of the same user."""
+    gateway._rewrite_config(cron_enabled=True, model_enabled=True)
+    gateway.restart_gateway()
+    jobs_path = f"/hmp/v1/bots/{DEFAULT_PROFILE}/jobs"
+    model_path = f"/hmp/v1/bots/{DEFAULT_PROFILE}/model/default"
+
+    # The first reference client explicitly declined controls at the host
+    # prompt. Both routes hide themselves from it even with feature flags on.
+    for path in (jobs_path, model_path):
+        status, body = gateway.client.get(path)
+        assert status == 404, body
+
+    granted_ref = dsf.pair_reference_device(
+        gateway.build, gateway.paths, port=gateway.hmp_port,
+        user_id=gateway.user_id, label="granted-fixture-phone",
+        grant_owner_controls=True,
+    )
+    granted = Client(
+        gateway.hmp_port, granted_ref["iid"], granted_ref["device"]["access_token"]
+    )
+    status, body = granted.get(jobs_path)
+    assert status == 200 and body["jobs"] == [], body
+    status, body = granted.post(jobs_path, {
+        "name": "owner-grant fixture", "schedule": "every 1h",
+        "prompt": "Summarize fixture status",
+    })
+    assert status == 200 and body["job"]["enabled"] is False, body
+    if gateway.build.label == "stock-base":
+        status, body = granted.get(model_path)
+        assert status == 200 and "model" in body, body
+    else:
+        # Experimental Hermes retains the qualified cron bridge fingerprint,
+        # but its model bridge fingerprint is not in the separate allowlist.
+        # A device grant must not bypass that build gate.
+        status, body = granted.get(model_path)
+        assert status == 503 and body["error"]["code"] == "model_unavailable", body
+    for path in (jobs_path, model_path):
+        status, body = gateway.client.get(path)
+        assert status == 404, body

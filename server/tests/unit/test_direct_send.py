@@ -176,22 +176,33 @@ OPEN = WriteGate(state=WriteGateState.OPEN, reason=None)
 
 
 @pytest.mark.asyncio
-async def test_genuinely_open_gate_still_resolves_and_uses_the_endpoint(store: Store) -> None:
-    """Found only by running the new fixture-gateway suite against the `experimental` build,
-    whose own capability map genuinely satisfies GU-4's OPEN floor: HMP_V1.md's own text describes
-    a native Hermes admission path for this case that does not exist in this codebase (FR-053).
-    The loopback mechanism is the only one implemented -- a genuinely OPEN gate must still resolve
-    and use it (never silently skip straight to `api_server_unavailable` with no attempt at all),
-    and the flag being off must not matter when the base gate is already OPEN."""
+async def test_genuinely_open_gate_still_requires_owner_switch(store: Store) -> None:
+    """A full Hermes guarantee does not override HMP's own send authorization switch."""
     bridge = clean_bridge(head=5)
     req = DirectSendRequest(client_message_id="c1", expected_head=5, text="hi")
+    with pytest.raises(ds.DirectSendError) as excinfo:
+        await ds.handle_direct_send(
+            make_deps(store, bridge),
+            iid="i1",
+            user_id="u1",
+            profile="default",
+            request=req,
+            flag_enabled=False,
+            base_write_gate=OPEN,
+        )
+    assert excinfo.value.failure.code.value == "write_gate_closed"
+
+
+@pytest.mark.asyncio
+async def test_genuinely_open_gate_sends_when_owner_switch_is_on(store: Store) -> None:
+    bridge = clean_bridge(head=5)
     outcome = await ds.handle_direct_send(
         make_deps(store, bridge),
         iid="i1",
         user_id="u1",
         profile="default",
-        request=req,
-        flag_enabled=False,
+        request=DirectSendRequest(client_message_id="c1", expected_head=5, text="hi"),
+        flag_enabled=True,
         base_write_gate=OPEN,
     )
     assert outcome.state == "accepted"
@@ -212,11 +223,11 @@ async def test_genuinely_open_gate_with_no_resolvable_endpoint_fails_closed(stor
             user_id="u1",
             profile="default",
             request=req,
-            flag_enabled=False,
+            flag_enabled=True,
             base_write_gate=OPEN,
         )
-    assert excinfo.value.failure.code.value == "api_server_unavailable"
-    assert excinfo.value.failure.retryable is True
+    assert excinfo.value.failure.code.value == "write_gate_closed"
+    assert excinfo.value.failure.retryable is False
 
 
 @pytest.mark.asyncio
