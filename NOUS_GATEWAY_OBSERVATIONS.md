@@ -24,7 +24,8 @@ in the prior separate sequential-scan fixture. Native page calls are 33 per batc
 4224, independent of selector count; all twelve native concurrent-writer controls passed.
 A bounded 42.99 MB uncharged-content scenario and registry mint memory were measured separately.
 These observations qualify neither full eligibility/handler cost nor allocation bounds, T12,
-serving or a device. C6b binding and request/process/device admission remain open. The
+serving or a device. C6b source is accepted below; complete native binding cost and
+request/process/device admission remain open. The
 [conditional C6 design](https://github.com/MahdiHedhli/hermes-hmp/blob/f1bc986/specs/011-local-image-serving/ROOT_DECISIONS.md#c6-descriptor-mint-batch-freeze-2026-10-01)
 keeps each fetch's single scan/recheck unchanged. No cache, registry hit or assistant path grants
 authority.
@@ -35,7 +36,7 @@ Hermes module reloads, with bounded no-follow reads and import-shadowing refusal
 Opus design amendments are adopted; the inert gate source is now accepted as described below.
 Listener integration, native callee closure and media entries remain open. This does not change or qualify the separate approval gate.
 
-**Current source scope (HMP `0dd2a37`).** The inert S6a gate source (`e5e6d40`, module
+**Current source scope (HMP `d1e55d2`).** The inert S6a gate source (`e5e6d40`, module
 `fb8ae21e...`) is accepted after an independent Opus review, one test-only repair and a delta
 review; root and the reviewer passed 392 focused cases. Its manifest build list is empty and
 no production listener uses it, so it admits nothing. It keeps a persistent stdlib
@@ -52,7 +53,13 @@ canonical lineage; the fixture demonstrated an operator retitle. On the
 real flow the title moves to a visible compression child while the root stays hidden `1`.
 The design therefore requires a unique native compression lineage equal to the parent chain,
 and mint and fetch will share one classification helper that treats uncertainty in either kind as
-closed. No binding, serving or build is accepted. The native component cost evidence is unchanged
+closed. The inert binding source is independently accepted at `d1e55d2` after strict-walk
+and own-Phone proof repairs; root passed 411 binding/layout cases. This is source acceptance
+only: complete exact-native binding cost, actual Phone-path evidence and request/process/device
+admission remain open. Three preexisting contract-table failures remain in the full unit suite;
+a full-green suite is not claimed. Listener binding is being implemented from the separately
+reviewed design and is not source-accepted yet. No handler, manifest entry or serving build is
+admitted. The native component cost evidence is unchanged
 at `5e63839`; it is not a full binding cost, T12 or a scalar performance promise.
 
 The [bounded producer fixture](https://github.com/MahdiHedhli/hermes-hmp/blob/f9c542b/docs/research/local-media-lexical-evidence-2026-10-01.md) now compares the raw persisted `image` string with the actual native routed-home helper's string plus `/cache/images/`, without normalizing the candidate. Root repeated three positive native flows on exact `8afaab37` (Desktop, Phone stand-in, deferred tool), retained private evidence, and passed 37 focused string/helper cases. All matched the selected profile prefix and one flat 128-byte-bounded name, not the foreign prefix; native source was clean and unchanged. This is one synthetic provider using real `save_b64_image`, one scratch layout and no live HMP media endpoint. Other producers/home spellings remain uncharacterized.
@@ -156,7 +163,20 @@ Current HMP status (draft, not released): an independent approval manifest gates
 
 The [earlier ac0 fixture evidence](https://github.com/MahdiHedhli/hermes-hmp/pull/44) cannot qualify the current candidate.
 
-**Future priority notification (not existing).** A future urgent-approval notification would carry only a minimal payload hint to fetch fresh state over APNs or FCM. The hint is not authority, carries no sensitive fields, and is not part of any current build, which is foreground-only. It needs a push provider and credential-custody design plus physical-device testing. No ETA.
+**Priority notifications (architecture only).** An urgent approval alert remains unimplemented.
+Independent architecture review separates a testable client tap-handoff from real APNs/FCM
+registration and delivery. A strict opaque hint cannot create a pairing or confer authority:
+explicit instance switching, current registration/pairing generation and context-epoch checks,
+and a fresh authoritative prompt read are required. An alert supplies no command, bot name,
+answer, pin or attachment URL, and its opaque references must not be logged. Approval-owner
+eligibility is separate from the jobs/model controls grant and must be rechecked per device.
+The HMP broker's configuration-derived expiry is an estimate, not evidence of a native
+execution deadline; pending state and Hermes's answer boundary remain authoritative.
+Registration, recipient eligibility, revocation and provider dispatch are an HMP contract and
+provider-infrastructure work item, not proof of a missing Nous notification API. Stable native
+expiry and cross-owner settlement remain useful upstream contracts. Current dogfood is
+foreground-only, and provider custody, signed capabilities, lifecycle cleanup and physical
+background delivery are unqualified. No ETA.
 
 **Watch exploration (not implemented).** A standalone Family Setup watch without its own iPhone is future exploration only. An optional parent companion phone does not prove an always-on relay. No ETA.
 
