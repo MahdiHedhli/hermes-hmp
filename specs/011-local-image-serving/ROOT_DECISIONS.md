@@ -136,8 +136,9 @@ unchanged. A new inert batch module requires independent security review before 
 - **C6.2 Inputs and eligibility.** One profile/session/tip and the home captured by the same
   `_profile_home` call as database acquisition; an exact tuple of 1..128 unique positive non-bool
   row-id / exact 32-byte digest pairs copied unchanged from the returned sidecar. Query tip,
-  lineage tip and fresh S4 eligible tip must agree. Canonical Bot Chat title AND hidden status,
-  chain/live tip, or the caller's own Phone session remain mandatory. Hints, assistant text,
+  lineage tip and fresh S4 eligible tip must agree. Canonical Bot Chat title AND lineage-root hidden
+  status (as clarified by the C6b freeze below), chain/live tip, or the caller's own Phone session
+  remain mandatory. Hints, assistant text,
   Markdown and MEDIA never confer authority. The batch never adds, replaces or backfills selectors.
 - **C6.3 Shared bracket.** Before/after eligibility tip checks, before/after equal active ids,
   at most 4096 strictly increasing positive ids, 128-row paging with unchanged count/order checks.
@@ -172,6 +173,85 @@ file access/stat at mint. This is an internal authority/cost clarification, not 
 S2d may finish independently. C6a batch source follows S2d to avoid shared layout-test edits;
 C6b bridge binding and S4 emission follow its independent review. Existing non-atomic/ABA,
 trusted native materialization, Linux, T12, process qualification and device gates remain open.
+
+## C6b binding design freeze (2026-10-01)
+
+These resolve the independent Opus D1-D5 choices. They are not implementation or admission.
+Root verified the actual native public rotation/title helpers; the bounded
+[rotation evidence](../../docs/research/local-media-canonical-rotation-evidence-2026-10-01.md)
+passed 15 cases and 51 checks. Root adopts the bounded independent design check's A1-A5
+amendments below. Source acceptance and complete binding cost remain separate gates.
+
+- **D1 Root-hidden canonical lineage.** On exact 8afa, publication creates a visible child and
+  title transfer leaves the hidden root untitled. Require the title lookup to return an exact
+  dict with exact canonical title and exact nonempty string id T. Resolve T to the query tip.
+  Require a nonempty exact list from `get_compression_lineage(T)`, unique nonempty string ids,
+  at most 100 ids, equal
+  to the bounded root-first parent walk from that tip. T and the bound sidecar session must be
+  in that chain, and the bound session must independently resolve to that same tip. Read every
+  chain row as an exact dict with its exact matching id. The root's re-read parent must be exactly
+  `None`, and its hidden value must be exact integer `1`. Root, T and live tip must have exact
+  integer `archived == 0`. Every chain row other than T must have a null or exact empty-string
+  title. T's re-read row must still have an exact string equal to the canonical title. The holder may
+  be visible. Interrupted transfers (title on root or middle ancestor) are valid under the same
+  proof. A missing, malformed, divergent, ambiguous or unprovable state refuses.
+  Retained residual: any native title writer can retitle a hidden ordinary compressed
+  lineage and create indistinguishable metadata. No assistant text, hint or media path supplies
+  this proof; native session metadata is trusted, including model-generated or operator-set
+  titles and automatic titling if it can produce this state while the canonical title is free.
+  Separate bearer/profile gates and
+  fetch validation remain mandatory.
+- **D2 Native equality, no mirrored fork predicate.** Reuse the existing `_parent_chain` helper
+  unchanged, then enforce exact row checks and native-lineage equality in the new media helper.
+  Do not use `resolve_bot_chat`'s union, its fallback tip, or copied SQL. Ordinary child, fork,
+  reset or divergent resume-walker paths must refuse. Re-run the complete classification,
+  including exclusion of the other kind, in both batch tip brackets on the same captured
+  database, without a verdict cache. A kind change or loss of uniqueness refuses every selector.
+- **D3 One home/database capture, lexical mint check.** One `_db_home(profile)` supplies both.
+  The home must be an exact nonempty absolute normalized string, no NUL or `..` component.
+  No image/home stat or file open at mint; the existing database-file check is retained.
+  Non-symlink file-root/leaf proof belongs to fetch. E1 is spelling evidence, not authority.
+- **D4 Exact own Phone bound session.** A fresh existing `conversation_ref(user, profile)` must
+  match the sidecar's bound profile/session, then native resolution must equal its query tip.
+  A compressed bound ancestor qualifies; a browsed projected tip that differs from the own
+  bound id does not. Foreign Phone sessions refuse. Evaluate both kinds with three outcomes:
+  proven, closed negative, or uncertain. Any native exception, wrong type, missing required row
+  field or unprovable parent walk in either proof closes the whole binding as
+  `ELIGIBILITY_UNCERTAIN`, even when the other proof succeeds. Known negative facts (no title
+  row, no own conversation, different bound session, non-hidden root, archived lineage, native
+  lineage/parent-chain inequality or another nonempty chain title) mean "not this kind".
+  Exactly one kind must prove; both or neither give `NOT_ELIGIBLE`. Do not consult `MediaOrigin`.
+- **D5 Authorization placement.** C6b runs inside the already authorized read; it performs no
+  new native auth call, request-access trigger or grant. S4 separately checks current owner,
+  flag and fresh qualification before mint. References alone authorize no file access;
+  both fetch phases recheck native per-bot authorization. A grant change after a read can thus
+  leave a useless opaque reference, but cannot authorize its fetch.
+- **D6 Invalid internal input.** `bind_media_batch` returns `None` for a non-exact sidecar,
+  because an exact identity-bound result cannot hold that input. Its optional protocol return
+  is `MediaBatchBinding | None`; S4 requires the exact result and `binding.sidecar is result.sidecar`.
+  Never fabricate a sidecar, widen its frozen constructor or let invalid optional input become
+  a successful text-read error. A valid sidecar with a refusal receives a closed result.
+  Binding session/tip views are `str | None`, matching closed sidecars. Only an OK result may
+  hold a kind or accepted ids; an OK batch with no accepted candidates mints zero descriptors.
+  S4 checks exact wrapper, sidecar identity and OK before consuming these views.
+- **A1 Fetch uses the same proof.** Phase two calls the same C6b eligibility helper by identity
+  for the handle's user/profile/bound session/expected tip, on that phase's one captured database.
+  Re-evaluate both kinds with D4's uncertainty rule and require the original kind to remain the
+  unique proven kind and its tip to equal the handle tip. Never use a weaker send resolver,
+  `resolve_bot_chat` or `MediaOrigin`. The helper accepts primitive bound inputs so fetch need
+  not reconstruct a sidecar. Phase-one/two native authorization remains separate.
+
+Source tests must causally cover the private evidence's unexercised predicate paths: mismatched
+bound-session resolution, an empty-string rather than null root parent, other chain titles,
+malformed shapes and native exceptions. Also cover classification becoming ambiguous or uncertain
+in either batch bracket, and the same identity-bound helper at future fetch integration.
+
+The new inert module reuses accepted batch primitives and selectors by identity; no accepted
+batch, sidecar guards, old read or send methods change. Bind at most once per response; mint only
+fresh accepted ids newest-first. Native metadata reads may materialize unbounded prompts and
+flush token counts. Exact-native complete binding cost, concurrent-writer controls, non-atomic/ABA,
+T12, S4-S6, callee closure, manifest and device acceptance remain open. Component batch timing
+does not establish this binding's cost or authority.
 
 ## S6 media qualification design freeze (2026-10-01)
 

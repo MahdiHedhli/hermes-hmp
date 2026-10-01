@@ -1355,7 +1355,7 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   matches `^[A-Za-z0-9_-]{43}$`. A host never emits extra keys. Client rules: ignore unknown extra
   keys on an otherwise valid descriptor; an unknown `kind` is ignored (row renders, no card); a
   malformed `media` is dropped and the row remains. A descriptor never comes from an assistant row.
-- **LM-5. Mint preconditions (candidate only; no file access or stat at mint).** The row is in
+- **LM-5. Mint preconditions (candidate only; no image/home file access or stat at mint).** The row is in
   an eligible session of the right kind (LM-6); `tool_name == "image_generate"`; the raw tool-result
   content, before the 4000-character display cut, is a `str` of at most 64 KiB UTF-8 that parses
   to an object with `success` equal to `true`, no `error` key, and `image` a `str` of 1..4096
@@ -1363,15 +1363,23 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   mint and fetch. Name derivation is lexical only: `image` must start with the routed profile home
   string plus `/cache/images/`, and the remainder must be a flat, bounded name. There is no
   `resolve()`, no legacy `image_cache`, no legacy-preferring or mkdir helper. A symlinked or
-  differently spelled home refuses.
+  differently spelled home refuses at fetch; mint checks spelling lexically and cannot prove
+  non-symlink without filesystem access. The existing database-file check remains permitted.
   Descriptor minting also requires one request-scoped active-history linkage batch per
   emitting response under the C6 freeze in `specs/011-local-image-serving/ROOT_DECISIONS.md`: strict
   active-set/declaration/digest checks for each returned candidate, with no cross-request
-  authority cache. This performs no file access or stat, and does not replace the per-fetch scan.
+  authority cache. This performs no image/home file access or stat, and does not replace the
+  per-fetch scan.
 
 - **LM-6. Session kind.** Fixed at mint, rechecked at fetch. `phone` iff the session equals the
   caller's own Phone conversation session. `bot_chat` iff it is in the canonical Bot Chat
   compression chain and its tip is the live tip. Any other session gets no descriptor.
+  The C6b freeze in `ROOT_DECISIONS.md` defines the shared mint/fetch proof: exact native
+  compression-lineage/parent-chain equality, canonical title holder, hidden lineage root,
+  current bound-session resolution and fresh unique-kind classification. The title can move
+  to a visible compression child; ordinary visible canonical titles do not qualify. Native
+  title writers are trusted metadata and can create indistinguishable retitled hidden lineages;
+  per-profile bearer gates and strict tool-result/fetch checks still apply.
 - **LM-7. Authority.** Authority comes **only** from a strict same-profile `image_generate` tool
   result row. Assistant `MEDIA:` text and Markdown are never parsed for authority.
 - **LM-8. Non-wire sidecar.** The raw candidate is internal. It is carried to the server handler in
