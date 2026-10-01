@@ -187,6 +187,25 @@ test SHA-256: `aee82e9fefb96d2eee63937516f4f0618c1742167a7d01aaa8b425ed5e010a17`
 Public result constructors remain conventional immutable containers rather than tamper-resistant
 authority; C6b must call the scanner itself and consume only that fresh result.
 
+## C6b inert binding source accepted (2026-10-01)
+
+The bounded source passed Opus review, its strict-walk repair passed independent Sonnet review,
+and root verified the focused tests. **C6b, S4, S5 and S6 stay unchecked**: native binding cost and
+serving qualification are still open. `local_media_batch_binding.py` holds the closed `MediaBatchBinding` result, `MintKind`,
+the pure two-proof `classify` rule and a lexical `strict_home`. The bridge adds
+`bind_media_batch(sidecar)` (an exact `MediaBatchBinding`, or `None` for a non-exact sidecar) and the
+shared `media_eligibility(db, user_id, profile, session_id, expected_tip)` helper, with
+`_phone_proof` and `_bot_chat_proof`. One `_db_home` capture, one fresh `scan_active_batch` and a
+full both-kind reclassification at the initial check and both batch tip checks. Nothing calls them;
+no route, flag, manifest entry, registry use or serving. The optional `MediaReadBridge` protocol
+annotation was not added, so the accepted sidecar stays byte-identical; S4 must add it with its own
+pin change. The strict walk re-read precedes lineage/membership negatives; malformed Phone refs
+close the two-proof classification. The result constructor has no magnitude cap on its six counters;
+actual batch counters are bounded. Independent delta verification: 411 tests passed (binding plus
+layout); three pre-existing draft MEDIA contract-table failures remain outside this focused result.
+Exact-native binding cost, concurrent-writer and ABA behavior, Phone evidence, fetch
+integration and every other C6/S4/S5/S6 gate remain open.
+
 ## S6 design accepted, implementation open (2026-10-01)
 
 The [S6 root freeze](ROOT_DECISIONS.md#s6-media-qualification-design-freeze-2026-10-01) adopts the

@@ -39,6 +39,7 @@
     "identity.py",
     "local_media_active_batch.py",
     "local_media_active_scan.py",
+    "local_media_batch_binding.py",
     "local_media_candidate.py",
     "local_media_file_safety.py",
     "local_media_gate.py",

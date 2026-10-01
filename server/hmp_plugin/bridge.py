@@ -1067,6 +1067,191 @@ class HermesReadBridge:
 
         return self._read(run)
 
+    # C6b: the media batch binding. Nothing calls these yet. Each proof has three outcomes (proven,
+    # closed negative, uncertain); a native exception, a wrong type or a missing required field is
+    # uncertain, a known contrary fact is negative. No exception text or native value leaves them.
+
+    def _phone_proof(self, db: Any, user_id: str, profile: str, session_id: str) -> Any:
+        """The caller's own existing conversation is exactly the bound session, resolved strictly
+        (no `_tip` fallback). A compressed own ancestor qualifies; a browsed projected tip that
+        differs from the own bound id does not."""
+        from .local_media_batch_binding import PROOF_NEGATIVE, PROOF_UNCERTAIN, proven
+
+        try:
+            own = self.conversation_ref(user_id, profile)
+            if own is None:
+                return PROOF_NEGATIVE
+            if (
+                type(own) is not ConversationRef
+                or type(own.session_id) is not str
+                or not own.session_id
+                or type(own.user_id) is not str
+                or type(own.profile) is not str
+                or own.user_id != user_id
+                or own.profile != profile
+            ):
+                return PROOF_UNCERTAIN
+            if own.session_id != session_id:
+                return PROOF_NEGATIVE
+            tip = db.resolve_resume_session_id(own.session_id)
+            if type(tip) is not str or not tip:
+                return PROOF_UNCERTAIN
+            return proven(tip)
+        except Exception:
+            return PROOF_UNCERTAIN
+
+    def _bot_chat_proof(self, db: Any, session_id: str) -> Any:
+        """The canonical Bot Chat lineage proof: a titled holder, its native lineage equal to the
+        unchanged parent walk from the tip, the bound session in it and resolving to the same tip,
+        and strict root/holder/tip row facts (D1). No mirrored fork predicate and no
+        `resolve_bot_chat`."""
+        from .local_media_batch_binding import PROOF_NEGATIVE, PROOF_UNCERTAIN, proven
+
+        try:
+            row = db.get_session_by_title(_CANONICAL_BOT_CHAT_TITLE)
+            if row is None:
+                return PROOF_NEGATIVE
+            if type(row) is not dict:
+                return PROOF_UNCERTAIN
+            holder, title = row.get("id"), row.get("title")
+            if type(holder) is not str or not holder or type(title) is not str:
+                return PROOF_UNCERTAIN
+            if title != _CANONICAL_BOT_CHAT_TITLE:
+                return PROOF_UNCERTAIN
+            tip = db.resolve_resume_session_id(holder)
+            lineage = db.get_compression_lineage(holder)
+            if type(tip) is not str or not tip or type(lineage) is not list:
+                return PROOF_UNCERTAIN
+            if not 0 < len(lineage) <= _LINEAGE_WALK_BOUND:
+                return PROOF_UNCERTAIN
+            if any(type(sid) is not str or not sid for sid in lineage):
+                return PROOF_UNCERTAIN
+            if len(set(lineage)) != len(lineage):
+                return PROOF_UNCERTAIN
+            chain = _parent_chain(db, tip)
+            if chain is None:
+                return PROOF_UNCERTAIN
+            # `_parent_chain` is lax (a missing id or parent key reads as a root), so the walk is
+            # strictly re-read first: an incomplete walk is uncertain, never a negative.
+            rows = [db.get_session(sid) for sid in chain]
+            for index, (sid, item) in enumerate(zip(chain, rows, strict=True)):
+                if type(item) is not dict or type(item.get("id")) is not str or item["id"] != sid:
+                    return PROOF_UNCERTAIN
+                if "title" not in item or "parent_session_id" not in item:
+                    return PROOF_UNCERTAIN
+                link = item["parent_session_id"]
+                if link is not None and type(link) is not str:
+                    return PROOF_UNCERTAIN
+                if index and link != chain[index - 1]:
+                    return PROOF_UNCERTAIN
+            if tuple(lineage) != chain or holder not in chain or session_id not in chain:
+                return PROOF_NEGATIVE
+            bound_tip = db.resolve_resume_session_id(session_id)
+            if type(bound_tip) is not str or not bound_tip:
+                return PROOF_UNCERTAIN
+            negative = bound_tip != tip
+            for index, (sid, item) in enumerate(zip(chain, rows, strict=True)):
+                held = item["title"]
+                if sid == holder:
+                    if held is not None and type(held) is not str:
+                        return PROOF_UNCERTAIN
+                    negative = negative or held != _CANONICAL_BOT_CHAT_TITLE
+                elif held is not None:
+                    if type(held) is not str:
+                        return PROOF_UNCERTAIN
+                    negative = negative or held != ""
+                if index == 0:
+                    if "hidden" not in item:
+                        return PROOF_UNCERTAIN
+                    parent, hidden = item["parent_session_id"], item["hidden"]
+                    if type(hidden) is not int:
+                        return PROOF_UNCERTAIN
+                    negative = negative or parent is not None or hidden != 1
+                if index == 0 or sid in (holder, tip):
+                    archived = item.get("archived")
+                    if type(archived) is not int:
+                        return PROOF_UNCERTAIN
+                    negative = negative or archived != 0
+            return PROOF_NEGATIVE if negative else proven(tip)
+        except Exception:
+            return PROOF_UNCERTAIN
+
+    def media_eligibility(
+        self, db: Any, user_id: str, profile: str, session_id: str, expected_tip: str
+    ) -> Any:
+        """`(reason, kind, tip)` for the bound primitive inputs on the caller's captured `db`.
+
+        Both kinds are always evaluated; an uncertain proof in either closes the result, exactly
+        one proven kind may be `ok`, and its tip must equal `expected_tip`. Mint and (later) fetch
+        share this one helper. It consults no `MediaOrigin`, hint or text, and no authorization."""
+        from .local_media_batch_binding import ELIGIBILITY_UNCERTAIN, classify
+
+        values = (user_id, profile, session_id, expected_tip)
+        if any(type(value) is not str or not value for value in values):
+            return (ELIGIBILITY_UNCERTAIN, None, None)
+        phone = self._phone_proof(db, user_id, profile, session_id)
+        bot = self._bot_chat_proof(db, session_id)
+        return classify(phone, bot, expected_tip)
+
+    def bind_media_batch(self, sidecar: Any) -> Any:
+        """The exact `MediaBatchBinding` for a valid exact sidecar, else `None`.
+
+        One `_db_home` supplies the home and database. A CANDIDATES sidecar with consistent tips is
+        classified, then judged by exactly one fresh `scan_active_batch` whose `current_tip`
+        re-runs the full classification (both kinds). Any media-only failure is a closed reason;
+        nothing is logged and no old read result changes. It never raises for such a failure."""
+        from .local_media_active_batch import scan_active_batch
+        from .local_media_batch_binding import (
+            ELIGIBILITY_UNCERTAIN,
+            HOME_INVALID,
+            NOT_CANDIDATES,
+            OK,
+            PROVENANCE_MISMATCH,
+            MediaBatchBinding,
+            strict_home,
+        )
+        from .local_media_sidecar import MediaSidecar, SidecarStatus
+
+        if type(sidecar) is not MediaSidecar:
+            return None
+        zero = (0, 0, 0, 0)
+
+        def closed(reason: str, stats: tuple[int, ...] = zero) -> Any:
+            counts = (len(sidecar.candidates), 0, *stats)
+            return MediaBatchBinding(sidecar, None, reason, (), counts)  # type: ignore[arg-type]
+
+        if sidecar.status is not SidecarStatus.CANDIDATES or not sidecar.candidates:
+            return closed(NOT_CANDIDATES)
+        session_id, tip, profile = sidecar.session_id, sidecar.query_tip, sidecar.profile
+        if type(session_id) is not str or type(tip) is not str or sidecar.lineage_tip != tip:
+            return closed(PROVENANCE_MISMATCH)
+        selectors = tuple((c.tool_row_id, c.raw_digest) for c in sidecar.candidates)
+        user_id = sidecar.user_id
+        try:
+            with self._db_home(profile) as (home_path, db):
+                home = os.fspath(home_path)
+                if not strict_home(home):
+                    return closed(HOME_INVALID)
+                reason, kind, _ = self.media_eligibility(db, user_id, profile, session_id, tip)
+                if reason != OK:
+                    return closed(reason)
+
+                def current_tip() -> str:
+                    again, same, now = self.media_eligibility(db, user_id, profile, session_id, tip)
+                    if again != OK or same is not kind or type(now) is not str:
+                        raise BridgeError("media eligibility changed")
+                    return now
+
+                result = scan_active_batch(db, tip, selectors, home=home, current_tip=current_tip)
+            stats = tuple(count for _, count in result.stats)
+            if not result.ok:
+                return closed(result.reason, stats)
+            accepted = tuple(sorted(result.accepted, reverse=True))
+            counts = (len(sidecar.candidates), len(accepted), *stats)
+            return MediaBatchBinding(sidecar, kind, OK, accepted, counts)  # type: ignore[arg-type]
+        except Exception:
+            return closed(ELIGIBILITY_UNCERTAIN)
+
     def lineage(self, ref: ConversationRef) -> LineageInfo:
         def run() -> LineageInfo:
             with self._db(ref.profile) as db:

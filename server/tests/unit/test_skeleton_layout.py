@@ -50,6 +50,7 @@ CONTRACT_MODULES = {
     "local_media_candidate.py",  # bounded candidate extraction (LM-8); inert, accepted modules only
     "local_media_active_batch.py",  # request-scoped active batch (C6a); inert, scanner + candidate
     "local_media_gate.py",  # process qualification gate (S6a); inert, compat + stdlib only
+    "local_media_batch_binding.py",  # closed batch binding (C6b); inert, batch + sidecar + stdlib
 }
 DATA_FILES = {
     "plugin.yaml",
@@ -104,7 +105,13 @@ OPTIONAL_MODULES = sorted(m[:-3] for m in CONTRACT_MODULES if m.startswith("loca
 ALLOWED_OPTIONAL_IMPORTS = {
     "local_media_result": {"local_media_active_scan"},
     # S2c: the bridge may load exactly these two, only below a function boundary (pinned below).
-    "bridge": {"local_media_candidate", "local_media_sidecar"},
+    # C6b: the same function-local rule for the batch scan and its binding result.
+    "bridge": {
+        "local_media_active_batch",
+        "local_media_batch_binding",
+        "local_media_candidate",
+        "local_media_sidecar",
+    },
     # S2d: the read cores load the carrier only below a function boundary (pinned below).
     "reads": {"local_media_sidecar"},
     "local_media_candidate": {
@@ -115,6 +122,8 @@ ALLOWED_OPTIONAL_IMPORTS = {
     },
     # C6a: the batch loads exactly the accepted scanner and candidate, at module scope only.
     "local_media_active_batch": {"local_media_active_scan", "local_media_candidate"},
+    # C6b: the binding loads exactly the accepted batch and sidecar, at module scope only.
+    "local_media_batch_binding": {"local_media_active_batch", "local_media_sidecar"},
 }
 
 
@@ -140,7 +149,11 @@ def test_only_optional_wrapper_imports_optional_modules() -> None:
         assert found <= allowed, f"{path.name} imports {sorted(found - allowed)}"
 
 
-MODULE_SCOPE_ONLY = {"local_media_candidate", "local_media_active_batch"}
+MODULE_SCOPE_ONLY = {
+    "local_media_candidate",
+    "local_media_active_batch",
+    "local_media_batch_binding",
+}
 FUNCTION_SCOPE_ONLY = {"bridge", "reads"}
 
 
@@ -276,7 +289,12 @@ def _module_scope_local_media_imports(source: str) -> set[str]:
 
 def test_bridge_media_imports_are_function_local_and_exact() -> None:
     bridge = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
-    assert _local_media_imports(bridge) == {"local_media_candidate", "local_media_sidecar"}
+    assert _local_media_imports(bridge) == {
+        "local_media_active_batch",
+        "local_media_batch_binding",
+        "local_media_candidate",
+        "local_media_sidecar",
+    }
     assert not _module_scope_local_media_imports(bridge)
     # The detector sees a module-scope import (guards the pin itself).
     assert _module_scope_local_media_imports("from . import local_media_sidecar\n")

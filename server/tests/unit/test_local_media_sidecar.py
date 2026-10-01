@@ -804,7 +804,8 @@ def test_sidecar_import_loads_no_parser_scanner_or_registry() -> None:
 
 
 _SIDECAR = "local_media_sidecar"
-_MODULE_SCOPE = {"local_media_candidate.py"}  # accepted S2b: a static import, module scope ONLY
+# accepted S2b / C6b: a static import, module scope ONLY
+_MODULE_SCOPE = {"local_media_candidate.py", "local_media_batch_binding.py"}
 _FUNCTION_SCOPE = {"bridge.py", "reads.py"}  # S2c/S2d: only inside a function body
 
 
