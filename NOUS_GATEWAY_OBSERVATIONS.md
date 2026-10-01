@@ -32,8 +32,28 @@ authority.
 The [S6 media gate design](https://github.com/MahdiHedhli/hermes-hmp/blob/f1bc986/specs/011-local-image-serving/ROOT_DECISIONS.md#s6-media-qualification-design-freeze-2026-10-01)
 requires fresh native/HMP source equality and a process-wide primitive baseline preserved across
 Hermes module reloads, with bounded no-follow reads and import-shadowing refusal. Independent
-Opus design amendments are adopted; gate implementation, native callee closure and media entries
-remain open. This does not change or qualify the separate approval gate.
+Opus design amendments are adopted; the inert gate source is now accepted as described below.
+Listener integration, native callee closure and media entries remain open. This does not change or qualify the separate approval gate.
+
+**Current source scope (HMP `0dd2a37`).** The inert S6a gate source (`e5e6d40`, module
+`fb8ae21e...`) is accepted after an independent Opus review, one test-only repair and a delta
+review; root and the reviewer passed 392 focused cases. Its manifest build list is empty and
+no production listener uses it, so it admits nothing. It keeps a persistent stdlib
+`sys` anchor that survives module reload and alias homes, checks exact origin/loader/source
+files, and does bounded descriptor-based source reads with fresh checks. A later binding step must
+enforce the supported-read precondition. Source-versus-bytecode/ABA, callee closure, kernel/Git
+latency, same-account tampering, sub-interpreters and free-threaded runtimes remain open.
+
+The [C6b binding design](https://github.com/MahdiHedhli/hermes-hmp/blob/0dd2a37/specs/011-local-image-serving/ROOT_DECISIONS.md#c6b-binding-design-freeze-2026-10-01)
+is frozen after amendments A1-A5. A native public-helper replay on exact `8afaab37` passed 15
+cases and 51 checks (23 accepted, 28 refused, including one known retitle accept). It ran no Agent,
+lease, model or gateway, and it qualifies no media. Any native title writer that can produce this state can create metadata that looks like a
+canonical lineage; the fixture demonstrated an operator retitle. On the
+real flow the title moves to a visible compression child while the root stays hidden `1`.
+The design therefore requires a unique native compression lineage equal to the parent chain,
+and mint and fetch will share one classification helper that treats uncertainty in either kind as
+closed. No binding, serving or build is accepted. The native component cost evidence is unchanged
+at `5e63839`; it is not a full binding cost, T12 or a scalar performance promise.
 
 The [bounded producer fixture](https://github.com/MahdiHedhli/hermes-hmp/blob/f9c542b/docs/research/local-media-lexical-evidence-2026-10-01.md) now compares the raw persisted `image` string with the actual native routed-home helper's string plus `/cache/images/`, without normalizing the candidate. Root repeated three positive native flows on exact `8afaab37` (Desktop, Phone stand-in, deferred tool), retained private evidence, and passed 37 focused string/helper cases. All matched the selected profile prefix and one flat 128-byte-bounded name, not the foreign prefix; native source was clean and unchanged. This is one synthetic provider using real `save_b64_image`, one scratch layout and no live HMP media endpoint. Other producers/home spellings remain uncharacterized.
 
