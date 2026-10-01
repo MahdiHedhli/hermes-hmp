@@ -1,7 +1,14 @@
 # Checklist: approval process qualification matrix
 
 Unchecked means not yet confirmed at root for the CURRENT tooling diff (including amendment 1).
-Current results live only in `tasks.md` ("Current status").
+Current results live only in `tasks.md` ("Current status at the exact tested revision").
+
+Status: the full matrix passed at HMP `f4730ebb901933f34c69c609e718f3984c6e62d9` against clean Git
+Hermes `8afaab3703e336d72a72c812dd2dd249f04f166a` (7/7 stages, exactly 27 cases, 0 skips, errors or
+failures; fixture-only). Only the two evidence items that file directly shows are checked below; the
+design-invariant boxes were written for earlier diffs and are not ticked merely because the matrix
+passed. Integrating the other feature set changes the runtime digest, so the integrated revision
+needs its own new matrix after root review.
 
 ## Design invariants (review)
 
@@ -44,7 +51,7 @@ cold, 200 cached calls).
 ## Evidence to record after the run
 
 - [ ] Amendment-1 unit/tool tests and pinned Ruff on the current diff (root).
-- [ ] Matrix JSON, junit XML, `logs/collect.log`, per-stage logs, PIDs and before/after
+- [x] (at `f4730eb`) Matrix JSON, junit XML, `logs/collect.log`, per-stage logs, PIDs and before/after
       fingerprints (approval, read, direct-send) from the swap test, plus admitted-start evidence.
-- [ ] Timing (cold/cached) as local evidence only.
+- [x] (at `f4730eb`) Timing (cold/cached) as local evidence only.
 - [ ] Any failure with its log tail, reported as a failure.
