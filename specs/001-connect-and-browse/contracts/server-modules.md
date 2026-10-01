@@ -96,6 +96,15 @@ server/
     logging_policy.py             # allow-listed log fields (SEC-4, SR-007): plugin logger; aiohttp access log
                                   #   disabled or reduced to method, route template, status, duration; bridge
                                   #   exceptions logged by type only; P6 reply dropped unlogged (CS-22)
+    local_media_active_scan.py    # OPTIONAL, inert, unimplemented as a feature: reviewed local-image active-content scanner
+                                  #   (stdlib only, Python 3.11+). Imported by nothing at start-up and by no route;
+                                  #   only local_media_result.py may import it (local image contract amendment)
+    local_media_file_safety.py    # OPTIONAL, inert: reviewed file-safety checks for a future local image reader (stdlib only);
+                                  #   no caller, route, claim or manifest uses it yet
+    local_media_raster_structure.py  # OPTIONAL, inert: reviewed raster structure validator (stdlib only); no caller yet
+    local_media_result.py         # OPTIONAL, inert: bounded result parser wrapping local_media_active_scan; no caller yet.
+                                  #   No production module (start-up, reads, compat, server, adapter, registration)
+                                  #   imports any local_media_* module; a test pins this
     read_compat_builds.json       # GU-2c list (starts empty). Entries: {git_sha|null, fingerprint, source_sha?
                                   #   (provenance only), label, qualified_by, qualified_at}; matching per research
                                   #   R8 steps 4-6 (CS-19); plus "bridge_files", the mechanically computed superset
