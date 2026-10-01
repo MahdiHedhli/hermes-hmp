@@ -16,6 +16,8 @@ exceptions, each an exact (module, name) allow-list entry in the surface check:
   class of exposure (IR-6, ruling option (a); HMP v1 §12).
 - `compat.py` may import Hermes modules dynamically, but only inside its dependency probe, and only
   for a build already on the read-compatible list (see "Startup order"; ruling on T013).
+- Third-party modules restricted to one file: `qrcode` to `cli.py`, and `yaml` (PyYAML) to
+  `routes.py`, imported lazily (specs/005-new-profile-routing). No other module may import either.
 
 The spike is reference only. Code is rewritten and reviewed, never copied wholesale (constitution
 VIII).
@@ -79,7 +81,7 @@ server/
                                   #   hermes_plugins.hmp*) cannot split a running app from the CTX_KEY/helpers
                                   #   it was built with (see the module's own docstring)
     adapter.py                    # HmpAdapter(BasePlatformAdapter): lifecycle only (start/stop listener)
-    cli.py                        # `hermes hmp …` operator commands (PR1-*, PR3-*, PR7-1, PR7-2, compat);
+    cli.py                        # `hermes hmp …` operator commands (PR1-*, PR3-*, PR7-1, PR7-2, routes add, compat);
                                   #   `pair offer` is one command end to end unless `--no-wait` (owner
                                   #   requirement, 2026-09-27): it waits, shows the expected code and asks
                                   #   "Does the phone show this code? [y/N]" (OD-F7, replacing the typed
@@ -88,6 +90,9 @@ server/
                                   #   their pending `hmp` requests through Hermes's own public CLI as a
                                   #   subprocess (OD-F8), before printing the next steps; reuses
                                   #   `pair list`/`confirm`/`deny`'s own internals throughout
+    routes.py                     # `hermes hmp routes add <profile>` (specs/005-new-profile-routing): writes one
+                                  #   exact root `gateway.profile_routes` entry only; lazy `yaml` import here only;
+                                  #   no Hermes import, no store, no network, no profile config write
     logging_policy.py             # allow-listed log fields (SEC-4, SR-007): plugin logger; aiohttp access log
                                   #   disabled or reduced to method, route template, status, duration; bridge
                                   #   exceptions logged by type only; P6 reply dropped unlogged (CS-22)

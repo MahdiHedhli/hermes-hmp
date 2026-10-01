@@ -25,6 +25,7 @@ are never renumbered; always refer to a spec by its full directory name.
 | `004-approval-qualification-lane` | Independent approval qualification gate |
 | `004-mobile-cron` | Owner-gated scheduled jobs (§7c) |
 | `005-approval-process-matrix` | Real-process approval matrix tooling |
+| `005-new-profile-routing` | Root route for a bot created after install |
 | `005-bot-default-model` | Owner-gated bot default model (§7d) |
 | `006-per-bot-send-gate` | Per-bot send status |
 | `006-phone-send-refusal` | Phone-send typed refusal |
