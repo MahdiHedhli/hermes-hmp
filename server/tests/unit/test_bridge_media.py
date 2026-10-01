@@ -929,8 +929,8 @@ def test_carrier_never_escapes_to_wire_serialization(tmp_path: Path) -> None:
             wire.dump_json({"x": request_ctx._plain([carrier])})
 
 
-def test_no_server_or_reads_media_import_or_caller() -> None:
-    for name in ("server.py", "reads.py", "routes.py", "cli.py", "compat.py"):
+def test_server_routes_cli_compat_remain_media_inert() -> None:
+    for name in ("server.py", "routes.py", "cli.py", "compat.py"):
         text = (PACKAGE / name).read_text(encoding="utf-8")
         for needle in ("local_media", "_with_media", "LOCAL_MEDIA_SIDECAR"):
             assert needle not in text, f"{name}: {needle}"

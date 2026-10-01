@@ -10,14 +10,16 @@
 ## M1 Host (after P0 review)
 
 - [x] **S1** Promote the accepted scanner, leaf and raster modules into the plugin surface, logic unchanged except the shared result function; record content hashes. Root accepted the inert slice after independent Opus wrapper/hash review, module-contract repair, and 70 bounded layout/wrapper tests on 2026-10-01. No serving or admission claim.
-- [ ] **S2** Read-result sidecar and lexical name derivation; golden proof that closed-gate bytes are unchanged (T1).
+- [x] **S2** Read-result sidecar and lexical name derivation; golden proof that closed-gate bytes are unchanged (T1). Root accepted S2a–S2d after independent reviews and 833 focused tests (three preexisting Hermes-build skips). Optional media twins remain unused by production handlers; no serving claim.
 - [x] **S3** Registry: lock, TTL, LRU, idempotent mint, first-digest CAS (T2, T8). Root accepted the inert slice after independent Opus delta review, causal foreign-snapshot/caller tests, and 152 focused registry/layout tests on 2026-10-01. No fetch authority or serving claim.
 - [ ] **S6** `local_media.enabled` default-off flag, empty manifest, dedicated media file list, start baseline plus fresh disk equality, off-loop (T18).
-- [ ] **S4** Descriptor emission in handlers, 128 cap (T1, T5, T6, T7). Needs S2, S3, S6.
+- [ ] **C6a** Request-scoped active-history batch module and independent security review, following the C6 freeze; accepted single scanner unchanged.
+- [ ] **C6b** Bind that reviewed batch to the same native database/home capture, then root exact-native cost, concurrent-writer and mint-memory evidence. C6 remains open.
+- [ ] **S4** Descriptor emission in handlers, 128 cap (T1, T5, T6, T7). Needs S2, S3, S6 and C6 admission.
 - [ ] **S5** Route, dedicated executor, permits, `ContextVar` copy for both phases, constants, streaming, phase one, phase two, synchronous final section (T3, T9-T11, T13, T15-T17). Needs S1, S3, S6.
 - [ ] **T** Causal suite T1-T18 on a fake bridge and an exact-build disposable-home fixture.
 - [ ] **T12** Memory measurement run recorded against the provisional ceilings.
-- [ ] **PG** Linux errno mapping run for the file leaf (`PLATFORM_GAP`). No Linux claim before it runs.
+- [x] **PG** Linux errno mapping for the file leaf only. Root reviewed and independently reran the accepted 89 tests plus 91 supplemental real-kernel checks on non-root Linux CPython 3.14.7/tmpfs. See the bounded evidence below; native HMP serving remains unqualified.
 
 ## M2 Convergence
 
@@ -113,3 +115,47 @@ imports. Narrow named-exception catch-widening mutants survive the test suite, a
 and independent review verify the exact catch in source. Native uncapped materialization and
 non-atomic snapshots remain explicit residuals. S2 remains open for read cores and golden bytes.
 Serving, cost qualification, Linux, memory, installation and device acceptance remain open.
+
+## S2d reviewed read cores (2026-10-01)
+
+Root accepted this inert read-core slice after fresh independent Sonnet review and root verification. S2 is complete for its stated sidecar/golden scope; serving and admission are separate gates.
+`reads.py` now has four private shared cores; the four old methods are thin wrappers with the media
+flag off and four optional `*_with_media` twins use the same cores with it on. The twins have no
+route, handler or gate caller. The bridge opt-in is read from the class only; a bridge without the
+explicit `True` marker keeps the old native calls and returns an empty `UNSUPPORTED_BRIDGE` sidecar.
+An opted-in bridge may return its carrier, the exact old row list (unchanged text, empty
+`UNSUPPORTED_BRIDGE`, never re-queried) or, for `after`, a `ResetReason`; any other shape is the
+existing `500 internal_error`. A separately read lineage tip the carrier cannot hold gives the same
+empty null-metadata downgrade, catching only the carrier refusal at that one construction.
+
+Golden bytes, native event logs, baseline rows and observation discard sets were captured once from
+a read-only `git archive` of `575a9bc` and are compared as static data. Old methods, the twins'
+`.public` and unsupported-bridge twins all match them, as do the four routes over aiohttp. The
+layout pins now allow the sidecar only below a function boundary in `reads.py` and `bridge.py`, and
+the candidate module's imports at module scope only. Dynamic imports are not detected.
+
+| File | SHA-256 |
+|---|---|
+| `reads.py` | `ee37573601c354fbbb12928bc6a3404fd6fcc784adb282287bf268f971581bea` |
+| `test_reads_media.py` | `a79f077315ff2b63cc553bf50a23d551a822119dab15a0304a0cbf989f19810c` |
+| `test_skeleton_layout.py` | `05cd947844971706eff2f05bd50332b50bb5141cae65668440f8754e0f8fb613` |
+| `test_local_media_sidecar.py` | `ba426d685cbb64fb1fe4976e90bcfa594fc0f9f35501d2ba75b7eed0acabc901` |
+
+The root-authorized S2c import-pin update now permits these optional read twins while keeping
+server, routes, CLI and compatibility callers inert. Root and the independent reviewer each passed
+833 focused tests, with three preexisting no-Hermes-build skips. Configured Ruff 0.16.9 and root
+explicit privacy/diff checks passed. The reviewer independently regenerated golden data from
+`575a9bc1cba5d5ec4c41741c5a5eb723f505f65c`; sorted JSON SHA-256 is
+`7b87d0b9a7bfd98e4826b9b0e190360595eba00f9ab7ce0d7f215823102d70ac`.
+The narrow constructor catch was reviewed: candidate invariants cannot downgrade silently, and
+a failing fallback still surfaces. Syntactic pins do not detect arbitrary dynamic imports.
+Native materialization, non-atomic reads, C6 cost, minting, S4-S6, qualification and device
+gates remain open. Existing formatting differences in `reads.py` predate this slice.
+
+## PG bounded Linux leaf evidence (2026-10-01)
+
+[Evidence](../../docs/research/local-media-linux-leaf-evidence-2026-10-01.md) records accepted
+source/test hashes, real errno and permission controls, race cases, root isolated rerun and limits.
+The accepted leaf source is unchanged. This closes only the Linux file-leaf task on the stated
+non-root tmpfs platform; it does not qualify native Hermes serving, other filesystems or kernels,
+process manifests, memory ceilings, a phone build or release.

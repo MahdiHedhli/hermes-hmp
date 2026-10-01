@@ -91,15 +91,19 @@ def test_write_supported_list_shape() -> None:
 
 
 # --- local_media_* import inertness ---------------------------------------------------------------
-# The four optional modules are not wired in. Only local_media_result.py (the optional wrapper) may
-# import the optional scanner; the bridge may import the candidate and sidecar modules only inside
-# function bodies (pinned below); nothing else may import any local_media_* module.
+# The optional modules are not wired in. Only local_media_result.py (the optional wrapper) may
+# import the optional scanner; local_media_candidate.py imports its accepted modules at MODULE scope
+# only; the bridge (candidate and sidecar) and reads.py (sidecar) import only inside function
+# bodies; nothing else may import any local_media_* module. Dynamic imports (`__import__`,
+# `importlib`) are not detected by these static pins.
 
 OPTIONAL_MODULES = sorted(m[:-3] for m in CONTRACT_MODULES if m.startswith("local_media_"))
 ALLOWED_OPTIONAL_IMPORTS = {
     "local_media_result": {"local_media_active_scan"},
     # S2c: the bridge may load exactly these two, only below a function boundary (pinned below).
     "bridge": {"local_media_candidate", "local_media_sidecar"},
+    # S2d: the read cores load the carrier only below a function boundary (pinned below).
+    "reads": {"local_media_sidecar"},
     "local_media_candidate": {
         "local_media_active_scan",
         "local_media_file_safety",
@@ -129,6 +133,116 @@ def test_only_optional_wrapper_imports_optional_modules() -> None:
         allowed = ALLOWED_OPTIONAL_IMPORTS.get(path.stem, set())
         found = _local_media_imports(path.read_text(encoding="utf-8"))
         assert found <= allowed, f"{path.name} imports {sorted(found - allowed)}"
+
+
+MODULE_SCOPE_ONLY = {"local_media_candidate"}
+FUNCTION_SCOPE_ONLY = {"bridge", "reads"}
+
+
+def _import_scopes(source: str) -> list[str]:
+    """One label per local_media_* import: `module` (a direct statement of the module), `function`
+    (inside any function body) or `nested` (class/if/try/with outside every function)."""
+    found: list[str] = []
+
+    def visit(node: ast.AST, in_function: bool) -> None:
+        for child in ast.iter_child_nodes(node):
+            if isinstance(child, (ast.Import, ast.ImportFrom)) and _local_media_imports(
+                ast.unparse(child)
+            ):
+                if in_function:
+                    found.append("function")
+                else:
+                    found.append("module" if isinstance(node, ast.Module) else "nested")
+            visit(child, in_function or isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)))
+
+    visit(ast.parse(source), False)
+    return found
+
+
+def _scopes_allowed(stem: str, source: str) -> bool:
+    """The scope rule for `stem`. The module allowlist (`ALLOWED_OPTIONAL_IMPORTS`) is separate."""
+    scopes = _import_scopes(source)
+    if stem in MODULE_SCOPE_ONLY:
+        return all(scope == "module" for scope in scopes)
+    if stem in FUNCTION_SCOPE_ONLY:
+        return all(scope == "function" for scope in scopes)
+    return True
+
+
+def _imports_allowed(stem: str, source: str) -> bool:
+    found = _local_media_imports(source)
+    return found <= ALLOWED_OPTIONAL_IMPORTS.get(stem, set()) and _scopes_allowed(stem, source)
+
+
+def test_import_scopes_match_the_accepted_boundary_in_every_module() -> None:
+    for path in sorted(PACKAGE.glob("*.py")):
+        assert _imports_allowed(path.stem, path.read_text(encoding="utf-8")), path.name
+
+
+def test_real_modules_use_the_exact_scopes() -> None:
+    def scopes(name: str) -> set[str]:
+        return set(_import_scopes((PACKAGE / name).read_text(encoding="utf-8")))
+
+    assert scopes("local_media_candidate.py") == {"module"}
+    assert scopes("bridge.py") == {"function"}
+    assert scopes("reads.py") == {"function"}
+    reads = (PACKAGE / "reads.py").read_text(encoding="utf-8")
+    assert _local_media_imports(reads) == {"local_media_sidecar"}
+
+
+_IMPORT_FORMS = {
+    "from_module": "from .local_media_{m} import X\n",
+    "from_package": "from . import local_media_{m}\n",
+    "plain": "import hmp_plugin.local_media_{m}\n",
+    "alias": "from . import local_media_{m} as _m\n",
+}
+
+
+def _wrapped(form: str, where: str) -> str:
+    line = _IMPORT_FORMS[form]
+
+    def indent(text: str, levels: int) -> str:
+        return "".join("    " * levels + part + "\n" for part in text.splitlines())
+
+    return {
+        "module": line,
+        "function": "def f():\n" + indent(line, 1),
+        "method": "class C:\n    def f(self):\n" + indent(line, 2),
+        "class": "class C:\n" + indent(line, 1),
+        "if": "if True:\n" + indent(line, 1),
+        "try": "try:\n" + indent(line, 1) + "except ImportError:\n    pass\n",
+    }[where]
+
+
+@pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))
+@pytest.mark.parametrize("where", ["function", "method", "class", "if", "try"])
+def test_candidate_imports_must_be_module_scope_only(form: str, where: str) -> None:
+    ok = _imports_allowed("local_media_candidate", _wrapped(form, "module").format(m="sidecar"))
+    assert ok  # positive control: the accepted module-scope form
+    assert not _imports_allowed("local_media_candidate", _wrapped(form, where).format(m="sidecar"))
+
+
+@pytest.mark.parametrize("stem", ["bridge", "reads"])
+@pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))
+@pytest.mark.parametrize("where", ["module", "class", "if", "try"])
+def test_bridge_and_reads_imports_must_be_function_local(stem: str, form: str, where: str) -> None:
+    assert _imports_allowed(stem, _wrapped(form, "function").format(m="sidecar"))  # control
+    assert not _imports_allowed(stem, _wrapped(form, where).format(m="sidecar"))
+
+
+@pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))
+def test_reads_may_import_only_the_sidecar(form: str) -> None:
+    for module in ("candidate", "result", "registry", "active_scan", "file_safety"):
+        source = _wrapped(form, "function").format(m=module)
+        assert not _imports_allowed("reads", source), module
+
+
+@pytest.mark.parametrize("stem", ["server", "wire", "contract", "compat", "cli", "routes"])
+@pytest.mark.parametrize("where", ["module", "function", "class", "if", "try"])
+def test_every_other_module_imports_no_optional_module(stem: str, where: str) -> None:
+    for module in ("sidecar", "candidate", "registry"):
+        source = _wrapped("from_module", where).format(m=module)
+        assert not _imports_allowed(stem, source), (stem, module)
 
 
 def test_wrapper_allowance_is_actually_used() -> None:

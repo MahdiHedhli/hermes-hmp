@@ -804,25 +804,33 @@ def test_sidecar_import_loads_no_parser_scanner_or_registry() -> None:
 
 
 _SIDECAR = "local_media_sidecar"
-_ANY_SCOPE = {"local_media_candidate.py"}  # accepted S2b: a static import
-_FUNCTION_SCOPE = {"bridge.py"}  # accepted S2c: only inside a function body
+_MODULE_SCOPE = {"local_media_candidate.py"}  # accepted S2b: a static import, module scope ONLY
+_FUNCTION_SCOPE = {"bridge.py", "reads.py"}  # S2c/S2d: only inside a function body
 
 
-def _sidecar_imports(source: str) -> list[bool]:
-    """One entry per import of the sidecar in `source`: True when it sits inside a function."""
-    found: list[bool] = []
+def _sidecar_imports(source: str) -> list[str]:
+    """One scope label per import of the sidecar in `source`: `module` (a direct statement of the
+    module), `function` (inside any function body) or `nested` (class/if/try/with outside every
+    function)."""
+    found: list[str] = []
 
     def visit(node: ast.AST, in_function: bool) -> None:
-        if isinstance(node, ast.Import):
-            if any(a.name.split(".")[-1] == _SIDECAR for a in node.names):
-                found.append(in_function)
-        elif isinstance(node, ast.ImportFrom):
-            named = (node.module or "").split(".")[-1] == _SIDECAR
-            if named or any(a.name == _SIDECAR for a in node.names):
-                found.append(in_function)
-        inner = in_function or isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
         for child in ast.iter_child_nodes(node):
-            visit(child, inner)
+            hit = False
+            if isinstance(child, ast.Import):
+                hit = any(a.name.split(".")[-1] == _SIDECAR for a in child.names)
+            elif isinstance(child, ast.ImportFrom):
+                named = (child.module or "").split(".")[-1] == _SIDECAR
+                hit = named or any(a.name == _SIDECAR for a in child.names)
+            if hit:
+                if in_function:
+                    found.append("function")
+                else:
+                    found.append("module" if isinstance(node, ast.Module) else "nested")
+            visit(
+                child,
+                in_function or isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)),
+            )
 
     visit(ast.parse(source), False)
     return found
@@ -832,10 +840,10 @@ def _sidecar_import_allowed(filename: str, source: str) -> bool:
     if filename == "local_media_sidecar.py":
         return True
     scopes = _sidecar_imports(source)
-    if filename in _ANY_SCOPE:
-        return True
+    if filename in _MODULE_SCOPE:
+        return all(scope == "module" for scope in scopes)
     if filename in _FUNCTION_SCOPE:
-        return all(scopes)
+        return all(scope == "function" for scope in scopes)
     return not scopes
 
 
@@ -846,21 +854,28 @@ def test_no_production_module_imports_the_sidecar_outside_the_accepted_boundary(
 
 
 _STATIC = "from .local_media_sidecar import MediaCandidate\n"
-_FORBIDDEN_BRIDGE = {
+_FORBIDDEN_FUNCTION_ONLY = {
     "module": _STATIC,
     "module_plain": "import hmp_plugin.local_media_sidecar\n",
     "module_from_package": "from . import local_media_sidecar\n",
     "class": "class B:\n    from .local_media_sidecar import MediaCandidate\n",
     "if": "if True:\n    from .local_media_sidecar import MediaCandidate\n",
+    "try": (
+        "try:\n    from .local_media_sidecar import MediaCandidate\nexcept ImportError:\n    pass\n"
+    ),
     "function_and_module": ("def f():\n    from .local_media_sidecar import X\n" + _STATIC),
 }
 
 
-@pytest.mark.parametrize("label", sorted(_FORBIDDEN_BRIDGE))
-def test_sidecar_guard_rejects_non_function_scope_in_the_bridge(label: str) -> None:
-    assert not _sidecar_import_allowed("bridge.py", _FORBIDDEN_BRIDGE[label])
+@pytest.mark.parametrize("filename", sorted(_FUNCTION_SCOPE))
+@pytest.mark.parametrize("label", sorted(_FORBIDDEN_FUNCTION_ONLY))
+def test_sidecar_guard_rejects_non_function_scope_in_bridge_and_reads(
+    filename: str, label: str
+) -> None:
+    assert not _sidecar_import_allowed(filename, _FORBIDDEN_FUNCTION_ONLY[label])
 
 
+@pytest.mark.parametrize("filename", sorted(_FUNCTION_SCOPE))
 @pytest.mark.parametrize(
     "source",
     [
@@ -869,23 +884,47 @@ def test_sidecar_guard_rejects_non_function_scope_in_the_bridge(label: str) -> N
         "x = 1\n",
     ],
 )
-def test_sidecar_guard_allows_function_local_import_in_the_bridge(source: str) -> None:
-    assert _sidecar_import_allowed("bridge.py", source)
+def test_sidecar_guard_allows_function_local_import_in_bridge_and_reads(
+    filename: str, source: str
+) -> None:
+    assert _sidecar_import_allowed(filename, source)
 
 
-def test_sidecar_guard_rejects_a_third_module_even_function_local() -> None:
-    local = "def f():\n    from .local_media_sidecar import MediaCandidate\n"
-    for name in ("reads.py", "server.py", "local_media_result.py", "local_media_registry.py"):
-        assert not _sidecar_import_allowed(name, _STATIC), name
-        assert not _sidecar_import_allowed(name, local), name
+_NOT_MODULE_SCOPE = {
+    "function": "def f():\n    from .local_media_sidecar import MediaCandidate\n",
+    "async_function": "async def f():\n    from . import local_media_sidecar\n",
+    "class": "class B:\n    from .local_media_sidecar import MediaCandidate\n",
+    "if": "if True:\n    from .local_media_sidecar import MediaCandidate\n",
+    "try": (
+        "try:\n    from .local_media_sidecar import MediaCandidate\nexcept ImportError:\n    pass\n"
+    ),
+    "with": "with x:\n    import hmp_plugin.local_media_sidecar\n",
+    "module_and_function": _STATIC + "def f():\n    from . import local_media_sidecar\n",
+}
+
+
+@pytest.mark.parametrize("label", sorted(_NOT_MODULE_SCOPE))
+def test_sidecar_guard_requires_module_scope_in_the_candidate(label: str) -> None:
+    assert not _sidecar_import_allowed("local_media_candidate.py", _NOT_MODULE_SCOPE[label])
 
 
 def test_sidecar_guard_accepts_the_candidate_static_import() -> None:
     assert _sidecar_import_allowed("local_media_candidate.py", _STATIC)
+    assert _sidecar_import_allowed(
+        "local_media_candidate.py", "from . import local_media_sidecar\n"
+    )
+
+
+def test_sidecar_guard_rejects_other_modules_in_every_form() -> None:
+    local = "def f():\n    from .local_media_sidecar import MediaCandidate\n"
+    for name in ("server.py", "local_media_result.py", "local_media_registry.py", "wire.py"):
+        assert not _sidecar_import_allowed(name, _STATIC), name
+        assert not _sidecar_import_allowed(name, local), name
 
 
 def test_sidecar_guard_sees_the_real_accepted_imports() -> None:
-    bridge = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
     candidate = (PACKAGE / "local_media_candidate.py").read_text(encoding="utf-8")
-    assert _sidecar_imports(bridge) and all(_sidecar_imports(bridge))
-    assert _sidecar_imports(candidate)
+    assert _sidecar_imports(candidate) and set(_sidecar_imports(candidate)) == {"module"}
+    for name in sorted(_FUNCTION_SCOPE):
+        source = (PACKAGE / name).read_text(encoding="utf-8")
+        assert _sidecar_imports(source) and set(_sidecar_imports(source)) == {"function"}, name
