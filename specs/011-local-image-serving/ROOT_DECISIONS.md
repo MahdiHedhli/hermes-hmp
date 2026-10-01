@@ -1,6 +1,6 @@
 # Root decisions
 
-Public record of the architecture decisions this feature was frozen on. Where another document here differs, this file wins. It records decisions only: nothing is implemented, qualified or released.
+Public record of the architecture decisions this feature was frozen on. Where another document here differs, this file wins. It records design decisions; the task evidence separately identifies reviewed components. No serving process, device or release is qualified.
 
 ## Accepted
 
@@ -43,7 +43,7 @@ An independent pre-code review of the frozen design passed. That review covers t
 
 ## Residuals carried
 
-No atomic snapshot (including ABA on unrelated rows); change after the last native check before `prepare`; coarse-timestamp torn buffer (the phone codec decides); out-of-tree providers unfingerprinted; no containment of same-account host code; Linux errno unrun; deadlines and memory ceilings provisional.
+No atomic snapshot (including ABA on unrelated rows); change after the last native check before `prepare`; coarse-timestamp torn buffer (the phone codec decides); out-of-tree providers unfingerprinted; no containment of same-account host code; bounded Linux file-leaf errno evidence accepted for its stated platform only; native serving and broader Linux coverage open; deadlines and memory ceilings provisional.
 
 2026-10-01 root P0 disposition: additive transcription conforms to the frozen design and its
 independent Opus pre-code PASS. Revision 1.6 draft and LM clause names are accepted. All
@@ -172,3 +172,121 @@ file access/stat at mint. This is an internal authority/cost clarification, not 
 S2d may finish independently. C6a batch source follows S2d to avoid shared layout-test edits;
 C6b bridge binding and S4 emission follow its independent review. Existing non-atomic/ABA,
 trusted native materialization, Linux, T12, process qualification and device gates remain open.
+
+## S6 media qualification design freeze (2026-10-01)
+
+Root adopts the independent Opus architecture review and its five required amendments as design.
+This accepts no implementation, manifest entry, listener binding, serving route, live flag,
+approval-gate change or device result. S6a follows accepted C6a; S6b binds listeners in a separately
+reviewed slice. The approval qualification matrix cannot qualify media, or vice versa.
+
+### Manifest, source coverage and dependency probes
+
+- Use a separate strict `hmp-local-media-1` manifest with exact keys, types and path grammar.
+  Require the exact native Git SHA where present, native fingerprint and HMP fingerprint;
+  `source_sha` is provenance only. Do not reuse the read-list parser for additional fields.
+  Keep builds empty until separate native/HMP execution evidence and root admission.
+- HMP coverage is every top-level plugin Python source, including authorization, transport,
+  context and media dependencies. Require sorted exact directory-set equality. Enumerate at most
+  512 top-level entries; extra importable source, extension or sourceless-bytecode forms identified
+  by `importlib.machinery.all_suffixes()` close the gate. Refuse extra directories other than
+  `__pycache__`, and non-regular entries inside that cache. Manifests and `plugin.yaml` are permitted
+  metadata, not recursive hash inputs; validate the current manifest semantically on every check.
+  Bytecode content and loader metadata remain explicit residuals.
+- The preliminary native inventory is the 16 read files, `gateway/session_context.py`,
+  `hermes_state_titles.py`, `hermes_state_common.py`, `tools/image_generation_tool.py`,
+  `tools/image_generation_managed.py` and `tools/image_source.py`. Those files exist on `8afaab37`;
+  they do not establish callee closure. Before any entry, verify actual reaching symbols, owning
+  modules and native execution traces. Add the actual producer callees rather than infer coverage.
+- A separate media dependency specification includes READ_DEPENDENCIES and the actual title,
+  lineage, home and profile APIs used by media. Probe their real owning files and signatures.
+  Containment/signature checks do not prove behavior or qualify providers, site-packages,
+  C extensions, the interpreter or monkeypatching.
+
+### Process identity across reloads and homes
+
+The first supported factory process-wide fixes the baseline across module reloads and Hermes
+homes. A different native root or plugin directory closes subsequent listeners. Only a full OS
+process restart clears that baseline. Unknown read compatibility does not initialize it; capture
+is independent of the live media flag. A startup closed state cannot reopen. A matching listener
+can close on later disk mismatch and reopen after a fresh restoration check; a listener captured
+with a mismatch stays closed for its lifetime.
+
+- Use the stable, unversioned private key `_hermes_hmp_local_media_process_state` in
+  `sys.__dict__`, created only by atomic `setdefault`. No reset, delete, setter or environment bypass.
+  Anchor shape is exactly `(1, lock, cell)`: exact tuple length 3, exact integer schema 1,
+  exact `_thread.LockType`, exact list length 1. No plugin-defined object, callable, module,
+  Path, label, secret, receipt or media claim is stored there.
+- `cell[0]` is `None`, exact string `"closed"`, or an exact baseline tuple:
+  `("b1", native_root, plugin_dir, read_files, read_fp, native_files, native_fp, git_sha,
+  hmp_files, hmp_fp)`. Resolved roots are exact strings; file lists are exact sorted tuples of
+  exact strings; fingerprints and optional SHA use strict hex grammar. Validate the complete
+  layout on every read. A future layout change requires a schema change and therefore closure
+  against an existing incompatible anchor, never replacement.
+- The sole transitions, under the anchor lock, are `None` to `"closed"` or `None` to baseline.
+  Foreign, malformed or incompatible anchors/cells return a constant closed callback unchanged.
+  A plugin-local dataclass may be a decoded view only, never the persistent value.
+- Module top level does only `setdefault` and never acquires the lock. Under lock, inspect the
+  cell and release; perform manifest work, disk fingerprints, imports and probes unlocked; then
+  reacquire to make the one first transition and compare the candidate with the fixed cell.
+  Never hold this lock over import/preload or disk work: abandoned Hermes loader threads and
+  concurrent old/new package copies can otherwise deadlock. Racing factories compare against
+  whichever candidate won the first transition.
+- If `sys._is_gil_enabled` exists and returns False, close before touching the anchor.
+  Free-threaded and sub-interpreter runtimes remain unqualified; each sub-interpreter has its
+  own sys module. Same-account host code can tamper with the anchor and is outside containment.
+
+### Preload and loaded origins
+
+After an exact nonempty manifest match: fingerprint disk before, call an adapter-owned static
+preload helper, fingerprint disk after, check loaded origins, then construct the candidate.
+Empty manifests perform no native/HMP source reads or preload. The inert gate imports neither
+adapter, bridge, server nor native Hermes. Its optional preload callable returns an exact tuple
+of module objects; wrong type or exception closes. It supplies no baseline and cannot reset one.
+
+Check the objects actually bound by this load, never hard-coded `sys.modules` names: Hermes may
+load a home-suffixed package while old listeners retain the old objects after reload. Derive any
+package name from the gate's own `__package__`. Each returned module must have equal spec origin
+and file, a resolved file exactly `plugin_dir / (stem + ".py")`, listed source, and an exact
+`importlib.machinery.SourceFileLoader`. Store no module objects in the anchor. These checks narrow
+origins; they do not attest loaded bytecode against disk or close lazy-import/ABA gaps.
+
+### Bounded reads and final request check
+
+- Manifest maximum is 256 KiB, with at most 256 native paths, 256 HMP paths and 128 entries;
+  labels are at most 256 characters and paths at most 1024 UTF-8 bytes, unique and sorted.
+- Resolve a root once. Open each intermediate component relative to a directory fd with
+  `O_RDONLY|O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC`, and the leaf with
+  `O_RDONLY|O_NONBLOCK|O_NOFOLLOW|O_CLOEXEC`. Check regular-file type before reading, including
+  immediate FIFO refusal. No absolute paths, traversal or symlink components.
+- Source cap is 8 MiB per file and 64 MiB combined native/HMP bytes per check, charged before
+  reading. Read no more than declared size plus one byte, and require exact length and identical
+  `(st_dev, st_ino, st_size, st_mtime_ns, st_ctime_ns)` before/after. Close every fd in finally.
+  Short read, growth, metadata change or cap failure closes. Pure digest over sorted
+  `path\0len\0bytes` pairs is byte-compatible with the existing read fingerprint algorithm.
+  Tooling and runtime share this pure function.
+- After the batch or fetch phase two completes, await a fresh qualification check on the default
+  executor, then immediately consume that request-local bool with synchronous owner, exact-bool
+  flag, TTL/CAS and mint/prepare checks. No await, async lock, awaited log or metrics operation
+  intervenes; the bool is never cached on a module or ServerContext. This clarifies C6.6's
+  qualification check: source hashing is off-loop, its result is consumed on-loop.
+- No asynchronous deadline is added in S6a. Canceling an awaiter does not stop a worker thread.
+  Any later timeout must prove worker lifetime/resource accounting first. Kernel/FUSE/NFS read
+  latency, default-executor capacity and inherited Git-metadata reads remain unbounded by time.
+  The final off-loop check to mint/prepare is non-atomic. Local manifests/receipts are unauthenticated.
+
+### Required causal checks and later admission
+
+S6a must cover real module eviction/re-import, aliases and differing directories, plugin-class
+identity regression, foreign/schema/lock/cell corruption without replacement, eight racing
+factories, and a blocked preload proving no anchor-lock deadlock. Cover import shadowing forms,
+module-origin decoys, disk change during preload, symlink components, FIFO/device/directory and
+source-size/growth refusal, exact digest equivalence, free-threaded short-circuit and no reset path.
+Test fixtures alone may snapshot/restore the private sys key. S4/S5 must prove the final check
+starts after scan/phase two and no coroutine runs before synchronous mint/prepare.
+
+Later media receipts bind exact native/HMP fingerprints and native SHA to E1, PG, C6, the route
+test suite and T12. They confer no approval/write qualification. Compatibility wording is deferred.
+Native callee closure, bytecode equivalence, process admission, memory ceilings, platform and
+phone gates remain open. The existing approval gate's native-only fingerprint and reloadable
+module latch limitations remain separately recorded; this new media design does not repair them.

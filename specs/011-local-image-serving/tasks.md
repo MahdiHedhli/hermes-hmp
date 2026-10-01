@@ -13,7 +13,7 @@
 - [x] **S2** Read-result sidecar and lexical name derivation; golden proof that closed-gate bytes are unchanged (T1). Root accepted S2a–S2d after independent reviews and 833 focused tests (three preexisting Hermes-build skips). Optional media twins remain unused by production handlers; no serving claim.
 - [x] **S3** Registry: lock, TTL, LRU, idempotent mint, first-digest CAS (T2, T8). Root accepted the inert slice after independent Opus delta review, causal foreign-snapshot/caller tests, and 152 focused registry/layout tests on 2026-10-01. No fetch authority or serving claim.
 - [ ] **S6** `local_media.enabled` default-off flag, empty manifest, dedicated media file list, start baseline plus fresh disk equality, off-loop (T18).
-- [ ] **C6a** Request-scoped active-history batch module and independent security review, following the C6 freeze; accepted single scanner unchanged.
+- [x] **C6a** Request-scoped active-history batch module and independent security review, following the C6 freeze; accepted single scanner unchanged. Source acceptance only; native cost/memory and C6b remain open.
 - [ ] **C6b** Bind that reviewed batch to the same native database/home capture, then root exact-native cost, concurrent-writer and mint-memory evidence. C6 remains open.
 - [ ] **S4** Descriptor emission in handlers, 128 cap (T1, T5, T6, T7). Needs S2, S3, S6 and C6 admission.
 - [ ] **S5** Route, dedicated executor, permits, `ContextVar` copy for both phases, constants, streaming, phase one, phase two, synchronous final section (T3, T9-T11, T13, T15-T17). Needs S1, S3, S6.
@@ -159,3 +159,37 @@ source/test hashes, real errno and permission controls, race cases, root isolate
 The accepted leaf source is unchanged. This closes only the Linux file-leaf task on the stated
 non-root tmpfs platform; it does not qualify native Hermes serving, other filesystems or kernels,
 process manifests, memory ceilings, a phone build or release.
+
+## C6a accepted inert batch module (2026-10-01)
+
+`local_media_active_batch.py` is accepted in its inert source scope; production imports nothing
+from it. `scan_active_batch(db, tip, selectors,
+*, home, current_tip, seam=None)` takes an exact tuple of 1..128 unique `(positive int row id,
+32-byte digest)` pairs and runs one bracketed active-set pass: tip, ids, 128-row pages through the
+accepted scanner helpers by identity, ids, tip. Role, name, call id and declarations are charged
+once into a shared base budget with no selected row; each selected content is bounded to 64 KiB
+and surrogate-checked before it is retained, then judged against the base plus only its own charge,
+the unchanged `_link`, constant-time digest equality and lexical derivation against the captured
+home. A bracket failure refuses every selector; otherwise verdicts are independent. The result
+holds row ids, closed reasons (the scanner's plus `digest_mismatch` and `lexical_mismatch`) and
+counts only. Native call count does not grow with selector count; cost, concurrent-writer and
+mint-memory evidence, C6b binding and S4 emission remain open.
+
+Independent Opus accepted the original bounded source; root then required exact native-dict
+capture, constructor re-init refusal and a non-str retention test. Independent Sonnet accepted
+that narrow delta. The original focused scanner/candidate/carrier/result/layout batch passed
+563 tests; the changed batch/layout slice passed 232 tests at root and review. Configured
+Ruff 0.16.9, explicit privacy scan and diff checks pass. No serving, native cost or device
+acceptance follows from these checks. Final module SHA-256:
+`b30d3bcc37e246a193d00d599855b7abcc114d1a2812d8014cb7062566948ecc`;
+test SHA-256: `aee82e9fefb96d2eee63937516f4f0618c1742167a7d01aaa8b425ed5e010a17`.
+Public result constructors remain conventional immutable containers rather than tamper-resistant
+authority; C6b must call the scanner itself and consume only that fresh result.
+
+## S6 design accepted, implementation open (2026-10-01)
+
+The [S6 root freeze](ROOT_DECISIONS.md#s6-media-qualification-design-freeze-2026-10-01) adopts the
+independent Opus design amendments: persistent process-wide primitive baseline across reloads,
+short anchor locking outside imports/I/O, free-threaded closure, this-load module-origin checks,
+import-shadowing refusal and bounded fd-relative source reads. No gate module, listener binding,
+manifest entry, live flag, media route or approval-gate change is accepted by this design.

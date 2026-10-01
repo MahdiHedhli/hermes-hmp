@@ -1308,9 +1308,10 @@ The host flag defaults off, and the owner's live Hermes is not qualified by this
 
 ## 7e. Host-local generated images (v1.6, draft; not implemented)
 
-Additive under V-3. **Status: draft contract only.** No code, route, manifest entry, qualification
-or release exists for it. The product manifest of supported builds is **empty**; this section never
-claims that any build, platform or device is qualified. Design record and open gates:
+Additive under V-3. **Status: draft serving contract.** Reviewed inert components are recorded in
+the task evidence below; no serving route, admitted manifest entry, process/device qualification
+or release exists. The product manifest of supported builds is **empty**; this section never
+claims that a complete build, serving platform or device is qualified. Design record and open gates:
 [`specs/011-local-image-serving`](../../../specs/011-local-image-serving/spec.md). A client on an
 earlier `1.x` build ignores `media` and the route (V-4). The numeric constants below (20 s, 30 s,
 1800 s, 512 per device, 4096 total, 128, 2 per device, 4 per instance, 120 per minute) are **new
@@ -1332,10 +1333,14 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   adds no upper version bound on the install. Approval gates are never waived by it.
 - **LM-2. Qualification.** Requires the loaded/start baseline **and** fresh on-disk equality over a
   dedicated media file list and the exact native/HMP dependencies. The startup baseline is
-  immutable: a mismatched startup baseline needs a restart. A later disk mismatch closes the gate
-  while it persists, and restoration to the startup baseline can reopen it. Disk and dependency
+  immutable across in-process reloads and Hermes homes: the first supported factory fixes it
+  process-wide, and a different native root or plugin directory closes later listeners. Only a
+  full OS process restart clears it. A startup closed state never reopens; a listener captured
+  with a mismatch stays closed for its lifetime. A matching listener can close on later disk
+  mismatch and reopen after a fresh restoration check. Disk and dependency
   work runs off the event loop on the shared default executor. A full approval run is not required
-  for media reads.
+  for media reads. The S6 design details and retained loaded-code/source limitations are in
+  [ROOT_DECISIONS](../../../specs/011-local-image-serving/ROOT_DECISIONS.md#s6-media-qualification-design-freeze-2026-10-01).
 - **LM-3. Closed-gate responses.** A non-owner device gets `404 not_found` before the gate is
   consulted. An owner device with a closed gate gets `503 media_unavailable`, message "image
   delivery is unavailable" (the only new ERR-2 code). User-visible text elsewhere is unchanged.
@@ -1473,12 +1478,15 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   not a native-allocation bound; a failure changes the implementation, not the ceiling.
 - **LM-19. Admission gates (open).** Before any manifest entry exists, and before any shipping or
   platform claim:
-  - **E1 (lexical producer string):** a bounded native-generated fixture must show the producer's
-    `image` string starts lexically with the routed home string plus `/cache/images/`. Existing
-    evidence uses path-object equality and `resolve()` and does not prove this. Until E1 passes, a
-    mismatch refuses.
-  - **Linux errno qualification (`PLATFORM_GAP`):** the file-leaf errno mapping evidence is macOS
-    only; it must be run on Linux before any Linux claim.
+  - **E1 (lexical producer string):** the bounded exact-build fixture now passes for its stated
+    producer and scratch layout, as recorded in [the task evidence](../../../specs/011-local-image-serving/tasks.md#e1-bounded-producer-evidence-2026-10-01).
+    It compares the raw producer string lexically with the captured routed home plus
+    `/cache/images/`, without path normalization. Other producer spellings remain uncharacterized;
+    a mismatch refuses.
+  - **Linux errno qualification (`PLATFORM_GAP`):** the bounded non-root tmpfs file-leaf run now
+    passes, as recorded in [the scoped evidence](../../research/local-media-linux-leaf-evidence-2026-10-01.md).
+    That closes only the leaf check on its stated platform. Native Linux serving and broader
+    platform coverage remain unqualified; no full Linux support claim follows from it.
   - Independent security review of the exact candidate, owner-authorized qualification and device
     acceptance. `SECURITY_REVIEW_REQUIRED` for the handle, route, gate and process qualification.
 - **LM-20. Residuals carried.** No atomic snapshot (including ABA on unrelated rows); change after

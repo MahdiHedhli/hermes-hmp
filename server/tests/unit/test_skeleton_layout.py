@@ -48,6 +48,7 @@ CONTRACT_MODULES = {
     "local_media_registry.py",  # process-local ref registry (LM-9); inert, stdlib only
     "local_media_sidecar.py",  # non-wire read-result carriers (LM-8); inert, stdlib + contract
     "local_media_candidate.py",  # bounded candidate extraction (LM-8); inert, accepted modules only
+    "local_media_active_batch.py",  # request-scoped active batch (C6a); inert, scanner + candidate
 }
 DATA_FILES = {
     "plugin.yaml",
@@ -110,6 +111,8 @@ ALLOWED_OPTIONAL_IMPORTS = {
         "local_media_result",
         "local_media_sidecar",
     },
+    # C6a: the batch loads exactly the accepted scanner and candidate, at module scope only.
+    "local_media_active_batch": {"local_media_active_scan", "local_media_candidate"},
 }
 
 
@@ -135,7 +138,7 @@ def test_only_optional_wrapper_imports_optional_modules() -> None:
         assert found <= allowed, f"{path.name} imports {sorted(found - allowed)}"
 
 
-MODULE_SCOPE_ONLY = {"local_media_candidate"}
+MODULE_SCOPE_ONLY = {"local_media_candidate", "local_media_active_batch"}
 FUNCTION_SCOPE_ONLY = {"bridge", "reads"}
 
 
@@ -184,6 +187,9 @@ def test_real_modules_use_the_exact_scopes() -> None:
         return set(_import_scopes((PACKAGE / name).read_text(encoding="utf-8")))
 
     assert scopes("local_media_candidate.py") == {"module"}
+    assert scopes("local_media_active_batch.py") == {"module"}
+    batch = (PACKAGE / "local_media_active_batch.py").read_text(encoding="utf-8")
+    assert _local_media_imports(batch) == {"local_media_active_scan", "local_media_candidate"}
     assert scopes("bridge.py") == {"function"}
     assert scopes("reads.py") == {"function"}
     reads = (PACKAGE / "reads.py").read_text(encoding="utf-8")

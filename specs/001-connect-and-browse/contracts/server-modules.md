@@ -115,6 +115,10 @@ server/
                                   #   returned page (newest 128 image_generate attempts, 64 KiB bound before the one accepted
                                   #   parser). Imports only the accepted result/file-safety/scanner/sidecar modules; no I/O,
                                   #   no logging, no caller yet. Emits row id + scanner digest only, never a path or name
+    local_media_active_batch.py   # OPTIONAL, inert (C6a): request-scoped active-history batch over up to 128 row-id/digest
+                                  #   selectors with one bracketed scan; imports only the accepted scanner and candidate
+                                  #   modules (module scope) and stdlib; no I/O, no logging, no caller yet. Closed
+                                  #   verdicts only, never a path, name, digest, call id or content; grants no authority
     read_compat_builds.json       # GU-2c list (starts empty). Entries: {git_sha|null, fingerprint, source_sha?
                                   #   (provenance only), label, qualified_by, qualified_at}; matching per research
                                   #   R8 steps 4-6 (CS-19); plus "bridge_files", the mechanically computed superset
