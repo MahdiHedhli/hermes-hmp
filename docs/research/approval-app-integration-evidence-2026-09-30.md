@@ -238,3 +238,28 @@ required after independent review of this checker change.
   running gateway is not qualified here.
 - Device acceptance of the approval card is still open. Historical receipts do not qualify this
   integrated revision.
+
+## Fresh native matrix and fixture enrollment correction
+
+At `f1841b3`, identity, boundary and behavior passed. Integration collected the exact 27
+required cases: 12 passed, 15 failed, no skips, errors, duplicate, missing or extra cases.
+Every failure returned an owner refusal (404). Reconnect, timing and stability did not run;
+no receipt was written. JUnit SHA-256: `319f4ee27819ce0e049114a592878a825922bf1b6d0e90d069c07644f2cc6c05`.
+
+Code tracing and metadata-only fixture observations showed that the current generic pairing
+fixture explicitly declines host controls. The configured approval-owner allowlist does not
+override that denial. Production requires the allowlist plus no explicit denial; that boundary
+is retained. The correction opts in only the approval and approval-lifecycle test wrappers
+to an explicit host grant. Generic direct-send fixtures and generic pairing defaults remain
+declined. No production source, manifest, build ID selection or test expectation changed.
+
+Three targeted native cases passed: Phone approval/clarify/unknown ID, owner-list refusal,
+and disabled-flag refusal. Root checked the exact three JUnit cases and absence of errors/skips
+at SHA-256 `c8c22bcbce8378056b464bb51d2f972249892c14a4e44511ec42c17a94b6c6a3`.
+Root separately passed 29 approval security unit tests. Pinned Ruff 0.16.9 check, plugin surface,
+private-source scan and diff check passed; format differences predate this patch.
+
+This is a fixture-only enrollment repair. Runtime digest remains
+`45a188f2450669a2bd06bf5dffb72ea5a3fada9f053b5d4eda6548b15e87dfe3`, and the two
+production write build lists stay empty. The full matrix must be rerun at the frozen corrected
+revision; targeted passes are not full qualification or host/device/release admission.

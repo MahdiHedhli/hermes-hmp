@@ -314,7 +314,9 @@ class DirectSendFixture:
 
 
 @pytest.fixture(params=BUILDS)
-def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSendFixture]:
+def gateway(
+    request: pytest.FixtureRequest, tmp_path: Path, *, approval_owner_enrollment: bool = False
+) -> Iterator[DirectSendFixture]:
     label = request.param
     if label not in ("stock-base",) and not (
         Path(BUILDS_DIR_ENV) / label / "src"
@@ -354,6 +356,9 @@ def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSe
             ref = dsf.pair_reference_device(
                 build, paths, port=hmp_port, user_id=authorized_user_id,
                 label="direct-send-fixture",
+                # Opt-in for the approval wrappers only. The grant just clears the host's explicit
+                # denial; `_rewrite_config` still has to allowlist this device as approval owner.
+                grant_owner_controls=approval_owner_enrollment,
             )
             client = Client(hmp_port, ref["iid"], ref["device"]["access_token"])
             direct_send_fixture = DirectSendFixture(
