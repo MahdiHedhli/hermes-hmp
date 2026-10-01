@@ -117,3 +117,58 @@ with all session/tip fields null. If a separately read lineage tip cannot fit th
 the same empty null-metadata downgrade. Never retry the native query, truncate rows or tip strings,
 or let this optional metadata failure turn a working text read into a 500. Golden-byte tests must
 cover these cases. No downgrade grants media authority or opens a serving gate.
+
+## C6 descriptor-mint batch freeze (2026-10-01)
+
+Root accepts the independent Opus conditional design, not its implementation or cost admission.
+The exact-native private fixture measured 128 sequential scans at median 4.58 seconds for small
+4096-row histories and 9.11 seconds near the scanner's 4 MiB processing budget. These are warm,
+isolated measurements, not upper bounds: native reads materialize uncharged content as well.
+Repeated scanning per candidate is not admitted. The 128-descriptor cap, TTL and idempotence stay
+unchanged. A new inert batch module requires independent security review before S4 uses it.
+
+- **C6.1 One response, one batch.** A CANDIDATES sidecar permits at most one fresh request-scoped
+  active-history batch scan. The accepted single scanner remains byte-identical to S1; fetch uses
+  that single scan and recheck unchanged. A new module reuses its helpers by identity: `_inspect_row`,
+  `_link`, `_read_active_ids`, `_check_tip`, `_Budget`, `utf8_weight` and constants. The new page
+  loop mirrors the accepted scanner; a base `_State` with selected id zero charges no candidate
+  content, since accepted active row ids are positive. No exception serves as a success signal.
+- **C6.2 Inputs and eligibility.** One profile/session/tip and the home captured by the same
+  `_profile_home` call as database acquisition; an exact tuple of 1..128 unique positive non-bool
+  row-id / exact 32-byte digest pairs copied unchanged from the returned sidecar. Query tip,
+  lineage tip and fresh S4 eligible tip must agree. Canonical Bot Chat title AND hidden status,
+  chain/live tip, or the caller's own Phone session remain mandatory. Hints, assistant text,
+  Markdown and MEDIA never confer authority. The batch never adds, replaces or backfills selectors.
+- **C6.3 Shared bracket.** Before/after eligibility tip checks, before/after equal active ids,
+  at most 4096 strictly increasing positive ids, 128-row paging with unchanged count/order checks.
+  Native call count and shared 4 MiB base budget are independent of candidate count. Bracket failure
+  refuses every candidate; paging may be skipped only if none is active. No replay facade or
+  cross-request cache, and no registry hit substitutes for this scan.
+- **C6.4 Independent verdicts.** Each selected row independently passes active/tool membership,
+  the 64 KiB content bound and surrogate check, base budget plus only its own content charge,
+  unchanged strict `_link`, constant-time canonical tool-digest equality and lexical flat-name
+  derivation against the captured home. A candidate refusal cannot affect another's acceptance.
+  For identical native reads, acceptance equals the accepted single scanner plus digest/derivation
+  equality for every selector. Internal reason precedence need not equal the single scanner.
+- **C6.5 Closed result.** Only accepted row ids, closed reasons and counts leave the batch.
+  No image/path/name/digest/call id/content/ScanClaim, logging, durable bytes or session cache.
+  It runs off-loop inside the emitting read's own work, with that profile ContextVar, on the
+  shared default executor. It does not consume dedicated fetch workers or permits.
+- **C6.6 Mint boundary.** After the batch, recheck owner, flag and qualification gates on the
+  loop and mint newest-first with no await between that check and mint. A media refusal, gate
+  change or exception at this optional S4 boundary adds no descriptors for affected candidates
+  and preserves exact successful text bytes; no optional failure becomes a text-read 500.
+- **C6.7 Fetch unchanged.** Every fetch still performs accepted single scan/recheck, both
+  off-loop phases, owner/grant/qualification checks, final synchronous section and digest CAS.
+  Minting a reference authorizes no file read. No file access or stat occurs at mint.
+- **C6.8 Admission open.** Require independent security review, causal differential tests for
+  all accepted scanner refusals and selection independence, budget/call-count/bracket/digest/
+  lexical/leakage/inertness tests, and root-run exact-native single-batch measurement covering the
+  three recorded shapes plus large uncharged content and concurrent writing. No threshold is
+  invented by this freeze; mint-path memory and native allocation remain unqualified.
+
+LM-5's draft heading is clarified to allow this active-history linkage scan while forbidding
+file access/stat at mint. This is an internal authority/cost clarification, not a wire change.
+S2d may finish independently. C6a batch source follows S2d to avoid shared layout-test edits;
+C6b bridge binding and S4 emission follow its independent review. Existing non-atomic/ABA,
+trusted native materialization, Linux, T12, process qualification and device gates remain open.

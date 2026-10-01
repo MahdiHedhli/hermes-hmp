@@ -1350,7 +1350,7 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   matches `^[A-Za-z0-9_-]{43}$`. A host never emits extra keys. Client rules: ignore unknown extra
   keys on an otherwise valid descriptor; an unknown `kind` is ignored (row renders, no card); a
   malformed `media` is dropped and the row remains. A descriptor never comes from an assistant row.
-- **LM-5. Mint preconditions (candidate only; no file access, scan or stat at mint).** The row is in
+- **LM-5. Mint preconditions (candidate only; no file access or stat at mint).** The row is in
   an eligible session of the right kind (LM-6); `tool_name == "image_generate"`; the raw tool-result
   content, before the 4000-character display cut, is a `str` of at most 64 KiB UTF-8 that parses
   to an object with `success` equal to `true`, no `error` key, and `image` a `str` of 1..4096
@@ -1359,6 +1359,11 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   string plus `/cache/images/`, and the remainder must be a flat, bounded name. There is no
   `resolve()`, no legacy `image_cache`, no legacy-preferring or mkdir helper. A symlinked or
   differently spelled home refuses.
+  Descriptor minting also requires one request-scoped active-history linkage batch per
+  emitting response under the C6 freeze in `specs/011-local-image-serving/ROOT_DECISIONS.md`: strict
+  active-set/declaration/digest checks for each returned candidate, with no cross-request
+  authority cache. This performs no file access or stat, and does not replace the per-fetch scan.
+
 - **LM-6. Session kind.** Fixed at mint, rechecked at fetch. `phone` iff the session equals the
   caller's own Phone conversation session. `bot_chat` iff it is in the canonical Bot Chat
   compression chain and its tip is the live tip. Any other session gets no descriptor.
