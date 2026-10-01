@@ -173,7 +173,7 @@ A later accepted G2 storage characterization ([HMP draft PR #64](https://github.
 
 Accepted G3 research now addresses selected file/raster hazards: [HMP draft PR #66](https://github.com/MahdiHedhli/hermes-hmp/pull/66), `6470379`, pins flat selected-profile cache descriptors and bounds regular single-link reads; [draft PR #67](https://github.com/MahdiHedhli/hermes-hmp/pull/67), `8a74190`, checks a static PNG/JPEG/WebP structural subset with 8 MiB, 8192 edge, 20 MP declared dimensions, 10000 units and 64 JPEG scans. Late file mutation and an empty-SOS bounds error were repaired causally and independently reviewed. These are research prototypes, not a host decoder, authority or integrity proof against a trusted same-account writer. A many-scan availability case motivated the conservative cap; no phone freeze was observed. Public CDN bytes bypass host validation, so a separate phone preflight is reviewed in [app draft PR #62](https://github.com/MahdiHedhli/HermesBotMobile/pull/62), still uninstalled.
 
-Limits: no native media network, grant or wire qualification. G4 active-history linkage/rechecks are the next native-storage research slice; fresh device/profile/conversation authorization and complete worker/buffer transport lifetimes remain unimplemented. The earlier `ca705dbf` fixture is not evidence for `8afaab37`. We do not claim that an upstream change is required for a possible HMP-owned route; a generic reusable upstream media contract remains the request below. The only end-to-end evidence so far is public-CDN image display in the mobile app, which is a separate path from local `MEDIA:` text.
+Limits: no native media network, grant or wire qualification. [HMP draft #69](https://github.com/MahdiHedhli/hermes-hmp/pull/69) now accepts bounded G4 active-history linkage/rechecks research at b32d913 (71 expected native storage outcomes, independent 28-case unit review and causal repair checks); fresh device/profile/conversation authorization and complete worker/buffer transport lifetimes remain unimplemented. The earlier `ca705dbf` fixture is not evidence for `8afaab37`. We do not claim that an upstream change is required for a possible HMP-owned route; a generic reusable upstream media contract remains the request below. The only end-to-end evidence so far is public-CDN image display in the mobile app, which is a separate path from local `MEDIA:` text.
 
 These observations constrain our adapter design. They do not qualify a release, freeze the
 upload wire or make an attachment send available on the phone. Canonical owner handoff and
@@ -282,3 +282,18 @@ roster read remains a send-time failure.
 - Expose profile lifecycle, voice routes, and view-only bot-screen access through the API server with their existing safeguards.
 
 Please discuss proposals in [repository issues](https://github.com/MahdiHedhli/hermes-hmp/issues). This file is the reviewable source for any companion public Gist.
+
+### Follow-up: accepted active-history research and phone safeguard
+
+The bounded G4 prototype checks whole-tip call-ID uniqueness with active-ID/tip
+brackets and selected-row digest rechecks. Callback errors close without private
+text; row caps precede HMP-side iteration. Single observed legacy and modern image
+bridge shapes work. Native allocation remains uncapped; provider call-ID reuse and
+large/malformed active histories can refuse image availability. There is no atomic
+snapshot or restore epoch, media grant, network route or serving qualification.
+
+App draft #62 is installed only as owner dogfood build 2026100101, with a conservative
+JPEG pre-decode complexity cap. Signed artifact checks and installation passed; the
+locked phone refused automatic launch. The owner confirmed CDN image rendering on
+the preceding build, while host-local MEDIA output remains text-only. No live HMP
+package or new external beta was deployed in this checkpoint.
