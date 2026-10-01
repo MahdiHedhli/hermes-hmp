@@ -108,6 +108,9 @@ server/
     local_media_registry.py       # OPTIONAL, inert: process-local image ref registry (LM-9; stdlib only, no hmp_plugin imports):
                                   #   lock, TTL 1800 s, 512/4096 LRU, idempotent mint, first-served digest CAS. A registry
                                   #   hit never authorizes a fetch. No production caller, route or module-level instance yet
+    local_media_sidecar.py        # OPTIONAL, inert: immutable non-wire read carriers; stdlib and contract only.
+                                  #   Candidate holds only row id/digest, never an image path. Generic serialization
+                                  #   refuses the carrier. No bridge/read/handler caller yet; no authority granted
     read_compat_builds.json       # GU-2c list (starts empty). Entries: {git_sha|null, fingerprint, source_sha?
                                   #   (provenance only), label, qualified_by, qualified_at}; matching per research
                                   #   R8 steps 4-6 (CS-19); plus "bridge_files", the mechanically computed superset

@@ -48,3 +48,48 @@ No atomic snapshot (including ABA on unrelated rows); change after the last nati
 2026-10-01 root P0 disposition: additive transcription conforms to the frozen design and its
 independent Opus pre-code PASS. Revision 1.6 draft and LM clause names are accepted. All
 implementation, native qualification, platform, device and release gates remain open.
+
+## S2 sidecar architecture freeze (2026-10-01)
+
+Root accepts the independent bounded architecture proposal in four sequential slices: immutable
+carrier, candidate derivation, shared bridge query, and four read cores with golden-byte checks.
+Old read methods remain the gate-closed path. No S2 production handler or route is enabled.
+
+- Carriers are plain immutable slots classes, never dataclasses, mappings or sequences. Fixed
+  representations and blocked pickle/copy prevent private values reaching diagnostic or generic
+  serialization. The wire serializer must fail closed if a carrier is accidentally returned.
+- Candidates carry only a positive tool row id and the accepted scanner's canonical tool digest
+  (row id, tool role/name, call id and uncapped content), never the image path or flat name.
+- Bound parsing to the newest 128 `image_generate` attempts in one returned page, with no older-row
+  backfill after rejection. The per-result 64 KiB byte bound precedes parsing.
+- Lexical derivation uses exactly the home captured by the bridge's existing `_profile_home`
+  call, without a second call or further normalization. On the qualified producer fixture the
+  native helper returns a Path and its string equals the bridge's Path string. Other spellings
+  may refuse. Reuse the accepted flat-name grammar; no filesystem lookup during derivation.
+- Capture the exact native message-query tip. If it differs from the separately read lineage tip,
+  emit no descriptors; preserve the old public result byte-for-byte. A history head is not a
+  separate media authority binding.
+- A class-level explicit bridge opt-in selects the media query extension. Unsupported bridges
+  keep the old method and return an empty unsupported sidecar; do not probe dynamic attributes.
+- S4 must freshly establish canonical Bot Chat title AND hidden status, chain and live tip, or
+  the caller's own Phone session. A browsed own Phone session may qualify; foreign or arbitrary
+  sessions never do. S2's read-origin label establishes none of this authority.
+- S4 checks qualification and owner gating before selecting the media read and checks again
+  afterwards. Closed gates use the old native call pattern and exact old response bytes.
+- List/multimodal tool content is not a candidate. Native uncapped materialization and the lack
+  of an atomic native snapshot remain residuals.
+
+The cost of repeated active-set rescans for descriptor minting remains an explicit S4 decision
+and measurement gate. This freeze neither changes accepted scanner logic nor accepts that cost
+without measurement. S2 completion requires independent review and causal serialization/golden
+tests. S4/S5/S6, Linux, qualification, live installation and device gates remain open.
+
+S2a carrier detail dispositions: no-conversation/reset/unsupported results may have null session
+or tips only with an empty non-candidate sidecar. Candidate status requires all three strings;
+unequal tips remain representable and cannot authorize minting. Candidate uniqueness is checked
+in the carrier; ordering and returned-tool-row filtering belong to the later extraction/read
+slices. Public result types are exactly the existing SnapshotResponse, SessionSnapshot,
+HistoryPage and HistoryReset. Row count uses the existing history maximum of 1000. The carrier
+duplicates the fixed 256-character field bound to avoid importing the registry, and the optional
+protocol adds no opt-in marker until the bridge implementation. These are internal type/shape
+choices, not wire changes or authority.

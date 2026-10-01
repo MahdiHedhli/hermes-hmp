@@ -54,3 +54,20 @@ S2, S4-S6, native serving qualification and device acceptance remain open.
 [Research evidence](https://github.com/MahdiHedhli/hermes-hmp/blob/f9c542b/docs/research/local-media-lexical-evidence-2026-10-01.md) compares the uncapped persisted producer string against the actual native routed-home helper's string, without normalizing the candidate. Desktop, Phone stand-in and deferred-tool flows matched the selected prefix and one flat 128-byte-bounded name; the foreign profile prefix did not match. The native pin, clean source and source fingerprints were checked before/after. Root retained the private native report and reviewed 37 focused lexical/helper tests.
 
 This evidence is not a live HMP route, other-provider path proof, Linux qualification or device acceptance. All other serving gates remain open.
+
+## S2a reviewed carrier (2026-10-01)
+
+Root accepted the immutable non-wire carrier after independent bounded review. A test-only
+follow-up closes the reviewer's class-spoof lookalike gap; the functional source is byte-identical
+to the accepted candidate, with one prose correction about trusted in-process subclass spoofing.
+Root passed 120 carrier/layout cases, configured Ruff 0.16.9 and explicit privacy/diff checks.
+Serialization mutants demonstrate that accidental generic return fails closed, and a dataclass
+mutant leaks the sentinel only in the causal test. No startup path or runtime reader imports the
+carrier. It establishes no authority and holds no image path, name or raw result.
+
+| Module | SHA-256 |
+|---|---|
+| `local_media_sidecar.py` | `c6abfd7684420a751023f4819bdc6810bd0d6b6ee2a04a8106976f7d4826c206` |
+
+S2 remains open for bounded candidate derivation, shared native query plumbing and four read
+cores with golden-byte proof. Serving, qualification, Linux, device and release gates remain open.

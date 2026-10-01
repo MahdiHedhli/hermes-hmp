@@ -46,6 +46,7 @@ CONTRACT_MODULES = {
     "local_media_raster_structure.py",
     "local_media_result.py",
     "local_media_registry.py",  # process-local ref registry (LM-9); inert, stdlib only
+    "local_media_sidecar.py",  # non-wire read-result carriers (LM-8); inert, stdlib + contract
 }
 DATA_FILES = {
     "plugin.yaml",
