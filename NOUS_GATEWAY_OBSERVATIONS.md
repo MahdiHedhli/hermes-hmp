@@ -1,5 +1,18 @@
 # Gateway observations for Nous Research
 
+## Local image contract checkpoint (2026-10-01)
+
+Follow-up owner screenshots confirm the public CDN image renders while generated
+host-local `MEDIA:` remains text. The independently reviewed local-image design is
+now [recorded as an additive HMP draft contract](https://github.com/MahdiHedhli/hermes-hmp/blob/6186e55/docs/architecture/contracts/HMP_V1.md#7e-host-local-generated-images-v16-draft-not-implemented).
+Implementation is assigned; no serving route, qualified media entry or public release
+is claimed. The design derives device/profile/session-bound opaque handles from
+scoped successful tool results; assistant paths never authorize file reads. Native
+checks stay off the event loop, with a final native authorization/tip check followed
+by fresh bearer/owner checks before bytes. The gap after the last native check is
+explicit because no atomic native authorization/session snapshot API exists. Native
+lexical-path and Linux filesystem qualification plus device acceptance remain open.
+
 HMP is a mobile gateway plugin for Hermes. These are proposals for upstream discussion, not claims that Hermes currently provides every requested API. Findings were checked against Hermes `main` at `81f481b2` and the qualified older `8afaab37` build on 2026-09-28. Search, bot lifecycle, and plugin installation were rechecked against `main` at `39faafb6` on 2026-09-29; the approval session stream was rechecked at `ac0cfa7` on 2026-09-29. The Bot Mode baseline tag `v2026.8.31` was also inspected on 2026-09-29; later releases may differ. Chat media and attachment handling was checked against exact Hermes `ca705dbf7ef86425b381b542712aff310f1ee52c` on 2026-09-30, together with an owner-observed display result in HMP's own mobile app.
 
 The [unified gateway research](https://github.com/MahdiHedhli/hermes-hmp/blob/main/HermesUnifiedGatewayResearch.md) and Nous's [one-gateway PR](https://github.com/NousResearch/hermes-agent/pull/106742) support one profile-scoped execution authority. The companion [entry-point plan](https://gist.github.com/unsupportedpastels/765f9d551ce88ee01630c18367763e75) puts a future mobile client behind an authenticated gateway API but treats remote entry as follow-on work. The requests below concern that remaining remote contract; they do not ask Nous to create another session owner.
