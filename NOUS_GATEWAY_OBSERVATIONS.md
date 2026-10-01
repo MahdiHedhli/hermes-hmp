@@ -5,13 +5,14 @@
 Follow-up owner screenshots confirm the public CDN image renders while generated
 host-local `MEDIA:` remains text. The independently reviewed local-image design is
 now [recorded as an additive HMP draft contract](https://github.com/MahdiHedhli/hermes-hmp/blob/6186e55/docs/architecture/contracts/HMP_V1.md#7e-host-local-generated-images-v16-draft-not-implemented).
-Implementation is assigned; no serving route, qualified media entry or public release
-is claimed. The design derives device/profile/session-bound opaque handles from
+Reviewed inert components are published in [HMP draft #70](https://github.com/MahdiHedhli/hermes-hmp/pull/70) (`575a9bc`) and [app draft #63](https://github.com/MahdiHedhli/HermesBotMobile/pull/63) (`7681eb9`): bounded scanner/file/raster guards, a result parser, temporary reference registry, typed descriptors, pinned reads and a tap-to-load card. No runtime screen binds the host loader, and no serving route, qualified media entry or public release is claimed. The design derives device/profile/session-bound opaque handles from
 scoped successful tool results; assistant paths never authorize file reads. Native
 checks stay off the event loop, with a final native authorization/tip check followed
 by fresh bearer/owner checks before bytes. The gap after the last native check is
 explicit because no atomic native authorization/session snapshot API exists. Native
-lexical-path and Linux filesystem qualification plus device acceptance remain open.
+lexical-path evidence is accepted for the exact-build synthetic producer/layout below; Linux filesystem qualification, serving and device acceptance remain open.
+
+The [bounded producer fixture](https://github.com/MahdiHedhli/hermes-hmp/blob/f9c542b/docs/research/local-media-lexical-evidence-2026-10-01.md) now compares the raw persisted `image` string with the actual native routed-home helper's string plus `/cache/images/`, without normalizing the candidate. Root repeated three positive native flows on exact `8afaab37` (Desktop, Phone stand-in, deferred tool), retained private evidence, and passed 37 focused string/helper cases. All matched the selected profile prefix and one flat 128-byte-bounded name, not the foreign prefix; native source was clean and unchanged. This is one synthetic provider using real `save_b64_image`, one scratch layout and no live HMP media endpoint. Other producers/home spellings remain uncharacterized.
 
 HMP is a mobile gateway plugin for Hermes. These are proposals for upstream discussion, not claims that Hermes currently provides every requested API. Findings were checked against Hermes `main` at `81f481b2` and the qualified older `8afaab37` build on 2026-09-28. Search, bot lifecycle, and plugin installation were rechecked against `main` at `39faafb6` on 2026-09-29; the approval session stream was rechecked at `ac0cfa7` on 2026-09-29. The Bot Mode baseline tag `v2026.8.31` was also inspected on 2026-09-29; later releases may differ. Chat media and attachment handling was checked against exact Hermes `ca705dbf7ef86425b381b542712aff310f1ee52c` on 2026-09-30, together with an owner-observed display result in HMP's own mobile app.
 
