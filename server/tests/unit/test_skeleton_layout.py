@@ -47,6 +47,7 @@ CONTRACT_MODULES = {
     "local_media_result.py",
     "local_media_registry.py",  # process-local ref registry (LM-9); inert, stdlib only
     "local_media_sidecar.py",  # non-wire read-result carriers (LM-8); inert, stdlib + contract
+    "local_media_candidate.py",  # bounded candidate extraction (LM-8); inert, accepted modules only
 }
 DATA_FILES = {
     "plugin.yaml",
@@ -94,7 +95,15 @@ def test_write_supported_list_shape() -> None:
 # import the optional scanner; nothing else may import any local_media_* module.
 
 OPTIONAL_MODULES = sorted(m[:-3] for m in CONTRACT_MODULES if m.startswith("local_media_"))
-ALLOWED_OPTIONAL_IMPORTS = {"local_media_result": {"local_media_active_scan"}}
+ALLOWED_OPTIONAL_IMPORTS = {
+    "local_media_result": {"local_media_active_scan"},
+    "local_media_candidate": {
+        "local_media_active_scan",
+        "local_media_file_safety",
+        "local_media_result",
+        "local_media_sidecar",
+    },
+}
 
 
 def _local_media_imports(source: str) -> set[str]:

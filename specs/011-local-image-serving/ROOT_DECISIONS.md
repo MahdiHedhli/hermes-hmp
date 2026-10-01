@@ -93,3 +93,11 @@ HistoryPage and HistoryReset. Row count uses the existing history maximum of 100
 duplicates the fixed 256-character field bound to avoid importing the registry, and the optional
 protocol adds no opt-in marker until the bridge implementation. These are internal type/shape
 choices, not wire changes or authority.
+
+S2b extraction detail dispositions: input is an exact list/tuple of at most 1000 native rows and
+an exact frozenset of at most 1000 positive, non-bool returned tool ids. Sort the bounded page by
+positive row id descending, never by timestamp. Duplicate ids are considered once, with the
+first input occurrence winning; native pages have unique ids. Count the newest 128 strict
+returned `image_generate` attempts before parsing, including rejected content; no older backfill.
+Mapping access runs in trusted host code and exceptions close the candidate result. This is not
+isolation or authority: S4 must independently rescan and compare the canonical tool digest.

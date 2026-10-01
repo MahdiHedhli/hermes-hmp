@@ -111,6 +111,10 @@ server/
     local_media_sidecar.py        # OPTIONAL, inert: immutable non-wire read carriers; stdlib and contract only.
                                   #   Candidate holds only row id/digest, never an image path. Generic serialization
                                   #   refuses the carrier. No bridge/read/handler caller yet; no authority granted
+    local_media_candidate.py      # OPTIONAL, inert: lexical flat-name derivation and bounded candidate extraction from one
+                                  #   returned page (newest 128 image_generate attempts, 64 KiB bound before the one accepted
+                                  #   parser). Imports only the accepted result/file-safety/scanner/sidecar modules; no I/O,
+                                  #   no logging, no caller yet. Emits row id + scanner digest only, never a path or name
     read_compat_builds.json       # GU-2c list (starts empty). Entries: {git_sha|null, fingerprint, source_sha?
                                   #   (provenance only), label, qualified_by, qualified_at}; matching per research
                                   #   R8 steps 4-6 (CS-19); plus "bridge_files", the mechanically computed superset

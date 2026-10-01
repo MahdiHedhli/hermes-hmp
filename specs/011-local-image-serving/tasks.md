@@ -69,5 +69,21 @@ carrier. It establishes no authority and holds no image path, name or raw result
 |---|---|
 | `local_media_sidecar.py` | `c6abfd7684420a751023f4819bdc6810bd0d6b6ee2a04a8106976f7d4826c206` |
 
-S2 remains open for bounded candidate derivation, shared native query plumbing and four read
+S2 remains open for shared native query plumbing and four read
 cores with golden-byte proof. Serving, qualification, Linux, device and release gates remain open.
+
+## S2b reviewed extraction (2026-10-01)
+
+Root accepted bounded candidate extraction after independent Sonnet review and 215 focused
+candidate/layout tests on the matrix interpreter. The reviewer ran separate refusal probes and
+nine causal mutants; all mutants failed their targeted checks. Configured Ruff 0.16.9 and explicit
+privacy/diff checks passed. The module is inert, performs no filesystem access, and emits only a
+tool row id and the accepted scanner's canonical digest. A candidate grants no file authority.
+
+| Module | SHA-256 |
+|---|---|
+| `local_media_candidate.py` | `6bd2cde98064b85b65831048a550787e4cd215ac5f5e74a050a683dcdb840e88` |
+
+Exact shapes, bounded descending row-id order and duplicate behavior are recorded in
+`ROOT_DECISIONS.md`. Native query/read plumbing, golden-byte proof, active-set rescan cost,
+serving, qualification, Linux and device acceptance remain open; S2 is not complete.
