@@ -1,0 +1,39 @@
+{
+  "format": 1,
+  "bridge_files": [
+    "agent/secret_scope.py",
+    "cron/jobs.py",
+    "cron/lifecycle_guard.py",
+    "cron/scheduler.py",
+    "cron/scheduler_provider.py",
+    "gateway/platforms/_shared.py",
+    "gateway/platforms/api_server.py",
+    "gateway/platforms/shared_ingress.py",
+    "gateway/run_adapters.py",
+    "hermes_constants.py",
+    "tools/cronjob_prompt_scan.py"
+  ],
+  "builds": [
+    {
+      "label": "stock-base-source",
+      "fingerprint": "453a85fa1175446fae95119682b72236e5a859cfd6007657b26a0012ca53ded4",
+      "git_sha": "04fa849e70165336ba73e6750257a1ebd7ff998d",
+      "qualified_by": "Hermes cron API and HMP scoped writer fixture, delivery/continuity/repeat tests",
+      "qualified_at": "2026-09-28"
+    },
+    {
+      "label": "stock-base-extracted",
+      "fingerprint": "453a85fa1175446fae95119682b72236e5a859cfd6007657b26a0012ca53ded4",
+      "git_sha": null,
+      "qualified_by": "Hermes cron API and HMP scoped writer fixture, delivery/continuity/repeat tests",
+      "qualified_at": "2026-09-28"
+    },
+    {
+      "label": "hermes-8afaab37-git",
+      "fingerprint": "da8a5a1e9a44232c975dc279ac5581a7b08d1a8ef2aaad35c58b2f87ae2d0c61",
+      "git_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
+      "qualified_by": "Hermes cron API and HMP scoped writer fixture, delivery/continuity/repeat tests",
+      "qualified_at": "2026-09-28"
+    }
+  ]
+}

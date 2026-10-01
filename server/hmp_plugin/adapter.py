@@ -47,6 +47,8 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import secrets
+import threading
+import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
@@ -54,10 +56,10 @@ from typing import Any
 from gateway.config import Platform
 from gateway.platforms.base import BasePlatformAdapter, SendResult
 
-from . import cli, compat, direct_send, identity, prompts, server
+from . import cli, compat, direct_send, identity, mobile_cron, mobile_model, prompts, server
 from .authorize import Authorize
 from .cli import listener_record_path
-from .contract import PLATFORM_NAME, OtherWhy
+from .contract import PLATFORM_NAME, OtherWhy, WriteGateState
 from .logging_policy import log_event
 from .reads import Reads, _fallback_display_name
 from .store import Store
@@ -146,6 +148,18 @@ def open_components(adapter: Any) -> server.ServerContext:
         else (lambda: False)
     )
 
+    def _read_cron_enabled() -> bool:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        block = live_extra.get("cron") if isinstance(live_extra, Mapping) else None
+        return isinstance(block, Mapping) and block.get("enabled") is True
+
+    def _read_model_enabled() -> bool:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        block = live_extra.get("model_management") if isinstance(live_extra, Mapping) else None
+        return isinstance(block, Mapping) and block.get("enabled") is True
+
     ctx = server.ServerContext(
         identity=ident,
         store=store,
@@ -156,6 +170,10 @@ def open_components(adapter: Any) -> server.ServerContext:
         # Independent of guarded send; bound to THIS listener's start identity and never open on an
         # unsupported build. The shipped approval list is empty, so this is False for every build.
         approval_qualified=approval_qualified,
+        cron_flag=_read_cron_enabled,
+        cron_qualified=lambda: result.supported and mobile_cron.qualified_build(),
+        model_flag=_read_model_enabled,
+        model_qualified=lambda: result.supported and mobile_model.qualified_build(),
     )
     if result.supported:
         bridge_cls, directory_cls = _bridge_classes()
@@ -174,6 +192,7 @@ def open_components(adapter: Any) -> server.ServerContext:
             iid=ident.iid,
             guarantees=ctx.guarantees,
             write_gate=ctx.reported_write_gate,
+            send_gate=ctx.reported_send_gate,
             clock=ctx.now,
             on_served_profiles=on_served_profiles,
             prompt_store=prompt_store,
@@ -223,6 +242,46 @@ class HmpAdapter(BasePlatformAdapter):
         self._nonce: str | None = None
         self._known_profiles: tuple[tuple[str, str], ...] | None = None
         self._profile_refresh_task: asyncio.Task[None] | None = None
+        self._record_lock = threading.Lock()
+
+    @staticmethod
+    def _health_snapshot(
+        ctx: server.ServerContext, profiles: Sequence[tuple[str, str]]
+    ) -> tuple[tuple[str, str, str, str], ...]:
+        """Only fixed status codes leave the runtime; credentials and endpoints stay in memory."""
+        rows: list[tuple[str, str, str, str]] = []
+        for profile, _display in profiles:
+            try:
+                send = (
+                    "disabled" if not ctx.direct_send_enabled()
+                    else "ready"
+                    if ctx.reported_send_gate(profile).state is not WriteGateState.CLOSED
+                    else "unavailable"
+                )
+                cron = (
+                    "disabled" if not ctx.cron_enabled()
+                    else "unsupported" if not ctx.cron_build_qualified()
+                    else "unavailable"
+                )
+                model = (
+                    "disabled" if not ctx.model_enabled()
+                    else "unsupported" if not ctx.model_build_qualified()
+                    else "unavailable"
+                )
+                if cron == "unavailable" or model == "unavailable":
+                    endpoint = ctx.bridge.direct_send_endpoint(profile) if ctx.bridge else None
+                    if endpoint is not None:
+                        if cron == "unavailable":
+                            cron = "ready"
+                        if model == "unavailable":
+                            model = "ready"
+            except Exception:
+                # A failed live lookup must never become a passing snapshot or leak exception text.
+                send = "unavailable" if ctx.direct_send_enabled() else "disabled"
+                cron = "unavailable" if ctx.cron_enabled() else "disabled"
+                model = "unavailable" if ctx.model_enabled() else "disabled"
+            rows.append((profile, send, cron, model))
+        return tuple(rows)
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
         """Run the compat gate, then start the TLS listener (server-modules.md "Startup order")."""
@@ -271,6 +330,7 @@ class HmpAdapter(BasePlatformAdapter):
                     log_event("listener_record_profiles", outcome="failed")
                     profiles = None
             try:  # PR1-4: `hmp pair offer` derives `ep` from this record only
+                health = self._health_snapshot(ctx, profiles) if profiles is not None else None
                 cli.write_listener_record(
                     self._record,
                     host=srv.bound[0],
@@ -278,6 +338,8 @@ class HmpAdapter(BasePlatformAdapter):
                     iid=ctx.iid,
                     nonce=self._nonce,
                     profiles=profiles,
+                    health_checked_at=int(time.time()) if health is not None else None,
+                    health=health,
                 )
             except OSError:
                 log_event("listener_record", outcome="write_failed")
@@ -307,7 +369,7 @@ class HmpAdapter(BasePlatformAdapter):
         never itself change what this key sees as "the same served set"."""
         return tuple(sorted(name for name, _display in profiles or ()))
 
-    def _sync_refresh(self, served: Iterable[str]) -> None:
+    def _sync_refresh(self, served: Iterable[str], *, refresh_health: bool = False) -> None:
         """The one place that compares and, on a change, rewrites the record. Synchronous and
         blocking (file I/O) by design: `Reads.roster`/`Authorize.authorize` already call this from
         inside their own `asyncio.to_thread` worker thread (`server.py`), so no further
@@ -328,21 +390,36 @@ class HmpAdapter(BasePlatformAdapter):
         except Exception:
             log_event("listener_record_profiles", outcome="refresh_failed")
             return
-        if self._profile_names_key(profiles) == self._profile_names_key(self._known_profiles):
-            return  # unchanged: no rewrite (cheap comparison short-circuits the write)
+        if (
+            not refresh_health
+            and self._profile_names_key(profiles) == self._profile_names_key(self._known_profiles)
+        ):
+            return  # the periodic tick handles flag/key changes on an unchanged roster
         try:
-            cli.write_listener_record(
-                self._record,
-                host=bound[0],
-                port=bound[1],
-                iid=srv.ctx.iid,
-                nonce=self._nonce,
-                profiles=profiles,
-            )
+            health = self._health_snapshot(srv.ctx, profiles)
+            with self._record_lock:
+                if self._server is not srv or self._record is None:
+                    return  # disconnect won the race; never recreate a stale record
+                if (
+                    not refresh_health
+                    and self._profile_names_key(profiles)
+                    == self._profile_names_key(self._known_profiles)
+                ):
+                    return  # an unchanged opportunistic read need not rewrite
+                cli.write_listener_record(
+                    self._record,
+                    host=bound[0],
+                    port=bound[1],
+                    iid=srv.ctx.iid,
+                    nonce=self._nonce,
+                    profiles=profiles,
+                    health_checked_at=int(time.time()),
+                    health=health,
+                )
+                self._known_profiles = tuple(profiles)
         except OSError:
             log_event("listener_record_profiles", outcome="refresh_write_failed")
             return  # the previous record is untouched (write_listener_record's own atomicity)
-        self._known_profiles = tuple(profiles)
 
     def _observe_served_profiles(self, served: Iterable[str]) -> None:
         """`Reads.roster`/`Authorize.authorize`'s hook (wired in through `open_components`),
@@ -373,7 +450,7 @@ class HmpAdapter(BasePlatformAdapter):
             except Exception:
                 log_event("listener_record_profiles", outcome="refresh_failed")
             else:
-                await asyncio.to_thread(self._sync_refresh, served)
+                await asyncio.to_thread(self._sync_refresh, served, refresh_health=True)
             await asyncio.sleep(PROFILE_REFRESH_INTERVAL_S)
 
     async def _cancel_profile_refresh(self) -> None:
@@ -385,11 +462,12 @@ class HmpAdapter(BasePlatformAdapter):
             await task
 
     def _drop_record(self) -> None:
-        record, self._record = self._record, None
-        self._nonce = None
-        self._known_profiles = None
-        if record is not None:
-            cli.remove_listener_record(record)
+        with self._record_lock:
+            record, self._record = self._record, None
+            self._nonce = None
+            self._known_profiles = None
+            if record is not None:
+                cli.remove_listener_record(record)
 
     def _listener_closed(self) -> None:
         srv, self._server = self._server, None

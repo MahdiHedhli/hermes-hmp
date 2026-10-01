@@ -733,24 +733,11 @@ async def handle_direct_send(
         raise _refuse(ErrorCode.BAD_REQUEST, retryable=False)
 
     # DS-2(b): the gate. `direct_send_endpoint` is resolved whenever it might matter: the guarded
-    # path needs it whenever the owner-dogfood flag is on, AND -- a fix this round, found only by
-    # actually running this suite against the `experimental` build -- so does a genuinely OPEN
-    # base gate. HMP_V1.md's own text ("if the original GU-4 'open' state holds, this route is
-    # available under that full guarantee, unchanged from SUB-1..SUB-10") describes a native
-    # Hermes admission path that plainly does not exist in this codebase (F1 registers no write
-    # route, FR-053) -- so when a build's own capability map genuinely satisfies GU-4's OPEN floor
-    # (confirmed to actually happen: `experimental`'s capability map carries `admission_
-    # precondition: 2` and `defer_policy_reject: 1`), the ONLY implemented delivery mechanism is
-    # still this route's own DS-6 loopback call. Falling back to it here (rather than reporting
-    # `api_server_unavailable` unconditionally whenever no native path exists) is strictly safer
-    # than leaving the route entirely non-functional for such a build, and the response is still
-    # correctly reported as full-guarantee, never `"guarded"` (`server.py`'s own `guarded = base_
-    # gate.state is not WriteGateState.OPEN`, unaffected by this). A disabled route with a CLOSED
-    # base gate still makes no Hermes call at all (ERR-2a's own "make no bridge call" discipline
-    # for an unqualified/ungated path). Off the event loop (should-fix): this read can do secret-
-    # source hydration that shells out.
+    # path needs it whenever the owner-dogfood flag is on, including a genuinely OPEN base
+    # gate: the DS-6 loopback is the only implemented delivery mechanism. An off flag makes no
+    # endpoint or Hermes call. Off the event loop: this read can hydrate a secret source.
     endpoint: DirectSendEndpoint | None = None
-    if flag_enabled or base_write_gate.state is WriteGateState.OPEN:
+    if flag_enabled:
         qualified_ok = True
         if deps.qualified is not None:
             try:
@@ -767,12 +754,8 @@ async def handle_direct_send(
     )
     if effective_gate.state not in (WriteGateState.OPEN, WriteGateState.OPEN_GUARDED):
         raise _refuse(ErrorCode.WRITE_GATE_CLOSED, retryable=False)
-    if endpoint is None:
-        # A gate state of OPEN or OPEN_GUARDED with no resolved endpoint: no native admission path
-        # exists in this codebase, and the loopback endpoint itself could not be positively
-        # determined (fail closed, DS-6). Never a bare `500` for this -- report the same
-        # non-definitive, retryable 503 DS-6's own loopback-unavailable case already uses.
-        raise _refuse(ErrorCode.API_SERVER_UNAVAILABLE, retryable=True)
+    if endpoint is None:  # defense in depth if gate semantics change later
+        raise _refuse(ErrorCode.WRITE_GATE_CLOSED, retryable=False)
 
     # DS-3: reserve the cmid atomically, BEFORE anything below (round-1 review's timing BLOCKER).
     payload_hash = _payload_hash(request.text, request.expected_head)

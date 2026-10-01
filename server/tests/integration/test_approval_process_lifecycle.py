@@ -119,7 +119,7 @@ def lifecycle(request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytes
     from `build_offline`); the direct-send receipt is still installed so reads and sends open."""
     receipt = _receipt()
     monkeypatch.delenv(af.RECEIPT_ENV)
-    gen = _f2.gateway.__wrapped__(request, tmp_path)
+    gen = _f2.gateway.__wrapped__(request, tmp_path, approval_owner_enrollment=True)
     gateway = next(gen)
     try:
         yield Lifecycle(gateway, receipt)
@@ -131,7 +131,7 @@ def lifecycle(request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytes
 def admitted(request: pytest.FixtureRequest, tmp_path: Path):
     """A gateway that STARTS admitted: `build_offline` installs the approval receipt."""
     receipt = _receipt()
-    gen = _f2.gateway.__wrapped__(request, tmp_path)
+    gen = _f2.gateway.__wrapped__(request, tmp_path, approval_owner_enrollment=True)
     gateway = next(gen)
     try:
         yield Lifecycle(gateway, receipt)
@@ -153,7 +153,7 @@ def swap(request: pytest.FixtureRequest, tmp_path: Path, monkeypatch: pytest.Mon
         original, label, copies, files=_files(COMMITTED_APPROVAL_MANIFEST)
     )
     monkeypatch.setattr(_f2, "BUILDS_DIR_ENV", str(copies))
-    gen = _f2.gateway.__wrapped__(request, tmp_path)
+    gen = _f2.gateway.__wrapped__(request, tmp_path, approval_owner_enrollment=True)
     gateway = next(gen)
     try:
         yield Lifecycle(gateway, receipt)

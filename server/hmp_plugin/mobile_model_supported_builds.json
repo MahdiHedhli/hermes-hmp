@@ -1,0 +1,41 @@
+{
+  "format": 1,
+  "bridge_files": [
+    "agent/secret_scope.py",
+    "gateway/platforms/api_server.py",
+    "gateway/run.py",
+    "hermes_cli/config.py",
+    "hermes_cli/env_loader.py",
+    "hermes_cli/inventory.py",
+    "hermes_cli/model_switch.py",
+    "hermes_cli/models_validate.py",
+    "hermes_cli/providers.py",
+    "hermes_cli/web_routers/profiles.py",
+    "hermes_cli/web_server_config.py",
+    "hermes_cli/web_server_profiles.py",
+    "hermes_constants.py"
+  ],
+  "builds": [
+    {
+      "label": "stock-base-source",
+      "fingerprint": "0a6b0537e0101598e04a7960b6ba525afb300b26bacb4ad4de131ff9037d4109",
+      "git_sha": "04fa849e70165336ba73e6750257a1ebd7ff998d",
+      "qualified_by": "Hermes profile model scope tests and HMP isolated A-B-A model integration",
+      "qualified_at": "2026-09-28"
+    },
+    {
+      "label": "stock-base-extracted",
+      "fingerprint": "0a6b0537e0101598e04a7960b6ba525afb300b26bacb4ad4de131ff9037d4109",
+      "git_sha": null,
+      "qualified_by": "Hermes profile model scope tests and HMP isolated A-B-A model integration",
+      "qualified_at": "2026-09-28"
+    },
+    {
+      "label": "hermes-8afaab37-git",
+      "fingerprint": "d5d360c9ba6217f3f31843b866a3f88cb5a48f0eac53ea5b2a76ba38b1312b50",
+      "git_sha": "8afaab3703e336d72a72c812dd2dd249f04f166a",
+      "qualified_by": "Hermes profile model scope tests (7) and HMP isolated A-B-A model integration (1) in isolated Python 3.14 environment",
+      "qualified_at": "2026-09-28"
+    }
+  ]
+}

@@ -15,6 +15,12 @@ union of two sets, computed for one Hermes build:
    dependencies plus the security behavior dependencies (control, delivery, timeout and API
    routes), even when the plugin reaches them indirectly rather than importing them itself.
 
+Imports inside the reviewed `HermesApi` cron/model methods (`FEATURE_METHOD_IMPORTS`) belong to
+those features' own boundaries: they are left out of the target sets above and instead each file is
+required to be in `mobile_model_supported_builds.json` / `mobile_cron_supported_builds.json`. The
+check proves declared source-file coverage for the imports it sees; it is not a complete call graph
+and attests nothing about installed third-party packages.
+
 The committed `bridge_files` list (`server/hmp_plugin/read_compat_builds.json`) must be a superset
 of both sets on every qualified build. `--check` verifies that. `--write` merges the computed set
 into the committed list. A changed list moves old builds to `requalification_required`,
@@ -40,7 +46,7 @@ import os
 import sys
 import sysconfig
 import tempfile
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -55,46 +61,120 @@ READ_COMPAT_PATH = SERVER_DIR / "hmp_plugin" / "read_compat_builds.json"
 # `read_compat_builds.json`: that would force every already-qualified read build to requalify for a
 # file reads never touch (`hermes_cli/active_sessions.py`).
 DIRECT_SEND_COMPAT_PATH = SERVER_DIR / "hmp_plugin" / "direct_send_supported_builds.json"
+# The cron and model features keep their own qualification boundaries; they are not part of the
+# read/direct/approval lists above and those lists must not grow to cover them.
+FEATURE_MANIFEST_PATHS: Mapping[str, Path] = {
+    "model": SERVER_DIR / "hmp_plugin" / "mobile_model_supported_builds.json",
+    "cron": SERVER_DIR / "hmp_plugin" / "mobile_cron_supported_builds.json",
+}
+# Audited, exact (class, method) -> (feature manifest, modules that method may import). An import
+# is classified as a feature import ONLY at one of these sites and ONLY for a listed module; the
+# same module imported anywhere else in `bridge.py` stays in the target's AST set. Those methods
+# are reached only from the cron/model route handlers, behind their own qualification gates, never
+# from the read, direct-send or approval paths. A new such method must be added here after review.
+FEATURE_METHOD_IMPORTS: Mapping[tuple[str, str], tuple[str, frozenset[str]]] = {
+    ("HermesApi", "model_config"): ("model", frozenset({"hermes_cli.config"})),
+    ("HermesApi", "write_profile_model"): (
+        "model",
+        frozenset({"hermes_cli.web_routers.profiles"}),
+    ),
+    ("HermesApi", "create_mobile_cron"): (
+        "cron",
+        frozenset({"cron.scheduler", "tools.cronjob_prompt_scan"}),
+    ),
+    ("HermesApi", "edit_mobile_cron"): (
+        "cron",
+        frozenset(
+            {"cron.jobs", "cron.lifecycle_guard", "cron.scheduler", "tools.cronjob_prompt_scan"}
+        ),
+    ),
+}
 
-# Not Hermes: the plugin's own runtime packages (`tools/ci/check_plugin_surface.py` S1).
-NON_HERMES_TOP_LEVEL: frozenset[str] = frozenset({"aiohttp", "cryptography", "qrcode"})
+# Not Hermes: the plugin's own runtime packages (`tools/ci/check_plugin_surface.py` S1), plus
+# `fastapi`, which is an external package the Hermes install provides, not a plugin runtime
+# package. `bridge.write_profile_model` imports `fastapi.HTTPException` lazily only to recognise
+# the native profile writer's validation refusal, so the AST scan must not map it to a Hermes file.
+# This classifies the import; it attests nothing about the installed package's provenance.
+NON_HERMES_TOP_LEVEL: frozenset[str] = frozenset({"aiohttp", "cryptography", "fastapi", "qrcode"})
 
 
 class BridgeFilesError(RuntimeError):
     pass
 
 
-def ast_imported_modules(
-    bridge_source: str, *, exclude_modules: frozenset[str] = frozenset()
-) -> list[str]:
-    """Absolute module names `bridge.py` imports, excluding the standard library, `__future__`,
-    and the plugin's non-Hermes runtime packages. Lazy imports inside functions count.
+def _import_sites(tree: ast.AST) -> list[tuple[str, tuple[str, ...]]]:
+    """Every absolute import as `(module, enclosing scope)`. The scope is the chain of enclosing
+    `class:`/`def:` names, outermost first."""
+    sites: list[tuple[str, tuple[str, ...]]] = []
 
-    `exclude_modules` (amendment F2): `bridge.py` now serves two compat targets from one file --
-    reads (`read_compat_builds.json`) and the guarded direct-send path
-    (`direct_send_supported_builds.json`) -- and this AST scan has no per-target granularity (it
-    walks the whole file). A module imported ONLY for a different target (tracked by that OTHER
-    target's own `DependencySpec` tuple in `compat.py`, e.g. `hermes_cli.active_sessions` for
-    direct send) is excluded here so checking the READ target does not spuriously demand it, while
-    an import that is not declared by ANY target's dependency tuple is never excluded and still
-    fails the check -- the defense-in-depth this scan exists for is preserved for genuinely
-    untracked imports, only the cross-target false positive is removed."""
+    def visit(node: ast.AST, scope: tuple[str, ...]) -> None:
+        for child in ast.iter_child_nodes(node):
+            inner = scope
+            if isinstance(child, ast.ClassDef):
+                inner = (*scope, f"class:{child.name}")
+            elif isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
+                inner = (*scope, f"def:{child.name}")
+            if isinstance(child, ast.Import):
+                sites.extend((alias.name, scope) for alias in child.names)
+            elif isinstance(child, ast.ImportFrom) and child.level == 0 and child.module:
+                sites.append((child.module, scope))
+            visit(child, inner)
+
+    visit(tree, ())
+    return sites
+
+
+def split_ast_imports(
+    bridge_source: str,
+    *,
+    exclude_modules: frozenset[str] = frozenset(),
+    typed_modules: frozenset[str] = frozenset(),
+) -> tuple[list[str], dict[str, set[str]]]:
+    """`(target imports, feature imports by manifest key)` for `bridge.py`.
+
+    Target imports are the absolute module names `bridge.py` imports, excluding the standard
+    library, `__future__`, the plugin's non-Hermes runtime packages and `exclude_modules`. Lazy
+    imports inside functions count.
+
+    `exclude_modules` (amendment F2): `bridge.py` serves several compat targets from one file and
+    the scan has no per-target granularity. A module imported ONLY for a different target (tracked
+    by that OTHER target's own `DependencySpec` tuple in `compat.py`, e.g.
+    `hermes_cli.active_sessions` for direct send) is excluded so checking the READ target does not
+    spuriously demand it; an import not declared by ANY target's tuple is never excluded.
+
+    Feature imports (`FEATURE_METHOD_IMPORTS`) are split out only at their exact reviewed
+    class/method site and only for the listed modules, and never when the module is in
+    `typed_modules` (the selected target's own dependency tuple): a dependency the target relies on
+    stays in the target set whatever else classifies it."""
     tree = ast.parse(bridge_source)
-    names: set[str] = set()
-    for node in ast.walk(tree):
-        if isinstance(node, ast.Import):
-            names.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
-            names.add(node.module)
-    out = []
-    for name in sorted(names):
+    target: set[str] = set()
+    feature: dict[str, set[str]] = {}
+    for name, scope in _import_sites(tree):
         top = name.split(".", 1)[0]
         if top == "__future__" or top in sys.stdlib_module_names or top in NON_HERMES_TOP_LEVEL:
             continue
+        reviewed = None
+        if len(scope) == 2 and scope[0].startswith("class:") and scope[1].startswith("def:"):
+            reviewed = FEATURE_METHOD_IMPORTS.get((scope[0][6:], scope[1][4:]))
+        if reviewed is not None and name in reviewed[1] and name not in typed_modules:
+            feature.setdefault(reviewed[0], set()).add(name)
+            continue
         if name in exclude_modules:
             continue
-        out.append(name)
-    return out
+        target.add(name)
+    return sorted(target), feature
+
+
+def ast_imported_modules(
+    bridge_source: str,
+    *,
+    exclude_modules: frozenset[str] = frozenset(),
+    typed_modules: frozenset[str] = frozenset(),
+) -> list[str]:
+    """The target half of `split_ast_imports`."""
+    return split_ast_imports(
+        bridge_source, exclude_modules=exclude_modules, typed_modules=typed_modules
+    )[0]
 
 
 def module_file(hermes_src: Path, module: str) -> str:
@@ -111,12 +191,44 @@ def ast_set(
     bridge_path: Path = BRIDGE_PATH,
     *,
     exclude_modules: frozenset[str] = frozenset(),
+    typed_modules: frozenset[str] = frozenset(),
 ) -> set[str]:
     source = bridge_path.read_text(encoding="utf-8")
     return {
         module_file(hermes_src, m)
-        for m in ast_imported_modules(source, exclude_modules=exclude_modules)
+        for m in ast_imported_modules(
+            source, exclude_modules=exclude_modules, typed_modules=typed_modules
+        )
     }
+
+
+def feature_boundaries(
+    hermes_src: Path,
+    bridge_path: Path = BRIDGE_PATH,
+    *,
+    typed_modules: frozenset[str] = frozenset(),
+    manifest_paths: Mapping[str, Path] = FEATURE_MANIFEST_PATHS,
+) -> dict[str, list[str]]:
+    """Hermes files of the classified feature imports, each required to be in its OWN feature
+    manifest's `bridge_files`. A module with no Hermes source file, or a missing or malformed
+    manifest, or an uncovered file, fails. Proves declared source-file coverage only: not a call
+    graph, and nothing about the installed third-party packages."""
+    _, feature = split_ast_imports(
+        bridge_path.read_text(encoding="utf-8"), typed_modules=typed_modules
+    )
+    out: dict[str, list[str]] = {}
+    for key, modules in sorted(feature.items()):
+        files = {module_file(hermes_src, m) for m in modules}
+        path = manifest_paths[key]
+        try:
+            committed = set(load_committed(path))
+        except (OSError, ValueError, AttributeError) as exc:
+            raise BridgeFilesError(f"{key} feature manifest is unreadable or malformed") from exc
+        uncovered = sorted(files - committed)
+        if uncovered:
+            raise BridgeFilesError(f"{key} feature manifest lacks {uncovered}")
+        out[key] = sorted(files)
+    return out
 
 
 def _relative(path: str | None, root: Path, what: str) -> str:
@@ -252,6 +364,7 @@ def compute(
             *dependencies,
         )
     this_modules = {spec.module for spec in dependencies}
+    typed = frozenset(this_modules)
     other_modules: set[str] = set()
     for attr in _ALL_DEPENDENCY_ATTRS:
         if attr == dependencies_attr or not hasattr(compat_module, attr):
@@ -259,7 +372,10 @@ def compute(
         other_modules |= {spec.module for spec in getattr(compat_module, attr)}
     exclude = frozenset(other_modules - this_modules)
 
-    result = {"ast": sorted(ast_set(hermes_src, exclude_modules=exclude))}
+    result = {"ast": sorted(ast_set(hermes_src, exclude_modules=exclude, typed_modules=typed))}
+    # Checked here, before any probe import or `--write`, and kept out of the target's union.
+    for key, files in feature_boundaries(hermes_src, typed_modules=typed).items():
+        result[f"feature:{key}"] = files
     if not ast_only:
         home = _isolate_hermes_home()
         try:
@@ -301,7 +417,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     except BridgeFilesError as exc:
         print(f"bridge_files: {exc}", file=sys.stderr)
         return 2
-    computed = set().union(*map(set, sets.values()))
+    # `feature:*` entries were each checked against their own manifest; they are not target files.
+    computed = set().union(*(set(v) for k, v in sets.items() if not k.startswith("feature:")))
     print(json.dumps({**sets, "union": sorted(computed)}, indent=2))
 
     if args.write:

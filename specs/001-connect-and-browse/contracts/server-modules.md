@@ -16,6 +16,8 @@ exceptions, each an exact (module, name) allow-list entry in the surface check:
   class of exposure (IR-6, ruling option (a); HMP v1 §12).
 - `compat.py` may import Hermes modules dynamically, but only inside its dependency probe, and only
   for a build already on the read-compatible list (see "Startup order"; ruling on T013).
+- Third-party modules restricted to one file: `qrcode` to `cli.py`, and `yaml` (PyYAML) to
+  `routes.py`, imported lazily (specs/005-new-profile-routing). No other module may import either.
 
 The spike is reference only. Code is rewritten and reviewed, never copied wholesale (constitution
 VIII).
@@ -57,6 +59,8 @@ server/
                                   #   uses the stored run_id. No sync /chat fallback.
     prompts.py                    # amendment F3 (§7b): process-memory prompt rows, answer idempotency,
                                   #   Phone-chat send, adapter hooks. No Hermes import.
+    mobile_cron.py                # mobile cron (§7c, CR-1..CR-6): bounded projection and loopback job calls; no Hermes import
+    mobile_model.py               # bot default model (§7d, MD-1..MD-3): projection and options loopback call; no Hermes import
     pairing.py                    # P2, P4 (PR2-*, PR4-*), sanitization (PR2-3)
     tokens.py                     # P5 exchange, rotation, retry grace (successor = HMAC over the RAW presented
                                   #   token, length-prefixed; R16, CS-13), family revoke (PR5-*)
@@ -77,7 +81,7 @@ server/
                                   #   hermes_plugins.hmp*) cannot split a running app from the CTX_KEY/helpers
                                   #   it was built with (see the module's own docstring)
     adapter.py                    # HmpAdapter(BasePlatformAdapter): lifecycle only (start/stop listener)
-    cli.py                        # `hermes hmp …` operator commands (PR1-*, PR3-*, PR7-1, PR7-2, compat);
+    cli.py                        # `hermes hmp …` operator commands (PR1-*, PR3-*, PR7-1, PR7-2, routes add, compat);
                                   #   `pair offer` is one command end to end unless `--no-wait` (owner
                                   #   requirement, 2026-09-27): it waits, shows the expected code and asks
                                   #   "Does the phone show this code? [y/N]" (OD-F7, replacing the typed
@@ -86,6 +90,9 @@ server/
                                   #   their pending `hmp` requests through Hermes's own public CLI as a
                                   #   subprocess (OD-F8), before printing the next steps; reuses
                                   #   `pair list`/`confirm`/`deny`'s own internals throughout
+    routes.py                     # `hermes hmp routes add <profile>` (specs/005-new-profile-routing): writes one
+                                  #   exact root `gateway.profile_routes` entry only; lazy `yaml` import here only;
+                                  #   no Hermes import, no store, no network, no profile config write
     logging_policy.py             # allow-listed log fields (SEC-4, SR-007): plugin logger; aiohttp access log
                                   #   disabled or reduced to method, route template, status, duration; bridge
                                   #   exceptions logged by type only; P6 reply dropped unlogged (CS-22)
@@ -97,6 +104,10 @@ server/
     direct_send_supported_builds.json  # amendment F2 (DS-2(b)/GAP-2): guarded-write qualification list, distinct
                                   #   from write_supported_builds.json (data-model.md "Direct-send qualification list");
                                   #   starts empty (OD-F3 discipline applied to the new guarantee tier)
+    approval_supported_builds.json  # amendment F3 (§7b) approval qualification list (starts empty; bridge_files
+                                  #   mechanically computed); independent of the direct-send list
+    mobile_cron_supported_builds.json   # §7c exact-build cron qualification list
+    mobile_model_supported_builds.json  # §7d exact-build model-management qualification list
   tests/unit/…                    # per module
   tests/integration/…             # real gateway in isolated homes (tools/fixtures)
   HOST_HARDENING.md               # SEC-3 guidance
@@ -158,11 +169,17 @@ SHA. Unresolvable git metadata or a missing listed file is unidentifiable, hence
 | GET | `/hmp/v1/bots/{p}/conversations/default/messages?after=&limit=` | RO-6 | bearer + per-bot gate |
 | GET | `/hmp/v1/bots/{p}/sessions?cursor=&limit=` | SES-1 (amendment A1, v1.1) | bearer + per-bot gate; only when `gateway.platforms.hmp.extra.session_browsing` is not `false` |
 | GET | `/hmp/v1/bots/{p}/sessions/{ref}/messages?after=&limit=` | SES-2 (amendment A1, v1.1) | bearer + per-bot gate; same kill switch |
+| GET | `/hmp/v1/bots/{p}/sessions/{ref}/messages/from-start?limit=` | SES-2a (phone Bot Chat history paging) | bearer + per-bot gate; same kill switch and read limiter; an older HMP has no route |
 | POST | `/hmp/v1/bots/{p}/chat/messages` | DS-1..DS-7 (amendment F2, v1.2) | bearer + per-bot gate; **always registered** (unlike SES-1/SES-2's kill switch), answers `503 write_gate_closed` rather than `404` when `direct_send`'s flag is off or the guard/gate otherwise fails closed |
 | GET | `/hmp/v1/bots/{p}/chat/messages/by-client-id/{cmid}` | DS-8 (amendment F2, v1.2) | bearer + per-bot gate; always registered, read-only, never re-sends |
 | GET | `/hmp/v1/bots/{p}/prompts` | AP-3 (amendment F3, v1.3) | bearer + per-bot gate; always registered; `503 write_gate_closed` when the direct-send gate is closed |
 | POST | `/hmp/v1/bots/{p}/prompts/{request_id}` | AP-4 (amendment F3, v1.3) | bearer + per-bot gate; answer is bound to the stored id and the authorized user |
 | POST | `/hmp/v1/bots/{p}/phone/messages` | AP-6 (amendment F3, v1.3) | bearer + per-bot gate; Phone chat hand-off (GU-4b), not SUB-1 |
+| GET/POST | `/hmp/v1/bots/{p}/jobs` | CR-1, CR-2 (§7c) | bearer + per-bot gate + controls decision; `404` non-owner, `503 cron_unavailable` otherwise closed |
+| PATCH/DELETE | `/hmp/v1/bots/{p}/jobs/{job_id}` | CR-3, CR-4 (§7c) | same as CR-1 |
+| POST | `/hmp/v1/bots/{p}/jobs/{job_id}/pause` and `/resume` | CR-5, CR-6 (§7c) | same as CR-1 |
+| GET/PUT | `/hmp/v1/bots/{p}/model/default` | MD-1, MD-3 (§7d) | bearer + per-bot gate + controls decision; `503 model_unavailable` when closed |
+| GET | `/hmp/v1/bots/{p}/model/options` | MD-2 (§7d) | same as MD-1 |
 
 Not registered in F1 (FR-053): lookup (`SUB-1`'s own `by-client-id` route — the original submit path
 itself is unregistered too, matching v1.0's write gate that is never open on a supported build),

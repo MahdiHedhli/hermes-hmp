@@ -12,13 +12,15 @@ dependencies = [
     # Pure Python (reviews/dependencies.md). Keep in step with `python_dependencies` in
     # hmp_plugin/plugin.yaml, which is what Hermes PM actually installs.
     "qrcode>=7.4.2,<9",
+    # `hermes hmp routes add` (routes.py only) parses and re-emits Hermes config files.
+    # Keep in step with `python_dependencies` in hmp_plugin/plugin.yaml.
+    "PyYAML>=6,<7",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest",
     "pytest-asyncio",
-    "PyYAML>=6,<7",
     "jsonschema>=4,<5",
     # Test-only: tests/unit/test_tls_trust_injection.py reproduces a host's process-wide
     # client-trust injection (`truststore.inject_into_ssl()`, which some Hermes builds call at
@@ -33,8 +35,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["hmp_plugin*"]
 
-# T024: the manifest and the two build lists ship inside the wheel (the compat gate and the
-# plugin loader read them next to the modules).
+# The manifest and build lists ship inside the wheel, next to their readers.
 [tool.setuptools.package-data]
 hmp_plugin = [
     "plugin.yaml",
@@ -42,6 +43,8 @@ hmp_plugin = [
     "write_supported_builds.json",
     "direct_send_supported_builds.json",
     "approval_supported_builds.json",
+    "mobile_cron_supported_builds.json",
+    "mobile_model_supported_builds.json",
 ]
 
 [tool.pytest.ini_options]

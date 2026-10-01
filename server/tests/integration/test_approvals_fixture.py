@@ -55,7 +55,7 @@ def gateway(request: pytest.FixtureRequest, tmp_path: Path):
     alone never opens them. Without it these tests skip, and the matrix rejects any skip."""
     if not os.environ.get(af.RECEIPT_ENV):
         pytest.skip(f"needs {af.RECEIPT_ENV} (tools/compat/approval_matrix.py fixture receipt)")
-    yield from _f2.gateway.__wrapped__(request, tmp_path)
+    yield from _f2.gateway.__wrapped__(request, tmp_path, approval_owner_enrollment=True)
 
 
 def _prompts(client: Client, profile: str = DEFAULT_PROFILE) -> tuple[int, Any]:

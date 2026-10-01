@@ -20,7 +20,7 @@ from pathlib import Path
 
 from .contract import LIMITER_TABLE_MAX
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Matches identity.py's DIR_MODE: the store lives beside the instance anchor, under the same
 # 0700 `plugin-data/hmp/` directory (ID-2). On a fresh install nothing has created that directory
@@ -85,6 +85,15 @@ CREATE TABLE IF NOT EXISTS devices (
     label TEXT NOT NULL,
     state TEXT NOT NULL CHECK (state IN ('PENDING','ACTIVE','REVOKED')),
     created_at INTEGER NOT NULL
+);
+
+-- A host decision for privileged phone controls. Missing rows defer to the legacy config list;
+-- an explicit denial overrides that list. A new pairing receives a new device_id and never
+-- inherits a previous device's decision, even if it uses the same phone or HMP user.
+CREATE TABLE IF NOT EXISTS device_owner_controls (
+    device_id TEXT PRIMARY KEY REFERENCES devices(device_id),
+    allowed INTEGER NOT NULL CHECK (allowed IN (0, 1)),
+    decided_at INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS token_families (
@@ -308,6 +317,12 @@ class Store:
             "schema_version) VALUES (1, 0, 0, ?)",
             (SCHEMA_VERSION,),
         )
+        # The new table above is additive. Record the upgrade after it exists, including for
+        # stores opened by older HMP builds with schema_version=1.
+        conn.execute(
+            "UPDATE meta SET schema_version = ? WHERE id = 1 AND schema_version < ?",
+            (SCHEMA_VERSION, SCHEMA_VERSION),
+        )
         self._conn = conn
 
     def close(self) -> None:
@@ -479,6 +494,31 @@ class Store:
             .execute("SELECT * FROM devices WHERE device_id = ?", (device_id,))
             .fetchone()
         )
+
+    def owner_controls_decision(self, device_id: str) -> bool | None:
+        """Return the host's explicit decision, or None for a legacy device without one."""
+        row = (
+            self._require_conn()
+            .execute("SELECT allowed FROM device_owner_controls WHERE device_id = ?", (device_id,))
+            .fetchone()
+        )
+        return bool(row["allowed"]) if row is not None else None
+
+    def set_owner_controls(self, device_id: str, *, allowed: bool, now: int) -> bool:
+        """Set a per-device host decision. Refuse missing or revoked devices."""
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT state FROM devices WHERE device_id = ?", (device_id,)
+            ).fetchone()
+            if row is None or row["state"] != "ACTIVE":
+                return False
+            conn.execute(
+                "INSERT INTO device_owner_controls (device_id, allowed, decided_at) "
+                "VALUES (?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET "
+                "allowed = excluded.allowed, decided_at = excluded.decided_at",
+                (device_id, int(allowed), now),
+            )
+            return True
 
     def set_device_state(self, device_id: str, state: str) -> None:
         if state not in DEVICE_STATES:

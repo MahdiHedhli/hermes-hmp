@@ -59,6 +59,43 @@ async def test_non_owner_device_cannot_use_any_prompt_route(tmp_path, monkeypatc
 
 
 @pytest.mark.asyncio
+async def test_controls_grant_alone_never_opens_an_approval_route(tmp_path, monkeypatch) -> None:
+    """The per-device jobs/model controls grant is a different privilege from approvals."""
+    env, who, request = _request_env(tmp_path, monkeypatch)
+    env.store.insert_user(USER, "label", 1000)
+    env.store.insert_device(who.device_id, USER, "f" * 64, b"x", "phone", 1000, state="ACTIVE")
+    env.ctx.owner_device_ids = lambda: frozenset()
+    assert env.store.set_owner_controls(who.device_id, allowed=True, now=1001)
+    assert env.ctx.is_owner_device(who.device_id) is True
+    assert env.ctx.is_approval_owner_device(who.device_id) is False
+    for handler in (
+        server.handle_prompts_list,
+        server.handle_prompt_answer,
+        server.handle_phone_send,
+    ):
+        with pytest.raises(HmpError) as caught:
+            await handler(request)
+        assert caught.value.code.value == "not_found"
+    env.store.close()
+
+
+@pytest.mark.asyncio
+async def test_controls_denial_closes_an_allowlisted_approval_device(tmp_path, monkeypatch) -> None:
+    env, who, request = _request_env(tmp_path, monkeypatch)
+    env.store.insert_user(USER, "label", 1000)
+    env.store.insert_device(who.device_id, USER, "f" * 64, b"x", "phone", 1000, state="ACTIVE")
+    env.ctx.owner_device_ids = lambda: frozenset({who.device_id})
+    assert env.ctx.is_approval_owner_device(who.device_id) is True
+    assert env.store.set_owner_controls(who.device_id, allowed=False, now=1001)
+    assert env.ctx.is_approval_owner_device(who.device_id) is False
+    for handler in (server.handle_prompts_list, server.handle_prompt_answer):
+        with pytest.raises(HmpError) as caught:
+            await handler(request)
+        assert caught.value.code.value == "not_found"
+    env.store.close()
+
+
+@pytest.mark.asyncio
 async def test_flag_off_even_with_full_guarantees(tmp_path, monkeypatch) -> None:
     env, who, request = _request_env(tmp_path, monkeypatch, flag=False)
     env.ctx.write_gate = lambda: WriteGate(WriteGateState.OPEN, None)

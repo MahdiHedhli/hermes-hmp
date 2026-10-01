@@ -566,14 +566,39 @@ def run_identity(world: World, tmp_path: Path, *extra: str, sha: str | None = No
 
 @pytest.fixture
 def git_identity_env(monkeypatch):
-    """The synthetic trees have no real venv or Hermes: stub only the interpreter version and the
-    three boundary lists identity reads, never the git checks under test."""
+    """The synthetic trees have no real venv or Hermes: stub only the interpreter version probes
+    (the build interpreter and the runner's own, both host facts) and the three boundary lists
+    identity reads, never the git checks under test. The production runner's pinned-Python refusal
+    is exercised separately with an explicitly unpinned runner by
+    test_runner_refuses_an_unpinned_python."""
     lists = {approval_matrix.APPROVAL_COMPAT_PATH: FILES,
              approval_matrix.DIRECT_COMPAT_PATH: DIRECT_FILES,
              approval_matrix.READ_COMPAT_PATH: READ_FILES}
     monkeypatch.setattr(approval_matrix, "_python_version",
                         lambda python: approval_matrix.PINNED_PYTHON)
     monkeypatch.setattr(approval_matrix, "_files", lambda path: list(lists[path]))
+    # Module-local shim: the real `sys` (and every other module's view of it) is untouched.
+    monkeypatch.setattr(approval_matrix, "sys", RunnerSys(approval_matrix.PINNED_PYTHON))
+
+
+class RunnerSys:
+    """Stands in for the `sys` name inside approval_matrix only, reporting a chosen interpreter."""
+
+    def __init__(self, version: tuple[int, int]):
+        self.version_info = version
+
+    def __getattr__(self, name):
+        return getattr(sys, name)
+
+
+def test_runner_refuses_an_unpinned_python(world, gitbuild, tmp_path, git_identity_env,
+                                           monkeypatch):
+    """The runner's own interpreter requirement stays pinned: a 3.11 host is refused."""
+    monkeypatch.setattr(approval_matrix, "sys", RunnerSys((3, 11)))
+    code, summary = run_identity(world, tmp_path, "--git-install",
+                                 "--upstream-source", str(world.upstream))
+    assert code == 1 and summary["stages"] == {"identity": False}, summary
+    assert "pinned Python 3.14, not (3, 11)" in summary["errors"]["identity"]
 
 
 def test_git_mode_identity_accepts_an_independent_clone_at_the_expected_sha(
