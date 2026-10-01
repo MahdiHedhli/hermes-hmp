@@ -279,6 +279,7 @@ def build_instance(
     plugin_dir: Path,
     *,
     force: bool,
+    private_seed_diagnostics: bool = False,
 ) -> dict[str, Any]:
     fc.assert_instance_paths_safe(paths)
     if paths.home.exists() or paths.xdg_state.exists():
@@ -386,6 +387,7 @@ def build_instance(
                 seeded = fc.run_seed_script(
                     build,
                     FIXTURE_SEED,
+                    *(["--diagnostic-stacks"] if private_seed_diagnostics else []),
                     "seed-messages",
                     "--home", str(paths.home),
                     "--profile", name,
@@ -451,6 +453,7 @@ def build_instance_if_needed(
     plugin_dir: Path,
     *,
     force: bool,
+    private_seed_diagnostics: bool = False,
 ) -> dict[str, Any]:
     """`--serve` on an existing `--out` reuses it (profiles, seeded history and any `mutate.py`
     change survive a restart) instead of rebuilding -- `server/tests/integration/
@@ -464,7 +467,10 @@ def build_instance_if_needed(
                 return inst
         # Home exists (e.g. from a differently-scoped prior run) but no meta recorded -- rebuild
         # is the only way to know what is really there.
-    return build_instance(build, paths, manifest, instance, plugin_dir, force=force)
+    return build_instance(
+        build, paths, manifest, instance, plugin_dir, force=force,
+        private_seed_diagnostics=private_seed_diagnostics,
+    )
 
 
 class _GatewayHandle:
@@ -716,8 +722,17 @@ def main(argv: list[str] | None = None) -> int:
         "--force", action="store_true",
         help="wipe and rebuild an instance home that already exists",
     )
+    parser.add_argument(
+        "--private-seed-diagnostics", action="store_true",
+        help="offline only: seed-messages dumps all Python thread stacks once to its stderr after "
+        "90 s (nonfatal). The stderr is sensitive: use only with private capture.",
+    )
     args = parser.parse_args(argv)
 
+    if args.private_seed_diagnostics and args.serve:
+        parser.error(
+            "--private-seed-diagnostics is offline-only; it cannot be combined with --serve"
+        )
     builds_dir = args.builds_dir or os.environ.get(DEFAULT_BUILDS_DIR_ENV)
     if not builds_dir:
         parser.error(f"--builds-dir is required (or set ${DEFAULT_BUILDS_DIR_ENV})")
@@ -740,7 +755,10 @@ def main(argv: list[str] | None = None) -> int:
         paths = fc.instance_paths(args.out, instance["key"])
         print(f"==> instance {instance['key']!r} ({build.label}) at {paths.home}", file=sys.stderr)
         built.append(
-            build_instance_if_needed(build, paths, manifest, instance, plugin_dir, force=args.force)
+            build_instance_if_needed(
+                build, paths, manifest, instance, plugin_dir, force=args.force,
+                private_seed_diagnostics=args.private_seed_diagnostics,
+            )
         )
 
     write_fixture_meta(args.out, build, built)

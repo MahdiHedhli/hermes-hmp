@@ -749,12 +749,19 @@ def _retain_build_failure_output(dir_fd: int | None, stdout: bytes, stderr: byte
 def build_offline(
     label: str, out: Path, *, builds_dir: str | None = None, instances: str | None = None
 ) -> dict[str, Any]:
-    """`build_fixture.py --build <label> --out <out>` (offline; never `--serve`), unmodified, as
-    its own subprocess -- exactly `test_reads_fixture.py`'s own `_build()` helper, except this one
-    also captures and parses the JSON `main()` prints on the non-`--serve` path (`{"ok", "build",
-    "instances": [...]}`), which carries each profile's `user_id`/`authorized` metadata this
-    module needs to pair a fresh reference device without going through `--serve`. `instances`
-    (comma-separated keys, e.g. `"A"`) narrows the build to just what a test needs.
+    """`build_fixture.py --build <label> --out <out>` (offline; never `--serve`) as its own
+    subprocess, plus `--private-seed-diagnostics` -- exactly `test_reads_fixture.py`'s own
+    `_build()` helper, except this one also captures and parses the JSON `main()` prints on
+    the non-`--serve` path (`{"ok", "build", "instances": [...]}`), which carries each
+    profile's `user_id`/`authorized` metadata this module needs to pair a fresh reference
+    device without going through `--serve`. `instances` (comma-separated keys, e.g. `"A"`)
+    narrows the build to just what a test needs.
+
+    `--private-seed-diagnostics` makes the `seed-messages` child dump one nonfatal all-thread
+    Python stack to its stderr if it is still running after 90 s. That stderr is sensitive and
+    reaches only this helper's private capture (retained 0600 on failure, never in the error or
+    the pytest report); a caller invoking `build_fixture.py` directly with the flag must capture
+    stderr privately too.
 
     The child gets `offline_build_env`, not the caller's environment. A nonzero exit raises a
     closed `FixtureSafetyError` (phase and exit code only: no argv, environment or output) and the
@@ -777,6 +784,8 @@ def build_offline(
             "offline fixture build refused: phase=build_offline_destination "
             "private_output=not_retained_unsafe_destination"
         ) from None
+    # Only after the private destination is held: stderr may then carry a diagnostic stack.
+    args.append("--private-seed-diagnostics")
     failure: str | None = None
     try:
         result = subprocess.run(args, check=False, env=env, capture_output=True)

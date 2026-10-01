@@ -25,6 +25,7 @@ seeding).
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import json
 import os
 import sqlite3
@@ -37,6 +38,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SERVER_DIR = REPO_ROOT / "server"
 if str(SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(SERVER_DIR))
+
+
+# Opt-in `--diagnostic-stacks`: one nonfatal all-thread Python stack dump to stderr if the
+# subcommand is still running after this many seconds (below `run_seed_script`'s 120 s deadline).
+# Not a signal handler, no core, no locals/env/argv. Sensitive stderr: capture it privately only.
+_DIAGNOSTIC_STACK_SECONDS = 90.0
 
 
 def _out(payload: dict[str, Any]) -> None:
@@ -452,6 +459,11 @@ def cmd_compat_identity(args: argparse.Namespace) -> None:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--diagnostic-stacks", action="store_true",
+        help="before the subcommand: dump all Python thread stacks to stderr once, nonfatally, "
+        f"after {_DIAGNOSTIC_STACK_SECONDS:g} s if still running (stderr is sensitive)",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     def _home_xdg(p: argparse.ArgumentParser) -> None:
@@ -553,12 +565,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.diagnostic_stacks:
+        faulthandler.dump_traceback_later(
+            _DIAGNOSTIC_STACK_SECONDS, repeat=False, file=sys.stderr, exit=False
+        )
     try:
         args.func(args)
     except SystemExit:
         raise
     except Exception as exc:
         _fail(f"{type(exc).__name__}: {exc}")
+    finally:
+        if args.diagnostic_stacks:
+            faulthandler.cancel_dump_traceback_later()
     return 0
 
 
