@@ -14,11 +14,11 @@ Reviewer-owned. Unchecked until an independent reviewer marks an item; the autho
 - [ ] Constants are labelled new choices; memory ceilings are provisional.
 - [ ] Ref grammar, TTL, caps, idempotent mint and the 128 limit are exact.
 - [ ] Permit lifetimes under cancellation are stated.
-- [ ] E1 and the Linux leaf run are stated as sampled evidence; independent review, C6b/T12 sample evidence and device acceptance are stated as pending; no shipping, enablement or qualification claim is made.
+- [ ] E1 and the Linux leaf run are stated as sampled evidence; delivery review, C6b/T12 sample evidence and device acceptance are stated as pending; no shipping, enablement or qualification claim is made.
 - [ ] Conformance rows list every future test as unimplemented.
 - [ ] Public text contains no private path, personal identifier, secret or transcript.
-- [ ] Superseded S6/S6a/S6b text is preserved as historical and not presented as current; the M0 constant closed binder is stated as current runtime behavior until M2/M3.
-- [ ] Known carried failures (three draft contract-table cases, 114 legacy qualification test failures, one collection error) are stated as work in progress, not green.
+- [ ] Superseded S6/S6a/S6b text is preserved as historical and not presented as current; the accepted M3 listener binding is described as source-only, with descriptor emission, fetching and device acceptance still open.
+- [ ] Known carried failures are scoped to their checkpoint: the 114 legacy failures and collection error were retired or adapted in M3; three S4 contract-table failures remain visible, not green.
 
 ## Open gates (not satisfiable by documents)
 

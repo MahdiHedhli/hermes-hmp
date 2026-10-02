@@ -49,7 +49,7 @@ server/
                                   #   candidate, scan, result, file safety, batch, binding); the media twins and the
                                   #   C6b binding read it, never a request-time import. Old read methods unchanged.
                                   #   Under the minimum-version amendment these caches are bound to the listener's
-                                  #   ServerContext and published as one locked tuple assignment (M3, unimplemented)
+                                  #   ServerContext and published as one locked tuple assignment (M3 source-reviewed)
     direct_send.py                # amendment F2: DS-2..DS-8 orchestration (gate order, guard, idempotency,
                                   #   the api_server loopback call, post-hoc verification). Never imports a Hermes
                                   #   internal itself -- reads bridge.py for Hermes state, and speaks api_server's
@@ -75,13 +75,13 @@ server/
                                   #   tokens.py and revoke.py so a plugin reload (sys.modules eviction of
                                   #   hermes_plugins.hmp*) cannot split a running app from the CTX_KEY/helpers
                                   #   it was built with (see the module's own docstring)
-                                  #   `media_flag` / `media_qualified` callable fields (default closed) and the
-                                  #   exact-True accessors `media_enabled` / `media_qualification_open`; in M0
-                                  #   `media_qualified` is bound to a constant closed callback; no route consumes them.
-                                  #   Planned (M3): replaced by `media_available` (default closed) and the bound modules
+                                  #   `media_flag` / `media_available` callable fields (default closed), exact-True
+                                  #   `media_enabled` / `is_media_available` accessors, and strong `media_modules`
+                                  #   references. No route consumes them yet; S4/S5 must capture and verify the bound tuple.
     adapter.py                    # HmpAdapter(BasePlatformAdapter): lifecycle only (start/stop listener)
-                                  #   M0 media: `_media_qualifier` is the constant closed callback until the
-                                  #   minimum-version availability binding (M3); the retired gate is not imported
+                                  #   M3 `_media_bind` verifies in-memory cache coherence at listener open and
+                                  #   a synchronous cache-identity fence closes this listener until reopen. Fixed
+                                  #   outcomes: media_binding_incoherent/media_binding_changed; no process latch.
     cli.py                        # `hermes hmp …` operator commands (PR1-*, PR3-*, PR7-1, PR7-2, compat);
                                   #   `pair offer` is one command end to end unless `--no-wait` (owner
                                   #   requirement, 2026-09-27): it waits, shows the expected code and asks
@@ -120,7 +120,7 @@ server/
     # (There is no `local_media_gate.py` and no `local_media_supported_builds.json`: the exact-build gate and its
     #   manifest are retired by the minimum-version conversion and were not carried onto the converted base. Their
     #   accepted bytes remain in the media lineage as historical evidence only. The replacement is the `local_media`
-    #   eligibility member in `compat.py` plus an in-memory binding in `adapter.py` (slices M2/M3, unimplemented);
+    #   eligibility member in `compat.py` plus an in-memory binding in `adapter.py` (slices M2/M3, independently source-reviewed; delivery unimplemented);
     #   no runtime module reads a build list, manifest, fingerprint or Git SHA for media.)
     read_compat_builds.json       # GU-2c list (starts empty). Entries: {git_sha|null, fingerprint, source_sha?
                                   #   (provenance only), label, qualified_by, qualified_at}; matching per research

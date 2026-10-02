@@ -48,11 +48,11 @@ dependency action.
   Configured Ruff 0.16.9, explicit candidate privacy and surface checks passed. This certifies only
   eligibility and offline drafting: the runtime binder remains closed; no route or descriptor exists.
   The known M3/S4 failures below remain; no green full-suite claim.
-- [ ] **M3** Replace the retired binder with the D-M4 binding and coherence check: delete the gate-era components
+- [x] **M3 source slice** Replace the retired binder with the D-M4 binding and coherence check: delete the gate-era components
   (manifest, fingerprints, anchor, GIL guard, origin checks, non-media core proof), add
   `ServerContext.media_available` and the bound modules, publish `_bridge_classes` as one tuple. Retire or adapt
-  the 114 legacy tests as the architecture allows. Exit: A7-A12 and A14, then **mandatory independent
-  exact-candidate security review**.
+  the 114 legacy tests as the architecture allows. Exit for the listener source slice: bounded A7-A12 and A14 evidence, then **mandatory independent
+  exact-candidate security review**. Root accepted exact `f737197` after independent review: 3047 unit cases passed, three existing S4 contract-table failures and 16 native-dependent skips remained. This closes the listener source slice only; the route portions of A8/A10/A11 stay with S4/S5.
 
 (The older headings "M1 Host" and "M2 Convergence" below are original document-phase names and are unrelated to slices M1-M3 above.) Later slices stay open exactly as listed under them: C6b exact-native cost and
 concurrent-writer evidence (release-candidate evidence, not a per-version allowlist), S4 descriptor emission, S5
@@ -63,7 +63,7 @@ the feature is not enabled by any of them.
 ### Acceptance matrix for M2/M3
 
 Each case must fail when its named guard is removed. A1-A6 and A13 have bounded source evidence
-from M2; A7-A12 and A14 remain unimplemented. No case proves media serving.
+from M2. M3 supplies bounded listener evidence for A7-A12 and A14; A8 owner/non-owner route responses, A10 mint/fetch identity and A11 route refusal are still S4/S5 requirements. No case proves media serving.
 
 | ID | Setup | Expected | Guard mutated |
 |---|---|---|---|

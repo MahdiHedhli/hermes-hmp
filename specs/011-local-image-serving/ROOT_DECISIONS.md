@@ -599,3 +599,28 @@ retired gate-test failures, three draft-contract failures and removed-gate colle
 visible; no full-suite green or shipping claim follows. Sibling signature rows were reviewed
 unchanged in the finite diff; a mutation broadening one sibling row survived the reviewer's tests,
 so that constraint is source-reviewed rather than mutation-certified.
+
+
+### M3 listener-scoped source acceptance (2026-10-02)
+
+Root accepted exact `f737197` after mandatory independent Opus-alias review. All 13 candidate paths
+and all nine protected media helpers matched the frozen root inventory after review. Bridge and reads
+logic is unchanged; their only M3 edits are comments. Binding checks the genuine media cache chain and
+reads sidecar by identity, holds strong per-listener references, accepts absent build identity, and uses
+a synchronous cache-identity fence with no import, native call or disk read. A failure closes only that
+listener until reopen. Bridge module/classes publish in one locked tuple with imports outside the lock.
+The fixed outcomes are `media_binding_incoherent` and `media_binding_changed`.
+
+Root's full unit run passed 3047 cases, with three existing S4 contract-table failures, 16 existing
+native-dependent skips and one preexisting warning. No full-green claim follows. The obsolete gate test
+collection error and 114 legacy design failures were explicitly retired or adapted; no unrelated skip
+or xfail was introduced. The reviewer independently reproduced the candidate results and named causal
+guard failures. Its aggregate mutant count is not adopted because the headline and survivor list differ.
+
+Carry-forward requirements: S4/S5 must snapshot the bound module tuple synchronously beside the
+availability check, refuse missing or foreign tuples, and use the same bound objects at mint and fetch.
+The mutable context field itself is not fenced by M3. Restore the live helper's omitted eight-step,
+nine-step and cyclic unwrap test coverage. Existing same-account in-process mutation, no bytecode
+attestation, non-atomic native reads and G-M1/G-M2 residuals remain. No serving, native complete-binding
+cost, T12 fetch memory, physical-device, free-threaded or deployment acceptance is implied. The A8
+owner/non-owner route responses and A10 mint/fetch identity remain unproved until S4/S5.

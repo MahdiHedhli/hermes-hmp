@@ -19,7 +19,7 @@ The initial public migration changes packaging only. It does not certify a new H
 
 ## Host-local generated images (draft §7e, v1.6): not implemented
 
-[§7e](HMP_V1.md) is a draft contract. **No row below is implemented, qualified or passing.** There is no build list or manifest; availability follows the minimum version, the required APIs and an in-memory binding (amended 2026-10-02). The runtime media binder is the M0 constant closed callback until M2/M3. Each future test must fail when its named guard is removed. Test IDs refer to [`specs/011-local-image-serving/plan.md`](../../../specs/011-local-image-serving/plan.md).
+[§7e](HMP_V1.md) is a draft contract. **No complete delivery row below is implemented or passing.** There is no build list or manifest; availability follows the minimum version, the required APIs and an in-memory binding (amended 2026-10-02). M2 eligibility and M3 listener binding are independently source-reviewed. No production handler selects the media twins or emits a descriptor. Each future test must fail when its named guard is removed. Test IDs refer to [`specs/011-local-image-serving/plan.md`](../../../specs/011-local-image-serving/plan.md).
 
 | Clause | Future verification | Status |
 | --- | --- | --- |
@@ -38,5 +38,5 @@ The initial public migration changes packaging only. It does not certify a new H
 | LM-16 | T15: logs carry closed enums only | Unimplemented |
 | LM-15 | T16: one test per error-table row | Unimplemented |
 | LM-11, LM-13 | T17: copied `ContextVar` profile scope in both phases | Unimplemented |
-| LM-1, LM-2 | T18 (amended): below-floor, missing probe row and split media chain close this listener only with a fixed outcome; a second coherent listener opens (no process latch); use-time identity mismatch closes that listener until reopen; a legacy process anchor is ignored and never written; no media component reads a build list, manifest, fingerprint or Git SHA. Acceptance cases A1-A14 are in the [task list](../../../specs/011-local-image-serving/tasks.md) | M2 eligibility/draft source-reviewed (A1-A6, A13); M3 binding and delivery unimplemented |
+| LM-1, LM-2 | T18 (amended): below-floor, missing probe row and split media chain close this listener only with a fixed outcome; a second coherent listener opens (no process latch); use-time identity mismatch closes that listener until reopen; a legacy process anchor is ignored and never written; no media component reads a build list, manifest, fingerprint or Git SHA. Acceptance cases A1-A14 are in the [task list](../../../specs/011-local-image-serving/tasks.md) | M2 eligibility/draft and M3 listener binding source-reviewed; A8 owner/non-owner route responses and A10 mint/fetch identity remain S4/S5 work. No delivery proof |
 | LM-19 | Sampled release-candidate evidence: E1 lexical-producer-string fixture and Linux leaf run (recorded for their stated builds and platform); C6b binding cost and T12 memory (pending). Not per-version gates | Sampled evidence; C6b and T12 not run |

@@ -118,15 +118,14 @@ The plugin belongs to the Hermes instance where it is installed. Do not copy its
 ## Host-local generated images (planned, not implemented)
 
 Image delivery does not exist yet; there is nothing to enable for it. The source-reviewed M2 slice
-adds `hermes hmp compat` probe eligibility and offline issue drafting only. When delivery is built
+adds `hermes hmp compat` probe eligibility and offline issue drafting. M3 listener-scoped binding is also independently source-reviewed at `f737197`; it does not add delivery. When delivery is built
 (draft contract: [spec 011](../specs/011-local-image-serving/spec.md)), it will be default off and for
 approval-owner devices only. It will need the host switch `platforms.hmp.extra.local_media.enabled`, a
 Hermes at or above `v0.21.5` (or a development build) that provides the session lookup APIs it reads, and the
 usual per-bot authorization. It will not use a build list, fingerprint or qualification manifest, and a
 disabled direct-send switch will not close it. The `local_media` compat line is `available` or
 `unavailable (<fixed reason>)`; `available` means required APIs passed inspection, not that an image can
-be fetched. Compat does not read the host flag or report `disabled`. The runtime binder remains closed;
-listener binding, descriptors, fetching and device acceptance are unfinished. The offline issue draft
+be fetched. Compat does not read the host flag or report `disabled`. The runtime binder now checks in-memory module coherence and retains listener-bound references; descriptors, fetching, complete binding-cost and memory evidence, and device acceptance are unfinished. The offline issue draft
 labels the failure as operator-reported and cannot attest the requester or flag. Assistant `MEDIA:` text
 remains ordinary text. No image-delivery review or release is claimed.
 
