@@ -49,7 +49,7 @@ the previous one is committed.
       (plan §4 I-1 rows, including the real `_apply_sse_frame` and `AdapterHooks.on_exec_approval`
       paths with a raising observer, and propagation of every other `BaseException`). No observer
       is registered anywhere in production code.
-- [ ] T040 **I-6.** Predicate with the pure retention mask, `view_row`, `view_visible`
+- [x] T040 **I-6.** Predicate with the pure retention mask, `view_row`, `view_visible`
       (`include_wire`), `ServerContext.approval_members_now`, `list_visible`/`list_prompts`
       delegation, `handle_prompts_list` refactor with the exact clock and call sequence (plan
       §2.4). Tests: `test_approval_visibility_seam.py` with the frozen `150bd0f` AP-3 oracle
@@ -124,3 +124,15 @@ the assertion outside the observer detects that violation without deadlocking.
 
 No production observer is registered. This checkpoint is not final T060 independent security
 review, native evidence, priority notification delivery or a deployed change. T040 is next.
+
+## I-6 root checkpoint — 2026-10-02
+
+T040 has incremental root source acceptance. Root passed 542 focused cases with one explicitly
+unconfigured native-probe skip, then the complete source suite passed 2,000 cases with 16
+explained native-fixture or Python-version skips and one existing aiohttp deprecation warning.
+Configured Ruff, plugin-surface, source privacy and diff checks passed. Root killed eighteen
+causal mutants covering visibility, grace, retention, member failures, ordering, clock sequence,
+reconciliation, immutable views, exposure and lock placement. The original missing test-node and
+three malformed mutant transformations failed before tests; corrected runs killed those mutants.
+No mutation changed the source files. This records source verification only; it does not prove
+native integration, device behavior, push delivery or deployment. Final T060/T061 remain open.

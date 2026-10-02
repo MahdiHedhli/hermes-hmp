@@ -59,6 +59,7 @@ from .contract import (
     WriteGateState,
 )
 from .logging_policy import log_bridge_exception, log_event
+from .prompts import MemberState
 
 # --------------------------------------------------------------------------------------------------
 # Peer address parsing: shared by `server.address_allowed` (TR-4 bind/peer policy) and `peer_key`
@@ -237,6 +238,22 @@ class ServerContext:
         if surface == "bot_chat":
             return self.is_approvals_available()
         return self.is_phone_chat_available()
+
+    def approval_members_now(self) -> MemberState:
+        """Both approval members as the existing predicates report them now (spec 015 NI-6.2).
+        Call it before entering a prompt-store view, never under `_guard`. Composes the existing
+        checks and adds no authorization; any failure closes that member."""
+        try:
+            bot_chat = self.is_approvals_available() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            bot_chat = False
+        try:
+            phone_chat = self.is_phone_chat_available() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            phone_chat = False
+        return MemberState(bot_chat=bot_chat, phone_chat=phone_chat)
 
     def is_owner_device(self, device_id: str) -> bool:
         try:

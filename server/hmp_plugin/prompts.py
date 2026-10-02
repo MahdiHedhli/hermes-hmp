@@ -195,6 +195,22 @@ _GENERATION_COUNTER = itertools.count(1)
 _GENERATION_LOCK = threading.Lock()
 
 
+def row_open_now(row: PromptRow, now: int) -> bool:
+    """Spec 015 NI-6.1: still open at `now`. Exactly `purge`'s local-expiry rule, without the
+    mutation: a stored `open` row past `expires_at + EXPIRY_GRACE_S` is not open now."""
+    if row.status != "open":
+        return False
+    return not (row.expires_at is not None and now > row.expires_at + EXPIRY_GRACE_S)
+
+
+def row_hidden_now(row: PromptRow, held: bool, members: MemberState) -> bool:
+    """Spec 015 NI-6.1: Desktop-held Bot Chat, or the row's surface member is closed. Values only,
+    whatever the row's status."""
+    if row.surface == "bot_chat":
+        return held or not members.bot_chat
+    return not members.phone_chat
+
+
 class PromptResolver(Protocol):
     async def resolve_approval(self, row: PromptRow, choice: str) -> str:
         """`accepted`, `stale`, or `unavailable`."""
@@ -351,8 +367,7 @@ class PromptStore:
                     self.expire(row, now, cause="local_expiry")
             stale = [
                 key for key, row in self._rows.items()
-                if row.settled_at is not None and now - row.settled_at >= IDEMPOTENCY_RETENTION_S
-                and not self._lock_users.get(key)
+                if self._retention_deleted_now(key, row, now)
             ]
             for key in stale:
                 del self._rows[key]
@@ -553,21 +568,102 @@ class PromptStore:
             if self._phone_tasks.get(key) is task:
                 del self._phone_tasks[key]
 
+    def _retention_deleted_now(
+        self, key: PromptKey, row: PromptRow, now: int
+    ) -> bool:
+        """Spec 015 NI-6.1 / RD-11: the retention-delete conditions of `purge`, on stored values.
+        The caller holds `_guard`. Nothing is deleted here."""
+        return (
+            row.settled_at is not None
+            and now - row.settled_at >= IDEMPOTENCY_RETENTION_S
+            and not self._lock_users.get(key)
+        )
+
+    def _visible_live_rows(
+        self, iid: str, user_id: str, profile: str, now: int, members: MemberState
+    ) -> tuple[bool, tuple[PromptRow, ...]]:
+        """The held marker and the live rows visible now, read in one `_guard` section with no
+        callable run under it (RD-9). Shared by `list_visible` and `list_prompts`."""
+        with self._guard:
+            held = (iid, user_id, profile) in self._desktop
+            rows = tuple(
+                row
+                for row in self._rows.values()
+                if (row.iid, row.user_id, row.profile) == (iid, user_id, profile)
+                and row_open_now(row, now)
+                and not row_hidden_now(row, held, members)
+            )
+        return held, rows
+
     def list_visible(
         self, iid: str, user_id: str, profile: str, *, now: int | None = None
     ) -> tuple[PromptRow, ...]:
-        self.purge(int(self._clock()) if now is None else now)
-        held = self.desktop_held(iid, user_id, profile)
+        """Live open rows for the RO-3 snapshot (a recorded residual: they are not snapshots).
+        Purges, then delegates to the shared predicate with every member open (RD-8)."""
+        at = int(self._clock()) if now is None else now
+        self.purge(at)
+        return self._visible_live_rows(iid, user_id, profile, at, ALL_OPEN)[1]
+
+    def _view(
+        self,
+        row: PromptRow,
+        held: bool,
+        members: MemberState,
+        now: int,
+        include_wire: bool,
+    ) -> RowView:
+        """One frozen snapshot. The caller holds `_guard`; this reads row values only."""
+        open_now = row_open_now(row, now)
+        hidden_now = row_hidden_now(row, held, members)
+        return RowView(
+            key=(row.iid, row.user_id, row.profile, row.request_id),
+            kind=row.kind,
+            surface=row.surface,
+            generation=self.generation,
+            status=row.status,
+            settle_cause=row.settle_cause,
+            expires_at=row.expires_at,
+            held=held,
+            open_now=open_now,
+            hidden_now=hidden_now,
+            visible_now=open_now and not hidden_now,
+            session_key=row.session_key if include_wire else None,
+            wire=wire_prompt(row) if include_wire else None,
+        )
+
+    def view_row(self, key: PromptKey, *, now: int, members: MemberState) -> RowView | None:
+        """A frozen view of one row, or `None` when it is missing or the next `purge(now)` would
+        delete it (the pure retention mask, RD-11). Mutates nothing, calls nothing under `_guard`,
+        and never exposes a session key or wire body (RD-12)."""
         with self._guard:
-            rows = [
-                row
-                for row in self._rows.values()
-                if row.status == "open"
-                and (row.iid, row.user_id, row.profile) == (iid, user_id, profile)
-            ]
-        if held:
-            rows = [row for row in rows if row.surface != "bot_chat"]
-        return tuple(rows)
+            row = self._rows.get(key)
+            if row is None or self._retention_deleted_now(key, row, now):
+                return None
+            held = (key[0], key[1], key[2]) in self._desktop
+            return self._view(row, held, members, now, False)
+
+    def view_visible(
+        self,
+        iid: str,
+        user_id: str,
+        profile: str,
+        *,
+        now: int,
+        members: MemberState,
+        include_wire: bool = False,
+    ) -> VisibleSet:
+        """Every row of the triple in insertion order, open or not, minus retention-masked rows,
+        with the held marker, all read in one `_guard` section. Mutates nothing. `wire` and
+        `session_key` are populated only when `include_wire` is true (AP-3)."""
+        with self._guard:
+            held = (iid, user_id, profile) in self._desktop
+            views = tuple(
+                self._view(row, held, members, now, include_wire)
+                for key, row in self._rows.items()
+                if (row.iid, row.user_id, row.profile) == (iid, user_id, profile)
+                and not self._retention_deleted_now(key, row, now)
+            )
+        return VisibleSet(held=held, rows=views)
 
 
 def wire_prompt(row: PromptRow) -> dict[str, object]:
@@ -617,15 +713,21 @@ def phone_open_request(row: PromptRow) -> dict[str, object]:
 
 
 def list_prompts(
-    store: PromptStore, *, iid: str, user_id: str, profile: str, now: int
+    store: PromptStore,
+    *,
+    iid: str,
+    user_id: str,
+    profile: str,
+    now: int,
+    members: MemberState = ALL_OPEN,
 ) -> HttpResult:
     store.purge(now)
-    rows = store.list_visible(iid, user_id, profile, now=now)
+    held, rows = store._visible_live_rows(iid, user_id, profile, now, members)
     return HttpResult(
         200,
         {
             "prompts": [wire_prompt(row) for row in rows],
-            "desktop_held": store.desktop_held(iid, user_id, profile),
+            "desktop_held": held,
         },
     )
 

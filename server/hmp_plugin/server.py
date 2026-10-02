@@ -947,11 +947,18 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
     store = ctx.prompt_store
     if store is None:
         return json_response({"prompts": [], "desktop_held": False})
-    rows = store.list_visible(ctx.iid, who.user_id, profile, now=ctx.now())
+    t1 = ctx.now()
+    store.purge(t1)
+    candidates = store.view_visible(
+        ctx.iid, who.user_id, profile, now=t1, members=prompts.ALL_OPEN, include_wire=True
+    )
     sessions = {
-        row.session_key
-        for row in rows
-        if row.kind == "approval" and row.session_key and row.surface == "phone_chat"
+        view.session_key
+        for view in candidates.rows
+        if view.visible_now
+        and view.kind == "approval"
+        and view.session_key
+        and view.surface == "phone_chat"
     }
     if sessions and ctx.is_phone_chat_available():
         for session_key in sessions:
@@ -966,16 +973,22 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
                 {item["request_id"] for item in pending if "request_id" in item},
                 ctx.now(),
             )
-    result = prompts.list_prompts(
-        store, iid=ctx.iid, user_id=who.user_id, profile=profile, now=ctx.now()
-    )
+    t2 = ctx.now()
+    store.purge(t2)
     # Only rows of an available member are shown. A closed member lists nothing of its own.
-    shown = [
-        item
-        for item in result.body["prompts"]  # type: ignore[attr-defined]
-        if ctx.approval_surface_available(str(item.get("surface")))
-    ]
-    return _prompt_result(prompts.HttpResult(200, {**result.body, "prompts": shown}))
+    members = ctx.approval_members_now()
+    final = store.view_visible(
+        ctx.iid, who.user_id, profile, now=t2, members=members, include_wire=True
+    )
+    return _prompt_result(
+        prompts.HttpResult(
+            200,
+            {
+                "prompts": [view.wire for view in final.rows if view.visible_now],
+                "desktop_held": final.held,
+            },
+        )
+    )
 
 
 async def handle_prompt_answer(request: web.Request) -> web.Response:
