@@ -253,8 +253,11 @@ source now captures media reads separately from sends, returns actual applied
 window proof, exposes the exact owned-clone viewer seam and retains each original
 card permit through actual refresh/fetch/decode termination even after UI loss.
 Phone screen ownership/registration, stable final budget, actual controller
-singleflight and fresh applied/current target-row checks remain unwired. Combined
-CI/integrated source, native/host/device and release gates remain open. This adds
+singleflight and fresh applied/current target-row checks now have independent
+source-only acceptance at mobile `1a4641e`. Root passed 276 focused cases; the
+independent review passed 122 overlapping cases and analysis, verifying all eight
+frozen source pins. Combined hosted CI, native/host/device and release gates
+remain open. This adds
 no upstream Hermes API requirement or installed capability. Hosted mobile run `37060192148` failed the legacy S11 immediate-release expectation and inherited late-TLS case. A corrected S11 retains the original shared-read permit until terminal; root's isolated 42-case binding suite passes. Personal SDK paths in two handoffs were sanitized at `19a5ba6`, and hosted security hygiene passes in run `37061780872`, closing the current-document privacy finding. Historical Git bytes remain in public history. Historical source freeze pins are not current documentation-byte pins.
 
 ### Mobile public-image lifetime (2026-10-02)
@@ -273,10 +276,11 @@ skips; all analyzers/guards pass. Python CI 145 passes retains 81 prior cleanup
 warnings. A failed overlapping run encountered checkout-mutating guard fixtures;
 the generated lockfile was restored exactly before the passing serial run.
 Hosted run `37054562001` on `4a93cc5` failed the successful late-TLS
-delivery case after three seconds; cause remains unclassified. Test-only fixed
-stage diagnostics are published at `18a0ed7` without changing timeouts or
-settlement assertions, and hosted diagnosis remains open. No deployment or
-release occurred.
+delivery case after three seconds. Exact `a26aea6` diagnostic run `37062811599`
+records `before-cancel/tlsFailure` then `timer-selection`, before successful TLS
+delivery. The fixture trust anchors are under investigation; no cleanup failure
+or resolved hosted result is inferred. Original timeouts and settlement
+assertions remain. No deployment or release occurred.
 
 A stronger loopback check found that raw close/peer EOF could leave the actual
 Dart 3.12.2 TLS handshake Future pending. The candidate forwards a fixed cancellation

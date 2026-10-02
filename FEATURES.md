@@ -34,16 +34,18 @@ is independently documentation-reviewed and published. It aligns client planning
 with minimum-version/API admission while preserving authorization and image limits.
 The combined app source baseline is independently accepted in
 [mobile draft #68](https://github.com/MahdiHedhli/HermesBotMobile/pull/68).
-Phone image wiring remains open. The [v2 Phone media contract](https://github.com/MahdiHedhli/HermesBotMobile/blob/4fa4764bbad7799850755ce4e7262b2fc38b0b28/specs/029-host-local-images/phone-media-contract.md)
+Phone image deployment remains open. The [v2 Phone media contract](https://github.com/MahdiHedhli/HermesBotMobile/blob/4fa4764bbad7799850755ce4e7262b2fc38b0b28/specs/029-host-local-images/phone-media-contract.md)
 has independent architecture acceptance. The controller/read ports and shared
 card/viewer prerequisites now have bounded independent source acceptance in
 [mobile draft #70](https://github.com/MahdiHedhli/HermesBotMobile/pull/70), `ba0f619`.
 Independent media activity/applied-read proof preserve send fences; original
 permits join actual refresh/fetch/decode work. Root passed 218 focused client,
 seven dev-support, 12 logging and 112 card/viewer cases; independent component
-reviews passed overlapping causal cases. Exact Phone screen/owned-route wiring,
-stable final budget, actual shared-flight/fresh-row retry integration, combined
-CI and physical delivery remain open. Hosted mobile run `37060192148` failed a
+reviews passed overlapping causal cases. Phone screen/owned-route wiring,
+stable final budget and actual shared-flight/fresh-row retry integration now
+have independent source-only acceptance at mobile `1a4641e`: root 276 focused
+passes and independent 122 overlapping cases, exact eight source pins and clean
+analysis. Combined hosted CI and physical delivery remain open. Hosted mobile run `37060192148` failed a
 legacy immediate-permit-release test and the inherited late-TLS test. Root's
 corrected legacy test and its full 42-case binding suite pass locally; exact
 hosted verification remains open. Handoff SDK paths were sanitized at `19a5ba6`; hosted security hygiene passes
