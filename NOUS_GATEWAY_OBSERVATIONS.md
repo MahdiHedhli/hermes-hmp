@@ -14,8 +14,9 @@ health were verified. Actual job execution and per-phone controls remain separat
 authoritative before the literal `__version__`, then `release_date`. Send and session
 browsing both need `SessionDB.get_session`. The stable interfaces requested below remain
 useful because a version number cannot prove behavior. The installed baseline has no
-approval lane. The separate reviewed approval candidate still has a legacy exact gate;
-its integration and minimum-policy conversion are now in implementation. The app-side lifecycle fix is
+approval lane. The integrated minimum-policy approval candidate passed independent source review (spec 034),
+including a bounded setup-wording correction and three added defensive regressions verified by root.
+Its real gateway fixtures, packaging and deployment remain pending. The app-side lifecycle fix is
 [`3cfe4d0`](https://github.com/MahdiHedhli/HermesBotMobile/commit/3cfe4d0), installed
 in iPhone dogfood build `2026100202`; physical behavior still awaits owner testing.
 
@@ -41,12 +42,31 @@ client responsibilities, not a request for upstream to remove authorization chec
 Server transcript rows remain authoritative; matching text alone cannot identify an
 ambiguous send, and original send evidence must survive refresh before a retry.
 
-The approval-alert handoff core passed independent review as inert source under its
-owned port contracts. Failure cleanup exposed a same-ticket timer arming defect; a paired
-exact-state and fail-closed repair is assigned before UI integration. Actual HMP
-issuer/provider/OS delivery and approvals minimum-policy integration remain unfinished.
-The installed build's bundle version was verified; physical behavior awaits owner testing.
+The approval-alert handoff foundation now includes the independently accepted paired timer-ownership
+repair. It is published at [`6cfd688`](https://github.com/MahdiHedhli/HermesBotMobile/commit/6cfd6880e56dac3665f3df7e10f49a17141e8d44);
+root verified 1,328 client/machine tests (one real-server fixture skip), seven required causal
+mutants and static scans. It remains unwired and is absent from installed build `2026100203`.
+Physical draft recovery remains open: the owner reported a message surviving refresh,
+but its build and whether the row returns from canonical server history are not yet confirmed.
 No public release, operational approvals or push-delivery result follows.
+
+## Approval admission and notification findings (2026-10-02)
+
+The spec 034 candidate removes the approval exact-build runtime gate while retaining actual
+authorization, explicit settings, required APIs and separate Bot Chat/Phone-chat availability.
+Independent source review accepted it; real native fixtures have not yet run. The installed
+`4d6863e` baseline remains unchanged and has no approval lane.
+
+On inspected Hermes `f97608f1`, `8afaab37` and `ac0cfa7d`, `retire_clarify_card` is optional
+hook documentation on `BasePlatformAdapter`, not a required base method. The actual gateway
+resolves the adapter's optional hook. Requiring that attribute on the base class would
+incorrectly disable Phone chat. This is a source finding on those samples, not a universal
+private-API guarantee.
+
+The notification registration/issuer/resolver/relay proposal (spec 014) is undergoing
+independent design review. Its initial scope covers approval rows observed by HMP. Broader
+Desktop/CLI/cron coverage needs a separate source check; that limited scope alone does not
+prove a new upstream API gap. No provider delivery or permission expansion is implemented.
 
 ## Native observation and access diagnostics checkpoint (2026-10-01)
 
