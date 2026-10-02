@@ -1,5 +1,22 @@
 # Gateway observations for Nous Research
 
+## Current policy and source checkpoint (2026-10-01)
+
+The HMP owner replaced exact-build runtime allowlists with a minimum supported Hermes
+version policy: session reads and browsing from `0.21.4` (`2026.9.21`); send, jobs and
+model from `0.21.5` (`2026.9.24`); later or unknown builds attempt the required APIs.
+Exact commit or fingerprint tests are sample evidence. Reviewed HMP source
+[`4d6863e`](https://github.com/MahdiHedhli/hermes-hmp/tree/4d6863ef8a311462adb68fc82dd3835657739f81)
+([spec 013](https://github.com/MahdiHedhli/hermes-hmp/tree/4d6863ef8a311462adb68fc82dd3835657739f81/specs/013-minimum-version-compatibility))
+implements it, and its files are installed on an owner Linux host. Activation was still
+pending at the last check, so no live-runtime result is claimed. The version stamp is
+authoritative before the literal `__version__`, then `release_date`. Send and session
+browsing both need `SessionDB.get_session`. The stable interfaces requested below remain
+useful because a version number cannot prove behavior. Approvals still use a legacy exact
+gate pending conversion, and the app-side lifecycle fix is
+[`3cfe4d0`](https://github.com/MahdiHedhli/HermesBotMobile/commit/3cfe4d0), installed
+in iPhone dogfood build `2026100202`; physical behavior still awaits owner testing.
+
 ## Native observation and access diagnostics checkpoint (2026-10-01)
 
 Source inspection on exact Hermes `8afaab37` confirms that a session lookup is not
@@ -230,9 +247,13 @@ This is the next major HermesBot Mobile feature after beta release work. We
 request a supported, authenticated, session-scoped contract that carries exact
 request IDs, offered choices, session/profile ownership, and authoritative
 expiry and settlement across Desktop and remote clients. The current-main
-session-stream candidate passed an isolated fixture matrix; each exact installed
-candidate still needs wrong-ID, cross-profile, timeout, disconnect, restart, and live-owner
-handoff qualification. HMP must not infer approvals from tool text or create
+session-stream candidate passed an isolated fixture matrix. The fixture evidence is
+historical, and the minimum-version policy supersedes exact-build availability gating for
+read, send, jobs and model. Before the first approvals release, the implementation must
+pass wrong-ID, cross-profile, timeout, disconnect, restart, and live-owner handoff tests.
+These tests validate authority and settlement; they are not an allowlist of future Hermes
+versions. The draft approvals' legacy exact gate needs conversion before merge, while
+actual owner permission and required API checks remain enforced. HMP must not infer approvals from tool text or create
 another execution owner.
 
 ## Chat media and attachment parity
