@@ -50,6 +50,12 @@ Physical draft recovery remains open: the owner reported a message surviving ref
 but its build and whether the row returns from canonical server history are not yet confirmed.
 No public release, operational approvals or push-delivery result follows.
 
+A subsequent source diagnostic found a client contract gap: explicit refresh reloads the
+transcript but does not reconcile a dismissed send's original delivery ID. The app repair is
+in progress, using a read-only status lookup with no automatic resend, no text-equality proof
+and no deletion of server history. It is not yet independently reviewed or installed. This
+finding does not establish the owner's physical delivery outcome or an upstream defect.
+
 ## Approval admission and notification findings (2026-10-02)
 
 The spec 034 candidate removes the approval exact-build runtime gate while retaining actual
@@ -63,8 +69,11 @@ resolves the adapter's optional hook. Requiring that attribute on the base class
 incorrectly disable Phone chat. This is a source finding on those samples, not a universal
 private-API guarantee.
 
-The notification registration/issuer/resolver/relay proposal (spec 014) is undergoing
-independent design review. Its initial scope covers approval rows observed by HMP. Broader
+The notification registration/issuer/resolver/relay proposal (spec 014) completed independent
+design review with amendments required before freeze: preserve Desktop-owned prompt visibility,
+align the resolver with the accepted app interface, handle registration retry-state loss and
+correct unsupported coverage claims. Those amendments are in progress. Its initial scope
+covers approval rows observed by HMP. Broader
 Desktop/CLI/cron coverage needs a separate source check; that limited scope alone does not
 prove a new upstream API gap. No provider delivery or permission expansion is implemented.
 
