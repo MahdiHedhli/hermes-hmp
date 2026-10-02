@@ -13,8 +13,9 @@ and the fresh running gateway, matching listener process, expected TLS identity 
 health were verified. Actual job execution and per-phone controls remain separate checks. The version stamp is
 authoritative before the literal `__version__`, then `release_date`. Send and session
 browsing both need `SessionDB.get_session`. The stable interfaces requested below remain
-useful because a version number cannot prove behavior. Approvals still use a legacy exact
-gate pending conversion, and the app-side lifecycle fix is
+useful because a version number cannot prove behavior. The installed baseline has no
+approval lane. The separate reviewed approval candidate still has a legacy exact gate;
+its integration and minimum-policy conversion are now in implementation. The app-side lifecycle fix is
 [`3cfe4d0`](https://github.com/MahdiHedhli/HermesBotMobile/commit/3cfe4d0), installed
 in iPhone dogfood build `2026100202`; physical behavior still awaits owner testing.
 
@@ -31,7 +32,8 @@ The visible instance-switcher heartbeat and Dismiss draft recovery are app candi
 not installed features. Independent review reproduced bounded client defects in shared
 credential retirement from an unauthenticated ready answer, stale probe quarantine,
 delivery-notice lifetime on reopen, ID redaction and saved success timestamps after
-lifecycle changes. Repairs are assigned and require independent delta review. These are
+lifecycle changes. The bounded repairs are now a source candidate undergoing independent
+delta review. These are
 client responsibilities, not a request for upstream to remove authorization checks.
 Server transcript rows remain authoritative; matching text alone cannot identify an
 ambiguous send, and original send evidence must survive refresh before a retry.
