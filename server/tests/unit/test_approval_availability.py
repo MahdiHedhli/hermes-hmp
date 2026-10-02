@@ -278,6 +278,7 @@ class Recorder:
             id(compat.CRON_DEPENDENCIES): "jobs",
             id(compat.MODEL_DEPENDENCIES): "model",
             id(PHONE_CHAT_DEPENDENCIES): "phone_chat",
+            id(compat.LOCAL_MEDIA_DEPENDENCIES): "local_media",
         }
         name = names[id(specs)]
         self.tables.append(name)

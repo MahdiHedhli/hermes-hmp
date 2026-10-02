@@ -45,6 +45,7 @@ TABLES: Mapping[str, Sequence[DependencySpec]] = {
     "jobs": compat.CRON_DEPENDENCIES,
     "model": compat.MODEL_DEPENDENCIES,
     "phone_chat": compat.PHONE_CHAT_DEPENDENCIES,
+    "local_media": compat.LOCAL_MEDIA_DEPENDENCIES,
 }
 
 
@@ -147,7 +148,9 @@ def test_e2_e3_unlisted_newer_and_unknown_versions_are_attempted(
     eligibility = evaluate(version, probe, root=fake_hermes, evidence={})
     assert "gateway.run" in sys.modules
     assert all(eligibility.available(f) for f in Feature)
-    assert probe.calls == ["read", "session_browsing", "send", "jobs", "model", "phone_chat"]
+    assert probe.calls == [
+        "read", "session_browsing", "send", "jobs", "model", "local_media", "phone_chat"
+    ]
 
 
 def test_e3_unknown_version_closes_only_the_feature_whose_probe_fails() -> None:
@@ -162,16 +165,32 @@ def test_e3_unknown_version_closes_only_the_feature_whose_probe_fails() -> None:
 
 def test_e6_e7_e8_each_write_feature_fails_alone() -> None:
     members = {Feature.APPROVALS, Feature.PHONE_CHAT}  # both need only read and send
+    media = Feature.LOCAL_MEDIA  # needs read alone: no sibling's own table ever closes it
     for broken, expected_open in (
-        ("jobs", {Feature.READ, Feature.SESSION_BROWSING, Feature.SEND, Feature.MODEL} | members),
-        ("model", {Feature.READ, Feature.SESSION_BROWSING, Feature.SEND, Feature.JOBS} | members),
-        ("send", {Feature.READ, Feature.SESSION_BROWSING, Feature.JOBS, Feature.MODEL}),
-        ("session_browsing", {Feature.READ, Feature.SEND, Feature.JOBS, Feature.MODEL} | members),
+        (
+            "jobs",
+            {Feature.READ, Feature.SESSION_BROWSING, Feature.SEND, Feature.MODEL, media} | members,
+        ),
+        (
+            "model",
+            {Feature.READ, Feature.SESSION_BROWSING, Feature.SEND, Feature.JOBS, media} | members,
+        ),
+        ("send", {Feature.READ, Feature.SESSION_BROWSING, Feature.JOBS, Feature.MODEL, media}),
+        (
+            "session_browsing",
+            {Feature.READ, Feature.SEND, Feature.JOBS, Feature.MODEL, media} | members,
+        ),
         # Spec 034: the Phone helpers closing never closes send or Bot Chat approvals.
         (
             "phone_chat",
             {Feature.READ, Feature.SESSION_BROWSING, Feature.SEND, Feature.JOBS, Feature.MODEL,
-             Feature.APPROVALS},
+             Feature.APPROVALS, media},
+        ),
+        # Spec 011: the media table closing never closes any sibling.
+        (
+            "local_media",
+            {Feature.READ, Feature.SESSION_BROWSING, Feature.SEND, Feature.JOBS, Feature.MODEL}
+            | members,
         ),
     ):
         eligibility = evaluate(SEMVER_FLOOR, Probe({broken: ["x.y"]}))
@@ -273,11 +292,12 @@ def test_e11_evidence_never_changes_availability(version: HermesVersion) -> None
     assert untested.features[Feature.READ].tested_label is None
 
 
-def test_the_feature_set_has_the_two_approval_members_and_no_media_member() -> None:
+def test_the_feature_set_has_the_approval_members_and_the_local_media_member() -> None:
     assert {f.value for f in Feature} == {
-        "read", "session_browsing", "send", "jobs", "model", "approvals", "phone_chat"
+        "read", "session_browsing", "send", "jobs", "model", "approvals", "phone_chat",
+        "local_media",
     }
-    assert not any("media" in f.value for f in Feature)
+    assert Feature.LOCAL_MEDIA.value == "local_media"
 
 
 def test_gate_result_maps_to_the_existing_err_2a_values(fake_hermes: Path) -> None:

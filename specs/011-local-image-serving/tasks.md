@@ -39,9 +39,15 @@ dependency action.
   INSTALL. No code, tests, fixtures or data. Exit: root review. Independent documentation review
   accepted the frozen 13-file delta; root accepted it and added the existing D-M4 publication and D-M6
   no-await mint requirements explicitly to the contract. This certifies documentation only, not media delivery.
-- [ ] **M2** Eligibility member (D-M2, D-M3, D-M8): `Feature.LOCAL_MEDIA`, the three-row probe table,
+- [x] **M2** Eligibility member (D-M2, D-M3, D-M8): `Feature.LOCAL_MEDIA`, the three-row probe table,
   `FEATURE_FLOORS["local_media"]` at the write floor, `issue_draft`/`cli` member, labels and the single reportable
-  code. Exit: A1-A6 and A13. Independent review before reliance.
+  code. Root accepted after independent bounded source review: 368 focused tests passed, six existing
+  native-fixture skips; the new media file passed 61 cases with no xfail. Eight root scratch-copy
+  guard mutations failed their targeted assertions; baseline and restored source passed. Thirteen
+  compatibility/extraction/privacy-tool tests also passed with the tools collection boundary.
+  Configured Ruff 0.16.9, explicit candidate privacy and surface checks passed. This certifies only
+  eligibility and offline drafting: the runtime binder remains closed; no route or descriptor exists.
+  The known M3/S4 failures below remain; no green full-suite claim.
 - [ ] **M3** Replace the retired binder with the D-M4 binding and coherence check: delete the gate-era components
   (manifest, fingerprints, anchor, GIL guard, origin checks, non-media core proof), add
   `ServerContext.media_available` and the bound modules, publish `_bridge_classes` as one tuple. Retire or adapt
@@ -56,14 +62,15 @@ the feature is not enabled by any of them.
 
 ### Acceptance matrix for M2/M3
 
-Each case must fail when its named guard is removed. All are unimplemented; none is passing.
+Each case must fail when its named guard is removed. A1-A6 and A13 have bounded source evidence
+from M2; A7-A12 and A14 remain unimplemented. No case proves media serving.
 
 | ID | Setup | Expected | Guard mutated |
 |---|---|---|---|
-| A1 | version at or above floor, all three rows present | `local_media` available; no build list, manifest, fingerprint or SHA read (spy on file opens) | re-introduce a manifest reader |
+| A1 | version at or above floor, all three rows present | `local_media` probe eligibility available; no media build-list, manifest, fingerprint or SHA input (shared diagnostic evidence does not gate media) | re-introduce a media manifest reader |
 | A2 | version unknown, `0.0.0`, newer or development | attempted (available if the probe passes) | floor treats unknown as below |
 | A3 | version below floor | unavailable `hermes_version_below_floor`; media rows not imported | probe before floor check |
-| A4 | `get_compression_lineage` missing (or `**kwargs`-only, or resolved from `site-packages`) | only `local_media` closes (`dependency_missing`, fixed labels); read, send, jobs, model unchanged | merge tables or close siblings |
+| A4 | media-table dependency missing, `**kwargs`-only, or resolved from `site-packages` | media-table failure closes only `local_media` (`dependency_missing`, fixed labels); an actually absent shared API also closes each sibling whose own table needs it | merge tables or close siblings |
 | A5 | send unavailable or `direct_send.enabled` false | `local_media` unaffected | add `requires_send` |
 | A6 | read core missing | `local_media` = `requires_read`; no media import | probe media without read |
 | A7 | supported, `identity is None` (converted base) | media can open | require `BuildIdentity` |

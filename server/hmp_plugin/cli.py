@@ -746,7 +746,7 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "--feature",
         default=None,
         help="With --issue-draft and --failure-code: the feature that failed "
-        "(read, session_browsing, send, jobs, model, approvals, phone_chat)",
+        "(read, session_browsing, send, jobs, model, approvals, phone_chat, local_media)",
     )
     compat_cmd.add_argument(
         "--verbose",
@@ -1832,7 +1832,8 @@ def _version_floor_text() -> str:
     write = hermes_version.FEATURE_FLOORS["send"]
     return (
         f"read {read.semver_text} ({read.calver_text}); "
-        f"send, jobs, model, approvals and phone chat {write.semver_text} ({write.calver_text})"
+        f"send, jobs, model, approvals, phone chat and local media "
+        f"{write.semver_text} ({write.calver_text})"
     )
 
 

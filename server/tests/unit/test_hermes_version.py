@@ -272,6 +272,11 @@ def test_v9_known_releases_are_increasing_and_floors_are_rows() -> None:
         assert FEATURE_FLOORS[name].calver == (2026, 9, 24, 0)
     assert FEATURE_FLOORS["approvals"] == FEATURE_FLOORS["send"]
     assert FEATURE_FLOORS["phone_chat"] == FEATURE_FLOORS["send"]
+    # Spec 011 D-M3: local media inherits the write floor exactly.
+    assert FEATURE_FLOORS["local_media"] == FEATURE_FLOORS["send"]
+    assert FEATURE_FLOORS["local_media"].semver == (0, 21, 5)
+    assert FEATURE_FLOORS["local_media"].calver == (2026, 9, 24, 0)
     assert set(FEATURE_FLOORS) == {
-        "read", "session_browsing", "send", "jobs", "model", "approvals", "phone_chat"
+        "read", "session_browsing", "send", "jobs", "model", "approvals", "phone_chat",
+        "local_media",
     }

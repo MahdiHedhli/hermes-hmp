@@ -500,7 +500,8 @@ nonexecuting approval-probe fixture `f4045cd`; media source `6d400af`). Root rev
 `ROOT_M0_INERT_INTEGRATION_REVIEWED_NOT_FEATURE_COMPLETE`. It is never a release candidate and is
 never installed. In it the runtime media binder is a **constant closed callback** (`_media_qualifier`
 always closed, no gate import, no identity read), so no media route, descriptor, registry mint or
-availability exists. That M0 constant stays the current runtime behavior until M2/M3 land.
+delivery exists. The M2 member now computes probe eligibility, but that M0 constant stays the current
+runtime behavior until M3 lands.
 The retired gate module and its empty manifest were not carried onto the converted base because the
 converted guard tests forbid a module that reads a supported-builds list or calls the deleted probe.
 
@@ -570,3 +571,31 @@ unconverted media source. 114 legacy qualification tests fail (109 listener-bind
 case) and the removed gate test has one collection error. They test
 the retired binder and are **explicit work in progress, not green**, until M3 replaces or retires them.
 Nothing was skipped or hidden to change that.
+
+
+### M2 bounded source acceptance (2026-10-02)
+
+Root accepted the four-file eligibility/CLI/draft slice after independent bounded source review.
+Each of the three native instance methods requires two positional parameters (self and the argument
+used by the existing bridge), through the unchanged signature/containment discipline. Native AST
+inspection on two sampled builds supports that shape; it is not a runtime build allowlist.
+Root and the reviewer each passed 368 focused cases with six existing no-native-fixture skips;
+the new media file passed 61 cases with no xfail. Eight root scratch-copy guard removals failed
+their targeted assertions, and restored source passed. Thirteen selected tool tests passed.
+Pinned Ruff 0.16.9, surface and explicit privacy checks passed. Earlier root tool attempts had a
+missing test path and package collection errors; they executed no test bodies and are not passes.
+The corrected tools collection boundary passed all 13 selected cases.
+
+A table-isolated media failure does not close siblings. An actually absent API shared with send
+or browsing can independently close those members through their own tables. Compat's media line
+is probe eligibility only, not live serving or a host-flag verdict. The offline media failure draft
+is an operator declaration, not an attestation of an owner requester or enabled flag; rate limits,
+permissions and routing keep their own explanations. Shared version/evidence diagnostics may still
+read metadata, but no media admission consumes a build list, manifest, SHA or fingerprint.
+
+M3 binding, S4/S5 descriptors/fetch, C6b/T12 sample evidence, independent exact-candidate security
+review and device acceptance remain open. The binder is still constant closed. The known 114
+retired gate-test failures, three draft-contract failures and removed-gate collection error remain
+visible; no full-suite green or shipping claim follows. Sibling signature rows were reviewed
+unchanged in the finite diff; a mutation broadening one sibling row survived the reviewer's tests,
+so that constraint is source-reviewed rather than mutation-certified.

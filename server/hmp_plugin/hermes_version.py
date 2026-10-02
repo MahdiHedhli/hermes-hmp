@@ -131,6 +131,9 @@ FEATURE_FLOORS: dict[str, Floor] = {
     "model": _WRITE_FLOOR,
     "approvals": _WRITE_FLOOR,  # spec 034: the send floor; no notifier floor is claimed
     "phone_chat": _WRITE_FLOOR,
+    # Local media (spec 011, D-M3): the inherited write floor, where its three native probe rows
+    # already sit in the send table. A host-local read feature: it never depends on send.
+    "local_media": _WRITE_FLOOR,
 }
 
 

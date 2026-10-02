@@ -18,6 +18,9 @@ order is mandatory:
 5a. `approvals` and `phone_chat` (spec 034) need read and send. Both use the send floor.
    `approvals` has no dependency table of its own. `phone_chat` probes `PHONE_CHAT_DEPENDENCIES`
    only when send is available, so below the floor or without send nothing is imported for them.
+5b. `local_media` (spec 011, D-M2/D-M3) depends on read alone, never on send or session browsing.
+   It uses the write floor, so below it nothing is probed or imported for it, and without read it
+   is `requires_read` with no probe. It has no build list, manifest, fingerprint or Git SHA reader.
 6. Exact build fingerprints and git SHAs are read only as test evidence (`tested_label`). No gate
    reads that field.
 
@@ -484,6 +487,20 @@ PHONE_CHAT_DEPENDENCIES: tuple[DependencySpec, ...] = (
     ),
 )
 
+# Local media (spec 011, D-M2): exactly the native callables the media path reaches beyond the read
+# core. `get_session` and `get_session_by_title` are also rows of other tables; each member is
+# probed from its own table, so a missing row closes a member only through its own table. There is
+# no image-producer row: a changed producer spelling is refused per candidate by the lexical check.
+LOCAL_MEDIA_DEPENDENCIES: tuple[DependencySpec, ...] = (
+    DependencySpec("hermes_state", "SessionDB.get_session", min_positional=2, gap="E-GAP-6/7"),
+    DependencySpec(
+        "hermes_state", "SessionDB.get_session_by_title", min_positional=2, gap="E-GAP-6/7"
+    ),
+    DependencySpec(
+        "hermes_state", "SessionDB.get_compression_lineage", min_positional=2, gap="E-GAP-6/7"
+    ),
+)
+
 # Mobile jobs (`bridge.create_mobile_cron` / `edit_mobile_cron`). The scheduler wrapper forwards
 # `**kwargs` to `cron.jobs.create_job`, so the named-parameter check (`paused` above all) is made on
 # the writer that actually defines them. `HermesApi.create_mobile_cron` always passes `paused=True`.
@@ -727,8 +744,8 @@ def probe_direct_send_dependencies(*, hermes_root: Path | None = None) -> Sequen
 
 
 class Feature(StrEnum):
-    """The closed set of version-gated features. There is deliberately no media member: reaching a
-    floor never implies it. `approvals` and `phone_chat` (spec 034) both need read and send."""
+    """The closed set of version-gated features. `approvals` and `phone_chat` (spec 034) both need
+    read and send. `local_media` (spec 011) needs read alone. Reaching a floor never implies one."""
 
     READ = "read"
     SESSION_BROWSING = "session_browsing"
@@ -737,6 +754,7 @@ class Feature(StrEnum):
     MODEL = "model"
     APPROVALS = "approvals"
     PHONE_CHAT = "phone_chat"
+    LOCAL_MEDIA = "local_media"
 
 
 class Unavailable(StrEnum):
@@ -782,6 +800,8 @@ _PROBE_TABLES: Mapping[Feature, Sequence[DependencySpec]] = {
     Feature.SEND: DIRECT_SEND_DEPENDENCIES,
     Feature.JOBS: CRON_DEPENDENCIES,
     Feature.MODEL: MODEL_DEPENDENCIES,
+    # Read alone gates this table (the loop below runs only once read is available).
+    Feature.LOCAL_MEDIA: LOCAL_MEDIA_DEPENDENCIES,
 }
 
 _EVIDENCE_FILES: Mapping[Feature, str] = {

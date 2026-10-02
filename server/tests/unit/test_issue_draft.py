@@ -116,7 +116,7 @@ def test_success_output_has_no_warning_vocabulary() -> None:
     assert "Hermes version: 2026.9.24 (source: release_date)" in run.out
     minimum = (
         "Minimum Hermes: read 0.21.4 (2026.9.21); "
-        "send, jobs, model, approvals and phone chat 0.21.5 (2026.9.24)"
+        "send, jobs, model, approvals, phone chat and local media 0.21.5 (2026.9.24)"
     )
     assert minimum in run.out
     for feature in Feature:

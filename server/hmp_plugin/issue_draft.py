@@ -19,6 +19,11 @@ Two inputs can make a draft:
   statement about a failure they saw, for the case the static probe cannot see (an upstream HTTP
   API that answered with a failure although every probe passed). It is not an availability
   decision, grant or ledger entry, and the draft says it was reported, not observed.
+
+Trust limit (spec 011, D-M8): this CLI is offline. It cannot verify that the declared
+`local_media`/`media_unavailable` came from an owner device with the host flag on, or that it
+happened at all. The operator's `--failure-code` is a statement, the draft says so, and a human
+reviews it before anything is posted. No online authority is invented to attest it.
 """
 
 from __future__ import annotations
@@ -47,6 +52,9 @@ REPORTABLE_CODES: Mapping[str, frozenset[str]] = {
     "model": frozenset({"model_unavailable"}),
     "approvals": frozenset({"write_gate_closed", "api_server_unavailable"}),
     "phone_chat": frozenset({"write_gate_closed", "api_server_unavailable"}),
+    # Spec 011, D-M8: only `media_unavailable`. Its sibling outcomes (`not_found`, `forbidden`,
+    # `rate_limited`, routing and authorization codes) get their own explanation, not a draft.
+    "local_media": frozenset({"media_unavailable"}),
 }
 
 # The members whose drafts may carry the neutral session-stream hook fact (spec 034 R4, R16).
@@ -93,6 +101,7 @@ _FEATURE_LABELS: Mapping[compat.Feature, frozenset[str]] = {
     # `approvals` has no dependency table of its own (it needs read and send).
     compat.Feature.APPROVALS: frozenset(),
     compat.Feature.PHONE_CHAT: frozenset(_label(s) for s in compat.PHONE_CHAT_DEPENDENCIES),
+    compat.Feature.LOCAL_MEDIA: frozenset(_label(s) for s in compat.LOCAL_MEDIA_DEPENDENCIES),
 }
 
 
@@ -142,6 +151,8 @@ def check_report_request(feature: object, failure_code: object) -> OperatorRepor
         return OperatorReport(
             own_feature, next(c for c in REPORTABLE_CODES[feature] if c == failure_code)
         )
+    if own_feature == "local_media" and failure_code == "rate_limited":
+        return OwnReason("local_media", "rate_limited")
     if failure_code in OWN_REASON_CODES or (
         failure_code == "not_found" and feature != "session_browsing"
     ):
@@ -169,6 +180,12 @@ def _recheck(item: object, kind: type[_T]) -> _T:
 def own_reason_text(item: object) -> str:
     """Revalidates `item` before interpolating it. Raises `ReportRequestError` (fixed text)."""
     checked = _recheck(item, OwnReason)
+    if checked.feature == "local_media" and checked.failure_code == "rate_limited":
+        return (
+            "`rate_limited` on local_media is a rate-limit outcome, not evidence of a Hermes "
+            "version incompatibility. No issue draft was prepared. Wait before an explicit "
+            "retry; this command does not retry the request."
+        )
     return (
         f"`{checked.failure_code}` on {checked.feature} is a permission, routing or setting "
         "outcome (device controls, bot authorization, host flag or route), not evidence of a "
