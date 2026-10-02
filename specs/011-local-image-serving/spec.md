@@ -12,7 +12,7 @@ Out of scope: upload, video, audio, file browsing, arbitrary host paths, local `
 
 - Hermes is the source of truth; one explicit active instance; no cross-instance fallback.
 - A missing Hermes capability is an explicit `HERMES_API_GAP`, not a mobile shadow path.
-- [SECURITY.md](../../SECURITY.md) applies: `SECURITY_REVIEW_REQUIRED` for the handle, route, gate and process qualification.
+- [SECURITY.md](../../SECURITY.md) applies: `SECURITY_REVIEW_REQUIRED` for the handle, route, gate and listener binding.
 
 ## Acceptance scenarios
 

@@ -50,7 +50,6 @@ CONTRACT_MODULES = {
     "local_media_sidecar.py",  # non-wire read-result carriers (LM-8); inert, stdlib + contract
     "local_media_candidate.py",  # bounded candidate extraction (LM-8); inert, accepted modules only
     "local_media_active_batch.py",  # request-scoped active batch (C6a); inert, scanner + candidate
-    "local_media_gate.py",  # process qualification gate (S6a); inert, compat + stdlib only
     "local_media_batch_binding.py",  # closed batch binding (C6b); inert, batch + sidecar + stdlib
 }
 DATA_FILES = {
@@ -59,7 +58,6 @@ DATA_FILES = {
     "write_supported_builds.json",
     "mobile_cron_supported_builds.json",
     "mobile_model_supported_builds.json",
-    "local_media_supported_builds.json",
 }
 
 
@@ -116,8 +114,8 @@ ALLOWED_OPTIONAL_IMPORTS = {
         "local_media_result",
         "local_media_sidecar",
     },
-    # S6b: the adapter loads only the gate, inside `_media_qualifier`, after the supported check.
-    "adapter": {"local_media_gate"},
+    # M3: the adapter imports no media module in any scope. Its availability binding proves and
+    # holds the objects the bridge and reads caches already hold; the retired gate is gone.
     # S2d: the read cores load the carrier only below a function boundary (pinned below).
     "reads": {"local_media_sidecar"},
     "local_media_candidate": {
@@ -212,7 +210,7 @@ def test_real_modules_use_the_exact_scopes() -> None:
     batch = (PACKAGE / "local_media_active_batch.py").read_text(encoding="utf-8")
     assert _local_media_imports(batch) == {"local_media_active_scan", "local_media_candidate"}
     assert scopes("bridge.py") == {"function"}
-    assert scopes("adapter.py") == {"function"}
+    assert scopes("adapter.py") == set()  # M3: no media import at all; it binds the cached objects
     assert scopes("reads.py") == {"function"}
     reads = (PACKAGE / "reads.py").read_text(encoding="utf-8")
     assert _local_media_imports(reads) == {"local_media_sidecar"}
@@ -259,10 +257,12 @@ def test_bridge_and_reads_imports_must_be_function_local(stem: str, form: str, w
 
 
 @pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))
-@pytest.mark.parametrize("where", ["module", "class", "if", "try"])
-def test_adapter_may_import_the_gate_only_inside_a_function(form: str, where: str) -> None:
-    assert _imports_allowed("adapter", _wrapped(form, "function").format(m="gate"))  # control
-    assert not _imports_allowed("adapter", _wrapped(form, where).format(m="gate"))
+@pytest.mark.parametrize("where", ["module", "function", "method", "class", "if", "try"])
+def test_adapter_may_import_no_media_module_in_any_scope(form: str, where: str) -> None:
+    # M3: the retired gate was the adapter's only allowed media import. Now none is allowed.
+    for module in ("gate", "sidecar", "candidate", "active_batch", "batch_binding", "registry"):
+        source = _wrapped(form, where).format(m=module)
+        assert not _imports_allowed("adapter", source), (module, where)
 
 
 @pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))

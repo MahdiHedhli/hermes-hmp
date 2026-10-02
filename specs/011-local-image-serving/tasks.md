@@ -106,7 +106,7 @@ candidate and sample; that evidence does not prove behavior on future builds.
 ## M2 Convergence
 
 - [ ] **R2** Independent security review of the exact candidate.
-- [ ] **R3** Owner-authorized manifest entry for a qualified build and device acceptance. Any live Hermes change needs separate owner authorization.
+- [ ] **R3** Owner-authorized install, live flag and physical-device acceptance. No build-list or manifest entry is required. Any live Hermes change needs separate owner authorization.
 
 ## S1 reviewed source identity (2026-10-01)
 

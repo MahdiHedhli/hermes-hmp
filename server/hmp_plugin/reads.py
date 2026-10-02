@@ -322,12 +322,12 @@ def _with_tip(found: _Found | None, lineage: LineageInfo) -> _Found | None:
     return _Found("page", found.query, found.candidates, lineage.lineage_tip)
 
 
-# Per-load media module cache (S6b, RC1): `(local_media_sidecar,)`, set once and never refilled. The
+# Per-load media module cache (RC1): `(local_media_sidecar,)`, set once and never refilled. The
 # media sites below read the carrier module from here, never from a request-time import, so a later
-# whole-package eviction cannot give a running listener a different copy. The adapter's preload
-# proves and returns the actual existing cache object inside the gate's disk bracket; an inert media
-# twin on an unadmitted listener may have filled it first. Start-up, the old read methods and the
-# gate-closed path never call it.
+# whole-package eviction cannot give a running listener a different copy. The adapter's
+# listener-open availability binding proves this cache coherent with the bridge's chain and keeps a
+# strong reference to it; an inert media twin on a listener whose media is closed may have filled
+# it first. Start-up, the old read methods and the gate-closed path never call it.
 _local_media_cache: tuple[ModuleType, ...] | None = None
 _local_media_lock = threading.Lock()
 

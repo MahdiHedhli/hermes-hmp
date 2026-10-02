@@ -633,13 +633,13 @@ def _cmid(platform_message_id: object, chat_id: str | None) -> str | None:
     return cmid if _CMID_RE.fullmatch(cmid) else None
 
 
-# Per-load media module cache (S6b, RC1). Set once, never refilled: the media twins and the C6b
+# Per-load media module cache (RC1). Set once, never refilled: the media twins and the C6b
 # binding read the modules from here, never from a request-time import, so a later whole-package
-# eviction cannot hand a running listener a different copy. Order (the adapter's preload and the
-# sites below rely on it): sidecar, candidate, active_scan, result, file_safety, active_batch,
-# batch_binding. For an admitted listener the first fill happens inside the adapter's preload,
-# inside the gate's disk bracket; on a listener whose qualifier is closed a media twin may fill it
-# first, which no consumer relies on. Start-up and the old read methods never call it.
+# eviction cannot hand a running listener a different copy. Order (the adapter's availability
+# binding and the sites below rely on it): sidecar, candidate, active_scan, result, file_safety,
+# active_batch, batch_binding. The adapter's listener-open binding proves this tuple coherent and
+# keeps a strong reference to it; an inert media twin may fill it first on a listener whose media
+# is closed, which no consumer relies on. Start-up and the old read methods never call it.
 _local_media_cache: tuple[ModuleType, ...] | None = None
 _local_media_lock = threading.Lock()
 

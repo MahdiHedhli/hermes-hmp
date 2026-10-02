@@ -41,14 +41,12 @@ module level after the first supported call in this load, so a later reload's ev
 gap in `bridge.py`'s own class identity does not reopen the error-shaping hazard the top-level
 `authorize`/`reads` imports close.) The same cache also holds the actual `bridge` module object.
 
-Local media (M0 integration of specs/011-local-image-serving onto the minimum-version base). The
-S6b exact-build qualification binder is retired by the owner's 2026-10-01 minimum-version policy:
-`_media_qualifier` returns the constant closed callback, and `local_media_gate.py` with its build
-list is not part of this tree, so nothing here can import the gate or read a build identity. The
-inert, identity-based module-coherence helpers (`_media_function`, `_media_sweep`,
-`_media_prove_chain`, ...) are kept as source for the later availability binding (M3) and are not
-called. The S6b core proof was removed in M0: it proved objects of the retired qualification path
-and cannot exist on this base. No route consumes `ServerContext.media_qualified`.
+Local media (specs/011-local-image-serving, M3). Availability is the `local_media` eligibility
+member (minimum version plus the three native probe rows) AND an in-memory media-chain coherence
+check, both decided once when the listener opens; `_media_bind` below never touches a file, a build
+list, a manifest, a fingerprint, a Git SHA or any process-wide state, and it binds the verified
+module objects to this one listener. The retired exact-build qualification (S6/S6a/S6b) is gone.
+No route consumes `ServerContext.media_available` yet.
 """
 
 from __future__ import annotations
@@ -66,7 +64,7 @@ from typing import Any
 from gateway.config import Platform
 from gateway.platforms.base import BasePlatformAdapter, SendResult
 
-from . import cli, compat, direct_send, identity, prompts, server
+from . import cli, compat, direct_send, identity, prompts, reads, server
 from .authorize import Authorize
 from .cli import listener_record_path
 from .contract import PLATFORM_NAME, OtherWhy, WriteGateState
@@ -88,27 +86,40 @@ IDENTITY_CHANGED_MESSAGE = "HMP instance key changed; restart the gateway to ser
 PROFILE_REFRESH_INITIAL_DELAY_S = 5.0
 PROFILE_REFRESH_INTERVAL_S = 15.0
 
-_bridge_classes_cache: tuple[type[Any], type[Any]] | None = None
-_bridge_module_cache: ModuleType | None = None
+# One published tuple: `(bridge module, HermesReadBridge, StoreDirectory)`, all read from the one
+# module object imported. Set once under the lock with a single assignment.
+_bridge_cache: tuple[ModuleType, type[Any], type[Any]] | None = None
+_bridge_lock = threading.Lock()
+
+
+def _bridge_published() -> tuple[ModuleType, type[Any], type[Any]]:
+    """`(bridge module, HermesReadBridge, StoreDirectory)`, imported from `bridge.py` at most once
+    per load of this package. S3 forbids importing `bridge` at module level, so this import cannot
+    move to the top of this file the way `authorize`/`reads` did above; caching it here instead
+    means only the FIRST supported `open_components()` call in this load ever wins the publication,
+    so a reload that happens between that call and a later one (another profile's load, on a
+    multiplexed gateway) cannot swap the class a running listener's `ctx.bridge` is built from.
+
+    The import runs outside the lock (an import lock may be held elsewhere). Only the one tuple
+    assignment is locked, so concurrent first calls all return the winner's tuple and the module
+    and its classes can never come from two different copies."""
+    global _bridge_cache
+    cached = _bridge_cache
+    if cached is None:
+        from . import bridge as bridge_module
+
+        fresh = (bridge_module, bridge_module.HermesReadBridge, bridge_module.StoreDirectory)
+        with _bridge_lock:
+            if _bridge_cache is None:
+                _bridge_cache = fresh
+            cached = _bridge_cache
+    return cached
 
 
 def _bridge_classes() -> tuple[type[Any], type[Any]]:
-    """`(HermesReadBridge, StoreDirectory)`, imported from `bridge.py` at most once per load of
-    this package. S3 forbids importing `bridge` at module level, so this import cannot move to
-    the top of this file the way `authorize`/`reads` did above; caching it here instead means
-    only the FIRST supported `open_components()` call in this load ever executes the `from
-    .bridge import ...` statement, so a reload that happens between that call and a later one
-    (another profile's load, on a multiplexed gateway) cannot swap the class a running listener's
-    `ctx.bridge` is built from out from under it."""
-    global _bridge_classes_cache, _bridge_module_cache
-    if _bridge_classes_cache is None:
-        from . import bridge as bridge_module
-
-        # One import statement fills both: the classes are read from the very module object kept,
-        # so a later coherence check (M3) can prove the module against the class the listener runs.
-        _bridge_module_cache = bridge_module
-        _bridge_classes_cache = (bridge_module.HermesReadBridge, bridge_module.StoreDirectory)
-    return _bridge_classes_cache
+    """`(HermesReadBridge, StoreDirectory)` from the one published tuple."""
+    _, bridge_cls, directory_cls = _bridge_published()
+    return bridge_cls, directory_cls
 
 
 def _log_unavailable_features(eligibility: compat.Eligibility | None) -> None:
@@ -122,7 +133,7 @@ def _log_unavailable_features(eligibility: compat.Eligibility | None) -> None:
 
 
 # --------------------------------------------------------------------------------------------------
-# S6b: local-media listener binding. Proofs are identity comparisons on objects, never lookups.
+# Local-media availability binding (D-M4). Proofs are identity comparisons, never lookups.
 # --------------------------------------------------------------------------------------------------
 
 _MEDIA_UNWRAP_LIMIT = 8
@@ -156,39 +167,13 @@ def _media_prove_function(value: object, module: ModuleType) -> None:
     _media_require(function is not None and function.__globals__ is vars(module))
 
 
-def _media_prove_method(cls: object, name: str, module: ModuleType) -> None:
-    """P-meth: a plain function in the class body of a class the listener actually uses. A class's
-    `__module__` string is never proof."""
-    _media_require(isinstance(cls, type))
-    _media_prove_function(vars(cls).get(name), module)
-
-
-def _media_sweep(modules: dict[str, ModuleType]) -> None:
-    """Cross-copy coherence. `modules` maps each member's own `__name__` to the member; names only
-    ROUTE a comparison, the proof is the `is`. A module, plain function or top-level class in one
-    member that names another member must be that member's own object."""
-    for module in modules.values():
-        for _, value in tuple(vars(module).items()):
-            if type(value) is ModuleType:
-                target = modules.get(value.__name__)
-                _media_require(target is None or value is target)
-                continue
-            function = _media_function(value) if type(value) is FunctionType else None
-            if function is not None:
-                target = modules.get(function.__module__)
-                _media_require(target is None or function.__globals__ is vars(target))
-            elif isinstance(value, type) and value.__qualname__ == value.__name__:
-                target = modules.get(value.__module__)
-                _media_require(target is None or vars(target).get(value.__name__) is value)
-
-
 def _media_prove_chain(
     bridge_module: ModuleType, reads_module: ModuleType
-) -> dict[str, ModuleType]:
-    """The media chain, from the caches the media sites themselves read. These two calls prove and
-    return the actual cache objects that exist inside the gate's disk bracket. They fill a cache
-    that is still empty, but an inert media twin on an unadmitted listener may have filled it
-    earlier; no claim is made that every cached module was first imported here."""
+) -> tuple[tuple[ModuleType, ...], tuple[ModuleType, ...]]:
+    """The media chain, from the caches the media sites themselves read. Returns the actual cache
+    objects `(bridge cache, reads cache)` after proving their cross-references. A call fills a
+    cache that is still empty (an import outside the publication lock); it reads no file of its
+    own and attests nothing about loaded bytes."""
     chain = vars(bridge_module)["_local_media_modules"]()
     reads_media = vars(reads_module)["_local_media_modules"]()
     _media_require(type(chain) is tuple and len(chain) == 7)
@@ -208,29 +193,57 @@ def _media_prove_chain(
     _media_prove_function(vars(active_batch)["scan_active_batch"], active_batch)
     _media_prove_function(vars(binding)["classify"], binding)
     _media_prove_function(vars(sidecar)["_text"], sidecar)
-    return {
-        "local_media_sidecar": sidecar,
-        "local_media_candidate": candidate,
-        "local_media_active_scan": active_scan,
-        "local_media_result": result,
-        "local_media_file_safety": file_safety,
-        "local_media_active_batch": active_batch,
-        "local_media_batch_binding": binding,
-    }
+    return chain, reads_media
 
 
 def _media_closed() -> bool:
     return False
 
 
-def _media_qualifier(adapter: Any, ctx: Any, result: compat.CompatResult) -> Callable[[], bool]:
-    """M0 integration binder: ALWAYS the constant closed callback, whatever the read result says.
-    The exact-build qualification this slot used to run (manifest, fingerprints, process anchor)
-    is retired by the owner's 2026-10-01 minimum-version policy and is not reachable from here:
-    nothing in this module imports `local_media_gate`, reads a build identity, or compares one.
-    The minimum-version availability binding (M3) replaces this function; until then local media
-    stays closed on every build. The arguments are unused and kept so M3 changes the body only."""
-    return _media_closed
+def _media_bind(
+    ctx: Any, bridge_module: ModuleType, reads_module: ModuleType
+) -> Callable[[], bool]:
+    """Bind local-media availability to ONE listener. Call only when this listener's `local_media`
+    eligibility member is available. The media-chain cross-references are verified once; on success
+    the verified `(bridge cache, reads cache)` tuples are stored on `ctx.media_modules` and the
+    returned callback is the listener's `media_available`. On any failure (`Exception`) this
+    listener's media stays closed and nothing process-wide changes, so another listener in the same
+    process opens independently. `BaseException` propagates to the caller.
+
+    The callback is the cheap use-time fence: no await, import, file or lock. It compares the
+    caches the bridge and reads modules hold NOW with the bound tuples by identity, and on a
+    mismatch closes this listener's media until the next open. It is not authenticity, a
+    loaded-bytecode proof or an attestation, and it never looks at `sys.modules`: whole-package
+    eviction replaces module-table entries but leaves these references and caches alone."""
+    try:
+        # The bound modules are the ones this listener's own bridge and reads objects come from.
+        _media_require(type(ctx.bridge) is vars(bridge_module).get("HermesReadBridge"))
+        _media_require(type(ctx.reads) is vars(reads_module).get("Reads"))
+        chain, reads_media = _media_prove_chain(bridge_module, reads_module)
+    except Exception:
+        log_event("local_media_binding", outcome="media_binding_incoherent")
+        return _media_closed
+    ctx.media_modules = (chain, reads_media)
+    closed = [False]
+
+    def media_available() -> bool:
+        if closed[0]:
+            return False
+        try:
+            same = (
+                vars(bridge_module)["_local_media_cache"] is chain
+                and vars(reads_module)["_local_media_cache"] is reads_media
+            )
+        except Exception:  # fail closed; the exception text is never logged
+            same = False
+        if same:
+            return True
+        closed[0] = True
+        ctx.media_modules = None  # a closed listener hands no bound reference to a later caller
+        log_event("local_media_binding", outcome="media_binding_changed")
+        return False
+
+    return media_available
 
 
 def open_components(adapter: Any) -> server.ServerContext:
@@ -327,7 +340,7 @@ def open_components(adapter: Any) -> server.ServerContext:
     )
     _log_unavailable_features(eligibility)
     if result.supported:
-        bridge_cls, directory_cls = _bridge_classes()
+        bridge_module, bridge_cls, directory_cls = _bridge_published()
 
         ctx.bridge = bridge_cls(adapter, directory_cls(store))
         # Live-bug fix: `adapter._observe_served_profiles` is a bound method of the adapter this
@@ -374,8 +387,14 @@ def open_components(adapter: Any) -> server.ServerContext:
             phone_bound[0] = ctx.bridge.bind_phone_chat_helpers(  # type: ignore[attr-defined]
                 lambda: prompt_store.close_phone_chat(ctx.now())
             )
-        # Local media (M0): the listener's media callback is the constant closed one.
-        ctx.media_qualified = _media_qualifier(adapter, ctx, result)
+        # Local media (M3): only a listener whose `local_media` member is available is bound; the
+        # result identity may be `None`. Closed (the default) otherwise, with no media import.
+        if _available(compat.Feature.LOCAL_MEDIA):
+            try:
+                ctx.media_available = _media_bind(ctx, bridge_module, reads)
+            except BaseException:
+                store.close()
+                raise
         adapter._hmp_hooks = prompts.AdapterHooks(  # type: ignore[attr-defined]
             store=prompt_store,
             bridge=ctx.bridge,

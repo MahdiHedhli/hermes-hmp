@@ -208,13 +208,17 @@ class ServerContext:
     # whether the owner turned a feature on.
     send_available: Callable[[], bool] = field(default=lambda: True)
     session_browsing_available: bool = True
-    # Local media (specs/011-local-image-serving). Both default closed and neither is a bool:
-    # `media_flag` re-reads the live host config on every call. `media_qualified` is the S6b carrier
-    # kept for the M0 integration only: `adapter.py` binds it to a constant closed callback until
-    # the minimum-version availability slice (M3) replaces it. No route consumes either yet, and a
-    # result is never cached on this context.
+    # Local media (specs/011-local-image-serving). `media_flag` re-reads the live host config on
+    # every call and defaults closed. `media_available` is the listener-scoped availability binding
+    # (D-M4): it defaults to closed, `adapter.py` replaces it only on a listener whose `local_media`
+    # eligibility member is available and whose media chain verified coherent, and the callback
+    # itself runs the cheap in-memory use-time identity fence. `media_modules` holds the verified
+    # strong references the bound listener uses -- `(bridge cache tuple, reads cache tuple)`, the
+    # very objects `bridge.py` and `reads.py` cache -- so a later S4/S5 caller uses the same objects
+    # without a fresh import. No route consumes either yet, and a result is never cached here.
     media_flag: Callable[[], bool] = field(default=lambda: False)
-    media_qualified: Callable[[], bool] = field(default=lambda: False)
+    media_available: Callable[[], bool] = field(default=lambda: False)
+    media_modules: tuple[tuple[Any, ...], tuple[Any, ...]] | None = None
 
     def is_approvals_available(self) -> bool:
         """Bot Chat approvals. Only an exact `True` opens it; anything else closes it."""
@@ -252,10 +256,11 @@ class ServerContext:
             log_bridge_exception(exc)
             return False
 
-    def media_qualification_open(self) -> bool:
-        """Only an exact `True` opens it; an exception, a falsy or a non-bool closes. Blocking."""
+    def is_media_available(self) -> bool:
+        """Only an exact `True` opens it; an exception, a falsy or a non-bool closes. In-memory,
+        synchronous and free of any await or import, so a caller can consume it on the loop."""
         try:
-            return self.media_qualified() is True
+            return self.media_available() is True
         except Exception as exc:
             log_bridge_exception(exc)
             return False

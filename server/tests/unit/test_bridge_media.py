@@ -929,11 +929,44 @@ def test_carrier_never_escapes_to_wire_serialization(tmp_path: Path) -> None:
             wire.dump_json({"x": request_ctx._plain([carrier])})
 
 
-def test_server_routes_cli_compat_remain_media_inert() -> None:
-    for name in ("server.py", "routes.py", "cli.py", "compat.py"):
-        text = (PACKAGE / name).read_text(encoding="utf-8")
-        for needle in ("local_media", "_with_media", "LOCAL_MEDIA_SIDECAR"):
-            assert needle not in text, f"{name}: {needle}"
+def _media_execution_sites(text: str) -> list[str]:
+    """Diagnostic feature labels are allowed; importing helpers or calling twins is not."""
+    sites: list[str] = []
+    for node in ast.walk(ast.parse(text)):
+        if isinstance(node, ast.Import | ast.ImportFrom):
+            names = [alias.name for alias in node.names]
+            if isinstance(node, ast.ImportFrom):
+                names.append(node.module or "")
+            sites.extend(name for name in names if any(
+                part.startswith("local_media_") for part in name.split(".")
+            ))
+        elif isinstance(node, ast.Call):
+            name = getattr(node.func, "attr", getattr(node.func, "id", ""))
+            if name.endswith("_with_media") or name == "_local_media_modules":
+                sites.append(name)
+    return sites
+
+
+def test_server_cli_compat_remain_media_inert() -> None:
+    # Routes live in server.py on this base. M2's local_media diagnostic label does not serve it.
+    for name in ("server.py", "cli.py", "compat.py"):
+        assert _media_execution_sites((PACKAGE / name).read_text(encoding="utf-8")) == [], name
+    text = (PACKAGE / "server.py").read_text(encoding="utf-8")
+    for needle in ("local_media", "_with_media", "LOCAL_MEDIA_SIDECAR"):
+        assert needle not in text, needle
+
+
+@pytest.mark.parametrize("site", [
+    "import hmp_plugin.local_media_registry",
+    "from . import local_media_sidecar",
+    "from .local_media_candidate import collect_candidates",
+    "bridge.latest_with_media(ref, 5)",
+    "_local_media_modules()",
+])
+def test_media_inert_pin_detects_execution_but_allows_diagnostic_labels(site: str) -> None:
+    label = 'FEATURE = "local_media"\n'
+    assert _media_execution_sites(label) == []
+    assert _media_execution_sites(label + site)
 
 
 def test_old_methods_still_use_read_wrapper_and_rows_after_release() -> None:
