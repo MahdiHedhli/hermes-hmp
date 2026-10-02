@@ -43,10 +43,16 @@ permits join actual refresh/fetch/decode work. Root passed 218 focused client,
 seven dev-support, 12 logging and 112 card/viewer cases; independent component
 reviews passed overlapping causal cases. Exact Phone screen/owned-route wiring,
 stable final budget, actual shared-flight/fresh-row retry integration, combined
-CI and physical delivery remain open. No new upstream Hermes API is required.
+CI and physical delivery remain open. Hosted mobile run `37060192148` failed a
+legacy immediate-permit-release test and the inherited late-TLS test. Root's
+corrected legacy test and its full 42-case binding suite pass locally; exact
+hosted verification remains open. Handoff SDK paths were sanitized at `19a5ba6`; hosted security hygiene passes
+in run `37061780872`, closing the current-document privacy finding. Historical
+Git bytes remain in public history.
+No new upstream Hermes API is required.
 The mobile MEDIA-C1/F1 source and exact
 registry repair are independently accepted in [draft #69](https://github.com/MahdiHedhli/HermesBotMobile/pull/69):
-219 focused passes and full serial CI pass (app 925 / 3 skips). This repairs the
+219 focused passes and local serial CI pass (app 925 / 3 skips). This repairs the
 demonstrated client accounting/API settlement mechanism; installed devices and
 physical/native/global memory/release gates remain unchanged. See [current mobile lifetime evidence](NOUS_GATEWAY_OBSERVATIONS.md#mobile-public-image-lifetime-2026-10-02).
 
