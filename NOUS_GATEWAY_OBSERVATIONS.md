@@ -60,6 +60,30 @@ passed 266 selected client cases, and the final dismiss file passed 37. A causal
 regression prevents silently swallowing a definitive lifecycle answer. Physical behavior awaits
 owner testing. This is a client repair, not an upstream defect.
 
+## Bot Chat send identity and Dismiss follow-up (2026-10-02)
+
+The owner confirms that Dismiss restores the draft, while an ordinary user bubble remains.
+The screenshot does not identify its build. Source inspection of app `0ae5667` shows that
+Bot Chat renders host snapshot/live-tail rows, not optimistic local user bubbles. Preserving
+those rows is necessary; a text match cannot identify an individual attempt.
+
+On inspected HMP `4d6863e` and `150bd0f`, the DS-7 session-chat request sends text without the
+phone's caller message ID. On Hermes `ca705dbf`, the session-chat endpoint does not forward an
+optional caller ID to user-row persistence or Desktop live-mailbox delivery. HMP's history
+parser can expose an ID from a stamped `platform_message_id`, but this inspected Bot Chat
+send path does not produce the stamp. The separate candidate Phone-chat path is different;
+this is not a claim that all HMP-originated rows lack IDs. DS-8 status remains independent
+of row correlation. Its unresolved outcomes must retain the original evidence.
+
+A generic optional caller-message identity preserved across both native session-chat routes
+would let HMP reconcile an exact history row. The interface needs defined profile/session
+scoping, restart deduplication, queued delivery and acknowledgement semantics. This is an
+upstream API gap, not a reason to delete host rows by matching text or bypass authorization.
+The current reply-derived `message_id` also does not reliably identify a user row; its client
+comment needs correction. No core patch or follow-up runtime fix has been deployed.
+See the [bounded source diagnosis and required verification](https://github.com/MahdiHedhli/HermesBotMobile/blob/d8b0f55/docs/research/bot-chat-send-identity-gap-2026-10-02.md).
+The user-visible bug remains open.
+
 ## Approval admission and notification findings (2026-10-02)
 
 The spec 034 candidate removes the approval exact-build runtime gate while retaining actual
