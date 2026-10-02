@@ -241,8 +241,9 @@ not enable Phone image cards or change installed hosts/devices.
 MEDIA-C1 is a mobile resource-accounting defect, not a missing Hermes API. Repeated
 public-image cancellation previously freed the visible count while injected DNS
 work remained pending. Its bounded repair contracts have independent acceptance;
-the local exact-source candidate `5f98477` is frozen for separate review. Root
-passed 218 focused app cases and clean analysis. No registry, deployment or release
+independent source review of initial candidate `5f98477` found one cleanup-error
+issue, F1. The amended local candidate `eb450db` is frozen for delta review; root
+passed 219 focused app cases and clean analysis. No registry, deployment or release
 qualification follows before that source review.
 
 A stronger loopback check found that raw close/peer EOF could leave the actual
@@ -254,6 +255,12 @@ TLS cancel/deadline/dispose, successful HTTP body forwarding, wrong-host refusal
 and cancellation before successful handshake delivery. Synthetic relay cancellation
 controls are models; no held real SDK cancellation or physical-device result is
 claimed. Private SDK filter quiescence and all OS allocations are outside this proof.
+The F1 diagnostic reproduced a synthetic cancellation error escaping because the
+SDK ignores its subscription cancellation Future; no native failure, crash or data
+disclosure was observed. The amended candidate retains the exact original Future
+and an immediately observing successful join, including synchronous throws. The
+SDK-facing join cannot end early, and no-test-only-consumer regressions pass. Source
+acceptance remains pending; no registry re-pin or deployment follows yet.
 Standard PKI, hostname/address checks, explicit tap, media bounds and credential
 exclusion remain unchanged. Phone activity/fresh-read architecture and host/native
 serving/device gates remain separate. See the [mobile finding and checkpoint](https://github.com/MahdiHedhli/HermesBotMobile/blob/docs/a1-session-review/docs/research/public-image-cancel-accounting-2026-10-02.md).

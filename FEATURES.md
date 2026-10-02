@@ -35,8 +35,8 @@ with minimum-version/API admission while preserving authorization and image limi
 The combined app source baseline is independently accepted in
 [mobile draft #68](https://github.com/MahdiHedhli/HermesBotMobile/pull/68).
 Phone image wiring remains open. The mobile MEDIA-C1 lifetime repair contracts
-are accepted and its frozen candidate passes 218 focused tests; exact-source
-review is pending. This is client resource accounting, not an upstream Hermes
+are accepted; independent source review found F1 cleanup-error handling. The
+amended candidate passes 219 focused tests, with exact delta review pending. This is client resource accounting, not an upstream Hermes
 requirement or a runtime/device change. See [current mobile lifetime evidence](NOUS_GATEWAY_OBSERVATIONS.md#mobile-public-image-lifetime-2026-10-02).
 
 | Status | Capability | Notes |
