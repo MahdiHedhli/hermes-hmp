@@ -224,6 +224,52 @@ acceptance remain open. Native materialization/pruning and non-atomic reads
 (G-M1), artifact authority (G-M2), ABA/torn-buffer and same-account replacement
 residuals remain. No runtime build allowlist or live change is introduced.
 
+### Native fetch probe diagnosis (2026-10-02)
+
+Three isolated native phase-probe attempts ended in failure; none produced a
+worker-memory receipt. Closed diagnostics on the latest attempt identified a
+failed positive image payload for both Bot Chat and Phone, with valid pre/post
+integrity metadata and no observed live-home events. These failed attempts do
+not qualify serving or establish an upstream defect.
+
+A separate stdlib-only control on the same interpreter reproduced an
+instrumentation collision: the audit wrapped `os.stat` before the file leaf
+captured its real capability identity. The leaf then reported an unsupported
+platform. Loading the hash-pinned leaf first preserved its real capability
+check and allowed an exact 8 MiB PNG read with the audit installed. Native
+imports were absent from this control. The probe amendment retains audit
+installation before native imports, restores the original fixture state, and
+requires a positive fetch immediately before the corruption-refusal test.
+Independent source review accepted the import-order and fixture amendment after
+repairing a probe-only lazy-cache initialization error. The corrected isolated
+native phase/service run completed with exact before/after checked inputs.
+
+Both Bot Chat and Phone returned exact rehashed 8 MiB PNG payloads, passed fresh
+phase two and refused the tested wrong-kind, denied-grant, changed-session and
+malformed-file cases. Each corruption refusal followed an immediate successful
+fetch. Four real service workers retained their permits until completion,
+refused fifth admission, settled callbacks and released payload mailboxes. The
+cancelled-lease sample refused late publication without cancelling the futures.
+
+| Native worker sample | Traced peak | Conservative RSS increment | Traced bytes after settlement |
+| --- | ---: | ---: | ---: |
+| Active | 41.858 MiB | 49.812 MiB | 143,091 |
+| Cancelled lease | 41.230 MiB | 43.969 MiB | 144,972 |
+
+These values satisfy the unchanged provisional ceilings of 96 MiB traced peak,
+128 MiB incremental RSS and less than 1 MiB traced settlement. This is one
+bounded native sample with synthetic authority/routing/producer rows and a
+padded PNG, not a worst-case bound or HTTP cancellation test. The three previous
+attempts remain failed. The [sanitized sample record](docs/research/local-media-native-phase-service-2026-10-02.md)
+separates the actual native methods and worker lifecycle from the synthetic
+fixture and remaining gates.
+
+The protected audit categorizes absolute paths only; descriptor-relative cache
+operations are not categorized. Positive controls are not complete leaf-I/O
+coverage. Python hooks, the finite loaded-source pins and runtime checks do not
+prove an OS sandbox or complete dependency immutability. All memory limits,
+native HTTP/T12, Linux, codec/device and release gates remain unchanged.
+
 ## Native observation and access diagnostics checkpoint (2026-10-01)
 
 Source inspection on exact Hermes `8afaab37` confirms that a session lookup is not
@@ -649,8 +695,8 @@ bridge shapes work. Native allocation remains uncapped; provider call-ID reuse a
 large/malformed active histories can refuse image availability. There is no atomic
 snapshot or restore epoch, media grant, network route or serving qualification.
 
-App draft #62 is installed only as owner dogfood build 2026100101, with a conservative
-JPEG pre-decode complexity cap. Signed artifact checks and installation passed; the
+At that historical checkpoint, app draft #62 was installed only as owner dogfood
+build 2026100101, with a conservative JPEG pre-decode complexity cap. Signed artifact checks and installation passed; the
 locked phone refused automatic launch. The owner confirmed CDN image rendering on
 the preceding build, while host-local MEDIA output remains text-only. No live HMP
 package or new external beta was deployed in this checkpoint.
