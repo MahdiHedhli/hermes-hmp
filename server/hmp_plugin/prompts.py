@@ -259,7 +259,7 @@ class PromptStore:
         with self._guard:
             self.closed = True
             for row in self._rows.values():
-                self.expire(row, now)
+                self.expire(row, now, cause="generation_closed")
             self._desktop.clear()
         _log("prompt_store", "closed")
 
@@ -273,7 +273,7 @@ class PromptStore:
             self.phone_closed = True
             for row in self._rows.values():
                 if row.surface == "phone_chat":
-                    self.expire(row, now)
+                    self.expire(row, now, cause="binding_fence")
             self._sessions.clear()
             self._observations.clear()
         log_event("approval_binding", outcome="changed")
@@ -300,23 +300,33 @@ class PromptStore:
                     del self._lock_users[key]
 
     @staticmethod
-    def expire(row: PromptRow, now: int) -> None:
+    def expire(row: PromptRow, now: int, *, cause: str) -> None:
         if row.status == "open":
             row.status = "expired"
             row.settled_at = now
+            row.settle_cause = cause
+
+    def settle_answer(self, row: PromptRow, *, status: str, cause: str, now: int) -> None:
+        """The answer path's only writer of `status`, `settled_at` and `settle_cause`. It overwrites
+        unconditionally, even a settlement another path made while the Hermes call was awaited
+        (spec 015 RD-7), and reads no clock: `now` is the caller's pre-await sample."""
+        with self._guard:
+            row.status = status
+            row.settled_at = now
+            row.settle_cause = cause
 
     def expire_run(self, run_id: str, now: int) -> None:
         with self._guard:
             for row in self._rows.values():
                 if row.run_id == run_id:
-                    self.expire(row, now)
+                    self.expire(row, now, cause="run_ended")
 
     def reconcile_approvals(self, session_key: str, pending: set[str], now: int) -> None:
         with self._guard:
             for row in self._rows.values():
                 if (row.session_key == session_key and row.kind == "approval"
                         and row.request_id not in pending):
-                    self.expire(row, now)
+                    self.expire(row, now, cause="phone_listing_omitted")
 
     def get(self, key: tuple[str, str, str, str]) -> PromptRow | None:
         with self._guard:
@@ -326,7 +336,7 @@ class PromptStore:
         with self._guard:
             for row in self._rows.values():
                 if row.expires_at is not None and now > row.expires_at + EXPIRY_GRACE_S:
-                    self.expire(row, now)
+                    self.expire(row, now, cause="local_expiry")
             stale = [
                 key for key, row in self._rows.items()
                 if row.settled_at is not None and now - row.settled_at >= IDEMPOTENCY_RETENTION_S
@@ -650,15 +660,20 @@ def _replay(row: PromptRow) -> HttpResult | None:
     return HttpResult(row.stored_status, dict(row.stored_body))
 
 
-def _remember(
-    row: PromptRow, result: HttpResult, digest: bytes | None, now: int, *, settle: bool
-) -> None:
+def _remember(row: PromptRow, result: HttpResult, digest: bytes | None) -> None:
+    """Replay fields only. `PromptStore.settle_answer` writes status, `settled_at` and cause."""
     row.stored_status = result.status
     row.stored_body = dict(result.body)
-    if settle:
-        row.settled_at = now
     if digest is not None:
         row.answer_hash = digest
+
+
+def _stale_cause(row: PromptRow) -> str:
+    """NI-2.3: a stale Bot Chat approval came from the native classifier (RD-5); every other stale
+    verdict is a Phone result that proves nothing about Hermes (RD-4, RD-6)."""
+    if row.kind == "approval" and row.surface == "bot_chat":
+        return "native_not_pending"
+    return "phone_not_resolved"
 
 
 async def answer_prompt(
@@ -703,14 +718,16 @@ async def answer_prompt(
             return _error("stale", "request is no longer answerable", applied=False)
         result = await _apply(row, form, value, resolver, user_id)
         if result.status == 200 and result.body.get("status") == "resolved":
-            row.status = "resolved"
-            _remember(row, result, digest, now, settle=True)
+            store.settle_answer(row, status="resolved", cause="answer_applied", now=now)
+            _remember(row, result, digest)
         elif result.status == 409 and isinstance(result.body.get("error"), dict):
             error = result.body["error"]
             code = error.get("code") if isinstance(error, dict) else None
             if code == "stale":
-                row.status = "expired"
-                _remember(row, result, None, now, settle=True)
+                store.settle_answer(
+                    row, status="expired", cause=_stale_cause(row), now=now
+                )
+                _remember(row, result, None)
             _log(
                 "prompt_answer",
                 "conflict" if code == "idempotency_conflict" else str(code or "stale"),
@@ -979,8 +996,7 @@ class AdapterHooks:
         with self.store._guard:
             for row in self.store._rows.values():
                 if row.request_id == clarify_id and row.kind == "clarify" and row.status == "open":
-                    row.status = "expired"
-                    row.settled_at = self.now()
+                    self.store.expire(row, self.now(), cause="clarify_retired")
                     _log(
                         "prompt_store",
                         "stale",

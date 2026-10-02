@@ -32,7 +32,7 @@ by a single worker (`RD-10`, root choice). T020, T030 and T040 all edit `prompts
 `RowView` carries `settle_cause` from T020, so no parallel worktrees. Each task starts only after
 the previous one is committed.
 
-- [ ] T020 **I-2.** `expire(..., cause=)` at the five internal sites; `settle_answer` as the only
+- [x] T020 **I-2.** `expire(..., cause=)` at the five internal sites; `settle_answer` as the only
       answer-path writer of `status`, `settled_at` and `settle_cause` in one `_guard` section,
       replacing the unguarded writes in `answer_prompt`; `_remember` reduced to the replay fields
       (the `settle` parameter removed entirely, no `await` between `settle_answer` and it);
@@ -92,4 +92,22 @@ the full unit suite passed 1,565 cases with 16 explained native/Python-version s
 are source-unit checks, not native or operational notification evidence. The independent
 reviewer did not read the mandatory app/skill documents; its authority is confined to its
 recorded type/diff review. Root reviewed the frozen contract and actual finite source delta.
-T020 and later implementation gates remain unchecked.
+T020 source acceptance is recorded below. Later implementation gates remain unchecked.
+
+## I-2 root checkpoint — 2026-10-02
+
+T020 has independent bounded source acceptance and root verification: 216 focused cases passed,
+with no skips. Root killed four causal mutants (unlocked writer, a second timestamp writer,
+clock resampling and first-writer-wins). Configured Ruff, source privacy, plugin-surface and diff
+checks passed. The author passed all 80 new cases and the existing approval suites; its one
+skipped native probe requires an explicitly configured isolated Hermes source and interpreter
+and was intentionally outside this source-only slice.
+
+The independent reviewer found no runtime blocker. Its first reading record used the wrong
+installed skill path; the private correction preserves that mistake and records the requested
+1.3.63 skill separately. This is not final T060 security review. Three bounded test-hygiene
+notes remain: stale replay-field omission is not detected by current route tests because the
+expired-row branch returns before replay; a stale-test comment is stronger than its call-count
+assertion; one lock-holder test has an unbounded event wait despite a 0.25-second hold. Root's
+mutation subprocesses were bounded to 45 seconds. No native, provider, device or operational
+notification evidence is claimed. T030, then T040, remain the implementation order.
