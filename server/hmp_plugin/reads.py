@@ -51,8 +51,10 @@ from __future__ import annotations
 import contextlib
 import re
 import secrets
+import threading
 import time
 from collections.abc import Callable, Mapping, Sequence
+from types import ModuleType
 from typing import Any
 
 from . import wire
@@ -320,11 +322,35 @@ def _with_tip(found: _Found | None, lineage: LineageInfo) -> _Found | None:
     return _Found("page", found.query, found.candidates, lineage.lineage_tip)
 
 
+# Per-load media module cache (S6b, RC1): `(local_media_sidecar,)`, set once and never refilled. The
+# media sites below read the carrier module from here, never from a request-time import, so a later
+# whole-package eviction cannot give a running listener a different copy. The adapter's preload
+# proves and returns the actual existing cache object inside the gate's disk bracket; an inert media
+# twin on an unadmitted listener may have filled it first. Start-up, the old read methods and the
+# gate-closed path never call it.
+_local_media_cache: tuple[ModuleType, ...] | None = None
+_local_media_lock = threading.Lock()
+
+
+def _local_media_modules() -> tuple[ModuleType, ...]:
+    global _local_media_cache
+    cached = _local_media_cache
+    if cached is not None:
+        return cached
+    from . import local_media_sidecar  # unlocked: only the set-once publication is locked
+
+    fresh = (local_media_sidecar,)
+    with _local_media_lock:
+        if _local_media_cache is None:
+            _local_media_cache = fresh
+        return _local_media_cache
+
+
 def _accept_media(got: object, *, allow_reset: bool) -> tuple[Any, _Found]:
     """The only shapes an opted-in bridge may return: its carrier, the exact old row list (the
     downgrade: unchanged text, no media metadata) or, for `after`, a `ResetReason`. Anything else
     is a fault: never a silent fallback, never a second query."""
-    from .local_media_sidecar import BridgeMediaRows
+    BridgeMediaRows = _local_media_modules()[0].BridgeMediaRows  # noqa: N806
 
     shape = type(got)
     if shape is list:
@@ -874,14 +900,13 @@ class Reads:
     def _media_result(
         self, origin: str, user_id: str, profile: str, public: Any, found: _Found | None
     ) -> Any:
-        # Function-local: start-up, the old read methods and the gate-closed path never load it.
-        from .local_media_sidecar import (
-            MediaCarrierRefusal,
-            MediaOrigin,
-            MediaReadResult,
-            MediaSidecar,
-            SidecarStatus,
-        )
+        # Start-up, the old read methods and the gate-closed path never load it.
+        sidecar = _local_media_modules()[0]
+        MediaCarrierRefusal = sidecar.MediaCarrierRefusal  # noqa: N806
+        MediaOrigin = sidecar.MediaOrigin  # noqa: N806
+        MediaReadResult = sidecar.MediaReadResult  # noqa: N806
+        MediaSidecar = sidecar.MediaSidecar  # noqa: N806
+        SidecarStatus = sidecar.SidecarStatus  # noqa: N806
 
         assert found is not None  # the media cores always return a note
         origin_kind = MediaOrigin(origin)

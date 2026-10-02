@@ -50,6 +50,9 @@ server/
                                   #   v1.3: list/resolve_gateway_approval, resolve_gateway_clarify,
                                   #   mark_awaiting_text, approval/clarify timeouts, phone session key
                                   #   (function-local, only after the direct-send gate is open)
+                                  #   S6b: per-load set-once local-media module cache (`_local_media_modules`: sidecar,
+                                  #   candidate, scan, result, file safety, batch, binding); the media twins and the
+                                  #   C6b binding read it, never a request-time import. Old read methods unchanged
     direct_send.py                # amendment F2: DS-2..DS-8 orchestration (gate order, guard, idempotency,
                                   #   the api_server loopback call, post-hoc verification). Never imports a Hermes
                                   #   internal itself -- reads bridge.py for Hermes state, and speaks api_server's
@@ -70,6 +73,7 @@ server/
                                   #   and the OD-F11 bot-view selector, _is_bot_view_session (title=="Bot Chat" and
                                   #   hidden; cross-checked against hermes-agent's canonical-chat.ts/bot_mode_probe.py/
                                   #   hermes_state.py, HMP_V1.md §6a SES-7 -- no new Hermes dependency)
+                                  #   S6b: a per-load set-once cache `(local_media_sidecar,)` read by the media sites
     authorize.py                  # P6 outcome table (PR6-*), via bridge
     revoke.py                     # P7-3 self-revoke; operator revoke helpers (PR7-1)
     gate.py                       # GU-2/GU-4 guarantee derivation + write gate (implemented, unused by F1 routes)
@@ -80,7 +84,13 @@ server/
                                   #   tokens.py and revoke.py so a plugin reload (sys.modules eviction of
                                   #   hermes_plugins.hmp*) cannot split a running app from the CTX_KEY/helpers
                                   #   it was built with (see the module's own docstring)
+                                  #   S6b: `media_flag` / `media_qualified` callable fields (default closed) and the
+                                  #   exact-True accessors `media_enabled` / `media_qualification_open` (blocking);
+                                  #   no route consumes them yet
     adapter.py                    # HmpAdapter(BasePlatformAdapter): lifecycle only (start/stop listener)
+                                  #   S6b: on a SUPPORTED build only, binds the local-media gate with a static preload
+                                  #   that proves each required module against the objects this listener runs
+                                  #   (`_media_qualifier`); the gate is its only function-local media import
     cli.py                        # `hermes hmp …` operator commands (PR1-*, PR3-*, PR7-1, PR7-2, routes add, compat);
                                   #   `pair offer` is one command end to end unless `--no-wait` (owner
                                   #   requirement, 2026-09-27): it waits, shows the expected code and asks
@@ -123,7 +133,8 @@ server/
                                   #   standard library. Strict hmp-local-media-1 manifest, bounded no-follow source reads,
                                   #   sys-anchored first-factory baseline that survives module reloads, optional adapter-owned
                                   #   preload for origin checks. Returns a closed callback for every input while the shipped
-                                  #   manifest has no entries; no caller, flag or route yet; grants no authority
+                                  #   manifest has no entries; imported only by adapter.py (S6b, function-local, supported
+                                  #   builds); no route or flag consumes it yet; grants no authority
     local_media_supported_builds.json  # S6a media qualification list: exact {format, native_files, hmp_files, builds}; ships
                                   #   with builds empty. Entries bind native and HMP fingerprints plus the Git SHA; never read
                                   #   by the read, approval or direct-send parsers

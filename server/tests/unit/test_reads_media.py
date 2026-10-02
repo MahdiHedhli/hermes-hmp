@@ -1231,8 +1231,10 @@ def _fresh(mode: str) -> subprocess.CompletedProcess[str]:
         ("unsupported", "local_media_sidecar"),
         (
             "media",
-            "local_media_active_scan,local_media_candidate,local_media_file_safety,"
-            "local_media_result,local_media_sidecar",
+            # S6b: the first bridge twin fills the whole per-load media cache.
+            "local_media_active_batch,local_media_active_scan,local_media_batch_binding,"
+            "local_media_candidate,local_media_file_safety,local_media_result,"
+            "local_media_sidecar",
         ),
     ],
 )

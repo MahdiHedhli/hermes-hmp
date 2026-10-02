@@ -39,7 +39,17 @@ module level after the first supported call in this load, so a later reload's ev
 `HmpError` -- every bridge call `authorize.py`/`reads.py` makes is wrapped in a generic
 `except Exception`, and re-raised as THEIR OWN, now load-stable, `HmpError` -- so this residual
 gap in `bridge.py`'s own class identity does not reopen the error-shaping hazard the top-level
-`authorize`/`reads` imports close.)
+`authorize`/`reads` imports close.) The same cache also holds the actual `bridge` module object.
+
+Local-media listener binding (S6b; specs/011-local-image-serving ROOT_DECISIONS "S6b listener
+binding freeze"). On a SUPPORTED build only, `open_components` hands `local_media_gate` an exact
+`BuildIdentity` and a zero-argument `preload`. The preload returns the module objects THIS load
+actually runs, after proving each against an object the listener really uses (a plain function's
+`__globals__`, a class-body method's `__globals__`, a static module reference, or this module's own
+namespace) and sweeping every pair for a split copy by identity. Module NAMES only route a
+comparison; they are never looked up and no module is fabricated. The top-level static imports and
+`_LOAD_SELF` below are only CANDIDATES until that proof. Any failure raises and the gate closes.
+Nothing here consumes the callback: no route reads `ServerContext.media_qualified` yet.
 """
 
 from __future__ import annotations
@@ -47,16 +57,34 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import secrets
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
+from types import FunctionType, ModuleType
 from typing import Any
 
 from gateway.config import Platform
 from gateway.platforms.base import BasePlatformAdapter, SendResult
 
-from . import cli, compat, direct_send, identity, mobile_cron, mobile_model, prompts, server
+from . import (
+    auth,
+    cli,
+    compat,
+    contract,
+    direct_send,
+    identity,
+    logging_policy,
+    mobile_cron,
+    mobile_model,
+    prompts,
+    request_ctx,
+    server,
+)
+from . import authorize as _authorize_module
+from . import reads as _reads_module
+from . import store as _store_module
 from .authorize import Authorize
 from .cli import listener_record_path
 from .contract import PLATFORM_NAME, OtherWhy, WriteGateState
@@ -79,6 +107,11 @@ PROFILE_REFRESH_INITIAL_DELAY_S = 5.0
 PROFILE_REFRESH_INTERVAL_S = 15.0
 
 _bridge_classes_cache: tuple[type[Any], type[Any]] | None = None
+_bridge_module_cache: ModuleType | None = None
+
+# S6b candidate for this load's own module object (RC3), captured at import time and used only
+# after `vars(_LOAD_SELF) is globals()` holds inside the preload. Never a name lookup after import.
+_LOAD_SELF: ModuleType | None = sys.modules.get(__name__)
 
 
 def _bridge_classes() -> tuple[type[Any], type[Any]]:
@@ -89,12 +122,229 @@ def _bridge_classes() -> tuple[type[Any], type[Any]]:
     .bridge import ...` statement, so a reload that happens between that call and a later one
     (another profile's load, on a multiplexed gateway) cannot swap the class a running listener's
     `ctx.bridge` is built from out from under it."""
-    global _bridge_classes_cache
+    global _bridge_classes_cache, _bridge_module_cache
     if _bridge_classes_cache is None:
-        from .bridge import HermesReadBridge, StoreDirectory
+        from . import bridge as bridge_module
 
-        _bridge_classes_cache = (HermesReadBridge, StoreDirectory)
+        # One import statement fills both: the classes are read from the very module object kept,
+        # so the S6b preload can prove the module against the class the listener runs.
+        _bridge_module_cache = bridge_module
+        _bridge_classes_cache = (bridge_module.HermesReadBridge, bridge_module.StoreDirectory)
     return _bridge_classes_cache
+
+
+# --------------------------------------------------------------------------------------------------
+# S6b: local-media listener binding. Proofs are identity comparisons on objects, never lookups.
+# --------------------------------------------------------------------------------------------------
+
+_MEDIA_UNWRAP_LIMIT = 8
+
+
+class _MediaSplitError(Exception):
+    """A required module is not the one this load's listener runs. Closes media; carries nothing."""
+
+
+def _media_require(ok: bool) -> None:
+    if not ok:
+        raise _MediaSplitError
+
+
+def _media_function(value: object) -> FunctionType | None:
+    """The exact plain function `value` is, following a `__wrapped__` chain of at most eight steps;
+    `None` for anything else (a partial, a builtin, a callable object)."""
+    for _ in range(_MEDIA_UNWRAP_LIMIT + 1):
+        if type(value) is not FunctionType:
+            return None
+        wrapped = value.__dict__.get("__wrapped__")
+        if wrapped is None:
+            return value
+        value = wrapped
+    raise _MediaSplitError
+
+
+def _media_prove_function(value: object, module: ModuleType) -> None:
+    """P-fn: the function's executing namespace IS `module`."""
+    function = _media_function(value)
+    _media_require(function is not None and function.__globals__ is vars(module))
+
+
+def _media_prove_method(cls: object, name: str, module: ModuleType) -> None:
+    """P-meth: a plain function in the class body of a class the listener actually uses. A class's
+    `__module__` string is never proof."""
+    _media_require(isinstance(cls, type))
+    _media_prove_function(vars(cls).get(name), module)
+
+
+def _media_sweep(modules: dict[str, ModuleType]) -> None:
+    """Cross-copy coherence. `modules` maps each member's own `__name__` to the member; names only
+    ROUTE a comparison, the proof is the `is`. A module, plain function or top-level class in one
+    member that names another member must be that member's own object."""
+    for module in modules.values():
+        for _, value in tuple(vars(module).items()):
+            if type(value) is ModuleType:
+                target = modules.get(value.__name__)
+                _media_require(target is None or value is target)
+                continue
+            function = _media_function(value) if type(value) is FunctionType else None
+            if function is not None:
+                target = modules.get(function.__module__)
+                _media_require(target is None or function.__globals__ is vars(target))
+            elif isinstance(value, type) and value.__qualname__ == value.__name__:
+                target = modules.get(value.__module__)
+                _media_require(target is None or vars(target).get(value.__name__) is value)
+
+
+def _media_prove_core(adapter: Any, ctx: Any, media_gate: ModuleType) -> dict[str, ModuleType]:
+    """The authority/transport/context core, proven against the objects this listener uses."""
+    own = _LOAD_SELF
+    _media_require(type(own) is ModuleType and vars(own) is globals())  # P-root
+    _media_require(type(adapter) is HmpAdapter)
+
+    ctx_cls = vars(request_ctx)["ServerContext"]
+    _media_require(vars(server)["ServerContext"] is ctx_cls and type(ctx) is ctx_cls)
+    _media_prove_method(ctx_cls, "approval_qualification_open", request_ctx)
+    _media_prove_method(ctx_cls, "media_qualification_open", request_ctx)
+    for name in ("context", "bearer"):
+        _media_prove_function(vars(server)[name], request_ctx)
+    _media_require(vars(server)["CTX_KEY"] is vars(request_ctx)["CTX_KEY"])
+    _media_prove_function(vars(server)["build_app"], server)
+    _media_prove_function(vars(request_ctx)["log_event"], logging_policy)
+
+    authenticator = vars(request_ctx)["Authenticator"]
+    _media_require(vars(auth)["Authenticator"] is authenticator)
+    _media_prove_method(authenticator, "authenticate", auth)
+    crypto = vars(auth)["crypto"]  # P-ref
+    _media_require(type(crypto) is ModuleType)
+    _media_prove_function(vars(crypto)["sha256"], crypto)
+    wire = vars(server)["wire"]  # P-ref
+    _media_require(type(wire) is ModuleType and vars(request_ctx)["wire"] is wire)
+    _media_prove_function(vars(wire)["parse_body"], wire)
+
+    error = vars(contract)["HmpError"]
+    for member in (server, request_ctx, _authorize_module):
+        _media_require(vars(member)["HmpError"] is error)
+
+    reads_cls = vars(_reads_module)["Reads"]
+    _media_require(vars(own)["Reads"] is reads_cls and type(ctx.reads) is reads_cls)
+    _media_prove_method(reads_cls, "_media_result", _reads_module)
+    _media_prove_function(vars(server)["require_bot_authorized"], _reads_module)
+    _media_prove_function(vars(_reads_module)["_accept_media"], _reads_module)
+    authorize_cls = vars(_authorize_module)["Authorize"]
+    _media_require(vars(own)["Authorize"] is authorize_cls and type(ctx.authorize) is authorize_cls)
+    _media_prove_method(authorize_cls, "authorize", _authorize_module)
+    _media_prove_function(vars(server)["ensure_chat"], _authorize_module)
+    store_cls = vars(_store_module)["Store"]
+    _media_require(vars(own)["Store"] is store_cls and type(ctx.store) is store_cls)
+    _media_prove_method(store_cls, "owner_controls_decision", _store_module)
+
+    _media_require(type(ctx.compat) is compat.CompatResult)
+    _media_require(vars(media_gate)["compat"] is compat)
+    _media_prove_function(vars(compat)["default_gate"], compat)
+    _media_prove_function(vars(media_gate)["media_listener_qualifier"], media_gate)
+
+    # This load's bridge cache (filled by the supported block above): classes and module.
+    classes, bridge_module = _bridge_classes_cache, _bridge_module_cache
+    _media_require(classes is not None and type(bridge_module) is ModuleType)
+    bridge_cls, directory_cls = classes  # type: ignore[misc]
+    _media_require(type(ctx.bridge) is bridge_cls)
+    _media_require(vars(bridge_module)["HermesReadBridge"] is bridge_cls)
+    _media_require(vars(bridge_module)["StoreDirectory"] is directory_cls)
+    _media_prove_method(bridge_cls, "_media_rows", bridge_module)
+    _media_prove_function(vars(bridge_module)["_local_media_modules"], bridge_module)
+    _media_prove_function(vars(_reads_module)["_local_media_modules"], _reads_module)
+    return {
+        "adapter": own,
+        "server": server,
+        "request_ctx": request_ctx,
+        "auth": auth,
+        "crypto": crypto,
+        "contract": contract,
+        "reads": _reads_module,
+        "authorize": _authorize_module,
+        "store": _store_module,
+        "compat": compat,
+        "wire": wire,
+        "logging_policy": logging_policy,
+        "bridge": bridge_module,
+        "local_media_gate": media_gate,
+    }
+
+
+def _media_prove_chain(
+    bridge_module: ModuleType, reads_module: ModuleType
+) -> dict[str, ModuleType]:
+    """The media chain, from the caches the media sites themselves read. These two calls prove and
+    return the actual cache objects that exist inside the gate's disk bracket. They fill a cache
+    that is still empty, but an inert media twin on an unadmitted listener may have filled it
+    earlier; no claim is made that every cached module was first imported here."""
+    chain = vars(bridge_module)["_local_media_modules"]()
+    reads_media = vars(reads_module)["_local_media_modules"]()
+    _media_require(type(chain) is tuple and len(chain) == 7)
+    _media_require(type(reads_media) is tuple and len(reads_media) == 1)
+    _media_require(all(type(member) is ModuleType for member in (*chain, *reads_media)))
+    sidecar, candidate, active_scan, result, file_safety, active_batch, binding = chain
+    _media_require(reads_media[0] is sidecar)
+    _media_require(vars(candidate)["_scan"] is active_scan)  # P-ref
+    _media_require(vars(result)["_scan"] is active_scan)
+    _media_require(vars(active_batch)["_scan"] is active_scan)
+    _media_require(vars(active_batch)["_candidate"] is candidate)
+    _media_require(vars(binding)["_batch"] is active_batch)
+    _media_require(vars(binding)["_sidecar"] is sidecar)
+    _media_prove_function(vars(candidate)["collect_candidates"], candidate)
+    _media_prove_function(vars(candidate)["classify_candidate"], file_safety)
+    _media_prove_function(vars(candidate)["parse_image_result"], result)
+    _media_prove_function(vars(active_batch)["scan_active_batch"], active_batch)
+    _media_prove_function(vars(binding)["classify"], binding)
+    _media_prove_function(vars(sidecar)["_text"], sidecar)
+    return {
+        "local_media_sidecar": sidecar,
+        "local_media_candidate": candidate,
+        "local_media_active_scan": active_scan,
+        "local_media_result": result,
+        "local_media_file_safety": file_safety,
+        "local_media_active_batch": active_batch,
+        "local_media_batch_binding": binding,
+    }
+
+
+def _media_closed() -> bool:
+    return False
+
+
+def _media_qualifier(adapter: Any, ctx: Any, result: compat.CompatResult) -> Callable[[], bool]:
+    """BLOCKING (the gate reads files; `open_components` already runs off the loop). The listener's
+    media admission callback, or the constant closed one. Only an exact SUPPORTED read result with
+    an exact `BuildIdentity` may import the gate at all. A wrong gate copy is refused BEFORE the
+    factory runs: the factory is never called and the anchor cell never transitions. (Importing a
+    gate copy may itself create the anchor through its import-time `setdefault`; that is allowed
+    S6a behavior and no zero-effect claim is made.) The factory gets only the identity and this
+    load's preload, whatever the live media flag says. An ordinary exception closes; a
+    `BaseException` propagates to `open_components`, which closes the store."""
+    try:
+        if result.supported is not True or type(result.identity) is not compat.BuildIdentity:
+            return _media_closed
+        from . import local_media_gate as media_gate
+
+        if (
+            type(media_gate) is not ModuleType
+            or media_gate.__package__ != __package__
+            or vars(media_gate).get("compat") is not compat
+        ):
+            return _media_closed
+
+        def _preload() -> tuple[ModuleType, ...]:
+            core = _media_prove_core(adapter, ctx, media_gate)
+            chain = _media_prove_chain(core["bridge"], core["reads"])
+            named: dict[str, ModuleType] = {}
+            for member in (*core.values(), *chain.values()):
+                _media_require(type(member.__name__) is str and member.__name__ not in named)
+                named[member.__name__] = member
+            _media_sweep(named)
+            return tuple(named.values())
+
+        return media_gate.media_listener_qualifier(result.identity, preload=_preload)
+    except Exception:
+        return _media_closed
 
 
 def open_components(adapter: Any) -> server.ServerContext:
@@ -154,6 +404,12 @@ def open_components(adapter: Any) -> server.ServerContext:
         block = live_extra.get("cron") if isinstance(live_extra, Mapping) else None
         return isinstance(block, Mapping) and block.get("enabled") is True
 
+    def _read_local_media_enabled() -> bool:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        block = live_extra.get("local_media") if isinstance(live_extra, Mapping) else None
+        return isinstance(block, Mapping) and block.get("enabled") is True
+
     def _read_model_enabled() -> bool:
         live_config = getattr(adapter, "config", None)
         live_extra = getattr(live_config, "extra", None)
@@ -174,6 +430,7 @@ def open_components(adapter: Any) -> server.ServerContext:
         cron_qualified=lambda: result.supported and mobile_cron.qualified_build(),
         model_flag=_read_model_enabled,
         model_qualified=lambda: result.supported and mobile_model.qualified_build(),
+        media_flag=_read_local_media_enabled,
     )
     if result.supported:
         bridge_cls, directory_cls = _bridge_classes()
@@ -219,6 +476,13 @@ def open_components(adapter: Any) -> server.ServerContext:
             approval_timeout=_approval_timeout,
             approval_qualified=ctx.approval_qualification_open,
         )
+        # S6b: bound before the hooks and the listener exist. A `BaseException` (the gate lets one
+        # escape) closes the store and leaves the adapter without hooks; nothing else is held.
+        try:
+            ctx.media_qualified = _media_qualifier(adapter, ctx, result)
+        except BaseException:
+            store.close()
+            raise
         adapter._hmp_hooks = prompts.AdapterHooks(  # type: ignore[attr-defined]
             store=prompt_store,
             bridge=ctx.bridge,

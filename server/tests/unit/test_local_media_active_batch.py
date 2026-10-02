@@ -1100,7 +1100,8 @@ def test_fresh_interpreter_loads_only_the_accepted_chain_and_no_production_modul
         "local_media_sidecar",
     }
     # C6b: only the binding (module scope) and the bridge (function scope) may name the batch.
-    named = {"local_media_active_batch", "local_media_batch_binding", "bridge"}
+    # S6b: the adapter's preload names it as a required-set member it proves (it never imports it).
+    named = {"local_media_active_batch", "local_media_batch_binding", "bridge", "adapter"}
     for path in PACKAGE.glob("*.py"):
         if path.stem not in named:
             assert "local_media_active_batch" not in path.read_text(encoding="utf-8"), path.name

@@ -1,10 +1,12 @@
 """Local-media process qualification gate (S6a; ROOT_DECISIONS "S6 media qualification design").
 
-INERT: no production module imports this, no flag selects it, and the shipped manifest has no
-entries, so every call returns the constant closed callback. It imports only `compat` and the
-standard library: never `adapter`, `bridge`, `server`, `request_ctx` or any Hermes module (the
-dependency probe lives in `compat`). Module import does no filesystem or native access; the only
-import-time effect is one atomic `setdefault` of the process anchor below.
+No route consumes it and the shipped manifest has no entries, so every call returns the constant
+closed callback. Since S6b only `adapter.py` imports it, function-locally and only for a SUPPORTED
+read result with an exact `BuildIdentity`; no flag selects it and it runs whether or not any media
+flag is set. It imports only `compat` and the standard library: never `adapter`, `bridge`, `server`,
+`request_ctx` or any Hermes module (the dependency probe lives in `compat`). Module import does no
+filesystem or native access; the only import-time effect is one atomic `setdefault` of the process
+anchor below.
 
 What a listener callback proves, at each call: the listed native files, the listed HMP top-level
 sources and the Git SHA hash to the values in a currently present exact manifest entry, they equal

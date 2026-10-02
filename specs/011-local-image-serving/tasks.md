@@ -14,6 +14,7 @@
 - [x] **S3** Registry: lock, TTL, LRU, idempotent mint, first-digest CAS (T2, T8). Root accepted the inert slice after independent Opus delta review, causal foreign-snapshot/caller tests, and 152 focused registry/layout tests on 2026-10-01. No fetch authority or serving claim.
 - [ ] **S6** `local_media.enabled` default-off flag, empty manifest, dedicated media file list, start baseline plus fresh disk equality, off-loop (T18).
 - [x] **S6a** Inert process qualification gate and empty manifest. Root accepted source after independent Opus original review, Sonnet hardening delta review and 392 focused tests. No listener, flag, entry or admission; S6 remains open.
+- [ ] **S6b** Bind the S6a gate to the adapter, request context and per-load media caches (static required set, actual-object proofs, strict flag fields). Source and focused tests written under the [S6b freeze](ROOT_DECISIONS.md#s6b-listener-binding-freeze-2026-10-01); bounded source independently reviewed and accepted after repair, with 138 root cases passing. No entry, route consumer or admission; S6 stays open.
 - [x] **C6a** Request-scoped active-history batch module and independent security review, following the C6 freeze; accepted single scanner unchanged. Source acceptance only; native cost/memory and C6b remain open.
 - [ ] **C6b** Bind that reviewed batch to the same native database/home capture, then root exact-native cost, concurrent-writer and mint-memory evidence. C6 remains open.
 - [ ] **S4** Descriptor emission in handlers, 128 cap (T1, T5, T6, T7). Needs S2, S3, S6 and C6 admission.
@@ -246,3 +247,41 @@ No approval gate, live plugin, source qualification entry or device build change
 | `local_media_supported_builds.json` | `4efc1f0a44fcd844d77a64320bd6fd92781604368cc018d6adbe8cdbb5db4f46` |
 | `test_local_media_gate.py` | `4f3f02ae7a28f6a13ced3b5d0ff7ce85d0795fb0fdf864471b815f4a9841c416` |
 | `test_skeleton_layout.py` | `52f19ad67250c3efda1d780b300afb5cd7dcc4fb2e77d8f2c01566fe1fde59ed` |
+
+## S6b listener binding source written (2026-10-01, review pending)
+
+Source and focused tests only; **S6, S6b, S4 and S5 stay unchecked** and no reviewer checklist item is
+marked. Root review and an independent Opus security review of the exact implementation are still
+required. Implements the [S6b freeze](ROOT_DECISIONS.md#s6b-listener-binding-freeze-2026-10-01): on a
+SUPPORTED build only, `adapter.open_components` calls `local_media_gate.media_listener_qualifier` with
+the exact identity and a static preload. The preload proves 21 required modules against the objects
+this listener runs (plain-function and class-body-method globals, static module references, the
+adapter's own namespace) and sweeps them for split copies by identity; any failure raises and the gate
+closes. `ServerContext` gains callable `media_flag` and `media_qualified` fields (default closed) with
+exact-True accessors; no route, manifest entry, consumer, dependency inventory or approval-gate change.
+`bridge.py` and `reads.py` gain per-load set-once media module caches that their media sites read in
+place of function-local imports; the old read methods are byte-identical. A first twin call on a
+closed listener may fill a cache (the reviewed design), so the caches do not fill only inside the
+preload. The gate edit is its module docstring only (AST-identical to `fb8ae21e` apart from the module
+docstring; only the AST was compared, no loaded or compiled bytecode claim); its pin is renewed below.
+An unlocked `adapter._bridge_classes()` can publish its two caches from different package copies if
+first calls race a whole-package eviction; the preload then refuses and the first factory latches
+closed. That is a fail-closed availability residual (restart to recover), not an authority gap. The native-inventory closure remains a separate later slice before any entry.
+The full evidence, residuals and the unverified gates are in the S6b author report, not here.
+
+| File | SHA-256 (S6b) |
+| --- | --- |
+| `local_media_gate.py` (docstring only) | `4cb4646a0722c7a28d4f4fc1c8afcf3ac492e709799af778deb067300b7d9e25` |
+| `test_skeleton_layout.py` | `619497a5a68af36fca7bbcce3dfd6cde802ef71a49745dcc47bf67bc79602325` |
+| `test_local_media_listener_binding.py` | `27fc47b49e2bae422e61b8e6a0b1f73dbac6688f2a76d0afa48f6e299ef755b4` |
+
+
+## S6b repaired source acceptance (2026-10-01)
+
+The source slice is accepted after independent review of the original implementation
+and its comment/test repair. Root reverified the frozen 15-file candidate and the
+138-case focused result. The independent delta review confirmed 138 cases and 13
+causal mutant kills. Reviewer checkboxes and S6/S6b stay open for their full scope.
+Three earlier baseline contract-table failures remain recorded; no full-suite green
+is claimed. No build entry, native admission or serving route is present. See the
+[root acceptance scope](ROOT_DECISIONS.md#s6b-bounded-source-acceptance--2026-10-01).

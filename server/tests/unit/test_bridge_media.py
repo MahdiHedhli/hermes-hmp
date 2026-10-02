@@ -262,9 +262,9 @@ def guard_module_inertness(module_path: Path) -> None:
         "b.latest_with_media(r, 5)\n"
         "got = set(media())\n"
         "ok = {'local_media_active_scan', 'local_media_file_safety', 'local_media_result',\n"
-        "      'local_media_sidecar', 'local_media_candidate'}\n"
-        "assert {'hmp_plugin.' + n for n in ok} >= got, got\n"
-        "assert 'hmp_plugin.local_media_candidate' in got, got\n"
+        "      'local_media_sidecar', 'local_media_candidate', 'local_media_active_batch',\n"
+        "      'local_media_batch_binding'}\n"
+        "assert {'hmp_plugin.' + n for n in ok} == got, got  # S6b: the whole per-load cache\n"
     )
     env = {**os.environ, "PYTHONPATH": str(PACKAGE.parent)}
     done = subprocess.run(

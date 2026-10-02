@@ -1834,20 +1834,14 @@ def _bridge_methods() -> dict[str, ast.FunctionDef]:
 NEW_METHODS = ("_phone_proof", "_bot_chat_proof", "media_eligibility", "bind_media_batch")
 
 
-def test_new_bridge_methods_import_statically_function_local_and_log_nothing() -> None:
+def test_new_bridge_methods_read_the_per_load_cache_import_nothing_and_log_nothing() -> None:
+    # S6b: the binding sites read the per-load module cache; no import statement of any kind
+    # remains in them (a request-time import could resolve a different package copy).
     methods = _bridge_methods()
-    allowed = {
-        "local_media_active_batch",
-        "local_media_batch_binding",
-        "local_media_sidecar",
-    }
     for name in NEW_METHODS:
         node = methods[name]
         for inner in ast.walk(node):
-            if isinstance(inner, ast.Import):
-                raise AssertionError(f"{name}: plain import")
-            if isinstance(inner, ast.ImportFrom):
-                assert inner.level == 1 and inner.module in allowed, (name, inner.module)
+            assert not isinstance(inner, ast.Import | ast.ImportFrom), f"{name}: import"
             if isinstance(inner, ast.Call):
                 target = inner.func
                 label = target.id if isinstance(target, ast.Name) else getattr(target, "attr", "")
@@ -1896,7 +1890,9 @@ def test_bind_media_batch_takes_only_the_sidecar() -> None:
 OLD_METHOD_HASHES = {
     "latest": "3c37321861c4c291bff35dc03a8a0da6b11b83c737359d2267a04700d90eac44",
     "after": "28eef086f1faa314a2e0cc56ec4158c4d68b58ce89ff1a06c4739ad63634036f",
-    "_media_rows": "30de9ef6460c21534be8e05fb8b792533dde723e7c06456aae8b75b336cc5e05",
+    # S6b (RC1): the only deliberate change: its function-local media imports now read the
+    # per-load cache. The old text-read methods around it are unchanged.
+    "_media_rows": "a3f0d4640d56ab2a9362f0154fa94aebde43f8e58d09acfd6e57f6117426055b",
     "latest_with_media": "8e9391e5f5c7963628dc2d83ec32aca20e8b6d3122e92bb58d9d7ce07d6c23c3",
     "after_with_media": "45302022098514fd35cec337867e9190f6a99cc29d4dc7d2a6ac4b8f01c393dc",
     "_latest_query": "5fa2e17bacc1ac1854c5d0bcb27c861868ace332830803aab23aeaa9e6b66394",

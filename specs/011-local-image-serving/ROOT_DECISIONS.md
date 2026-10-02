@@ -370,3 +370,109 @@ test suite and T12. They confer no approval/write qualification. Compatibility w
 Native callee closure, bytecode equivalence, process admission, memory ceilings, platform and
 phone gates remain open. The existing approval gate's native-only fingerprint and reloadable
 module latch limitations remain separately recorded; this new media design does not repair them.
+
+## S6b listener binding freeze (2026-10-01)
+
+Root adopts the independent Opus `READY_WITH_DECISIONS` advice as architecture, with RC1–RC5
+resolved below. It accepts no implementation, route, manifest entry, live installation or phone
+result. The current C6b source is included in the module set; the older architecture review did
+not inspect that source. Security review of the exact implementation remains required.
+
+- **RC1:** Allow per-load, set-once module caches in `bridge.py` and `reads.py`. Preload fills
+  them inside the qualification disk bracket; media twins subsequently use those same objects.
+  Replace only media-twin function-local imports. Old read/send behavior stays unchanged.
+- **RC2:** The static required set is adapter, server, request_ctx, auth, crypto, contract,
+  reads, authorize, store, compat, wire, logging_policy, bridge, local_media_gate,
+  local_media_sidecar, local_media_candidate, local_media_active_scan, local_media_result,
+  local_media_file_safety, local_media_active_batch and local_media_batch_binding. Registry and
+  raster join the set when S4/S5 reach them. Captured modules are candidates until proven against
+  actual listener use. Plain function globals (unwrap at most eight steps), class-body method
+  globals, static module references and adapter namespace identity supply the proof. Sweep the
+  set for split module/function/top-level-class references using identity; names only route the
+  comparison. No fabricated module, heap scan or preload-time module-name lookup is allowed.
+- **RC3:** Capture `_LOAD_SELF` as a module candidate at adapter import and prove
+  `vars(_LOAD_SELF) is globals()` inside the preload. Capture the other non-media candidates
+  through static adapter imports. Preserve the lazy bridge cache, extended to hold its actual
+  module, and prove concrete context instances/classes and the shared error/context objects.
+- **RC4:** Permit a docstring-only change to `local_media_gate.py`, with its pin renewed. Gate
+  behavior, manifest and `MEDIA_DEPENDENCIES` are unchanged. Only `supported is True` with an exact
+  BuildIdentity may import the gate; prove the gate's package and compat binding before calling
+  its factory. Call the factory with only the identity and `preload=`. It runs regardless of the
+  live media flag and cannot rebaseline. Ordinary exceptions close; BaseException propagates
+  after closing the store, before hooks/listener activation.
+- **RC5:** Before any manifest entry, perform a separate native-inventory slice covering actual
+  profile/secret/terminal scope owners, profile-home resolution, SessionDB MRO method owners,
+  image-provider storage and the format-only postprocessor callees. Include terminal lifecycle
+  and credential-file mapping rather than omit them. This is not permission to edit the native
+  inventory in S6b, and does not claim recursive closure or producer/provider qualification.
+
+ServerContext gets callable `media_flag` and `media_qualified` fields, both default closed, and
+strict exact-True accessors that close on exceptions and log only the exception type. The flag
+re-reads live configuration. Qualification is blocking and must later be invoked on the default
+executor; no route consumes it in S6b. S4/S5 must consume a fresh request-local result immediately
+before synchronous owner/flag/TTL/CAS mint or prepare, with no intervening await and no cache.
+
+Require causal coverage of unsupported/truthy/missing-dependency states, empty-manifest closure,
+synthetic admission using actual objects, whole-package eviction and old-listener cache identity,
+split edges, foreign homes, inert init, strict/live flag, callable fields, no profile authority,
+BaseException cleanup, unchanged approval binding and existing route bytes, AST import/preload
+constraints, and reconnect in the same load. Synthetic admissions use isolated package/native
+copies; fixture-only anchor restoration never becomes a production seam.
+
+Residuals remain: import/eviction races can latch closure until process restart; abandoned module
+loader threads can block preload indefinitely; native lazy-import objects are not bound; the
+sweep does not attest partial/lru-cache callables or modules outside its set; bytecode/ABA,
+same-account tampering, interpreter/platform, unbounded Git/kernel latency and per-check cost
+are not qualified. The source slice does not fix local MEDIA display or deliver a media feature.
+
+
+S6b root interpretation after the author handoff: keep the reviewed lazy, set-once cache
+helpers. An inert media twin can first fill them on an unadmitted listener; no production
+handler selects those twins. The later preload proves and returns the actual existing cache
+objects inside its disk bracket, rather than claiming that every cached module's first import
+occurred there. This is part of the retained loaded-bytecode/first-import limitation, not new
+media authority. A future S4 handler must qualify before selecting a twin and use the old read
+path when closed. Reconnect must not refill an existing cache or switch its objects after
+whole-package eviction. Exact source security review remains required.
+
+
+### S6b root repair checkpoint — 2026-10-01
+
+The bounded repair changes only comments/docstrings and tests; root compared the five runtime
+module ASTs against the original frozen bytes with docstrings stripped and found no behavior
+change. The original and repair inventories remain private immutable evidence. Acceptance is
+still pending an independent delta review of the exact root-frozen repaired files.
+
+Retain the availability residual found by that review: `_bridge_classes()` publishes its
+module and class caches in two unlocked assignments. Concurrent first calls racing whole-package
+eviction can give the preload split copies. Its identity proofs refuse that mixture and the first
+factory latches closed until restart. This is fail-closed availability behavior; no receipt,
+serving admission or arbitrary concurrent-reload recovery is claimed.
+
+The repair author's required developer-skill read was omitted after searching the wrong skill
+location. That omission remains in the original private report. Root has loaded installed skill
+1.3.50 at its actual path and requires the independent delta reviewer to read it explicitly.
+Do not rewrite historical reading records or claim the author read guidance they did not read.
+The slice changes no native integration, wire, inventory, manifest entry or serving consumer.
+
+
+### S6b bounded source acceptance — 2026-10-01
+
+Root accepted the repaired listener-binding source after independent Opus delta review.
+The 15 repaired file hashes matched root's immutable inventory; the repair changed
+comments/docstrings and tests, with runtime AST behavior unchanged. Root's focused
+138 cases passed. Independent review confirmed 138 cases and 13 causal mutant kills.
+The earlier full suite retains three baseline contract-table failures; no full-suite
+green claim is made. The original review and repaired delta together cover this source
+slice only. S6, S4/S5 serving consumers and every admission/release gate remain open.
+
+The cache race closes the process until restart when it affects the first supported
+factory. Otherwise the affected load stays closed until coherent reload or restart.
+With the empty build manifest the preload is not reached, so this race currently has
+no media effect; ordinary text and send paths are unaffected. Dynamic-lookup pins are
+syntactic and bounded; causal eviction tests cover the exercised sites. Fixture spies
+prove module selection, not native cost. No arbitrary-callback termination claim is made.
+
+Native inventory ownership, real-loader registration, native binding cost, registry/raster
+joining, serving routes, T12 memory, device and release checks remain required. No manifest
+entry, production media consumer, live installation or local image display is added here.

@@ -105,13 +105,19 @@ OPTIONAL_MODULES = sorted(m[:-3] for m in CONTRACT_MODULES if m.startswith("loca
 ALLOWED_OPTIONAL_IMPORTS = {
     "local_media_result": {"local_media_active_scan"},
     # S2c: the bridge may load exactly these two, only below a function boundary (pinned below).
-    # C6b: the same function-local rule for the batch scan and its binding result.
+    # C6b: the same function-local rule for the batch scan and its binding result. S6b: the one
+    # cache-fill function `_local_media_modules` loads the whole chain the preload must prove.
     "bridge": {
         "local_media_active_batch",
+        "local_media_active_scan",
         "local_media_batch_binding",
         "local_media_candidate",
+        "local_media_file_safety",
+        "local_media_result",
         "local_media_sidecar",
     },
+    # S6b: the adapter loads only the gate, inside `_media_qualifier`, after the supported check.
+    "adapter": {"local_media_gate"},
     # S2d: the read cores load the carrier only below a function boundary (pinned below).
     "reads": {"local_media_sidecar"},
     "local_media_candidate": {
@@ -154,7 +160,7 @@ MODULE_SCOPE_ONLY = {
     "local_media_active_batch",
     "local_media_batch_binding",
 }
-FUNCTION_SCOPE_ONLY = {"bridge", "reads"}
+FUNCTION_SCOPE_ONLY = {"adapter", "bridge", "reads"}
 
 
 def _import_scopes(source: str) -> list[str]:
@@ -206,6 +212,7 @@ def test_real_modules_use_the_exact_scopes() -> None:
     batch = (PACKAGE / "local_media_active_batch.py").read_text(encoding="utf-8")
     assert _local_media_imports(batch) == {"local_media_active_scan", "local_media_candidate"}
     assert scopes("bridge.py") == {"function"}
+    assert scopes("adapter.py") == {"function"}
     assert scopes("reads.py") == {"function"}
     reads = (PACKAGE / "reads.py").read_text(encoding="utf-8")
     assert _local_media_imports(reads) == {"local_media_sidecar"}
@@ -252,6 +259,20 @@ def test_bridge_and_reads_imports_must_be_function_local(stem: str, form: str, w
 
 
 @pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))
+@pytest.mark.parametrize("where", ["module", "class", "if", "try"])
+def test_adapter_may_import_the_gate_only_inside_a_function(form: str, where: str) -> None:
+    assert _imports_allowed("adapter", _wrapped(form, "function").format(m="gate"))  # control
+    assert not _imports_allowed("adapter", _wrapped(form, where).format(m="gate"))
+
+
+@pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))
+def test_adapter_may_import_no_other_media_module(form: str) -> None:
+    for module in ("sidecar", "candidate", "registry", "active_batch", "batch_binding"):
+        source = _wrapped(form, "function").format(m=module)
+        assert not _imports_allowed("adapter", source), module
+
+
+@pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))
 def test_reads_may_import_only_the_sidecar(form: str) -> None:
     for module in ("candidate", "result", "registry", "active_scan", "file_safety"):
         source = _wrapped(form, "function").format(m=module)
@@ -291,8 +312,11 @@ def test_bridge_media_imports_are_function_local_and_exact() -> None:
     bridge = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
     assert _local_media_imports(bridge) == {
         "local_media_active_batch",
+        "local_media_active_scan",
         "local_media_batch_binding",
         "local_media_candidate",
+        "local_media_file_safety",
+        "local_media_result",
         "local_media_sidecar",
     }
     assert not _module_scope_local_media_imports(bridge)

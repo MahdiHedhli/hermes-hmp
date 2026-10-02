@@ -43,8 +43,10 @@ import json
 import os
 import re
 import secrets
+import threading
 from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
+from types import ModuleType
 from typing import Any, ClassVar, Protocol
 from urllib.parse import quote
 
@@ -631,6 +633,49 @@ def _cmid(platform_message_id: object, chat_id: str | None) -> str | None:
     return cmid if _CMID_RE.fullmatch(cmid) else None
 
 
+# Per-load media module cache (S6b, RC1). Set once, never refilled: the media twins and the C6b
+# binding read the modules from here, never from a request-time import, so a later whole-package
+# eviction cannot hand a running listener a different copy. Order (the adapter's preload and the
+# sites below rely on it): sidecar, candidate, active_scan, result, file_safety, active_batch,
+# batch_binding. For an admitted listener the first fill happens inside the adapter's preload,
+# inside the gate's disk bracket; on a listener whose qualifier is closed a media twin may fill it
+# first, which no consumer relies on. Start-up and the old read methods never call it.
+_local_media_cache: tuple[ModuleType, ...] | None = None
+_local_media_lock = threading.Lock()
+
+
+def _local_media_modules() -> tuple[ModuleType, ...]:
+    global _local_media_cache
+    cached = _local_media_cache
+    if cached is not None:
+        return cached
+    # The import statement runs unlocked (an import lock may be held elsewhere); only the
+    # set-once publication is locked, so concurrent first calls agree on one tuple.
+    from . import (
+        local_media_active_batch,
+        local_media_active_scan,
+        local_media_batch_binding,
+        local_media_candidate,
+        local_media_file_safety,
+        local_media_result,
+        local_media_sidecar,
+    )
+
+    fresh = (
+        local_media_sidecar,
+        local_media_candidate,
+        local_media_active_scan,
+        local_media_result,
+        local_media_file_safety,
+        local_media_active_batch,
+        local_media_batch_binding,
+    )
+    with _local_media_lock:
+        if _local_media_cache is None:
+            _local_media_cache = fresh
+        return _local_media_cache
+
+
 class HermesReadBridge:
     """`contract.ReadBridge` over a running Hermes gateway (HMP v1 §12)."""
 
@@ -1028,14 +1073,14 @@ class HermesReadBridge:
     def _media_rows(self, ref: ConversationRef, query: tuple[Path, str, object]) -> Any:
         home, tip, raw = query
         parsed = self._rows(ref, raw)  # fails exactly like the old path, before any media code
-        # Function-local: start-up and the old read methods never load the local media modules.
-        from .local_media_candidate import collect_candidates
-        from .local_media_sidecar import (
-            MAX_ROWS,
-            BridgeMediaRows,
-            MediaCarrierRefusal,
-            MediaRowsQuery,
-        )
+        # Start-up and the old read methods never load the local media modules; these come from
+        # the per-load cache, never a request-time import.
+        sidecar, candidate = _local_media_modules()[:2]
+        collect_candidates = candidate.collect_candidates
+        MAX_ROWS = sidecar.MAX_ROWS  # noqa: N806
+        BridgeMediaRows = sidecar.BridgeMediaRows  # noqa: N806
+        MediaCarrierRefusal = sidecar.MediaCarrierRefusal  # noqa: N806
+        MediaRowsQuery = sidecar.MediaRowsQuery  # noqa: N806
 
         # Media-only downgrade: metadata the carrier cannot represent (native ids and tips have no
         # bound of their own) or an oversized page returns the SAME parsed list, as the old method
@@ -1075,7 +1120,9 @@ class HermesReadBridge:
         """The caller's own existing conversation is exactly the bound session, resolved strictly
         (no `_tip` fallback). A compressed own ancestor qualifies; a browsed projected tip that
         differs from the own bound id does not."""
-        from .local_media_batch_binding import PROOF_NEGATIVE, PROOF_UNCERTAIN, proven
+        binding = _local_media_modules()[6]
+        PROOF_NEGATIVE, PROOF_UNCERTAIN = binding.PROOF_NEGATIVE, binding.PROOF_UNCERTAIN  # noqa: N806
+        proven = binding.proven
 
         try:
             own = self.conversation_ref(user_id, profile)
@@ -1105,7 +1152,9 @@ class HermesReadBridge:
         unchanged parent walk from the tip, the bound session in it and resolving to the same tip,
         and strict root/holder/tip row facts (D1). No mirrored fork predicate and no
         `resolve_bot_chat`."""
-        from .local_media_batch_binding import PROOF_NEGATIVE, PROOF_UNCERTAIN, proven
+        binding = _local_media_modules()[6]
+        PROOF_NEGATIVE, PROOF_UNCERTAIN = binding.PROOF_NEGATIVE, binding.PROOF_UNCERTAIN  # noqa: N806
+        proven = binding.proven
 
         try:
             row = db.get_session_by_title(_CANONICAL_BOT_CHAT_TITLE)
@@ -1184,7 +1233,9 @@ class HermesReadBridge:
         Both kinds are always evaluated; an uncertain proof in either closes the result, exactly
         one proven kind may be `ok`, and its tip must equal `expected_tip`. Mint and (later) fetch
         share this one helper. It consults no `MediaOrigin`, hint or text, and no authorization."""
-        from .local_media_batch_binding import ELIGIBILITY_UNCERTAIN, classify
+        binding = _local_media_modules()[6]
+        ELIGIBILITY_UNCERTAIN = binding.ELIGIBILITY_UNCERTAIN  # noqa: N806
+        classify = binding.classify
 
         values = (user_id, profile, session_id, expected_tip)
         if any(type(value) is not str or not value for value in values):
@@ -1200,17 +1251,18 @@ class HermesReadBridge:
         classified, then judged by exactly one fresh `scan_active_batch` whose `current_tip`
         re-runs the full classification (both kinds). Any media-only failure is a closed reason;
         nothing is logged and no old read result changes. It never raises for such a failure."""
-        from .local_media_active_batch import scan_active_batch
-        from .local_media_batch_binding import (
-            ELIGIBILITY_UNCERTAIN,
-            HOME_INVALID,
-            NOT_CANDIDATES,
-            OK,
-            PROVENANCE_MISMATCH,
-            MediaBatchBinding,
-            strict_home,
-        )
-        from .local_media_sidecar import MediaSidecar, SidecarStatus
+        modules = _local_media_modules()
+        sidecar_module, binding = modules[0], modules[6]
+        scan_active_batch = modules[5].scan_active_batch
+        ELIGIBILITY_UNCERTAIN = binding.ELIGIBILITY_UNCERTAIN  # noqa: N806
+        HOME_INVALID = binding.HOME_INVALID  # noqa: N806
+        NOT_CANDIDATES = binding.NOT_CANDIDATES  # noqa: N806
+        OK = binding.OK  # noqa: N806
+        PROVENANCE_MISMATCH = binding.PROVENANCE_MISMATCH  # noqa: N806
+        MediaBatchBinding = binding.MediaBatchBinding  # noqa: N806
+        strict_home = binding.strict_home
+        MediaSidecar = sidecar_module.MediaSidecar  # noqa: N806
+        SidecarStatus = sidecar_module.SidecarStatus  # noqa: N806
 
         if type(sidecar) is not MediaSidecar:
             return None
