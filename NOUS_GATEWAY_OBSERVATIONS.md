@@ -8,8 +8,9 @@ model from `0.21.5` (`2026.9.24`); later or unknown builds attempt the required 
 Exact commit or fingerprint tests are sample evidence. Reviewed HMP source
 [`4d6863e`](https://github.com/MahdiHedhli/hermes-hmp/tree/4d6863ef8a311462adb68fc82dd3835657739f81)
 ([spec 013](https://github.com/MahdiHedhli/hermes-hmp/tree/4d6863ef8a311462adb68fc82dd3835657739f81/specs/013-minimum-version-compatibility))
-implements it, and its files are installed on an owner Linux host. Activation was still
-pending at the last check, so no live-runtime result is claimed. The version stamp is
+implements it and is active on an owner Linux host. The native graceful restart completed,
+and the fresh running gateway, matching listener process, expected TLS identity and per-bot
+health were verified. Actual job execution and per-phone controls remain separate checks. The version stamp is
 authoritative before the literal `__version__`, then `release_date`. Send and session
 browsing both need `SessionDB.get_session`. The stable interfaces requested below remain
 useful because a version number cannot prove behavior. Approvals still use a legacy exact
