@@ -231,8 +231,32 @@ has independent documentation acceptance. It removes stale exact-build runtime
 admission wording and follows the HMP minimum-version/required-API policy, retaining
 owner activation, per-bot grants, listener identity and image bounds. This is client
 documentation alignment, not a new upstream requirement or serving result.
-Phone image UI/controller integration and physical delivery remain open; the accepted
-Bot Chat client and separate Phone screen are being integrated locally.
+Phone image UI/controller wiring and physical delivery remain open. The combined
+Bot Chat media / separate Phone screen source baseline has independent acceptance
+in [mobile draft #68](https://github.com/MahdiHedhli/HermesBotMobile/pull/68); it does
+not enable Phone image cards or change installed hosts/devices.
+
+### Mobile public-image lifetime (2026-10-02)
+
+MEDIA-C1 is a mobile resource-accounting defect, not a missing Hermes API. Repeated
+public-image cancellation previously freed the visible count while injected DNS
+work remained pending. Its bounded repair contracts have independent acceptance;
+the local exact-source candidate `5f98477` is frozen for separate review. Root
+passed 218 focused app cases and clean analysis. No registry, deployment or release
+qualification follows before that source review.
+
+A stronger loopback check found that raw close/peer EOF could leave the actual
+Dart 3.12.2 TLS handshake Future pending. The candidate forwards a fixed cancellation
+error through the SDK's public subscription API and joins caller-owned TLS, HTTP,
+subscription and socket-close API Futures under a stable shared screen budget.
+Causal cases include late socket ownership, held cleanup, redirects, real stalled
+TLS cancel/deadline/dispose, successful HTTP body forwarding, wrong-host refusal
+and cancellation before successful handshake delivery. Synthetic relay cancellation
+controls are models; no held real SDK cancellation or physical-device result is
+claimed. Private SDK filter quiescence and all OS allocations are outside this proof.
+Standard PKI, hostname/address checks, explicit tap, media bounds and credential
+exclusion remain unchanged. Phone activity/fresh-read architecture and host/native
+serving/device gates remain separate. See the [mobile finding and checkpoint](https://github.com/MahdiHedhli/HermesBotMobile/blob/docs/a1-session-review/docs/research/public-image-cancel-accounting-2026-10-02.md).
 
 ### Native fetch probe diagnosis (2026-10-02)
 

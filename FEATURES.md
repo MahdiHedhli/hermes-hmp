@@ -32,8 +32,12 @@ full T12, Linux, phone loading and release acceptance remain open. See the
 The mobile [spec 029 policy amendment](https://github.com/MahdiHedhli/HermesBotMobile/commit/57fb3394af8c61026074abf8ebe3387942d67a75)
 is independently documentation-reviewed and published. It aligns client planning
 with minimum-version/API admission while preserving authorization and image limits.
-Phone UI/controller image integration remains open; no runtime or device change
-follows from this documentation update.
+The combined app source baseline is independently accepted in
+[mobile draft #68](https://github.com/MahdiHedhli/HermesBotMobile/pull/68).
+Phone image wiring remains open. The mobile MEDIA-C1 lifetime repair contracts
+are accepted and its frozen candidate passes 218 focused tests; exact-source
+review is pending. This is client resource accounting, not an upstream Hermes
+requirement or a runtime/device change. See [current mobile lifetime evidence](NOUS_GATEWAY_OBSERVATIONS.md#mobile-public-image-lifetime-2026-10-02).
 
 | Status | Capability | Notes |
 | --- | --- | --- |
