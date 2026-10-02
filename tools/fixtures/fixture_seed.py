@@ -435,17 +435,20 @@ def cmd_acquire_lease(args: argparse.Namespace) -> None:
 
 
 def cmd_compat_identity(args: argparse.Namespace) -> None:
-    """The GU-2c build identity (fingerprint, git_sha) of THIS venv's Hermes install, computed by
-    the real `compat.default_gate()` -- the exact code path the live gateway and `hermes hmp
-    compat` use. No `--home` needed: identity is a property of the Hermes source tree, not of any
-    instance. Used by `build_fixture.py` to check (never silently assume) whether a build is
-    listed in `read_compat_builds.json` before bootstrapping a fixture-provenance entry for it
-    (see that script's docstring and this task's final report)."""
+    """The production read verdict for THIS venv's Hermes install, computed by the real
+    `compat.default_gate()` -- the exact code path the live gateway and `hermes hmp compat` use.
+    No `--home` needed: it is a property of the Hermes source tree, not of any instance. Used by
+    `build_fixture.py` (`require_read_eligible`), which reads `supported` only. `fingerprint` and
+    `git_sha` are diagnostic and are null for an eligible build (the gate no longer reads a
+    per-build list); `read_reason`/`read_missing` are additive, fixed-vocabulary reasons
+    (`compat.Unavailable` value; HMP's own dependency labels) present only when read is not
+    available."""
     del args
     from hmp_plugin import compat
 
     result = compat.default_gate().evaluate()
     identity = result.identity
+    read = result.eligibility.features[compat.Feature.READ] if result.eligibility else None
     _out(
         {
             "ok": True,
@@ -453,6 +456,8 @@ def cmd_compat_identity(args: argparse.Namespace) -> None:
             "why": getattr(result.why, "value", None),
             "fingerprint": identity.fingerprint if identity else None,
             "git_sha": identity.git_sha if identity else None,
+            "read_reason": getattr(read.reason, "value", None) if read else None,
+            "read_missing": list(read.missing) if read else [],
         }
     )
 
