@@ -98,6 +98,7 @@ candidate and sample; that evidence does not prove behavior on future builds.
 - [x] **C6a** Request-scoped active-history batch module and independent security review, following the C6 freeze; accepted single scanner unchanged. Source acceptance only; native cost/memory and C6b remain open.
 - [ ] **C6b** Bind that reviewed batch to the same native database/home capture, then root exact-native cost, concurrent-writer and mint-memory evidence. C6 remains open.
 - [ ] **S4** Descriptor emission in handlers, 128 cap (T1, T5, T6, T7). Needs S2, S3, S6 and C6 admission.
+  Source written on `b07890e`, independently reviewed and accepted for the S4 source slice (2026-10-02; full task not ticked): the four read handlers select the old read or the media twin plus one `bind_media_batch` in one worker job, then mint newest-first (at most 128) on the loop through the listener's one registry; `media_unavailable` and the §13 media constants are in `contract.py`; no fetch route (S5). Native complete-binding cost and T12 are release-candidate evidence, not prerequisites for this source. Independent review accepted the exact source, with stale documentation repaired. Root reproduced 679 focused cases after seven added tests; full delivery, native cost, T12 and device evidence remain separate open gates.
 - [ ] **S5** Route, dedicated executor, permits, `ContextVar` copy for both phases, constants, streaming, phase one, phase two, synchronous final section (T3, T9-T11, T13, T15-T17). Needs S1, S3, S6.
 - [ ] **T** Causal suite T1-T18 on a fake bridge and an exact-build disposable-home fixture.
 - [ ] **T12** Memory measurement run recorded against the provisional ceilings.
@@ -365,3 +366,13 @@ causal mutant kills. Reviewer checkboxes and S6/S6b stay open for their full sco
 Three earlier baseline contract-table failures remain recorded; no full-suite green
 is claimed. No build entry, native admission or serving route is present. See the
 [root acceptance scope](ROOT_DECISIONS.md#s6b-bounded-source-acceptance--2026-10-01).
+
+
+## C6b sampled complete-binding evidence (2026-10-02)
+
+The [r2 native sample](../../docs/research/local-media-complete-binding-sample-2026-10-02.md)
+completed 58 steps with 9,686 semantic checks and 500 writer phases. Root rechecked all 1,000
+first/second outcomes, including closed refusal reasons. Public native prompts prove the declared
+large-prompt fixture. This is M3 binding/mint research on the stated native sample, not S4 route
+cost or S5/T12 evidence. Native materialization and non-atomic residual/ABA remain; no gate,
+ceiling or release checkbox is implied. Earlier r1 measurement defects remain historical.

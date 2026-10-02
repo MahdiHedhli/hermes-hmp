@@ -105,6 +105,21 @@ SNAPSHOT_LIMIT_MAX = 500
 HISTORY_LIMIT_DEFAULT = 100
 HISTORY_LIMIT_MAX = 1_000
 
+# HMP_V1.md §13, v1.6 draft (§7e): new choices for host-local generated images. S4 consumes the
+# descriptor cap; the others are recorded for the fetch slice (S5) and must equal §13 exactly. The
+# registry module keeps its own copies of the first three so it stays stdlib-only.
+MEDIA_REF_TTL_S = 1_800
+MEDIA_REFS_PER_DEVICE = 512
+MEDIA_REFS_TOTAL = 4_096
+MEDIA_DESCRIPTORS_PER_RESPONSE = 128
+MEDIA_FETCH_PER_MIN = 120
+MEDIA_PERMITS_PER_DEVICE = 2
+MEDIA_PERMITS_PER_INSTANCE = 4
+MEDIA_WORKERS = 4
+MEDIA_WORKER_WAIT_S = 20
+MEDIA_WRITE_DEADLINE_S = 30
+MEDIA_MAX_BYTES = 8_388_608
+
 # Amendment A1 (session browsing, SES-1f). Not an HMP_V1.md §13 constant: A1 is additive (v1.1)
 # and these are route-local caps, not contract-wide ones. SES-2 reuses HISTORY_LIMIT_DEFAULT/MAX
 # above (its route is a reparameterization of RO-6).
@@ -175,6 +190,9 @@ class ErrorCode(StrEnum):
     API_SERVER_UNAVAILABLE = "api_server_unavailable"
     CRON_UNAVAILABLE = "cron_unavailable"
     MODEL_UNAVAILABLE = "model_unavailable"
+    # v1.6 draft, LM-3 (HMP_V1.md §7e): the fetch route's owner-device closed-gate answer. The
+    # S4 descriptor routes never raise it; a closed gate there gives the exact old bytes.
+    MEDIA_UNAVAILABLE = "media_unavailable"
 
 
 class SubmitDefinitive(StrEnum):
@@ -245,6 +263,7 @@ ERROR_TABLE: Mapping[ErrorCode, ErrorSpec] = {
         _spec(ErrorCode.API_SERVER_UNAVAILABLE, (503,), _N),
         _spec(ErrorCode.CRON_UNAVAILABLE, (503,), _NA),
         _spec(ErrorCode.MODEL_UNAVAILABLE, (503,), _NA),
+        _spec(ErrorCode.MEDIA_UNAVAILABLE, (503,), _NA),
     )
 }
 
@@ -290,6 +309,7 @@ ERROR_MESSAGES: Mapping[ErrorCode, str] = {
     ErrorCode.API_SERVER_UNAVAILABLE: "direct send delivery is unavailable",
     ErrorCode.CRON_UNAVAILABLE: "scheduled jobs are unavailable",
     ErrorCode.MODEL_UNAVAILABLE: "model management is unavailable",
+    ErrorCode.MEDIA_UNAVAILABLE: "image delivery is unavailable",
 }
 
 
@@ -659,6 +679,16 @@ class WireToolCall:
 
 
 @dataclass(frozen=True)
+class WireMediaDescriptor:
+    """LM-4 `media` value: exactly `kind` and `ref`, nothing else. The `ref` is the registry's
+    43-character base64url handle. The native sidecar, the row id and the raw digest never appear
+    here; a descriptor is attached to a `role:"tool"` message only by `media_emission`."""
+
+    kind: str
+    ref: str
+
+
+@dataclass(frozen=True)
 class WireMessage:
     """RO-3 `messages[]` item.
 
@@ -678,6 +708,9 @@ class WireMessage:
     tool_name: str | None = field(default=None, metadata={"omit_if_none": True})
     tool_call_id: str | None = field(default=None, metadata={"omit_if_none": True})
     truncated: bool | None = field(default=None, metadata={"omit_if_none": True})
+    # v1.6 draft (§7e LM-4): omitted unless the gate opened and a descriptor was minted, so a
+    # closed gate keeps the previous bytes exactly.
+    media: WireMediaDescriptor | None = field(default=None, metadata={"omit_if_none": True})
 
 
 class TurnObservedState(StrEnum):

@@ -65,6 +65,11 @@ server/
                                   #   hermes_state.py, HMP_V1.md §6a SES-7 -- no new Hermes dependency)
                                   #   a per-load set-once cache `(local_media_sidecar,)` read by the media sites (bound to
                                   #   ServerContext under the minimum-version amendment; no longer "inside a gate's disk bracket")
+    media_emission.py             # S4 source-reviewed: descriptor emission for RO-3, RO-6, SES-2/SES-2a. Imports no
+                                  #   local_media_* module and registers no route; uses only the references the listener
+                                  #   bound at open (`ServerContext.media_snapshot`). Closed listener, non-owner or flag off
+                                  #   runs the old read untouched; open runs the media twin plus one bind_media_batch in one
+                                  #   worker job, then mints synchronously on the loop (no await) after a gate recheck
     authorize.py                  # P6 outcome table (PR6-*), via bridge
     revoke.py                     # P7-3 self-revoke; operator revoke helpers (PR7-1)
     gate.py                       # GU-2/GU-4 guarantee derivation + write gate (implemented, unused by F1 routes)
@@ -101,14 +106,20 @@ server/
                                   #   no caller, route, claim or manifest uses it yet
     local_media_raster_structure.py  # OPTIONAL, inert: reviewed raster structure validator (stdlib only); no caller yet
     local_media_result.py         # OPTIONAL, inert: bounded result parser wrapping local_media_active_scan; no caller yet.
-                                  #   No production module (start-up, reads, compat, server, adapter, registration)
-                                  #   imports any local_media_* module; a test pins this
+                                  #   Imports are function-local and pinned by a test: bridge.py's one cache-fill function
+                                  #   loads the chain (sidecar, candidate, scan, result, file safety, batch, binding), reads.py
+                                  #   loads the sidecar, adapter.py loads only local_media_registry. media_emission, compat,
+                                  #   server and registration import none, and no request path imports one
     local_media_registry.py       # OPTIONAL, inert: process-local image ref registry (LM-9; stdlib only, no hmp_plugin imports):
                                   #   lock, TTL 1800 s, 512/4096 LRU, idempotent mint, first-served digest CAS. A registry
-                                  #   hit never authorizes a fetch. No production caller, route or module-level instance yet
+                                  #   hit never authorizes a fetch. S4 source-reviewed: adapter.py's function-local
+                                  #   `_media_registry_bind` makes one instance per listener at open and binds its actual
+                                  #   module on ServerContext; media_emission mints on it through that bound reference only.
+                                  #   No lookup or record_first_served caller, no fetch route and no module-level instance yet
     local_media_sidecar.py        # OPTIONAL, inert: immutable non-wire read carriers; stdlib and contract only.
                                   #   Candidate holds only row id/digest, never an image path. Generic serialization
-                                  #   refuses the carrier. No bridge/read/handler caller yet; no authority granted
+                                  #   refuses the carrier. Read by the reads.py media twins and bridge.py; media_emission
+                                  #   consumes it from the listener-bound module only. Grants no authority
     local_media_candidate.py      # OPTIONAL, inert: lexical flat-name derivation and bounded candidate extraction from one
                                   #   returned page (newest 128 image_generate attempts, 64 KiB bound before the one accepted
                                   #   parser). Imports only the accepted result/file-safety/scanner/sidecar modules; no I/O,

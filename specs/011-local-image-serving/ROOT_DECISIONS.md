@@ -631,3 +631,69 @@ Five focused cases passed: eight steps reach the original function; nine steps a
 raising/removing the bound and shortening/skipping the chain each make the scratch-copy property
 fail. A watched function dictionary bounds runaway-cycle execution. Ruff, explicit privacy and
 diff checks pass. This closes T-1 only; the full 3047-case result above predates this test-only delta.
+
+## S4 descriptor source candidate (2026-10-02, unreviewed)
+
+Source candidate on `b07890e`, following root's S4 direction. Nothing here is accepted: it needs an
+independent exact-candidate security review, and no fetch route, native qualification, device or
+release claim follows from it.
+
+- **Registry.** `adapter._media_registry_bind` makes ONE `LocalMediaRegistry` per listener at open and
+  binds its actual module (constructor, `mint`, `lookup`, `record_first_served` must execute in that
+  module's namespace; the instance must be that module's exact class). The context records
+  `media_registry_module` and `media_registry` (default `None`); `media_modules` keeps its
+  `(bridge cache, reads cache)` shape. The adapter's only media import is that function's registry import.
+- **Fence (C1 repair).** The availability closure retains the exact outer bound tuple and compares
+  `ctx.media_modules is bound` besides the two caches, and fences the registry module and instance by
+  identity. A replaced, missing or foreign object closes this listener only (`media_binding_changed`).
+  `ServerContext.media_snapshot()` runs it and returns the exact bound references or `None`.
+- **Selection and emission.** `media_emission.read` picks the old read unless owner, exact-true flag and
+  availability all hold. Otherwise the exact `Reads` twin and, only when the sidecar has candidates, one
+  `bridge.bind_media_batch` run in the SAME `asyncio.to_thread` job. A twin failure keeps its semantics;
+  any optional failure keeps the successful text and mints nothing; nothing re-reads. On the loop, with no
+  await, owner, flag, snapshot identity and exact types/identity of wrapper, sidecar and binding are
+  rechecked and accepted rows that match returned `image_generate` tool messages are minted newest-first
+  (at most 128). No `MediaOrigin`, text, path or file is consulted.
+- **Wire.** `WireMessage.media` (optional, omitted when `None`) holds a frozen
+  `WireMediaDescriptor(kind, ref)`; the sidecar and digest never reach the wire.
+- **Disclosed choice.** A twin result that is not the bound module's wrapper but whose `.public` is an
+  exact public type keeps that text with no media; any other foreign shape is the existing
+  `500 internal_error` (a bridge fault: there is no successful text to preserve).
+- **Sidecar delta.** `MediaReadBridge` gains `bind_media_batch(sidecar) -> object | None` and its
+  docstring drops "no caller yet"; every other byte of `local_media_sidecar.py` is unchanged
+  (pinned by reversing the two edits against the old hash). The nine helper modules, `bridge.py` and
+  `reads.py` are byte-identical to the base.
+
+
+### S4 bounded source acceptance (2026-10-02)
+
+The preceding candidate record is historical. Root accepted its executable source after independent
+Opus security review, the required documentation repair, and root review of the finite follow-up.
+The reviewer reproduced 3424 CI-shaped cases with 16 native-dependent skips and one existing warning.
+Root subsequently reproduced 679 focused cases after seven added tests (110 descriptor cases).
+The finite follow-up changed only the two status/module-map documents, a comment in request_ctx,
+and test_s4_descriptors. All other baseline files were hash-checked unchanged; the comment reversal
+reproduced its baseline hash and AST. No new full-suite result is implied by the focused run.
+
+Added cases cover a genuine outer mint failure preserving the exact successful text without reread,
+ordinary visible/non-canonical sessions on three browsing routes with a positive canonical control,
+and all five read call sites sharing one worker and the copied request ContextVar. Removing the outer
+catch or context-copy behavior makes its corresponding property fail. Same-thread identity alone
+is not mutation-certified, and the ordinary-session refusal uses the previously reviewed classifier.
+
+The optional source residuals remain explicit: imported fixture modules can make test order matter;
+trusted same-account in-process replacement is not bytecode attestation; mint references grant no
+fetch authority; native reads are non-atomic and native materialization/pruning remains G-M1.
+No native cost, S5 route, four-fetch T12, phone rendering, Linux integration, live flag or deployment
+acceptance follows. Native cost is measured separately on sampled fixtures, never an admission gate.
+Full delivery rows and S4/S5 release checkboxes stay open until their stated scope is proved.
+
+
+### C6b r2 execution evidence (2026-10-02)
+
+The independently reviewed measurement repair passed a fresh preflight and complete disposable
+native run: 58 steps, 9,686 semantic checks, 500 writer phases. Root verified all 1,000 phase
+outcomes and the declared public native prompt content; native/HMP/foundation/runtime hashes
+and isolation/cleanup receipts held. [Sampled evidence](../../docs/research/local-media-complete-binding-sample-2026-10-02.md)
+distinguishes 194 native-writer refusals from 42 synthetic-store refusals and preserves 60
+residual-window accepts plus 50 ABA controls. No S4/S5/T12 or deployment acceptance follows.

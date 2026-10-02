@@ -1351,9 +1351,9 @@ The host flag defaults off. Availability on a given Hermes follows GU-2d, not a 
 ## 7e. Host-local generated images (v1.6, draft; not implemented)
 
 Additive under V-3. **Status: draft serving contract; the feature is not implemented.** Reviewed inert
-components are recorded in the task evidence. M2 API eligibility and M3 listener-scoped binding are independently source-reviewed; no serving route, descriptor emission, device acceptance or release exists. Amended 2026-10-02 for the owner's minimum-version
+components are recorded in the task evidence. M2 API eligibility and M3 listener-scoped binding are independently source-reviewed; no serving route, device acceptance or release exists. Descriptor emission on the four read routes (RO-3, RO-6, SES-2, SES-2a) is **independently source-reviewed S4 code** (see ROOT_DECISIONS); fetch and device acceptance remain open. Amended 2026-10-02 for the owner's minimum-version
 policy: there is **no build list, manifest, fingerprint or process latch**, and this section never claims
-that a build, serving platform or device is qualified. The runtime media binder verifies the listener's in-memory cache chain and closes only that listener on a cache identity change; no route consumes it yet. Design record and open gates:
+that a build, serving platform or device is qualified. The runtime media binder verifies the listener's in-memory cache chain and closes only that listener on a cache identity change; the S4 candidate's four read routes consume it, the fetch route (S5) does not exist yet. Design record and open gates:
 [`specs/011-local-image-serving`](../../../specs/011-local-image-serving/spec.md). A client on an
 earlier `1.x` build ignores `media` and the route (V-4). The numeric constants below (20 s, 30 s,
 1800 s, 512 per device, 4096 total, 128, 2 per device, 4 per instance, 120 per minute) are **new
@@ -1401,7 +1401,7 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   - The availability result is an in-memory boolean. Authorization, explicit settings, scoped
     credentials, payload bounds, resource bounds and the C6b identity proofs are unchanged.
 
-  Status: the M2 eligibility member, offline issue drafting and M3 listener-scoped binding are independently source-reviewed; **media delivery remains unimplemented**. The fixed binding outcomes are `media_binding_incoherent` and `media_binding_changed`; no path or exception text accompanies them. A compat `available` line is probe eligibility only, not
+  Status: the M2 eligibility member, offline issue drafting and M3 listener-scoped binding are independently source-reviewed; **media delivery remains unimplemented** (S4 descriptor emission is independently source-reviewed; the fetch route is not implemented). The fixed binding outcomes are `media_binding_incoherent` and `media_binding_changed`; no path or exception text accompanies them. A compat `available` line is probe eligibility only, not
   serving availability. The retired design is recorded as historical in
   [ROOT_DECISIONS](../../../specs/011-local-image-serving/ROOT_DECISIONS.md#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02).
 - **LM-3. Closed-gate responses.** A non-owner device gets `404 not_found` before the gate is
