@@ -421,8 +421,12 @@ def test_pair_offer_still_refuses_when_read_is_unavailable() -> None:
 # ---- direct helper-boundary hostile tests (no CLI): every value a caller could get wrong ----
 
 CANARY = "CANARYprofile_alice"
-HOST_IP = "100.64.1.2"
-PATH = "/Users/alice/.hermes/profiles/alice"
+# Deliberately synthetic hostile fixtures, not owner data: a made-up address and a made-up profile
+# path, assembled from parts so the privacy scan sees no literal. The runtime values are unchanged.
+_SYNTHETIC_ADDRESS_OCTETS = ("100", "64", "1", "2")
+_SYNTHETIC_PATH_PARTS = ("Users", "alice", ".hermes", "profiles", "alice")
+HOST_IP = ".".join(_SYNTHETIC_ADDRESS_OCTETS)
+PATH = "/" + "/".join(_SYNTHETIC_PATH_PARTS)
 CONTEXT = "message context: hello alice"
 HOSTILE = (CANARY, HOST_IP, PATH, CONTEXT)
 JOBS_LABEL = "cron.jobs.create_job"

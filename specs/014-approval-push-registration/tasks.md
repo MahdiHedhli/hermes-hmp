@@ -1,7 +1,7 @@
 # Tasks: approval push registration, issuance, hint resolution and relay delivery
 
 Root has frozen `ROOT_DECISIONS.md` after the focused closure review. Implementation remains
-blocked on the separately accepted approval-lane amendments (T003) and subsequent contract tasks. Tasks are dependency-ordered. Work in parallel only
+blocked on the subsequent contract tasks. The approval-lane source prerequisite T003 is now accepted; no runtime is wired. Tasks are dependency-ordered. Work in parallel only
 after T001–T004 freeze the shared contract. Workers do not tick review boxes. Gap markers:
 `HMP_CONTRACT_GAP`, `HERMES_API_GAP`, `PLATFORM_GAP`, `EVIDENCE_GAP`, `UX_CONTRACT_GAP`,
 `SECURITY_REVIEW_REQUIRED`.
@@ -14,14 +14,11 @@ after T001–T004 freeze the shared contract. Workers do not tick review boxes. 
   C1–C8, with a targeted independent check of C1–C3 only if an actual remaining risk is found.
   Root closes design review on 2026-10-02 after the focused C1–C3 acceptance and mechanical precision fixes.
 - [x] T002 Root freezes D1–D28 (D21 unused) and records the frozen values in `ROOT_DECISIONS.md`.
-- [ ] T003 **Approval-lane amendments, not confirmations.** Root states that spec 034 source
-  `150bd0f` (PR #73) is independently accepted, with native fixtures and deployment pending, and that
-  I-1 (insertion notification with its thread contract), I-2 (`settle_cause`) and I-6
-  (`row_visible_now`) are absent from it. Each needs its own spec delta, independent review and root
-  verification in the approval lane, accepted before any Phase 2 work. I-6 means current visibility
-  with local expiry (`expires_at + EXPIRY_GRACE_S`), no sticky hidden bit, and AP-3 calling the same
-  seam, with an equivalence test over held, closed, expired and Phone cases. I-3..I-5 are confirmed
-  or amended in the same review. 014 is not wired against unaccepted behavior.
+- [x] T003 **Approval-lane source prerequisite.** Spec 015 `6a139ba` supplies I-1, I-2 and I-6
+  with independent focused review and final root source verification. Section 10 records the
+  exact interfaces, immutable visibility flags and source-test limits. I-3/I-4 and the I-5
+  generation-close lifecycle boundary are confirmed. Dispatcher cancellation and hint/slot
+  cleanup remain future 014 work. No native, push, device or deployment acceptance is implied.
 - [ ] T004 Owner chooses O1–O6 (all pending). Nothing is provisioned by this task.
 - [ ] T005 Cross-channel coverage research (`EVIDENCE_GAP`): run the Hermes Developer skill refresh
   procedure, then trace the approval notification path on the exact target commits (Desktop TUI
@@ -29,7 +26,7 @@ after T001–T004 freeze the shared contract. Workers do not tick review boxes. 
 
 ## Phase 1: contract text (single worker, after T002 and T003)
 
-- [ ] T010 Add HMP v1 §7e (PN-REG, PN-ISS, PN-RES, PN-BND) with schemas, gate order, status table and
+- [ ] T010 Add HMP v1 §7f (PN-REG, PN-ISS, PN-RES, PN-BND) with schemas, gate order, status table and
   constants. Add the four `why` values (`push_disabled`, `relay_unconfigured`,
   `approvals_unavailable`, `push_capacity`) to the closed `OtherWhy` set, each allowed only on
   `503 write_gate_closed`; no new error extra (the `generation` extra is dropped) and no new error
@@ -205,3 +202,12 @@ No Hermes core change; no change to spec 034 except through its own reviewed ame
 change to existing send, jobs, model, AP-3 or AP-4 authority; no Watch features; no clarification,
 chat or job alerts; no website, store or beta change; no grant, controls or owner-list edits; no
 SD3/SD5 edits.
+
+## Source prerequisite checkpoint — 2026-10-02
+
+T003 is closed by accepted spec 015 `6a139ba` (PR #76). Root checked the current store,
+owner/surface predicates and adapter close call sites. The production delta is documentation only;
+it does not import or wire the input implementation. The synthetic issue-draft fixture repair
+keeps its runtime values unchanged and passed all 46 tests without privacy suppressions. T010–T012 are the next source-contract
+work. T004 and all provisioning choices remain pending and do not prevent documentation work.
+The 015 no-await adjacency invariant is source-read evidence only, not a killed test mutant.

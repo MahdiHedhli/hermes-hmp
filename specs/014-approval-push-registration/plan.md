@@ -32,15 +32,13 @@ use the frozen mapping in [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md); owner budget
     `SQLITE_NOMEM`, `SQLITE_BUSY`); `ROLLBACK TO` then finds no savepoint and the cause is lost. A
     nested savepoint therefore cannot isolate push from a cause, and no push statement runs inside
     a cause's transaction.
-- **Approval lane (spec 034).** Root states that source `150bd0f` (PR #73) is independently
-  accepted, with native fixtures and deployment pending (not re-verified here). Process-memory
-  `PromptStore`
-  per listener generation; producers `record_stream_approval` (Bot Chat stream) and
-  `AdapterHooks` (Phone chat); the effective approval-owner predicate; the surface gate; and the
-  AP-3 visibility rule (`list_visible` hides `bot_chat` rows while `desktop_held`). This plan
-  consumes only the inputs I-1..I-6 (spec §10). I-1, I-2 and I-6 are absent from the accepted source
-  (root), so each needs a separately reviewed approval-lane amendment; I-6 includes AP-3 calling the
-  same seam.
+- **Approval lane (specs 034/015).** Base `150bd0f` has independent source review and two
+  isolated native samples; deployment remains pending. Spec 015 `6a139ba` adds independently
+  reviewed insertion, settlement-cause and immutable visibility inputs. T003 is source accepted.
+  Section 10 records exact interfaces and I-3/I-4/I-5 lifecycle confirmation. This branch has not
+  integrated them, and 014 still supplies dispatcher cancellation and hint/slot cleanup. Native
+  evidence for the base does not attest 015. AP-3 uses the shared visibility seam; the frozen
+  baseline oracle and final route tests verify source-level equivalence.
 - **App spec 030 (private app repository).** The S1 foundation is source-implemented and its
   resolver port is root-accepted: hint parser `{v, route, hint}` with 22..64 character opaque
   strings, the begin/commit route table, `HintResolveRequest{iid, epoch, hintRef}` and the handoff
@@ -98,7 +96,7 @@ same text. The phone needs the tailnet only at tap time.
 
 | Area | Planned change | Verification |
 | --- | --- | --- |
-| `docs/architecture/contracts/HMP_V1.md` | New §7e "Push registration and hint resolution" (PN-REG, PN-ISS, PN-RES, PN-BND), constants (§13), residuals (§14). No new error code. | Contract review |
+| `docs/architecture/contracts/HMP_V1.md` | New §7f "Push registration and hint resolution" (PN-REG, PN-ISS, PN-RES, PN-BND), constants (§13), residuals (§14). No new error code. | Contract review |
 | Constitution and PR-2 surface note | Record the one sanctioned outbound non-loopback client (`push_relay.py`), whose destination comes only from host config | `check_plugin_surface.py` rule extension and test |
 | `store.py` | Schema 3: `push_registrations` and `push_device_generations`. A bounded push purge step (expiry of stale active rows, deletion of REVOKED devices' rows, retained caps, the D28 cap). A guard in `Store.set_device_state` that refuses to change a REVOKED device. No push statement runs inside any cause's transaction. | Migration tests from schema 1 and 2; idempotent migrate; a test that `set_device_state` cannot revive REVOKED; purge tests |
 | `revoke.py`, `tokens.py`, `pairing.py` | After the cause's transaction commits (before `REVOKED` is raised in the refresh-reuse path), call one best-effort cleanup in its own `Store.transaction()`. The cause's outcome is unchanged on any cleanup error. | Causal negative tests; a real `SQLITE_FULL` (for example `max_page_count`) injected into the post-commit cleanup leaves each cause's committed outcome and rows unchanged |

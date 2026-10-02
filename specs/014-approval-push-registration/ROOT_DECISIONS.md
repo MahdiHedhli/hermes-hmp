@@ -128,7 +128,16 @@ The direction tables above record review history; the following is the authorita
 - Precision M1–M7 from closure review are incorporated: named post-commit call sites, exception-
   agnostic cause preservation, key read before transaction, no key-file mode mutation, generation
   capacity visibility, retirement excess wording, and in-transaction device/family liveness.
-- T003 approval inputs I-1/I-2/I-6 and T010/T011 contract changes remain prerequisite work.
+- T003 approval inputs I-1/I-2/I-6 are source accepted in spec 015 `6a139ba`; section 10 records
+  I-3/I-4 and the I-5 lifecycle boundary. T010/T011 contract changes remain prerequisite work.
   No operational approval, push delivery, crypto dependency or provider qualification is claimed.
 - O1–O6, provider keys/capabilities, HPKE key custody, DNS and global deployment budgets remain
   pending. This freeze authorizes no provisioning, billing, store submission or public activation.
+
+## Contract section allocation — 2026-10-02
+
+Local media already reserves HMP v1 section 7e in spec 011. Root allocates section 7f to
+push registration and hint resolution; this changes numbering only, not the frozen protocol
+or owner choices. T010 follows that allocation. The old branch's two synthetic hostile
+fixture literals are now assembled exactly as in accepted `6a139ba`; runtime canaries and
+assertions are unchanged, with no privacy suppression added.

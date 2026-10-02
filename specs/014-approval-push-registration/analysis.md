@@ -16,7 +16,7 @@ checklist box is ticked.
 | I. Minimum-version policy | Pass. No floor, manifest, fingerprint or latch (PN-AV-1). Availability inherits the approval members; later and unknown builds attempt the actual APIs. |
 | II. Device trust is explicit | Pass. A device-scoped registration on the pinned instance. Eligibility is the effective approval owner AND the bot grant AND the row's own live family AND AP-3 visibility, read live. Revocation closes eligibility by validation; cascades are cleanup. |
 | III. Public by default | Pass for these files: no private addresses, identifiers or owner evidence. Physical results stay private. |
-| IV. Contract before code | Pass. Wire additions are specified here and go to HMP v1 §7e (T010) before code. |
+| IV. Contract before code | Pass. Wire additions are specified here and go to HMP v1 §7f (T010) before code. |
 | V. Verify on Hermes | Planned: route-level tests, isolated fixture, surface, log and privacy scans (T022–T029). Samples are evidence, not gates. |
 | VI. Security findings block | The open items in §4 are explicit. `SECURITY_REVIEW_REQUIRED` items are listed in plan §7.1. |
 | Closed plugin surface (PR-2) | **Needs amendment (T011).** HMP currently opens sockets only to loopback literals. The relay client is a new outbound destination, sourced only from host config. There is no new registration surface, hook, tool or dependency. |
@@ -66,8 +66,9 @@ The resolver and issuer are HMP-owned contract work, not Nous API gaps (030 FS-4
    located prompt may already be settled elsewhere. The answer path discovers that (`409`), and the
    app's fresh read shows the current list.
 3. **Capability and request ID (`HERMES_API_GAP`, as recorded by 034 G1, G3).**
-4. **Approval-lane amendments.** I-1, I-2 and I-6 are absent from accepted 034 source `150bd0f` and are HMP
-   approval-lane work (T003), not Hermes gaps.
+4. **Approval-lane amendments.** I-1, I-2 and I-6 were absent from base `150bd0f`. Spec 015
+   `6a139ba` supplies the independently reviewed source inputs and closes T003; integration
+   and runtime consumers remain 014 work, not Hermes gaps.
 
 Everything else (relay, accounts, keys, native registration, persistence, device proof) is our own
 work or the owner's choice.
@@ -86,7 +87,7 @@ work or the owner's choice.
 | A8 | `interruption-level: time-sensitive` without the signed entitlement: system behavior not verified here | Unknown | `PLATFORM_GAP`; capability check on owner-authorized builds only |
 | A9 | `UNAuthorizationOptions.timeSensitive`: availability metadata reads iOS 15.0 to 15.0 (introduced and deprecated in 15.0), consistent with the earlier app root record. The earlier "evidence conflict" note misread the page. | Resolved | The design does not use the option; it relies on the Time Sensitive entitlement, checked only on owner-authorized signed builds |
 | A10 | The relay client is HMP's first non-loopback socket | Medium (surface) | T011 amendment, host-config-only destination, no redirects or proxies, bounded parser |
-| A11 | Spec 034 source `150bd0f` (PR #73) is independently accepted per root, with native fixtures and deployment pending, but I-1, I-2 and I-6 are absent from it | Medium (schedule) | T003 approval-lane amendments with their own review; 014 is never wired to unaccepted behavior |
+| A11 | Base `150bd0f` lacked I-1/I-2/I-6; spec 015 `6a139ba` now supplies source-accepted inputs, while 014 integration and runtime evidence remain pending | Source prerequisite resolved; runtime pending | T003 source gate closed; integrate accepted inputs and verify consumers before wiring |
 | A12 | A `DELETE` whose store write fails (for example a full disk), and background display that app code cannot suppress | Low | Eligibility closes at once through the bounded in-memory delete fence (PN-REG-3, PN-BND); `GET` reports a fenced row as not active; `503 other` is "not confirmed". The app keeps a persisted, encrypted pending delete intent, retries on resume, and says alerts stopped only after a `200` (PN-APP-3, §11). Residual: the fence does not survive a restart, so alerts may resume until a retry succeeds, a revocation happens or the seal's `not_after` passes; a tap then shows unable to check |
 | A13 | A phone that unpairs while its host is unreachable cannot withdraw the seal the host holds; the host's alerts keep being displayed by the OS until `not_after` | Medium (annoyance; no authority) | D9 max lowered to 14 d; app shows "unlinked" on tap; Android full alert opt-out can rotate the FCM registration; iOS has no equivalent guarantee |
 | A14 | A shared per-destination cap lets one host suppress another's real alerts. The per-`(destination, iid)` cap stops **one** `iid` doing so (not all cross-host suppression), but under open enrollment `iid`s cost nothing, so `n ≥ ⌈destination ceiling / pair cap⌉` sybil `iid`s (2 at the proposed 60 and 30) holding a leaked address still suppress the real host's alerts to that phone | Medium (availability) | Root keeps the destination ceiling (the spam bound) and accepts the suppression; the alternative of dropping the ceiling would allow unbounded spam across many `iid`s. Recorded for R1 acceptance; public mode stays inactive and owner-pending (O1) |

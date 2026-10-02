@@ -802,13 +802,28 @@ The dispatcher and resolver consume, and must not reimplement:
   does not reconcile Phone rows through `list_gateway_approvals` as AP-3's listing does
   (PN-RES-4); the withdrawn-Phone-row residual is recorded (analysis A20).
 
-In accepted 034 source `150bd0f` as the earlier reviews read it, `PromptStore.put` returns `None`
-and signals nothing (I-1 absent), and every settle path sets the same `status = "expired"` (I-2
-absent); root states that I-1, I-2 and I-6 are all absent. I-6 is a new seam over existing state.
-I-1, I-2 and I-6 are therefore **approval-lane amendments**, each with its own spec delta,
-independent review and root verification, accepted before any 014 implementation. I-3 to I-5 are
-confirmed or amended in the same review. If the accepted lane differs, 014 is re-reviewed. It is
-never wired against unaccepted behavior.
+The historical base `150bd0f` lacked I-1, I-2 and I-6. Spec 015 now supplies those
+inputs with independent focused security review and final root source acceptance at
+[`6a139ba`](https://github.com/MahdiHedhli/hermes-hmp/commit/6a139bae6646eb6e7584336c94ef611609833fe3) (PR #76).
+I-1 is `PromptStore.set_insertion_observer` and `ApprovalInserted`; I-2 is the closed cause
+sets and guarded settlement writers; I-6 is `view_row`/`view_visible` plus
+`ServerContext.approval_members_now`, used by AP-3 itself. Root passed 482 focused source cases
+(three unconfigured native-probe skips) and 2,004 complete source cases (16 explained skips).
+The final test-only repairs preserve the reviewed production hashes and frozen AP-3 oracle.
+
+I-3 is confirmed in `PromptStore.get`, the new immutable `view_row`, and the generation's
+`closed`/`phone_closed` flags. Consumers must use `open_now` and `visible_now`, not `status`
+alone: a view can retain status `open` while already past the grace boundary. I-4 is confirmed
+in the existing owner, surface, direct-send and availability predicates in `request_ctx.py`;
+015 changes none of their authority. I-5's lifecycle boundary is confirmed in
+`adapter._close_generation`, reached by listener close and disconnect. Its dispatcher
+cancellation, hint and slot cleanup are still **014 implementation work**, not behavior
+provided by 015. No dispatcher or production observer registration exists yet.
+
+This closes T003's source prerequisite. It does not merge or wire 014, prove native behavior
+of the amended candidate, or supply provider infrastructure. The base's two native samples
+cover `150bd0f`, not 015. Implementation must integrate the accepted inputs and pass its own
+review and runtime gates before dispatch becomes available.
 
 ## Section 11. Inputs this provides to app spec 030 (S2/S3)
 
@@ -854,7 +869,7 @@ never wired against unaccepted behavior.
 | 014 dispatches only for rows the 034 lane inserts (Bot Chat streams HMP started, HMP Phone chat). Approvals raised on Desktop, CLI, cron or other platforms are not covered. Whether Hermes offers or lacks a plugin-visible, profile-scoped multi-subscriber approval observer is unresearched for the target builds. Upgrade to `HERMES_API_GAP` only after a cited exact-commit source trace following the skill's refresh procedure. | `EVIDENCE_GAP` (research pending) | Project, then Nous if confirmed |
 | No stream settlement or expiry event (034 G4). A located prompt may already be settled elsewhere and is discovered at answer (`409`). | `HERMES_API_GAP` (as recorded by 034) | Nous |
 | No session-stream approval capability flag; `ExecApprovalPrompt` lacks a request ID (034 G1, G3) | `HERMES_API_GAP` (as recorded by 034) | Nous |
-| I-1, I-2, I-6 absent from accepted 034 source `150bd0f` (root statement) | Approval-lane amendment | HMP (034 lane) |
+| I-1, I-2 and I-6 source accepted by 015 at `6a139ba`; integration and 014 runtime consumers remain unwired | Implementation and runtime verification | HMP (014 lane) |
 | Instance-level pending-approval summary, so prompts of other bots without their own alert are discoverable without a roster scan | `UX_CONTRACT_GAP` / `HMP_CONTRACT_GAP` | App and HMP |
 | Registration, issuer, resolver, dispatcher, post-commit cleanup, store, purge, CLI | `HMP_CONTRACT_GAP` (this spec) | HMP |
 | Relay service, HPKE keys, rate limits, deployment | Our infrastructure | Project and owner |
