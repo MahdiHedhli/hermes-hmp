@@ -224,6 +224,16 @@ acceptance remain open. Native materialization/pruning and non-atomic reads
 (G-M1), artifact authority (G-M2), ABA/torn-buffer and same-account replacement
 residuals remain. No runtime build allowlist or live change is introduced.
 
+### Mobile contract alignment (2026-10-02)
+
+The mobile [spec 029 amendment](https://github.com/MahdiHedhli/HermesBotMobile/commit/57fb3394af8c61026074abf8ebe3387942d67a75)
+has independent documentation acceptance. It removes stale exact-build runtime
+admission wording and follows the HMP minimum-version/required-API policy, retaining
+owner activation, per-bot grants, listener identity and image bounds. This is client
+documentation alignment, not a new upstream requirement or serving result.
+Phone image UI/controller integration and physical delivery remain open; the accepted
+Bot Chat client and separate Phone screen are being integrated locally.
+
 ### Native fetch probe diagnosis (2026-10-02)
 
 Three isolated native phase-probe attempts ended in failure; none produced a

@@ -29,6 +29,12 @@ full T12, Linux, phone loading and release acceptance remain open. See the
 [native sample](docs/research/local-media-native-phase-service-2026-10-02.md) and
 [probe diagnosis](NOUS_GATEWAY_OBSERVATIONS.md#native-fetch-probe-diagnosis-2026-10-02).
 
+The mobile [spec 029 policy amendment](https://github.com/MahdiHedhli/HermesBotMobile/commit/57fb3394af8c61026074abf8ebe3387942d67a75)
+is independently documentation-reviewed and published. It aligns client planning
+with minimum-version/API admission while preserving authorization and image limits.
+Phone UI/controller image integration remains open; no runtime or device change
+follows from this documentation update.
+
 | Status | Capability | Notes |
 | --- | --- | --- |
 | Available | Device pairing | Operator starts a local QR offer and confirms a short authentication string. Each paired device has its own key. |
