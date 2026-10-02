@@ -570,21 +570,27 @@ released. The plan has one host opt-in, per-bot keys and a running route activat
 
 The profile-scoped API server has list, create, edit, pause, resume, and delete
 routes for scheduled jobs. HMP's mobile cron preview uses those existing
-read/pause/resume/delete routes with an owner-device gate, a closed-by-default
-host flag, and exact-build qualification. New jobs start paused. On qualified
-builds, a narrow profile-scoped Hermes writer also saves Bot Chat delivery,
-finite repeats, and previous-run continuity for create/edit. The feature works
-without an upstream change on those builds, but a complete public API contract
-for continuity would remove that version-specific writer. Delivery of mobile
-push notifications remains a separate API gap. On the owner's qualified host,
-two runs of a phone-created job completed with Bot Chat delivery receipts and
-persisted replies. The second run's input contained the first answer,
-establishing previous-run continuity in this preview. This does not make the
-private writer a supported public API.
+read/pause/resume/delete routes with an owner-device gate and a closed-by-default
+host flag. The current minimum-version policy above replaces the earlier
+exact-build runtime allowlist: jobs and model operations require Hermes `0.21.5`
+(`2026.9.24`), while later or unknown builds attempt the required APIs. Authorization,
+feature settings and actual API behavior still govern availability; an untested
+commit alone does not turn a supported feature off.
 
-Bot default-model reads and writes are also possible on a qualified build using
-Hermes's profile-scoped validation. HMP keeps this preview off by default and
-does not send model credentials to the phone.
+New jobs start paused. A narrow profile-scoped Hermes writer also saves Bot Chat
+delivery, finite repeats and previous-run continuity for create/edit. A complete
+public API contract for continuity would remove that version-specific writer.
+Earlier qualification samples recorded two completed runs of a phone-created job,
+with Bot Chat delivery receipts and persisted replies. The second run's input
+contained the first answer, establishing continuity in that sample. Those historical
+runs do not establish job execution or phone controls on the currently deployed
+Linux host, and do not make the private writer a supported public API. Mobile
+push remains separate work; the approval notification contract and inputs above
+are not a deployed notification service.
+
+Bot default-model reads and writes also use Hermes's profile-scoped validation
+under the current minimum-version policy. HMP keeps this preview off by default
+and does not send model credentials to the phone.
 
 Named profiles need their own API server keys under the existing multiplexed
 gateway contract. HMP now reports Bot Chat send availability per authorized bot
