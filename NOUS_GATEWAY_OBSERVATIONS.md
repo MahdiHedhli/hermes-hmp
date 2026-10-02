@@ -28,20 +28,25 @@ gate or make unfinished approval/media transport available.
 
 ## Mobile availability and draft-recovery review checkpoint (2026-10-01)
 
-The visible instance-switcher heartbeat and Dismiss draft recovery are app candidates,
-not installed features. Independent review reproduced bounded client defects in shared
+The visible instance-switcher heartbeat and Dismiss draft recovery are independently
+reviewed source in [app draft #66](https://github.com/MahdiHedhli/HermesBotMobile/pull/66)
+at `097f4a1`, now installed in owner iPhone dogfood build `2026100203`.
+Independent review reproduced bounded client defects in shared
 credential retirement from an unauthenticated ready answer, stale probe quarantine,
 delivery-notice lifetime on reopen, ID redaction and saved success timestamps after
-lifecycle changes. The bounded repairs are now a source candidate undergoing independent
-delta review. These are
+lifecycle changes. All five repairs passed independent delta review and root source acceptance.
+Five permanent real-controller and Navigator tests cover signal lifetime, reopen and queued
+replacement; root reran those and sixteen released-draft cases (21 passed). These are
 client responsibilities, not a request for upstream to remove authorization checks.
 Server transcript rows remain authoritative; matching text alone cannot identify an
 ambiguous send, and original send evidence must survive refresh before a retry.
 
 The approval-alert handoff core passed independent review as inert source under its
-owned port contracts. Failure cleanup is assigned before UI integration; actual HMP
+owned port contracts. Failure cleanup exposed a same-ticket timer arming defect; a paired
+exact-state and fail-closed repair is assigned before UI integration. Actual HMP
 issuer/provider/OS delivery and approvals minimum-policy integration remain unfinished.
-No new installed build, public release or push-delivery result follows.
+The installed build's bundle version was verified; physical behavior awaits owner testing.
+No public release, operational approvals or push-delivery result follows.
 
 ## Native observation and access diagnostics checkpoint (2026-10-01)
 
