@@ -13,11 +13,27 @@ Start from the [constitution](../.specify/memory/constitution.md) and the [spec]
 
 The migrated F1 and send design notes are reference material. New work should use the structure above.
 
-Current draft feature specs: [scheduled jobs](004-mobile-cron/spec.md),
-[bot default model](005-bot-default-model/spec.md),
-[per-bot send gate](006-per-bot-send-gate/spec.md), and
-[host setup check](007-host-setup-check/spec.md),
-[bot channel health](008-bot-health-check/spec.md),
-[owner pairing controls](009-owner-pairing-controls/spec.md), and
-[Bot Chat history paging](010-bot-chat-history-start/spec.md). The setup-check branch
-originally used `004`; this integration gives each feature a unique number.
+Several early number prefixes are shared by two directories. Directory names are historical and
+are never renumbered; always refer to a spec by its full directory name.
+
+| Directory | Topic |
+| --- | --- |
+| `000-public-migration` | Public repository migration |
+| `001-connect-and-browse` | Pairing, transport, and read routes |
+| `002-send-messages` | Guarded Bot Chat send |
+| `003-approvals` | Approval and clarify draft (§7b) |
+| `004-approval-qualification-lane` | Independent approval qualification gate |
+| `004-mobile-cron` | Owner-gated scheduled jobs (§7c) |
+| `005-approval-process-matrix` | Real-process approval matrix tooling |
+| `005-new-profile-routing` | Root route for a bot created after install |
+| `005-bot-default-model` | Owner-gated bot default model (§7d) |
+| `006-per-bot-send-gate` | Per-bot send status |
+| `006-phone-send-refusal` | Phone-send typed refusal |
+| `007-host-setup-check` | Read-only host setup check |
+| `008-bot-health-check` | Read-only bot channel health |
+| `009-owner-pairing-controls` | Per-device jobs and model controls decision |
+| `010-bot-chat-history-start` | Bot Chat history paging (SES-2a) |
+
+Per-bot send, per-device controls, and approval gates are separate: a controls grant never opens an
+approval route (see `docs/architecture/contracts/HMP_V1.md` §7b). A future owner-admission spec
+should use an unoccupied number (`014` is currently free).

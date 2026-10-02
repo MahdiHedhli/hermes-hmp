@@ -1,6 +1,6 @@
 # Gateway observations for Nous Research
 
-HMP is a mobile gateway plugin for Hermes. These are proposals for upstream discussion, not claims that Hermes currently provides these APIs. Findings were checked against Hermes `main` at `81f481b2` and the qualified older `8afaab37` build on 2026-09-28. Search, bot lifecycle, and plugin installation were rechecked against `main` at `39faafb6` on 2026-09-29; later releases may differ.
+HMP is a mobile gateway plugin for Hermes. These requests come from implementing a client that reads and sends to the canonical Bot Chat. They are proposals for upstream discussion, not claims that Hermes currently provides these APIs. Legacy-path findings were checked against Hermes `main` at `81f481b2` and the qualified older `8afaab37` build on 2026-09-28; the approval finding was also reproduced on extracted stock-base `04fa849e` and experimental `7e8c8f07` builds. Search, bot lifecycle, and plugin installation were rechecked against `main` at `39faafb6` on 2026-09-29; later releases may differ.
 
 The [unified gateway research](https://github.com/MahdiHedhli/hermes-hmp/blob/main/HermesUnifiedGatewayResearch.md) and Nous's [one-gateway PR](https://github.com/NousResearch/hermes-agent/pull/106742) support one profile-scoped execution authority. The companion [entry-point plan](https://gist.github.com/unsupportedpastels/765f9d551ce88ee01630c18367763e75) puts a future mobile client behind an authenticated gateway API but treats remote entry as follow-on work. The requests below concern that remaining remote contract; they do not ask Nous to create another session owner.
 
@@ -24,7 +24,7 @@ The [unified gateway research](https://github.com/MahdiHedhli/hermes-hmp/blob/ma
 
 ## Approval and clarify events
 
-Desktop-owned Bot Chat turns can surface prompts only through Desktop's process-local channel. A remote client cannot answer those same prompts through session chat. We propose durable, session-scoped pending prompt identifiers, event delivery for approval and clarify requests, and authenticated response routes that enforce the same authorization and expiry rules as Hermes itself. Draft HMP security fixes do not resolve the missing Bot Chat notifier, so the interim server path remains disabled pending real-route qualification.
+Desktop-owned Bot Chat turns can surface prompts only through Desktop's process-local channel. A remote client cannot answer those same prompts through session chat. The inspected session-chat route also lacks the notifier and approval events needed for API-owned Bot Chat turns. We propose durable, session-scoped pending prompt identifiers, event delivery for approval and clarify requests, and authenticated response routes that enforce the same authorization and expiry rules as Hermes itself. HMP's proposed Phone chat path is under security review and is not released; draft HMP security fixes do not resolve the missing Bot Chat notifier, so the interim server path remains disabled pending real-route qualification.
 
 ## Already usable without a new Hermes contract
 

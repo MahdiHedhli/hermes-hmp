@@ -140,17 +140,30 @@ def bootstrap_compat_entry(build: fc.BuildInfo, plugin_copy_dir: Path) -> None:
         )
     compat_path = plugin_copy_dir / "read_compat_builds.json"
     data = json.loads(compat_path.read_text(encoding="utf-8"))
+    # An archive extraction has no `.git` (`git_sha` None, fingerprint-only). A git-install fixture
+    # (specs/005 amendment 2) reports its own HEAD, and the runtime matches a git install only to
+    # an entry with that SHA, so the bootstrap entry must carry it.
+    git_sha = identity.get("git_sha")
+    # Never bind a HEAD the fixture merely borrows (linked worktree, pointer file, alternates): the
+    # seed's reading must equal the independence-checked one, and an archive must stay `.git`-free.
+    import approval_fixture
+
+    if approval_fixture.independent_git_head(build.src_dir) != git_sha:
+        raise fc.FixtureSafetyError(
+            f"build {build.label!r}: git identity is not an independent clone's HEAD; "
+            "refusing to bootstrap a compat entry"
+        )
     for entry in data.get("builds", []):
-        if entry.get("fingerprint") == fingerprint and entry.get("git_sha") is None:
+        if entry.get("fingerprint") == fingerprint and entry.get("git_sha") == git_sha:
             return  # already listed (a prior bootstrap run against this same copy)
     data.setdefault("builds", []).append(
         {
             "fingerprint": fingerprint,
-            "git_sha": None,
+            "git_sha": git_sha,
             "label": f"fixture-bootstrap-{build.label}",
             "qualified_by": "tools/fixtures/build_fixture.py (T060 bootstrap pending T063/T064)",
             "qualified_at": datetime.now(UTC).isoformat(),
-            "source_sha": _resolve_source_sha(build.label),
+            "source_sha": git_sha or _resolve_source_sha(build.label),
         }
     )
     compat_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
@@ -266,6 +279,7 @@ def build_instance(
     plugin_dir: Path,
     *,
     force: bool,
+    private_seed_diagnostics: bool = False,
 ) -> dict[str, Any]:
     fc.assert_instance_paths_safe(paths)
     if paths.home.exists() or paths.xdg_state.exists():
@@ -373,6 +387,7 @@ def build_instance(
                 seeded = fc.run_seed_script(
                     build,
                     FIXTURE_SEED,
+                    *(["--diagnostic-stacks"] if private_seed_diagnostics else []),
                     "seed-messages",
                     "--home", str(paths.home),
                     "--profile", name,
@@ -438,6 +453,7 @@ def build_instance_if_needed(
     plugin_dir: Path,
     *,
     force: bool,
+    private_seed_diagnostics: bool = False,
 ) -> dict[str, Any]:
     """`--serve` on an existing `--out` reuses it (profiles, seeded history and any `mutate.py`
     change survive a restart) instead of rebuilding -- `server/tests/integration/
@@ -451,7 +467,10 @@ def build_instance_if_needed(
                 return inst
         # Home exists (e.g. from a differently-scoped prior run) but no meta recorded -- rebuild
         # is the only way to know what is really there.
-    return build_instance(build, paths, manifest, instance, plugin_dir, force=force)
+    return build_instance(
+        build, paths, manifest, instance, plugin_dir, force=force,
+        private_seed_diagnostics=private_seed_diagnostics,
+    )
 
 
 class _GatewayHandle:
@@ -703,8 +722,17 @@ def main(argv: list[str] | None = None) -> int:
         "--force", action="store_true",
         help="wipe and rebuild an instance home that already exists",
     )
+    parser.add_argument(
+        "--private-seed-diagnostics", action="store_true",
+        help="offline only: seed-messages dumps all Python thread stacks once to its stderr after "
+        "90 s (nonfatal). The stderr is sensitive: use only with private capture.",
+    )
     args = parser.parse_args(argv)
 
+    if args.private_seed_diagnostics and args.serve:
+        parser.error(
+            "--private-seed-diagnostics is offline-only; it cannot be combined with --serve"
+        )
     builds_dir = args.builds_dir or os.environ.get(DEFAULT_BUILDS_DIR_ENV)
     if not builds_dir:
         parser.error(f"--builds-dir is required (or set ${DEFAULT_BUILDS_DIR_ENV})")
@@ -727,7 +755,10 @@ def main(argv: list[str] | None = None) -> int:
         paths = fc.instance_paths(args.out, instance["key"])
         print(f"==> instance {instance['key']!r} ({build.label}) at {paths.home}", file=sys.stderr)
         built.append(
-            build_instance_if_needed(build, paths, manifest, instance, plugin_dir, force=args.force)
+            build_instance_if_needed(
+                build, paths, manifest, instance, plugin_dir, force=args.force,
+                private_seed_diagnostics=args.private_seed_diagnostics,
+            )
         )
 
     write_fixture_meta(args.out, build, built)

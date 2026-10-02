@@ -214,11 +214,17 @@ REACHED_DATA_ATTRIBUTES: frozenset[str] = frozenset(
         "profile_route_rejected",
         "config",
         "extra",
+        "_gateway_accepted",
+        "defer_policy",
+        "admission_ticket",
+        "reported",
+        "value",
     }
 )
 
 # HMP-originated rows carry `platform_message_id = "hmp:<chat_id>:<cmid>"` (§2, `chat_id` row).
 _CMID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+PHONE_ADMISSION_WAIT_S = 5.0
 
 
 class BridgeError(RuntimeError):
@@ -844,6 +850,8 @@ class HermesReadBridge:
             return AuthorizeResult(authz=AuthzState.UNVERIFIABLE)
         self._pending_triggers.add(future)
         future.add_done_callback(self._trigger_done)
+        if hasattr(self._adapter, "note_inert_reply"):
+            self._adapter.note_inert_reply(chat_id)
         log_event("p6_trigger", outcome="sent")
         return AuthorizeResult(authz=AuthzState.PENDING_OPERATOR)
 
@@ -1245,3 +1253,140 @@ class HermesReadBridge:
             return None  # no usable key: the gate stays closed (never a short key, never a 401)
         prefix = "" if is_default else f"/p/{quote(profile, safe='')}"
         return DirectSendEndpoint(host=host, port=port, api_key=key, path_prefix=prefix)
+
+    # ------------------------------------------------------------------------------------------
+    # Amendment F3 (HMP_V1.md §7b). Function-local imports, only called once the direct-send
+    # gate is open. `resolve_all` is never passed. Private clarify indexes are not read.
+    # ------------------------------------------------------------------------------------------
+
+    def phone_session_key(self, user_id: str, profile: str) -> str | None:
+        """The session key `handle_message` will derive for this user's Phone chat. Not the
+        Bot Chat key, and not a value the phone sent."""
+        chat_id = self._directory.chat_id(user_id, profile)
+        if chat_id is None:
+            return None
+        source = self._source(chat_id=chat_id, user_id=user_id, profile=profile, user_name=None)
+        if _not_routed(source, profile):
+            return None
+        key = self._hermes.build_session_key(source, profile)
+        return key if isinstance(key, str) and key else None
+
+    def list_gateway_approvals(self, session_key: str) -> list[dict[str, object]]:
+        from tools.approval import list_gateway_approvals
+
+        rows = list_gateway_approvals(session_key)
+        if not isinstance(rows, list):
+            raise BridgeError("approval list is not a list")
+        return [row for row in rows if isinstance(row, dict)]
+
+    def resolve_gateway_approval(self, session_key: str, choice: str, request_id: str) -> int:
+        from tools.approval import resolve_gateway_approval
+
+        resolved = resolve_gateway_approval(
+            session_key, choice, resolve_all=False, request_id=request_id
+        )
+        return resolved if isinstance(resolved, int) and not isinstance(resolved, bool) else 0
+
+    def resolve_gateway_clarify(self, clarify_id: str, response: str) -> bool:
+        from tools.clarify_gateway import resolve_gateway_clarify
+
+        return bool(resolve_gateway_clarify(clarify_id, response))
+
+    def mark_clarify_awaiting_text(self, clarify_id: str) -> bool:
+        from tools.clarify_gateway import mark_awaiting_text
+
+        return bool(mark_awaiting_text(clarify_id))
+
+    def approval_timeout_s(self, profile: str) -> int:
+        from tools.approval_context import _get_approval_timeout
+
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = _get_approval_timeout()
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 300
+        return value
+
+    def clarify_timeout_s(self, profile: str) -> int:
+        from tools.clarify_gateway import get_clarify_timeout
+
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = get_clarify_timeout()
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 3600
+        return value
+
+    async def deliver_phone_message(
+        self, *, user_id: str, profile: str, text: str, message_id: str
+    ) -> bool | None:
+        """AP-6. Builds the event off the loop (the Hermes import) and hands it to
+        `handle_message` on the loop. `allow_gateway_control` is false. On builds with
+        admission tickets, task scheduling is not a successful submission: wait for the
+        definitive admission outcome. None means the result is ambiguous."""
+        event = await asyncio.to_thread(
+            self._phone_event, user_id=user_id, profile=profile, text=text, message_id=message_id
+        )
+        await self._adapter.handle_message(event)
+        accepted = getattr(event, "_gateway_accepted", None) is True
+        if getattr(event, "defer_policy", None) != "reject":
+            # Older stock builds have no admission ticket. `_gateway_accepted` is only set True on
+            # acceptance; False or missing also covers a busy-queued event that was retained but
+            # never flagged, so it is unknown, never a definitive refusal.
+            return True if accepted else None
+        # Reject policy: the reported admission ticket is authoritative. The initial scheduling
+        # flag is deliberately not consulted (busy queue debounce leaves it False while the event
+        # is retained).
+        ticket = getattr(event, "admission_ticket", None)
+        if ticket is None:
+            return None
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + PHONE_ADMISSION_WAIT_S
+        while True:
+            reported = getattr(ticket, "reported", None)
+            if reported is not None:
+                outcome = getattr(reported, "value", None)
+                if outcome == "admitted":
+                    return True
+                if outcome in {
+                    "refused_busy",
+                    "refused_draining",
+                    "refused_precondition_head",
+                    "refused_precondition_expired",
+                    "refused_lease_timeout",
+                    "refused_unauthorized",
+                }:
+                    return False
+                # REFUSED_OTHER includes persist_failed and unreported_exit. Its detail
+                # is not on the ticket, so this cannot safely be called definitive.
+                return None
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return None
+            await asyncio.sleep(min(0.025, remaining))
+
+    def _phone_event(self, *, user_id: str, profile: str, text: str, message_id: str) -> Any:
+        from gateway.platforms.event import MessageEvent, MessageType
+
+        chat_id = self._directory.chat_id(user_id, profile)
+        if chat_id is None:
+            raise BridgeError("no chat for the phone message")
+        label = self._directory.operator_label(user_id) or OPERATOR_LABEL_UNKNOWN
+        source = self._source(chat_id=chat_id, user_id=user_id, profile=profile, user_name=label)
+        if _not_routed(source, profile):
+            raise BridgeError("source is not routed to the profile")
+        names = {f.name for f in dataclasses.fields(MessageEvent)}
+        kwargs: dict[str, Any] = {
+            "text": text,
+            "message_type": MessageType.TEXT,
+            "message_id": message_id,
+            "source": source,
+            "user_id": user_id,
+            "user_name": label,
+        }
+        if "internal" in names:
+            kwargs["internal"] = False
+        if "allow_gateway_control" not in names:
+            raise BridgeError("MessageEvent lacks allow_gateway_control")
+        kwargs["allow_gateway_control"] = False
+        if "defer_policy" in names:
+            kwargs["defer_policy"] = "reject"
+        return MessageEvent(**kwargs)

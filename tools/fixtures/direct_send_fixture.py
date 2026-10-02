@@ -32,15 +32,19 @@ unmodified, through the SAME `_fixture_common.py` helpers `build_fixture.py` its
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
 import json
 import os
 import re
 import secrets
 import socket
+import stat
 import subprocess
 import sys
 import time
+from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -50,9 +54,14 @@ if str(THIS_DIR) not in sys.path:
     sys.path.insert(0, str(THIS_DIR))
 
 import _fixture_common as fc  # noqa: E402
+import approval_fixture  # noqa: E402
 
 FIXTURE_SEED = THIS_DIR / "fixture_seed.py"
 FIXTURE_PAIRING_CLI = THIS_DIR / "fixture_pairing_cli.py"
+# Fixture tooling may be invoked without pytest's server pythonpath configuration.
+if str(fc.SERVER_DIR) not in sys.path:
+    sys.path.insert(0, str(fc.SERVER_DIR))
+
 BUILD_FIXTURE = THIS_DIR / "build_fixture.py"
 
 # CS-22-style scannable prefix (mirrors `fixtures/f1/instances.yaml`'s own `label_prefix`
@@ -118,9 +127,11 @@ def write_direct_send_config(
     model_base_url: str,
     named_profile_keys: dict[str, str] | None = None,
     direct_send_enabled: bool = True,
+    owner_device_ids: tuple[str, ...] = (),
     cron_enabled: bool = False,
     model_enabled: bool = False,
     api_server_host: str = "127.0.0.1",
+    approval_timeout: int = 120,
 ) -> None:
     """Rewrites the instance's own `config.yaml` (the SAME shape `build_fixture.py`'s
     `_write_config_yaml` writes, plus the new blocks) and appends a matching `model:` block to
@@ -170,6 +181,7 @@ def write_direct_send_config(
         "      extra:\n",
         '        bind: "127.0.0.1"\n',
         f"        port: {hmp_port}\n",
+        f"        owner_device_ids: {json.dumps(list(owner_device_ids))}\n",
         "        direct_send:\n",
         f"          enabled: {'true' if direct_send_enabled else 'false'}\n",
     ]
@@ -185,7 +197,18 @@ def write_direct_send_config(
         f"        port: {api_server_port}\n",
         f'        key: "{api_key}"\n',
     ]
+    # Plugin platforms have no implicit hermes-hmp toolset. Without this explicit
+    # selection Phone turns send no tools, and the fake provider routes them as aux.
+    # Manual mode makes human approval deterministic; smart uses an auxiliary LLM.
     model_block = [
+        "platform_toolsets:\n",
+        "  hmp: [terminal, clarify]\n",
+        "approvals:\n",
+        "  mode: manual\n",
+        f"  timeout: {int(approval_timeout)}\n",
+        "  unattended_mode: deny\n",
+        "terminal:\n",
+        f"  cwd: {json.dumps(str(paths.out_dir))}\n",
         "model:\n",
         "  provider: custom\n",
         f"  base_url: {model_base_url}\n",
@@ -369,6 +392,8 @@ def seed_bot_chat(
 
 
 def wait_for_port(port: int, *, timeout: float) -> bool:
+    """Legacy generic TCP wait for callers that own no process. The native gateway starts use
+    `require_native_listener`, which also watches the spawned process."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -380,6 +405,170 @@ def wait_for_port(port: int, *, timeout: float) -> bool:
                 continue
             return True
     return False
+
+
+# The one hard deadline for a native HMP listener, from spawn. Unchanged from the former
+# `wait_for_port(..., timeout=45.0)` calls; nothing below extends or resets it.
+NATIVE_LISTENER_DEADLINE_SECONDS = 45.0
+_CONNECT_TIMEOUT_SECONDS = 1.0
+_RETRY_SLEEP_SECONDS = 0.5
+NATIVE_START_RECORD = "native_start_readiness.jsonl"
+NATIVE_START_PHASES = ("first_start", "restart")
+_LOG_TAIL_CHARS = 4000
+
+
+@dataclass(frozen=True)
+class ReadinessResult:
+    """Content-free outcome of one native listener wait. `outcome` is exactly one of `ready`,
+    `process_exit` or `deadline`; `exit_code` is set only for `process_exit`."""
+
+    outcome: str
+    elapsed: float
+    attempts: int
+    exit_code: int | None = None
+
+
+class NativeStartError(RuntimeError):
+    """A native gateway start that did not reach readiness. `classification` is `process_exit`
+    or `deadline`; the new metadata in the message (phase, exit code, deadline) is content-free.
+    The message also carries the existing, unredacted local gateway log tail the fixture has
+    always emitted (bounded, private fixture material, not a public artifact)."""
+
+    classification = "native_start"
+
+    def __init__(self, message: str, result: ReadinessResult) -> None:
+        super().__init__(message)
+        self.result = result
+
+
+class NativeProcessExitError(NativeStartError):
+    classification = "process_exit"
+
+
+class NativeListenerDeadlineError(NativeStartError):
+    classification = "deadline"
+
+
+def _connect_loopback(port: int, timeout: float) -> None:
+    """One loopback TCP connect. Raises OSError (incl. timeout) on failure."""
+    with socket.create_connection(("127.0.0.1", port), timeout=timeout):
+        pass
+
+
+def wait_for_native_listener(
+    proc: subprocess.Popen[bytes],
+    port: int,
+    *,
+    timeout: float = NATIVE_LISTENER_DEADLINE_SECONDS,
+    clock: Callable[[], float] = time.monotonic,
+    sleep: Callable[[float], None] = time.sleep,
+    connect: Callable[[int, float], None] | None = None,
+) -> ReadinessResult:
+    """Process-aware readiness: the SAME loopback TCP connect as `wait_for_port`, under one hard
+    monotonic deadline measured from this call (the caller invokes it right after spawn), no
+    sliding extension.
+
+    The exact spawned `proc` is polled before each connect and again after a connect succeeds; an
+    exited process is `process_exit` immediately, so a listener that appears on the port while
+    `proc` is dead (or belongs to something else) never qualifies. After that poll the deadline is
+    checked once more: a connect that succeeds at or after it is `deadline`, not `ready`. Each
+    connect timeout and each sleep is clamped to the time left, so requested waits cannot exceed
+    `timeout`; the OS may still return later than requested, but no success at or after the
+    ceiling can qualify. This is readiness only, not listener ownership or authority: pairing/TLS
+    and the later gates stay authoritative. A connect failure of any kind counts as not ready."""
+    # The deadline is a ceiling, never widened: a caller may only shorten it.
+    if not 0 <= timeout <= NATIVE_LISTENER_DEADLINE_SECONDS:
+        raise ValueError("native listener timeout must be within 0..45 seconds")
+    connect = connect or _connect_loopback
+    start = clock()
+    deadline = start + timeout
+    attempts = 0
+
+    def result(outcome: str, code: int | None = None, now: float | None = None) -> ReadinessResult:
+        return ReadinessResult(
+            outcome, max(0.0, (clock() if now is None else now) - start), attempts, code
+        )
+
+    while True:
+        code = proc.poll()
+        if code is not None:
+            return result("process_exit", code)
+        remaining = deadline - clock()
+        if remaining <= 0:
+            return result("deadline")
+        attempts += 1
+        try:
+            connect(port, min(_CONNECT_TIMEOUT_SECONDS, remaining))
+        except OSError:
+            connected = False
+        else:
+            connected = True
+        if connected:
+            # The connect may have reached a listener that is not this process's.
+            code = proc.poll()
+            if code is not None:
+                return result("process_exit", code)
+            # A connect that returns at or after the ceiling (a last-moment success, or the OS
+            # delaying this thread) never qualifies; the clock is read after the poll so a slow
+            # poll counts too. One read serves both the check and the reported elapsed.
+            now = clock()
+            if now >= deadline:
+                return result("deadline", now=now)
+            return result("ready", now=now)
+        remaining = deadline - clock()
+        if remaining <= 0:
+            continue  # the top-of-loop poll decides process_exit before deadline
+        sleep(min(_RETRY_SLEEP_SECONDS, remaining))
+
+
+def _require_known_phase(phase: str) -> None:
+    if phase not in NATIVE_START_PHASES:
+        raise ValueError(f"native start phase must be one of {NATIVE_START_PHASES}")
+
+
+def record_native_start(out_dir: Path, phase: str, result: ReadinessResult) -> None:
+    """Appends one minimal line to the fixture artifact: phase, outcome, elapsed seconds, attempt
+    count and exit code. No environment, argv, prompt, key, identifier or transcript."""
+    line = {
+        "phase": phase,
+        "outcome": result.outcome,
+        "elapsed_seconds": round(result.elapsed, 3),
+        "attempts": result.attempts,
+        "exit_code": result.exit_code,
+    }
+    out_dir.mkdir(parents=True, exist_ok=True)
+    with (out_dir / NATIVE_START_RECORD).open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps(line, sort_keys=True) + "\n")
+
+
+def require_native_listener(
+    proc: subprocess.Popen[bytes],
+    port: int,
+    *,
+    phase: str,
+    out_dir: Path,
+    log_path: Path,
+    timeout: float = NATIVE_LISTENER_DEADLINE_SECONDS,
+    **boundaries: Any,
+) -> ReadinessResult:
+    """`wait_for_native_listener`, recorded for `phase` (`first_start` or `restart`); raises a
+    classified `NativeStartError` (with the local log tail, as before) unless ready."""
+    _require_known_phase(phase)
+    result = wait_for_native_listener(proc, port, timeout=timeout, **boundaries)
+    record_native_start(out_dir, phase, result)
+    if result.outcome == "ready":
+        return result
+    tail = log_path.read_text(encoding="utf-8", errors="replace")[-_LOG_TAIL_CHARS:]
+    if result.outcome == "process_exit":
+        raise NativeProcessExitError(
+            f"{phase}: gateway process exited (code {result.exit_code}) before the HMP "
+            f"listener was ready.\nLog tail:\n{tail}",
+            result,
+        )
+    raise NativeListenerDeadlineError(
+        f"{phase}: HMP listener did not come up within {timeout:g}s.\nLog tail:\n{tail}",
+        result,
+    )
 
 
 def start_gateway(
@@ -408,8 +597,36 @@ def stop_gateway(proc: subprocess.Popen[bytes]) -> None:
         proc.wait(timeout=5)
 
 
+def start_native_gateway(
+    build: fc.BuildInfo,
+    paths: fc.InstancePaths,
+    *,
+    port: int,
+    phase: str,
+    log_path: Path,
+) -> subprocess.Popen[bytes]:
+    """Spawns the gateway and waits for its listener under the process-aware deadline. On any
+    failure the spawned process is stopped before the classified error propagates, so a caller
+    never inherits (or leaks) a half-started process."""
+    _require_known_phase(phase)  # before any spawn
+    proc = start_gateway(build, paths, log_path=log_path)
+    try:
+        require_native_listener(
+            proc, port, phase=phase, out_dir=paths.out_dir, log_path=log_path
+        )
+    except BaseException:
+        stop_gateway(proc)
+        raise
+    return proc
+
+
 def start_lease_holder(
-    build: fc.BuildInfo, paths: fc.InstancePaths, *, profile: str, session_id: str
+    build: fc.BuildInfo,
+    paths: fc.InstancePaths,
+    *,
+    profile: str,
+    session_id: str,
+    desktop_held: bool = False,
 ) -> subprocess.Popen[str]:
     """Starts `fixture_seed.py acquire-lease` as a BACKGROUND process that holds the lease for as
     long as it stays alive (see that command's own docstring for why it must not exit). Blocks
@@ -424,6 +641,7 @@ def start_lease_holder(
         [
             str(build.venv_python), str(FIXTURE_SEED), "acquire-lease",
             "--home", str(paths.home), "--profile", profile, "--session-id", session_id,
+            *(["--desktop-held"] if desktop_held else []),
         ],
         env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
         text=True,
@@ -476,20 +694,268 @@ def pair_reference_device(
     return json.loads(result.stdout)
 
 
+# The offline build needs only a runnable toolchain: `build_fixture.py` and every child it spawns
+# (`hermes profile create`, the seed scripts, git) re-derive HERMES_*/XDG_* themselves, and nothing
+# under tools/fixtures or server/hmp_plugin reads another variable. The caller's credentials and
+# Hermes/live-home variables are therefore NOT forwarded. `PYTHONDONTWRITEBYTECODE` is the matrix's
+# own test control; `HMP_HERMES_BUILDS_DIR` is added explicitly from `builds_dir`. The receipt
+# variables (`HMP_DIRECT_SEND_QUALIFICATION`, `RECEIPT_ENV`) are read by THIS process after the
+# build and are never needed, or forwarded, to it.
+BUILD_ENV_ALLOWLIST = (
+    "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "PYTHONDONTWRITEBYTECODE",
+)
+BUILD_FAILURE_OUTPUT = "build_offline_failure.log"
+BUILD_FAILURE_STREAM_CAP = 64 * 1024  # bytes kept per stream (the tail); the rest is dropped
+
+
+def offline_build_env(builds_dir: str | None) -> dict[str, str]:
+    env = {k: os.environ[k] for k in BUILD_ENV_ALLOWLIST if k in os.environ}
+    builds = builds_dir or os.environ.get("HMP_HERMES_BUILDS_DIR")
+    if builds:
+        env["HMP_HERMES_BUILDS_DIR"] = builds
+    return env
+
+
+# Only the two known macOS aliases are normalized (`/tmp` -> `/private/tmp`, `/var` ->
+# `/private/var`), and only while the alias really is a root-owned symlink with exactly that
+# target. Any other symlink in the path is refused, never resolved.
+_PLATFORM_ALIASES = {"/tmp": "private/tmp", "/var": "private/var"}  # noqa: S108 - alias table
+_DIR_FLAGS = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+# The one sticky shared directory an ancestor may be: the root-owned temp base, by canonical name.
+_SHARED_TEMP_BASES = ("/private/tmp", "/tmp")  # noqa: S108 - the known shared temp base
+BUILD_FAILURE_NOT_RETAINED = ("not_retained_unsafe_destination", "not_retained_write_failed")
+
+
+def _normalize_platform_alias(path: str) -> str:
+    for alias, target in _PLATFORM_ALIASES.items():
+        if path == alias or path.startswith(alias + "/"):
+            try:
+                st = os.lstat(alias)
+                if stat.S_ISLNK(st.st_mode) and st.st_uid == 0 and os.readlink(alias) == target:
+                    return "/" + target + path[len(alias):]
+            except OSError:
+                pass
+            break
+    return path
+
+
+def _ancestor_is_trusted(st: os.stat_result, canonical: str) -> bool:
+    """An ancestor may only be renamed/replaced by its owner, so it must be owned by root or this
+    user and not group/other-writable. The one exception is the known shared temp base, accepted
+    only when its real metadata is a root-owned sticky directory; no other sticky or foreign
+    directory is trusted."""
+    if not stat.S_ISDIR(st.st_mode):
+        return False
+    if canonical in _SHARED_TEMP_BASES:
+        return st.st_uid == 0 and bool(st.st_mode & stat.S_ISVTX)
+    if st.st_uid not in (0, os.geteuid()):
+        return False
+    return not st.st_mode & (stat.S_IWGRP | stat.S_IWOTH)
+
+
+def _open_private_output_dir(out: Path) -> int | None:
+    """Returns a directory fd for `out`, or None when it is not a safe private destination.
+
+    The absolute path is walked one component at a time with `openat(O_NOFOLLOW|O_DIRECTORY)` from
+    `/`, so a symlink in ANY component (not just the last) is refused and nothing is resolved. Only
+    the final component may be created (mode 0700, never `parents=True`, nothing else is made or
+    chmod-ed); its parent must already exist. Every ancestor must be owned by root or this user and
+    not group/other-writable (the root-owned sticky temp base excepted), so no one else can rename
+    the directory out from under the path. The final directory must be owned by this user with
+    mode exactly 0700. The caller keeps the fd, so a later write goes to this inode, never to
+    whatever the path names afterwards."""
+    try:
+        fc.assert_outside_real_home(out, "fixture build output")
+        raw = os.fspath(out)
+        if not os.path.isabs(raw):
+            raw = os.path.join(os.getcwd(), raw)
+        parts = [p for p in _normalize_platform_alias(raw).split("/") if p not in ("", ".")]
+        if not parts or ".." in parts:
+            return None
+        fd = os.open("/", _DIR_FLAGS)
+        try:
+            if not _ancestor_is_trusted(os.fstat(fd), "/"):
+                raise OSError
+            for i, name in enumerate(parts):
+                try:
+                    nxt = os.open(name, _DIR_FLAGS, dir_fd=fd)
+                except FileNotFoundError:
+                    if i != len(parts) - 1:
+                        raise
+                    os.mkdir(name, 0o700, dir_fd=fd)
+                    nxt = os.open(name, _DIR_FLAGS, dir_fd=fd)
+                os.close(fd)
+                fd = nxt
+                if i != len(parts) - 1 and not _ancestor_is_trusted(
+                    os.fstat(fd), "/" + "/".join(parts[: i + 1])
+                ):
+                    raise OSError
+            st = os.fstat(fd)
+            if st.st_uid != os.geteuid() or stat.S_IMODE(st.st_mode) != 0o700:
+                raise OSError
+        except BaseException:
+            os.close(fd)
+            raise
+        return fd
+    except (OSError, ValueError, fc.FixtureSafetyError):
+        return None
+
+
+def _retain_build_failure_output(dir_fd: int | None, stdout: bytes, stderr: bytes) -> str:
+    """Writes the build's raw output (unfiltered, tail-bounded) into the private directory behind
+    `dir_fd` as a new 0600 file and returns a closed status word; it never raises. The file is
+    created `O_EXCL|O_NOFOLLOW` relative to the fd, so it cannot be redirected or replace anything.
+    On a write/close failure the partial file is unlinked only if the name still refers to the
+    inode this call created (checked against the open fd); a failed cleanup is not retried and
+    nothing about the failure (exception text, paths) is returned or kept. The raw output is
+    fixture-private diagnostic material for the root reviewer and is never put in an exception."""
+    if dir_fd is None:
+        return BUILD_FAILURE_NOT_RETAINED[0]
+    try:
+        st = os.fstat(dir_fd)
+        if st.st_uid != os.geteuid() or stat.S_IMODE(st.st_mode) != 0o700:
+            return BUILD_FAILURE_NOT_RETAINED[0]
+        flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
+        fd = os.open(BUILD_FAILURE_OUTPUT, flags, 0o600, dir_fd=dir_fd)
+    except OSError:
+        return BUILD_FAILURE_NOT_RETAINED[0]
+    status = "retained"
+    created = None
+    try:
+        created = os.fstat(fd)
+        parts = []
+        for name, data in (("stdout", stdout), ("stderr", stderr)):
+            kept = data[-BUILD_FAILURE_STREAM_CAP:]
+            parts.append(f"== {name}: {len(data)} bytes, last {len(kept)} kept ==\n".encode())
+            parts.append(kept + b"\n")
+        view = memoryview(b"".join(parts))
+        while view:
+            written = os.write(fd, view)
+            if type(written) is not int or not 0 < written <= len(view):
+                raise OSError  # no progress (or nonsense): closed, never retried or spun on
+            view = view[written:]
+    except Exception:  # a diagnostic must never replace the native failure
+        status = BUILD_FAILURE_NOT_RETAINED[1]
+    try:
+        os.close(fd)
+    except Exception:
+        status = BUILD_FAILURE_NOT_RETAINED[1]
+    if status != "retained" and created is not None:
+        with contextlib.suppress(Exception):  # one attempt; a failed cleanup is not retried
+            now = os.stat(BUILD_FAILURE_OUTPUT, dir_fd=dir_fd, follow_symlinks=False)
+            if (now.st_dev, now.st_ino) == (created.st_dev, created.st_ino):
+                os.unlink(BUILD_FAILURE_OUTPUT, dir_fd=dir_fd)
+    return status
+
+
 def build_offline(
     label: str, out: Path, *, builds_dir: str | None = None, instances: str | None = None
 ) -> dict[str, Any]:
-    """`build_fixture.py --build <label> --out <out>` (offline; never `--serve`), unmodified, as
-    its own subprocess -- exactly `test_reads_fixture.py`'s own `_build()` helper, except this one
-    also captures and parses the JSON `main()` prints on the non-`--serve` path (`{"ok", "build",
-    "instances": [...]}`), which carries each profile's `user_id`/`authorized` metadata this
-    module needs to pair a fresh reference device without going through `--serve`. `instances`
-    (comma-separated keys, e.g. `"A"`) narrows the build to just what a test needs."""
-    env = dict(os.environ)
-    if builds_dir:
-        env["HMP_HERMES_BUILDS_DIR"] = builds_dir
+    """`build_fixture.py --build <label> --out <out>` (offline; never `--serve`) as its own
+    subprocess, plus `--private-seed-diagnostics` -- exactly `test_reads_fixture.py`'s own
+    `_build()` helper, except this one also captures and parses the JSON `main()` prints on
+    the non-`--serve` path (`{"ok", "build", "instances": [...]}`), which carries each
+    profile's `user_id`/`authorized` metadata this module needs to pair a fresh reference
+    device without going through `--serve`. `instances` (comma-separated keys, e.g. `"A"`)
+    narrows the build to just what a test needs.
+
+    `--private-seed-diagnostics` makes the `seed-messages` child dump one nonfatal all-thread
+    Python stack to its stderr if it is still running after 90 s. That stderr is sensitive and
+    reaches only this helper's private capture (retained 0600 on failure, never in the error or
+    the pytest report); a caller invoking `build_fixture.py` directly with the flag must capture
+    stderr privately too.
+
+    The child gets `offline_build_env`, not the caller's environment. A nonzero exit raises a
+    closed `FixtureSafetyError` (phase and exit code only: no argv, environment or output) and the
+    raw output is kept only in `BUILD_FAILURE_OUTPUT` under `out`, mode 0600, when `out` is a
+    private (0700, this user's) directory reached without a symlink. So does a zero exit whose
+    stdout is not one JSON object (the body is never in the error). Never retried.
+
+    An `out` that is not such a destination (symlinked ancestor, missing parent, `..`, wrong owner
+    or mode) is refused BEFORE any child is started, with a closed `FixtureSafetyError`
+    (`phase=build_offline_destination`, no path); nothing is created or chmod-ed for it."""
+    env = offline_build_env(builds_dir)
     args = [sys.executable, str(BUILD_FIXTURE), "--build", label, "--out", str(out)]
     if instances:
         args += ["--instances", instances]
-    result = subprocess.run(args, check=True, env=env, capture_output=True, text=True)
-    return json.loads(result.stdout)
+    # Private output is arranged BEFORE the build (created 0700 if absent, nothing else made or
+    # chmod-ed) and the fd is held, so a failure is retained into that same inode.
+    out_fd = _open_private_output_dir(Path(out))
+    if out_fd is None:
+        raise fc.FixtureSafetyError(
+            "offline fixture build refused: phase=build_offline_destination "
+            "private_output=not_retained_unsafe_destination"
+        ) from None
+    # Only after the private destination is held: stderr may then carry a diagnostic stack.
+    args.append("--private-seed-diagnostics")
+    failure: str | None = None
+    try:
+        result = subprocess.run(args, check=False, env=env, capture_output=True)
+        info = None
+        if result.returncode == 0:
+            # Parsed inline, not through a helper taking the body: pytest's long traceback prints
+            # each frame's arguments, so `json.loads(s=<child stdout>)` would put the body in a
+            # failure report. Only flagged here; the raise is outside any except block.
+            with contextlib.suppress(ValueError):
+                info = json.loads(result.stdout.decode("utf-8"))
+            if not isinstance(info, dict):
+                failure = (
+                    f"phase=build_offline_output exit_code=0 stdout_bytes={len(result.stdout)}"
+                )
+        else:
+            failure = f"phase=build_offline exit_code={result.returncode}"
+        if failure is not None:
+            retained = _retain_build_failure_output(out_fd, result.stdout, result.stderr)
+    finally:
+        with contextlib.suppress(OSError):  # owned fd only; never replaces the native result
+            os.close(out_fd)
+    if failure is not None:
+        raise fc.FixtureSafetyError(
+            f"offline fixture build failed: {failure} private_output={retained}"
+        ) from None
+    qualification = os.environ.get("HMP_DIRECT_SEND_QUALIFICATION")
+    approval_receipt = os.environ.get(approval_fixture.RECEIPT_ENV)
+    if qualification or approval_receipt:
+        builds = builds_dir or os.environ["HMP_HERMES_BUILDS_DIR"]
+        build = fc.resolve_build(Path(builds), label)
+        if qualification:
+            install_fixture_qualification(build, out, Path(qualification))
+        # A separate lane, manifest and receipt: the direct-send receipt above never opens it.
+        approval_fixture.install_from_env(build, out, approval_receipt)
+    return info
+
+
+def install_fixture_qualification(build: fc.BuildInfo, out: Path, qualification: Path) -> None:
+    """Apply a matrix receipt ONLY to the scratch plugin copy, bound to exact current bytes.
+
+    No environment override exists in the runtime plugin. Without a receipt, fixtures retain
+    the committed fail-closed list. The matrix uses a provisional receipt after probes, then
+    publishes a final receipt only after integration passes.
+    """
+    from hmp_plugin.compat import compute_read_bridge_fingerprint, load_read_compat_list
+
+    fc.assert_outside_real_home(out, "fixture qualification destination")
+    target = out.resolve() / "_hmp_plugin" / "direct_send_supported_builds.json"
+    if not target.resolve().is_relative_to(out.resolve()):
+        raise fc.FixtureSafetyError("qualification destination escaped the fixture copy")
+    data = json.loads(target.read_text(encoding="utf-8"))
+    receipt = json.loads(qualification.read_text(encoding="utf-8"))
+    if receipt.get("format") != 1 or receipt.get("bridge_files") != data["bridge_files"]:
+        raise fc.FixtureSafetyError("direct-send qualification fingerprint boundary differs")
+    # Validate with the actual runtime parser before changing the fixture. Identity-only
+    # candidates lack BuildEntry provenance and would silently close the runtime gate.
+    try:
+        load_read_compat_list(qualification)
+    except (TypeError, ValueError) as exc:
+        raise fc.FixtureSafetyError("invalid direct-send fixture qualification schema") from exc
+    fingerprint = compute_read_bridge_fingerprint(build.src_dir, data["bridge_files"])
+    # An archive (no .git) needs a fingerprint-only entry; a git-install fixture needs one bound to
+    # the build's own HEAD, exactly as the runtime matches them. `None == None` for an archive.
+    head = approval_fixture.independent_git_head(build.src_dir)
+    entries = [e for e in receipt.get("builds", [])
+               if e.get("label") == build.label and e.get("fingerprint") == fingerprint
+               and e.get("git_sha") == head and fingerprint is not None]
+    if len(entries) != 1:
+        raise fc.FixtureSafetyError("no exact direct-send fixture qualification for this build")
+    data["builds"] = entries
+    target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")

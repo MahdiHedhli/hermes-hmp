@@ -52,7 +52,7 @@ import contextlib
 import re
 import secrets
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from typing import Any
 
 from . import wire
@@ -91,6 +91,7 @@ from .contract import (
     WriteGateState,
 )
 from .logging_policy import log_bridge_exception
+from .prompts import phone_open_request
 
 # Amendment A1 (session browsing, SES-1a): the opaque session_ref prefix, matching the §13-style
 # identifier convention (`device_id`, `pairing_id`, ...): a fixed tag plus b64u of random bytes.
@@ -283,6 +284,7 @@ class Reads:
         clock: Callable[[], int] = lambda: int(time.time()),
         epoch: str | None = None,
         on_served_profiles: Callable[[Sequence[str]], None] | None = None,
+        prompt_store: Any = None,
     ) -> None:
         self._bridge = bridge
         self._store = store
@@ -301,6 +303,7 @@ class Reads:
         # build with no adapter wired in (tests, an unsupported build). Never allowed to affect
         # the response: any exception it raises is swallowed here, not propagated to the caller.
         self._on_served_profiles = on_served_profiles
+        self._prompt_store = prompt_store
 
     # ------------------------------------------------------------------------------------------
     # RO-1 roster
@@ -433,7 +436,7 @@ class Reads:
             if ref is None:
                 if self._baseline(user_id, profile) is not None:
                     self._drop_baseline(user_id, profile)
-                return self._empty_snapshot(tail)
+                return self._empty_snapshot(tail, user_id, profile)
             lineage = self._bridge.lineage(ref)
             rows = self._bridge.latest(ref, limit)
         except HmpError:
@@ -441,33 +444,62 @@ class Reads:
         except Exception as exc:
             raise _internal_error(exc) from exc
         self._save_baseline(user_id, profile, lineage)
+        durable = tuple(_wire(r) for r in rows)
         return SnapshotResponse(
             conversation_id=CONVERSATION_ID,
             session_id=lineage.lineage_tip,
             # The head is the newest active row id, read in the same query as the window (RO-7),
             # so it never names a row the client does not hold.
             head_message_id=rows[-1].id if rows else None,
-            messages=tuple(_wire(r) for r in rows),
+            messages=self._with_observations(user_id, profile, durable),
             turn=TurnObservation(observed_state=TurnObservedState.UNKNOWN, since=None),
             partial=None,
             partial_lost=False,
-            open_requests=(),
+            open_requests=self._phone_open_requests(user_id, profile),
             tail=tail,
         )
 
-    @staticmethod
-    def _empty_snapshot(tail: TailPosition) -> SnapshotResponse:
+    def _empty_snapshot(
+        self, tail: TailPosition, user_id: str = "", profile: str = ""
+    ) -> SnapshotResponse:
         return SnapshotResponse(
             conversation_id=CONVERSATION_ID,
             session_id=None,
             head_message_id=None,
-            messages=(),
+            messages=self._with_observations(user_id, profile, ()),
             turn=TurnObservation(observed_state=TurnObservedState.UNKNOWN, since=None),
             partial=None,
             partial_lost=False,
-            open_requests=(),
+            open_requests=self._phone_open_requests(user_id, profile),
             tail=tail,
         )
+
+    def _phone_open_requests(self, user_id: str, profile: str) -> tuple[Mapping[str, object], ...]:
+        store = self._prompt_store
+        if store is None or not user_id:
+            return ()
+        store.purge(int(self._clock()))
+        return tuple(
+            phone_open_request(row)
+            for row in store.list_visible(self._iid, user_id, profile, now=int(self._clock()))
+            if row.surface == "phone_chat"
+        )
+
+    def _with_observations(
+        self, user_id: str, profile: str, durable: tuple[WireMessage, ...]
+    ) -> tuple[WireMessage, ...]:
+        """Phone-chat observations Hermes has not yet written. A durable row with the same text
+        replaces the observation (AP-6)."""
+        store = self._prompt_store
+        if store is None or not user_id:
+            return durable
+        store.purge(int(self._clock()))
+        store.discard_durable_observations(
+            self._iid, user_id, profile, {(row.role, row.text) for row in durable}
+        )
+        # Observations have no durable id or lineage. Never splice them into cursor-addressed
+        # history: repeated text and a sliding fetch window cannot prove message identity.
+        return durable
 
     # ------------------------------------------------------------------------------------------
     # RO-6 history

@@ -188,6 +188,14 @@ class ServerContext:
     direct_send_flag: Callable[[], bool] = field(default=lambda: False)
     # `direct_send.DirectSendDeps`, only on a supported build (mirrors `reads`/`authorize` above).
     direct_send_deps: Any = None
+    # v1.3 prompt rows (process memory). None until a supported listener builds one.
+    prompt_store: Any = None
+    # Independent approval qualification (specs/004-approval-qualification-lane). Default closed.
+    # A passing guarded-send build never implies this; `adapter.py` binds it to
+    # `compat.approval_listener_qualifier(read identity)`, bound to the PROCESS-level baseline
+    # (`approval_build_qualified` is the informational CLI check, not admission). May block on file
+    # reads, so callers run it off the event loop.
+    approval_qualified: Callable[[], bool] = field(default=lambda: False)
     # Mobile cron is a separate persistent-execution gate. Both settings are
     # read from live HMP config for every request, and default to deny.
     owner_device_ids: Callable[[], frozenset[str]] = field(default=lambda: frozenset())
@@ -201,11 +209,34 @@ class ServerContext:
     send_available: Callable[[], bool] = field(default=lambda: True)
     session_browsing_available: bool = True
 
+    def approval_qualification_open(self) -> bool:
+        """Only an exact `True` opens the gate; an exception, a falsy or a non-bool closes it."""
+        try:
+            return self.approval_qualified() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
+
     def is_owner_device(self, device_id: str) -> bool:
         try:
             decision = self.store.owner_controls_decision(device_id)
             if decision is not None:
                 return decision
+            return device_id in self.owner_device_ids()
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def is_approval_owner_device(self, device_id: str) -> bool:
+        """Approval/clarify and Phone-send routes: the configured allowlist AND no host denial.
+
+        The per-device controls grant (`is_owner_device`) is a separate privilege for jobs and
+        model management. It never opens an approval route on its own: only an exact
+        `owner_device_ids` entry does, and an explicit host denial still closes it. Any failed
+        read denies."""
+        try:
+            if self.store.owner_controls_decision(device_id) is False:
+                return False
             return device_id in self.owner_device_ids()
         except Exception as exc:
             log_bridge_exception(exc)

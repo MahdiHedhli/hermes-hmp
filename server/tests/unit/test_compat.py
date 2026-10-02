@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -18,10 +19,13 @@ from pathlib import Path
 
 import pytest
 
+from hmp_plugin import compat as compat_mod
 from hmp_plugin.compat import (
+    BuildIdentity,
     DependencySpec,
     GitFingerprintReader,
     _resolve_gitdir,  # white-box test of the git-metadata parser
+    approval_build_qualified,
     compute_read_bridge_fingerprint,
     load_read_compat_list,
     probe_dependencies,
@@ -29,6 +33,805 @@ from hmp_plugin.compat import (
 )
 
 BRIDGE_FILES = ("a.py", "sub/b.py")
+
+
+# --------------------------------------------------------------------------------------------
+# Approval qualification lane (draft, fail closed; specs/004-approval-qualification-lane)
+# --------------------------------------------------------------------------------------------
+
+_SHA = "a" * 40
+
+
+def _approval_fixture(tmp_path: Path, *, listed: bool = True) -> tuple[Path, Path, BuildIdentity]:
+    """A fake Hermes tree with one approval file and an optional exact-build listing."""
+    source = tmp_path / "hermes"
+    (source / "tools").mkdir(parents=True)
+    (source / "tools" / "approval.py").write_text("def resolve(): pass\n", encoding="utf-8")
+    git_dir = source / ".git"
+    git_dir.mkdir()
+    (git_dir / "HEAD").write_text(_SHA + "\n", encoding="utf-8")
+    fingerprint = compute_read_bridge_fingerprint(source, ["tools/approval.py"])
+    assert fingerprint is not None
+    builds = (
+        [{
+            "label": "fixture", "fingerprint": fingerprint, "git_sha": _SHA,
+            "qualified_by": "test", "qualified_at": "2026-09-30",
+        }]
+        if listed
+        else []
+    )
+    manifest = tmp_path / "approval.json"
+    manifest.write_text(
+        json.dumps({"format": 1, "bridge_files": ["tools/approval.py"], "builds": builds}),
+        encoding="utf-8",
+    )
+    return source, manifest, BuildIdentity("f" * 64, _SHA)
+
+
+def _spy_approval_probe(
+    monkeypatch: pytest.MonkeyPatch, result: tuple[str, ...] = ()
+) -> list[tuple[Path, tuple[str, ...]]]:
+    calls: list[tuple[Path, tuple[str, ...]]] = []
+
+    def probe(*, hermes_root: Path, bridge_files: tuple[str, ...]) -> tuple[str, ...]:
+        calls.append((hermes_root, tuple(bridge_files)))
+        return result
+
+    monkeypatch.setattr(compat_mod, "probe_approval_dependencies", probe)
+    return calls
+
+
+def test_shipped_approval_list_is_empty_and_covers_the_direct_send_files() -> None:
+    package = Path(compat_mod.__file__).parent
+    shipped = load_read_compat_list(package / "approval_supported_builds.json")
+    send = load_read_compat_list(package / "direct_send_supported_builds.json")
+    assert shipped.builds == ()
+    assert set(send.bridge_files) < set(shipped.bridge_files)
+    assert list(shipped.bridge_files) == sorted(shipped.bridge_files)
+    assert all(not f.startswith("/") and ".." not in f for f in shipped.bridge_files)
+    assert {
+        f"{dependency.module.replace('.', '/')}.py"
+        for dependency in compat_mod.APPROVAL_DEPENDENCIES
+    } <= set(shipped.bridge_files)
+    assert {
+        "tools/approval_detection.py",
+        "tools/approval_floors.py",
+        "tools/approval_prompt.py",
+        "tools/approval_smart.py",
+        "tools/clarify_tool.py",
+        "gateway/session_context.py",
+        "gateway/hosted_room_execution_policy.py",
+        "agent/terminal_approval_batch.py",
+        "gateway/platforms/api_server_openai_routes.py",
+        "gateway/platforms/api_server_room_dispatch.py",
+        "gateway/status.py",
+        "hermes_cli/config.py",
+    } <= set(shipped.bridge_files)
+
+
+def test_empty_approval_list_qualifies_nothing_and_probes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path, listed=False)
+    calls = _spy_approval_probe(monkeypatch)
+    def unexpected_read(*args: object, **kwargs: object) -> None:
+        pytest.fail("an empty approval list must not inspect Hermes source")
+
+    monkeypatch.setattr(compat_mod, "locate_hermes_root", unexpected_read)
+    monkeypatch.setattr(compat_mod.GitFingerprintReader, "read", unexpected_read)
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert calls == []
+    shipped = approval_build_qualified(identity, hermes_root=source)  # the real shipped list
+    assert shipped is False
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    "content",
+    [
+        "not json",
+        "[]",
+        json.dumps({"format": 2, "bridge_files": [], "builds": []}),
+        json.dumps({"format": 1, "bridge_files": "tools/approval.py", "builds": []}),
+        json.dumps({"format": 1, "bridge_files": ["tools/approval.py"], "builds": {}}),
+        json.dumps({
+            "format": 1,
+            "bridge_files": ["tools/approval.py"],
+            "builds": [{"label": "x"}],
+        }),
+        json.dumps({"format": 1, "bridge_files": [], "builds": []}),
+    ],
+)
+def test_malformed_approval_list_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, content: str
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path)
+    manifest.write_text(content, encoding="utf-8")
+    calls = _spy_approval_probe(monkeypatch)
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert calls == []
+
+
+def test_missing_approval_list_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, _, identity = _approval_fixture(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    assert not approval_build_qualified(
+        identity, hermes_root=source, compat_path=tmp_path / "absent.json"
+    )
+    assert calls == []
+
+
+def test_listed_build_with_no_bridge_files_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path)
+    manifest.write_text(
+        json.dumps({
+            "format": 1,
+            "bridge_files": [],
+            "builds": [{
+                "label": "fixture",
+                "fingerprint": "f" * 64,
+                "git_sha": _SHA,
+                "qualified_by": "test",
+                "qualified_at": "2026-09-30",
+            }],
+        }),
+        encoding="utf-8",
+    )
+    calls = _spy_approval_probe(monkeypatch)
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert calls == []
+
+
+def test_listed_build_with_passing_probe_is_qualified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    assert approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert calls == [(source, ("tools/approval.py",))]
+    assert not approval_build_qualified(None, hermes_root=source, compat_path=manifest)
+
+
+def test_missing_approval_source_file_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path)
+    (source / "tools" / "approval.py").unlink()
+    calls = _spy_approval_probe(monkeypatch)
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert calls == []
+
+
+def test_changed_approval_source_sha_mismatch_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    (source / "tools" / "approval.py").write_text("def resolve(): return 1\n", encoding="utf-8")
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert calls == []  # changed fingerprint: no exact match, so nothing was probed
+    (source / "tools" / "approval.py").write_text("def resolve(): pass\n", encoding="utf-8")
+    moved = BuildIdentity("f" * 64, "b" * 40)  # read identity at another commit
+    assert not approval_build_qualified(moved, hermes_root=source, compat_path=manifest)
+    assert calls == []
+    no_git = BuildIdentity("f" * 64, None)
+    assert not approval_build_qualified(no_git, hermes_root=source, compat_path=manifest)
+    assert calls == []
+
+
+def test_approval_probe_failure_or_error_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity = _approval_fixture(tmp_path)
+    _spy_approval_probe(monkeypatch, ("tools.approval.resolve_gateway_approval",))
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+
+    def boom(**_: object) -> tuple[str, ...]:
+        raise RuntimeError("probe exploded")
+
+    monkeypatch.setattr(compat_mod, "probe_approval_dependencies", boom)
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+
+
+def test_approval_probe_uses_only_approval_dependencies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: list[object] = []
+
+    def fake(*, hermes_root: Path | None, bridge_files: object, specs: object) -> tuple[str, ...]:
+        seen.append(specs)
+        return ()
+
+    monkeypatch.setattr(compat_mod, "probe_read_dependencies", fake)
+    compat_mod.probe_approval_dependencies(hermes_root=tmp_path, bridge_files=("x.py",))
+    compat_mod.probe_direct_send_dependencies(hermes_root=tmp_path, bridge_files=("x.py",))
+    assert seen == [compat_mod.APPROVAL_DEPENDENCIES, compat_mod.DIRECT_SEND_DEPENDENCIES]
+    assert compat_mod.APPROVAL_DEPENDENCIES is not compat_mod.DIRECT_SEND_DEPENDENCIES
+    # F3 added send dependencies beyond the original three; require those three, never an exact set.
+    assert {
+        ("hermes_cli.active_sessions", "active_session_registry_snapshot"),
+        ("hermes_state", "SessionDB.get_session_by_title"),
+        ("hermes_state", "SessionDB.get_compression_lineage"),
+    } <= {(s.module, s.qualname) for s in compat_mod.DIRECT_SEND_DEPENDENCIES}
+
+
+def test_approval_and_guarded_send_qualification_are_independent(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, approval_manifest, identity = _approval_fixture(tmp_path / "a")
+    _, empty_manifest, _ = _approval_fixture(tmp_path / "b", listed=False)
+    approval_calls = _spy_approval_probe(monkeypatch)
+    send_probes: list[object] = []
+    monkeypatch.setattr(
+        compat_mod, "probe_direct_send_dependencies", lambda **kw: send_probes.append(kw) or ()
+    )
+
+    # A cached guarded-send pass is never borrowed: approvals stay closed on an empty list.
+    monkeypatch.setattr(compat_mod, "_direct_send_qualified_cache", True)
+    assert not approval_build_qualified(identity, hermes_root=source, compat_path=empty_manifest)
+    assert approval_calls == []
+
+    # A cached guarded-send failure does not close an otherwise qualified approval build, and the
+    # approval lane neither reads nor writes the send cache nor runs the send probe.
+    monkeypatch.setattr(compat_mod, "_direct_send_qualified_cache", False)
+    assert approval_build_qualified(identity, hermes_root=source, compat_path=approval_manifest)
+    assert compat_mod._direct_send_qualified_cache is False
+    assert send_probes == []
+    assert len(approval_calls) == 1
+
+
+# --------------------------------------------------------------------------------------------
+# Listener-start approval admission (`approval_listener_qualifier`) and the bounded probe cache
+# --------------------------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _clean_approval_state(monkeypatch: pytest.MonkeyPatch) -> None:
+    compat_mod._approval_probe_cache.clear()
+    monkeypatch.setattr(compat_mod, "_approval_process_latch", None)
+    real = compat_mod.approval_listener_qualifier
+
+    def with_read_manifest(identity: object, **kwargs: object):  # type: ignore[no-untyped-def]
+        """Tests that inject an approval manifest also get the explicit synthetic read manifest
+        written beside it by `_listener`, never the shipped read list."""
+        manifest = kwargs.get("compat_path")
+        if isinstance(manifest, Path) and "read_compat_path" not in kwargs:
+            kwargs["read_compat_path"] = manifest.with_name("read.json")
+        return real(identity, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(compat_mod, "approval_listener_qualifier", with_read_manifest)
+
+
+def _new_process(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Simulate a full gateway process restart: a fresh module means an unset latch."""
+    monkeypatch.setattr(compat_mod, "_approval_process_latch", None)
+
+
+def _entry(fingerprint: str, sha: str | None) -> dict[str, object]:
+    entry: dict[str, object] = {
+        "label": "fixture", "fingerprint": fingerprint,
+        "qualified_by": "test", "qualified_at": "2026-09-30",
+    }
+    if sha is not None:
+        entry["git_sha"] = sha
+    return entry
+
+
+def _fingerprint(source: Path, files: list[str] | None = None) -> str:
+    value = compute_read_bridge_fingerprint(source, files or ["tools/approval.py"])
+    assert value is not None
+    return value
+
+
+def _write_manifest(
+    manifest: Path, entries: list[dict[str, object]], files: list[str] | None = None
+) -> None:
+    manifest.write_text(
+        json.dumps(
+            {"format": 1, "bridge_files": files or ["tools/approval.py"], "builds": entries}
+        ),
+        encoding="utf-8",
+    )
+
+
+def _listener(
+    tmp_path: Path, *, git: bool = True
+) -> tuple[Path, Path, BuildIdentity, list[dict[str, object]]]:
+    """A fake source, a manifest listing it exactly, and its startup read identity."""
+    source, manifest, _ = _approval_fixture(tmp_path)
+    sha = _SHA if git else None
+    if not git:
+        (source / ".git" / "HEAD").unlink()
+        (source / ".git").rmdir()
+    entries = [_entry(_fingerprint(source), sha)]
+    _write_manifest(manifest, entries)
+    # An explicit synthetic read manifest; the read identity is the REAL fresh read of it.
+    _write_manifest(manifest.with_name("read.json"), [], ["tools/approval.py"])
+    identity = GitFingerprintReader(["tools/approval.py"]).read(source)
+    assert identity is not None
+    return source, manifest, identity, entries
+
+
+def _count_reads(monkeypatch: pytest.MonkeyPatch) -> list[int]:
+    reads: list[int] = []
+    real = compat_mod.GitFingerprintReader.read
+
+    def counted(self: GitFingerprintReader, root: Path) -> BuildIdentity | None:
+        reads.append(1)
+        return real(self, root)
+
+    monkeypatch.setattr(compat_mod.GitFingerprintReader, "read", counted)
+    return reads
+
+
+def test_listener_factory_with_empty_list_inspects_and_imports_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, _ = _listener(tmp_path)
+    _write_manifest(manifest, [])
+    calls = _spy_approval_probe(monkeypatch)
+
+    def unexpected(*args: object, **kwargs: object) -> None:
+        pytest.fail("an empty approval list must not inspect Hermes source")
+
+    monkeypatch.setattr(compat_mod, "locate_hermes_root", unexpected)
+    monkeypatch.setattr(compat_mod.GitFingerprintReader, "read", unexpected)
+    closed = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    assert closed() is False
+    # Adding the first entry later needs a restart: this listener stays closed.
+    (source / "tools" / "approval.py").write_text("def resolve(): pass\n", encoding="utf-8")
+    _write_manifest(manifest, [_entry("a" * 64, _SHA)])
+    assert closed() is False
+    shipped = compat_mod.approval_listener_qualifier(identity, hermes_root=source)
+    assert shipped() is False
+    assert calls == []
+
+
+def test_listener_factory_without_a_read_identity_is_closed_and_reads_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, _, _ = _listener(tmp_path)
+    reads = _count_reads(monkeypatch)
+    calls = _spy_approval_probe(monkeypatch)
+    closed = compat_mod.approval_listener_qualifier(
+        None, hermes_root=source, compat_path=manifest
+    )
+    assert closed() is False
+    assert reads == [] and calls == []
+
+
+def test_listener_accepts_the_exact_startup_source_and_probes_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, _ = _listener(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    qualified = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    reads = _count_reads(monkeypatch)  # counts only the per-callback identity reads
+    assert [qualified() for _ in range(4)] == [True] * 4
+    assert len(reads) == 4  # fresh fingerprint + SHA on EVERY callback
+    assert calls == [(source.resolve(), ("tools/approval.py",))]  # the probe ran once
+    assert len(compat_mod._approval_probe_cache) == 1
+
+
+def test_listener_starting_on_a_moved_read_sha_or_unidentifiable_source_stays_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, _ = _listener(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    moved = BuildIdentity(identity.fingerprint, "b" * 40)
+    closed = compat_mod.approval_listener_qualifier(
+        moved, hermes_root=source, compat_path=manifest
+    )
+    assert closed() is False
+    _new_process(monkeypatch)
+    (source / "tools" / "approval.py").unlink()
+    closed = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    (source / "tools" / "approval.py").write_text("def resolve(): pass\n", encoding="utf-8")
+    assert closed() is False  # a startup failure is permanent until restart
+    assert calls == []
+
+
+def test_listener_malformed_startup_manifest_stays_closed_after_repair(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, entries = _listener(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    manifest.write_text("not json", encoding="utf-8")
+    closed = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    _write_manifest(manifest, entries)
+    assert closed() is False
+    assert calls == []
+
+
+def test_another_qualified_no_git_build_in_place_closes_until_restart(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, entries = _listener(tmp_path, git=False)
+    calls = _spy_approval_probe(monkeypatch)
+    qualified = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    assert qualified() is True
+    (source / "tools" / "approval.py").write_text("def resolve(): return 2\n", encoding="utf-8")
+    both = [*entries, _entry(_fingerprint(source), None)]  # disk build B is ALSO listed
+    _write_manifest(manifest, both)
+    assert qualified() is False
+    assert len(calls) == 1  # B was never probed
+    # A listener reconnect in the SAME process cannot adopt B: the process latch holds build A.
+    same_process = compat_mod.approval_listener_qualifier(
+        GitFingerprintReader(["tools/approval.py"]).read(source),
+        hermes_root=source,
+        compat_path=manifest,
+    )
+    assert same_process() is False
+    # Only a new gateway PROCESS re-baselines on B (whose read identity is read afresh).
+    _new_process(monkeypatch)
+    restarted = compat_mod.approval_listener_qualifier(
+        GitFingerprintReader(["tools/approval.py"]).read(source),
+        hermes_root=source,
+        compat_path=manifest,
+    )
+    assert restarted() is True
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    ["moved_sha", "missing_file", "changed_file", "other_file_list", "removed", "malformed"],
+)
+def test_source_or_manifest_drift_closes_immediately_and_restoration_may_reopen(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    source, manifest, identity, entries = _listener(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    qualified = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    assert qualified() is True
+    approval_file = source / "tools" / "approval.py"
+    if mutation == "moved_sha":
+        moved = "b" * 40
+        (source / ".git" / "HEAD").write_text(moved + "\n", encoding="utf-8")
+        _write_manifest(manifest, [*entries, _entry(_fingerprint(source), moved)])  # also listed
+    elif mutation == "missing_file":
+        approval_file.unlink()
+    elif mutation == "changed_file":
+        approval_file.write_text("def resolve(): return 1\n", encoding="utf-8")
+        _write_manifest(manifest, [*entries, _entry(_fingerprint(source), _SHA)])  # also listed
+    elif mutation == "other_file_list":
+        (source / "tools" / "extra.py").write_text("x = 1\n", encoding="utf-8")
+        files = ["tools/approval.py", "tools/extra.py"]
+        _write_manifest(manifest, [_entry(_fingerprint(source, files), _SHA)], files)
+    elif mutation == "removed":
+        _write_manifest(manifest, [])
+    else:
+        manifest.write_text("{", encoding="utf-8")
+    assert qualified() is False
+    assert len(calls) == 1  # the drifted source was never probed
+    if mutation == "moved_sha":
+        (source / ".git" / "HEAD").write_text(_SHA + "\n", encoding="utf-8")
+    elif mutation in ("missing_file", "changed_file"):
+        approval_file.write_text("def resolve(): pass\n", encoding="utf-8")
+    # other_file_list: restoring the startup list/entries is all that is needed; a DIFFERENT list
+    # could only be adopted by a restart.
+    _write_manifest(manifest, entries)
+    assert qualified() is True  # the same startup entry restored
+    assert len(calls) == 1  # the restored identity reused the cached pass
+
+
+def test_failed_probe_is_never_cached_and_retries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, _ = _listener(tmp_path)
+    outcomes = [("tools.approval.resolve_gateway_approval",), RuntimeError("boom"), ()]
+    calls: list[int] = []
+
+    def probe(**_: object) -> tuple[str, ...]:
+        calls.append(1)
+        outcome = outcomes[len(calls) - 1]
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+    monkeypatch.setattr(compat_mod, "probe_approval_dependencies", probe)
+    qualified = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    assert qualified() is False
+    assert qualified() is False  # an exception closes too
+    assert compat_mod._approval_probe_cache == {}
+    assert qualified() is True
+    assert qualified() is True
+    assert len(calls) == 3
+
+
+def test_cached_pass_never_outlives_a_later_failure_condition(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, entries = _listener(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    qualified = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    assert qualified() is True
+    _write_manifest(manifest, [])
+    assert qualified() is False  # no TTL: revocation is visible on the very next callback
+    (source / "tools" / "approval.py").unlink()
+    _write_manifest(manifest, entries)
+    assert qualified() is False
+    assert len(calls) == 1
+
+
+def test_probe_cache_is_bounded_lru_and_isolated_by_source_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    calls = _spy_approval_probe(monkeypatch)
+    files = ("tools/approval.py",)
+    roots = [tmp_path / f"r{i}" for i in range(compat_mod._APPROVAL_PROBE_CACHE_MAX + 4)]
+    for root in roots:
+        assert compat_mod._approval_probe_passed(root, files, "f" * 64, _SHA) is True
+    assert len(compat_mod._approval_probe_cache) == compat_mod._APPROVAL_PROBE_CACHE_MAX
+    assert len(calls) == len(roots)  # every distinct root probed on its own
+    before = len(calls)
+    assert compat_mod._approval_probe_passed(roots[-1], files, "f" * 64, _SHA) is True
+    assert len(calls) == before  # newest still cached
+    assert compat_mod._approval_probe_passed(roots[0], files, "f" * 64, _SHA) is True
+    assert len(calls) == before + 1  # oldest was evicted
+    for other in (
+        (roots[-1], files, "e" * 64, _SHA),
+        (roots[-1], files, "f" * 64, "b" * 40),
+        (roots[-1], files, "f" * 64, None),
+        (roots[-1], ("tools/other.py",), "f" * 64, _SHA),
+    ):
+        assert compat_mod._approval_probe_passed(*other) is True
+    assert len(calls) == before + 5  # each differing key component misses
+    assert len(compat_mod._approval_probe_cache) <= compat_mod._APPROVAL_PROBE_CACHE_MAX
+
+
+def test_probe_cache_is_isolated_from_the_direct_send_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, _ = _listener(tmp_path)
+    _spy_approval_probe(monkeypatch)
+    monkeypatch.setattr(compat_mod, "_direct_send_qualified_cache", None)
+    qualified = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    assert qualified() is True
+    assert compat_mod._direct_send_qualified_cache is None
+    monkeypatch.setattr(compat_mod, "_direct_send_qualified_cache", False)
+    assert qualified() is True
+
+
+def test_simultaneous_callers_share_one_probe_under_the_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import threading
+    import time
+
+    source, manifest, identity, _ = _listener(tmp_path)
+    calls: list[int] = []
+
+    def slow_probe(**_: object) -> tuple[str, ...]:
+        calls.append(1)
+        time.sleep(0.05)
+        return ()
+
+    monkeypatch.setattr(compat_mod, "probe_approval_dependencies", slow_probe)
+    qualified = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    results: list[bool] = []
+    threads = [threading.Thread(target=lambda: results.append(qualified())) for _ in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    assert results == [True] * 8
+    assert len(calls) == 1
+    assert len(compat_mod._approval_probe_cache) == 1
+
+
+def test_one_shot_diagnostic_is_uncached_and_distinct_from_listener_admission(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, _ = _listener(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    assert approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert approval_build_qualified(identity, hermes_root=source, compat_path=manifest)
+    assert len(calls) == 2  # the informational CLI check is exact-source, one shot, no cache
+    assert compat_mod._approval_probe_cache == {}
+
+
+def test_approval_read_files_are_a_subset_of_the_approval_list() -> None:
+    package = Path(compat_mod.__file__).parent
+    shipped = load_read_compat_list(package / "approval_supported_builds.json")
+    read = load_read_compat_list(package / "read_compat_builds.json")
+    assert set(read.bridge_files) <= set(shipped.bridge_files)
+
+
+def test_production_root_lookup_binds_to_the_startup_root(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, _ = _listener(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    link = tmp_path / "link"
+    link.symlink_to(source)
+    current: list[Path | None] = [link]
+    monkeypatch.setattr(compat_mod, "locate_hermes_root", lambda: current[0])
+    qualified = compat_mod.approval_listener_qualifier(  # hermes_root=None: the production path
+        identity, compat_path=manifest
+    )
+    assert qualified() is True  # a symlink to the same resolved root is the same root
+    current[0] = None
+    assert qualified() is False  # lookup returns None
+    other = tmp_path / "other"
+    shutil.copytree(source, other)  # identical bytes and SHA, different root
+    current[0] = other
+    assert qualified() is False  # root moved
+    link.unlink()
+    link.symlink_to(other)
+    current[0] = link
+    assert qualified() is False  # symlink target moved
+    current[0] = source
+    assert qualified() is True
+    assert len(calls) == 1
+
+
+def test_read_fingerprint_mismatch_or_uncovered_read_files_latch_the_process_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, _ = _listener(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    wrong = BuildIdentity("f" * 64, identity.git_sha)  # the old fake fixture value
+    assert compat_mod.approval_listener_qualifier(
+        wrong, hermes_root=source, compat_path=manifest
+    )() is False
+    # The latch is closed: even the correct identity cannot reopen inside this process.
+    assert compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )() is False
+    _new_process(monkeypatch)
+    (source / "tools" / "read_only.py").write_text("x = 1\n", encoding="utf-8")
+    _write_manifest(
+        manifest.with_name("read.json"), [], ["tools/approval.py", "tools/read_only.py"]
+    )
+    read_identity = GitFingerprintReader(["tools/approval.py", "tools/read_only.py"]).read(source)
+    assert compat_mod.approval_listener_qualifier(
+        read_identity, hermes_root=source, compat_path=manifest
+    )() is False  # approval list does not cover the read files
+    assert calls == []
+
+
+def test_unlisted_startup_source_cannot_be_opened_by_adding_an_entry_later(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, entries = _listener(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    _write_manifest(manifest, [_entry("c" * 64, _SHA)])  # non-empty, but not this source
+    qualified = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    assert qualified() is False
+    _write_manifest(manifest, entries)  # the matching entry appears afterwards
+    assert qualified() is False
+    # A listener reconnect in the same process stays closed; only a process restart may admit.
+    assert compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )() is False
+    assert compat_mod._approval_process_latch == (None,)
+    _new_process(monkeypatch)
+    assert compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )() is True
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("bad", ["empty", "malformed", "missing"])
+def test_closed_process_latch_survives_a_repaired_manifest_and_reconnect(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, bad: str
+) -> None:
+    source, manifest, identity, entries = _listener(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    if bad == "empty":
+        _write_manifest(manifest, [])
+    elif bad == "malformed":
+        manifest.write_text("{", encoding="utf-8")
+    else:
+        manifest.unlink()
+    first = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    _write_manifest(manifest, entries)
+    reconnect = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    assert first() is False and reconnect() is False
+    assert compat_mod._approval_process_latch == (None,)
+    assert calls == []
+
+
+def test_reconnect_onto_another_listed_git_build_closes_in_the_same_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, entries = _listener(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    first = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    assert first() is True
+    moved = "b" * 40  # in-place upgrade to a build that is listed for reads AND approvals
+    (source / ".git" / "HEAD").write_text(moved + "\n", encoding="utf-8")
+    _write_manifest(manifest, [*entries, _entry(_fingerprint(source), moved)])
+    new_identity = GitFingerprintReader(["tools/approval.py"]).read(source)
+    reconnect = compat_mod.approval_listener_qualifier(
+        new_identity, hermes_root=source, compat_path=manifest
+    )
+    assert reconnect() is False and first() is False
+    assert len(calls) == 1
+
+
+def test_same_source_reconnect_reopens_and_shares_the_cached_probe(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, manifest, identity, _ = _listener(tmp_path)
+    calls = _spy_approval_probe(monkeypatch)
+    first = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    second = compat_mod.approval_listener_qualifier(
+        identity, hermes_root=source, compat_path=manifest
+    )
+    assert first() is True and second() is True
+    assert len(calls) == 1
+    assert len(compat_mod._approval_probe_cache) == 1
+
+
+def test_concurrent_first_factories_initialise_one_process_baseline(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import threading
+
+    _spy_approval_probe(monkeypatch)
+    setups = []
+    for name in ("a", "b"):
+        base = tmp_path / name
+        base.mkdir()
+        setups.append(_listener(base))
+    callbacks: list[tuple[str, object]] = []
+    guard = threading.Lock()
+    barrier = threading.Barrier(8)
+
+    def start(index: int) -> None:
+        source, manifest, identity, _ = setups[index % 2]
+        barrier.wait()
+        callback = compat_mod.approval_listener_qualifier(
+            identity, hermes_root=source, compat_path=manifest
+        )
+        with guard:
+            callbacks.append(("ab"[index % 2], callback))
+
+    threads = [threading.Thread(target=start, args=(i,)) for i in range(8)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+    latch = compat_mod._approval_process_latch
+    assert latch is not None and latch[0] is not None
+    winner = "a" if latch[0].root == setups[0][0].resolve() else "b"
+    opened = [name for name, callback in callbacks if callback()]  # type: ignore[operator]
+    assert opened == [winner] * 4  # exactly the winner's four listeners; the other root is closed
 
 
 def _write_bridge_files(root: Path) -> None:
@@ -243,6 +1046,70 @@ def test_reader_unresolvable_git_is_unidentifiable(tmp_path: Path) -> None:
     (tmp_path / ".git" / "HEAD").write_text("garbage\n")
     reader = GitFingerprintReader(BRIDGE_FILES)
     assert reader.read(tmp_path) is None
+
+
+def test_dangling_git_symlink_is_not_no_git(tmp_path: Path) -> None:
+    (tmp_path / ".git").symlink_to(tmp_path / "missing-target")
+    with pytest.raises(ValueError):
+        resolve_git_head_sha(tmp_path)
+
+
+def test_git_symlink_to_valid_dir_still_resolves(tmp_path: Path) -> None:
+    real = tmp_path / "real-git"
+    real.mkdir()
+    (real / "HEAD").write_text("b" * 40 + "\n")
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / ".git").symlink_to(real)
+    assert resolve_git_head_sha(root) == "b" * 40
+
+
+@pytest.mark.parametrize("target_kind", ["file", "dir"])
+def test_reader_dangling_git_link_is_unidentifiable(tmp_path: Path, target_kind: str) -> None:
+    _write_bridge_files(tmp_path)
+    (tmp_path / ".git").symlink_to(tmp_path / f"nonexistent-{target_kind}")
+    assert GitFingerprintReader(BRIDGE_FILES).read(tmp_path) is None
+
+
+def test_reader_inaccessible_git_metadata_is_unidentifiable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_bridge_files(tmp_path)
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "HEAD").write_text("c" * 40 + "\n")  # valid, so only the denial can fail
+    real_lstat = Path.lstat
+
+    def denied(self: Path, *args: object, **kwargs: object) -> os.stat_result:
+        if self.name == ".git":
+            raise PermissionError(13, "denied")
+        return real_lstat(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "lstat", denied)
+    with pytest.raises(PermissionError):
+        resolve_git_head_sha(tmp_path)
+    assert GitFingerprintReader(BRIDGE_FILES).read(tmp_path) is None
+
+
+def test_reader_malformed_git_pointer_is_unidentifiable(tmp_path: Path) -> None:
+    _write_bridge_files(tmp_path)
+    (tmp_path / ".git").write_text("not a pointer\n")
+    assert GitFingerprintReader(BRIDGE_FILES).read(tmp_path) is None
+
+
+def test_reader_valid_archive_without_git_is_unchanged(tmp_path: Path) -> None:
+    _write_bridge_files(tmp_path)
+    identity = GitFingerprintReader(BRIDGE_FILES).read(tmp_path)
+    assert identity is not None and identity.git_sha is None
+
+
+def test_matching_manifest_cannot_qualify_dangling_git_build(tmp_path: Path) -> None:
+    source, manifest, identity, _ = _listener(tmp_path, git=False)
+    # The archive manifest lists this exact fingerprint with no git SHA and the genuine archive
+    # reads as fingerprint-only; a dangling `.git` must not be read as that archive.
+    assert identity.git_sha is None
+    assert compat_mod.match_build(identity, load_read_compat_list(manifest).builds) is not None
+    (source / ".git").symlink_to(source / "nowhere")
+    assert GitFingerprintReader(["tools/approval.py"]).read(source) is None
 
 
 def test_reader_is_stable_across_calls(tmp_path: Path) -> None:

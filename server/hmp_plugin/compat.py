@@ -294,10 +294,13 @@ def _resolve_ref(dirs: _GitDirs, ref: str, *, _seen: frozenset[str] = frozenset(
 
 def resolve_git_head_sha(root: Path) -> str | None:
     """Research R8 step 2: HEAD resolved to a 40-hex SHA by reading git metadata only (no
-    subprocess). `None` means no `.git` at all (a valid "no git metadata" install). Any other
-    failure (a `.git` file pointer, loose ref, or `packed-refs` that cannot be resolved) raises
+    subprocess). `None` means `<root>/.git` itself is absent (`lstat` raises ENOENT): a valid
+    "no git metadata" install. A present `.git` that cannot be resolved (a dangling symlink, an
+    unreadable entry, a bad `.git` file pointer, loose ref, or `packed-refs`) raises `OSError` or
     `ValueError` — R8 step 5 treats that as unidentifiable, never as "no git"."""
-    if not (root / ".git").exists():
+    try:
+        (root / ".git").lstat()  # lstat, not exists(): a dangling link is present, not absent
+    except FileNotFoundError:
         return None
     dirs = _resolve_gitdir(root)
     head_text = (dirs.worktree / "HEAD").read_text(encoding="utf-8").strip()

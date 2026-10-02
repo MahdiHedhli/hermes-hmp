@@ -49,14 +49,14 @@ import contextlib
 import secrets
 import threading
 import time
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
 from gateway.config import Platform
 from gateway.platforms.base import BasePlatformAdapter, SendResult
 
-from . import cli, compat, direct_send, identity, server
+from . import cli, compat, direct_send, identity, prompts, server
 from .authorize import Authorize
 from .cli import listener_record_path
 from .contract import PLATFORM_NAME, OtherWhy, WriteGateState
@@ -194,6 +194,8 @@ def open_components(adapter: Any) -> server.ServerContext:
         # here even though `self._record`/`self._nonce` are not set until `connect()` finishes
         # further down -- neither `Reads.roster` nor `Authorize.authorize` can run before then.
         on_served_profiles = getattr(adapter, "_observe_served_profiles", None)
+        prompt_store = prompts.PromptStore(clock=ctx.now)
+        ctx.prompt_store = prompt_store
         ctx.reads = Reads(
             ctx.bridge,
             store,
@@ -203,6 +205,7 @@ def open_components(adapter: Any) -> server.ServerContext:
             send_gate=ctx.reported_send_gate,
             clock=ctx.now,
             on_served_profiles=on_served_profiles,
+            prompt_store=prompt_store,
         )
         ctx.authorize = Authorize(
             ctx.bridge, store, clock=ctx.now, on_served_profiles=on_served_profiles
@@ -210,11 +213,27 @@ def open_components(adapter: Any) -> server.ServerContext:
         # Amendment F2: constructed on every supported build, regardless of `direct_send_enabled`
         # -- the flag is re-checked per request (DS-2(b)), not at listener-start time, so a
         # host-side flag flip takes effect on the next request, not the next restart.
+        def _approval_timeout(profile: str) -> int:
+            bridge = ctx.bridge
+            if bridge is None:
+                return 300
+            return bridge.approval_timeout_s(profile)  # type: ignore[no-any-return]
+
         ctx.direct_send_deps = direct_send.DirectSendDeps(
             bridge=ctx.bridge,
             store=store,
             locks=direct_send.ProfileLocks(),
             now=ctx.now,
+            prompt_store=prompt_store,
+            approval_timeout=_approval_timeout,
+            approval_qualified=ctx.approval_qualification_open,
+        )
+        adapter._hmp_hooks = prompts.AdapterHooks(  # type: ignore[attr-defined]
+            store=prompt_store,
+            bridge=ctx.bridge,
+            now=ctx.now,
+            iid=ident.iid,
+            approval_qualified=ctx.approval_qualification_open,
         )
     log_event("adapter_open", outcome=result.status.value)
     return ctx
@@ -482,6 +501,18 @@ class HmpAdapter(BasePlatformAdapter):
             srv.ctx.store.close()
         self._mark_disconnected()
 
+    def _hooks(self) -> prompts.AdapterHooks | None:
+        hooks = getattr(self, "_hmp_hooks", None)
+        if isinstance(hooks, prompts.AdapterHooks):
+            return hooks
+        return None
+
+    def note_inert_reply(self, chat_id: str) -> None:
+        """The P6 trigger's outbound reply is still dropped (PR6-2)."""
+        hooks = self._hooks()
+        if hooks is not None:
+            hooks.note_inert(chat_id)
+
     async def send(
         self,
         chat_id: str,
@@ -489,9 +520,54 @@ class HmpAdapter(BasePlatformAdapter):
         reply_to: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> SendResult:
-        """Drop the content, unlogged. F1 delivers nothing to devices (PR6-2, SR-007)."""
-        del chat_id, content, reply_to, metadata
+        """Phone-chat replies create bounded observations. The inert-trigger reply does not.
+        Nothing here is logged (PR6-2, SEC-4)."""
+        hooks = self._hooks()
+        if hooks is None:
+            return SendResult(success=True)
+        await hooks.reconcile_chat(chat_id)
+        hooks.on_send(chat_id, content, reply_to, metadata)
         return SendResult(success=True)
+
+    async def _send_exec_approval_prompt(self, prompt: Any) -> SendResult:
+        """AP-6 / §3.3. An exact match becomes a card; ambiguous entries get deny-only recovery.
+        Unbound text cannot become an approval answer."""
+        hooks = self._hooks()
+        if hooks is None:
+            return SendResult(success=False)
+        stored = await hooks.on_exec_approval(prompt)
+        return SendResult(success=stored)
+
+    async def send_clarify(
+        self,
+        chat_id: str,
+        question: str,
+        choices: list[Any] | None,
+        clarify_id: str,
+        session_key: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> SendResult:
+        """Phone-chat clarify card. Does not call the base numbered-list implementation."""
+        del metadata
+        hooks = self._hooks()
+        if hooks is None:
+            return SendResult(success=False)
+        offered = [choice for choice in choices if isinstance(choice, str)] if choices else None
+        stored = await hooks.on_clarify(
+            chat_id=chat_id,
+            question=question,
+            choices=offered,
+            clarify_id=clarify_id,
+            session_key=session_key,
+        )
+        return SendResult(success=stored)
+
+    async def retire_clarify_card(self, clarify_id: str, notice: str | None = None) -> None:
+        """The wait ended with no answer. The next poll omits the card. `notice` is not logged."""
+        del notice
+        hooks = self._hooks()
+        if hooks is not None:
+            hooks.retire(clarify_id)
 
     async def get_chat_info(self, chat_id: str) -> dict[str, Any]:
         del chat_id

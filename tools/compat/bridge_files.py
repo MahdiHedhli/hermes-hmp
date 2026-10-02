@@ -11,7 +11,15 @@ union of two sets, computed for one Hermes build:
    dependency probe's list, which covers every internal the bridge reaches; `test_bridge.py` keeps
    the two in step), `inspect.getsourcefile` of the module and of the resolved attribute. This
    imports the Hermes modules, so it must run in that build's own interpreter, with the tree
-   importable. `--ast-only` skips it.
+   importable. `--ast-only` skips it. For DIRECT_SEND_DEPENDENCIES, include the read
+   dependencies plus the security behavior dependencies (control, delivery, timeout and API
+   routes), even when the plugin reaches them indirectly rather than importing them itself.
+
+Imports inside the reviewed `HermesApi` cron/model methods (`FEATURE_METHOD_IMPORTS`) belong to
+those features' own boundaries: they are left out of the target sets above and instead each file is
+required to be in `mobile_model_supported_builds.json` / `mobile_cron_supported_builds.json`. The
+check proves declared source-file coverage for the imports it sees; it is not a complete call graph
+and attests nothing about installed third-party packages.
 
 Imports inside the reviewed `HermesApi` cron/model methods (`FEATURE_METHOD_IMPORTS`) belong to
 those features' own boundaries: they are left out of the target sets above and instead each file is
@@ -21,7 +29,8 @@ and attests nothing about installed third-party packages.
 
 The committed `bridge_files` list (`server/hmp_plugin/read_compat_builds.json`) must be a superset
 of both sets on every qualified build. `--check` verifies that. `--write` merges the computed set
-into the committed list. That is a data-only change, and it changes every build fingerprint.
+into the committed list. A changed list moves old builds to `requalification_required`,
+retaining their original fingerprints as provenance but removing their matching authority.
 
 Isolation: Hermes may read `HERMES_HOME` at import time. The tool always points it at a fresh
 temporary directory, and refuses a `--hermes-src` inside the real home's `.hermes`. It never
@@ -303,6 +312,13 @@ def load_committed(path: Path = READ_COMPAT_PATH) -> list[str]:
 def write_merged(computed: set[str], path: Path = READ_COMPAT_PATH) -> list[str]:
     data = json.loads(path.read_text(encoding="utf-8"))
     merged = sorted(set(data.get("bridge_files") or []) | computed)
+    if merged != data.get("bridge_files") and data.get("builds"):
+        # An expanded boundary invalidates EVERY prior qualification. Preserve provenance,
+        # but remove matching entries rather than relying on accidentally stale hashes.
+        pending = data.setdefault("requalification_required", [])
+        for entry in data["builds"]:
+            pending.append({**entry, "reason": "bridge_files changed; rerun qualification"})
+        data["builds"] = []
     data["bridge_files"] = merged
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return merged
@@ -341,6 +357,18 @@ def compute(
     import hmp_plugin.compat as compat_module
 
     dependencies = getattr(compat_module, dependencies_attr)
+    if dependencies_attr == "DIRECT_SEND_DEPENDENCIES":
+        # Direct send also relies on read-side identity, authorization, routing and history.
+        # Derive their defining/wrapper files too, rather than trusting a hand-copied old list.
+        dependencies = (*compat_module.READ_DEPENDENCIES, *dependencies)
+    elif dependencies_attr == "APPROVAL_DEPENDENCIES":
+        # The approval lane sits on top of guarded send: its file list must cover the read,
+        # send and approval-specific defining files (a strict superset of the send list).
+        dependencies = (
+            *compat_module.READ_DEPENDENCIES,
+            *compat_module.DIRECT_SEND_DEPENDENCIES,
+            *dependencies,
+        )
     this_modules = {spec.module for spec in dependencies}
     typed = frozenset(this_modules)
     other_modules: set[str] = set()
@@ -384,7 +412,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--dependencies-attr",
         default="READ_DEPENDENCIES",
         help="name of the hmp_plugin.compat tuple to probe "
-        "(READ_DEPENDENCIES or DIRECT_SEND_DEPENDENCIES, amendment F2)",
+        "(READ_DEPENDENCIES, DIRECT_SEND_DEPENDENCIES or APPROVAL_DEPENDENCIES)",
     )
     args = parser.parse_args(argv)
 
