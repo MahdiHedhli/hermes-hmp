@@ -61,15 +61,15 @@ The [S6 media gate design](https://github.com/MahdiHedhli/hermes-hmp/blob/f1bc98
 requires fresh native/HMP source equality and a process-wide primitive baseline preserved across
 Hermes module reloads, with bounded no-follow reads and import-shadowing refusal. Independent
 Opus design amendments are adopted; the inert gate source is now accepted as described below.
-Listener integration, native callee closure and media entries remain open. This does not change or qualify the separate approval gate.
+The bounded listener integration is now source-reviewed below. Native binding, runtime ownership and media entries remain open. This does not change or qualify the separate approval gate.
 
-**Current source scope (HMP `d1e55d2`).** The inert S6a gate source (`e5e6d40`, module
+**Current source scope (HMP `6d400af`).** The inert S6a gate source (`e5e6d40`, module
 `fb8ae21e...`) is accepted after an independent Opus review, one test-only repair and a delta
 review; root and the reviewer passed 392 focused cases. Its manifest build list is empty and
-no production listener uses it, so it admits nothing. It keeps a persistent stdlib
+the listener binding calls it only under the supported-read precondition; the empty manifest admits nothing. It keeps a persistent stdlib
 `sys` anchor that survives module reload and alias homes, checks exact origin/loader/source
-files, and does bounded descriptor-based source reads with fresh checks. A later binding step must
-enforce the supported-read precondition. Source-versus-bytecode/ABA, callee closure, kernel/Git
+files, and does bounded descriptor-based source reads with fresh checks. The reviewed listener binding
+enforces the supported-read precondition. Source-versus-bytecode/ABA, callee closure, kernel/Git
 latency, same-account tampering, sub-interpreters and free-threaded runtimes remain open.
 
 The [C6b binding design](https://github.com/MahdiHedhli/hermes-hmp/blob/0dd2a37/specs/011-local-image-serving/ROOT_DECISIONS.md#c6b-binding-design-freeze-2026-10-01)
@@ -84,8 +84,13 @@ closed. The inert binding source is independently accepted at `d1e55d2` after st
 and own-Phone proof repairs; root passed 411 binding/layout cases. This is source acceptance
 only: complete exact-native binding cost, actual Phone-path evidence and request/process/device
 admission remain open. Three preexisting contract-table failures remain in the full unit suite;
-a full-green suite is not claimed. Listener binding is being implemented from the separately
-reviewed design and is not source-accepted yet. No handler, manifest entry or serving build is
+a full-green suite is not claimed. The listener binding is now independently source-accepted
+in [HMP draft #70](https://github.com/MahdiHedhli/hermes-hmp/pull/70) at `6d400af`.
+Root and the independent delta reviewer passed 138 repaired cases, and the reviewer confirmed
+13 causal mutant kills. Its preload binds actual module and class objects; split-package
+observations close media availability. Concurrent first-load cache races can require a reload
+or restart to recover. Source and bytecode, arbitrary callbacks and native cost remain distinct
+limits. No production handler selects the media twins, and no manifest entry or serving build is
 admitted. The native component cost evidence is unchanged
 at `5e63839`; it is not a full binding cost, T12 or a scalar performance promise.
 
