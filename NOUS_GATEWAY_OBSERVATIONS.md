@@ -25,6 +25,22 @@ authentication, authorization, API availability, idempotency and independent
 review remain required. This documentation does not convert a legacy runtime
 gate or make unfinished approval/media transport available.
 
+## Mobile availability and draft-recovery review checkpoint (2026-10-01)
+
+The visible instance-switcher heartbeat and Dismiss draft recovery are app candidates,
+not installed features. Independent review reproduced bounded client defects in shared
+credential retirement from an unauthenticated ready answer, stale probe quarantine,
+delivery-notice lifetime on reopen, ID redaction and saved success timestamps after
+lifecycle changes. Repairs are assigned and require independent delta review. These are
+client responsibilities, not a request for upstream to remove authorization checks.
+Server transcript rows remain authoritative; matching text alone cannot identify an
+ambiguous send, and original send evidence must survive refresh before a retry.
+
+The approval-alert handoff core passed independent review as inert source under its
+owned port contracts. Failure cleanup is assigned before UI integration; actual HMP
+issuer/provider/OS delivery and approvals minimum-policy integration remain unfinished.
+No new installed build, public release or push-delivery result follows.
+
 ## Native observation and access diagnostics checkpoint (2026-10-01)
 
 Source inspection on exact Hermes `8afaab37` confirms that a session lookup is not
