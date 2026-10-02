@@ -149,10 +149,46 @@ checks passed. The three native methods require the positional argument the brid
 Media depends on read alone; a genuinely absent shared API can also close siblings whose own
 tables need it. A compat `available` line is probe eligibility, not working image delivery.
 Offline drafts are labelled operator reports, not attestations of requester or flag. The M3 listener
-binding now has independent exact-candidate source acceptance at [`f737197`](https://github.com/MahdiHedhli/hermes-hmp/commit/f737197): genuine module/cache identities are retained per listener, an identity change closes only that listener until reopen, and bridge module/classes publish together under a lock. The default-off flag and owner checks remain separate requirements. No route emits descriptors or fetches local images yet.
-Root and the reviewer each passed 3047 unit cases, retaining three existing S4 contract-table failures and 16 native-dependent skips. The old qualification tests were explicitly retired or adapted; no unrelated skip or xfail was introduced. Complete native binding cost, concurrent-writer and mint-memory evidence, delivery review and device acceptance remain open. S4/S5 must snapshot and verify the listener-bound tuple at mint/fetch; a mutable context field alone supplies no new authority. Root restored the omitted 8-step/9-step/cycle coverage at [`b07890e`](https://github.com/MahdiHedhli/hermes-hmp/commit/b07890e): five focused cases passed, including four scratch-copy guard mutations detected by the property; production bytes are unchanged. This test-only result does not replace the earlier full-suite receipt. There is no green full-suite or image-delivery claim. Assistant `MEDIA:` text confers no file-read authority;
+binding now has independent exact-candidate source acceptance at [`f737197`](https://github.com/MahdiHedhli/hermes-hmp/commit/f737197): genuine module/cache identities are retained per listener, an identity change closes only that listener until reopen, and bridge module/classes publish together under a lock. The default-off flag and owner checks remain separate requirements. At that M3 checkpoint no route emitted descriptors or fetched local images; the S4 source update below supersedes the descriptor status.
+Root and the reviewer each passed 3047 unit cases, retaining three existing S4 contract-table failures and 16 native-dependent skips. The old qualification tests were explicitly retired or adapted; no unrelated skip or xfail was introduced. At that M3 checkpoint complete native binding cost, concurrent-writer and mint-memory evidence remained open; the sampled r2 evidence below supersedes that measurement status. Delivery review and device acceptance remain open. S4/S5 must snapshot and verify the listener-bound tuple at mint/fetch; a mutable context field alone supplies no new authority. Root restored the omitted 8-step/9-step/cycle coverage at [`b07890e`](https://github.com/MahdiHedhli/hermes-hmp/commit/b07890e): five focused cases passed, including four scratch-copy guard mutations detected by the property; production bytes are unchanged. This test-only result does not replace the earlier full-suite receipt. There is no green full-suite or image-delivery claim. Assistant `MEDIA:` text confers no file-read authority;
 recognized native tool history will supply the proposed image card. Unbounded native materialization
 and nontransactional session/message reads remain upstream gaps. The S6 text below is historical.
+
+## Local image descriptor and sampled binding update (2026-10-02)
+
+S4 source [`6b2fb82`](https://github.com/MahdiHedhli/hermes-hmp/commit/6b2fb82a1924e76f84a329dea5d75cdbe8462cbf)
+is independently security-reviewed in [draft #79](https://github.com/MahdiHedhli/hermes-hmp/pull/79).
+It emits optional image references on RO-3, RO-6, SES-2 and SES-2a through one listener-bound
+registry. The read and one batch classification share a context-copying worker; optional failures
+keep the exact successful text without rereading. Owner, flag, object identity and row/digest
+bindings are checked before synchronous mint. Assistant MEDIA/Markdown grants no authority.
+
+The independent source review reproduced 3,424 CI-shaped cases with 16 native-dependent skips
+and an existing warning. Root reviewed the required status-document repair and seven added tests,
+then reproduced 679 focused cases, including 110 descriptor cases. Added causal checks cover the
+outer mint-failure boundary and request context copying. No fetch route or image bytes are delivered
+by this slice. S5 two-phase fetching is being implemented; phone loading and physical verification
+remain open, and the installed phone still shows host-local MEDIA as text.
+
+The [r2 complete-binding sample](https://github.com/MahdiHedhli/hermes-hmp/blob/8f4e571/docs/research/local-media-complete-binding-sample-2026-10-02.md)
+on disposable native `8afaab37` completed 58 child steps and 9,686 semantic checks, with unchanged
+source/runtime inputs and cleanup confirmed. The repaired public system_prompt checks prove the
+declared 262,144-character prompts, including 196 distinct prompts in the 98-session shape.
+All 500 writer phases matched both expected outcomes: 194 native-mutation refusals, 42 synthetic
+store refusals, accepted controls/pre-window cases, 60 accepted non-atomic residual-window cases
+and 50 accepted ABA controls. These last two groups remain limitations, not fixes.
+
+The measurements exercise genuine native reads/writes and HMP binding/mint with synthetic gateway
+authority inputs. They do not prove route latency, four-fetch T12 memory, cancellation/streaming,
+Linux serving, device behavior or deployment. Native C allocations are outside Python tracing.
+Unbounded native materialization/pruning and non-atomic session/history reads remain upstream
+G-M1; a stable scoped artifact/provenance interface remains G-M2. No build allowlist is introduced.
+
+The spec 014 follow-up protocol review accepted its concurrency and availability clarifications
+with two bounded source gates: a non-decreasing relay acceptance instant (prevent clock rollback
+from reopening a purged nonce) and exact additional TLS leaf-SPKI pin grammar/trust semantics.
+Those amendments are being written; no registration, relay, provider or device acceptance follows.
+A notification remains a generic alert with no execution authority.
 
 ## Native observation and access diagnostics checkpoint (2026-10-01)
 
