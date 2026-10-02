@@ -2,6 +2,24 @@
 
 HMP is the Hermes gateway plugin used by the [HermesBot Mobile](https://hermes-bot.app) apps. This list describes the plugin in this repository. Mobile UI work is tracked separately.
 
+## Current development checkpoint (2026-10-02)
+
+The table below preserves earlier release/source history. Current development
+follows the owner's minimum-version policy; historical fingerprints are sampled
+evidence, not runtime feature allowlists.
+
+Host-local image descriptors ([draft #79](https://github.com/MahdiHedhli/hermes-hmp/pull/79))
+and authenticated fetch ([draft #80](https://github.com/MahdiHedhli/hermes-hmp/pull/80),
+source `c9a47b7`, status head `d924f28`) are independently source-reviewed. Fetch
+clean locked CI passed 3613 cases with 16 native-dependent skips and one existing
+warning; root focused tests passed 162, and the reviewer reproduced 162 plus 308
+startup/layout cases. Nine causal guard-removal mutants failed targeted assertions.
+The synthetic four-fetch sample passed provisional memory limits, including late
+cancelled workers retaining permits. This does not establish native serving/T12,
+Linux serving, phone decoding or device/release acceptance. No local-media live
+flag, host installation or phone build changed. Public CDN rendering remains
+physically confirmed; host-local MEDIA text on the installed phone is unchanged.
+
 | Status | Capability | Notes |
 | --- | --- | --- |
 | Available | Device pairing | Operator starts a local QR offer and confirms a short authentication string. Each paired device has its own key. |

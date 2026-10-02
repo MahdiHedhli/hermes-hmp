@@ -190,6 +190,40 @@ from reopening a purged nonce) and exact additional TLS leaf-SPKI pin grammar/tr
 Those amendments are being written; no registration, relay, provider or device acceptance follows.
 A notification remains a generic alert with no execution authority.
 
+## Local image fetch source update (2026-10-02)
+
+The earlier S5 implementation status is superseded by independent source
+acceptance in [draft #80](https://github.com/MahdiHedhli/hermes-hmp/pull/80):
+source `c9a47b7`, status-doc head `d924f28`. The always-registered authenticated
+GET route retains owner and fresh per-bot grant checks, two native bridge
+phases, listener-bound identities, active tool-history provenance, captured-home
+lexical/leaf/raster bounds and first-served digest CAS. Four dedicated workers,
+two per-device/four instance leases and actual-future accounting retain permits
+through cancellation until the real workers finish. No assistant MEDIA text
+authorizes a filesystem read.
+
+Independent original and amendment reviews resolved fixed submission-error
+mapping, complete new namespace binding and causal route-test gaps. Root's
+fresh locked CI passed 3613 cases, with 16 existing native-dependent skips and
+one existing warning. The reviewer reproduced 162 fetch/amendment plus 308
+startup/layout cases. Nine root scratch-copy guard removals failed targeted
+assertions; two misselected pytest nodes are excluded. All production/test
+bytes stayed exact after integration with the accepted S4 test-only repair.
+
+The [synthetic four-fetch sample](https://github.com/MahdiHedhli/hermes-hmp/blob/d924f28/docs/research/local-media-four-fetch-synthetic-2026-10-02.md)
+used actual routes/bridge/leaf work, synthetic native DBs and four exact 8 MiB
+structural images, with clients in a separate process. Active/cancelled traced
+peaks were 42.55/41.28 MiB; conservative observed RSS increments were 52.89/41.03
+MiB, below unchanged provisional limits. It checked fifth-request refusal and
+permit retention until actual completion. This is macOS synthetic evidence,
+**not native T12 release evidence or a phone codec result**.
+
+Native serving/fetch cost/T12 samples, broader Linux serving, phone binary
+loading, independent delivery review and owner-authorized activation/device
+acceptance remain open. Native materialization/pruning and non-atomic reads
+(G-M1), artifact authority (G-M2), ABA/torn-buffer and same-account replacement
+residuals remain. No runtime build allowlist or live change is introduced.
+
 ## Native observation and access diagnostics checkpoint (2026-10-01)
 
 Source inspection on exact Hermes `8afaab37` confirms that a session lookup is not
