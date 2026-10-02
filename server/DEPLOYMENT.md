@@ -134,8 +134,10 @@ checklist before assuming a plugin or pairing problem.
 
 Approvals follow the same minimum-version policy as every other HMP feature: HMP attempts them on
 Hermes `0.21.5` or later and closes them only when a Hermes API they need is actually missing.
-There is no build list, receipt or restart latch to satisfy. The feature is still not released or
-independently reviewed, and nothing here changes a grant, a config file or a device.
+There is no build list, receipt or restart latch to satisfy. The candidate source and the two
+prepared native samples have passed their review gates, and an exact owner-local source package
+is prepared. Installation and physical card/answer acceptance remain pending; the feature is
+not released. Nothing here changes a grant, a config file or a device.
 
 1. **Check availability.** `hermes hmp compat` lists `approvals` and `phone_chat`. `approvals`
    needs read and send. `phone_chat` also needs the Hermes helpers HMP calls in process. Add

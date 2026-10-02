@@ -1,7 +1,8 @@
 # Implementation plan: approvals under the minimum-version policy
 
 Status: root-frozen D1-D8 (2026-10-01); independent source review accepted (2026-10-02).
-Native sample testing and owner-local packaging remain pending. See the
+The two prepared native samples and the exact private source package are accepted.
+Target installation and physical card/answer verification remain pending. See the
 [root source review record](../../docs/research/approval-minimum-policy-source-review-2026-10-02.md).
 
 ## Constitution check
