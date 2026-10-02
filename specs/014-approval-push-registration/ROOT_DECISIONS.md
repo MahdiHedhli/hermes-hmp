@@ -132,4 +132,3 @@ The direction tables above record review history; the following is the authorita
   No operational approval, push delivery, crypto dependency or provider qualification is claimed.
 - O1–O6, provider keys/capabilities, HPKE key custody, DNS and global deployment budgets remain
   pending. This freeze authorizes no provisioning, billing, store submission or public activation.
-
