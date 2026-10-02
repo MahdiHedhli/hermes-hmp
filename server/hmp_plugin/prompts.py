@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import itertools
 import json
 import threading
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Protocol
 
 from .contract import IDEMPOTENCY_RETENTION_S
@@ -95,12 +97,102 @@ class PromptRow:
     stored_status: int | None = None
     stored_body: dict[str, object] | None = None
     settled_at: int | None = None
+    settle_cause: str | None = None  # process memory only; never on the wire or in a log
 
 
 @dataclass(frozen=True)
 class HttpResult:
     status: int
     body: dict[str, object]
+
+
+PromptKey = tuple[str, str, str, str]
+
+# Why an approval row stopped being open (spec 015 NI-2.2). Only Hermes's own answer counts as
+# authoritative: an applied answer, a native not-pending code, or a Hermes listing without the row.
+SETTLE_AUTHORITATIVE = frozenset({"answer_applied", "native_not_pending", "phone_listing_omitted"})
+SETTLE_NON_AUTHORITATIVE = frozenset({
+    "local_expiry",
+    "generation_closed",
+    "binding_fence",
+    "run_ended",
+    "phone_not_resolved",
+    "clarify_retired",
+})
+
+
+def is_authoritative(cause: object) -> bool:
+    """True only for a recorded authoritative cause. `None` and unknown values are False."""
+    return isinstance(cause, str) and cause in SETTLE_AUTHORITATIVE
+
+
+@dataclass(frozen=True)
+class ApprovalInserted:
+    """One inserted approval row. No command, description, choices, run ID or session key."""
+
+    key: PromptKey
+    surface: str  # "bot_chat" | "phone_chat"
+    generation: int
+    expires_at: int | None
+
+
+@dataclass(frozen=True)
+class MemberState:
+    bot_chat: bool
+    phone_chat: bool
+
+
+ALL_OPEN = MemberState(bot_chat=True, phone_chat=True)
+
+
+def _freeze_wire(wire: Mapping[str, object] | None) -> Mapping[str, object] | None:
+    """An owned, read-only copy of a `wire_prompt` body: a fresh dict whose `choices` (the only
+    container `wire_prompt` emits) is a tuple, behind a `MappingProxyType`."""
+    if wire is None:
+        return None
+    owned = dict(wire)
+    choices = owned.get("choices")
+    if isinstance(choices, (list, tuple)):
+        owned["choices"] = tuple(item for item in choices)
+    return MappingProxyType(owned)
+
+
+@dataclass(frozen=True)
+class RowView:
+    """A frozen snapshot of one row. `wire` is excluded from equality and hash; every other
+    field is immutable, so a view is hashable."""
+
+    key: PromptKey
+    kind: str
+    surface: str
+    generation: int
+    status: str
+    settle_cause: str | None
+    expires_at: int | None
+    held: bool
+    open_now: bool
+    hidden_now: bool
+    visible_now: bool
+    session_key: str | None = None
+    wire: Mapping[str, object] | None = field(default=None, compare=False, hash=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "wire", _freeze_wire(self.wire))
+
+
+@dataclass(frozen=True)
+class VisibleSet:
+    held: bool
+    rows: tuple[RowView, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "rows", tuple(self.rows))
+
+
+# Generation tokens come from one process-wide counter advanced under its own lock, so stores
+# built on different threads never share a token and nothing relies on the GIL.
+_GENERATION_COUNTER = itertools.count(1)
+_GENERATION_LOCK = threading.Lock()
 
 
 class PromptResolver(Protocol):
@@ -146,6 +238,8 @@ class PromptStore:
 
     def __init__(self, *, clock: Callable[[], float] = time.time) -> None:
         self._clock = clock
+        with _GENERATION_LOCK:
+            self.generation: int = next(_GENERATION_COUNTER)
         self._guard = threading.Lock()
         self._rows: dict[tuple[str, str, str, str], PromptRow] = {}
         self._desktop: set[tuple[str, str, str]] = set()

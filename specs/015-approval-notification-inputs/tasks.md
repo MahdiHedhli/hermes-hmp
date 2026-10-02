@@ -12,17 +12,17 @@ the native harness or its test-tool fingerprint bootstrap.
 
 ## Phase 1: shared contract (single worker; blocks everything after it)
 
-- [ ] T010 Add the plan §2.1 types to `prompts.py`: `ApprovalInserted`, the two cause sets and
+- [x] T010 Add the plan §2.1 types to `prompts.py`: `ApprovalInserted`, the two cause sets and
       `is_authoritative`, `MemberState` and `ALL_OPEN`, `RowView`, `VisibleSet`,
       `PromptRow.settle_cause` (default `None`), `PromptStore.generation`. No call site changes;
       the full unit suite stays green unchanged.
-- [ ] T011 Contract test `test_approval_input_contract.py`: frozen dataclasses, exact cause sets,
+- [x] T011 Contract test `test_approval_input_contract.py`: frozen dataclasses, exact cause sets,
       `is_authoritative(None)` is false, generation tokens differ per store (including stores
       built concurrently from several threads), `settle_cause` is absent from `wire_prompt` and
       `phone_open_request`. `RowView` is hashable and `wire` is excluded from compare and hash
       (`compare=False, hash=False`); `wire` is a `MappingProxyType` whose `choices` is a tuple;
       `session_key` and `wire` default to `None`.
-- [ ] T012 Root checkpoint: the types are frozen. Later tasks may not change them; a needed change
+- [x] T012 Root checkpoint: the types are frozen. Later tasks may not change them; a needed change
       returns to root.
 
 ## Phase 2: the three inputs (each one commit, own tests, independently revertible)
@@ -81,3 +81,15 @@ the previous one is committed.
 
 Native sample evidence (034 T14), packaging (034 T15), any 014 task, push relay work, owner and
 provider choices, and repair of the native fixture setup.
+
+## Shared types root checkpoint — 2026-10-02
+
+T010–T012 have root source acceptance. Independent bounded review identified immutable
+choices sharing on an already-tuple input; the one-expression repair and two discriminating
+assertions are accepted. Root passed 22 final contract cases, killed the original alias mutant,
+and passed configured Ruff, privacy, plugin-surface and diff checks. Before that bounded repair,
+the full unit suite passed 1,565 cases with 16 explained native/Python-version skips. These
+are source-unit checks, not native or operational notification evidence. The independent
+reviewer did not read the mandatory app/skill documents; its authority is confined to its
+recorded type/diff review. Root reviewed the frozen contract and actual finite source delta.
+T020 and later implementation gates remain unchecked.
