@@ -98,7 +98,29 @@ incorrectly disable Phone chat. This is a source finding on those samples, not a
 private-API guarantee.
 
 The notification registration/issuer/resolver/relay design (spec 014) is frozen at
-[`32b53cd`](https://github.com/MahdiHedhli/hermes-hmp/commit/32b53cd) ([draft #74](https://github.com/MahdiHedhli/hermes-hmp/pull/74)) after independent design, amendment and focused closure reviews. It preserves Desktop-owned prompt visibility and the accepted app resolver interface, uses post-commit cleanup that cannot roll back revocation, bounds registration-generation storage, and records explicit error-envelope additions. The separate approval insertion, authoritative settlement and shared visibility input design (015) is frozen in [draft #76](https://github.com/MahdiHedhli/hermes-hmp/pull/76). Its shared immutable types are source accepted at `cfe4d09`; the guarded settlement-cause writers are independently source accepted at [`726e16f`](https://github.com/MahdiHedhli/hermes-hmp/commit/726e16f). Root passed 216 focused cases and killed four causal mutants for locking, replay timestamp writes, pre-await clock sampling and settlement precedence. Local expiry, generation closure, binding changes and run completion remain non-authoritative. The answer path preserves the existing unconditional overwrite, including a fail-closed Phone-cause downgrade. Insertion callbacks and the visibility seam remain prerequisite implementation work. This slice has no native, provider or device evidence. No push runtime is deployed. Its initial scope covers approval rows observed by HMP. Broader Desktop/CLI/cron coverage needs a separate source check; that limited scope alone does not prove an upstream API gap. Provider setup and physical delivery are pending; no permission expansion is implemented.
+[`32b53cd`](https://github.com/MahdiHedhli/hermes-hmp/commit/32b53cd) ([draft #74](https://github.com/MahdiHedhli/hermes-hmp/pull/74)) after independent design, amendment and focused closure reviews. It preserves Desktop-owned prompt visibility and the accepted app resolver interface, uses post-commit cleanup that cannot roll back revocation, bounds registration-generation storage, and records explicit error-envelope additions. The separate approval insertion, authoritative settlement and shared visibility input design (015) is frozen in [draft #76](https://github.com/MahdiHedhli/hermes-hmp/pull/76). Its shared immutable types are source accepted at `cfe4d09`; the guarded settlement-cause writers are independently source accepted at [`726e16f`](https://github.com/MahdiHedhli/hermes-hmp/commit/726e16f). Root passed 216 focused cases and killed four causal mutants for locking, replay timestamp writes, pre-await clock sampling and settlement precedence. Local expiry, generation closure, binding changes and run completion remain non-authoritative. The answer path preserves the existing unconditional overwrite, including a fail-closed Phone-cause downgrade. Insertion callbacks at `b67b5ec` and immutable visibility views at [`3fb19ec`](https://github.com/MahdiHedhli/hermes-hmp/commit/3fb19ec7823d4f409bd67df630c40e097e8f4abd) now have incremental root source acceptance. Root passed 542 focused cases with one deliberately unconfigured native-probe skip, then 2,000 complete source cases with 16 explained native/Python-version skips. Eleven callback and eighteen visibility mutants were killed. The final joint independent review remains in progress; no production observer or notification dispatcher is registered. This slice has no native, provider or device evidence. No push runtime is deployed. Its initial scope covers approval rows observed by HMP. Broader Desktop/CLI/cron coverage needs a separate source check; that limited scope alone does not prove an upstream API gap. Provider setup and physical delivery are pending; no permission expansion is implemented.
+
+## Installer and local-media integration checkpoint (2026-10-02)
+
+The exact `150bd0f` source export encountered a native installer critical finding in a
+nonexecuting approval-probe input. [Draft #78](https://github.com/MahdiHedhli/hermes-hmp/pull/78)
+at `c1d3d0b` changes that synthetic string to a relative recursive-delete target, preserving
+the real approval classification and fake-executor flow. Independent bounded source/scanner
+review accepted the one-file change. All 32 runtime files and the server tree are unchanged.
+The scanner retains 121 cautions and reports zero critical findings; it remains enabled.
+Both high findings were inspected individually and remaining groups were reviewed with a
+recorded sampling limit. The full changed-input native probe and a new exact package remain
+pending. There has been no live install, restart or physical card/answer acceptance.
+
+The local-media branch predates the minimum-version conversions and still carries the old
+empty-manifest gate. Integration onto the converted base is in progress. The architecture
+proposal removes runtime SHA/fingerprint admission while preserving required APIs, owner
+access, listener-bound media object coherence, active-history provenance, digest/CAS and
+file/raster bounds. Neither the integration nor the amended contract is accepted yet. No
+serving route is deployed. Assistant `MEDIA:` text does not authorize a host file read;
+recognized native tool history supplies the proposed image card. Unbounded native message
+materialization and nontransactional session/message reads remain explicit upstream gaps.
+The S6 text below describes the historical inert source, not the intended availability policy.
 
 ## Native observation and access diagnostics checkpoint (2026-10-01)
 
@@ -176,7 +198,7 @@ Hermes module reloads, with bounded no-follow reads and import-shadowing refusal
 Opus design amendments are adopted; the inert gate source is now accepted as described below.
 The bounded listener integration is now source-reviewed below. Native binding, runtime ownership and media entries remain open. This does not change or qualify the separate approval gate.
 
-**Current source scope (HMP `6d400af`).** The inert S6a gate source (`e5e6d40`, module
+**Historical inert source scope (HMP `6d400af`; minimum-policy integration pending).** The inert S6a gate source (`e5e6d40`, module
 `fb8ae21e...`) is accepted after an independent Opus review, one test-only repair and a delta
 review; root and the reviewer passed 392 focused cases. Its manifest build list is empty and
 the listener binding calls it only under the supported-read precondition; the empty manifest admits nothing. It keeps a persistent stdlib
