@@ -41,6 +41,8 @@ CONTRACT_MODULES = {
     "adapter.py",
     "cli.py",
     "logging_policy.py",
+    # S4: descriptor emission for the four read routes; imports no local_media_* module.
+    "media_emission.py",
     # Optional, inert local-image modules: no production module imports them (see the test below).
     "local_media_active_scan.py",
     "local_media_file_safety.py",
@@ -114,8 +116,10 @@ ALLOWED_OPTIONAL_IMPORTS = {
         "local_media_result",
         "local_media_sidecar",
     },
-    # M3: the adapter imports no media module in any scope. Its availability binding proves and
-    # holds the objects the bridge and reads caches already hold; the retired gate is gone.
+    # M3: the adapter's availability binding proves and holds the objects the bridge and reads
+    # caches already hold; the retired gate is gone. S4: its one media import is the registry,
+    # function-local, in `_media_registry_bind` (pinned in test_s4_descriptors.py).
+    "adapter": {"local_media_registry"},
     # S2d: the read cores load the carrier only below a function boundary (pinned below).
     "reads": {"local_media_sidecar"},
     "local_media_candidate": {
@@ -210,7 +214,7 @@ def test_real_modules_use_the_exact_scopes() -> None:
     batch = (PACKAGE / "local_media_active_batch.py").read_text(encoding="utf-8")
     assert _local_media_imports(batch) == {"local_media_active_scan", "local_media_candidate"}
     assert scopes("bridge.py") == {"function"}
-    assert scopes("adapter.py") == set()  # M3: no media import at all; it binds the cached objects
+    assert scopes("adapter.py") == {"function"}  # S4: only the registry, below a function
     assert scopes("reads.py") == {"function"}
     reads = (PACKAGE / "reads.py").read_text(encoding="utf-8")
     assert _local_media_imports(reads) == {"local_media_sidecar"}
@@ -259,15 +263,23 @@ def test_bridge_and_reads_imports_must_be_function_local(stem: str, form: str, w
 @pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))
 @pytest.mark.parametrize("where", ["module", "function", "method", "class", "if", "try"])
 def test_adapter_may_import_no_media_module_in_any_scope(form: str, where: str) -> None:
-    # M3: the retired gate was the adapter's only allowed media import. Now none is allowed.
-    for module in ("gate", "sidecar", "candidate", "active_batch", "batch_binding", "registry"):
+    # M3: the retired gate was the adapter's only allowed media import. S4 allows the registry
+    # alone, function-local (below), and still none of these.
+    for module in ("gate", "sidecar", "candidate", "active_batch", "batch_binding"):
         source = _wrapped(form, where).format(m=module)
         assert not _imports_allowed("adapter", source), (module, where)
 
 
 @pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))
+@pytest.mark.parametrize("where", ["module", "class", "if", "try"])
+def test_adapter_registry_import_must_be_function_local(form: str, where: str) -> None:
+    assert _imports_allowed("adapter", _wrapped(form, "function").format(m="registry"))  # control
+    assert not _imports_allowed("adapter", _wrapped(form, where).format(m="registry"))
+
+
+@pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))
 def test_adapter_may_import_no_other_media_module(form: str) -> None:
-    for module in ("sidecar", "candidate", "registry", "active_batch", "batch_binding"):
+    for module in ("sidecar", "candidate", "active_batch", "batch_binding"):
         source = _wrapped(form, "function").format(m=module)
         assert not _imports_allowed("adapter", source), module
 

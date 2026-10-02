@@ -123,7 +123,10 @@ M_PROCESS_LATCH = {
 }
 _FENCE = (
     '            same = (\n                vars(bridge_module)["_local_media_cache"] is chain\n'
-    '                and vars(reads_module)["_local_media_cache"] is reads_media\n            )\n'
+    '                and vars(reads_module)["_local_media_cache"] is reads_media\n'
+    "                and ctx.media_modules is bound\n"
+    "                and ctx.media_registry_module is registry_module\n"
+    "                and ctx.media_registry is registry\n            )\n"
 )
 M_NO_FENCE = {"adapter.py": [(_FENCE, "            same = True\n")]}
 M_FENCE_REIMPORTS = {
@@ -160,10 +163,10 @@ M_READ_LEGACY_ANCHOR = {
 M_WRITE_LEGACY_ANCHOR = {
     "adapter.py": [
         (
-            "    ctx.media_modules = (chain, reads_media)\n",
+            "    ctx.media_modules = bound\n",
             "    import sys\n"
             f"    sys.__dict__.setdefault({LEGACY_ANCHOR!r}, (1, None, [None]))\n"
-            "    ctx.media_modules = (chain, reads_media)\n",
+            "    ctx.media_modules = bound\n",
         )
     ]
 }
@@ -347,7 +350,9 @@ def test_binding_reads_no_file_and_no_module_table(
     ):
         monkeypatch.setattr(owner, name, spy(name, getattr(owner, name)))
     callback = adapter._media_bind(ctx, bridge, reads)
-    assert callback() is True and ctx.media_available() is True
+    # S4: a second bind on the same context replaces its registry slots, so the FIRST closure
+    # (still `ctx.media_available`) now fences itself closed by identity; the new one is open.
+    assert callback() is True and ctx.media_available() is False
     assert touched == []
 
 
@@ -781,12 +786,21 @@ def test_no_module_names_the_legacy_anchor_or_the_process_dict() -> None:
 def test_server_context_media_fields_are_closed_callables_and_a_reference_slot() -> None:
     fields = {f.name: f for f in dataclasses.fields(real_request_ctx.ServerContext)}
     media = {n for n in fields if "media" in n}
-    assert media == {"media_flag", "media_available", "media_modules"}
+    # S4: the listener's registry and its actual module are two more reference slots.
+    assert media == {
+        "media_flag",
+        "media_available",
+        "media_modules",
+        "media_registry_module",
+        "media_registry",
+    }
     for name in ("media_flag", "media_available"):
         assert str(fields[name].type).startswith("Callable"), fields[name].type  # never a bool
         assert fields[name].default_factory is dataclasses.MISSING
         assert fields[name].default() is False  # type: ignore[misc]
     assert fields["media_modules"].default is None
+    assert fields["media_registry_module"].default is None
+    assert fields["media_registry"].default is None
     assert not [n for n in media if str(fields[n].type) == "bool"]
     assert not hasattr(real_request_ctx.ServerContext, "media_qualification_open")
     assert not hasattr(real_request_ctx.ServerContext, "media_qualified")
@@ -964,7 +978,13 @@ def test_every_route_answers_identically_with_the_flag_and_availability_off_and_
     assert server.build_app
     assert seen["off"] and seen["off"] == seen["on"]
     assert calls == {"flag": 0, "available": 0}
-    assert "media" not in READ_SRC["server.py"].lower().replace("immediately", "")
+    # S4: the server's only media reference is the one emission module; it names no carrier,
+    # twin, registry or `local_media_*` module itself.
+    server_src = READ_SRC["server.py"].lower().replace("immediately", "")
+    assert "local_media" not in server_src and "_with_media" not in server_src
+    # one import and the five call sites of the four read handlers (SES-2 has two branches)
+    assert server_src.count("media_emission") == 6
+    assert server_src.replace("media_emission", "").count("media") == 0
 
 
 # --------------------------------------------------------------------------------------------
@@ -1340,7 +1360,10 @@ def test_media_imports_live_only_in_the_cache_fill_functions_and_never_in_the_ad
     assert _media_import_owners(READ_SRC["reads.py"]) == {
         "_local_media_modules": {"local_media_sidecar"}
     }
-    assert _media_import_owners(READ_SRC["adapter.py"]) == {}
+    # S4: the adapter's one media import is the listener's registry, in its own function.
+    assert _media_import_owners(READ_SRC["adapter.py"]) == {
+        "_media_registry_bind": {"local_media_registry"}
+    }
     assert _media_import_owners(READ_SRC["request_ctx.py"]) == {}
 
 

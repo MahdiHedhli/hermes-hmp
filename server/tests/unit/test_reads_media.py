@@ -1252,10 +1252,14 @@ def test_server_has_no_reference_to_the_twins_or_media_modules() -> None:
 
 
 def test_contract_read_bridge_and_wire_types_are_unchanged() -> None:
-    from hmp_plugin.contract import ReadBridge, WireMessage
+    from hmp_plugin.contract import ReadBridge, WireMediaDescriptor, WireMessage
 
     assert not {n for n in vars(ReadBridge) if "media" in n.lower()}
-    assert "media" not in set(WireMessage.__dataclass_fields__)
+    # S4 adds exactly one optional, omit-if-none field and its two-field frozen descriptor.
+    assert "media" in set(WireMessage.__dataclass_fields__)
+    field = WireMessage.__dataclass_fields__["media"]
+    assert field.default is None and field.metadata == {"omit_if_none": True}
+    assert list(WireMediaDescriptor.__dataclass_fields__) == ["kind", "ref"]
     assert re.search(r"LOCAL_MEDIA", (PACKAGE / "contract.py").read_text(encoding="utf-8")) is None
 
 

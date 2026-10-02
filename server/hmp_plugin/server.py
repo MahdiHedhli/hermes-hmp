@@ -53,7 +53,7 @@ from typing import Any
 from aiohttp import web
 from aiohttp.http_exceptions import LineTooLong
 
-from . import direct_send, mobile_cron, mobile_model, prompts, wire
+from . import direct_send, media_emission, mobile_cron, mobile_model, prompts, wire
 from .authorize import ensure_chat
 from .contract import (
     CONTRACT_REVISION,
@@ -448,7 +448,9 @@ async def handle_snapshot(request: web.Request) -> web.Response:
     )
     ctx.limiter.check("bots_snapshot", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now())
     reads = _require(ctx.reads)
-    result = await asyncio.to_thread(reads.snapshot, who.user_id, profile, limit)
+    result = await media_emission.read(
+        ctx, who, profile, "snapshot", reads.snapshot, (who.user_id, profile, limit)
+    )
     if hasattr(result, "open_requests"):
         # `open_requests` carries Phone-chat prompts only (`Reads._phone_open_requests`), so it
         # needs the `phone_chat` member as well as an approval owner and the host flag.
@@ -470,7 +472,9 @@ async def handle_history(request: web.Request) -> web.Response:
     limit = _query_int(request, "limit", default=HISTORY_LIMIT_DEFAULT, lo=1, hi=HISTORY_LIMIT_MAX)
     ctx.limiter.check("bots_history", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now())
     reads = _require(ctx.reads)
-    result = await asyncio.to_thread(reads.history, who.user_id, profile, after, limit)
+    result = await media_emission.read(
+        ctx, who, profile, "history", reads.history, (who.user_id, profile, after, limit)
+    )
     return _result_response(result)
 
 
@@ -509,12 +513,22 @@ async def handle_session_messages(request: web.Request) -> web.Response:
     )
     reads = _require(ctx.reads)
     if after == 0:
-        result: Any = await asyncio.to_thread(
-            reads.session_snapshot, who.user_id, profile, ref, limit
+        result: Any = await media_emission.read(
+            ctx,
+            who,
+            profile,
+            "session_snapshot",
+            reads.session_snapshot,
+            (who.user_id, profile, ref, limit),
         )
     else:
-        result = await asyncio.to_thread(
-            reads.session_history, who.user_id, profile, ref, after, limit
+        result = await media_emission.read(
+            ctx,
+            who,
+            profile,
+            "session_history",
+            reads.session_history,
+            (who.user_id, profile, ref, after, limit),
         )
     return _result_response(result)
 
@@ -536,7 +550,14 @@ async def handle_session_history_start(request: web.Request) -> web.Response:
         "bots_session_messages", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now()
     )
     reads = _require(ctx.reads)
-    result = await asyncio.to_thread(reads.session_history, who.user_id, profile, ref, 0, limit)
+    result = await media_emission.read(
+        ctx,
+        who,
+        profile,
+        "session_history",
+        reads.session_history,
+        (who.user_id, profile, ref, 0, limit),
+    )
     return _result_response(result)
 
 

@@ -155,6 +155,34 @@ class ServingIdentity(Protocol):
     def server_ssl_context(self) -> ssl.SSLContext: ...
 
 
+@dataclass(frozen=True, slots=True, repr=False)
+class MediaBound:
+    """What `ServerContext.media_snapshot` returns: the listener's bound references, by identity.
+    `bound` is the exact `ctx.media_modules` tuple; `chain` is the bridge's seven-member cache and
+    `reads_media` the reads cache; `registry_module` and `registry` are the listener's own. No
+    value here is a wire, native or request field."""
+
+    bound: tuple[Any, ...]
+    chain: tuple[Any, ...]
+    reads_media: tuple[Any, ...]
+    registry_module: Any
+    registry: Any
+
+    def __repr__(self) -> str:
+        return "MediaBound()"
+
+    __str__ = __repr__
+
+    def same_as(self, other: MediaBound) -> bool:
+        return (
+            self.bound is other.bound
+            and self.chain is other.chain
+            and self.reads_media is other.reads_media
+            and self.registry_module is other.registry_module
+            and self.registry is other.registry
+        )
+
+
 @dataclass
 class ServerContext:
     """Everything a route handler may use. Built once per listener start."""
@@ -214,11 +242,18 @@ class ServerContext:
     # eligibility member is available and whose media chain verified coherent, and the callback
     # itself runs the cheap in-memory use-time identity fence. `media_modules` holds the verified
     # strong references the bound listener uses -- `(bridge cache tuple, reads cache tuple)`, the
-    # very objects `bridge.py` and `reads.py` cache -- so a later S4/S5 caller uses the same objects
-    # without a fresh import. No route consumes either yet, and a result is never cached here.
+    # very objects `bridge.py` and `reads.py` cache -- so a caller uses the same objects
+    # without a fresh import. S4's four read routes consume them through `media_snapshot()`; no
+    # fetch route exists yet (S5), and a result is never cached here.
     media_flag: Callable[[], bool] = field(default=lambda: False)
     media_available: Callable[[], bool] = field(default=lambda: False)
     media_modules: tuple[tuple[Any, ...], tuple[Any, ...]] | None = None
+    # S4: this listener's one registry (shared by mint here and the later S5 fetch) and the actual
+    # `local_media_registry` module it came from, bound once at listener open by `adapter.py`. They
+    # are NOT part of the `media_modules` shape. Both default `None`; the availability closure
+    # fences them by identity and clears them when it closes this listener's media.
+    media_registry_module: Any = None
+    media_registry: Any = None
 
     def is_approvals_available(self) -> bool:
         """Bot Chat approvals. Only an exact `True` opens it; anything else closes it."""
@@ -264,6 +299,29 @@ class ServerContext:
         except Exception as exc:
             log_bridge_exception(exc)
             return False
+
+    def media_snapshot(self) -> MediaBound | None:
+        """The exact references this listener bound, or `None`. Synchronous: it first runs the
+        availability closure (an exact-true, identity-fenced check), then reads the context's own
+        slots without an await, import, file or lock, so a caller can mint on the loop with nothing
+        between this call and the mint. It never builds, copies or looks up an object: every
+        member is the very object bound at listener open. Fails closed, logging only the type."""
+        try:
+            if self.media_available() is not True:
+                return None
+            bound = self.media_modules
+            module, registry = self.media_registry_module, self.media_registry
+            if type(bound) is not tuple or len(bound) != 2:
+                return None
+            chain, reads_media = bound
+            if type(chain) is not tuple or type(reads_media) is not tuple:
+                return None
+            if module is None or registry is None:
+                return None
+            return MediaBound(bound, chain, reads_media, module, registry)
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return None
 
     def is_owner_device(self, device_id: str) -> bool:
         try:

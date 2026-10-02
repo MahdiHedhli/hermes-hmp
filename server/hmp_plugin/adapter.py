@@ -46,7 +46,10 @@ member (minimum version plus the three native probe rows) AND an in-memory media
 check, both decided once when the listener opens; `_media_bind` below never touches a file, a build
 list, a manifest, a fingerprint, a Git SHA or any process-wide state, and it binds the verified
 module objects to this one listener. The retired exact-build qualification (S6/S6a/S6b) is gone.
-No route consumes `ServerContext.media_available` yet.
+S4 (source candidate): the four read routes consume `ServerContext.media_snapshot()` through
+`media_emission`. `_media_registry_bind` makes the listener's one registry and binds its actual
+module at open; the availability closure fences the exact bound tuple, that module and that
+instance by identity. The adapter's only media import is that function's `local_media_registry`.
 """
 
 from __future__ import annotations
@@ -196,6 +199,25 @@ def _media_prove_chain(
     return chain, reads_media
 
 
+def _media_registry_bind() -> tuple[ModuleType, Any]:
+    """S4: this listener's one registry and the actual module it comes from, both made here, once,
+    at listener open, and never re-imported per request. The constructor and the public
+    mint/lookup/record_first_served functions must execute in that module's own namespace, and
+    the instance must be that module's exact class. It is independent of the seven-member bridge
+    chain. A mismatch raises `_MediaSplitError`, which `_media_bind` turns into this listener's
+    closed media. It imports no other media module and reads no file."""
+    from . import local_media_registry
+
+    module = local_media_registry
+    cls = vars(module)["LocalMediaRegistry"]
+    _media_require(type(cls) is type and cls.__module__ == module.__name__)
+    for name in ("__init__", "mint", "lookup", "record_first_served"):
+        _media_prove_function(vars(cls)[name], module)
+    registry = cls()
+    _media_require(type(registry) is cls)
+    return module, registry
+
+
 def _media_closed() -> bool:
     return False
 
@@ -205,10 +227,12 @@ def _media_bind(
 ) -> Callable[[], bool]:
     """Bind local-media availability to ONE listener. Call only when this listener's `local_media`
     eligibility member is available. The media-chain cross-references are verified once; on success
-    the verified `(bridge cache, reads cache)` tuples are stored on `ctx.media_modules` and the
-    returned callback is the listener's `media_available`. On any failure (`Exception`) this
-    listener's media stays closed and nothing process-wide changes, so another listener in the same
-    process opens independently. `BaseException` propagates to the caller.
+    the verified `(bridge cache, reads cache)` tuples are stored on `ctx.media_modules`, this
+    listener's own registry and its actual module on `ctx.media_registry` and
+    `ctx.media_registry_module`, and the returned callback is the listener's `media_available`. On
+    any failure (`Exception`) this listener's media stays closed and nothing process-wide changes,
+    so another listener in the same process opens independently. `BaseException` propagates to the
+    caller.
 
     The callback is the cheap use-time fence: no await, import, file or lock. It compares the
     caches the bridge and reads modules hold NOW with the bound tuples by identity, and on a
@@ -220,10 +244,16 @@ def _media_bind(
         _media_require(type(ctx.bridge) is vars(bridge_module).get("HermesReadBridge"))
         _media_require(type(ctx.reads) is vars(reads_module).get("Reads"))
         chain, reads_media = _media_prove_chain(bridge_module, reads_module)
+        registry_module, registry = _media_registry_bind()
     except Exception:
         log_event("local_media_binding", outcome="media_binding_incoherent")
         return _media_closed
-    ctx.media_modules = (chain, reads_media)
+    # The exact outer tuple is retained: the fence compares `ctx.media_modules` against it by
+    # identity, not only the two caches inside it.
+    bound = (chain, reads_media)
+    ctx.media_modules = bound
+    ctx.media_registry_module = registry_module
+    ctx.media_registry = registry
     closed = [False]
 
     def media_available() -> bool:
@@ -233,6 +263,9 @@ def _media_bind(
             same = (
                 vars(bridge_module)["_local_media_cache"] is chain
                 and vars(reads_module)["_local_media_cache"] is reads_media
+                and ctx.media_modules is bound
+                and ctx.media_registry_module is registry_module
+                and ctx.media_registry is registry
             )
         except Exception:  # fail closed; the exception text is never logged
             same = False
@@ -240,6 +273,8 @@ def _media_bind(
             return True
         closed[0] = True
         ctx.media_modules = None  # a closed listener hands no bound reference to a later caller
+        ctx.media_registry_module = None
+        ctx.media_registry = None
         log_event("local_media_binding", outcome="media_binding_changed")
         return False
 

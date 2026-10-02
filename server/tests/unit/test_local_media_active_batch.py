@@ -1042,7 +1042,8 @@ FROZEN = {
         "f293d0c1e379d20ec5d466e9a92e9c0e6b961a2a2b7009b5aac3705410b47610"
     ),
     "local_media_result.py": ("04d011cf8b805c2b285297e18f99a4ec1691f0133320948d2680d564c29b4336"),
-    "local_media_sidecar.py": ("e3872f8f013fc51f9e4f682d3ad96024817aa1585075433ede980649857410bf"),
+    # `local_media_sidecar.py` carries the one S4 `MediaReadBridge` annotation delta; its bounded
+    # delta is pinned against the old hash in test_s4_descriptors.py.
     "local_media_registry.py": ("b49e6e6205805f38144e769f742f6e3ee918536aa6dd5f66e6c8096d8f77c2b2"),
 }
 

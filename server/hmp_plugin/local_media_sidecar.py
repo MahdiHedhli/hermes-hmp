@@ -335,8 +335,9 @@ class MediaReadResult(_Carrier, Generic[P]):
 class MediaReadBridge(Protocol):
     """Optional bridge extension, selected by an explicit class-level opt-in (never probed).
 
-    `ReadBridge` itself is unchanged. The methods have no caller yet. A bridge that cannot represent
-    the query metadata (or a page over `MAX_ROWS`) returns the exact old text-row list instead.
+    `ReadBridge` itself is unchanged. S4 calls these through `Reads` and `bind_media_batch` through
+    the descriptor routes. A bridge that cannot represent the query metadata (or a page over
+    `MAX_ROWS`) returns the exact old text-row list instead.
     """
 
     def latest_with_media(
@@ -346,3 +347,5 @@ class MediaReadBridge(Protocol):
     def after_with_media(
         self, ref: ConversationRef, after_id: int, limit: int
     ) -> BridgeMediaRows | list[Row] | ResetReason: ...
+
+    def bind_media_batch(self, sidecar: MediaSidecar) -> object | None: ...
