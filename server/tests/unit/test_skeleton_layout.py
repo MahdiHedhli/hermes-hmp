@@ -5,12 +5,11 @@ from __future__ import annotations
 import ast
 import importlib
 import json
-import os
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
+
+from .fresh_import import run_no_local_media_probe
 
 PACKAGE = Path(__file__).resolve().parents[2] / "hmp_plugin"
 
@@ -366,15 +365,14 @@ def test_deleting_a_forbidden_import_is_detected_as_the_only_difference() -> Non
 
 def test_startup_modules_load_no_local_media_module() -> None:
     # Fresh interpreter: adapter.py and bridge.py need Hermes, so only the Hermes-free startup path.
-    code = (
-        "import sys, hmp_plugin\n"
-        "import hmp_plugin.server, hmp_plugin.reads, hmp_plugin.compat\n"
-        "import hmp_plugin.cli, hmp_plugin.routes\n"
-        "bad = sorted(m for m in sys.modules if 'local_media_' in m)\n"
-        "assert not bad, bad\n"
-    )
-    env = {**os.environ, "PYTHONPATH": str(PACKAGE.parent)}
-    done = subprocess.run(
-        [sys.executable, "-B", "-c", code], env=env, capture_output=True, text=True, check=False
+    done = run_no_local_media_probe(
+        [
+            "hmp_plugin",
+            "hmp_plugin.server",
+            "hmp_plugin.reads",
+            "hmp_plugin.compat",
+            "hmp_plugin.cli",
+        ],
+        marker="local_media_",
     )
     assert done.returncode == 0, done.stderr[-500:]

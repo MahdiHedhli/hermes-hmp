@@ -17,6 +17,7 @@ import importlib.util
 import logging
 import pickle
 import re
+import shutil
 import subprocess
 import sys
 from collections.abc import Callable, Iterator, Mapping, Sequence
@@ -49,6 +50,8 @@ from hmp_plugin.local_media_sidecar import (
     MediaSidecar,
     SidecarStatus,
 )
+
+from .fresh_import import foreign_hmp_modules, run_no_local_media_probe
 
 PACKAGE = Path(__file__).resolve().parents[2] / "hmp_plugin"
 SOURCE = (PACKAGE / "local_media_sidecar.py").read_text(encoding="utf-8")
@@ -781,14 +784,64 @@ def _fresh(code: str) -> subprocess.CompletedProcess[str]:
 
 
 def test_existing_read_and_server_paths_load_no_media_module() -> None:
-    done = _fresh(
-        "import sys, hmp_plugin\n"
-        "import hmp_plugin.server, hmp_plugin.reads, hmp_plugin.request_ctx, hmp_plugin.wire\n"
-        "import hmp_plugin.compat, hmp_plugin.cli, hmp_plugin.routes\n"
-        "bad = sorted(m for m in sys.modules if 'local_media' in m)\n"
-        "assert not bad, bad\n"
+    done = run_no_local_media_probe(
+        [
+            "hmp_plugin",
+            "hmp_plugin.server",
+            "hmp_plugin.reads",
+            "hmp_plugin.request_ctx",
+            "hmp_plugin.wire",
+            "hmp_plugin.compat",
+            "hmp_plugin.cli",
+        ]
     )
     assert done.returncode == 0, done.stderr[-500:]
+
+
+def test_foreign_provenance_check_rejects_modules_outside_the_package(tmp_path: Path) -> None:
+    import types
+
+    foreign = tmp_path / "other" / "hmp_plugin"
+    foreign.mkdir(parents=True)
+    own = types.ModuleType("hmp_plugin.reads")
+    own.__file__ = str(PACKAGE / "reads.py")
+    pkg = types.ModuleType("hmp_plugin")
+    pkg.__file__ = str(PACKAGE / "__init__.py")
+    pkg.__path__ = [str(PACKAGE)]
+    assert foreign_hmp_modules({"hmp_plugin": pkg, "hmp_plugin.reads": own}, str(PACKAGE)) == []
+
+    stray = types.ModuleType("hmp_plugin.routes")
+    stray.__file__ = str(foreign / "routes.py")
+    bad_pkg = types.ModuleType("hmp_plugin")
+    bad_pkg.__file__ = str(foreign / "__init__.py")
+    bad_pkg.__path__ = [str(foreign)]
+    sneaky = types.ModuleType("hmp_plugin.sneaky")  # no file: only a foreign __path__
+    sneaky.__path__ = [str(PACKAGE), str(foreign)]
+    sibling = types.ModuleType("hmp_plugin.x")  # name-prefix sibling of the package dir
+    sibling.__file__ = str(PACKAGE) + "_evil/x.py"
+    mods = {
+        "hmp_plugin": bad_pkg,
+        "hmp_plugin.routes": stray,
+        "hmp_plugin.sneaky": sneaky,
+        "hmp_plugin.x": sibling,
+        "json": types.ModuleType("json"),
+    }
+    assert foreign_hmp_modules(mods, str(PACKAGE)) == [
+        "hmp_plugin",
+        "hmp_plugin.routes",
+        "hmp_plugin.sneaky",
+        "hmp_plugin.x",
+    ]
+
+
+def test_fresh_probe_fails_when_hmp_plugin_resolves_from_a_foreign_tree(tmp_path: Path) -> None:
+    root = tmp_path / "foreign"
+    shutil.copytree(PACKAGE, root / "hmp_plugin", ignore=shutil.ignore_patterns("__pycache__"))
+    ok = run_no_local_media_probe(["hmp_plugin", "hmp_plugin.wire"])
+    assert ok.returncode == 0, ok.stderr[-500:]
+    done = run_no_local_media_probe(["hmp_plugin", "hmp_plugin.wire"], search_root=root)
+    assert done.returncode != 0
+    assert "foreign hmp_plugin" in done.stderr
 
 
 def test_sidecar_import_loads_no_parser_scanner_or_registry() -> None:
