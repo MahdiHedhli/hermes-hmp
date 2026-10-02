@@ -140,8 +140,17 @@ The old local-media branch has now been integrated inertly onto the converted mi
 base (`0cdbbf5`). The contract amendment (`028a946`) passed independent documentation and root
 review. It removes runtime build-list/SHA/fingerprint admission while retaining required APIs,
 owner access, listener-bound media object coherence, active-history provenance, digest/CAS and
-file/raster bounds. The eligibility slice is being implemented; binding, descriptors and serving
-remain unfinished. The current binder is closed; no local image is available through HMP.
+file/raster bounds. The eligibility and offline-diagnostics slice now has independent source
+acceptance at [`a4f347b`](https://github.com/MahdiHedhli/hermes-hmp/commit/a4f347b4add54fb50352e6a6863836668490bc95):
+root and the reviewer each passed 368 focused cases with six existing native-fixture skips; the
+new media file passed 61 cases without xfail. Eight root guard-removal mutations failed their
+targeted assertions, with restored source passing; 13 selected tool tests and pinned lint/privacy
+checks passed. The three native methods require the positional argument the bridge actually passes.
+Media depends on read alone; a genuinely absent shared API can also close siblings whose own
+tables need it. A compat `available` line is probe eligibility, not working image delivery.
+Offline drafts are labelled operator reports, not attestations of requester or flag. Binding is
+now being implemented; descriptors and serving remain unfinished. The current binder is closed;
+no local image is available through HMP.
 Legacy qualification-test failures and three draft-contract-table failures are visible work in
 progress, not a green full-suite result. Assistant `MEDIA:` text confers no file-read authority;
 recognized native tool history will supply the proposed image card. Unbounded native materialization
