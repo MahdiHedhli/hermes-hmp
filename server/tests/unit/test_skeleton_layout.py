@@ -23,6 +23,7 @@ CONTRACT_MODULES = {
     "bridge.py",
     "pairing.py",
     "tokens.py",
+    "push_issuer.py",
     "auth.py",
     "reads.py",
     "authorize.py",
