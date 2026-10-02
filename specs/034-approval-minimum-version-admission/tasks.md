@@ -1,7 +1,7 @@
 # Tasks: approvals under the minimum-version policy
 
 Root froze D1-D8 on 2026-10-01. T1-T12 are authorized for the implementation worker; T13-T15 are
-root-operated gates. Root records T13 and the two prepared T14 samples below; T15 remains open. Each item is one reviewable change.
+root-operated gates. Root records T13, the two prepared T14 samples and the exact T15 source export below. Each item is one reviewable change.
 
 - [x] T1 Amend HMP v1 §7b (availability replaces qualification; AP-1 transport; AP-5 status table),
       GU-2d, the error table, spec 013 (closed-set constraint) and `specs/003-approvals` status.
@@ -21,7 +21,7 @@ root-operated gates. Root records T13 and the two prepared T14 samples below; T1
 - [x] T12 Ruff, unit suite, plugin surface, log and zero-baseline privacy scans.
 - [x] T13 Independent focused security review of the merge (`--remerge-diff`) and conversion.
 - [x] T14 Sampled candidate evidence on `8afaab37` and `v2026.9.24`. An additional `ca705dbf` candidate run remains unperformed.
-- [ ] T15 Owner-local dogfood package from the reviewed candidate commit (separate authorization).
+- [x] T15 Owner-local dogfood package from the reviewed candidate commit (separate authorization).
 
 Worker status at original handoff: T1-T12 meant "source written", not "verified".
 Root accepted the independent Opus source review and the bounded L1/L2 wording/test correction
@@ -32,5 +32,11 @@ negative capability checks, not proof of operational Bot Chat cards. See the
 [native sample evidence](../../docs/research/approval-minimum-native-samples-2026-10-02.md).
 Mismatched dependencies or a Python version outside a sample's declared range are not admitted
 as that sample's runtime evidence.
-T15 and physical card/answer acceptance remain open. Reviewer-owned checklists are not
+The T15 private source export has zero changed files relative to reviewed `150bd0f`, with
+239 tracked files (32 runtime files), private custody modes and an independent Git archive
+comparison. Plugin-surface and source privacy checks passed. This is an unsigned exact source
+copy; it adds no build allowlist entries. Installation, fresh running-process verification and
+physical card/answer acceptance remain open. See the
+[packaging record](../../docs/research/approval-minimum-owner-package-2026-10-02.md).
+Reviewer-owned checklists are not
 blanket-certified. See the [source review record](../../docs/research/approval-minimum-policy-source-review-2026-10-02.md).
