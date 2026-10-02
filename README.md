@@ -5,7 +5,7 @@
 <p align="center"><a href="https://hermes-bot.app">hermes-bot.app</a> · <a href="FEATURES.md">Features</a> · <a href="HermesUnifiedGatewayResearch.md">Gateway research</a> · <a href="NOUS_GATEWAY_OBSERVATIONS.md">Requests for Nous</a> · <a href="https://gist.github.com/MahdiHedhli/c8d01a96bdfc794edaf7c3e1f4cb1502">Nous Gist</a></p>
 <p align="center"><a href="https://github.com/MahdiHedhli/hermes-hmp/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/MahdiHedhli/hermes-hmp/actions/workflows/ci.yml/badge.svg"></a> <img alt="Python 3.11+" src="https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white"> <img alt="Hermes plugin" src="https://img.shields.io/badge/Hermes-platform%20plugin-343A40"> <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-2ea44f"></a></p>
 
-HMP runs inside your own Hermes gateway. It pairs each phone to an instance, serves bot and Bot Chat reads, and supports guarded Bot Chat sends on qualified Hermes builds. The iOS and Android apps live in a separate private repository.
+HMP runs inside your own Hermes gateway. It pairs each phone to an instance, serves bot and Bot Chat reads, and supports guarded Bot Chat sends on Hermes 0.21.5 or later. The iOS and Android apps live in a separate private repository.
 
 ## Install
 
@@ -60,7 +60,7 @@ fixture, vector, and compatibility tools are in `tools/`. See the
 [release compatibility watch](docs/RELEASE_COMPAT_WATCH.md) for tested Hermes
 tags and future-release checks.
 
-HMP registers one platform adapter and one operator CLI. It does not register agent tools or hooks. Unsupported Hermes builds fail closed for guarded operations. See [SECURITY.md](SECURITY.md) for reporting and the threat model.
+HMP registers one platform adapter and one operator CLI. It does not register agent tools or hooks. Hermes older than HMP's minimum version, or missing an API a feature needs, is refused for that feature; later and unknown versions are attempted. See [SECURITY.md](SECURITY.md) for reporting and the threat model.
 
 ## Development
 

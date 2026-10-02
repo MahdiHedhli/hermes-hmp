@@ -17,7 +17,7 @@ HMP follows the [feature list](FEATURES.md), [unified gateway research](HermesUn
 
 1. Confirm canonical runtime and authenticated remote entry have landed in the target release.
 2. Identify and authorize the exact installation, profile, and session; negotiate supported operations. Missing capabilities fail explicitly.
-3. Requalify HMP read/send, Cron, and model fingerprints in an isolated Hermes home.
+3. Re-run the HMP read/send, Cron, and model fixtures in an isolated Hermes home as tested-sample evidence.
 4. Prove the [research acceptance cases](HermesUnifiedGatewayResearch.md#20-hmp-acceptance-tests-derived-from-upstream): shared Desktop/mobile session, no duplicate turn after a lost acknowledgement, replay or authoritative snapshot after reconnect, stale-control refusal, profile isolation, and restart recovery.
 5. Add a versioned canonical-gateway adapter only after those checks pass, with a rollback for qualified older builds.
 

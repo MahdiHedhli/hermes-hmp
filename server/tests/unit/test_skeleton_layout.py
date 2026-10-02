@@ -18,6 +18,8 @@ CONTRACT_MODULES = {
     "identity.py",
     "store.py",
     "compat.py",
+    "hermes_version.py",
+    "issue_draft.py",
     "bridge.py",
     "pairing.py",
     "tokens.py",

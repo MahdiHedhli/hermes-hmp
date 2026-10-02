@@ -588,7 +588,7 @@ async def handle_chat_send(request: web.Request) -> web.Response:
             user_id=who.user_id,
             profile=profile,
             request=req,
-            flag_enabled=ctx.direct_send_enabled(),
+            flag_enabled=ctx.direct_send_effective(),
             base_write_gate=base_gate,
         )
     except direct_send.DirectSendError as exc:
@@ -609,7 +609,7 @@ async def _cron_endpoint(request: web.Request, *, write: bool) -> Any:
     )
     profile = request.match_info["p"]
     await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
-    if not ctx.cron_enabled() or not ctx.cron_build_qualified():
+    if not ctx.cron_enabled() or not ctx.is_cron_available():
         raise HmpError(ErrorCode.CRON_UNAVAILABLE)
     endpoint = await asyncio.to_thread(ctx.bridge.direct_send_endpoint, profile)
     if endpoint is None:
@@ -687,7 +687,7 @@ async def _model_profile(request: web.Request, *, write: bool) -> str:
     )
     profile = request.match_info["p"]
     await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
-    if not ctx.model_enabled() or not ctx.model_build_qualified():
+    if not ctx.model_enabled() or not ctx.is_model_available():
         raise HmpError(ErrorCode.MODEL_UNAVAILABLE)
     return profile
 
@@ -870,7 +870,7 @@ def build_app(ctx: ServerContext) -> web.Application:
         list(F1_ROUTES) + list(F2_DIRECT_SEND_ROUTES)
         + list(MOBILE_CRON_ROUTES) + list(MOBILE_MODEL_ROUTES)
     )
-    if ctx.session_browsing_enabled:
+    if ctx.session_browsing_enabled and ctx.session_browsing_available:
         # Amendment A1 kill switch: when off, SES-1/SES-2 are never added to the router at all,
         # so they 404 exactly like every other unregistered F1 route (server-modules.md).
         handlers["/bots/{p}/sessions"] = handle_sessions_list

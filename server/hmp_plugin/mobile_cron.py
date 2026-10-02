@@ -32,7 +32,8 @@ _BUILDS_PATH = Path(__file__).with_name("mobile_cron_supported_builds.json")
 
 
 def qualified_build(*, root: Path | None = None, builds_path: Path = _BUILDS_PATH) -> bool:
-    """Bind cron API behavior to reviewed Hermes files, independently of read compat."""
+    """Evidence only: does this install match a tested jobs sample exactly? No gate reads this;
+    jobs availability comes from `compat.evaluate_eligibility` (owner policy 2026-10-01)."""
     try:
         data = json.loads(builds_path.read_text(encoding="utf-8"))
         files = data["bridge_files"]

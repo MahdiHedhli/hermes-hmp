@@ -1117,13 +1117,28 @@ def test_rotate_key_checks_currency_under_the_custody_lock(
 
 
 def test_compat_output(c: Cli) -> None:
+    from hmp_plugin.compat import Eligibility, Feature, FeatureStatus, Unavailable
+    from hmp_plugin.hermes_version import HermesVersion, Scheme, VersionSource
+
+    version = HermesVersion(Scheme.SEMVER, (0, 21, 5), VersionSource.LITERAL)
+    c.compat = CompatResult(
+        CompatStatus.SUPPORTED,
+        eligibility=Eligibility(version, None, {f: FeatureStatus(True) for f in Feature}),
+    )
     assert c.run("compat") == 0
-    assert "supported" in c.out and FP in c.out and "stock-base" in c.out and "passed" in c.out
-    assert "Guarded send qualification:" in c.out
-    c.compat = CompatResult(CompatStatus.UNSUPPORTED, OtherWhy.HERMES_BUILD_UNSUPPORTED)
+    assert "Hermes version: 0.21.5 (source: literal)" in c.out
+    assert "read: available" in c.out and "jobs: available" in c.out
+    gone = {f: FeatureStatus(False, Unavailable.VERSION_BELOW_FLOOR) for f in Feature}
+    c.compat = CompatResult(
+        CompatStatus.UNSUPPORTED,
+        OtherWhy.HERMES_BUILD_UNSUPPORTED,
+        eligibility=Eligibility(
+            HermesVersion(Scheme.SEMVER, (0, 21, 3), VersionSource.LITERAL), None, gone
+        ),
+    )
     assert c.run("compat") == 0
-    assert "hermes_build_unsupported" in c.out and "unidentifiable" in c.out
-    assert "not run" in c.out
+    assert "read: unavailable (hermes_version_below_floor)" in c.out
+    assert "Update Hermes." in c.out
 
 
 def test_no_subcommand_is_usage(c: Cli) -> None:

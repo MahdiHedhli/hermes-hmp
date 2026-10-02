@@ -76,8 +76,12 @@ Refusals and rules:
   commands for later changes. An explicit decision overrides the legacy config allowlist.
 - **`instance rotate-key` (PR7-2)** makes a new key, revokes every device, and expires every open
   offer and pending pairing.
-- **`compat`** prints the build identity, the list match and the probe outcome. There are no
-  secrets in any of them.
+- **`compat`** prints the Hermes version, the minimum supported versions and whether each feature
+  is available. `compat --issue-draft` prints a GitHub issue draft for the operator to review and
+  paste. It is pure and offline: nothing is submitted, no network, `gh` or browser is used, and only
+  allowlisted version and fixed-code fields appear. `--feature` with `--failure-code` states a
+  failure the operator saw, for an upstream failure the static probe cannot see. There are no
+  secrets in any of it.
 
 Grants that live in Hermes's own pairing stores cannot be read without a Hermes internal, and
 only `bridge.py` may import one (PR-2). So the "grants" the CLI prints are the bots this user asked
@@ -730,7 +734,25 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     instance.add_parser("show", help="Show the instance fingerprint")
     instance.add_parser("rotate-key", help="Rotate the instance key; revokes every device (PR7-2)")
 
-    groups.add_parser("compat", help="Show build identity, list match and probe result (GU-2c)")
+    compat_cmd = groups.add_parser(
+        "compat", help="Show the Hermes version and which HMP features are available"
+    )
+    compat_cmd.add_argument(
+        "--issue-draft",
+        action="store_true",
+        help="Print a GitHub issue draft to review and paste (offline; nothing is sent)",
+    )
+    compat_cmd.add_argument(
+        "--feature",
+        default=None,
+        help="With --issue-draft and --failure-code: the feature that failed "
+        "(read, session_browsing, send, jobs, model)",
+    )
+    compat_cmd.add_argument(
+        "--failure-code",
+        default=None,
+        help="With --issue-draft and --feature: the HMP error code the phone showed",
+    )
     setup = groups.add_parser("setup", help="Check host readiness without changing configuration")
     setup.add_subparsers(dest="setup_command").add_parser(
         "check", help="Check the Hermes build, HMP identity, and pinned listener"
@@ -1779,40 +1801,149 @@ def _cmd_rotate(ctx: _Context, _args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _cmd_compat(env: CliEnv) -> int:
-    result = env.compat()
-    out = env.stdout
-    status = getattr(getattr(result, "status", None), "value", "unsupported")
-    out.write(f"Read compatibility: {status}\n")
-    why = getattr(getattr(result, "why", None), "value", None)
-    if why:
-        out.write(f"Reason: {why}\n")
-    ident = getattr(result, "identity", None)
-    if ident is not None:
-        out.write(f"Git SHA: {ident.git_sha or 'none (no git metadata)'}\n")
-        out.write(f"Read-bridge fingerprint: {ident.fingerprint}\n")
-    else:
-        out.write("Build identity: unidentifiable\n")
-    entry = getattr(result, "entry", None)
-    out.write(f"List match: {entry.label if entry is not None else 'none'}\n")
-    probe = (
-        "passed"
-        if getattr(result, "supported", False)
-        else ("failed" if why == "hermes_read_dependency_missing" else "not run")
-    )
-    out.write(f"Dependency probe: {probe}\n")
-    if getattr(result, "supported", False):
-        from . import compat
+def _version_floor_text() -> str:
+    from . import hermes_version
 
-        send_ready = compat.direct_send_build_qualified(ident)
-        out.write(f"Guarded send qualification: {'qualified' if send_ready else 'unqualified'}\n")
-    if status != "supported":
-        out.write(
-            "For an older Hermes install, update to v0.21.5 (v2026.9.24). "
-            "If already newer, update HMP after that release is qualified; "
-            "see github.com/MahdiHedhli/hermes-hmp/blob/main/docs/RELEASE_COMPAT_WATCH.md.\n"
+    read = hermes_version.FEATURE_FLOORS["read"]
+    write = hermes_version.FEATURE_FLOORS["send"]
+    return (
+        f"read {read.semver_text} ({read.calver_text}); "
+        f"send, jobs and model {write.semver_text} ({write.calver_text})"
+    )
+
+
+def _failure_lines(version: str, feature: Any, status: Any) -> list[str]:
+    """A failed compatibility check. A failed probe is a fact about this install's APIs, not proof
+    of a version problem: the sample note appears only when no tested sample matches, and only
+    after a failure."""
+    from . import issue_draft
+
+    detail = issue_draft.failure_detail(feature, status)
+    lines = [f"The {feature.value} compatibility check failed on Hermes {version} ({detail}).\n"]
+    if status.tested_label is None:
+        lines.append("This Hermes is not one of HMP's tested samples.\n")
+    return lines
+
+
+def _read_gap_lines(result: Any) -> list[str]:
+    """The three-way read wording shared by `compat` and `setup check`."""
+    from . import compat
+
+    eligibility = getattr(result, "eligibility", None)
+    status = eligibility.features.get(compat.Feature.READ) if eligibility is not None else None
+    if status is None or status.available:
+        return []
+    version = eligibility.version.text
+    if status.reason is compat.Unavailable.VERSION_BELOW_FLOOR:
+        floor = _version_floor_text()
+        return [
+            f"Hermes {version} is older than HMP's minimum ({floor}). Update Hermes.\n"
+        ]
+    if status.reason is compat.Unavailable.HERMES_NOT_FOUND:
+        return ["The Hermes install could not be found, so HMP cannot serve any feature.\n"]
+    return [
+        *_failure_lines(version, compat.Feature.READ, status),
+        "To prepare a report: hermes hmp compat --issue-draft\n",
+    ]
+
+
+def _cmd_compat(env: CliEnv, args: argparse.Namespace | None = None) -> int:
+    from . import compat, issue_draft
+
+    want_draft = bool(getattr(args, "issue_draft", False))
+    feature = getattr(args, "feature", None)
+    code = getattr(args, "failure_code", None)
+    if (feature is None) != (code is None):
+        raise RefusedError(
+            "refused: --feature and --failure-code must be used together", EXIT_ENVIRONMENT
         )
+    if feature is not None and not want_draft:
+        raise RefusedError(
+            "refused: --feature and --failure-code need --issue-draft", EXIT_ENVIRONMENT
+        )
+    context: issue_draft.OperatorReport | issue_draft.OwnReason | None = None
+    if feature is not None:
+        try:
+            context = issue_draft.check_report_request(feature, code)
+        except issue_draft.ReportRequestError as exc:
+            raise RefusedError(
+                f"refused: {exc}. Features: {', '.join(issue_draft.FEATURES)}. Use the code the "
+                "phone showed for that feature.",
+                EXIT_ENVIRONMENT,
+            ) from exc
+
+    result = env.compat()
+    eligibility = getattr(result, "eligibility", None)
+    out = env.stdout
+    if want_draft:
+        return _write_issue_draft(out, eligibility, context)
+
+    if eligibility is None:
+        out.write("Hermes version: unknown\n")
+        out.write(f"Minimum Hermes: {_version_floor_text()}\n")
+        out.write("Feature availability could not be determined.\n")
+        return EXIT_OK
+    version = eligibility.version
+    out.write(f"Hermes version: {version.text} (source: {version.source.value})\n")
+    out.write(f"Minimum Hermes: {_version_floor_text()}\n")
+    for feat, status in eligibility.features.items():
+        if status.available:
+            out.write(f"{feat.value}: available\n")
+            continue
+        out.write(f"{feat.value}: unavailable ({issue_draft.failure_detail(feat, status)})\n")
+
+    below = [
+        f.value
+        for f, st in eligibility.features.items()
+        if st.reason is compat.Unavailable.VERSION_BELOW_FLOOR
+    ]
+    if below:
+        out.write(
+            f"Hermes {version.text} is older than HMP's minimum "
+            f"({_version_floor_text()}) for {', '.join(below)}. Update Hermes.\n"
+        )
+    failures = issue_draft.static_failures(eligibility)
+    for feat, status in failures:
+        out.writelines(_failure_lines(version.text, feat, status))
+    if failures:
+        out.write("To prepare a report: hermes hmp compat --issue-draft\n")
+    elif eligibility.features[compat.Feature.READ].reason is compat.Unavailable.HERMES_NOT_FOUND:
+        out.write("The Hermes install could not be found, so HMP cannot serve any feature.\n")
     return EXIT_OK
+
+
+def _write_issue_draft(out: TextIO, eligibility: Any, context: Any) -> int:
+    from . import issue_draft
+
+    report = None
+    if isinstance(context, issue_draft.OwnReason):
+        out.write(issue_draft.own_reason_text(context) + "\n")
+    elif isinstance(context, issue_draft.OperatorReport):
+        report = context
+        feature_status = _feature_status(eligibility, report.feature)
+        if feature_status is not None and feature_status.reason is not None and (
+            feature_status.reason.value == "hermes_version_below_floor"
+        ):
+            out.write(
+                f"Note: this Hermes is older than HMP's minimum for {report.feature}; "
+                "updating Hermes is the expected fix.\n\n"
+            )
+    draft = issue_draft.build_draft(eligibility, report)
+    if draft is None:
+        if context is None:
+            out.write(issue_draft.NOTHING_TO_REPORT + "\n")
+        return EXIT_OK
+    out.write(draft.render())
+    return EXIT_OK
+
+
+def _feature_status(eligibility: Any, feature: str) -> Any:
+    if eligibility is None:
+        return None
+    for feat, status in eligibility.features.items():
+        if feat.value == feature:
+            return status
+    return None
 
 
 def _checked_setup(env: CliEnv) -> tuple[int, ListenerRecord | None]:
@@ -1824,7 +1955,8 @@ def _checked_setup(env: CliEnv) -> tuple[int, ListenerRecord | None]:
     supported = bool(getattr(result, "supported", False))
     out.write(f"Hermes read compatibility: {'supported' if supported else 'unsupported'}\n")
     if not supported:
-        out.write("Check `hermes hmp compat` and use a qualified Hermes build.\n")
+        out.writelines(_read_gap_lines(result))
+        out.write("Check `hermes hmp compat` for the details.\n")
 
     kw = env.identity_kwargs
     try:
@@ -1927,7 +2059,7 @@ def dispatch(args: argparse.Namespace, env: Optional[CliEnv] = None) -> int:  # 
     group, action = _command(args)
     try:
         if group == "compat":
-            return _cmd_compat(env)
+            return _cmd_compat(env, args)
         if (group, action) == ("setup", "check"):
             return _cmd_setup_check(env)
         if (group, action) == ("health", "check"):

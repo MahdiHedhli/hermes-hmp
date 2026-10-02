@@ -56,7 +56,7 @@ from typing import Any
 from gateway.config import Platform
 from gateway.platforms.base import BasePlatformAdapter, SendResult
 
-from . import cli, compat, direct_send, identity, mobile_cron, mobile_model, server
+from . import cli, compat, direct_send, identity, server
 from .authorize import Authorize
 from .cli import listener_record_path
 from .contract import PLATFORM_NAME, OtherWhy, WriteGateState
@@ -97,6 +97,16 @@ def _bridge_classes() -> tuple[type[Any], type[Any]]:
     return _bridge_classes_cache
 
 
+def _log_unavailable_features(eligibility: compat.Eligibility | None) -> None:
+    """One event per feature this Hermes cannot serve for a reason other than its declared
+    version. Only fixed enum strings are ever logged."""
+    if eligibility is None:
+        return
+    for feature, status in eligibility.unavailable():
+        if status.reason is not compat.Unavailable.VERSION_BELOW_FLOOR:
+            log_event("hermes_feature_unavailable", outcome=feature.value)
+
+
 def open_components(adapter: Any) -> server.ServerContext:
     """Compat gate, store, identity and (on a supported build only) the bridge. Blocking."""
     try:
@@ -116,7 +126,14 @@ def open_components(adapter: Any) -> server.ServerContext:
     config = getattr(adapter, "config", None)
     extra = getattr(config, "extra", None)
     session_browsing = extra.get("session_browsing", True) if isinstance(extra, Mapping) else True
-    direct_send_qualified = result.supported and compat.direct_send_build_qualified(result.identity)
+    eligibility = result.eligibility
+    # Availability comes from the one eligibility evaluation done above (Hermes code cannot change
+    # without a gateway restart), never from a per-request lookup. A result that carries no
+    # eligibility (an injected test double) reports nothing beyond read as available.
+    def _available(feature: compat.Feature) -> bool:
+        return eligibility is not None and eligibility.available(feature)
+
+    send_available = result.supported and _available(compat.Feature.SEND)
 
     # Amendment F2 (direct send, OD-F14/OD-F15): `gateway.platforms.hmp.extra.direct_send.enabled`,
     # default False. A malformed (non-mapping) `direct_send` block fails closed to disabled, never
@@ -131,7 +148,7 @@ def open_components(adapter: Any) -> server.ServerContext:
         live_config = getattr(adapter, "config", None)
         live_extra = getattr(live_config, "extra", None)
         block = live_extra.get("direct_send") if isinstance(live_extra, Mapping) else None
-        return direct_send_qualified and isinstance(block, Mapping) and block.get("enabled") is True
+        return isinstance(block, Mapping) and block.get("enabled") is True
 
     def _read_owner_device_ids() -> frozenset[str]:
         live_config = getattr(adapter, "config", None)
@@ -161,10 +178,13 @@ def open_components(adapter: Any) -> server.ServerContext:
         direct_send_flag=_read_direct_send_enabled,
         owner_device_ids=_read_owner_device_ids,
         cron_flag=_read_cron_enabled,
-        cron_qualified=lambda: result.supported and mobile_cron.qualified_build(),
+        cron_available=lambda: result.supported and _available(compat.Feature.JOBS),
         model_flag=_read_model_enabled,
-        model_qualified=lambda: result.supported and mobile_model.qualified_build(),
+        model_available=lambda: result.supported and _available(compat.Feature.MODEL),
+        session_browsing_available=_available(compat.Feature.SESSION_BROWSING),
+        send_available=lambda: send_available,
     )
+    _log_unavailable_features(eligibility)
     if result.supported:
         bridge_cls, directory_cls = _bridge_classes()
 
@@ -224,18 +244,19 @@ class HmpAdapter(BasePlatformAdapter):
             try:
                 send = (
                     "disabled" if not ctx.direct_send_enabled()
+                    else "unsupported" if not ctx.is_send_available()
                     else "ready"
                     if ctx.reported_send_gate(profile).state is not WriteGateState.CLOSED
                     else "unavailable"
                 )
                 cron = (
                     "disabled" if not ctx.cron_enabled()
-                    else "unsupported" if not ctx.cron_build_qualified()
+                    else "unsupported" if not ctx.is_cron_available()
                     else "unavailable"
                 )
                 model = (
                     "disabled" if not ctx.model_enabled()
-                    else "unsupported" if not ctx.model_build_qualified()
+                    else "unsupported" if not ctx.is_model_available()
                     else "unavailable"
                 )
                 if cron == "unavailable" or model == "unavailable":

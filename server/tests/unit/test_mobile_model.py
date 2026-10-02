@@ -61,7 +61,7 @@ def test_current_projection_rejects_unbounded_or_non_text_values() -> None:
         assert exc.value.code is ErrorCode.MODEL_UNAVAILABLE
 
 
-def test_model_fingerprint_fails_closed_after_source_change(tmp_path: Path) -> None:
+def test_model_evidence_matcher_follows_source_bytes_and_gates_nothing(tmp_path: Path) -> None:
     (tmp_path / "writer.py").write_text("approved", encoding="utf-8")
     fingerprint = compute_read_bridge_fingerprint(tmp_path, ["writer.py"])
     builds = tmp_path / "builds.json"
@@ -75,7 +75,7 @@ def test_model_fingerprint_fails_closed_after_source_change(tmp_path: Path) -> N
     assert not mobile_model.qualified_build(root=tmp_path, builds_path=builds)
 
 
-def test_model_routes_reject_non_owner_disabled_and_unqualified(tmp_path: Path) -> None:
+def test_model_routes_reject_non_owner_disabled_and_unavailable(tmp_path: Path) -> None:
     env = Env(tmp_path)
     calls: list[str] = []
     env.bridge.authz_state = lambda *_: AuthzState.AUTHORIZED
@@ -90,10 +90,10 @@ def test_model_routes_reject_non_owner_disabled_and_unqualified(tmp_path: Path) 
         status, _ = await get(client, url, headers=env.headers(dev))
         assert status == 503 and not calls
         env.ctx.model_flag = lambda: True
-        env.ctx.model_qualified = lambda: False
+        env.ctx.model_available = lambda: False
         status, _ = await get(client, url, headers=env.headers(dev))
         assert status == 503 and not calls
-        env.ctx.model_qualified = lambda: True
+        env.ctx.model_available = lambda: True
         env.bridge.authz_state = lambda *_: AuthzState.PENDING_OPERATOR
         status, _ = await get(client, url, headers=env.headers(dev))
         assert status == 403 and not calls
@@ -113,7 +113,7 @@ def test_model_routes_use_exact_profile_and_do_not_retry_write(tmp_path: Path) -
         or {"provider": provider, "model": model}
     )
     env.ctx.model_flag = lambda: True
-    env.ctx.model_qualified = lambda: True
+    env.ctx.model_available = lambda: True
 
     async def scenario(client: TestClient) -> None:
         dev = await pair(env, client)

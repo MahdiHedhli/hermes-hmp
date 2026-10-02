@@ -1,8 +1,14 @@
 # Hermes release compatibility watch
 
-HMP's current bridge uses Hermes internals. A Hermes version number alone does not
-establish that profile routing, authorization, Bot Chat reads, or send outcomes remain
-safe. Do not add a tag to `read_compat_builds.json` solely because its files exist.
+HMP's current bridge uses Hermes internals. Owner policy (2026-10-01) replaces exact-build
+admission with a minimum supported version: reads need Hermes 0.21.4 (2026.9.21) or later, and
+send, jobs and model need 0.21.5 (2026.9.24) or later. Later releases and development builds are
+attempted; a feature turns off only when an API it needs is missing, and the operator can then
+prepare a user-reviewed report with `hermes hmp compat --issue-draft`.
+
+The tables below, and the `*_supported_builds.json` files, are **tested-sample evidence**: they
+record what a fixture run covered. They never decide which builds may run, and a tag does not
+need an entry before it works. Exact fingerprints and commit SHAs are never admission data.
 
 The [scheduled GitHub workflow](../.github/workflows/hermes-release-compat.yml) runs
 daily and can be started manually. It reads every published upstream release since
@@ -11,8 +17,9 @@ then checks the newest release and every new tag against HMP's committed
 bridge fingerprints in a disposable runner. The fixture matrix exercises
 profile isolation, authorization, Bot Chat
 history and mutations, and refusal of an altered unknown build. The workflow uses
-no repository secrets or write token; a new tag fails the run until it is reviewed.
-Its report is a source and test result, **not an automatic compatibility grant**.
+no repository secrets or write token. Its report is a source and test result for maintainers;
+it has no runtime effect. Today a new tag still fails the run until a maintainer reviews it;
+making that report-only is tracked as follow-on work.
 
 ## Baseline found on 2026-09-29
 
@@ -28,12 +35,12 @@ Its report is a source and test result, **not an automatic compatibility grant**
 The Omarchy Lenovo Legion Y520 owner's 2026-09-29 Git commit
 `ca705dbf7ef86425b381b542712aff310f1ee52c` also passed the same isolated
 read matrix and unsupported-build refusal. It is a moving main-branch commit,
-4,600 commits beyond `v2026.9.24`, not a new release tag. The exact Git
-commit and bridge fingerprint are qualified; a later update is a new build.
+4,600 commits beyond `v2026.9.24`, not a new release tag. This exact commit is
+recorded as tested evidence; a later update is attempted without a new entry.
 Its separate eight-case direct-send fixture suite also passed in isolation;
-this result is recorded in `direct_send_supported_builds.json`. The guarded
-send route now checks that separate list and the additional dependencies
-before the owner-enabled send flag can open it.
+this result is recorded in `direct_send_supported_builds.json` as evidence. The guarded
+send route checks the additional send dependencies, the version floor and the
+owner-enabled send flag; it does not consult that file.
 
 The August 31 through September 11 tags cannot work with the current bridge by
 loosening the version check. They need an adapter that uses their older gateway and
@@ -41,14 +48,13 @@ session APIs, with the same authorization and profile isolation assertions as th
 current bridge. Track that work in [issue 22](https://github.com/MahdiHedhli/hermes-hmp/issues/22).
 
 For a newly published tag, inspect the workflow's release table and matrix result.
-Investigate any failure, qualify the exact release and install form, and then update
-the reviewed-tag inventory in `tools/compat/watch_releases.py` and HMP's compatibility
-data together. Retest after an upstream change in any fingerprinted file. Do not
-silently admit an untested future source layout or turn off the fail-closed gate.
+Investigate any failure and add the result to the tested evidence if useful; the tag
+works at runtime without that. If a feature needs an API that moved, fix HMP's dependency
+probe or bridge rather than adding an allowlist entry.
 
-The earliest public tagged build qualified for the current read bridge is
-`v2026.9.21`; `v2026.9.24` is the earliest public tag with guarded sends
-qualified. The `v2026.9.21` send fixture could not run because that Hermes
+The earliest public tagged build the current read bridge was tested on is
+`v2026.9.21`; `v2026.9.24` is the earliest public tag with the guarded-send fixture
+passed. The `v2026.9.21` send fixture could not run because that Hermes
 source lacks its deterministic fake LLM test fixture; do not infer send support
 from the passing read matrix. Persistent host actions keep their separate
 host-side gates.

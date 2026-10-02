@@ -88,11 +88,11 @@ def test_job_projection_omits_host_internals() -> None:
     ))["deliver"] == "other"
 
 
-def test_unqualified_build_fails_closed(tmp_path: Path) -> None:
+def test_cron_evidence_matcher_is_false_without_a_sample(tmp_path: Path) -> None:
     assert not mobile_cron.qualified_build(root=tmp_path)
 
 
-def test_cron_fingerprint_matches_only_exact_reviewed_bytes(tmp_path: Path) -> None:
+def test_cron_evidence_matcher_matches_only_exact_sample_bytes(tmp_path: Path) -> None:
     (tmp_path / "api.py").write_text("approved", encoding="utf-8")
     fingerprint = compute_read_bridge_fingerprint(tmp_path, ["api.py"])
     builds = tmp_path / "builds.json"
@@ -115,7 +115,7 @@ def test_non_owner_and_disabled_flag_never_reach_upstream(tmp_path: Path, monkey
     calls: list[str] = []
     env.bridge.authz_state = lambda *_: AuthzState.AUTHORIZED
     env.bridge.direct_send_endpoint = lambda p: calls.append(p)
-    env.ctx.cron_qualified = lambda: True
+    env.ctx.cron_available = lambda: True
     env.ctx.cron_flag = lambda: True
 
     async def scenario(client: TestClient) -> None:
@@ -134,7 +134,7 @@ def test_non_owner_and_disabled_flag_never_reach_upstream(tmp_path: Path, monkey
         assert status == 403
         assert calls == []
         env.bridge.authz_state = lambda *_: AuthzState.AUTHORIZED
-        env.ctx.cron_qualified = lambda: False
+        env.ctx.cron_available = lambda: False
         status, _ = await get(client, "/bots/default/jobs", headers=env.headers(dev))
         assert status == 503
         assert calls == []
@@ -146,7 +146,7 @@ def test_owner_route_uses_fixed_loopback_profile_and_projects_result(tmp_path: P
     env = Env(tmp_path)
     received: list[tuple[str, str, dict[str, object] | None]] = []
     env.bridge.authz_state = lambda *_: AuthzState.AUTHORIZED
-    env.ctx.cron_qualified = lambda: True
+    env.ctx.cron_available = lambda: True
     env.ctx.cron_flag = lambda: True
     created: list[tuple[str, dict[str, object]]] = []
     env.bridge.create_mobile_cron = lambda profile, fields: (

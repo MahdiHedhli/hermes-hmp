@@ -23,7 +23,8 @@ _LOOPBACK = frozenset({"127.0.0.1", "::1"})
 
 
 def qualified_build(*, root: Path | None = None, builds_path: Path = _BUILDS_PATH) -> bool:
-    """Do not trust a changed Hermes model writer or options API automatically."""
+    """Evidence only: does this install match a tested model sample exactly? No gate reads this;
+    model availability comes from `compat.evaluate_eligibility` (owner policy 2026-10-01)."""
     try:
         data = json.loads(builds_path.read_text(encoding="utf-8"))
         files, entries = data["bridge_files"], data["builds"]

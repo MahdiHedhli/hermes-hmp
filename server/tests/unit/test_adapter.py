@@ -288,9 +288,10 @@ def test_health_snapshot_keeps_profile_failures_separate(adapter_module: types.M
             reason=None,
         ),
         cron_enabled=lambda: True,
-        cron_build_qualified=lambda: True,
+        is_cron_available=lambda: True,
         model_enabled=lambda: False,
-        model_build_qualified=lambda: True,
+        is_model_available=lambda: True,
+        is_send_available=lambda: True,
         bridge=bridge,
     )
     assert adapter_module.HmpAdapter._health_snapshot(
@@ -298,6 +299,39 @@ def test_health_snapshot_keeps_profile_failures_separate(adapter_module: types.M
     ) == (
         ("alpha", "ready", "ready", "disabled"),
         ("beta", "unavailable", "unavailable", "disabled"),
+    )
+
+
+def test_health_snapshot_reports_unavailable_send_as_unsupported_not_disabled(
+    adapter_module: types.ModuleType,
+) -> None:
+    """E13: the owner's flag and this Hermes's availability are separate. A flag that is on for a
+    Hermes without the send dependencies reads `unsupported`; a flag that is off reads
+    `disabled`."""
+
+    def ctx(*, flag: bool, available: bool) -> types.SimpleNamespace:
+        return types.SimpleNamespace(
+            direct_send_enabled=lambda: flag,
+            is_send_available=lambda: available,
+            reported_send_gate=lambda profile: WriteGate(
+                state=WriteGateState.OPEN_GUARDED, reason=None
+            ),
+            cron_enabled=lambda: False,
+            is_cron_available=lambda: False,
+            model_enabled=lambda: False,
+            is_model_available=lambda: False,
+            bridge=None,
+        )
+
+    snapshot = adapter_module.HmpAdapter._health_snapshot
+    assert snapshot(ctx(flag=True, available=False), [("a", "A")]) == (
+        ("a", "unsupported", "disabled", "disabled"),
+    )
+    assert snapshot(ctx(flag=False, available=False), [("a", "A")]) == (
+        ("a", "disabled", "disabled", "disabled"),
+    )
+    assert snapshot(ctx(flag=True, available=True), [("a", "A")]) == (
+        ("a", "ready", "disabled", "disabled"),
     )
 
 

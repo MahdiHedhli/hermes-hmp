@@ -9,7 +9,7 @@ from the gateway config to route correctly.
 
 ## Check the Hermes gateway topology first
 
-The explicit configuration below was qualified on the older fixture builds
+The explicit configuration below was tested on the older fixture builds
 `04fa849e70` and `7e8c8f07a1`. Do not apply its `multiplex_profiles: true` line
 blindly to a different Hermes release. In Hermes `8afaab3703` (2026-09-26),
 an **unset** root value lets the gateway run a migration preflight and stay
@@ -23,9 +23,9 @@ Before changing the root flag on a multi-profile host, review the output of
 profile's credentials. Resolve any migration blockers through Hermes's own
 workflow. HMP may report `not_served` until the topology is safe; do not force
 the flag to make the mobile app connect. The routing checklist below describes
-the configuration that the older qualified HMP fixtures need once the host is
-ready to serve those profiles. Requalify it against the exact Hermes build in
-use before automating it.
+the configuration that the older tested HMP fixtures need once the host is
+ready to serve those profiles. Check it against the Hermes build in use before
+automating it.
 
 ## The requirement
 

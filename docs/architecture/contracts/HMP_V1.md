@@ -240,14 +240,14 @@ Normative keywords follow RFC 2119 and RFC 8174.
 | `no_bot_chat` (v1.2, DS-4(2)) | 409 | direct send: no canonical Bot Chat exists yet for this bot | yes | Ask the operator to open this bot once on Hermes Desktop first. |
 | `session_busy` (v1.2, DS-4(3)) | 409 | direct send: the lease-registry guard found another live writer, or the liveness read itself failed | **no** (Hermes never saw this attempt) | Restore the draft; plain retry once the busy state clears. |
 | `stale_head` (v1.2, DS-4(4)) | 409 | direct send: the client's `expected_head` does not match the Bot Chat's current head | yes | Refresh (re-read via SES-2), then retry with the fresh head. Never a silent retry with the old value. |
-| `write_gate_closed` (v1.2, DS-2(b)) | 503 | Bot Chat direct send lacks its owner switch, qualification, loopback configuration, or target profile key | yes (HMP did not hand off) | Keep the draft. Composer is read-only for this bot until its gate reopens. |
+| `write_gate_closed` (v1.2, DS-2(b)) | 503 | Bot Chat direct send lacks its owner switch, a Hermes API it needs (GU-2d), loopback configuration, or target profile key | yes (HMP did not hand off) | Keep the draft. Composer is read-only for this bot until its gate reopens. |
 | `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"` | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
-| `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, unqualified build, missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
-| `model_unavailable` (v1.5, MD-1) | 503 | mobile default model: flag off, unqualified build, missing scoped picker endpoint, or Hermes read/write failure | — | Reopen the model screen and check the current selection before another write. |
+| `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, a required Hermes API unavailable (GU-2d), missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
+| `model_unavailable` (v1.5, MD-1) | 503 | mobile default model: flag off, a required Hermes API unavailable (GU-2d), missing scoped picker endpoint, or Hermes read/write failure | — | Reopen the model screen and check the current selection before another write. |
 
 - **ERR-2a. Read-compatibility refusal** (GU-2c; additive `other {why}` values, no contract revision; controller clarification, 2026-09-25).
-  - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes build's identity is not on the read-compatible builds list or cannot be determined.
-  - `503 other {why:"hermes_read_dependency_missing"}` when a listed build lacks a Hermes internal the read bridge needs.
+  - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes declares a version below the minimum supported version for reads (GU-2c), or its install cannot be found. An unknown, unlisted, newer or unreleased version is never refused for that reason.
+  - `503 other {why:"hermes_read_dependency_missing"}` when a Hermes internal the read bridge actually needs is missing, mis-shaped or resolves outside the Hermes tree and standard library.
   - HMP makes no bridge call and hands nothing to Hermes. Definitive for submit: yes (nothing handed off).
   - Client action: show "Unsupported Hermes build" for this instance; keep saved content visible and labelled; never retry against another instance.
 
@@ -529,7 +529,7 @@ Normative keywords follow RFC 2119 and RFC 8174.
   - **Profile send availability (additive, V-3).** Each authorized bot MAY carry
     `"send_gate":{"state":"open"|"open_guarded"|"closed","reason":null|"write_gate_closed"}`.
     It describes the Bot Chat send route for that bot's own profile. A closed value is returned
-    when the host switch, configured qualification check, loopback configuration, or that profile's key is
+    when the host switch, a Hermes API send needs (GU-2d), loopback configuration, or that profile's key is
     unavailable; neither the key nor its source is exposed. Bots without authorization omit the
     field and do not trigger a key lookup. The send route rechecks these conditions on every POST.
     A client that understands this field uses it for the selected bot's composer. If absent, it
@@ -870,7 +870,7 @@ which no supported build advertises today (§8).
   advertises success here).
 - **DS-2. Gate order.** (a) The per-bot gate (ERR-3). (b) The Bot Chat route requires **all** of:
   the host flag `gateway.platforms.hmp.extra.direct_send` is `true` (default `false`, off;
-  OD-F14/OD-F15); any configured qualification check passes; `api_server` resolves to a
+  OD-F14/OD-F15); this Hermes provides the APIs send needs (GU-2d); `api_server` resolves to a
   loopback-only target for the profile (DS-6); and that profile's `API_SERVER_KEY` resolves to a
   usable secret (DS-6). A genuine GU-4 `"open"` state retains its full-guarantee label only
   after these route prerequisites pass. Otherwise the route is `"open_guarded"` and applies
@@ -1026,9 +1026,9 @@ which no supported build advertises today (§8).
 
 This additive route family is disabled unless `gateway.platforms.hmp.extra.cron.enabled`
 is explicitly true, at least one `owner_device_ids` entry matches this authenticated device,
-and the running Hermes build has an independently qualified cron fingerprint. A device also
+and the running Hermes provides the scheduler APIs the route needs (GU-2d). A device also
 needs the existing per-bot authorization for `{p}`. A failed gate returns `404 not_found`
-for non-owner devices or `503 cron_unavailable` for a disabled/unqualified endpoint, before
+for non-owner devices or `503 cron_unavailable` for a disabled or unavailable endpoint, before
 any job data or loopback API key is used.
 
 | Method | Path under `/hmp/v1` | Body | Result |
@@ -1051,7 +1051,7 @@ other Hermes job internals. Create/edit fields are length bounded; unknown field
 rejected. Reads, pause/resume, and delete use one profile-scoped, literal-loopback API server
 endpoint with the profile's own server key, disabled proxy inheritance, redirects, and
 automatic retries. Create and edit use Hermes's profile-scoped cron writer so continuity
-is saved atomically with the job; both retain the same owner/device/bot/qualified-build gate.
+is saved atomically with the job; both retain the same owner/device/bot gate and the same required-API availability check.
 The phone may select only local run history or its own bot's Bot Chat. It cannot name an
 arbitrary delivery destination. HMP still creates jobs paused.
 Phone clients must treat a transport failure after a write as an unknown outcome and
@@ -1062,9 +1062,9 @@ fixture qualification and independent security review.
 
 This additive route family is disabled unless `gateway.platforms.hmp.extra.model_management.enabled`
 is explicitly true, this authenticated device is in `owner_device_ids`, the selected bot
-passes the existing per-bot access check, and the running Hermes model writer is an exact
-qualified build. Non-owner devices receive `404 not_found`; a disabled or unqualified
-feature receives `503 model_unavailable`. These checks happen before a config read, model
+passes the existing per-bot access check, and the running Hermes provides the model reader and
+writer APIs the route needs (GU-2d). Non-owner devices receive `404 not_found`; a disabled or
+unavailable feature receives `503 model_unavailable`. These checks happen before a config read, model
 catalog request, or write.
 
 | Method | Path under `/hmp/v1` | Body | Result |
@@ -1086,7 +1086,7 @@ bad_request`; other write failures are `503 model_unavailable`. A model selectio
 billing. The phone must confirm the named bot and model before PUT. A lost response is an
 unknown result: refresh the current model and never automatically retry. The persisted
 default applies to new sessions; this route does not switch a running Desktop-owned turn.
-The host flag defaults off, and the owner's live Hermes is not qualified by this draft.
+The host flag defaults off. Availability on a given Hermes follows GU-2d, not a build list.
 
 ## 8. Guarantees, capability contract and write gate (FZ-R-8, FZ-R-9)
 
@@ -1114,20 +1114,25 @@ The host flag defaults off, and the owner's live Hermes is not qualified by this
     - Only a genuine integer counts as a version. A boolean, a string or a float is treated as absent (DR-12).
     - `>= floor` relies on the Hermes map's rule that a higher version is a strict superset of every lower version's behaviour (DR-5). HMP SHOULD log any version higher than the ones it knows.
     - HMP does not use a Hermes build identity to derive guarantees. Build identity is used only for GU-2c read compatibility.
-- **GU-2a. Supported builds (release gating).**
-  - A Hermes build is **supported** only if it is listed in the HMP release test matrix. That matrix pins exact reviewed Hermes builds by commit SHA (`R0_FREEZE_REVIEW.md` §6).
-  - The HMP release is tested against every listed build, and those tests include the capability-derived flags.
-  - A build outside the matrix whose capability map meets the floors will still open the write gate at runtime. It is nevertheless **unsupported**, and the documentation says so.
+- **GU-2a. Tested samples (evidence only; owner policy 2026-10-01).**
+  - The HMP release test matrix pins exact reviewed Hermes builds by commit SHA (`R0_FREEZE_REVIEW.md` §6). Those receipts describe the samples that were tested, including the capability-derived flags.
+  - A tested-sample match is evidence only. It never admits or refuses a build, and no gate reads it.
+  - A build outside the matrix is attempted like any other (GU-2c, GU-2d). Its tested/untested status appears only as evidence in tooling.
 - **GU-2b. Residual: false capability claims.**
   - A modified Hermes could advertise capabilities it does not implement.
   - Such code runs as the same OS user as Hermes, so this sits inside the E-SI-15 trust boundary (SEC-1). It is covered by the same owner acknowledgement.
   - HMP does not try to detect it.
-- **GU-2c. Read-compatible builds** (`R0_OWNER_DECISIONS.md`, bounded amendment 1).
-  - Read compatibility is a separate question from write qualification (GU-2a). "Works on any Hermes build" is replaced by an exact list of tested **read-compatible** Hermes builds, pinned by commit SHA, maintained separately from the write-supported release matrix.
-  - HMP's read routes (roster, snapshot, history, and the live tail and stop where reachable) are exercised against each build on that list before the build is added.
-  - A Hermes build outside the read-compatible list is not silently assumed to work. It yields an understandable compatibility state to the client — never a guessed call into an unlisted build's private API surface.
-  - The list starts empty. F1 (`FIRST_FEATURE_PLAN.md`) populates its first entries.
-  - Build identity is the exact Hermes git commit SHA when the install has git metadata; otherwise a deterministic SHA-256 fingerprint over the exact source files the read bridge depends on. The list records both identity kinds. An unidentifiable build is unsupported (controller clarification, 2026-09-25).
+- **GU-2c. Minimum supported Hermes version** (owner policy 2026-10-01, replacing the exact-build list of `R0_OWNER_DECISIONS.md` bounded amendment 1).
+  - Read compatibility is decided by a minimum version, not a list of builds. The floors are per feature: `read` and session browsing 0.21.4 (2026.9.21); `send`, `jobs` and `model` 0.21.5 (2026.9.24). Each floor is one verified release, expressed in both version schemes.
+  - HMP reads the Hermes version with file reads only: a valid `baseVersion` in `install-stamp.json` (read as UTF-8, optional BOM), else a literal `__version__` in `hermes_cli/__init__.py`, else the literal `__release_date__`. The stamp is authoritative, as in Hermes's own version lookup; HMP does not take the larger of the stamp and the literal. The `0.0.0` placeholder and any non-plain version count as absent. HMP never imports, executes or evaluates Hermes code to learn the version, and never converts between the two schemes.
+  - Only a version that declares itself below a floor is refused (`hermes_build_unsupported`), and then no Hermes internal is imported. An unknown, unlisted, newer or unreleased version is attempted, subject to GU-2d and every security check. An unidentifiable or unlisted build is not, by that fact alone, unsupported.
+  - Exact commit SHAs and source fingerprints are recorded as test evidence only.
+- **GU-2d. Required-API availability and failure reporting** (owner policy 2026-10-01).
+  - A feature is available when its version floor is met and each Hermes internal it reaches is present, has the required parameter names (a `**kwargs` catch-all never satisfies a name such as `paused`), and resolves, with every wrapper layer, inside the Hermes tree or the standard library (not `site-packages`, `dist-packages` or the Hermes home's `plugins` directory). Probes import and inspect; they never call.
+  - A missing core read dependency closes read, and with it every other feature, which uses the same authorization and profile primitives. Otherwise one feature's missing dependency closes only that feature. Session browsing's own absence closes only the session routes (404).
+  - Availability is computed once when the listener opens. Permissions, explicit host settings, instance identity, profile routing, scoped credentials, payload bounds and idempotency are unchanged and are checked as before. A genuinely absent implementation is never advertised as usable.
+  - A compatibility warning follows a real feature failure only, never a merely unlisted version. A failed probe states the fixed reason and does not claim the version is bad; a "not one of HMP's tested samples" note appears only after a failure and only when no tested sample matches. `hermes hmp compat --issue-draft` prints a user-reviewed GitHub issue draft limited to the Hermes version and its source, the commit SHA when present, the HMP version, the OS family and Python `major.minor`, and the failed feature, reason and HMP's own dependency labels. Nothing is submitted, no network, `gh` or browser is used, and no profile, device, chat, path, host, key, config, content, log or exception text can appear. `--feature` with `--failure-code` records a failure the operator saw (for an upstream failure no static probe can see); it is labelled as operator-reported, grants nothing, and accepts only fixed error codes that match the feature. Permission and routing codes are explained as such and never drafted.
+  - No wire code or field is added.
 - **GU-3. Symbol detection never advertises a guarantee.**
   - Detecting `defer_policy`, `AdmissionPrecondition` and similar symbols MAY be used only as a cross-check.
   - If a symbol is absent while the capability map claims the capability, the flag is `false` and HMP logs the inconsistency.
@@ -1301,7 +1306,7 @@ The bridge module uses these undocumented Hermes internals. Each is a `HERMES_AP
 | `runner._authorization_home_for_source(source)` | evidence only | E-GAP-22 |
 | `gateway.run._profile_runtime_scope`, and its async twin | reads in profile scope | E-GAP-14 |
 | `hermes_state_registry.acquire(<home>/state.db)` → `SessionDB` reads (`get_compression_chain`, message reads, `platform_message_id` lookup, resume-tip resolution) | head, history, snapshot, lookup | E-GAP-6/7 |
-| `SessionDB.list_sessions_rich`, `SessionDB.get_session` (v1.1, amendment A1) | SES-1 session list, SES-2 `session_ref` resolution | E-GAP-6/7 |
+| `SessionDB.list_sessions_rich`, `SessionDB.get_session` (v1.1, amendment A1) | SES-1 session list, SES-2 `session_ref` resolution; `get_session` is also a send dependency (compression-lineage walk when resolving a Bot Chat), so its absence closes both session browsing and send | E-GAP-6/7 |
 | `hermes_cli.active_sessions.active_session_registry_snapshot` (v1.2, amendment F2) | DS-4(3) liveness/lease-registry guard | E-GAP-6/7 family; public and exported, used by three independent Hermes surfaces (`cli.py`, `tui_gateway`, `gateway/run_busy.py`) for the same kind of liveness check, but outside the documented plugin contract |
 | `tools.bot_live_delivery.find_canonical_owner` (v1.2, amendment F2) | DS-4(2) Bot Chat resolution (same primitive SES-1/OD-F11 already relies on) | E-GAP-6/7 family |
 | `adapter._session_store.lookup_by_session_key` | the session resolved at submit | E-GAP-6 |
@@ -1313,7 +1318,7 @@ The bridge module uses these undocumented Hermes internals. Each is a `HERMES_AP
 | `gateway.platforms.event.MessageEvent`, `AdmissionPrecondition` | submit event construction | P2/P3 API |
 | `hermes_constants.get_default_hermes_root()` | instance-key anchor | documented (PLUGIN) |
 
-**Plugin API used outside the bridge** (controller ruling, 2026-09-25). `adapter.py` imports exactly `gateway.platforms.base.BasePlatformAdapter`, `SendResult` and `gateway.config.Platform`, and `identity.py` imports exactly `hermes_constants.get_default_hermes_root` (the instance-key anchor, needed on every build because `/ready` must serve the `iid`). These are the documented platform-plugin API, not read internals, and they are the only Hermes imports allowed outside the bridge; they (and their transitive imports) load on every build, including unsupported ones. `Platform` is also a bridge dependency (above). `compat.py` locates the Hermes source root without importing it; only for a build already on the GU-2c list does it run a dependency probe (import and signature inspection, no calls). An unlisted build never has a Hermes internal imported by HMP.
+**Plugin API used outside the bridge** (controller ruling, 2026-09-25). `adapter.py` imports exactly `gateway.platforms.base.BasePlatformAdapter`, `SendResult` and `gateway.config.Platform`, and `identity.py` imports exactly `hermes_constants.get_default_hermes_root` (the instance-key anchor, needed on every build because `/ready` must serve the `iid`). These are the documented platform-plugin API, not read internals, and they are the only Hermes imports allowed outside the bridge; they (and their transitive imports) load on every build, including unsupported ones. `Platform` is also a bridge dependency (above). `compat.py` locates the Hermes source root without importing it and reads the version from files; only for a build at or above the read floor (or of unknown version) does it run a dependency probe (import and signature inspection, no calls). A build below the minimum version never has a Hermes internal imported by HMP.
 
 **GAP-1.** HMP MUST refuse writes unless the capability contract establishes both write guarantees (GU-2, GU-4). When a bridge dependency HMP needs for **reads** is missing, HMP MUST refuse every route except `/ready` with ERR-2a and make no bridge call (editorial alignment with ERR-2a, 2026-09-25).
 
@@ -1324,9 +1329,10 @@ kind of dependency from every row in the table above: reached over loopback, wit
 (`API_SERVER_KEY`) HMP does not own the lifecycle of, versioned by `api_server`'s own product
 compatibility story rather than by anything `bridge_files` fingerprints. It is not added to
 `bridge_files` for that reason (`tools/compat/bridge_files.py`); it is qualified instead by the
-route probe and behavioral confirmation in `direct_send_supported_builds.json`
-(`server/hmp_plugin/direct_send_supported_builds.json`, starts empty, same discipline as
-`write_supported_builds.json` under OD-F3).
+send dependency probe (GU-2d). `direct_send_supported_builds.json`
+(`server/hmp_plugin/direct_send_supported_builds.json`) records the tested samples as evidence
+only. A failure of the HTTP route itself, which no static probe can see, answers
+`api_server_unavailable` and can be reported with `hermes hmp compat --issue-draft`.
 
 ## 13. Constants (tunable only by contract revision)
 

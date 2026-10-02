@@ -192,9 +192,14 @@ class ServerContext:
     # read from live HMP config for every request, and default to deny.
     owner_device_ids: Callable[[], frozenset[str]] = field(default=lambda: frozenset())
     cron_flag: Callable[[], bool] = field(default=lambda: False)
-    cron_qualified: Callable[[], bool] = field(default=lambda: False)
+    cron_available: Callable[[], bool] = field(default=lambda: False)
     model_flag: Callable[[], bool] = field(default=lambda: False)
-    model_qualified: Callable[[], bool] = field(default=lambda: False)
+    model_available: Callable[[], bool] = field(default=lambda: False)
+    # Minimum-version eligibility (owner policy 2026-10-01): whether this Hermes install provides
+    # what send and session browsing need. Kept separate from the host flags above, which only say
+    # whether the owner turned a feature on.
+    send_available: Callable[[], bool] = field(default=lambda: True)
+    session_browsing_available: bool = True
 
     def is_owner_device(self, device_id: str) -> bool:
         try:
@@ -213,9 +218,9 @@ class ServerContext:
             log_bridge_exception(exc)
             return False
 
-    def cron_build_qualified(self) -> bool:
+    def is_cron_available(self) -> bool:
         try:
-            return self.cron_qualified() is True
+            return self.cron_available() is True
         except Exception as exc:
             log_bridge_exception(exc)
             return False
@@ -227,12 +232,23 @@ class ServerContext:
             log_bridge_exception(exc)
             return False
 
-    def model_build_qualified(self) -> bool:
+    def is_model_available(self) -> bool:
         try:
-            return self.model_qualified() is True
+            return self.model_available() is True
         except Exception as exc:
             log_bridge_exception(exc)
             return False
+
+    def is_send_available(self) -> bool:
+        try:
+            return self.send_available() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
+
+    def direct_send_effective(self) -> bool:
+        """The owner's flag AND this Hermes providing what send needs."""
+        return self.direct_send_enabled() and self.is_send_available()
 
     def direct_send_enabled(self) -> bool:
         try:
@@ -277,7 +293,7 @@ class ServerContext:
         per-profile send gates into a conservative top-level value, and newer clients use each
         authorized bot's own `send_gate`. The route rechecks everything per request."""
         base = self.write_gate()
-        if not self.direct_send_enabled():
+        if not self.direct_send_effective():
             return (
                 gate.direct_send_gate(base_write_gate=base, flag_enabled=False, endpoint=None)
                 if base.state is WriteGateState.OPEN
@@ -290,27 +306,18 @@ class ServerContext:
     def reported_send_gate(self, profile: str) -> WriteGate:
         """Bot Chat send availability for one profile, using the route's actual prerequisites.
 
-        Never send the endpoint or key over the wire. A failed qualification or secret lookup
-        reports a closed gate and does not turn a global owner flag into per-profile authority.
+        Never send the endpoint or key over the wire. A send that this Hermes cannot serve or a
+        failed secret lookup reports a closed gate and does not turn a global owner flag into
+        per-profile authority.
         The send route rechecks all prerequisites at submission time.
         """
         base = self.write_gate()
-        if not self.direct_send_enabled():
+        if not self.direct_send_effective():
             return gate.direct_send_gate(base_write_gate=base, flag_enabled=False, endpoint=None)
         deps = self.direct_send_deps
         bridge = self.bridge
         if deps is None or bridge is None:
             return gate.direct_send_gate(base_write_gate=base, flag_enabled=True, endpoint=None)
-        qualified = getattr(deps, "qualified", None)
-        if qualified is not None:
-            try:
-                if not bool(qualified()):
-                    return gate.direct_send_gate(
-                        base_write_gate=base, flag_enabled=True, endpoint=None
-                    )
-            except Exception as exc:
-                log_bridge_exception(exc)
-                return gate.direct_send_gate(base_write_gate=base, flag_enabled=True, endpoint=None)
         try:
             endpoint = bridge.direct_send_endpoint(profile)
         except Exception as exc:
