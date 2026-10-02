@@ -148,11 +148,9 @@ targeted assertions, with restored source passing; 13 selected tool tests and pi
 checks passed. The three native methods require the positional argument the bridge actually passes.
 Media depends on read alone; a genuinely absent shared API can also close siblings whose own
 tables need it. A compat `available` line is probe eligibility, not working image delivery.
-Offline drafts are labelled operator reports, not attestations of requester or flag. Binding is
-now being implemented; descriptors and serving remain unfinished. The current binder is closed;
-no local image is available through HMP.
-Legacy qualification-test failures and three draft-contract-table failures are visible work in
-progress, not a green full-suite result. Assistant `MEDIA:` text confers no file-read authority;
+Offline drafts are labelled operator reports, not attestations of requester or flag. The M3 listener
+binding now has independent exact-candidate source acceptance at [`f737197`](https://github.com/MahdiHedhli/hermes-hmp/commit/f737197): genuine module/cache identities are retained per listener, an identity change closes only that listener until reopen, and bridge module/classes publish together under a lock. The default-off flag and owner checks remain separate requirements. No route emits descriptors or fetches local images yet.
+Root and the reviewer each passed 3047 unit cases, retaining three existing S4 contract-table failures and 16 native-dependent skips. The old qualification tests were explicitly retired or adapted; no unrelated skip or xfail was introduced. Complete native binding cost, concurrent-writer and mint-memory evidence, delivery review and device acceptance remain open. S4/S5 must snapshot and verify the listener-bound tuple at mint/fetch; a mutable context field alone supplies no new authority. The live unwrap helper's omitted 8-step/9-step/cycle tests are a recorded follow-up. There is no green full-suite or image-delivery claim. Assistant `MEDIA:` text confers no file-read authority;
 recognized native tool history will supply the proposed image card. Unbounded native materialization
 and nontransactional session/message reads remain upstream gaps. The S6 text below is historical.
 
