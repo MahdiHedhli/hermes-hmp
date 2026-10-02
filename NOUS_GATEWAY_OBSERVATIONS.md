@@ -27,6 +27,19 @@ device status and improve recovery wording without an upstream change; that cont
 being designed. It must preserve resource concealment, never grant privileges automatically
 and never use a job-list or job execution as a health check.
 
+**Secret-read uncertainty.** On both inspected `ca705dbf` and `8afaab37`,
+`hydrate_profile_secret_sources` can return an empty mapping after a configuration
+or external-source exception. The profile scope is then built from the remaining
+available values, and `get_scoped_secret` returns its supplied default for a scoped
+miss. HMP therefore cannot distinguish a genuinely absent API key from a failed
+external-secret lookup using an empty string alone. A diagnostic must keep this case
+`unknown`, rather than assert that setup is missing. The write gate remains closed
+without a usable key. This is a source finding, not a live credential incident;
+no native helper was executed for this inspection. See the exact-build
+[hydration path](https://github.com/NousResearch/hermes-agent/blob/ca705dbf7ef86425b381b542712aff310f1ee52c/hermes_cli/env_loader.py#L114),
+[scope construction](https://github.com/NousResearch/hermes-agent/blob/ca705dbf7ef86425b381b542712aff310f1ee52c/gateway/run.py#L1801)
+and [scoped reader](https://github.com/NousResearch/hermes-agent/blob/ca705dbf7ef86425b381b542712aff310f1ee52c/gateway/platforms/_shared.py#L22).
+
 ## Local image contract checkpoint (2026-10-01)
 
 Follow-up owner screenshots confirm the public CDN image renders while generated
