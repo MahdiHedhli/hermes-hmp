@@ -18,6 +18,13 @@ gate pending conversion, and the app-side lifecycle fix is
 [`3cfe4d0`](https://github.com/MahdiHedhli/HermesBotMobile/commit/3cfe4d0), installed
 in iPhone dogfood build `2026100202`; physical behavior still awaits owner testing.
 
+The app's [governance amendment](https://github.com/MahdiHedhli/HermesBotMobile/commit/3cd9cf80412167c5d708b2e246cbf7cf61e52a13)
+now records this owner policy in the constitution, Master Plan, Beta Plan and
+owner decisions. Runtime support and tested-sample evidence are distinct;
+authentication, authorization, API availability, idempotency and independent
+review remain required. This documentation does not convert a legacy runtime
+gate or make unfinished approval/media transport available.
+
 ## Native observation and access diagnostics checkpoint (2026-10-01)
 
 Source inspection on exact Hermes `8afaab37` confirms that a session lookup is not
