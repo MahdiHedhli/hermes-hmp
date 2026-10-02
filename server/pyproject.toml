@@ -45,6 +45,7 @@ hmp_plugin = [
     "approval_supported_builds.json",
     "mobile_cron_supported_builds.json",
     "mobile_model_supported_builds.json",
+    "local_media_supported_builds.json",
 ]
 
 [tool.pytest.ini_options]

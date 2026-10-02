@@ -203,12 +203,34 @@ class ServerContext:
     cron_qualified: Callable[[], bool] = field(default=lambda: False)
     model_flag: Callable[[], bool] = field(default=lambda: False)
     model_qualified: Callable[[], bool] = field(default=lambda: False)
+    # Local media (specs/011-local-image-serving, S6b). Both default closed and neither is a bool:
+    # `media_flag` re-reads the live host config on every call; `media_qualified` is bound by
+    # `adapter.py` to `local_media_gate.media_listener_qualifier(...)` and BLOCKS (file reads), so
+    # a caller must run `media_qualification_open` on the default executor. No route consumes
+    # either yet, and a result is never cached on this context.
+    media_flag: Callable[[], bool] = field(default=lambda: False)
+    media_qualified: Callable[[], bool] = field(default=lambda: False)
 
     def approval_qualification_open(self) -> bool:
         """Only an exact `True` opens the gate; an exception, a falsy or a non-bool closes it."""
         try:
             return self.approval_qualified() is True
         except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
+
+    def media_enabled(self) -> bool:
+        try:
+            return self.media_flag() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def media_qualification_open(self) -> bool:
+        """Only an exact `True` opens it; an exception, a falsy or a non-bool closes. Blocking."""
+        try:
+            return self.media_qualified() is True
+        except Exception as exc:
             log_bridge_exception(exc)
             return False
 
