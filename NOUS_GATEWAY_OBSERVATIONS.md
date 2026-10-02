@@ -16,7 +16,7 @@ browsing both need `SessionDB.get_session`. The stable interfaces requested belo
 useful because a version number cannot prove behavior. The installed baseline has no
 approval lane. The integrated minimum-policy approval candidate passed independent source review (spec 034),
 including a bounded setup-wording correction and three added defensive regressions verified by root.
-Its real gateway fixtures, packaging and deployment remain pending. The app-side lifecycle fix is
+Its corrected two-sample native matrix and private packaging are recorded below; deployment remains pending. The app-side lifecycle fix is
 [`3cfe4d0`](https://github.com/MahdiHedhli/HermesBotMobile/commit/3cfe4d0), installed
 in iPhone dogfood build `2026100202`; physical behavior still awaits owner testing.
 
@@ -97,30 +97,55 @@ resolves the adapter's optional hook. Requiring that attribute on the base class
 incorrectly disable Phone chat. This is a source finding on those samples, not a universal
 private-API guarantee.
 
-The notification registration/issuer/resolver/relay design (spec 014) is frozen at
-[`32b53cd`](https://github.com/MahdiHedhli/hermes-hmp/commit/32b53cd) ([draft #74](https://github.com/MahdiHedhli/hermes-hmp/pull/74)) after independent design, amendment and focused closure reviews. It preserves Desktop-owned prompt visibility and the accepted app resolver interface, uses post-commit cleanup that cannot roll back revocation, bounds registration-generation storage, and records explicit error-envelope additions. The separate approval insertion, authoritative settlement and shared visibility input design (015) is frozen in [draft #76](https://github.com/MahdiHedhli/hermes-hmp/pull/76). Its shared immutable types are source accepted at `cfe4d09`; the guarded settlement-cause writers are independently source accepted at [`726e16f`](https://github.com/MahdiHedhli/hermes-hmp/commit/726e16f). Root passed 216 focused cases and killed four causal mutants for locking, replay timestamp writes, pre-await clock sampling and settlement precedence. Local expiry, generation closure, binding changes and run completion remain non-authoritative. The answer path preserves the existing unconditional overwrite, including a fail-closed Phone-cause downgrade. Insertion callbacks at `b67b5ec` and immutable visibility views at [`3fb19ec`](https://github.com/MahdiHedhli/hermes-hmp/commit/3fb19ec7823d4f409bd67df630c40e097e8f4abd) now have incremental root source acceptance. Root passed 542 focused cases with one deliberately unconfigured native-probe skip, then 2,000 complete source cases with 16 explained native/Python-version skips. Eleven callback and eighteen visibility mutants were killed. The final joint independent review remains in progress; no production observer or notification dispatcher is registered. This slice has no native, provider or device evidence. No push runtime is deployed. Its initial scope covers approval rows observed by HMP. Broader Desktop/CLI/cron coverage needs a separate source check; that limited scope alone does not prove an upstream API gap. Provider setup and physical delivery are pending; no permission expansion is implemented.
+The notification registration/issuer/resolver/relay design (spec 014) is independently reviewed
+in [draft #74](https://github.com/MahdiHedhli/hermes-hmp/pull/74). It preserves Desktop-owned prompt
+visibility, the accepted app resolver interface, post-commit cleanup that cannot roll back revocation,
+bounded registration generations and explicit error-envelope additions. Its prerequisite is now
+accepted at `66874cf`, with push allocated contract section 7f (media already owns 7e).
+
+The separate insertion, authoritative settlement and shared visibility inputs (015) are independently
+source accepted at [`6a139ba`](https://github.com/MahdiHedhli/hermes-hmp/commit/6a139bae6646eb6e7584336c94ef611609833fe3)
+in [draft #76](https://github.com/MahdiHedhli/hermes-hmp/pull/76), with handoff record `b0fe113`.
+Root passed 482 final focused cases with 3 explained skips and 2,004 complete source cases with
+16 explained native/Python-version skips. Fifteen final causal mutants failed assertions, in
+addition to earlier component checks whose counts overlap. Transformation/collection errors were
+retained and excluded. Replay adjacency is source-reading evidence; its semantically equivalent
+mutant survives. Local expiry, generation closure, binding changes and run completion remain
+non-authoritative, and no authorization or native answer authority was added.
+
+No production observer, registration, notification resolver or dispatcher is wired. This amendment
+has no native, provider or device acceptance, and no operational push exists. Initial alert scope
+covers approval rows observed by HMP; broader Desktop/CLI/cron coverage needs a source check, not
+an inferred upstream gap. Provider setup and physical delivery remain pending.
 
 ## Installer and local-media integration checkpoint (2026-10-02)
 
 The exact `150bd0f` source export encountered a native installer critical finding in a
-nonexecuting approval-probe input. [Draft #78](https://github.com/MahdiHedhli/hermes-hmp/pull/78)
-at `c1d3d0b` changes that synthetic string to a relative recursive-delete target, preserving
-the real approval classification and fake-executor flow. Independent bounded source/scanner
-review accepted the one-file change. All 32 runtime files and the server tree are unchanged.
-The scanner retains 121 cautions and reports zero critical findings; it remains enabled.
-Both high findings were inspected individually and remaining groups were reviewed with a
-recorded sampling limit. The full changed-input native probe and a new exact package remain
-pending. There has been no live install, restart or physical card/answer acceptance.
+nonexecuting approval-probe input. The independently reviewed one-file repair
+[draft #78](https://github.com/MahdiHedhli/hermes-hmp/pull/78), `c1d3d0b`, uses a relative synthetic
+target while preserving real classification and fake-executor behavior. It passed all 32 required
+changed-input checks on isolated native `8afaab37`; no command executes. Root made a fresh private
+export of all 239 regular files and compared every file with Git objects. Its 32 runtime files are
+byte-identical to `150bd0f`, and only the probe input differs. The original export is preserved.
 
-The local-media branch predates the minimum-version conversions and still carries the old
-empty-manifest gate. Integration onto the converted base is in progress. The architecture
-proposal removes runtime SHA/fingerprint admission while preserving required APIs, owner
-access, listener-bound media object coherence, active-history provenance, digest/CAS and
-file/raster bounds. Neither the integration nor the amended contract is accepted yet. No
-serving route is deployed. Assistant `MEDIA:` text does not authorize a host file read;
-recognized native tool history supplies the proposed image card. Unbounded native message
-materialization and nontransactional session/message reads remain explicit upstream gaps.
-The S6 text below describes the historical inert source, not the intended availability policy.
+The actual native `plugin-guard-v8` scanned that new export read-only inside the protected sandbox:
+**caution, 121 findings, zero critical** (2 high, 112 medium, 7 low). All findings match the earlier
+reviewed corrected-source scan. Both high findings were inspected individually; remaining groups
+retain the recorded sampling limit. The scanner is enabled and protected inputs are unchanged.
+See the [superseding packaging record](https://github.com/MahdiHedhli/hermes-hmp/blob/79508f7/docs/research/approval-minimum-owner-package-2026-10-02.md).
+No live install, restart or physical card/answer acceptance occurred. This corrected package does
+not contain the separate 015 amendment.
+
+The old local-media branch has now been integrated inertly onto the converted minimum-version
+base (`0cdbbf5`). The contract amendment (`028a946`) passed independent documentation and root
+review. It removes runtime build-list/SHA/fingerprint admission while retaining required APIs,
+owner access, listener-bound media object coherence, active-history provenance, digest/CAS and
+file/raster bounds. The eligibility slice is being implemented; binding, descriptors and serving
+remain unfinished. The current binder is closed; no local image is available through HMP.
+Legacy qualification-test failures and three draft-contract-table failures are visible work in
+progress, not a green full-suite result. Assistant `MEDIA:` text confers no file-read authority;
+recognized native tool history will supply the proposed image card. Unbounded native materialization
+and nontransactional session/message reads remain upstream gaps. The S6 text below is historical.
 
 ## Native observation and access diagnostics checkpoint (2026-10-01)
 
