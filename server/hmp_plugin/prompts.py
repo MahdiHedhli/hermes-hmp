@@ -253,11 +253,23 @@ class PromptStore:
         # fence (AP-10) closed the Phone-chat side of this generation. Both only ever go True.
         self.closed = False
         self.phone_closed = False
+        # One synchronous insertion observer per generation (spec 015 NI-1.1). Read and written
+        # only under `_guard`; called only after `_guard` is released.
+        self._observer: Callable[[ApprovalInserted], None] | None = None
+
+    def set_insertion_observer(self, observer: Callable[[ApprovalInserted], None] | None) -> None:
+        """Register (or clear with `None`) the one insertion observer. Safe from any thread; a
+        no-op once this generation is closed."""
+        with self._guard:
+            if self.closed:
+                return
+            self._observer = observer
 
     def close(self, now: int) -> None:
         """The listener that owned this generation stopped: expire everything, refuse new rows."""
         with self._guard:
             self.closed = True
+            self._observer = None
             for row in self._rows.values():
                 self.expire(row, now, cause="generation_closed")
             self._desktop.clear()
@@ -364,6 +376,7 @@ class PromptStore:
             if current is not None:
                 return
             self._rows[key] = row
+            observer = self._observer if row.kind == "approval" else None
         _log(
             "prompt_store",
             "stored",
@@ -371,6 +384,15 @@ class PromptStore:
             request_id=row.request_id,
             run_id=row.run_id or "",
         )
+        if observer is not None:
+            # Synchronous, on this thread, outside `_guard` (NI-1.3, NI-1.4). Only a callback
+            # failure is contained: the call has no `await`, so a `CancelledError` raised here is
+            # not the delivery of this task's own cancellation (RD-3). Every other
+            # `BaseException` propagates with the row already stored.
+            try:
+                observer(ApprovalInserted(key, row.surface, self.generation, row.expires_at))
+            except (Exception, asyncio.CancelledError):
+                _log("prompt_observer", "error")
 
     def record_stream_approval(
         self,

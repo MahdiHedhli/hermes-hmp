@@ -43,7 +43,7 @@ the previous one is committed.
       `phone_listing_omitted` downgrade, the pre-await clock, and the guarded-write probe whose
       mutants are the old unlocked writer and `_remember` still writing `settled_at`). Existing
       approval suites pass unmodified.
-- [ ] T030 **I-1.** Observer slot, `set_insertion_observer`, notify after release in `put`, detach
+- [x] T030 **I-1.** Observer slot, `set_insertion_observer`, notify after release in `put`, detach
       in `close`, fixed `prompt_observer outcome=error`, containment of `Exception` (including
       `ExceptionGroup`) and `asyncio.CancelledError` only. Tests: `test_approval_insert_observer.py`
       (plan §4 I-1 rows, including the real `_apply_sse_frame` and `AdapterHooks.on_exec_approval`
@@ -111,3 +111,16 @@ expired-row branch returns before replay; a stale-test comment is stronger than 
 assertion; one lock-holder test has an unbounded event wait despite a 0.25-second hold. Root's
 mutation subprocesses were bounded to 45 seconds. No native, provider, device or operational
 notification evidence is claimed. T030, then T040, remain the implementation order.
+
+## I-1 root checkpoint — 2026-10-02
+
+T030 has incremental root source acceptance: 338 focused approval cases passed with no skips;
+Ruff, plugin-surface, source privacy and diff checks passed. Root killed eleven causal mutants
+covering missing/duplicate notification, clarify and duplicate filtering, lock placement,
+exception containment and propagation, detach, captured reference and caller thread. Four
+initial mutant transformations failed before tests started; their corrected runs failed the
+intended tests. Root changed the nonblocking lock probe to return on failed acquisition, so
+the assertion outside the observer detects that violation without deadlocking.
+
+No production observer is registered. This checkpoint is not final T060 independent security
+review, native evidence, priority notification delivery or a deployed change. T040 is next.
