@@ -243,9 +243,19 @@ preserve the existing send fences. Every participating card must retain its
 original permit through the actual shared refresh Future, including cancellation
 and binding replacement, plus fetch/decode settlement. This closes the design
 gap where UI abandonment could outlive accounting while a read kept running.
-Bounded controller/read-port implementation is in progress; exact-source review,
-UI wiring, combined CI and device/release evidence remain open. It introduces
-no new upstream Hermes API requirement or installed capability.
+The bounded controller/read ports (A5-P) and shared card/viewer prerequisites
+(A5-V) now have independent source acceptance and are published at mobile
+`ba0f619` in [draft #70](https://github.com/MahdiHedhli/HermesBotMobile/pull/70).
+Root passed 218 focused client cases, seven dev-support, 12 logging and 112
+card/viewer cases; independent P review passed 112 selected causal/preservation
+cases and V review passed the 112 widget cases. These counts overlap. Accepted
+source now captures media reads separately from sends, returns actual applied
+window proof, exposes the exact owned-clone viewer seam and retains each original
+card permit through actual refresh/fetch/decode termination even after UI loss.
+Phone screen ownership/registration, stable final budget, actual controller
+singleflight and fresh applied/current target-row checks remain unwired. Combined
+CI/integrated source, native/host/device and release gates remain open. This adds
+no upstream Hermes API requirement or installed capability.
 
 ### Mobile public-image lifetime (2026-10-02)
 
