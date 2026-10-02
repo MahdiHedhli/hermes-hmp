@@ -697,3 +697,78 @@ outcomes and the declared public native prompt content; native/HMP/foundation/ru
 and isolation/cleanup receipts held. [Sampled evidence](../../docs/research/local-media-complete-binding-sample-2026-10-02.md)
 distinguishes 194 native-writer refusals from 42 synthetic-store refusals and preserves 60
 residual-window accepts plus 50 ABA controls. No S4/S5/T12 or deployment acceptance follows.
+
+## S5 fetch route source candidate (2026-10-02, unreviewed)
+
+Source candidate on `6b2fb82a1924e76f84a329dea5d75cdbe8462cbf`, following root's S5 freeze
+(`/private/tmp/hmp-s5-root-directions.md`). Nothing here is accepted: it needs an independent
+exact-candidate security review. No T12 measurement, native fixture, device, live flag, install or
+release claim follows, and no S5, T, T12 or reviewer checkbox is ticked.
+
+- **Route.** `GET /hmp/v1/bots/{p}/media/{ref}` (`allow_head=False`) is always registered
+  (`server.S5_MEDIA_ROUTES`). Order: bearer, non-owner 404, query/body/Transfer-Encoding 400, rate limit,
+  initial per-bot grant (ERR-3, shared default executor), flag + availability snapshot 503, ref lookup 404,
+  nonblocking permits 429. Orchestration lives in `media_fetch.py`; the handler in `server.py` only delegates.
+- **Bridge phases.** `HermesReadBridge.media_fetch_phase_one/two` are additions only (plus the
+  `hashlib` and `media_payload` imports). Every old method, the proof, `bind_media_batch` and the twins are
+  byte-identical: removing exactly the new block and the two imports reproduces the base hash (pinned in
+  `test_s4_descriptors`). Phase one re-proves authorization, one captured `(home, db)`, both-kind
+  eligibility, the accepted scan of the one bound tool row, the lexical name against the captured home,
+  the accepted leaf read, the bound raster check (which fixes the MIME), the SHA-256 and the accepted
+  rescan. Phase two repeats authorization and eligibility only. Every failure is a private `None`/`False`.
+- **Listener binding.** `adapter._media_raster_bind` and `_media_fetch_bind` bind the actual raster module,
+  the shared payload module and the orchestrator at open; the availability closure fences and clears them
+  with the registry slots. The raster binder proves the namespace of the entry, the three format checkers
+  and every helper they reach (by name), then sweeps every other function the module itself defines and
+  the closed refusal's constructor, so a split namespace anywhere in the module closes that listener.
+- **Lifetime.** A buffer + device permit is one lease, released only after the handler's `finally` and every
+  submitted phase future's done callback. The worker publishes the payload to a lock-protected mailbox and
+  returns a bool; a late worker drops the payload. `_final_section` and `_stream` clear their `payload`
+  argument and `data` alias in `finally`, so an exception traceback the framework retains cannot hold the
+  8 MiB buffer after the permits return. The shared 20 s deadline is taken before the phase-one submission.
+- **Streaming.** A plain `StreamResponse` in 64 KiB slices under one 30 s deadline. A failure before
+  `prepare` has started propagates to the standard ERR-1 500; after it, the transport is aborted and no
+  second body is written. The `500` before prepare and the abort after it are both tested.
+- **Recovery repairs** (an interrupted author run was resumed; root's provisional findings were each
+  reproduced by a test that failed on the interrupted candidate before the repair): raster helper
+  namespaces beyond the entry and its dispatchers; payload retained by traceback frames (checked on the
+  actual retained exception frames and by `tracemalloc`, not by permit counts); unexpected pre-prepare
+  failure swallowed instead of the ERR-1 500; the deadline started after the submission.
+- **Stated residuals.** A grant or tip change after the last native check and before `prepare` is not
+  promised as a refusal; native reads stay non-atomic; a stalled worker holds its permits until it truly
+  ends (by design); tests use a synthetic native database and temporary files, not a Hermes home.
+
+### S5 bounded source acceptance (2026-10-02)
+
+The preceding candidate record is historical. Root accepts the frozen S5 source
+after independent review of the original candidate and a focused amendment review.
+The three findings are resolved: unexpected executor submission failures retain
+the fixed phase-failure 404; listener-open namespace binding now covers the new
+orchestrator helpers and class/property paths; and authenticated route tests
+causally cover foreign kind, fresh grants, own Phone replacement, ambiguous and
+uncertain classification, exact ERR-3 mappings and blocked phase-two cancellation.
+The separately accepted S4 fresh-import test repair is carried unchanged.
+
+Root's fresh locked CI completed with **3613 passed, 16 existing native-dependent
+skips and one existing warning**. Root's focused fetch/amendment run passed 162
+cases; the independent reviewer reproduced those 162 plus 308 startup/layout
+cases. Configured Ruff 0.16.9, plugin-surface, explicit privacy and diff checks
+passed. Nine private scratch-copy guard removals failed their targeted assertions;
+two earlier misselected pytest nodes exited 4 and are excluded from that count.
+All 279 frozen candidate hashes matched before and after independent review.
+The nine protected media helpers and reads.py remain byte-identical; removing
+only the three new bridge methods and two imports reproduces the old bridge.
+
+The [synthetic four-fetch measurement](../../docs/research/local-media-four-fetch-synthetic-2026-10-02.md)
+passed the unchanged provisional memory limits with four active buffers and with
+four cancelled handlers whose actual workers still held their permits. This is
+macOS synthetic route/lifecycle evidence, **not native T12 release evidence**.
+Native serving fixtures, sampled native fetch costs and T12, Linux serving, phone
+binary loading/codec verification, independent delivery review and owner-authorized
+packaging, installation and live flag/device acceptance remain open. No S5 or
+full-feature release checkbox is closed by source acceptance.
+
+G-M1 native allocation/pruning/accounting and non-atomic reads, same-account
+replacement, trusted title metadata, ABA/torn-buffer races and changes after
+the last native check remain the stated residuals. This source slice introduces
+no runtime build allowlist, fingerprint admission or process latch.

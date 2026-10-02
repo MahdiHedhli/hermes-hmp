@@ -49,7 +49,11 @@ module objects to this one listener. The retired exact-build qualification (S6/S
 S4 (source candidate): the four read routes consume `ServerContext.media_snapshot()` through
 `media_emission`. `_media_registry_bind` makes the listener's one registry and binds its actual
 module at open; the availability closure fences the exact bound tuple, that module and that
-instance by identity. The adapter's only media import is that function's `local_media_registry`.
+instance by identity. The adapter's only media imports are `local_media_registry` (there) and
+`local_media_raster_structure` (in `_media_raster_bind`), each function-local.
+S5 (source candidate): `_media_raster_bind` and `_media_fetch_bind` also bind the actual raster
+module, the shared payload-carrier module and the route orchestrator module at open, so the fetch
+route runs the same objects mint did; the availability closure fences and clears them with the rest.
 """
 
 from __future__ import annotations
@@ -218,6 +222,108 @@ def _media_registry_bind() -> tuple[ModuleType, Any]:
     return module, registry
 
 
+def _media_raster_bind() -> ModuleType:
+    """S5: the actual raster-structure module phase one runs, bound once at listener open. The
+    entry function and every helper it dispatches to must execute in that module's own namespace.
+    It reads no file and touches no image; the only media import here is function-local."""
+    from . import local_media_raster_structure
+
+    module = local_media_raster_structure
+    _media_require(type(module) is ModuleType)
+    space = vars(module)
+    # The entry, its three format checkers and every helper they reach, by name ...
+    for name in (
+        "check_raster_structure",
+        "_check_png",
+        "_check_png_ancillary",
+        "_check_jpeg",
+        "_jpeg_sof",
+        "_jpeg_dqt",
+        "_jpeg_dht",
+        "_jpeg_scan",
+        "_check_webp",
+        "_webp_vp8",
+        "_webp_vp8l",
+        "_webp_alph",
+        "_webp_vp8x",
+        "_webp_extended_chunk",
+        "_check_dims",
+        "_refuse",
+        "_bad",
+    ):
+        _media_prove_function(space[name], module)
+    # ... then every other function this module itself defines, so a helper added later (or one
+    # a name list missed) cannot run in a second namespace; imported functions are not its own.
+    for value in tuple(space.values()):
+        if type(value) is FunctionType and value.__module__ == module.__name__:
+            _media_prove_function(value, module)
+    # The closed refusal's constructor runs on every refusal path.
+    refusal = space["RasterRefused"]
+    _media_require(type(refusal) is type and refusal.__module__ == module.__name__)
+    _media_prove_function(vars(refusal)["__init__"], module)
+    return module
+
+
+def _media_fetch_bind(bridge_module: ModuleType) -> tuple[ModuleType, ModuleType]:
+    """S5: `(payload carrier module, route orchestrator module)`, proven to be the very objects the
+    bridge's phase functions and the route run: the bridge and the orchestrator hold ONE payload
+    module (no split carrier class), and the phase, carrier, service and handler functions execute
+    in their own modules' namespaces. Imports nothing and reads no file; `server.py` already holds
+    the orchestrator at module level, so this load's copy is the one it routes through."""
+    fetch = vars(server).get("media_fetch")
+    payload = vars(bridge_module).get("media_payload")
+    _media_require(type(fetch) is ModuleType and type(payload) is ModuleType)
+    _media_require(vars(fetch).get("media_payload") is payload)
+    carrier = vars(payload).get("MediaPayload")
+    _media_require(type(carrier) is type and carrier.__module__ == payload.__name__)
+    for name in ("data", "mime", "sha256", "size"):
+        member = vars(carrier)[name]
+        _media_require(type(member) is property)
+        _media_prove_function(member.fget, payload)
+    bridge_cls = vars(bridge_module)["HermesReadBridge"]
+    for name in ("media_fetch_phase_one", "media_fetch_phase_two", "_media_fetch_bound"):
+        _media_prove_function(vars(bridge_cls)[name], bridge_module)
+    service = vars(fetch).get("MediaFetchService")
+    lease = vars(fetch).get("_Lease")
+    # Every method/accessor of the new private classes runs in the same module as its class.
+    # Include refusal constructors and carrier lifetime/serialization guards, not just entry points.
+    for module, cls in (
+        (payload, carrier),
+        (payload, vars(payload)["MediaPayloadRefusal"]),
+        (fetch, service),
+        (fetch, lease),
+        (fetch, vars(fetch)["MediaServiceRefusal"]),
+    ):
+        _media_require(type(cls) is type and cls.__module__ == module.__name__)
+        for member in tuple(vars(cls).values()):
+            if type(member) in (classmethod, staticmethod):
+                _media_prove_function(member.__func__, module)
+            elif type(member) is FunctionType:
+                _media_prove_function(member, module)
+            elif type(member) is property:
+                for accessor in (member.fget, member.fset, member.fdel):
+                    if accessor is not None:
+                        _media_prove_function(accessor, module)
+    for name in ("__init__", "close", "lease", "stats"):
+        _media_prove_function(vars(service)[name], fetch)
+    for name in ("start", "take", "finish", "_publish", "_done", "_release_if_ready"):
+        _media_prove_function(vars(lease)[name], fetch)
+    closed = vars(service)["closed"]
+    _media_require(type(closed) is property)
+    _media_prove_function(closed.fget, fetch)
+    for name in (
+        "serve", "_final_section", "_stream", "_wait", "_service_ok", "_runner",
+        "_abort", "_shaped_badly", "_not_started", "_not_found", "close_service",
+    ):
+        _media_prove_function(vars(fetch).get(name), fetch)
+    for value in tuple(vars(fetch).values()):
+        if type(value) is FunctionType and value.__module__ == fetch.__name__:
+            _media_prove_function(value, fetch)
+    _media_prove_function(vars(server).get("handle_media_fetch"), server)
+    _media_prove_function(vars(server).get("build_app"), server)
+    return payload, fetch
+
+
 def _media_closed() -> bool:
     return False
 
@@ -245,6 +351,8 @@ def _media_bind(
         _media_require(type(ctx.reads) is vars(reads_module).get("Reads"))
         chain, reads_media = _media_prove_chain(bridge_module, reads_module)
         registry_module, registry = _media_registry_bind()
+        raster_module = _media_raster_bind()
+        payload_module, fetch_module = _media_fetch_bind(bridge_module)
     except Exception:
         log_event("local_media_binding", outcome="media_binding_incoherent")
         return _media_closed
@@ -254,6 +362,9 @@ def _media_bind(
     ctx.media_modules = bound
     ctx.media_registry_module = registry_module
     ctx.media_registry = registry
+    ctx.media_raster_module = raster_module
+    ctx.media_payload_module = payload_module
+    ctx.media_fetch_module = fetch_module
     closed = [False]
 
     def media_available() -> bool:
@@ -267,6 +378,13 @@ def _media_bind(
                 and ctx.media_registry_module is registry_module
                 and ctx.media_registry is registry
             )
+            # S5: the three further bound modules, a separate expression so the S4 fence above is
+            # byte-for-byte what was reviewed.
+            same = same and (
+                ctx.media_raster_module is raster_module
+                and ctx.media_payload_module is payload_module
+                and ctx.media_fetch_module is fetch_module
+            )
         except Exception:  # fail closed; the exception text is never logged
             same = False
         if same:
@@ -275,6 +393,9 @@ def _media_bind(
         ctx.media_modules = None  # a closed listener hands no bound reference to a later caller
         ctx.media_registry_module = None
         ctx.media_registry = None
+        ctx.media_raster_module = None
+        ctx.media_payload_module = None
+        ctx.media_fetch_module = None
         log_event("local_media_binding", outcome="media_binding_changed")
         return False
 

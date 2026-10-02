@@ -42,6 +42,10 @@ CONTRACT_MODULES = {
     "logging_policy.py",
     # S4: descriptor emission for the four read routes; imports no local_media_* module.
     "media_emission.py",
+    # S5: the authenticated fetch route's orchestrator and its private payload carrier; neither
+    # imports a local_media_* module (the carrier is stdlib only).
+    "media_fetch.py",
+    "media_payload.py",
     # Optional, inert local-image modules: no production module imports them (see the test below).
     "local_media_active_scan.py",
     "local_media_file_safety.py",
@@ -118,7 +122,8 @@ ALLOWED_OPTIONAL_IMPORTS = {
     # M3: the adapter's availability binding proves and holds the objects the bridge and reads
     # caches already hold; the retired gate is gone. S4: its one media import is the registry,
     # function-local, in `_media_registry_bind` (pinned in test_s4_descriptors.py).
-    "adapter": {"local_media_registry"},
+    # S5: plus the raster-structure module, function-local in `_media_raster_bind` only.
+    "adapter": {"local_media_registry", "local_media_raster_structure"},
     # S2d: the read cores load the carrier only below a function boundary (pinned below).
     "reads": {"local_media_sidecar"},
     "local_media_candidate": {
@@ -274,6 +279,14 @@ def test_adapter_may_import_no_media_module_in_any_scope(form: str, where: str) 
 def test_adapter_registry_import_must_be_function_local(form: str, where: str) -> None:
     assert _imports_allowed("adapter", _wrapped(form, "function").format(m="registry"))  # control
     assert not _imports_allowed("adapter", _wrapped(form, where).format(m="registry"))
+
+
+@pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))
+@pytest.mark.parametrize("where", ["module", "class", "if", "try"])
+def test_adapter_raster_import_must_be_function_local(form: str, where: str) -> None:
+    # S5: the raster-structure binder is the second (and last) function-local adapter media import.
+    assert _imports_allowed("adapter", _wrapped(form, "function").format(m="raster_structure"))
+    assert not _imports_allowed("adapter", _wrapped(form, where).format(m="raster_structure"))
 
 
 @pytest.mark.parametrize("form", sorted(_IMPORT_FORMS))
