@@ -242,9 +242,16 @@ MEDIA-C1 is a mobile resource-accounting defect, not a missing Hermes API. Repea
 public-image cancellation previously freed the visible count while injected DNS
 work remained pending. Its bounded repair contracts have independent acceptance;
 independent source review of initial candidate `5f98477` found one cleanup-error
-issue, F1. The amended local candidate `eb450db` is frozen for delta review; root
-passed 219 focused app cases and clean analysis. No registry, deployment or release
-qualification follows before that source review.
+issue, F1. Independent follow-up accepted `eb450db` and closed F1 plus the
+demonstrated early-release/reset mechanism within the screen budget/caller-owned
+API settlement boundary. The exact registry delta is separately accepted and
+published in [mobile draft #69](https://github.com/MahdiHedhli/HermesBotMobile/pull/69)
+(`4a93cc5`). Root passed 219 focused cases and nine-item analysis. Full serial
+CI passed: client 1,191 / 1 skip, dev support 9, device key 155, app 925 / 3
+skips; all analyzers/guards pass. Python CI 145 passes retains 81 prior cleanup
+warnings. A failed overlapping run encountered checkout-mutating guard fixtures;
+the generated lockfile was restored exactly before the passing serial run.
+No deployment or release occurred.
 
 A stronger loopback check found that raw close/peer EOF could leave the actual
 Dart 3.12.2 TLS handshake Future pending. The candidate forwards a fixed cancellation
@@ -259,8 +266,11 @@ The F1 diagnostic reproduced a synthetic cancellation error escaping because the
 SDK ignores its subscription cancellation Future; no native failure, crash or data
 disclosure was observed. The amended candidate retains the exact original Future
 and an immediately observing successful join, including synchronous throws. The
-SDK-facing join cannot end early, and no-test-only-consumer regressions pass. Source
-acceptance remains pending; no registry re-pin or deployment follows yet.
+SDK-facing join cannot end early, and no-test-only-consumer regressions pass. Independent checks added eight causal cases and one no-consumer regression,
+reusing 25 earlier cases for unchanged source. Source/registry acceptance does
+not prove global or native allocation bounds; uncancellable work may hold slots
+indefinitely, and different screen States/direct callers have separate budgets.
+Installed app code is unchanged.
 Standard PKI, hostname/address checks, explicit tap, media bounds and credential
 exclusion remain unchanged. Phone activity/fresh-read architecture and host/native
 serving/device gates remain separate. See the [mobile finding and checkpoint](https://github.com/MahdiHedhli/HermesBotMobile/blob/docs/a1-session-review/docs/research/public-image-cancel-accounting-2026-10-02.md).

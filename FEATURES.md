@@ -34,10 +34,11 @@ is independently documentation-reviewed and published. It aligns client planning
 with minimum-version/API admission while preserving authorization and image limits.
 The combined app source baseline is independently accepted in
 [mobile draft #68](https://github.com/MahdiHedhli/HermesBotMobile/pull/68).
-Phone image wiring remains open. The mobile MEDIA-C1 lifetime repair contracts
-are accepted; independent source review found F1 cleanup-error handling. The
-amended candidate passes 219 focused tests, with exact delta review pending. This is client resource accounting, not an upstream Hermes
-requirement or a runtime/device change. See [current mobile lifetime evidence](NOUS_GATEWAY_OBSERVATIONS.md#mobile-public-image-lifetime-2026-10-02).
+Phone image wiring remains open. The mobile MEDIA-C1/F1 source and exact
+registry repair are independently accepted in [draft #69](https://github.com/MahdiHedhli/HermesBotMobile/pull/69):
+219 focused passes and full serial CI pass (app 925 / 3 skips). This repairs the
+demonstrated client accounting/API settlement mechanism; installed devices and
+physical/native/global memory/release gates remain unchanged. See [current mobile lifetime evidence](NOUS_GATEWAY_OBSERVATIONS.md#mobile-public-image-lifetime-2026-10-02).
 
 | Status | Capability | Notes |
 | --- | --- | --- |
