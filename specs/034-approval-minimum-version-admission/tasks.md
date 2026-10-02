@@ -1,7 +1,8 @@
 # Tasks: approvals under the minimum-version policy
 
 Root froze D1-D8 on 2026-10-01. T1-T12 are authorized for the implementation worker; T13-T15 are
-root-operated gates. Root records T13, the two prepared T14 samples and the exact T15 source export below. Each item is one reviewable change.
+root-operated gates. Root records T13, the two prepared T14 samples and the exact T15 source
+export below. Each item is one reviewable change.
 
 - [x] T1 Amend HMP v1 §7b (availability replaces qualification; AP-1 transport; AP-5 status table),
       GU-2d, the error table, spec 013 (closed-set constraint) and `specs/003-approvals` status.
