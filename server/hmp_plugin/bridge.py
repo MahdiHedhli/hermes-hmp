@@ -43,9 +43,11 @@ import json
 import os
 import re
 import secrets
+import threading
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Protocol
+from types import ModuleType
+from typing import Any, ClassVar, Protocol
 from urllib.parse import quote
 
 from .contract import (
@@ -631,6 +633,49 @@ def _cmid(platform_message_id: object, chat_id: str | None) -> str | None:
     return cmid if _CMID_RE.fullmatch(cmid) else None
 
 
+# Per-load media module cache (S6b, RC1). Set once, never refilled: the media twins and the C6b
+# binding read the modules from here, never from a request-time import, so a later whole-package
+# eviction cannot hand a running listener a different copy. Order (the adapter's preload and the
+# sites below rely on it): sidecar, candidate, active_scan, result, file_safety, active_batch,
+# batch_binding. For an admitted listener the first fill happens inside the adapter's preload,
+# inside the gate's disk bracket; on a listener whose qualifier is closed a media twin may fill it
+# first, which no consumer relies on. Start-up and the old read methods never call it.
+_local_media_cache: tuple[ModuleType, ...] | None = None
+_local_media_lock = threading.Lock()
+
+
+def _local_media_modules() -> tuple[ModuleType, ...]:
+    global _local_media_cache
+    cached = _local_media_cache
+    if cached is not None:
+        return cached
+    # The import statement runs unlocked (an import lock may be held elsewhere); only the
+    # set-once publication is locked, so concurrent first calls agree on one tuple.
+    from . import (
+        local_media_active_batch,
+        local_media_active_scan,
+        local_media_batch_binding,
+        local_media_candidate,
+        local_media_file_safety,
+        local_media_result,
+        local_media_sidecar,
+    )
+
+    fresh = (
+        local_media_sidecar,
+        local_media_candidate,
+        local_media_active_scan,
+        local_media_result,
+        local_media_file_safety,
+        local_media_active_batch,
+        local_media_batch_binding,
+    )
+    with _local_media_lock:
+        if _local_media_cache is None:
+            _local_media_cache = fresh
+        return _local_media_cache
+
+
 class HermesReadBridge:
     """`contract.ReadBridge` over a running Hermes gateway (HMP v1 §12)."""
 
@@ -895,17 +940,24 @@ class HermesReadBridge:
         return ConversationRef(user_id=user_id, profile=profile, session_id=session_id)
 
     @contextlib.contextmanager
-    def _db(self, profile: str) -> Iterator[Any]:
-        """The profile's own `SessionDB` (E-PRV-9), acquired from Hermes's shared registry and
-        released afterwards. A missing database file is an error, never created here."""
-        db_path = self._profile_home(profile) / STATE_DB_FILENAME
+    def _db_home(self, profile: str) -> Iterator[tuple[Path, Any]]:
+        """The profile home captured by this one `_profile_home` call, and that profile's own
+        `SessionDB` (E-PRV-9), acquired from Hermes's shared registry and released afterwards. A
+        missing database file is an error, never created here."""
+        home = self._profile_home(profile)
+        db_path = home / STATE_DB_FILENAME
         if not db_path.is_file():
             raise BridgeError("session database missing")
         db = self._hermes.acquire(db_path)
         try:
-            yield db
+            yield home, db
         finally:
             self._hermes.release(db)
+
+    @contextlib.contextmanager
+    def _db(self, profile: str) -> Iterator[Any]:
+        with self._db_home(profile) as (_, db):
+            yield db
 
     @staticmethod
     def _tip(db: Any, session_id: str) -> str:
@@ -969,11 +1021,38 @@ class HermesReadBridge:
 
         return self._read(run)
 
+    def _latest_query(self, ref: ConversationRef, limit: int) -> tuple[Path, str, object]:
+        """The native latest-page query: the captured home, the exact tip queried, the raw rows."""
+        with self._db_home(ref.profile) as (home, db):
+            tip = self._tip(db, ref.session_id)
+            rows = db.get_messages(tip, latest=True, limit=limit)
+        return home, tip, rows
+
+    def _after_query(
+        self, ref: ConversationRef, after_id: int, limit: int
+    ) -> tuple[Path, str, object] | ResetReason:
+        """The native after-cursor query: as `_latest_query`, or the reset the cursor calls for."""
+        with self._db_home(ref.profile) as (home, db):
+            tip = self._tip(db, ref.session_id)
+            if after_id > 0:
+                probe = db.get_messages(tip, include_inactive=True, after_id=after_id - 1, limit=1)
+                if not isinstance(probe, list):
+                    raise BridgeError("message rows are not a list")
+                if not probe or not isinstance(probe[0], Mapping):
+                    return ResetReason.CURSOR_NOT_RESOLVABLE
+                if probe[0].get("id") != after_id:
+                    return ResetReason.CURSOR_NOT_RESOLVABLE
+                active = probe[0].get("active")
+                if active not in (0, 1):
+                    raise BridgeError("row activity flag missing")
+                if active == 0:
+                    return ResetReason.HISTORY_REWRITTEN
+            rows = db.get_messages(tip, after_id=after_id, limit=limit)
+        return home, tip, rows
+
     def latest(self, ref: ConversationRef, limit: int) -> list[Row]:
         def run() -> list[Row]:
-            with self._db(ref.profile) as db:
-                tip = self._tip(db, ref.session_id)
-                rows = db.get_messages(tip, latest=True, limit=limit)
+            _, _, rows = self._latest_query(ref, limit)
             return self._rows(ref, rows)
 
         return self._read(run)
@@ -984,27 +1063,251 @@ class HermesReadBridge:
         (RO-8 (a)). One that does not exist in the lineage tip cannot be resolved."""
 
         def run() -> list[Row] | ResetReason:
-            with self._db(ref.profile) as db:
-                tip = self._tip(db, ref.session_id)
-                if after_id > 0:
-                    probe = db.get_messages(
-                        tip, include_inactive=True, after_id=after_id - 1, limit=1
-                    )
-                    if not isinstance(probe, list):
-                        raise BridgeError("message rows are not a list")
-                    if not probe or not isinstance(probe[0], Mapping):
-                        return ResetReason.CURSOR_NOT_RESOLVABLE
-                    if probe[0].get("id") != after_id:
-                        return ResetReason.CURSOR_NOT_RESOLVABLE
-                    active = probe[0].get("active")
-                    if active not in (0, 1):
-                        raise BridgeError("row activity flag missing")
-                    if active == 0:
-                        return ResetReason.HISTORY_REWRITTEN
-                rows = db.get_messages(tip, after_id=after_id, limit=limit)
-            return self._rows(ref, rows)
+            query = self._after_query(ref, after_id, limit)
+            if isinstance(query, ResetReason):
+                return query
+            return self._rows(ref, query[2])
 
         return self._read(run)
+
+    # S2c: the media-aware twins of `latest` and `after`. They run the same native queries, then
+    # derive non-wire candidates from the UNCAPPED raw rows. Nothing calls them yet (the class
+    # marker is the only selector a later slice may read; it never probes attributes).
+    LOCAL_MEDIA_SIDECAR: ClassVar[bool] = True
+
+    def _media_rows(self, ref: ConversationRef, query: tuple[Path, str, object]) -> Any:
+        home, tip, raw = query
+        parsed = self._rows(ref, raw)  # fails exactly like the old path, before any media code
+        # Start-up and the old read methods never load the local media modules; these come from
+        # the per-load cache, never a request-time import.
+        sidecar, candidate = _local_media_modules()[:2]
+        collect_candidates = candidate.collect_candidates
+        MAX_ROWS = sidecar.MAX_ROWS  # noqa: N806
+        BridgeMediaRows = sidecar.BridgeMediaRows  # noqa: N806
+        MediaCarrierRefusal = sidecar.MediaCarrierRefusal  # noqa: N806
+        MediaRowsQuery = sidecar.MediaRowsQuery  # noqa: N806
+
+        # Media-only downgrade: metadata the carrier cannot represent (native ids and tips have no
+        # bound of their own) or an oversized page returns the SAME parsed list, as the old method
+        # would. Only this refusal is caught; nothing else, and not the construction below.
+        try:
+            media_query = MediaRowsQuery(ref.profile, ref.session_id, tip)
+        except MediaCarrierRefusal:
+            return parsed
+        if len(parsed) > MAX_ROWS:
+            return parsed
+        tool_ids = frozenset(
+            r.id for r in parsed if r.role == "tool" and type(r.id) is int and r.id >= 1
+        )
+        candidates = collect_candidates(raw, os.fspath(home), tool_ids)  # type: ignore[arg-type]
+        return BridgeMediaRows(tuple(parsed), media_query, candidates)
+
+    def latest_with_media(self, ref: ConversationRef, limit: int) -> Any:
+        def run() -> Any:
+            return self._media_rows(ref, self._latest_query(ref, limit))
+
+        return self._read(run)
+
+    def after_with_media(self, ref: ConversationRef, after_id: int, limit: int) -> Any:
+        def run() -> Any:
+            query = self._after_query(ref, after_id, limit)
+            if isinstance(query, ResetReason):
+                return query
+            return self._media_rows(ref, query)
+
+        return self._read(run)
+
+    # C6b: the media batch binding. Nothing calls these yet. Each proof has three outcomes (proven,
+    # closed negative, uncertain); a native exception, a wrong type or a missing required field is
+    # uncertain, a known contrary fact is negative. No exception text or native value leaves them.
+
+    def _phone_proof(self, db: Any, user_id: str, profile: str, session_id: str) -> Any:
+        """The caller's own existing conversation is exactly the bound session, resolved strictly
+        (no `_tip` fallback). A compressed own ancestor qualifies; a browsed projected tip that
+        differs from the own bound id does not."""
+        binding = _local_media_modules()[6]
+        PROOF_NEGATIVE, PROOF_UNCERTAIN = binding.PROOF_NEGATIVE, binding.PROOF_UNCERTAIN  # noqa: N806
+        proven = binding.proven
+
+        try:
+            own = self.conversation_ref(user_id, profile)
+            if own is None:
+                return PROOF_NEGATIVE
+            if (
+                type(own) is not ConversationRef
+                or type(own.session_id) is not str
+                or not own.session_id
+                or type(own.user_id) is not str
+                or type(own.profile) is not str
+                or own.user_id != user_id
+                or own.profile != profile
+            ):
+                return PROOF_UNCERTAIN
+            if own.session_id != session_id:
+                return PROOF_NEGATIVE
+            tip = db.resolve_resume_session_id(own.session_id)
+            if type(tip) is not str or not tip:
+                return PROOF_UNCERTAIN
+            return proven(tip)
+        except Exception:
+            return PROOF_UNCERTAIN
+
+    def _bot_chat_proof(self, db: Any, session_id: str) -> Any:
+        """The canonical Bot Chat lineage proof: a titled holder, its native lineage equal to the
+        unchanged parent walk from the tip, the bound session in it and resolving to the same tip,
+        and strict root/holder/tip row facts (D1). No mirrored fork predicate and no
+        `resolve_bot_chat`."""
+        binding = _local_media_modules()[6]
+        PROOF_NEGATIVE, PROOF_UNCERTAIN = binding.PROOF_NEGATIVE, binding.PROOF_UNCERTAIN  # noqa: N806
+        proven = binding.proven
+
+        try:
+            row = db.get_session_by_title(_CANONICAL_BOT_CHAT_TITLE)
+            if row is None:
+                return PROOF_NEGATIVE
+            if type(row) is not dict:
+                return PROOF_UNCERTAIN
+            holder, title = row.get("id"), row.get("title")
+            if type(holder) is not str or not holder or type(title) is not str:
+                return PROOF_UNCERTAIN
+            if title != _CANONICAL_BOT_CHAT_TITLE:
+                return PROOF_UNCERTAIN
+            tip = db.resolve_resume_session_id(holder)
+            lineage = db.get_compression_lineage(holder)
+            if type(tip) is not str or not tip or type(lineage) is not list:
+                return PROOF_UNCERTAIN
+            if not 0 < len(lineage) <= _LINEAGE_WALK_BOUND:
+                return PROOF_UNCERTAIN
+            if any(type(sid) is not str or not sid for sid in lineage):
+                return PROOF_UNCERTAIN
+            if len(set(lineage)) != len(lineage):
+                return PROOF_UNCERTAIN
+            chain = _parent_chain(db, tip)
+            if chain is None:
+                return PROOF_UNCERTAIN
+            # `_parent_chain` is lax (a missing id or parent key reads as a root), so the walk is
+            # strictly re-read first: an incomplete walk is uncertain, never a negative.
+            rows = [db.get_session(sid) for sid in chain]
+            for index, (sid, item) in enumerate(zip(chain, rows, strict=True)):
+                if type(item) is not dict or type(item.get("id")) is not str or item["id"] != sid:
+                    return PROOF_UNCERTAIN
+                if "title" not in item or "parent_session_id" not in item:
+                    return PROOF_UNCERTAIN
+                link = item["parent_session_id"]
+                if link is not None and type(link) is not str:
+                    return PROOF_UNCERTAIN
+                if index and link != chain[index - 1]:
+                    return PROOF_UNCERTAIN
+            if tuple(lineage) != chain or holder not in chain or session_id not in chain:
+                return PROOF_NEGATIVE
+            bound_tip = db.resolve_resume_session_id(session_id)
+            if type(bound_tip) is not str or not bound_tip:
+                return PROOF_UNCERTAIN
+            negative = bound_tip != tip
+            for index, (sid, item) in enumerate(zip(chain, rows, strict=True)):
+                held = item["title"]
+                if sid == holder:
+                    if held is not None and type(held) is not str:
+                        return PROOF_UNCERTAIN
+                    negative = negative or held != _CANONICAL_BOT_CHAT_TITLE
+                elif held is not None:
+                    if type(held) is not str:
+                        return PROOF_UNCERTAIN
+                    negative = negative or held != ""
+                if index == 0:
+                    if "hidden" not in item:
+                        return PROOF_UNCERTAIN
+                    parent, hidden = item["parent_session_id"], item["hidden"]
+                    if type(hidden) is not int:
+                        return PROOF_UNCERTAIN
+                    negative = negative or parent is not None or hidden != 1
+                if index == 0 or sid in (holder, tip):
+                    archived = item.get("archived")
+                    if type(archived) is not int:
+                        return PROOF_UNCERTAIN
+                    negative = negative or archived != 0
+            return PROOF_NEGATIVE if negative else proven(tip)
+        except Exception:
+            return PROOF_UNCERTAIN
+
+    def media_eligibility(
+        self, db: Any, user_id: str, profile: str, session_id: str, expected_tip: str
+    ) -> Any:
+        """`(reason, kind, tip)` for the bound primitive inputs on the caller's captured `db`.
+
+        Both kinds are always evaluated; an uncertain proof in either closes the result, exactly
+        one proven kind may be `ok`, and its tip must equal `expected_tip`. Mint and (later) fetch
+        share this one helper. It consults no `MediaOrigin`, hint or text, and no authorization."""
+        binding = _local_media_modules()[6]
+        ELIGIBILITY_UNCERTAIN = binding.ELIGIBILITY_UNCERTAIN  # noqa: N806
+        classify = binding.classify
+
+        values = (user_id, profile, session_id, expected_tip)
+        if any(type(value) is not str or not value for value in values):
+            return (ELIGIBILITY_UNCERTAIN, None, None)
+        phone = self._phone_proof(db, user_id, profile, session_id)
+        bot = self._bot_chat_proof(db, session_id)
+        return classify(phone, bot, expected_tip)
+
+    def bind_media_batch(self, sidecar: Any) -> Any:
+        """The exact `MediaBatchBinding` for a valid exact sidecar, else `None`.
+
+        One `_db_home` supplies the home and database. A CANDIDATES sidecar with consistent tips is
+        classified, then judged by exactly one fresh `scan_active_batch` whose `current_tip`
+        re-runs the full classification (both kinds). Any media-only failure is a closed reason;
+        nothing is logged and no old read result changes. It never raises for such a failure."""
+        modules = _local_media_modules()
+        sidecar_module, binding = modules[0], modules[6]
+        scan_active_batch = modules[5].scan_active_batch
+        ELIGIBILITY_UNCERTAIN = binding.ELIGIBILITY_UNCERTAIN  # noqa: N806
+        HOME_INVALID = binding.HOME_INVALID  # noqa: N806
+        NOT_CANDIDATES = binding.NOT_CANDIDATES  # noqa: N806
+        OK = binding.OK  # noqa: N806
+        PROVENANCE_MISMATCH = binding.PROVENANCE_MISMATCH  # noqa: N806
+        MediaBatchBinding = binding.MediaBatchBinding  # noqa: N806
+        strict_home = binding.strict_home
+        MediaSidecar = sidecar_module.MediaSidecar  # noqa: N806
+        SidecarStatus = sidecar_module.SidecarStatus  # noqa: N806
+
+        if type(sidecar) is not MediaSidecar:
+            return None
+        zero = (0, 0, 0, 0)
+
+        def closed(reason: str, stats: tuple[int, ...] = zero) -> Any:
+            counts = (len(sidecar.candidates), 0, *stats)
+            return MediaBatchBinding(sidecar, None, reason, (), counts)  # type: ignore[arg-type]
+
+        if sidecar.status is not SidecarStatus.CANDIDATES or not sidecar.candidates:
+            return closed(NOT_CANDIDATES)
+        session_id, tip, profile = sidecar.session_id, sidecar.query_tip, sidecar.profile
+        if type(session_id) is not str or type(tip) is not str or sidecar.lineage_tip != tip:
+            return closed(PROVENANCE_MISMATCH)
+        selectors = tuple((c.tool_row_id, c.raw_digest) for c in sidecar.candidates)
+        user_id = sidecar.user_id
+        try:
+            with self._db_home(profile) as (home_path, db):
+                home = os.fspath(home_path)
+                if not strict_home(home):
+                    return closed(HOME_INVALID)
+                reason, kind, _ = self.media_eligibility(db, user_id, profile, session_id, tip)
+                if reason != OK:
+                    return closed(reason)
+
+                def current_tip() -> str:
+                    again, same, now = self.media_eligibility(db, user_id, profile, session_id, tip)
+                    if again != OK or same is not kind or type(now) is not str:
+                        raise BridgeError("media eligibility changed")
+                    return now
+
+                result = scan_active_batch(db, tip, selectors, home=home, current_tip=current_tip)
+            stats = tuple(count for _, count in result.stats)
+            if not result.ok:
+                return closed(result.reason, stats)
+            accepted = tuple(sorted(result.accepted, reverse=True))
+            counts = (len(sidecar.candidates), len(accepted), *stats)
+            return MediaBatchBinding(sidecar, kind, OK, accepted, counts)  # type: ignore[arg-type]
+        except Exception:
+            return closed(ELIGIBILITY_UNCERTAIN)
 
     def lineage(self, ref: ConversationRef) -> LineageInfo:
         def run() -> LineageInfo:

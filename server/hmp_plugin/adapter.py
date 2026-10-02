@@ -39,7 +39,16 @@ module level after the first supported call in this load, so a later reload's ev
 `HmpError` -- every bridge call `authorize.py`/`reads.py` makes is wrapped in a generic
 `except Exception`, and re-raised as THEIR OWN, now load-stable, `HmpError` -- so this residual
 gap in `bridge.py`'s own class identity does not reopen the error-shaping hazard the top-level
-`authorize`/`reads` imports close.)
+`authorize`/`reads` imports close.) The same cache also holds the actual `bridge` module object.
+
+Local media (M0 integration of specs/011-local-image-serving onto the minimum-version base). The
+S6b exact-build qualification binder is retired by the owner's 2026-10-01 minimum-version policy:
+`_media_qualifier` returns the constant closed callback, and `local_media_gate.py` with its build
+list is not part of this tree, so nothing here can import the gate or read a build identity. The
+inert, identity-based module-coherence helpers (`_media_function`, `_media_sweep`,
+`_media_prove_chain`, ...) are kept as source for the later availability binding (M3) and are not
+called. The S6b core proof was removed in M0: it proved objects of the retired qualification path
+and cannot exist on this base. No route consumes `ServerContext.media_qualified`.
 """
 
 from __future__ import annotations
@@ -49,8 +58,9 @@ import contextlib
 import secrets
 import threading
 import time
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
+from types import FunctionType, ModuleType
 from typing import Any
 
 from gateway.config import Platform
@@ -79,6 +89,7 @@ PROFILE_REFRESH_INITIAL_DELAY_S = 5.0
 PROFILE_REFRESH_INTERVAL_S = 15.0
 
 _bridge_classes_cache: tuple[type[Any], type[Any]] | None = None
+_bridge_module_cache: ModuleType | None = None
 
 
 def _bridge_classes() -> tuple[type[Any], type[Any]]:
@@ -89,11 +100,14 @@ def _bridge_classes() -> tuple[type[Any], type[Any]]:
     .bridge import ...` statement, so a reload that happens between that call and a later one
     (another profile's load, on a multiplexed gateway) cannot swap the class a running listener's
     `ctx.bridge` is built from out from under it."""
-    global _bridge_classes_cache
+    global _bridge_classes_cache, _bridge_module_cache
     if _bridge_classes_cache is None:
-        from .bridge import HermesReadBridge, StoreDirectory
+        from . import bridge as bridge_module
 
-        _bridge_classes_cache = (HermesReadBridge, StoreDirectory)
+        # One import statement fills both: the classes are read from the very module object kept,
+        # so a later coherence check (M3) can prove the module against the class the listener runs.
+        _bridge_module_cache = bridge_module
+        _bridge_classes_cache = (bridge_module.HermesReadBridge, bridge_module.StoreDirectory)
     return _bridge_classes_cache
 
 
@@ -105,6 +119,118 @@ def _log_unavailable_features(eligibility: compat.Eligibility | None) -> None:
     for feature, status in eligibility.unavailable():
         if status.reason is not compat.Unavailable.VERSION_BELOW_FLOOR:
             log_event("hermes_feature_unavailable", outcome=feature.value)
+
+
+# --------------------------------------------------------------------------------------------------
+# S6b: local-media listener binding. Proofs are identity comparisons on objects, never lookups.
+# --------------------------------------------------------------------------------------------------
+
+_MEDIA_UNWRAP_LIMIT = 8
+
+
+class _MediaSplitError(Exception):
+    """A required module is not the one this load's listener runs. Closes media; carries nothing."""
+
+
+def _media_require(ok: bool) -> None:
+    if not ok:
+        raise _MediaSplitError
+
+
+def _media_function(value: object) -> FunctionType | None:
+    """The exact plain function `value` is, following a `__wrapped__` chain of at most eight steps;
+    `None` for anything else (a partial, a builtin, a callable object)."""
+    for _ in range(_MEDIA_UNWRAP_LIMIT + 1):
+        if type(value) is not FunctionType:
+            return None
+        wrapped = value.__dict__.get("__wrapped__")
+        if wrapped is None:
+            return value
+        value = wrapped
+    raise _MediaSplitError
+
+
+def _media_prove_function(value: object, module: ModuleType) -> None:
+    """P-fn: the function's executing namespace IS `module`."""
+    function = _media_function(value)
+    _media_require(function is not None and function.__globals__ is vars(module))
+
+
+def _media_prove_method(cls: object, name: str, module: ModuleType) -> None:
+    """P-meth: a plain function in the class body of a class the listener actually uses. A class's
+    `__module__` string is never proof."""
+    _media_require(isinstance(cls, type))
+    _media_prove_function(vars(cls).get(name), module)
+
+
+def _media_sweep(modules: dict[str, ModuleType]) -> None:
+    """Cross-copy coherence. `modules` maps each member's own `__name__` to the member; names only
+    ROUTE a comparison, the proof is the `is`. A module, plain function or top-level class in one
+    member that names another member must be that member's own object."""
+    for module in modules.values():
+        for _, value in tuple(vars(module).items()):
+            if type(value) is ModuleType:
+                target = modules.get(value.__name__)
+                _media_require(target is None or value is target)
+                continue
+            function = _media_function(value) if type(value) is FunctionType else None
+            if function is not None:
+                target = modules.get(function.__module__)
+                _media_require(target is None or function.__globals__ is vars(target))
+            elif isinstance(value, type) and value.__qualname__ == value.__name__:
+                target = modules.get(value.__module__)
+                _media_require(target is None or vars(target).get(value.__name__) is value)
+
+
+def _media_prove_chain(
+    bridge_module: ModuleType, reads_module: ModuleType
+) -> dict[str, ModuleType]:
+    """The media chain, from the caches the media sites themselves read. These two calls prove and
+    return the actual cache objects that exist inside the gate's disk bracket. They fill a cache
+    that is still empty, but an inert media twin on an unadmitted listener may have filled it
+    earlier; no claim is made that every cached module was first imported here."""
+    chain = vars(bridge_module)["_local_media_modules"]()
+    reads_media = vars(reads_module)["_local_media_modules"]()
+    _media_require(type(chain) is tuple and len(chain) == 7)
+    _media_require(type(reads_media) is tuple and len(reads_media) == 1)
+    _media_require(all(type(member) is ModuleType for member in (*chain, *reads_media)))
+    sidecar, candidate, active_scan, result, file_safety, active_batch, binding = chain
+    _media_require(reads_media[0] is sidecar)
+    _media_require(vars(candidate)["_scan"] is active_scan)  # P-ref
+    _media_require(vars(result)["_scan"] is active_scan)
+    _media_require(vars(active_batch)["_scan"] is active_scan)
+    _media_require(vars(active_batch)["_candidate"] is candidate)
+    _media_require(vars(binding)["_batch"] is active_batch)
+    _media_require(vars(binding)["_sidecar"] is sidecar)
+    _media_prove_function(vars(candidate)["collect_candidates"], candidate)
+    _media_prove_function(vars(candidate)["classify_candidate"], file_safety)
+    _media_prove_function(vars(candidate)["parse_image_result"], result)
+    _media_prove_function(vars(active_batch)["scan_active_batch"], active_batch)
+    _media_prove_function(vars(binding)["classify"], binding)
+    _media_prove_function(vars(sidecar)["_text"], sidecar)
+    return {
+        "local_media_sidecar": sidecar,
+        "local_media_candidate": candidate,
+        "local_media_active_scan": active_scan,
+        "local_media_result": result,
+        "local_media_file_safety": file_safety,
+        "local_media_active_batch": active_batch,
+        "local_media_batch_binding": binding,
+    }
+
+
+def _media_closed() -> bool:
+    return False
+
+
+def _media_qualifier(adapter: Any, ctx: Any, result: compat.CompatResult) -> Callable[[], bool]:
+    """M0 integration binder: ALWAYS the constant closed callback, whatever the read result says.
+    The exact-build qualification this slot used to run (manifest, fingerprints, process anchor)
+    is retired by the owner's 2026-10-01 minimum-version policy and is not reachable from here:
+    nothing in this module imports `local_media_gate`, reads a build identity, or compares one.
+    The minimum-version availability binding (M3) replaces this function; until then local media
+    stays closed on every build. The arguments are unused and kept so M3 changes the body only."""
+    return _media_closed
 
 
 def open_components(adapter: Any) -> server.ServerContext:
@@ -170,6 +296,12 @@ def open_components(adapter: Any) -> server.ServerContext:
         block = live_extra.get("cron") if isinstance(live_extra, Mapping) else None
         return isinstance(block, Mapping) and block.get("enabled") is True
 
+    def _read_local_media_enabled() -> bool:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        block = live_extra.get("local_media") if isinstance(live_extra, Mapping) else None
+        return isinstance(block, Mapping) and block.get("enabled") is True
+
     def _read_model_enabled() -> bool:
         live_config = getattr(adapter, "config", None)
         live_extra = getattr(live_config, "extra", None)
@@ -191,6 +323,7 @@ def open_components(adapter: Any) -> server.ServerContext:
         model_available=lambda: result.supported and _available(compat.Feature.MODEL),
         session_browsing_available=_available(compat.Feature.SESSION_BROWSING),
         send_available=lambda: send_available,
+        media_flag=_read_local_media_enabled,
     )
     _log_unavailable_features(eligibility)
     if result.supported:
@@ -241,6 +374,8 @@ def open_components(adapter: Any) -> server.ServerContext:
             phone_bound[0] = ctx.bridge.bind_phone_chat_helpers(  # type: ignore[attr-defined]
                 lambda: prompt_store.close_phone_chat(ctx.now())
             )
+        # Local media (M0): the listener's media callback is the constant closed one.
+        ctx.media_qualified = _media_qualifier(adapter, ctx, result)
         adapter._hmp_hooks = prompts.AdapterHooks(  # type: ignore[attr-defined]
             store=prompt_store,
             bridge=ctx.bridge,

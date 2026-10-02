@@ -208,6 +208,13 @@ class ServerContext:
     # whether the owner turned a feature on.
     send_available: Callable[[], bool] = field(default=lambda: True)
     session_browsing_available: bool = True
+    # Local media (specs/011-local-image-serving). Both default closed and neither is a bool:
+    # `media_flag` re-reads the live host config on every call. `media_qualified` is the S6b carrier
+    # kept for the M0 integration only: `adapter.py` binds it to a constant closed callback until
+    # the minimum-version availability slice (M3) replaces it. No route consumes either yet, and a
+    # result is never cached on this context.
+    media_flag: Callable[[], bool] = field(default=lambda: False)
+    media_qualified: Callable[[], bool] = field(default=lambda: False)
 
     def is_approvals_available(self) -> bool:
         """Bot Chat approvals. Only an exact `True` opens it; anything else closes it."""
@@ -237,6 +244,21 @@ class ServerContext:
         if surface == "bot_chat":
             return self.is_approvals_available()
         return self.is_phone_chat_available()
+
+    def media_enabled(self) -> bool:
+        try:
+            return self.media_flag() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def media_qualification_open(self) -> bool:
+        """Only an exact `True` opens it; an exception, a falsy or a non-bool closes. Blocking."""
+        try:
+            return self.media_qualified() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
 
     def is_owner_device(self, device_id: str) -> bool:
         try:
