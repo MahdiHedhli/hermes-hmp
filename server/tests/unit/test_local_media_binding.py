@@ -40,6 +40,7 @@ from __future__ import annotations
 import ast
 import builtins
 import dataclasses
+import functools
 import io
 import logging
 import os
@@ -1363,3 +1364,80 @@ def test_the_adapter_imports_bridge_only_inside_the_publication_function() -> No
                 for n in ast.walk(fn))
     ]
     assert owner == ["_bridge_published"]
+
+
+# Restored live-helper coverage from the retired binder suite (review T-1). A watched function
+# dictionary makes an accidentally unbounded cycle fail promptly instead of hanging the suite.
+class _WatchedUnwrapDict(dict):
+    def __init__(self) -> None:
+        super().__init__()
+        self.gets = 0
+
+    def get(self, key: Any, default: Any = None) -> Any:
+        self.gets += 1
+        if self.gets > 64:
+            raise AssertionError("unbounded unwrap")
+        return super().get(key, default)
+
+
+def _wrapped_media_function(steps: int) -> tuple[Any, Any]:
+    def base() -> None:
+        pass
+
+    top: Any = base
+    for _ in range(steps):
+        def wrapper() -> None:
+            pass
+
+        wrapper.__wrapped__ = top
+        top = wrapper
+    return top, base
+
+
+def _property_unwrap_bound(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, edits: Any
+) -> bool:
+    world = World(tmp_path, monkeypatch, edits=edits)
+    adapter = world.mod("adapter")
+    unwrap, split = adapter._media_function, adapter._MediaSplitError
+    try:
+        top, base = _wrapped_media_function(8)
+        if unwrap(top) is not base or unwrap(base) is not base:
+            return False
+        if unwrap(functools.partial(base)) is not None:
+            return False
+        too_deep, _ = _wrapped_media_function(9)
+        try:
+            unwrap(too_deep)
+            return False
+        except split:
+            pass
+        cycle, _ = _wrapped_media_function(0)
+        cycle.__dict__ = _WatchedUnwrapDict()
+        cycle.__dict__["__wrapped__"] = cycle
+        try:
+            unwrap(cycle)
+            return False
+        except split:
+            pass
+        return cycle.__dict__.gets <= 9
+    except Exception:
+        return False
+
+
+def test_unwrap_follows_eight_steps_and_refuses_nine_and_cycle(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert _property_unwrap_bound(tmp_path, monkeypatch, None)
+
+
+@pytest.mark.parametrize("edit", [
+    ("_MEDIA_UNWRAP_LIMIT = 8\n", "_MEDIA_UNWRAP_LIMIT = 100\n"),
+    ("    for _ in range(_MEDIA_UNWRAP_LIMIT + 1):\n", "    while True:\n"),
+    ("_MEDIA_UNWRAP_LIMIT = 8\n", "_MEDIA_UNWRAP_LIMIT = 0\n"),
+    ("        value = wrapped\n", "        return value\n"),
+], ids=["raised_bound", "unbounded", "zero_bound", "no_follow"])
+def test_unwrap_guard_mutations_are_detected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, edit: tuple[str, str]
+) -> None:
+    assert not _property_unwrap_bound(tmp_path, monkeypatch, {"adapter.py": [edit]})

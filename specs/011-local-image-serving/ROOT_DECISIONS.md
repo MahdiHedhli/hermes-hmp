@@ -624,3 +624,10 @@ nine-step and cyclic unwrap test coverage. Existing same-account in-process muta
 attestation, non-atomic native reads and G-M1/G-M2 residuals remain. No serving, native complete-binding
 cost, T12 fetch memory, physical-device, free-threaded or deployment acceptance is implied. The A8
 owner/non-owner route responses and A10 mint/fetch identity remain unproved until S4/S5.
+
+
+M3 test follow-up: root restored the omitted unwrap-bound coverage without changing production code.
+Five focused cases passed: eight steps reach the original function; nine steps and a cycle refuse;
+raising/removing the bound and shortening/skipping the chain each make the scratch-copy property
+fail. A watched function dictionary bounds runaway-cycle execution. Ruff, explicit privacy and
+diff checks pass. This closes T-1 only; the full 3047-case result above predates this test-only delta.
