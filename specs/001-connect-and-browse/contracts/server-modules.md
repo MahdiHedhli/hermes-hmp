@@ -47,7 +47,9 @@ server/
                                   #   also resolve_bot_chat/registry_snapshot/direct_send_target (amendment F2, DS-4/DS-6)
                                   #   per-load set-once local-media module cache (`_local_media_modules`: sidecar,
                                   #   candidate, scan, result, file safety, batch, binding); the media twins and the
-                                  #   C6b binding read it, never a request-time import. Old read methods unchanged
+                                  #   C6b binding read it, never a request-time import. Old read methods unchanged.
+                                  #   Under the minimum-version amendment these caches are bound to the listener's
+                                  #   ServerContext and published as one locked tuple assignment (M3, unimplemented)
     direct_send.py                # amendment F2: DS-2..DS-8 orchestration (gate order, guard, idempotency,
                                   #   the api_server loopback call, post-hoc verification). Never imports a Hermes
                                   #   internal itself -- reads bridge.py for Hermes state, and speaks api_server's
@@ -61,7 +63,8 @@ server/
                                   #   and the OD-F11 bot-view selector, _is_bot_view_session (title=="Bot Chat" and
                                   #   hidden; cross-checked against hermes-agent's canonical-chat.ts/bot_mode_probe.py/
                                   #   hermes_state.py, HMP_V1.md §6a SES-7 -- no new Hermes dependency)
-                                  #   S6b: a per-load set-once cache `(local_media_sidecar,)` read by the media sites
+                                  #   a per-load set-once cache `(local_media_sidecar,)` read by the media sites (bound to
+                                  #   ServerContext under the minimum-version amendment; no longer "inside a gate's disk bracket")
     authorize.py                  # P6 outcome table (PR6-*), via bridge
     revoke.py                     # P7-3 self-revoke; operator revoke helpers (PR7-1)
     gate.py                       # GU-2/GU-4 guarantee derivation + write gate (implemented, unused by F1 routes)
@@ -74,7 +77,8 @@ server/
                                   #   it was built with (see the module's own docstring)
                                   #   `media_flag` / `media_qualified` callable fields (default closed) and the
                                   #   exact-True accessors `media_enabled` / `media_qualification_open`; in M0
-                                  #   `media_qualified` is bound to a constant closed callback; no route consumes them
+                                  #   `media_qualified` is bound to a constant closed callback; no route consumes them.
+                                  #   Planned (M3): replaced by `media_available` (default closed) and the bound modules
     adapter.py                    # HmpAdapter(BasePlatformAdapter): lifecycle only (start/stop listener)
                                   #   M0 media: `_media_qualifier` is the constant closed callback until the
                                   #   minimum-version availability binding (M3); the retired gate is not imported
@@ -113,10 +117,11 @@ server/
                                   #   selectors with one bracketed scan; imports only the accepted scanner and candidate
                                   #   modules (module scope) and stdlib; no I/O, no logging, no caller yet. Closed
                                   #   verdicts only, never a path, name, digest, call id or content; grants no authority
-    # (M0: the S6a exact-build gate `local_media_gate.py` and `local_media_supported_builds.json` are NOT carried
-    #   onto the minimum-version base -- the converted base forbids a module that reads a supported-builds list or
-    #   calls the retired probe. Their accepted bytes remain in the media lineage; the availability binding that
-    #   replaces them is a later slice.)
+    # (There is no `local_media_gate.py` and no `local_media_supported_builds.json`: the exact-build gate and its
+    #   manifest are retired by the minimum-version conversion and were not carried onto the converted base. Their
+    #   accepted bytes remain in the media lineage as historical evidence only. The replacement is the `local_media`
+    #   eligibility member in `compat.py` plus an in-memory binding in `adapter.py` (slices M2/M3, unimplemented);
+    #   no runtime module reads a build list, manifest, fingerprint or Git SHA for media.)
     read_compat_builds.json       # GU-2c list (starts empty). Entries: {git_sha|null, fingerprint, source_sha?
                                   #   (provenance only), label, qualified_by, qualified_at}; matching per research
                                   #   R8 steps 4-6 (CS-19); plus "bridge_files", the mechanically computed superset

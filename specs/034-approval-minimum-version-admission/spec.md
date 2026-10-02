@@ -126,7 +126,7 @@ admits or refuses approvals.
 
 ## Out of scope
 
-Push/urgent notifications, media and attachments, the Phone chat composer UI, new-bot routing
+Push/urgent notifications, attachments, the Phone chat composer UI, local media (host-local generated images are handled by [spec 011](../011-local-image-serving/ROOT_DECISIONS.md#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02), which adds its own `local_media` member and amends the member set by cross-reference; docs only, unimplemented; this spec adds no media member), new-bot routing
 (own lane, D5: no `routes.py`, config writer or PyYAML dependency here), the `owner_package` manifest editor, a runtime failure ledger (spec 013 F1), new wire error codes, Hermes core changes,
 automatic issue submission, live host changes, and the pending SD3/SD5 human fixes.
 

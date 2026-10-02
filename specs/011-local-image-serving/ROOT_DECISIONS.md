@@ -2,6 +2,13 @@
 
 Public record of the architecture decisions this feature was frozen on. Where another document here differs, this file wins. It records design decisions; the task evidence separately identifies reviewed components. No serving process, device or release is qualified.
 
+> **Superseding section (2026-10-02).** The exact-build gate described below (process-qualified
+> manifest, fingerprints, process anchor, preload qualification) is superseded by
+> [Minimum-version conversion](#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02),
+> the last section of this file. The earlier S6, S6a and S6b text is preserved as **historical
+> evidence about the retired design**. It is not current policy, and nothing there describes
+> runtime behavior of the converted base.
+
 ## Accepted
 
 | ID | Decision |
@@ -476,3 +483,90 @@ prove module selection, not native cost. No arbitrary-callback termination claim
 Native inventory ownership, real-loader registration, native binding cost, registry/raster
 joining, serving routes, T12 memory, device and release checks remain required. No manifest
 entry, production media consumer, live installation or local image display is added here.
+
+
+## Minimum-version conversion (supersedes S6 manifest/fingerprint/anchor, S6a admission semantics, S6b preload qualification) (2026-10-02)
+
+Source of authority: the owner policy of 2026-10-01 ([spec 013](../013-minimum-version-compatibility/OWNER_POLICY.md))
+and the [spec 034](../034-approval-minimum-version-admission/ROOT_DECISIONS.md) precedent (exact gate
+removed, object-identity fence kept, no process latch, sampled evidence only). Root adopted the
+independent architecture proposal's decisions D-M1 through D-M10 **for documentation only (M1)**.
+This section accepts no runtime source, serving route, manifest entry, qualification or release.
+No live, device or provider action is authorized by it.
+
+**M0 integration checkpoint.** Local media was merged onto the converted minimum-version base as an
+inert integration checkpoint (merge `0cdbbf5`; converted approvals base `2c153e2` plus the relative
+nonexecuting approval-probe fixture `f4045cd`; media source `6d400af`). Root reviewed it as
+`ROOT_M0_INERT_INTEGRATION_REVIEWED_NOT_FEATURE_COMPLETE`. It is never a release candidate and is
+never installed. In it the runtime media binder is a **constant closed callback** (`_media_qualifier`
+always closed, no gate import, no identity read), so no media route, descriptor, registry mint or
+availability exists. That M0 constant stays the current runtime behavior until M2/M3 land.
+The retired gate module and its empty manifest were not carried onto the converted base because the
+converted guard tests forbid a module that reads a supported-builds list or calls the deleted probe.
+
+### Decisions
+
+| ID | Decision |
+|---|---|
+| D-M1 | Integration base is the converted approvals line (`2c153e2` with the `f4045cd` probe fixture), merged with `6d400af` by a root-reviewed finite/remerge process. The gate and manifest are removed because they are incompatible with the owner's minimum-version policy; byte-identical helpers and twins are retained. |
+| D-M2 | New eligibility member `local_media`. It depends on `READ`, **not** on `SEND` or `SESSION_BROWSING`. Its probe table is exactly the three native callables the media path reaches beyond the read core: `SessionDB.get_session`, `SessionDB.get_session_by_title`, `SessionDB.get_compression_lineage`. Computed once at listener open. No image-producer probe: a changed producer spelling is caught per candidate by the retained lexical check. |
+| D-M3 | Floor inherited from the write floor, `0.21.5` / `2026.9.24`. Unknown, `0.0.0`, unlisted, newer and development versions are attempted. |
+| D-M4 | Genuine media-chain identity binding only. Verify the media-chain cross-references once at listener open (this listener only; never latch the process), bind the verified strong references to that listener, and adopt a cheap in-memory use-time identity fence that closes only that listener. Cache publication uses a lock and a **single tuple assignment**, including the bridge module together with its classes; imports happen outside the publication lock. No GIL assumption, no process latch, no origin, fingerprint or manifest authentication claim, no generic all-route core proof. Accepted helpers and their provenance are unchanged. The M3 exact-candidate independent security review is mandatory. |
+| D-M5 | Gate: valid bearer, approval-owner device, live `local_media.enabled` exactly `true` (default off), and actual media availability. Every per-bot, surface and history grant check remains. A non-owner device gets `404` first. No automatic grants. |
+| D-M6 | The per-request "fresh qualification" await is replaced by a synchronous immediate check of owner, flag, availability, TTL and CAS, with no `await` between the check and mint/`prepare`. The two off-loop bounded native phases, deadlines, permits and copied `ContextVar`s are unchanged. |
+| D-M7 | The existing runtime bounds apply on every version. Native C6b cost and T12 memory sampling are **release-candidate evidence, never a per-version allowlist**; a failure changes the implementation, not a ceiling. |
+| D-M8 | User-reviewed offline issue drafts only, and only for an owner flag-on actual `media_unavailable` failure; fixed labels; no paths, refs, digests, profiles or device ids; never automatic. |
+| D-M9 | An assistant `MEDIA:` string remains ordinary text with no authority. The `image_generate` tool row supplies the local image. Root's presentation choice: keep the `MEDIA:` text **unmodified**: no suppression, de-emphasis, duplicate detection or assistant-path fetch. No presentation question is pending. Other producers are a recorded typed-artifact API gap (G-M2). |
+| D-M10 | A legacy process anchor is ignored: new code never reads or writes it, and no reset helper exists. Any live install still uses a separately authorized idle gateway restart. |
+
+### Superseded items (historical text kept above, not rewritten)
+
+- Accepted table: the **Gate** row ("process-qualified manifest, shipped empty").
+- Authoritative corrections: **3** (process qualification) and, in correction 5/clarifications, the
+  qualification-executor and immutable-startup-mismatch clarifications; residual "out-of-tree providers unfingerprinted".
+- The whole **S6 media qualification design freeze** subsections "Manifest, source coverage and
+  dependency probes" (except that the three native probe rows survive as D-M2), "Process identity across
+  reloads and homes", "Preload and loaded origins", and "Bounded reads and final request check" (except the
+  rule that no `await` runs between the final check and mint/`prepare`, which is kept as D-M6), together with
+  "Required causal checks and later admission" insofar as it binds receipts to exact fingerprints.
+- The **S6b listener binding freeze** `media_qualified` paragraph, RC4 and the preload-bracket wording
+  of RC1-RC3; the S6b repair checkpoint and bounded source acceptance remain accurate historical records of
+  the retired binder only.
+- **C6.6** "recheck owner, flag and **qualification** gates" and the S6 "fresh qualification" wording:
+  read "owner, flag and availability" (D-M5, D-M6).
+- Process-wide exact-build qualification statements elsewhere in this directory.
+
+Retained: the C6b identity proofs and one-capture rule; the typed tool-row authority (C2); RC1's per-load,
+set-once module caches (publication fixed per D-M4); RC2's media-chain coherence and identity edges
+(reduced to a listener-open in-memory check); the registry, permits, 20 s/30 s deadlines, 8 MiB, raster
+and leaf rules; and every accepted security and resource bound. No authorization is broadened.
+
+A direct-send switch that is off does **not** close media. Media is a read-path feature.
+
+### Evidence and gaps
+
+- Existing S6/S6a/S6b results, hashes and test counts are historical evidence of the retired design.
+  E1 (producer spelling), the Linux leaf run, C6 cost and rotation evidence remain sampled evidence for the
+  builds and platform they describe. They do not prove behavior on other builds and are not an admission input.
+- **Pending, not done:** C6b exact-native complete binding cost and concurrent-writer evidence; T12 memory
+  on sampled builds; independent exact-candidate security review; owner-authorized install, flag and
+  physical-device acceptance. The feature is **unimplemented**; no route exists.
+- SD3 and SD5 unresolved scoped-authorization risks are retained, not remediated here.
+- **G-M1 (HERMES_API_GAP):** Hermes lacks a bounded, side-effect-free, snapshot-consistent session and
+  message read. Native reads may materialize unbounded content, flush queued token counts and prune; these
+  residuals apply on every build and are neither solved nor hidden.
+- **G-M2 (HERMES_API_GAP):** no typed, profile-scoped tool-artifact record exists in session history, so
+  producers other than `image_generate` cannot gain authority. Retained as a broader artifact API gap.
+- **E-M1 (EVIDENCE_GAP):** whether `get_session_by_title` and `get_compression_lineage` exist at the read
+  floor is unverified; the write floor is chosen because the three rows are already in the send table there.
+- **E-M2 (EVIDENCE_GAP):** hidden-root title rotation was observed on one sampled build only. On other builds
+  the proof fails closed (`NOT_ELIGIBLE` or `ELIGIBILITY_UNCERTAIN`), which is correct behavior.
+
+### Known state of the integration checkpoint (not green)
+
+Three carried contract-table failures in `test_contract_tables.py` remain because the draft contract carries
+`media_unavailable` and `MEDIA_*` constants that `contract.py` does not yet define; the same three fail on the
+unconverted media source. 114 legacy qualification tests fail (109 listener-binding, 4 gate-pinning layout, 1 bridge-inert
+case) and the removed gate test has one collection error. They test
+the retired binder and are **explicit work in progress, not green**, until M3 replaces or retires them.
+Nothing was skipped or hidden to change that.

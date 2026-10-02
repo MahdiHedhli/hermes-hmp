@@ -1,5 +1,7 @@
 # Plan
 
+Amended 2026-10-02 for the minimum-version policy; the earlier exact-build qualification design is historical.
+
 Authority: [`spec.md`](spec.md), [HMP v1 §7e](../../docs/architecture/contracts/HMP_V1.md) and [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md). This plan is documents only; no code is authorized by it. Implementation starts only after the contract revision is merged and reviewed.
 
 ## Trust-boundary impact
@@ -7,7 +9,7 @@ Authority: [`spec.md`](spec.md), [HMP v1 §7e](../../docs/architecture/contracts
 | Boundary | Change | Control |
 | --- | --- | --- |
 | Host file system | New read of one profile image-cache file | Lexical flat-name derivation, accepted leaf read, structural raster check, tool-row rescan on every fetch |
-| Handle registry | New process-local capability tokens | 32 random bytes, TTL, caps, binding to device/user/instance/profile/kind/tip/row digest; never authorizes alone |
+| Handle registry | New process-local capability tokens | 32 random bytes, TTL, caps, binding to device/user/instance/profile/kind/tip/row digest; never authorizes alone; no process latch |
 | Network | New binary response | Owner-only, no query or body, fixed headers, no range, bounded streaming, abort on failure |
 | Native Hermes | Reads of the database and authorization | Existing bridge calls only, never on the event loop; second bounded post-worker native check before the loop's synchronous section |
 | Memory and DoS | Up to 4 x 8 MiB buffers | Dedicated 4-worker executor, buffer permits, device 2 and instance 4, provisional ceilings |
@@ -18,8 +20,8 @@ Authority: [`spec.md`](spec.md), [HMP v1 §7e](../../docs/architecture/contracts
 1. **Shared result rule.** One function decides "valid `image_generate` result"; mint and fetch both call it.
 2. **Sidecar.** The bridge hands the raw candidate to the server handler in an explicit read-result carrier. It never enters a wire dataclass. Golden bytes prove the closed gate.
 3. **Registry.** Lock, TTL, LRU, idempotent mint without TTL extension, first-digest compare-and-set.
-4. **Qualification.** Dedicated media file list, loaded/start baseline plus fresh disk equality over the exact native and HMP dependencies, run off the loop on the shared default executor. Follow the existing approval baseline discipline; do not reuse the model feature's disk-only check. Empty manifest, owner-device gate, default-off flag.
-5. **Route.** Order per LM-10. Initial per-bot grant runs on the shared default executor with the existing ERR-3 mapping. Phase one and phase two run on the dedicated 4-worker executor with copied `ContextVar`s and one shared 20 s deadline. Phase two takes a worker permit without queueing (busy is `429`, no retry). Then, with no `await` before `prepare`, only the synchronous bearer, owner, gate, TTL and digest steps run on the loop.
+4. **Availability.** The `local_media` eligibility member (floor `0.21.5` / `2026.9.24`, three native probe rows, depends on read, not on send) plus an in-memory media-chain coherence and binding check (D-M4). It is computed at listener open and does no disk work, reads no build list, manifest, fingerprint or Git SHA, and sets no process latch. Owner-device gate and default-off flag remain.
+5. **Route.** Order per LM-10 (the gate step reads owner, flag and `media_available()`). Initial per-bot grant runs on the shared default executor with the existing ERR-3 mapping. Phase one and phase two run on the dedicated 4-worker executor with copied `ContextVar`s and one shared 20 s deadline. Phase two takes a worker permit without queueing (busy is `429`, no retry). Then, with no `await` before `prepare`, only the synchronous bearer, owner, gate, TTL and digest steps run on the loop.
 6. **Permits.** A worker permit is released by its future's done callback, including after cancellation. The buffer permit (the instance admission permit) spans both futures and the handler `finally`; the device permit shares that lifetime.
 7. **Streaming.** 64 KiB slices within one 30 s deadline including EOF; abort after `prepare` on any failure; return only after EOF or abort.
 8. **Conformance.** [`HMP_V1_CONFORMANCE.md`](../../docs/architecture/contracts/HMP_V1_CONFORMANCE.md) lists every future test as unimplemented until it exists.
@@ -47,7 +49,7 @@ Each test must fail when its named guard is removed. Unit tests use a fake bridg
 | T15 | Logs and access log: closed enums only | log ref, path or digest |
 | T16 | One test per error-table row plus causal negatives (revocation, cross-device, cross-profile, tip change, async cancel) | per row |
 | T17 | `ContextVar` profile scope survives the dedicated executor in both phases | skip context copy |
-| T18 | Startup mismatch stays closed until restart; later mismatch closes while present and may reopen on restoration; empty manifest closed | per case |
+| T18 | Eligibility and coherence closed states: below floor, missing probe row, split media chain close this listener only with a fixed outcome; a second coherent listener in the same process opens (no latch); use-time identity mismatch closes that listener until reopen; no media component reads a build list. See tasks A1-A14 | per case |
 
 ## Review gates
 

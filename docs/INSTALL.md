@@ -115,6 +115,17 @@ To change that decision later, use `hermes hmp devices list` on the host to find
 
 The plugin belongs to the Hermes instance where it is installed. Do not copy its instance keys or device store between hosts. See [Host hardening](../server/HOST_HARDENING.md) before exposing any Hermes host service.
 
+## Host-local generated images (planned, not implemented)
+
+This feature does not exist yet; there is no setting to turn on and nothing to install. When it is built
+(draft contract: [spec 011](../specs/011-local-image-serving/spec.md)), it will be default off and for
+approval-owner devices only. It will need the host switch `platforms.hmp.extra.local_media.enabled`, a
+Hermes at or above `v0.21.5` (or a development build) that provides the session lookup APIs it reads, and the
+usual per-bot authorization. It will not use a build list, fingerprint or qualification manifest, and a
+disabled direct-send switch will not close it. `hermes hmp compat` is planned to show a `local_media` line
+(`available`, `disabled` or `unavailable (<fixed reason>)`). Assistant `MEDIA:` text will remain ordinary text.
+Nothing here claims the feature is qualified, reviewed or released.
+
 ## Scheduled jobs preview
 
 Scheduled jobs are disabled by default. The host must run Hermes `v0.21.5` or later (or a

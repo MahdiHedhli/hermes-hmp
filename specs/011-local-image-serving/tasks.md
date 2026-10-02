@@ -1,5 +1,11 @@
 # Tasks
 
+> **Amended 2026-10-02.** The owner's minimum-version policy replaces the exact-build manifest, fingerprints,
+> process anchor and preload qualification (S6/S6a/S6b). Their records below are **historical evidence about the
+> retired design**, not current policy and not runtime behavior. See
+> [Minimum-version conversion](ROOT_DECISIONS.md#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02)
+> and the slices M0-M3 below. The feature is **unimplemented**.
+
 `[ ]` means not started or not independently reviewed. Workers do not self-certify. No implementation task starts before the contract revision (P0) is reviewed. A worker meeting unspecified behavior records a gap marker instead of inventing a rule.
 
 ## M0 Documents
@@ -7,14 +13,81 @@
 - [x] **P0** Additive public contract revision: HMP v1 §7e, `media_unavailable` row, optional `media` on tool rows, constants, residual, conformance rows (this change). Root reviewed the additive transcription against the frozen design and the independent Opus pre-code PASS (2026-10-01). No serving or code gate is certified.
 - [x] **E1** Native-generated bounded fixture: producer `image` string versus the routed-home lexical prefix on exact Hermes `8afaab3703e336d72a72c812dd2dd249f04f166a`. Root passed three isolated positive native flows and 37 focused string/helper tests (research `f9c542b`). Limited to the real `save_b64_image` producer and stated scratch layout; no live route or manifest admission is granted.
 
+## Minimum-version conversion slices (M0 integration to M3)
+
+Ordered. Workers tick no review boxes; every `[ ]` here is unchecked until root or an independent reviewer marks it.
+Native fixtures and owner-local packaging are root-operated. No slice here authorizes a live, device, provider or
+dependency action.
+
+- [x] **M0 root integration checkpoint** (inert). Merge `0cdbbf5` of media source `6d400af` onto the converted
+  approvals base (`2c153e2` plus probe fixture `f4045cd`). Root receipt status:
+  `ROOT_M0_INERT_INTEGRATION_REVIEWED_NOT_FEATURE_COMPLETE`. The runtime media binder is a constant closed
+  callback; the retired gate and its empty manifest were not carried. Carried media modules, the `reads.py` twins
+  and the bridge twins are byte-identical to the accepted media lineage except the merged twin hunks. **Not green:**
+  - converted focused 013/034 set: 1123 passed, 14 skipped, 3 failed; the three failures are
+    `test_contract_tables.py` draft-contract-table cases (`media_unavailable` and `MEDIA_*` constants not in
+    `contract.py`); the identical three fail on the unconverted media source and remain the S4 gate. They are
+    visible, not skipped or hidden.
+  - 114 legacy qualification tests fail (109 listener-binding, 4 gate-pinning layout, 1 bridge-inert) and the
+    removed gate test has one collection error. They test the retired binder and are **explicit work in progress**
+    pending M3. Nothing was skipped, deleted or ignored to change that, and no green full-suite claim is made.
+  - The media helper suites (active batch, scan, binding, candidate, file safety, raster, registry, result,
+    sidecar, reads media) passed at the checkpoint.
+  - Not run: full server suite, `tools/*` suites, native or fixture matrices.
+- [x] **M1** Documentation and contract amendments (this change): ROOT_DECISIONS section, spec, plan, tasks,
+  checklists, HMP v1 §7e and GU-2d, conformance, specs 013/034 cross-references, `server-modules.md`, FEATURES and
+  INSTALL. No code, tests, fixtures or data. Exit: root review. Independent documentation review
+  accepted the frozen 13-file delta; root accepted it and added the existing D-M4 publication and D-M6
+  no-await mint requirements explicitly to the contract. This certifies documentation only, not media delivery.
+- [ ] **M2** Eligibility member (D-M2, D-M3, D-M8): `Feature.LOCAL_MEDIA`, the three-row probe table,
+  `FEATURE_FLOORS["local_media"]` at the write floor, `issue_draft`/`cli` member, labels and the single reportable
+  code. Exit: A1-A6 and A13. Independent review before reliance.
+- [ ] **M3** Replace the retired binder with the D-M4 binding and coherence check: delete the gate-era components
+  (manifest, fingerprints, anchor, GIL guard, origin checks, non-media core proof), add
+  `ServerContext.media_available` and the bound modules, publish `_bridge_classes` as one tuple. Retire or adapt
+  the 114 legacy tests as the architecture allows. Exit: A7-A12 and A14, then **mandatory independent
+  exact-candidate security review**.
+
+(The older headings "M1 Host" and "M2 Convergence" below are original document-phase names and are unrelated to slices M1-M3 above.) Later slices stay open exactly as listed under them: C6b exact-native cost and
+concurrent-writer evidence (release-candidate evidence, not a per-version allowlist), S4 descriptor emission, S5
+route, T12 memory on sampled builds, R2 independent exact-candidate review, and R3 owner-authorized install, flag
+and physical-device acceptance. C6b and T12 sample evidence, independent review and device acceptance are pending;
+the feature is not enabled by any of them.
+
+### Acceptance matrix for M2/M3
+
+Each case must fail when its named guard is removed. All are unimplemented; none is passing.
+
+| ID | Setup | Expected | Guard mutated |
+|---|---|---|---|
+| A1 | version at or above floor, all three rows present | `local_media` available; no build list, manifest, fingerprint or SHA read (spy on file opens) | re-introduce a manifest reader |
+| A2 | version unknown, `0.0.0`, newer or development | attempted (available if the probe passes) | floor treats unknown as below |
+| A3 | version below floor | unavailable `hermes_version_below_floor`; media rows not imported | probe before floor check |
+| A4 | `get_compression_lineage` missing (or `**kwargs`-only, or resolved from `site-packages`) | only `local_media` closes (`dependency_missing`, fixed labels); read, send, jobs, model unchanged | merge tables or close siblings |
+| A5 | send unavailable or `direct_send.enabled` false | `local_media` unaffected | add `requires_send` |
+| A6 | read core missing | `local_media` = `requires_read`; no media import | probe media without read |
+| A7 | supported, `identity is None` (converted base) | media can open | require `BuildIdentity` |
+| A8 | flag off, non-bool or malformed block | closed: exact old read bytes; owner `503 media_unavailable`; non-owner `404` first | truthy flag |
+| A9 | media chain split (synthetic second package copy, foreign `candidate._scan`) | this listener's media closed with a fixed outcome; a second listener in the same process with coherent modules opens (no latch) | process latch or skip coherence |
+| A10 | whole-package eviction after open | old listener keeps its bound tuple; mint and fetch use the same objects by identity | handler re-imports |
+| A11 | use-time cache identity differs from the bound tuple | `503 media_unavailable`; this listener's media closed until reopen | skip fence |
+| A12 | free-threaded interpreter flag simulated | no closure from interpreter mode alone; review confirms registry, permits and caches are lock-protected | GIL guard re-added |
+| A13 | `--issue-draft --feature local_media --failure-code media_unavailable` | draft with bounded metadata; `not_found`, `rate_limited`, `forbidden` refused as their own reason; privacy canary (no ref, path, digest, profile or device) | allow 404 drafting |
+| A14 | legacy process anchor present as `"closed"` in `sys.__dict__` | new code ignores it and never writes it | read the legacy key |
+| Inherited | T1-T18 (T18 amended), C6b A1 identity, D4 uncertainty rule, registry CAS/TTL/LRU, leaf no-follow/nlink, raster, permits and cancellation, `ContextVar` copy, closed log enums | unchanged | as in plan.md |
+
+Sampled evidence (E1 producer spelling, Linux leaf, C6 cost, rotation) stays recorded as tested-sample evidence.
+No case requires an exact-build receipt for runtime admission. Release evidence still binds the tested
+candidate and sample; that evidence does not prove behavior on future builds.
+
 ## M1 Host (after P0 review)
 
 - [x] **S1** Promote the accepted scanner, leaf and raster modules into the plugin surface, logic unchanged except the shared result function; record content hashes. Root accepted the inert slice after independent Opus wrapper/hash review, module-contract repair, and 70 bounded layout/wrapper tests on 2026-10-01. No serving or admission claim.
 - [x] **S2** Read-result sidecar and lexical name derivation; golden proof that closed-gate bytes are unchanged (T1). Root accepted S2a–S2d after independent reviews and 833 focused tests (three preexisting Hermes-build skips). Optional media twins remain unused by production handlers; no serving claim.
 - [x] **S3** Registry: lock, TTL, LRU, idempotent mint, first-digest CAS (T2, T8). Root accepted the inert slice after independent Opus delta review, causal foreign-snapshot/caller tests, and 152 focused registry/layout tests on 2026-10-01. No fetch authority or serving claim.
-- [ ] **S6** `local_media.enabled` default-off flag, empty manifest, dedicated media file list, start baseline plus fresh disk equality, off-loop (T18).
-- [x] **S6a** Inert process qualification gate and empty manifest. Root accepted source after independent Opus original review, Sonnet hardening delta review and 392 focused tests. No listener, flag, entry or admission; S6 remains open.
-- [ ] **S6b** Bind the S6a gate to the adapter, request context and per-load media caches (static required set, actual-object proofs, strict flag fields). Source and focused tests written under the [S6b freeze](ROOT_DECISIONS.md#s6b-listener-binding-freeze-2026-10-01); bounded source independently reviewed and accepted after repair, with 138 root cases passing. No entry, route consumer or admission; S6 stays open.
+- [ ] **S6** *(converted by the minimum-version policy; the manifest, file list, baseline and disk-equality parts are retired. The flag accessor already exists; remaining scope is the eligibility member and in-memory binding, tracked as M2/M3; T18 amended.)* Original text: `local_media.enabled` default-off flag, empty manifest, dedicated media file list, start baseline plus fresh disk equality, off-loop (T18).
+- [x] **S6a** *(historical; retired design, not carried onto the converted base)* Inert process qualification gate and empty manifest. Root accepted source after independent Opus original review, Sonnet hardening delta review and 392 focused tests. No listener, flag, entry or admission; S6 remains open.
+- [ ] **S6b** *(historical; retired design, superseded by M3)* Bind the S6a gate to the adapter, request context and per-load media caches (static required set, actual-object proofs, strict flag fields). Source and focused tests written under the [S6b freeze](ROOT_DECISIONS.md#s6b-listener-binding-freeze-2026-10-01); bounded source independently reviewed and accepted after repair, with 138 root cases passing. No entry, route consumer or admission; S6 stays open.
 - [x] **C6a** Request-scoped active-history batch module and independent security review, following the C6 freeze; accepted single scanner unchanged. Source acceptance only; native cost/memory and C6b remain open.
 - [ ] **C6b** Bind that reviewed batch to the same native database/home capture, then root exact-native cost, concurrent-writer and mint-memory evidence. C6 remains open.
 - [ ] **S4** Descriptor emission in handlers, 128 cap (T1, T5, T6, T7). Needs S2, S3, S6 and C6 admission.
@@ -207,7 +280,7 @@ layout); three pre-existing draft MEDIA contract-table failures remain outside t
 Exact-native binding cost, concurrent-writer and ABA behavior, Phone evidence, fetch
 integration and every other C6/S4/S5/S6 gate remain open.
 
-## S6 design accepted, implementation open (2026-10-01)
+## S6 design accepted, implementation open (2026-10-01) *(historical; superseded 2026-10-02)*
 
 The [S6 root freeze](ROOT_DECISIONS.md#s6-media-qualification-design-freeze-2026-10-01) adopts the
 independent Opus design amendments: persistent process-wide primitive baseline across reloads,
@@ -215,7 +288,7 @@ short anchor locking outside imports/I/O, free-threaded closure, this-load modul
 import-shadowing refusal and bounded fd-relative source reads. No gate module, listener binding,
 manifest entry, live flag, media route or approval-gate change is accepted by this design.
 
-## S6a reviewed inert gate (2026-10-01)
+## S6a reviewed inert gate (2026-10-01) *(historical evidence of the retired exact-build gate; superseded 2026-10-02, not current policy or runtime behavior)*
 
 Source acceptance only; **S6 stays unchecked**. `local_media_gate.py` is
 inert: nothing imports it, there is no flag, route, adapter or bridge binding, and the shipped
@@ -248,7 +321,7 @@ No approval gate, live plugin, source qualification entry or device build change
 | `test_local_media_gate.py` | `4f3f02ae7a28f6a13ced3b5d0ff7ce85d0795fb0fdf864471b815f4a9841c416` |
 | `test_skeleton_layout.py` | `52f19ad67250c3efda1d780b300afb5cd7dcc4fb2e77d8f2c01566fe1fde59ed` |
 
-## S6b listener binding source written (2026-10-01, review pending)
+## S6b listener binding source written (2026-10-01, review pending) *(historical; the qualifier it binds is retired)*
 
 Source and focused tests only; **S6, S6b, S4 and S5 stay unchecked** and no reviewer checklist item is
 marked. Root review and an independent Opus security review of the exact implementation are still
@@ -276,7 +349,7 @@ The full evidence, residuals and the unverified gates are in the S6b author repo
 | `test_local_media_listener_binding.py` | `27fc47b49e2bae422e61b8e6a0b1f73dbac6688f2a76d0afa48f6e299ef755b4` |
 
 
-## S6b repaired source acceptance (2026-10-01)
+## S6b repaired source acceptance (2026-10-01) *(historical; accepts the retired binder only)*
 
 The source slice is accepted after independent review of the original implementation
 and its comment/test repair. Root reverified the frozen 15-file candidate and the

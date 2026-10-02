@@ -245,7 +245,7 @@ Normative keywords follow RFC 2119 and RFC 8174.
 | `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"`; on a §7b route also a native approval answer that is not a recognised settlement (AP-5), or a Hermes helper that failed at use time (AP-7a) | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
 | `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, a required Hermes API unavailable (GU-2d), missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
 | `model_unavailable` (v1.5, MD-1) | 503 | mobile default model: flag off, a required Hermes API unavailable (GU-2d), missing scoped picker endpoint, or Hermes read/write failure | — | Reopen the model screen and check the current selection before another write. |
-| `media_unavailable` (v1.6 draft, LM-3) | 503 | host-local image fetch: the caller is an owner device but the media gate is closed. Message: "image delivery is unavailable" | — | Show "Image unavailable". Do not retry automatically. |
+| `media_unavailable` (v1.6 draft, LM-3) | 503 | host-local image fetch: the caller is an owner device but the host flag is off or the feature is unavailable (LM-1). Message: "image delivery is unavailable" | — | Show "Image unavailable". Do not retry automatically. |
 
 - **ERR-2a. Read-compatibility refusal** (GU-2c; additive `other {why}` values, no contract revision; controller clarification, 2026-09-25).
   - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes declares a version below the minimum supported version for reads (GU-2c), or its install cannot be found. An unknown, unlisted, newer or unreleased version is never refused for that reason.
@@ -1350,10 +1350,12 @@ The host flag defaults off. Availability on a given Hermes follows GU-2d, not a 
 
 ## 7e. Host-local generated images (v1.6, draft; not implemented)
 
-Additive under V-3. **Status: draft serving contract.** Reviewed inert components are recorded in
-the task evidence below; no serving route, admitted manifest entry, process/device qualification
-or release exists. The product manifest of supported builds is **empty**; this section never
-claims that a complete build, serving platform or device is qualified. Design record and open gates:
+Additive under V-3. **Status: draft serving contract; the feature is not implemented.** Reviewed inert
+components are recorded in the task evidence; no serving route, descriptor emission, availability member,
+process/device qualification or release exists. Amended 2026-10-02 for the owner's minimum-version
+policy: there is **no build list, manifest, fingerprint or process latch**, and this section never claims
+that a build, serving platform or device is qualified. The current runtime media binder is the M0 constant
+closed callback until the M2/M3 slices land. Design record and open gates:
 [`specs/011-local-image-serving`](../../../specs/011-local-image-serving/spec.md). A client on an
 earlier `1.x` build ignores `media` and the route (V-4). The numeric constants below (20 s, 30 s,
 1800 s, 512 per device, 4096 total, 128, 2 per device, 4 per instance, 120 per minute) are **new
@@ -1367,24 +1369,44 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   1. the device passes `is_approval_owner_device` (configured owner allowlist and no explicit
      controls denial; unrelated owner privilege never implies this);
   2. the live host flag `local_media.enabled` is exactly `true`;
-  3. the process-qualified manifest has an entry for this exact build. The shipped manifest has
-     `builds: []`; no entry exists until an actual qualification.
+  3. the `local_media` eligibility member is available (LM-2, GU-2d): the version floor is met, the
+     required Hermes APIs are present, and the in-memory media binding holds. No build list, manifest,
+     fingerprint or Git SHA is consulted.
 
   Otherwise no `media` field is emitted and read response bytes are **identical** to those of a
   server without this section. The gate does not affect compat, roster, send or approvals and
-  adds no upper version bound on the install. Approval gates are never waived by it.
-- **LM-2. Qualification.** Requires the loaded/start baseline **and** fresh on-disk equality over a
-  dedicated media file list and the exact native/HMP dependencies. The startup baseline is
-  immutable across in-process reloads and Hermes homes: the first supported factory fixes it
-  process-wide, and a different native root or plugin directory closes later listeners. Only a
-  full OS process restart clears it. A startup closed state never reopens; a listener captured
-  with a mismatch stays closed for its lifetime. A matching listener can close on later disk
-  mismatch and reopen after a fresh restoration check. Disk and dependency
-  work runs off the event loop on the shared default executor. A full approval run is not required
-  for media reads. The S6 design details and retained loaded-code/source limitations are in
-  [ROOT_DECISIONS](../../../specs/011-local-image-serving/ROOT_DECISIONS.md#s6-media-qualification-design-freeze-2026-10-01).
+  adds no upper version bound on the install. Approval gates are never waived by it, and no grant
+  is made automatically. Each device is checked per request against the owner list and any host denial.
+- **LM-2. Availability.** Replaces the retired exact-build qualification (manifest, fingerprints, Git SHA,
+  process anchor, preload origin checks, GIL guard). The `local_media` member (GU-2d) is computed **once
+  when the listener opens**, beside the other members, and reads no build list, manifest, fingerprint or Git SHA:
+  - *Minimum floor (root decision D-M3):* the write floor `0.21.5` / `2026.9.24`, inherited from send, whose
+    probe table already contains these rows (EVIDENCE_GAP E-M1: existence at the read floor is unverified). A version that declares itself below the floor is
+    unavailable (`hermes_version_below_floor`) and no media module is imported. Unknown, `0.0.0`,
+    unlisted, newer and development versions are attempted.
+  - *Dependencies:* requires `read` available (otherwise `requires_read`). It does **not** require
+    `send` or `session_browsing`; a disabled direct-send switch never closes media. The probe table is
+    exactly the native callables the media path reaches beyond the read core:
+    `SessionDB.get_session`, `SessionDB.get_session_by_title`, `SessionDB.get_compression_lineage`,
+    probed by containment and signature shape (never called), with the GU-2d wrapper and tree rules.
+    There is no image-producer probe; a changed producer spelling is refused per candidate by the
+    lexical check of LM-5.
+  - *Binding:* at listener open, the media-chain cross-references are verified in memory and the
+    verified references are bound to that listener. An incoherent chain closes **this listener's**
+    media with a fixed outcome and never latches the process; a second coherent listener in the same
+    process can open. A cheap use-time identity fence compares the current cache objects with the bound
+    ones by identity and, on mismatch, closes only that listener's media (`503 media_unavailable`)
+    until the next open. This is not authenticity, a loaded-bytecode proof or attestation. Cache
+    publication includes the bridge module and its classes in a single locked tuple assignment, with
+    imports outside the publication lock. No component relies on GIL atomicity, and a legacy
+    process-anchor value is ignored and never written.
+  - The availability result is an in-memory boolean. Authorization, explicit settings, scoped
+    credentials, payload bounds, resource bounds and the C6b identity proofs are unchanged.
+
+  Status: **unimplemented.** The retired design is recorded as historical in
+  [ROOT_DECISIONS](../../../specs/011-local-image-serving/ROOT_DECISIONS.md#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02).
 - **LM-3. Closed-gate responses.** A non-owner device gets `404 not_found` before the gate is
-  consulted. An owner device with a closed gate gets `503 media_unavailable`, message "image
+  consulted. An owner device with the flag off or the feature unavailable gets `503 media_unavailable`, message "image
   delivery is unavailable" (the only new ERR-2 code). User-visible text elsewhere is unchanged.
 - **LM-4. Descriptor.** `media` appears only on `role:"tool"` rows in RO-3, RO-6, SES-2 and SES-2a,
   only when the gate is open:
@@ -1411,7 +1433,8 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   emitting response under the C6 freeze in `specs/011-local-image-serving/ROOT_DECISIONS.md`: strict
   active-set/declaration/digest checks for each returned candidate, with no cross-request
   authority cache. This performs no image/home file access or stat, and does not replace the
-  per-fetch scan.
+  per-fetch scan. Immediately before mint, owner authorization, the live exact-true flag, availability
+  and registry state are checked synchronously, with no await before mint.
 
 - **LM-6. Session kind.** Fixed at mint, rechecked at fetch. `phone` iff the session equals the
   caller's own Phone conversation session. `bot_chat` iff it is in the canonical Bot Chat
@@ -1445,7 +1468,7 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   4. rate limit 120 per minute per device: `429 rate_limited`;
   5. initial per-bot grant via the existing per-bot gate (ERR-3, unchanged), run off the loop on the
      shared default executor;
-  6. gate closed: `503 media_unavailable`;
+  6. flag off or media unavailable (LM-1): `503 media_unavailable`;
   7. ref grammar and binding lookup: one `404 not_found` shape;
   8. nonblocking permits (2 per device, 4 per instance): else `429 rate_limited`, no `why`. The
      instance permit is the buffer permit of LM-13 and the device permit shares its lifetime.
@@ -1466,12 +1489,13 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   - **No native check runs on the event loop.**
 - **LM-12. Final synchronous section.** After the phase-two future returns, on the loop, with no
   `await` between these steps and response `prepare`: fresh bearer authentication (existing `401`
-  codes), approval-owner flag (`404`), gate flag and registry existence/TTL (`404`), and the
+  codes), approval-owner flag (`404`), live media flag, availability and registry existence/TTL (`404`),
+  with no per-request qualification await before this section, and the
   first-served digest compare-and-set under the registry lock (set if absent; if different, delete
   the entry and refuse `404`). A causal change between the phase-one recheck/return and the
   phase-two check refuses. **Residual (unavoidable, stated):** a grant or tip change after the last
   native check and before `prepare` is **not** promised to refuse, because no atomic native API
-  exists. This contract makes **no atomic snapshot guarantee**. Bearer, owner, gate, TTL and CAS
+  exists. This contract makes **no atomic snapshot guarantee**. Bearer, owner, flag, availability, TTL and CAS
   changes on the loop still causally refuse.
 - **LM-13. Lifetimes under cancellation.** Each phase's worker permit counts actual concurrent
   future completion, including cancellation, and is released only by that future's done callback.
@@ -1498,14 +1522,14 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   | Initial per-bot grant (ERR-3) | `pending_operator`, `refused_allow_all` | 403 | `forbidden` | `authz` |
   | | `not_routed`, `not_served` | 409 | `not_routed` | `authz` |
   | | `unverifiable`, bridge error, unmapped state | 503 | `other` | `authz:"unverifiable"`, `why:"unverifiable"` |
-  | Gate | owner device, gate closed | 503 | `media_unavailable` | none |
+  | Gate | owner device, flag off or media unavailable | 503 | `media_unavailable` | none |
   | Ref/binding | bad grammar, unknown, expired, evicted, foreign device/user/instance/profile/kind | 404 | `not_found` | none |
   | Permits | device 2 or instance 4 exceeded | 429 | `rate_limited` | none |
   | Phase one | candidate invalid, eligibility or tip changed, file missing or unsafe, raster rejected, digest mismatch, worker error, 20 s shared wait | 404 | `not_found` | none; no oracle between causes |
   | Phase two | grant revoked or changed, eligibility or tip changed, phase-two error, shared 20 s wait | 404 | `not_found` | none; same body as phase one |
   | | no worker permit free (no queue, no retry) | 429 | `rate_limited` | none |
   | Final bearer | token expired, device revoked, wrong instance | 401 | `unauthenticated` / `revoked` / `wrong_instance` | none |
-  | Final synchronous | owner flag, gate, TTL, entry or CAS no longer holds | 404 | `not_found` | none |
+  | Final synchronous | owner flag, media flag, availability, TTL, entry or CAS no longer holds | 404 | `not_found` | none |
   | Unexpected | any other exception | 500 | `other` | `why:"internal_error"` |
 
   The phase-two per-bot refusal is deliberately `404`, not the ERR-3 mapping; ERR-3 applies only at
@@ -1526,23 +1550,35 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
 - **LM-18. Memory ceilings (provisional).** Verification ceilings for four concurrent 8 MiB fetches
   are a traced allocation peak of 96 MiB and an incremental RSS of 128 MiB. They are provisional,
   not a native-allocation bound; a failure changes the implementation, not the ceiling.
-- **LM-19. Admission gates (open).** Before any manifest entry exists, and before any shipping or
-  platform claim:
-  - **E1 (lexical producer string):** the bounded exact-build fixture now passes for its stated
-    producer and scratch layout, as recorded in [the task evidence](../../../specs/011-local-image-serving/tasks.md#e1-bounded-producer-evidence-2026-10-01).
+- **LM-19. Release-candidate evidence and review (open).** Under the minimum-version policy none of
+  the following is a per-build runtime admission gate, and no build list or fingerprint receipt is consulted
+  by the runtime. Release evidence still identifies its exact tested candidate and native sample. Sampled evidence describes the builds and platform it ran on and does not prove behavior
+  on others. Before any shipping, enablement or platform claim:
+  - **E1 (lexical producer string):** the bounded exact-build fixture passes for its stated producer and
+    scratch layout, as recorded in [the task evidence](../../../specs/011-local-image-serving/tasks.md#e1-bounded-producer-evidence-2026-10-01).
     It compares the raw producer string lexically with the captured routed home plus
-    `/cache/images/`, without path normalization. Other producer spellings remain uncharacterized;
-    a mismatch refuses.
-  - **Linux errno qualification (`PLATFORM_GAP`):** the bounded non-root tmpfs file-leaf run now
-    passes, as recorded in [the scoped evidence](../../research/local-media-linux-leaf-evidence-2026-10-01.md).
-    That closes only the leaf check on its stated platform. Native Linux serving and broader
-    platform coverage remain unqualified; no full Linux support claim follows from it.
-  - Independent security review of the exact candidate, owner-authorized qualification and device
-    acceptance. `SECURITY_REVIEW_REQUIRED` for the handle, route, gate and process qualification.
+    `/cache/images/`, without path normalization. Other producer spellings are uncharacterized; a
+    mismatch refuses that candidate on every build.
+  - **Linux file-leaf run (`PLATFORM_GAP` for the rest):** the bounded non-root tmpfs file-leaf run passes,
+    as recorded in [the scoped evidence](../../research/local-media-linux-leaf-evidence-2026-10-01.md).
+    That covers only the leaf check on its stated platform. Native Linux serving and broader
+    platform coverage remain unqualified; no Linux support claim follows.
+  - **C6b and T12 (pending sample evidence):** exact-native complete binding cost with concurrent-writer
+    evidence, and memory on sampled builds against the provisional ceilings of LM-18, are measured once per
+    feature release candidate. A failure changes the implementation, not a ceiling or an allowlist. The
+    runtime protections are the in-code bounds that apply on every version (LM-5, LM-9, LM-11, LM-14).
+  - Independent security review of the exact candidate, owner-authorized install and flag, and physical-
+    device acceptance remain required. `SECURITY_REVIEW_REQUIRED` for the handle, route, availability
+    binding and its removal of the retired qualification gate.
 - **LM-20. Residuals carried.** No atomic snapshot (including ABA on unrelated rows); change after
   the last native check and before `prepare` (LM-12); a coarse-timestamp torn buffer is left to the
-  phone codec; out-of-tree image providers are not fingerprinted; same-account host code is not
-  contained; deadlines and memory ceilings are provisional.
+  phone codec; no image provider or producer is qualified or fingerprinted (each candidate is refused
+  or accepted by the lexical check and the strict tool-row rules); no loaded-bytecode attestation;
+  same-account host code, including plugin-directory writes, is not contained; native session and message
+  reads may materialize unbounded content, flush queued token counts and prune (HERMES_API_GAP, every
+  build); native title writers are trusted metadata; deadlines and memory ceilings are provisional.
+  Assistant `MEDIA:` text stays ordinary unmodified text; producers other than `image_generate` have no
+  authority (HERMES_API_GAP: no typed tool-artifact record).
 
 ## 8. Guarantees, capability contract and write gate (FZ-R-8, FZ-R-9)
 
@@ -1589,6 +1625,7 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   - Availability is computed once when the listener opens. Permissions, explicit host settings, instance identity, profile routing, scoped credentials, payload bounds and idempotency are unchanged and are checked as before. A genuinely absent implementation is never advertised as usable.
   - A compatibility warning follows a real feature failure only, never a merely unlisted version. A failed probe states the fixed reason and does not claim the version is bad; a "not one of HMP's tested samples" note appears only after a failure and only when no tested sample matches. `hermes hmp compat --issue-draft` prints a user-reviewed GitHub issue draft limited to the Hermes version and its source, the commit SHA when present, the HMP version, the OS family and Python `major.minor`, and the failed feature, reason and HMP's own dependency labels. Nothing is submitted, no network, `gh` or browser is used, and no profile, device, chat, path, host, key, config, content, log or exception text can appear. `--feature` with `--failure-code` records a failure the operator saw (for an upstream failure no static probe can see); it is labelled as operator-reported, grants nothing, and accepts only fixed error codes that match the feature. Permission and routing codes are explained as such and never drafted.
   - **Members (spec 034).** The eligibility set is `read`, `session_browsing`, `send`, `jobs`, `model`, `approvals` and `phone_chat`. `approvals` (Bot Chat approvals) and `phone_chat` (Phone chat sends and approval or clarify answers, §7b) both require read and send and the send floor (0.21.5 / 2026.9.24). `approvals` has no dependency table of its own; `phone_chat` has the table in §7b. A consequence of read or send being unavailable is reported as `requires_read` or `requires_send`, not as a failure of the member, and drafts nothing. `--issue-draft --feature approvals|phone_chat` accepts `write_gate_closed` and `api_server_unavailable` as operator-reported codes; a draft for these members may include the neutral session-stream hook fact (§7b).
+  - **Planned member (spec 011 amendment; unimplemented).** `local_media` (§7e) will be added to the eligibility set exactly as spec 034 added `approvals` and `phone_chat`, amending spec 013's "no media member" constraint. Frozen planned shape (implementation pending): it requires `read` available but not `send` or `session_browsing`; floor `0.21.5` / `2026.9.24` (inherited from send); probe rows `SessionDB.get_session`, `SessionDB.get_session_by_title` and `SessionDB.get_compression_lineage`; reported as `requires_read` when read is unavailable. A failure closes only `local_media`. The compat output gains a line `available`, `disabled` or `unavailable (<fixed reason>)`. `--issue-draft --feature local_media` will accept only `media_unavailable`, reportable only from an owner device with the flag on; `not_found`, `rate_limited`, `forbidden` and the other permission or routing codes stay their own reason and are never drafted. No path, ref, digest, profile or device id can appear. Until implemented, the member list above is the current set.
   - No wire code or field is added.
 - **GU-3. Symbol detection never advertises a guarantee.**
   - Detecting `defer_policy`, `AdmissionPrecondition` and similar symbols MAY be used only as a cross-check.

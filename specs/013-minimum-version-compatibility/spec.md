@@ -72,7 +72,10 @@ a user-reviewed GitHub issue draft that carries only bounded version and fixed-c
 - Availability is computed once when the listener opens. No per-request fingerprint hashing remains.
 - The eligibility feature set is closed: no media member. Spec 034 (owner policy 2026-10-01) adds
   exactly two members, `approvals` and `phone_chat`, at the send floor. Reaching a floor never implies
-  media.
+  media. *Amendment (member set amended by the 011 conversion, docs only, unimplemented):* the
+  [spec 011 minimum-version conversion](../011-local-image-serving/ROOT_DECISIONS.md#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02)
+  adds one further planned member, `local_media`, at the send floor, depending on read only, with its own three-row probe
+  table. Reaching a floor still never implies media: the member, the owner flag and the owner device are separate.
 - The issue draft never contacts the network, `gh`, a browser or a subprocess.
 - The tested-sample manifests and the tool-native fixtures are unchanged byte for byte.
 

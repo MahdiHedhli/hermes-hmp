@@ -19,11 +19,11 @@ The initial public migration changes packaging only. It does not certify a new H
 
 ## Host-local generated images (draft §7e, v1.6): not implemented
 
-[§7e](HMP_V1.md) is a draft contract. **No row below is implemented, qualified or passing.** The product manifest of supported builds is empty. Each future test must fail when its named guard is removed. Test IDs refer to [`specs/011-local-image-serving/plan.md`](../../../specs/011-local-image-serving/plan.md).
+[§7e](HMP_V1.md) is a draft contract. **No row below is implemented, qualified or passing.** There is no build list or manifest; availability follows the minimum version, the required APIs and an in-memory binding (amended 2026-10-02). The runtime media binder is the M0 constant closed callback until M2/M3. Each future test must fail when its named guard is removed. Test IDs refer to [`specs/011-local-image-serving/plan.md`](../../../specs/011-local-image-serving/plan.md).
 
 | Clause | Future verification | Status |
 | --- | --- | --- |
-| LM-1, LM-3, LM-8 | T1: gate closed (flag, build, non-owner) reproduces the golden RO-3, RO-6, SES-2 and SES-2a bytes; the candidate never reaches wire serialization | Unimplemented |
+| LM-1, LM-3, LM-8 | T1: gate closed (flag, availability, non-owner) reproduces the golden RO-3, RO-6, SES-2 and SES-2a bytes; the candidate never reaches wire serialization | Unimplemented |
 | LM-9, LM-10 | T2: a ref used by another device, user, profile, or after expiry or eviction gives one 404 shape | Unimplemented |
 | LM-12 | T3: revoke between worker return and the loop check gives the existing 401, no bytes | Unimplemented |
 | LM-6, LM-9 | T4, T5: compression, rewind, retire, replaced Phone conversation and non-canonical Bot Chat session refuse | Unimplemented |
@@ -38,5 +38,5 @@ The initial public migration changes packaging only. It does not certify a new H
 | LM-16 | T15: logs carry closed enums only | Unimplemented |
 | LM-15 | T16: one test per error-table row | Unimplemented |
 | LM-11, LM-13 | T17: copied `ContextVar` profile scope in both phases | Unimplemented |
-| LM-1, LM-2 | T18: startup baseline mismatch, later disk mismatch, restoration, empty manifest | Unimplemented |
-| LM-19 | E1 lexical-producer-string fixture and Linux errno qualification | Not run |
+| LM-1, LM-2 | T18 (amended): below-floor, missing probe row and split media chain close this listener only with a fixed outcome; a second coherent listener opens (no process latch); use-time identity mismatch closes that listener until reopen; a legacy process anchor is ignored and never written; no media component reads a build list, manifest, fingerprint or Git SHA. Acceptance cases A1-A14 are in the [task list](../../../specs/011-local-image-serving/tasks.md) | Unimplemented |
+| LM-19 | Sampled release-candidate evidence: E1 lexical-producer-string fixture and Linux leaf run (recorded for their stated builds and platform); C6b binding cost and T12 memory (pending). Not per-version gates | Sampled evidence; C6b and T12 not run |
