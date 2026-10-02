@@ -100,6 +100,7 @@ candidate and sample; that evidence does not prove behavior on future builds.
 - [ ] **S4** Descriptor emission in handlers, 128 cap (T1, T5, T6, T7). Needs S2, S3, S6 and C6 admission.
   Source written on `b07890e`, independently reviewed and accepted for the S4 source slice (2026-10-02; full task not ticked): the four read handlers select the old read or the media twin plus one `bind_media_batch` in one worker job, then mint newest-first (at most 128) on the loop through the listener's one registry; `media_unavailable` and the §13 media constants are in `contract.py`; no fetch route (S5). Native complete-binding cost and T12 are release-candidate evidence, not prerequisites for this source. Independent review accepted the exact source, with stale documentation repaired. Root reproduced 679 focused cases after seven added tests; full delivery, native cost, T12 and device evidence remain separate open gates.
 - [ ] **S5** Route, dedicated executor, permits, `ContextVar` copy for both phases, constants, streaming, phase one, phase two, synchronous final section (T3, T9-T11, T13, T15-T17). Needs S1, S3, S6.
+  Source slice independently reviewed and accepted after bounded amendments (2026-10-02; full task not ticked): the always-registered route, per-app executor/permits, both native bridge phases and synchronous final section. Clean locked CI: 3613 passed, 16 native-dependent skips, one existing warning. Synthetic four-fetch memory passed the unchanged provisional limits; native T12, native serving, phone binary loading, device and release evidence remain open. See [the S5 acceptance scope](ROOT_DECISIONS.md#s5-bounded-source-acceptance-2026-10-02).
 - [ ] **T** Causal suite T1-T18 on a fake bridge and an exact-build disposable-home fixture.
 - [ ] **T12** Memory measurement run recorded against the provisional ceilings.
 - [x] **PG** Linux errno mapping for the file leaf only. Root reviewed and independently reran the accepted 89 tests plus 91 supplemental real-kernel checks on non-root Linux CPython 3.14.7/tmpfs. See the bounded evidence below; native HMP serving remains unqualified.
@@ -376,3 +377,17 @@ first/second outcomes, including closed refusal reasons. Public native prompts p
 large-prompt fixture. This is M3 binding/mint research on the stated native sample, not S4 route
 cost or S5/T12 evidence. Native materialization and non-atomic residual/ABA remain; no gate,
 ceiling or release checkbox is implied. Earlier r1 measurement defects remain historical.
+
+## S5 source checkpoint (2026-10-02)
+
+The source slice is independently accepted after the three bounded amendments,
+with root clean locked CI (3613 passed, 16 native-dependent skips, one existing
+warning), 162 focused fetch cases and nine causal scratch-copy mutant kills.
+The independent reviewer reproduced 162 fetch/amendment and 308 startup/layout
+cases; all frozen candidate hashes stayed unchanged. See the
+[S5 acceptance scope](ROOT_DECISIONS.md#s5-bounded-source-acceptance-2026-10-02).
+
+S5's full serving task and T12 stay unchecked. The synthetic four-by-8-MiB
+route measurement covers its stated macOS allocation/lifecycle scenario only;
+native sample serving/cost/T12, Linux serving and phone/device/release evidence
+remain open. No live install or flag was changed.

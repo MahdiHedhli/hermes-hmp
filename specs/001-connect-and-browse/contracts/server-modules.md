@@ -70,6 +70,12 @@ server/
                                   #   bound at open (`ServerContext.media_snapshot`). Closed listener, non-owner or flag off
                                   #   runs the old read untouched; open runs the media twin plus one bind_media_batch in one
                                   #   worker job, then mints synchronously on the loop (no await) after a gate recheck
+    media_fetch.py                # S5 source candidate (unreviewed): `GET /bots/{p}/media/{ref}` orchestrator and the per-app
+                                  #   `MediaFetchService` (dedicated 4-worker executor, worker/buffer/device permits, lease
+                                  #   mailbox). Imports no local_media_* module; runs only the references the listener bound
+                                  #   at open. Phase one/two run on the bridge's `media_fetch_phase_*` off the loop
+    media_payload.py              # S5 source candidate (unreviewed): private frozen-bytes carrier (stdlib only, no wire form,
+                                  #   fixed repr). The bridge and the route hold this one module, proven at listener open
     authorize.py                  # P6 outcome table (PR6-*), via bridge
     revoke.py                     # P7-3 self-revoke; operator revoke helpers (PR7-1)
     gate.py                       # GU-2/GU-4 guarantee derivation + write gate (implemented, unused by F1 routes)
@@ -108,14 +114,16 @@ server/
     local_media_result.py         # OPTIONAL, inert: bounded result parser wrapping local_media_active_scan; no caller yet.
                                   #   Imports are function-local and pinned by a test: bridge.py's one cache-fill function
                                   #   loads the chain (sidecar, candidate, scan, result, file safety, batch, binding), reads.py
-                                  #   loads the sidecar, adapter.py loads only local_media_registry. media_emission, compat,
+                                  #   loads the sidecar, adapter.py loads only local_media_registry and local_media_raster_structure (each in its own
+                                  #   function-local binder). media_emission, media_fetch, compat,
                                   #   server and registration import none, and no request path imports one
     local_media_registry.py       # OPTIONAL, inert: process-local image ref registry (LM-9; stdlib only, no hmp_plugin imports):
                                   #   lock, TTL 1800 s, 512/4096 LRU, idempotent mint, first-served digest CAS. A registry
                                   #   hit never authorizes a fetch. S4 source-reviewed: adapter.py's function-local
                                   #   `_media_registry_bind` makes one instance per listener at open and binds its actual
                                   #   module on ServerContext; media_emission mints on it through that bound reference only.
-                                  #   No lookup or record_first_served caller, no fetch route and no module-level instance yet
+                                  #   S5 source candidate: media_fetch looks refs up and records first-served digests through
+                                  #   that bound reference only. No module-level instance
     local_media_sidecar.py        # OPTIONAL, inert: immutable non-wire read carriers; stdlib and contract only.
                                   #   Candidate holds only row id/digest, never an image path. Generic serialization
                                   #   refuses the carrier. Read by the reads.py media twins and bridge.py; media_emission

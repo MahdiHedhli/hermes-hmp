@@ -39,6 +39,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import hashlib
 import json
 import os
 import re
@@ -50,6 +51,7 @@ from types import ModuleType
 from typing import Any, ClassVar, Protocol
 from urllib.parse import quote
 
+from . import media_payload
 from .contract import (
     CONVERSATION_ID,
     TOOL_ARGUMENTS_CAP,
@@ -1308,6 +1310,134 @@ class HermesReadBridge:
             return MediaBatchBinding(sidecar, kind, OK, accepted, counts)  # type: ignore[arg-type]
         except Exception:
             return closed(ELIGIBILITY_UNCERTAIN)
+
+    # S5: the two off-loop native phases of the authenticated image fetch (HMP v1 §7e LM-11). They
+    # run only on the dedicated media executor, never on the event loop, and import nothing: the
+    # accepted modules come from the per-load cache the caller passes (it must BE that cache), the
+    # registry types from the caller's bound registry module and the carrier from this load's own
+    # `media_payload` import, which the listener binder proved is the one the route uses. Every
+    # failure is a private `None` / `False`; no exception text, path, name, size or digest leaves.
+
+    def _media_fetch_bound(self, binding: Any, chain: Any, registry_module: Any) -> bool:
+        """Exact bound inputs, checked before any native call: the registry module's own `Binding`
+        and `SessionKind`, and the passed chain being this bridge's current media cache itself."""
+        if type(registry_module) is not ModuleType or type(chain) is not tuple:
+            return False
+        binding_type = vars(registry_module).get("Binding")
+        kind_type = vars(registry_module).get("SessionKind")
+        return (
+            isinstance(binding_type, type)
+            and isinstance(kind_type, type)  # an Enum class has its own metaclass
+            and type(binding) is binding_type
+            and type(binding.kind) is kind_type
+            and chain is _local_media_cache
+            and len(chain) == 7
+        )
+
+    def media_fetch_phase_one(
+        self, binding: Any, chain: Any, registry_module: Any, raster_module: Any
+    ) -> Any:
+        """The private `MediaPayload` for the exact bound tool row, or `None`.
+
+        Fresh native authorization, one captured `(home, db)` (a missing database is never
+        created), both-kind media eligibility with the bound session and tip, the accepted active
+        scan of exactly the bound tool row (strict digest equality), the accepted lexical name
+        derivation against that captured home string, the accepted file leaf, the bound raster
+        structure check (it fixes the MIME) and the SHA-256, then the accepted rescan. Every
+        `current_tip` callback re-runs the full classification and requires the same kind."""
+        try:
+            if not self._media_fetch_bound(binding, chain, registry_module):
+                return None
+            if type(raster_module) is not ModuleType:
+                return None
+            check = vars(raster_module).get("check_raster_structure")
+            function_type = type(_cap_chars)  # the plain function type
+            if type(check) is not function_type or check.__globals__ is not vars(raster_module):
+                return None
+            candidate, active_scan, file_safety, batch_binding = (
+                chain[1],
+                chain[2],
+                chain[4],
+                chain[6],
+            )
+            mint_kind = batch_binding.MintKind
+            ok = batch_binding.OK
+            user_id, profile = binding.user_id, binding.profile
+            session_id, tip = binding.session_id, binding.tip
+            row_id, digest = binding.tool_row_id, binding.raw_digest
+            if self.authz_state(user_id, profile) is not AuthzState.AUTHORIZED:
+                return None
+            with self._db_home(profile) as (home_path, db):
+                home = os.fspath(home_path)
+                if not batch_binding.strict_home(home):
+                    return None
+                reason, kind, now = self.media_eligibility(db, user_id, profile, session_id, tip)
+                if reason != ok or type(kind) is not mint_kind or now != tip:
+                    return None
+                if kind.value != binding.kind.value:
+                    return None
+
+                def current_tip() -> str:
+                    again, same, current = self.media_eligibility(
+                        db, user_id, profile, session_id, tip
+                    )
+                    if again != ok or same is not kind or type(current) is not str:
+                        raise BridgeError("media eligibility changed")
+                    return current
+
+                scan = active_scan.scan_active_set(db, tip, row_id, current_tip=current_tip)
+                claim = scan.claim
+                if not scan.ok or claim is None:
+                    return None
+                if claim.tool_row_id != row_id or claim.tip != tip:
+                    return None
+                if not secrets.compare_digest(claim.tool_digest, digest):
+                    return None
+                name = candidate.derive_flat_name(claim.image, home)
+                if name is None:
+                    return None
+                read = file_safety.read_profile_cache_image(home, name)
+                if read.outcome is not file_safety.Outcome.OK:
+                    return None
+                data = read.unvalidated_raster_bytes()
+                del read
+                mime = {"png": "image/png", "jpeg": "image/jpeg", "webp": "image/webp"}.get(
+                    check(data).kind
+                )
+                if mime is None:
+                    return None
+                sha = hashlib.sha256(data).digest()
+                if not active_scan.recheck(db, claim, current_tip=current_tip).ok:
+                    return None
+                return media_payload.MediaPayload(data, mime, sha)
+        except Exception:
+            return None
+
+    def media_fetch_phase_two(self, binding: Any, chain: Any, registry_module: Any) -> bool:
+        """The post-worker final native check: fresh authorization, the captured profile database
+        and both-kind eligibility with the bound session and tip. Reads no image file and holds no
+        bytes. Exactly `True` or `False`."""
+        try:
+            if not self._media_fetch_bound(binding, chain, registry_module):
+                return False
+            batch_binding = chain[6]
+            user_id, profile = binding.user_id, binding.profile
+            if self.authz_state(user_id, profile) is not AuthzState.AUTHORIZED:
+                return False
+            with self._db_home(profile) as (home_path, db):
+                if not batch_binding.strict_home(os.fspath(home_path)):
+                    return False
+                reason, kind, now = self.media_eligibility(
+                    db, user_id, profile, binding.session_id, binding.tip
+                )
+                return bool(
+                    reason == batch_binding.OK
+                    and type(kind) is batch_binding.MintKind
+                    and kind.value == binding.kind.value
+                    and now == binding.tip
+                )
+        except Exception:
+            return False
 
     def lineage(self, ref: ConversationRef) -> LineageInfo:
         def run() -> LineageInfo:

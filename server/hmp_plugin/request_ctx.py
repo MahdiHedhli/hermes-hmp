@@ -159,14 +159,20 @@ class ServingIdentity(Protocol):
 class MediaBound:
     """What `ServerContext.media_snapshot` returns: the listener's bound references, by identity.
     `bound` is the exact `ctx.media_modules` tuple; `chain` is the bridge's seven-member cache and
-    `reads_media` the reads cache; `registry_module` and `registry` are the listener's own. No
-    value here is a wire, native or request field."""
+    `reads_media` the reads cache; `registry_module` and `registry` are the listener's own. S5
+    adds three more bound modules: `raster_module` (the actual raster-structure module whose
+    `check_raster_structure` phase one runs), `payload_module` (the one carrier module the bridge
+    and the route share) and `fetch_module` (the orchestrator whose namespace the route runs in).
+    No value here is a wire, native or request field."""
 
     bound: tuple[Any, ...]
     chain: tuple[Any, ...]
     reads_media: tuple[Any, ...]
     registry_module: Any
     registry: Any
+    raster_module: Any = None
+    payload_module: Any = None
+    fetch_module: Any = None
 
     def __repr__(self) -> str:
         return "MediaBound()"
@@ -180,6 +186,9 @@ class MediaBound:
             and self.reads_media is other.reads_media
             and self.registry_module is other.registry_module
             and self.registry is other.registry
+            and self.raster_module is other.raster_module
+            and self.payload_module is other.payload_module
+            and self.fetch_module is other.fetch_module
         )
 
 
@@ -243,8 +252,8 @@ class ServerContext:
     # itself runs the cheap in-memory use-time identity fence. `media_modules` holds the verified
     # strong references the bound listener uses -- `(bridge cache tuple, reads cache tuple)`, the
     # very objects `bridge.py` and `reads.py` cache -- so a caller uses the same objects
-    # without a fresh import. S4's four read routes consume them through `media_snapshot()`; no
-    # fetch route exists yet (S5), and a result is never cached here.
+    # without a fresh import. S4's four read routes and the S5 fetch route consume them through
+    # `media_snapshot()`, and a result is never cached here.
     media_flag: Callable[[], bool] = field(default=lambda: False)
     media_available: Callable[[], bool] = field(default=lambda: False)
     media_modules: tuple[tuple[Any, ...], tuple[Any, ...]] | None = None
@@ -254,6 +263,12 @@ class ServerContext:
     # fences them by identity and clears them when it closes this listener's media.
     media_registry_module: Any = None
     media_registry: Any = None
+    # S5: three more per-listener bound references, set at open beside the registry and fenced and
+    # cleared by the same availability closure: the actual `local_media_raster_structure` module,
+    # the shared payload-carrier module and the route orchestrator module. All default `None`.
+    media_raster_module: Any = None
+    media_payload_module: Any = None
+    media_fetch_module: Any = None
 
     def is_approvals_available(self) -> bool:
         """Bot Chat approvals. Only an exact `True` opens it; anything else closes it."""
@@ -318,7 +333,11 @@ class ServerContext:
                 return None
             if module is None or registry is None:
                 return None
-            return MediaBound(bound, chain, reads_media, module, registry)
+            raster = self.media_raster_module
+            payload, fetch = self.media_payload_module, self.media_fetch_module
+            if raster is None or payload is None or fetch is None:
+                return None
+            return MediaBound(bound, chain, reads_media, module, registry, raster, payload, fetch)
         except Exception as exc:
             log_bridge_exception(exc)
             return None

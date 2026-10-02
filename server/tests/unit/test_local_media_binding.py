@@ -793,6 +793,10 @@ def test_server_context_media_fields_are_closed_callables_and_a_reference_slot()
         "media_modules",
         "media_registry_module",
         "media_registry",
+        # S5: the raster module, the shared payload-carrier module and the route orchestrator.
+        "media_raster_module",
+        "media_payload_module",
+        "media_fetch_module",
     }
     for name in ("media_flag", "media_available"):
         assert str(fields[name].type).startswith("Callable"), fields[name].type  # never a bool
@@ -801,6 +805,8 @@ def test_server_context_media_fields_are_closed_callables_and_a_reference_slot()
     assert fields["media_modules"].default is None
     assert fields["media_registry_module"].default is None
     assert fields["media_registry"].default is None
+    for name in ("media_raster_module", "media_payload_module", "media_fetch_module"):
+        assert fields[name].default is None
     assert not [n for n in media if str(fields[n].type) == "bool"]
     assert not hasattr(real_request_ctx.ServerContext, "media_qualification_open")
     assert not hasattr(real_request_ctx.ServerContext, "media_qualified")
@@ -978,13 +984,22 @@ def test_every_route_answers_identically_with_the_flag_and_availability_off_and_
     assert server.build_app
     assert seen["off"] and seen["off"] == seen["on"]
     assert calls == {"flag": 0, "available": 0}
-    # S4: the server's only media reference is the one emission module; it names no carrier,
-    # twin, registry or `local_media_*` module itself.
+    # S4: the server's media references are the emission module; S5 adds only the fetch route, its
+    # orchestrator module and that module's per-app service. It names no carrier, twin, registry or
+    # `local_media_*` module itself.
     server_src = READ_SRC["server.py"].lower().replace("immediately", "")
     assert "local_media" not in server_src and "_with_media" not in server_src
     # one import and the five call sites of the four read handlers (SES-2 has two branches)
     assert server_src.count("media_emission") == 6
-    assert server_src.replace("media_emission", "").count("media") == 0
+    rest = server_src.replace("media_emission", "").replace("media_fetch", "")
+    for allowed in (
+        "s5_media_routes",
+        "/bots/{p}/media/{ref}",
+        "media_service_key",
+        "mediafetchservice",
+    ):
+        rest = rest.replace(allowed, "")
+    assert rest.count("media") == 0
 
 
 # --------------------------------------------------------------------------------------------
@@ -1360,9 +1375,11 @@ def test_media_imports_live_only_in_the_cache_fill_functions_and_never_in_the_ad
     assert _media_import_owners(READ_SRC["reads.py"]) == {
         "_local_media_modules": {"local_media_sidecar"}
     }
-    # S4: the adapter's one media import is the listener's registry, in its own function.
+    # S4: the adapter's media imports are the listener's registry, in its own function; S5 adds
+    # the raster-structure module, function-local in its own binder (and nothing else).
     assert _media_import_owners(READ_SRC["adapter.py"]) == {
-        "_media_registry_bind": {"local_media_registry"}
+        "_media_registry_bind": {"local_media_registry"},
+        "_media_raster_bind": {"local_media_raster_structure"},
     }
     assert _media_import_owners(READ_SRC["request_ctx.py"]) == {}
 

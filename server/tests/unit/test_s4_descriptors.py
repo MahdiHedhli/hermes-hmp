@@ -1589,9 +1589,31 @@ BASE_HASHES = {
 }
 
 
-@pytest.mark.parametrize("name", sorted(BASE_HASHES))
-def test_the_bridge_reads_and_nine_helpers_are_byte_identical_to_the_base(name: str) -> None:
+@pytest.mark.parametrize("name", sorted(set(BASE_HASHES) - {"bridge.py"}))
+def test_the_reads_and_nine_helpers_are_byte_identical_to_the_base(name: str) -> None:
     assert _sha(name) == BASE_HASHES[name]
+
+
+def test_the_bridge_differs_from_the_base_only_by_the_s5_additions() -> None:
+    """S5 adds to `bridge.py` exactly: the `hashlib` and `media_payload` module imports and the
+    block of three new methods (`_media_fetch_bound`, `media_fetch_phase_one`,
+    `media_fetch_phase_two`) before `lineage`. Removing precisely those pieces reproduces the base
+    bytes, so every old method, the proof, `bind_media_batch` and the twins are byte-identical."""
+    text = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
+    assert text.count("import hashlib\n") == 1
+    assert text.count("from . import media_payload\n") == 1
+    start = text.index("    # S5: the two off-loop native phases")
+    end = text.index("    def lineage(self, ref: ConversationRef) -> LineageInfo:")
+    assert start < end
+    block = text[start:end]
+    assert [
+        line.strip().split("(")[0]
+        for line in block.splitlines()
+        if line.startswith("    def ")
+    ] == ["def _media_fetch_bound", "def media_fetch_phase_one", "def media_fetch_phase_two"]
+    base = text[:start] + text[end:]
+    base = base.replace("import hashlib\n", "", 1).replace("from . import media_payload\n", "", 1)
+    assert hashlib.sha256(base.encode()).hexdigest() == BASE_HASHES["bridge.py"]
 
 
 def test_the_sidecar_delta_is_exactly_the_protocol_annotation() -> None:
@@ -1616,7 +1638,7 @@ def test_the_sidecar_delta_is_exactly_the_protocol_annotation() -> None:
     )
 
 
-def test_media_emission_imports_no_local_media_module_and_the_adapter_only_the_registry() -> None:
+def test_media_emission_imports_no_local_media_and_the_adapter_only_registry_and_raster() -> None:
     emission = ast.parse((PACKAGE / "media_emission.py").read_text(encoding="utf-8"))
     for node in ast.walk(emission):
         if isinstance(node, ast.ImportFrom | ast.Import):
@@ -1629,7 +1651,10 @@ def test_media_emission_imports_no_local_media_module_and_the_adapter_only_the_r
             for node in ast.walk(fn):
                 if isinstance(node, ast.ImportFrom) and "local_media" in ast.unparse(node):
                     owners.setdefault(fn.name, []).append(ast.unparse(node))
-    assert owners == {"_media_registry_bind": ["from . import local_media_registry"]}
+    assert owners == {
+        "_media_registry_bind": ["from . import local_media_registry"],
+        "_media_raster_bind": ["from . import local_media_raster_structure"],
+    }
 
 
 def test_the_registry_bind_function_has_no_await_sys_modules_or_file_access() -> None:

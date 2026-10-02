@@ -53,7 +53,15 @@ from typing import Any
 from aiohttp import web
 from aiohttp.http_exceptions import LineTooLong
 
-from . import direct_send, media_emission, mobile_cron, mobile_model, prompts, wire
+from . import (
+    direct_send,
+    media_emission,
+    media_fetch,
+    mobile_cron,
+    mobile_model,
+    prompts,
+    wire,
+)
 from .authorize import ensure_chat
 from .contract import (
     CONTRACT_REVISION,
@@ -152,6 +160,11 @@ F2_DIRECT_SEND_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("POST", "/bots/{p}/chat/messages", "DS-1"),
     ("GET", "/bots/{p}/chat/messages/by-client-id/{cmid}", "DS-8"),
 )
+
+# Host-local generated images (HMP_V1.md §7e, LM-10; spec 011 S5). ALWAYS registered, GET only
+# (`allow_head=False`): the gate, owner, flag and availability checks run per request inside the
+# handler, never by withholding the route.
+S5_MEDIA_ROUTES: tuple[tuple[str, str, str], ...] = (("GET", "/bots/{p}/media/{ref}", "LM-10"),)
 
 # Amendment F3 (approvals and Phone chat, HMP_V1.md §7b). Always registered. The direct-send
 # gate is re-checked per request; flag off is `503 write_gate_closed`, not `404`.
@@ -462,6 +475,11 @@ async def handle_snapshot(request: web.Request) -> web.Response:
         if not visible:
             result = replace(result, open_requests=())
     return _result_response(result)
+
+
+async def handle_media_fetch(request: web.Request) -> web.StreamResponse:
+    """LM-10: `GET /bots/{p}/media/{ref}`. The whole route lives in `media_fetch.serve`."""
+    return await media_fetch.serve(request)
 
 
 async def handle_history(request: web.Request) -> web.Response:
@@ -1132,6 +1150,10 @@ def build_app(ctx: ServerContext) -> web.Application:
         },
     )
     app[CTX_KEY] = ctx
+    # S5: this app's own fetch service (dedicated executor, permits); never module-global. Threads
+    # start lazily on the first submission, and cleanup closes admissions without waiting.
+    app[media_fetch.MEDIA_SERVICE_KEY] = media_fetch.MediaFetchService()
+    app.on_cleanup.append(media_fetch.close_service)
     app.on_response_prepare.append(_server_header)
     handlers: dict[str, Handler] = {
         "/ready": handle_ready,
@@ -1150,6 +1172,7 @@ def build_app(ctx: ServerContext) -> web.Application:
         "/bots/{p}/prompts": handle_prompts_list,
         "/bots/{p}/prompts/{request_id}": handle_prompt_answer,
         "/bots/{p}/phone/messages": handle_phone_send,
+        "/bots/{p}/media/{ref}": handle_media_fetch,
         "/bots/{p}/jobs": handle_cron_list,
         "/bots/{p}/jobs/{job_id}": handle_cron_edit,
         "/bots/{p}/jobs/{job_id}/pause": handle_cron_pause,
@@ -1159,7 +1182,7 @@ def build_app(ctx: ServerContext) -> web.Application:
     }
     routes = (
         list(F1_ROUTES) + list(F2_DIRECT_SEND_ROUTES) + list(F3_APPROVAL_ROUTES)
-        + list(MOBILE_CRON_ROUTES) + list(MOBILE_MODEL_ROUTES)
+        + list(MOBILE_CRON_ROUTES) + list(MOBILE_MODEL_ROUTES) + list(S5_MEDIA_ROUTES)
     )
     if ctx.session_browsing_enabled and ctx.session_browsing_available:
         # Amendment A1 kill switch: when off, SES-1/SES-2 are never added to the router at all,
