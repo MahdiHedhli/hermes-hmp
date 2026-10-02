@@ -115,8 +115,16 @@ non-authoritative, and no authorization or native answer authority was added.
 
 No production observer, registration, notification resolver or dispatcher is wired. This amendment
 has no native, provider or device acceptance, and no operational push exists. Initial alert scope
-covers approval rows observed by HMP; broader Desktop/CLI/cron coverage needs a source check, not
-an inferred upstream gap. Provider setup and physical delivery remain pending.
+covers HMP Bot Chat and Phone-chat rows. The static
+[cross-surface census](https://github.com/MahdiHedhli/hermes-hmp/blob/docs/nous-observations-sync/docs/research/approval-cross-channel-source-census-2026-10-02.md)
+at Hermes `ca705dbf` confirms existing `pre_approval_request` / `post_approval_response`
+observer hooks fire around CLI prompts and shared gateway waits. A loaded plugin can
+observe them without a new generic approval callback; synchronous callbacks require
+a bounded nonblocking handoff. Current HMP adapter/local-store inputs do not register
+that consumer. CLI process loading and durable cross-surface lifecycle mapping remain
+evidence/design work; observer events are not answer authority. Cron applies unattended
+automatic policy, and clarify is separate. No generic upstream API gap is established
+by this census. Provider setup and physical delivery remain pending.
 
 ## Installer and local-media integration checkpoint (2026-10-02)
 
