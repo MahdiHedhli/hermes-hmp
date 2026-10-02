@@ -1,10 +1,26 @@
 # Tasks: approval push registration, issuance, hint resolution and relay delivery
 
 
-**Current contract review status (2026-10-02):** The clock mechanism, optional pin grammar and N3–N6 were accepted by the prior focused review. The independent D1/D2/D3 sentence review accepted the capacity/retention qualifications, per-`(app, env)` APNs connections and seal-expiry wording. Root resolved its remaining editorial status finding M1 by dating the pre-review statements below. This is contract-text acceptance only. Source, causal tests/vectors, interoperability, provider/device/deployment/release and owner choices O1–O6 remain pending. No task checkbox or security mechanism changed.
+**Current contract review status (2026-10-02):** The clock mechanism, optional pin grammar and N3–N6 were accepted by the prior focused review. The independent D1/D2/D3 sentence review accepted the capacity/retention qualifications, per-`(app, env)` APNs connections and seal-expiry wording. Root resolved its remaining editorial status finding M1 by dating the pre-review statements below. This is contract-text acceptance only. Source, causal tests/vectors, interoperability, provider/device/deployment/release and owner choices O1–O6 remain pending. Those contract reviews changed no task checkbox or security mechanism; the subsequent root audit below records four documentation/research completions.
 
-Root has frozen `ROOT_DECISIONS.md` after the focused closure review. Implementation remains
-blocked on the subsequent contract tasks. The approval-lane source prerequisite T003 is now accepted; no runtime is wired. Tasks are dependency-ordered. Work in parallel only
+## Root task audit — 2026-10-02
+
+Root and a separate reviewer verified the existing reviewed contract text against
+T010/T011/T012. Their checkboxes below record completion of **documentation only**.
+The proposed outbound exception remains conditional on actual implementation and
+independent source acceptance; no scanner or runtime network permission changes.
+T005's static trace is published in the
+[cross-surface census](https://github.com/MahdiHedhli/hermes-hmp/blob/0a8d08f1854e6676781c75dc99766fa622e8de2d/docs/research/approval-cross-channel-source-census-2026-10-02.md).
+Existing CLI/shared-wait observer hooks were verified; CLI subscriber loading and
+safe lifecycle mapping remain implementation/evidence work. No generic missing
+approval-hook API gap or operational coverage is claimed.
+
+T004 and T020 onward remain open. Accepted contract text permits inert unit/source
+work; O1–O6 remain prerequisites for provisioning and activation. The review-history
+statements below describe their earlier checkpoints, not a new pending text review.
+No deployment, provider, device, release or feature-completion claim follows.
+
+Root has frozen `ROOT_DECISIONS.md` after the focused closure review. The contract-text tasks have passed the root audit above. The approval-lane source prerequisite T003 is now accepted; no runtime is wired. Tasks are dependency-ordered. Work in parallel only
 after T001–T004 freeze the shared contract. Workers do not tick review boxes. The **root
 interoperability amendment of 2026-10-02** (`ROOT_DECISIONS.md`, decisions B1–B6 and P1–P3) adds the
 conformance obligations marked "(amendment)" below to T010, T012, T022, T025, T030, T031, T040 and T043.
@@ -34,13 +50,13 @@ evidence. The clock-count repair of 2026-10-02 followed a focused review of that
   generation-close lifecycle boundary are confirmed. Dispatcher cancellation and hint/slot
   cleanup remain future 014 work. No native, push, device or deployment acceptance is implied.
 - [ ] T004 Owner chooses O1–O6 (all pending). Nothing is provisioned by this task.
-- [ ] T005 Cross-channel coverage research (`EVIDENCE_GAP`): run the Hermes Developer skill refresh
+- [x] T005 Cross-channel coverage research (`EVIDENCE_GAP`): run the Hermes Developer skill refresh
   procedure, then trace the approval notification path on the exact target commits (Desktop TUI
   RPC, CLI prompts, cron, gateway platforms). File a `HERMES_API_GAP` only from that cited trace.
 
 ## Phase 1: contract text (single worker, after T002 and T003)
 
-- [ ] T010 Add HMP v1 §7f (PN-REG, PN-ISS, PN-RES, PN-BND) with schemas, gate order, status table and
+- [x] T010 Add HMP v1 §7f (PN-REG, PN-ISS, PN-RES, PN-BND) with schemas, gate order, status table and
   constants. Add the four `why` values (`push_disabled`, `relay_unconfigured`,
   `approvals_unavailable`, `push_capacity`) to the closed `OtherWhy` set, each allowed only on
   `503 write_gate_closed`; no new error extra (the `generation` extra is dropped) and no new error
@@ -54,10 +70,11 @@ evidence. The clock-count repair of 2026-10-02 followed a focused review of that
   RES-26 (relay restart replay window) and RES-27 (provider refusals retire nothing).
   (Clarification) The same section carries the F2 availability, `why` precedence, kid-liveness and `PUT`
   order text and qualifies the gap labels (F3). A scoped independent review of an earlier candidate
-  accepted it with conditions; the clarified text is pending review. No box is ticked.
-- [ ] T011 Amend the constitution and the closed-surface note: one sanctioned outbound
+  accepted it with conditions. At that earlier checkpoint the clarified text awaited review;
+  the current review summary and root audit above supersede that status. This box records text only.
+- [x] T011 Amend the constitution and the closed-surface note: one sanctioned outbound
   non-loopback client whose destination comes only from host configuration.
-- [ ] T012 Write the relay contract (PN-REL, PN-SEAL, plan §6.5 bounds) as a standalone document for
+- [x] T012 Write the relay contract (PN-REL, PN-SEAL, plan §6.5 bounds) as a standalone document for
   the relay repository, including the audience, `addr_kind`, the closed result set with
   `unavailable` versus `provider_unavailable`, HPKE parameters (D1) and the pinned RFC 9180 vector
   reference. (Amendment) The relay document now also fixes the transcript bytes (B1), the JCS plaintext
@@ -67,8 +84,9 @@ evidence. The clock-count repair of 2026-10-02 followed a focused review of that
   (Clarification) The relay document also carries F1 (atomic skew re-check), F4 (strict DER signature),
   F5 (APNs environment per allowed `(app, env)` pair) and F6 (rolling 3,600-second post-seal counters).
   A scoped independent review of an earlier candidate accepted it with conditions; a later review accepted the
-  clarified text's other clauses and required the clock and pin gates, written at that time as the unreviewed clock/pin
-  delta (R-F1a, R-PIN). No box is ticked.
+  clarified text's other clauses and required the clock and pin gates. At that earlier checkpoint,
+  the delta (R-F1a, R-PIN) was unreviewed. The current review summary and root audit above
+  supersede that status; this box records text only.
 
 ## Phase 2: HMP server (after T010/T011; GENERAL tier; unit and route tests only)
 
