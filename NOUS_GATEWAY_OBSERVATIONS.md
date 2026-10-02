@@ -1,5 +1,32 @@
 # Gateway observations for Nous Research
 
+## Native observation and access diagnostics checkpoint (2026-10-01)
+
+Source inspection on exact Hermes `8afaab37` confirms that a session lookup is not
+necessarily a side-effect-free observation. `SessionStore.lookup_by_session_key` calls
+`_entry_locked`, which can lazily load the store, create its directory and prune stale
+routing entries. Pruning can save metadata. Separately, `SessionDB.get_session` and
+`list_sessions_rich` can flush queued token deltas, and first database construction can
+initialize or migrate schema. These are source findings, not observed live incidents.
+HMP's native qualification uses disposable homes; a diagnostic must not treat these
+helpers as guaranteed read-only operations. The owning source is
+[session persistence](https://github.com/NousResearch/hermes-agent/blob/8afaab3703e336d72a72c812dd2dd249f04f166a/gateway/session_persistence.py#L219)
+and [session reads](https://github.com/NousResearch/hermes-agent/blob/8afaab3703e336d72a72c812dd2dd249f04f166a/hermes_state_sessions.py#L786).
+
+The local-media dependency census now proposes 69 native paths, distinguishing actual
+read-path owners from producer-format evidence. Root verified 82 inspected source hashes.
+This is a finite source proposal; recursive imports, external providers, runtime callable
+ownership, the complete native binding cost and serving admission remain unqualified.
+It adds no manifest entry and does not enable local image reads.
+
+Separately, HMP needs clearer access diagnostics. A device's persistent controls grant,
+per-bot authorization, host feature activation, build validation and profile endpoint
+readiness are independent checks. Linux support does not establish all of them, and an
+unvalidated newer build does not prove incompatibility. HMP can expose its own authenticated
+device status and improve recovery wording without an upstream change; that contract is
+being designed. It must preserve resource concealment, never grant privileges automatically
+and never use a job-list or job execution as a health check.
+
 ## Local image contract checkpoint (2026-10-01)
 
 Follow-up owner screenshots confirm the public CDN image renders while generated
@@ -86,6 +113,7 @@ The [unified gateway research](https://github.com/MahdiHedhli/hermes-hmp/blob/ma
 | Private session search | `SessionDB.search_messages` logs up to 200 characters of the query at INFO when a search crosses its slow threshold (`hermes_state_search.py` in the checked build). Hermes-wide search could put private conversation terms in host logs. HMP can separately page its authorized canonical Bot Chats and match on the phone without sending a query. | Log timing, path, and row count without query text, and cover the slow path with a regression test before any remote feature invokes native Hermes search. |
 | Session management | The profile-scoped API server already lists sessions, reads messages, changes title/pin/archive/hidden state, and deletes sessions. Its `/fork` ends the source session, so it cannot implement a non-destructive branch. Project moves, export, and opening a session in a terminal are not API server operations. | Preserve the existing safe metadata routes; add a non-destructive branch operation and explicit project/export capabilities where appropriate. A canonical Bot Chat must not be accidentally archived or deleted by a remote client. |
 | Scoped session read | HMP's draft session-ref repair checks whether a ref still selects an allowed Bot Chat before reading its messages, but Hermes exposes those as separate database reads. An archive, retitle, or replacement between them can leave one page based on the earlier eligibility decision. Per-bot authorization still applies; [HMP's extra session routes](https://github.com/MahdiHedhli/hermes-hmp/pull/51) now require an explicit boolean-true host opt-in, and the phone's picker remains hidden. | Provide an authenticated, profile-scoped read that selects an allowed session and returns its eligibility, canonical lineage, and message page from one consistent snapshot. Unknown and no-longer-eligible refs should have the same refusal. |
+| Read-only session observation | On inspected `8afaab37`, a routing lookup can lazily initialize and prune the session store; database session reads can flush queued usage writes. A diagnostic cannot assume these helpers only observe existing state. | Provide an explicit profile-scoped observation contract with declared side effects and freshness. A read-only snapshot should not implicitly migrate, repair, prune or flush state; keep maintenance in Hermes's own lifecycle. |
 | Chat media and attachments | Displaying a linked image was an HMP renderer gap, not a Hermes API gap; a bounded renderer is now in an unreleased mobile draft. Sending attachments into a Desktop-owned canonical Bot Chat, and reading generated local media back later, have no equivalent canonical contract on the inspected source. | Attachment-aware canonical single-owner admission and stable, authorized, reusable generated-media reads with capability flags. See [Chat media and attachment parity](#chat-media-and-attachment-parity). |
 | Canonical remote attachment | Current HMP reaches a qualified legacy Bot Chat path; the unified runtime PR is a local/gateway cutover, while remote Desktop/web/mobile entry is staged separately. | Expose authenticated, profile-scoped remote attach/submit/event/control operations with explicit capability negotiation, target-session authorization, durable request identity, and replay-or-snapshot recovery. Keep one execution owner. |
 
