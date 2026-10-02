@@ -45,22 +45,26 @@ ambiguous send, and original send evidence must survive refresh before a retry.
 The approval-alert handoff foundation now includes the independently accepted paired timer-ownership
 repair. It is published at [`6cfd688`](https://github.com/MahdiHedhli/HermesBotMobile/commit/6cfd6880e56dac3665f3df7e10f49a17141e8d44);
 root verified 1,328 client/machine tests (one real-server fixture skip), seven required causal
-mutants and static scans. It remains unwired and is absent from installed build `2026100203`.
+mutants and static scans. It remains unwired and is absent from latest installed build `2026100204`.
 Physical draft recovery remains open: the owner reported a message surviving refresh,
 but its build and whether the row returns from canonical server history are not yet confirmed.
 No public release, operational approvals or push-delivery result follows.
 
 A subsequent source diagnostic found a client contract gap: explicit refresh reloads the
 transcript but does not reconcile a dismissed send's original delivery ID. The app repair is
-in progress, using a read-only status lookup with no automatic resend, no text-equality proof
-and no deletion of server history. It is not yet independently reviewed or installed. This
-finding does not establish the owner's physical delivery outcome or an upstream defect.
+independently reviewed and published at [app `0ae5667`](https://github.com/MahdiHedhli/HermesBotMobile/commit/0ae5667bea8b1e339517823471e49834f2c423e3),
+using one read-only original-ID status lookup with no automatic resend, no text-equality proof
+and no deletion of server history. Signed owner dogfood build `2026100204` is installed and its
+version verified. Root passed the three explicit-refresh invariant cases; independent review
+passed 266 selected client cases, and the final dismiss file passed 37. A causal revocation
+regression prevents silently swallowing a definitive lifecycle answer. Physical behavior awaits
+owner testing. This is a client repair, not an upstream defect.
 
 ## Approval admission and notification findings (2026-10-02)
 
 The spec 034 candidate removes the approval exact-build runtime gate while retaining actual
 authorization, explicit settings, required APIs and separate Bot Chat/Phone-chat availability.
-Independent source review accepted it; real native fixtures have not yet run. The installed
+Independent source review accepted it at [`150bd0f`](https://github.com/MahdiHedhli/hermes-hmp/commit/150bd0f1535b41495e5fc31ded128b9452221052) ([draft #73](https://github.com/MahdiHedhli/hermes-hmp/pull/73)); CI passed at that head. Locked native environments are prepared, but the real gateway fixtures have not yet run. The installed
 `4d6863e` baseline remains unchanged and has no approval lane.
 
 On inspected Hermes `f97608f1`, `8afaab37` and `ac0cfa7d`, `retire_clarify_card` is optional
@@ -72,7 +76,7 @@ private-API guarantee.
 The notification registration/issuer/resolver/relay proposal (spec 014) completed independent
 design review with amendments required before freeze: preserve Desktop-owned prompt visibility,
 align the resolver with the accepted app interface, handle registration retry-state loss and
-correct unsupported coverage claims. Those amendments are in progress. Its initial scope
+correct unsupported coverage claims. A subsequent bounded review also requires post-commit cleanup that cannot roll back the original revocation, finite registration-generation storage, and explicit error-envelope additions. Those proposal corrections are in progress; no push runtime is deployed. Its initial scope
 covers approval rows observed by HMP. Broader
 Desktop/CLI/cron coverage needs a separate source check; that limited scope alone does not
 prove a new upstream API gap. No provider delivery or permission expansion is implemented.
