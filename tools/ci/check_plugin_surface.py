@@ -55,9 +55,7 @@ THIRD_PARTY_ALLOWED: frozenset[str] = frozenset({"aiohttp", "cryptography"})
 # Third-party packages allowed in exactly one module. `qrcode` is the operator CLI's terminal QR
 # renderer (T032; reviews/dependencies.md): only `cli.py` may import it.
 CLI_MODULE = "cli.py"
-ROUTES_MODULE = "routes.py"
-# `yaml` (PyYAML) is the parser of `hermes hmp routes add`: routes.py only, imported lazily.
-MODULE_ONLY_THIRD_PARTY: dict[str, str] = {"qrcode": CLI_MODULE, "yaml": ROUTES_MODULE}
+MODULE_ONLY_THIRD_PARTY: dict[str, str] = {"qrcode": CLI_MODULE}
 
 # S1 closed exception: (module file, imported module) -> allowed names. Exact pairs only.
 DOCUMENTED_PLUGIN_API: dict[tuple[str, str], frozenset[str]] = {

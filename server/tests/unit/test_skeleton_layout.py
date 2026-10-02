@@ -36,14 +36,12 @@ CONTRACT_MODULES = {
     "request_ctx.py",
     "adapter.py",
     "cli.py",
-    "routes.py",  # specs/005-new-profile-routing: `hermes hmp routes add`
     "logging_policy.py",
 }
 DATA_FILES = {
     "plugin.yaml",
     "read_compat_builds.json",
     "write_supported_builds.json",
-    "approval_supported_builds.json",
     "mobile_cron_supported_builds.json",
     "mobile_model_supported_builds.json",
 }

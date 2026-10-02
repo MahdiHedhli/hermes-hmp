@@ -1,15 +1,8 @@
 #!/usr/bin/env python3
 """T063: the compat matrix runner (research R8, SC-007; specs/001-connect-and-browse/tasks.md).
 
-With `--target direct-send`, runs the source-containment and real-Hermes approval probes,
-then F2 direct-send integration with a provisional entry installed ONLY in scratch fixture
-copies. Approvals are a separate lane (`approval_matrix.py`) and never open from this receipt.
-Emits candidates only for passing builds, and `--fixture-qualification-out` only when ALL
-selected builds pass without skips. The committed lists and live owner configuration are never
-changed. Use HMP_DIRECT_SEND_QUALIFICATION=<receipt> for subsequent fixture integration.
-
-In the default read mode, for each build named in `tools/hermes_builds/builds.yaml`
-(already extracted by `tools/hermes_builds/extract.py --out <builds-dir>`), this:
+For each build named in `tools/hermes_builds/builds.yaml` (already extracted by T004's
+`tools/hermes_builds/extract.py --out <builds-dir>`), this:
 
   1. Runs the fixture self-check (T061 `tools/fixtures/selfcheck.py`) against a real gateway on
      that build: every fixture profile's roster/authz state and seeded conversation content, read
@@ -64,7 +57,6 @@ import re
 import subprocess
 import sys
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -84,9 +76,6 @@ BUILDS_YAML = TOOLS_DIR / "hermes_builds" / "builds.yaml"
 SELFCHECK = TOOLS_DIR / "fixtures" / "selfcheck.py"
 READ_SUITE = SERVER_DIR / "tests" / "integration" / "test_reads_fixture.py"
 READ_COMPAT_PATH = SERVER_DIR / "hmp_plugin" / "read_compat_builds.json"
-DIRECT_COMPAT_PATH = SERVER_DIR / "hmp_plugin" / "direct_send_supported_builds.json"
-COMPAT_DIR = TOOLS_DIR / "compat"
-
 
 sys.path.insert(0, str(SERVER_DIR))
 
@@ -334,99 +323,8 @@ def unsupported_path_check(builds_dir: Path, qualified_label: str, scratch: Path
     }
 
 
-def direct_send_entry(result: dict[str, Any], *, provisional: bool = False) -> dict[str, Any]:
-    """A complete runtime BuildEntry; bootstrap provenance must not claim integration passed."""
-    return {
-        **{k: result[k] for k in ("label", "fingerprint", "git_sha", "source_sha")},
-        "qualified_by": (
-            "tools/compat/run_matrix.py (provisional fixture bootstrap; integration pending)"
-            if provisional else
-            "tools/compat/run_matrix.py (boundary, behavior and F2/F3 integration passed)"
-        ),
-        "qualified_at": datetime.now(UTC).isoformat(),
-    }
-
-
-def process_direct_build(spec: BuildSpec, builds_dir: Path, scratch: Path) -> dict[str, Any]:
-    """Probe first; provisional qualification only in disposable fixture copies."""
-    from hmp_plugin.compat import compute_read_bridge_fingerprint
-
-    src = (builds_dir / spec.label / "src").resolve()
-    python = src / ".venv" / "bin" / "python"
-    result: dict[str, Any] = {"label": spec.label, "qualified": False, "git_sha": None}
-    data = json.loads(DIRECT_COMPAT_PATH.read_text(encoding="utf-8"))
-    fingerprint = compute_read_bridge_fingerprint(src, data["bridge_files"])
-    result["fingerprint"] = fingerprint
-    result["source_sha"] = resolve_source_sha(spec)
-    if not fingerprint or not python.is_file():
-        result["error"] = "missing fingerprint files or build interpreter"
-        return result
-    # This mode qualifies archive fixtures only. Never turn it into an owner-local git entry.
-    if (src / ".git").exists() or spec.git_install:
-        result["error"] = "direct-send matrix requires an extracted fixture build"
-        return result
-    work = scratch / spec.label
-    work.mkdir(parents=True, exist_ok=True)
-    env = dict(os.environ, HMP_HERMES_BUILDS_DIR=str(builds_dir.resolve()))
-    env["PYTHONDONTWRITEBYTECODE"] = "1"
-    env.pop("HMP_DIRECT_SEND_QUALIFICATION", None)
-    # Approvals are a separate lane (`tools/compat/approval_matrix.py`); never inherit its receipt.
-    env.pop("HMP_APPROVAL_QUALIFICATION", None)
-    commands = {
-        "boundary": [str(python), str(COMPAT_DIR / "bridge_files.py"), "--hermes-src", str(src),
-                     "--dependencies-attr", "DIRECT_SEND_DEPENDENCIES", "--target",
-                     str(DIRECT_COMPAT_PATH), "--check"],
-        "behavior": [str(python), str(COMPAT_DIR / "approval_probes.py"), "--hermes-src", str(src)],
-    }
-    for stage, cmd in commands.items():
-        proc = subprocess.run(cmd, capture_output=True, text=True, check=False, env=env)
-        (work / f"{stage}.log").write_text(proc.stdout + proc.stderr, encoding="utf-8")
-        result[f"{stage}_ok"] = proc.returncode == 0
-        if proc.returncode:
-            result["error"] = f"{stage} failed; see {stage}.log"
-            return result
-    candidate = direct_send_entry(result, provisional=True)
-    provisional = work / "provisional-fixture-only.json"
-    provisional.write_text(json.dumps({"format": 1, "bridge_files": data["bridge_files"],
-                                      "builds": [candidate]}, indent=2) + "\n", encoding="utf-8")
-    env["HMP_DIRECT_SEND_QUALIFICATION"] = str(provisional.resolve())
-    # Empty selections / skips must never count as qualification: pytest's JUnit report
-    # provides the independently checked count and outcomes.
-    report = work / "integration.xml"
-    proc = subprocess.run([
-        sys.executable, "-m", "pytest", "server/tests/integration/test_direct_send_fixture.py",
-        "-k", spec.label, "-q",
-        "-o", "addopts=", f"--junitxml={report.resolve()}",
-        f"--basetemp={work.resolve() / 'pytest'}",
-    ], cwd=REPO_ROOT, capture_output=True, text=True, check=False, env=env)
-    (work / "integration.log").write_text(proc.stdout + proc.stderr, encoding="utf-8")
-    result["integration_ok"] = proc.returncode == 0 and integration_report_passed(report)
-    if not result["integration_ok"]:
-        result["error"] = "integration failed or skipped; see integration.log"
-        return result
-    if compute_read_bridge_fingerprint(src, data["bridge_files"]) != fingerprint:
-        result["error"] = "Hermes files changed during qualification"
-        return result
-    result["qualified"] = True
-    return result
-
-
-def integration_report_passed(path: Path) -> bool:
-    import xml.etree.ElementTree as ET
-
-    if not path.is_file():
-        return False
-    cases = list(ET.parse(path).getroot().iter("testcase"))  # noqa: S314 -- local pytest output
-    return bool(cases) and all(
-        case.find(tag) is None for case in cases for tag in ("failure", "error", "skipped")
-    )
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--target", choices=("read", "direct-send"), default="read")
-    parser.add_argument("--fixture-qualification-out", type=Path, default=None,
-                        help="direct-send: final receipt for scratch fixture copies only")
     parser.add_argument("--builds-dir", type=Path, default=None)
     parser.add_argument("--out", required=True, type=Path)
     parser.add_argument("--builds", default=None, help="comma-separated labels (default: all)")
@@ -468,23 +366,12 @@ def main(argv: list[str] | None = None) -> int:
     )
     if args.builds:
         wanted = set(args.builds.split(","))
-        unknown = wanted - {s.label for s in specs}
-        if unknown:
-            parser.error(f"unknown builds: {sorted(unknown)}")
         specs = [s for s in specs if s.label in wanted]
-    if args.fixture_qualification_out:
-        if args.target != "direct-send":
-            parser.error("--fixture-qualification-out requires --target direct-send")
-        if not args.fixture_qualification_out.resolve().is_relative_to(args.out.resolve()):
-            parser.error("fixture qualification receipt must be inside --out")
-        # Do not leave a previous successful receipt behind on a failed requalification.
-        args.fixture_qualification_out.unlink(missing_ok=True)
 
     results: list[dict[str, Any]] = []
     for spec in specs:
         print(f"run_matrix: {spec.label} ...", file=sys.stderr)
-        process = process_direct_build if args.target == "direct-send" else process_build
-        res = process(spec, builds_dir, args.out)
+        res = process_build(spec, builds_dir, args.out)
         results.append(res)
         if res["qualified"]:
             status = "QUALIFIED"
@@ -494,7 +381,7 @@ def main(argv: list[str] | None = None) -> int:
 
     qualified = [r for r in results if r["qualified"]]
     unsupported: dict[str, Any] | None = None
-    if qualified and args.target == "read":
+    if qualified:
         unsupported = unsupported_path_check(builds_dir, qualified[0]["label"], args.out)
         print(
             f"run_matrix: SC-007 unsupported-path check: {'OK' if unsupported['ok'] else 'FAIL'} "
@@ -506,7 +393,7 @@ def main(argv: list[str] | None = None) -> int:
         "format": 1,
         "results": results,
         "candidate_entries": [
-            direct_send_entry(r) if args.target == "direct-send" else {
+            {
                 "label": r["label"],
                 "fingerprint": r["fingerprint"],
                 "git_sha": r["git_sha"],
@@ -522,13 +409,6 @@ def main(argv: list[str] | None = None) -> int:
         args.json_out.write_text(text, encoding="utf-8")
 
     ok = bool(qualified) and (unsupported is None or unsupported["ok"])
-    if args.target == "direct-send":
-        ok = ok and len(qualified) == len(results)
-    if ok and args.fixture_qualification_out:
-        data = json.loads(DIRECT_COMPAT_PATH.read_text(encoding="utf-8"))
-        data["builds"] = matrix["candidate_entries"]
-        args.fixture_qualification_out.write_text(
-            json.dumps(data, indent=2) + "\n", encoding="utf-8")
     return 0 if ok else 1
 
 

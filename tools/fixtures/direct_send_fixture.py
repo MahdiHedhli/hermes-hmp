@@ -54,7 +54,6 @@ if str(THIS_DIR) not in sys.path:
     sys.path.insert(0, str(THIS_DIR))
 
 import _fixture_common as fc  # noqa: E402
-import approval_fixture  # noqa: E402
 
 FIXTURE_SEED = THIS_DIR / "fixture_seed.py"
 FIXTURE_PAIRING_CLI = THIS_DIR / "fixture_pairing_cli.py"
@@ -698,9 +697,7 @@ def pair_reference_device(
 # (`hermes profile create`, the seed scripts, git) re-derive HERMES_*/XDG_* themselves, and nothing
 # under tools/fixtures or server/hmp_plugin reads another variable. The caller's credentials and
 # Hermes/live-home variables are therefore NOT forwarded. `PYTHONDONTWRITEBYTECODE` is the matrix's
-# own test control; `HMP_HERMES_BUILDS_DIR` is added explicitly from `builds_dir`. The receipt
-# variables (`HMP_DIRECT_SEND_QUALIFICATION`, `RECEIPT_ENV`) are read by THIS process after the
-# build and are never needed, or forwarded, to it.
+# own test control; `HMP_HERMES_BUILDS_DIR` is added explicitly from `builds_dir`.
 BUILD_ENV_ALLOWLIST = (
     "PATH", "HOME", "TMPDIR", "LANG", "LC_ALL", "LC_CTYPE", "PYTHONDONTWRITEBYTECODE",
 )
@@ -913,49 +910,4 @@ def build_offline(
         raise fc.FixtureSafetyError(
             f"offline fixture build failed: {failure} private_output={retained}"
         ) from None
-    qualification = os.environ.get("HMP_DIRECT_SEND_QUALIFICATION")
-    approval_receipt = os.environ.get(approval_fixture.RECEIPT_ENV)
-    if qualification or approval_receipt:
-        builds = builds_dir or os.environ["HMP_HERMES_BUILDS_DIR"]
-        build = fc.resolve_build(Path(builds), label)
-        if qualification:
-            install_fixture_qualification(build, out, Path(qualification))
-        # A separate lane, manifest and receipt: the direct-send receipt above never opens it.
-        approval_fixture.install_from_env(build, out, approval_receipt)
     return info
-
-
-def install_fixture_qualification(build: fc.BuildInfo, out: Path, qualification: Path) -> None:
-    """Apply a matrix receipt ONLY to the scratch plugin copy, bound to exact current bytes.
-
-    No environment override exists in the runtime plugin. Without a receipt, fixtures retain
-    the committed fail-closed list. The matrix uses a provisional receipt after probes, then
-    publishes a final receipt only after integration passes.
-    """
-    from hmp_plugin.compat import compute_read_bridge_fingerprint, load_read_compat_list
-
-    fc.assert_outside_real_home(out, "fixture qualification destination")
-    target = out.resolve() / "_hmp_plugin" / "direct_send_supported_builds.json"
-    if not target.resolve().is_relative_to(out.resolve()):
-        raise fc.FixtureSafetyError("qualification destination escaped the fixture copy")
-    data = json.loads(target.read_text(encoding="utf-8"))
-    receipt = json.loads(qualification.read_text(encoding="utf-8"))
-    if receipt.get("format") != 1 or receipt.get("bridge_files") != data["bridge_files"]:
-        raise fc.FixtureSafetyError("direct-send qualification fingerprint boundary differs")
-    # Validate with the actual runtime parser before changing the fixture. Identity-only
-    # candidates lack BuildEntry provenance and would silently close the runtime gate.
-    try:
-        load_read_compat_list(qualification)
-    except (TypeError, ValueError) as exc:
-        raise fc.FixtureSafetyError("invalid direct-send fixture qualification schema") from exc
-    fingerprint = compute_read_bridge_fingerprint(build.src_dir, data["bridge_files"])
-    # An archive (no .git) needs a fingerprint-only entry; a git-install fixture needs one bound to
-    # the build's own HEAD, exactly as the runtime matches them. `None == None` for an archive.
-    head = approval_fixture.independent_git_head(build.src_dir)
-    entries = [e for e in receipt.get("builds", [])
-               if e.get("label") == build.label and e.get("fingerprint") == fingerprint
-               and e.get("git_sha") == head and fingerprint is not None]
-    if len(entries) != 1:
-        raise fc.FixtureSafetyError("no exact direct-send fixture qualification for this build")
-    data["builds"] = entries
-    target.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")

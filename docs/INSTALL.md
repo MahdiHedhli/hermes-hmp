@@ -115,35 +115,6 @@ To change that decision later, use `hermes hmp devices list` on the host to find
 
 The plugin belongs to the Hermes instance where it is installed. Do not copy its instance keys or device store between hosts. See [Host hardening](../server/HOST_HARDENING.md) before exposing any Hermes host service.
 
-## Adding a bot after installation
-
-Creating a Hermes profile does not route it to HMP or authorize any phone for it, so a bot created
-after the steps above stays `not_routed` until the host operator adds its route. From an operator
-terminal on the host:
-
-```sh
-hermes hmp routes add <profile>
-hermes gateway restart
-```
-
-Then request access to that bot on the paired phone and approve the matching pending row:
-
-```sh
-hermes -p <profile> pairing list
-hermes -p <profile> pairing approve hmp <request_id>
-```
-
-`routes add` only writes the route: it adds the exact HMP route to the default root config and
-nothing else. The profile's own config is never changed. It requires the root
-`gateway.multiplex_profiles: true` from the initial setup and refuses if it is missing; it never
-turns multiplexing on. The route is then on disk only: the command did not activate it in the
-running gateway (reload requires a gateway restart on the inspected build), restart anything,
-approve anything, grant access or provision a send key. Sending also needs its separate
-prerequisites. It refuses rather than change an existing route or a conflicting root setting, and
-keeps one rolling private backup of the root config. Confirm the pending row belongs to the device
-you just paired before approving it. See
-[Deployment](../server/DEPLOYMENT.md#a-bot-created-after-installation).
-
 ## Scheduled jobs preview
 
 Scheduled jobs are disabled by default. The host must run Hermes `v0.21.5` or later (or a

@@ -126,7 +126,6 @@ MUTATING_COMMANDS: frozenset[tuple[str, str | None]] = frozenset(
         ("devices", "grant-controls"),
         ("devices", "deny-controls"),
         ("instance", "rotate-key"),
-        ("routes", "add"),
     }
 )
 
@@ -872,26 +871,6 @@ class _ReadOnlyEpoch:
         if not self._path.with_name(self._path.name + "-wal").exists():
             return self._read("mode=ro&immutable=1")
         return self._read("mode=ro")
-
-
-def _resolve_custody(env: CliEnv) -> Any:
-    """`identity.resolve_custody` with the CLI's refusals (ID-2). Writes nothing."""
-    from . import identity
-
-    kw = env.identity_kwargs
-    try:
-        return identity.resolve_custody(
-            env=kw.get("env", env.environ),
-            hermes_root=kw.get("hermes_root"),
-            binding_root=kw.get("binding_root"),
-        )
-    except identity.NamedProfileError as exc:  # ID-2
-        raise RefusedError(
-            "refused: HMP runs only under the default profile; run this without -p/--profile",
-            EXIT_ENVIRONMENT,
-        ) from exc
-    except identity.IdentityError as exc:
-        raise RefusedError("refused: the HMP custody location is unsafe", EXIT_ENVIRONMENT) from exc
 
 
 @contextlib.contextmanager
@@ -2052,58 +2031,6 @@ def _cmd_health_check(env: CliEnv) -> int:
     return EXIT_OK if healthy else EXIT_REFUSED
 
 
-def _cmd_routes_add(env: CliEnv, args: argparse.Namespace) -> int:
-    """`routes add <profile>`: write the root route for one existing profile. Host-only: it edits
-    the root config file and nothing else (the profile's config is never written). It does not
-    open the store, authorize a device, approve a request, contact Hermes or restart the gateway
-    (specs/005-new-profile-routing)."""
-    from . import routes
-
-    custody = _resolve_custody(env)
-    try:
-        outcome = routes.add_route(custody.hermes_root, args.profile)
-    except routes.RoutesError as exc:
-        code = (
-            EXIT_INTERRUPTED
-            if exc.interrupted
-            else EXIT_ENVIRONMENT
-            if exc.partial
-            else EXIT_REFUSED
-        )
-        raise RefusedError(f"refused: {exc}", code) from exc
-    out, name = env.stdout, outcome.profile
-    if outcome.changed:
-        out.write(f"Wrote the HMP route for bot {name} to the root config.yaml (on disk).\n")
-        for backup in outcome.backups:
-            out.write(f"  backup (private, one rolling file, replaced on change): {backup}\n")
-        out.write(
-            "  The profile's own config.yaml was not touched. Comments and layout in the root\n"
-            "  config are not preserved; the backup is replaced by a later run, so keep a copy\n"
-            "  if you need the original comments.\n"
-        )
-    else:
-        out.write(
-            f"The HMP route for bot {name} is already in the root config.yaml; "
-            "nothing was changed.\n"
-            "Whether the running gateway has loaded it was not checked.\n"
-        )
-    if outcome.changed:
-        out.write(
-            "The route is on disk only. This command did not activate it in the running gateway; "
-            "reload requires a gateway restart on the inspected build. Sending also needs its "
-            "separate prerequisites.\n"
-        )
-    out.write(
-        "This did not restart the gateway, authorize any phone, approve any access request, "
-        "or enable any API server. Next (manual):\n"
-        "  1. hermes gateway restart\n"
-        f"  2. On the paired phone, request access to {name} (Bot Chat access request).\n"
-        f"  3. hermes -p {name} pairing list; confirm the pending hmp row is your device's, then\n"
-        f"     hermes -p {name} pairing approve hmp <request_id>\n"
-    )
-    return EXIT_OK
-
-
 _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], int]] = {
     ("pair", "offer"): _cmd_offer,
     ("pair", "list"): _cmd_list,
@@ -2137,14 +2064,9 @@ def dispatch(args: argparse.Namespace, env: Optional[CliEnv] = None) -> int:  # 
             return _cmd_setup_check(env)
         if (group, action) == ("health", "check"):
             return _cmd_health_check(env)
-        if (group, action) == ("routes", "add"):
-            _check_mutation_allowed(env)
-            return _cmd_routes_add(env, args)
         handler = _STORE_COMMANDS.get((group or "", action or ""))
         if handler is None:
-            env.stderr.write(
-                "usage: hermes hmp {pair,devices,instance,routes,compat,setup,health} ...\n"
-            )
+            env.stderr.write("usage: hermes hmp {pair,devices,instance,compat,setup,health} ...\n")
             return EXIT_ENVIRONMENT
         if (group, action) in MUTATING_COMMANDS:
             _check_mutation_allowed(env)
