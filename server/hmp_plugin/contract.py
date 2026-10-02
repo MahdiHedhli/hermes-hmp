@@ -55,6 +55,13 @@ HASH_DOMAIN_TAGS: tuple[bytes, ...] = (TAG_OFFER, TAG_HOST)
 # is deliberately kept out of TRANSCRIPT_TAGS and HASH_DOMAIN_TAGS.
 TAG_GRACE = b"HMP1-GRACE"
 
+# PN-KEY: push-only domains, never added to the V-1 wire/tag tables above.
+# ROUTE/COLLAPSE are HMAC-only; RELAY is signature-only (future relay client).
+TAG_PUSH_ROUTE = b"HMP1-PUSH-ROUTE"
+TAG_PUSH_COLLAPSE = b"HMP1-PUSH-COLLAPSE"
+TAG_PUSH_RELAY = b"HMP1-PUSH-RELAY"
+
+
 # §2: the single conversation id in v1.
 CONVERSATION_ID = "default"
 
