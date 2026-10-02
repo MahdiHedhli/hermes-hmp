@@ -21,10 +21,10 @@ are never renumbered; always refer to a spec by its full directory name.
 | `000-public-migration` | Public repository migration |
 | `001-connect-and-browse` | Pairing, transport, and read routes |
 | `002-send-messages` | Guarded Bot Chat send |
-| `003-approvals` | Approval and clarify draft (§7b) |
-| `004-approval-qualification-lane` | Independent approval qualification gate |
+| `003-approvals` | Approval and clarify design (§7b); historical, see 034 |
+| `004-approval-qualification-lane` | Exact-build approval gate; historical, superseded by 034 |
 | `004-mobile-cron` | Owner-gated scheduled jobs (§7c) |
-| `005-approval-process-matrix` | Real-process approval matrix tooling |
+| `005-approval-process-matrix` | Real-process approval matrix tooling; historical, superseded by 034 |
 | `005-bot-default-model` | Owner-gated bot default model (§7d) |
 | `006-per-bot-send-gate` | Per-bot send status |
 | `006-phone-send-refusal` | Phone-send typed refusal |
@@ -32,7 +32,9 @@ are never renumbered; always refer to a spec by its full directory name.
 | `008-bot-health-check` | Read-only bot channel health |
 | `009-owner-pairing-controls` | Per-device jobs and model controls decision |
 | `010-bot-chat-history-start` | Bot Chat history paging (SES-2a) |
+| `013-minimum-version-compatibility` | Minimum supported Hermes version policy |
+| `034-approval-minimum-version-admission` | Approvals and Phone chat under the minimum-version policy |
 
-Per-bot send, per-device controls, and approval gates are separate: a controls grant never opens an
-approval route (see `docs/architecture/contracts/HMP_V1.md` §7b). A future owner-admission spec
-should use an unoccupied number (`014` is currently free).
+Per-bot send, per-device controls, and approval availability are separate: a controls grant never
+opens an approval route (see `docs/architecture/contracts/HMP_V1.md` §7b). Spec 034 replaces the exact-build
+approval gate described by specs 003-005 (approval line).

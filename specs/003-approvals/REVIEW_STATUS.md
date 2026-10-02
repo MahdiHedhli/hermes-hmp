@@ -1,5 +1,12 @@
 # Approvals review status
 
+> **HISTORICAL (superseded by [spec 034](../034-approval-minimum-version-admission/spec.md), 2026-10-01).**
+> The exact-build qualification gate, process latch, receipt tooling and the empty approval
+> manifest described below were replaced by minimum-version availability (`approvals` and
+> `phone_chat` members). It is kept as a record of the reviewed design and of sampled fixture
+> evidence. Nothing below is a runtime requirement, and no document here admits or refuses a build.
+
+
 ## Independent approval route qualification (draft wiring)
 
 Prompt listing, exact-ID answers and Phone sends are now gated by an approval qualification

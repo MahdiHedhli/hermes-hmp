@@ -421,10 +421,64 @@ async def _iter_response_chunks(resp: aiohttp.ClientResponse) -> AsyncIterator[b
 async def aiohttp_loopback_call(
     endpoint: DirectSendEndpoint, live_tip_session_id: str, text: str
 ) -> LoopbackResult:
-    """AP-1 / DS-6: `POST [/p/<profile>]/api/sessions/{id}/chat/stream`, body `{"message": text}`,
-    bearer `endpoint.api_key`, pinned to the resolved loopback literal. There is no fallback to
-    sync `POST …/chat`. `trust_env=False` so no proxy environment variable can redirect the
-    bearer off-box. `await`ed on this coroutine — genuine async socket I/O, not a thread hop.
+    """DS-6: `POST [/p/<profile>]/api/sessions/{id}/chat`, body `{"message": text}`, bearer
+    `endpoint.api_key`, pinned to the resolved loopback literal `bridge.py` already positively
+    determined -- never a hostname, never a proxy. `trust_env=False` is the whole point: no
+    `HTTP_PROXY`/`HTTPS_PROXY`/`NO_PROXY` is ever read, so the Bearer token cannot leave the host
+    through a configured proxy (review round-1 finding #6). `await`ed directly on this coroutine --
+    no `asyncio.to_thread` -- this is genuine async socket I/O, not blocking work.
+
+    Review round 3: this request is the loopback verification. The connector's resolver returns
+    only `endpoint.host` (the literal), with a short connect timeout. A refused or timed-out
+    connect raises `aiohttp.ClientError` / `TimeoutError`, which the caller maps to
+    `api_server_unavailable`. There is no earlier probe connection.
+
+    Review round 2, should-fix (path quoting): `live_tip_session_id` is a Hermes-internal id, never
+    caller-controlled, but is still quoted defensively -- this loopback call is the one place HMP
+    ever builds a URL path from a value it did not itself construct end-to-end."""
+    from urllib.parse import quote
+
+    host = _format_host(endpoint.host)
+    session_segment = quote(live_tip_session_id, safe="")
+    url = f"http://{host}:{endpoint.port}{endpoint.path_prefix}/api/sessions/{session_segment}/chat"
+    timeout = aiohttp.ClientTimeout(
+        total=None, connect=LOOPBACK_CONNECT_TIMEOUT_S, sock_connect=LOOPBACK_CONNECT_TIMEOUT_S
+    )
+    connector = aiohttp.TCPConnector(
+        resolver=_PinnedLoopbackResolver(endpoint.host), use_dns_cache=False
+    )
+    async with (
+        aiohttp.ClientSession(trust_env=False, timeout=timeout, connector=connector) as session,
+        session.post(
+            url,
+            json={"message": text},
+            headers={"Authorization": f"Bearer {endpoint.api_key}"},
+        ) as resp,
+    ):
+        status = resp.status
+        try:
+            body = await resp.json(content_type=None)
+        except (aiohttp.ContentTypeError, json.JSONDecodeError, ValueError):
+            body = None
+    effective_session_id = None
+    if isinstance(body, Mapping):
+        raw_effective = body.get("session_id")
+        effective_session_id = raw_effective if isinstance(raw_effective, str) else None
+    return LoopbackResult(
+        status=status,
+        body=body if isinstance(body, Mapping) else None,
+        effective_session_id=effective_session_id,
+    )
+
+
+async def aiohttp_stream_call(
+    endpoint: DirectSendEndpoint, live_tip_session_id: str, text: str
+) -> LoopbackResult:
+    """AP-1 (approval-owner sends only): `POST [/p/<profile>]/api/sessions/{id}/chat/stream`, body
+    `{"message": text}`, bearer `endpoint.api_key`, pinned to the resolved loopback literal. There
+    is no fallback to sync `POST …/chat` after a failure here. `trust_env=False` so no proxy
+    environment variable can redirect the bearer off-box. `await`ed on this coroutine: genuine
+    async socket I/O, not a thread hop.
 
     Review round 3: this request is the loopback verification. The connector's resolver returns
     only `endpoint.host` (the literal), with a short connect timeout. A refused or timed-out
@@ -469,13 +523,65 @@ async def aiohttp_loopback_call(
         return await consume_sse(_iter_response_chunks(resp), bind=_STREAM_BIND.get())
 
 
+# R14: only a bounded, parsed native JSON error code makes an approval stale. Every other
+# status/body is unavailable and leaves the observation open.
+_NATIVE_STALE: frozenset[tuple[int, str]] = frozenset(
+    {
+        (409, "approval_not_pending"),
+        (409, "approval_not_active"),
+        (404, "run_not_found"),
+    }
+)
+
+
+def classify_native_answer(status: int, raw: bytes | None) -> str:
+    """`accepted`, `stale` or `unavailable` for one native answer response.
+
+    `accepted` needs a `200` whose JSON body has a non-bool integer `resolved` greater than zero.
+    `stale` needs exactly one of the three native `(status, error.code)` pairs. Everything else,
+    including an oversized (`None`), malformed or non-object body, an unknown `409` code, a
+    non-JSON `404`, `401`, `403`, `3xx`, `5xx` and a malformed `200`, is `unavailable`. The body is
+    parsed, never echoed or logged."""
+    if raw is None:
+        return "unavailable"
+    try:
+        payload = json.loads(raw)
+    except (ValueError, UnicodeDecodeError):
+        return "unavailable"
+    if not isinstance(payload, dict):
+        return "unavailable"
+    if status == 200:
+        resolved = payload.get("resolved")
+        if type(resolved) is int and resolved > 0:
+            return "accepted"
+        return "unavailable"
+    if status in (404, 409):
+        error = payload.get("error")
+        code = error.get("code") if isinstance(error, dict) else None
+        if isinstance(code, str) and (status, code) in _NATIVE_STALE:
+            return "stale"
+    return "unavailable"
+
+
+async def _read_bounded(resp: aiohttp.ClientResponse, cap: int) -> bytes | None:
+    """The body up to `cap` bytes; `None` when it is larger. Reads through EOF under the
+    request's own absolute deadline (`read(n)` can return short)."""
+    raw = b""
+    while len(raw) <= cap:
+        part = await resp.content.read(cap + 1 - len(raw))
+        if not part:
+            return raw
+        raw += part
+    return None
+
+
 async def aiohttp_approval_call(
     endpoint: DirectSendEndpoint, run_id: str, request_id: str, choice: str
 ) -> str:
     """AP-4: `POST {prefix}/v1/runs/{stored_run_id}/approval` with `{choice, request_id}` only.
 
-    Returns `accepted`, `stale`, or `unavailable`. Never sends `all` or `resolve_all`. The
-    response body is not logged (SEC-4)."""
+    Returns `accepted`, `stale`, or `unavailable` (see `classify_native_answer`). Never sends `all`
+    or `resolve_all`. No retry and no fallback. The response body is not logged (SEC-4)."""
     from urllib.parse import quote
 
     if choice not in _APPROVAL_CHOICES or not run_id or not request_id:
@@ -507,35 +613,12 @@ async def aiohttp_approval_call(
             ) as resp,
         ):
             status = resp.status
-            if status == 409:
-                return "stale"
-            if 300 <= status < 400 or status == 401 or status >= 500:
+            if status not in (200, 404, 409):
                 return "unavailable"
-            try:
-                raw = await resp.content.read(SSE_MAX_FRAME_BYTES + 1)
-                # read(n) can return short; read through EOF under the same absolute deadline.
-                while len(raw) <= SSE_MAX_FRAME_BYTES:
-                    part = await resp.content.read(SSE_MAX_FRAME_BYTES + 1 - len(raw))
-                    if not part:
-                        break
-                    raw += part
-                if len(raw) > SSE_MAX_FRAME_BYTES:
-                    return "unavailable"
-                payload = json.loads(raw)
-            except (aiohttp.ContentTypeError, json.JSONDecodeError, ValueError):
-                payload = None
+            raw = await _read_bounded(resp, SSE_MAX_FRAME_BYTES)
     except (TimeoutError, aiohttp.ClientError):
         return "unavailable"
-    if status == 401 or status >= 500:
-        return "unavailable"
-    if status == 409:
-        return "stale"
-    if status != 200 or not isinstance(payload, dict):
-        return "stale"
-    resolved = payload.get("resolved")
-    if isinstance(resolved, int) and not isinstance(resolved, bool) and resolved > 0:
-        return "accepted"
-    return "stale"
+    return classify_native_answer(status, raw)
 
 
 def _payload_hash(text: str, expected_head: int | None) -> bytes:
@@ -698,13 +781,10 @@ class DirectSendDeps:
     tasks: PendingSendTasks = field(default_factory=PendingSendTasks)
     # v1.3: process-memory prompts. None in tests that only exercise the DS-7 outcome.
     prompt_store: object | None = None
-    # None skips the fingerprint check (unit fakes). Production sets the compat predicate.
-    qualified: Callable[[], bool] | None = None
     approval_timeout: Callable[[str], int] | None = None
-    # Independent approval qualification, default closed. While closed, an ordinary send neither
-    # asks Hermes for an approval timeout nor binds the stream to the prompt store, so no
-    # actionable row is collected. The send outcome itself is unchanged.
-    approval_qualified: Callable[[], bool] = field(default=lambda: False)
+    # The stream call used only for a send the caller marked `stream` (an approval-owner device
+    # with `approvals` available, decided before the send). Every other send uses `loopback_call`.
+    stream_call: LoopbackCall = aiohttp_stream_call
 
 
 def _cmid_key(iid: str, user_id: str, profile: str, cmid: str) -> tuple[str, str, str, str]:
@@ -724,9 +804,14 @@ async def handle_direct_send(
     request: DirectSendRequest,
     flag_enabled: bool,
     base_write_gate: WriteGate,
+    stream: bool = False,
 ) -> DirectSendOutcome:
     """DS-2..DS-8. Raises `DirectSendError` for every non-`200`/`202` outcome; the route handler
-    (`server.py`) maps `DirectSendError.failure` onto DS-7's response table."""
+    (`server.py`) maps `DirectSendError.failure` onto DS-7's response table.
+
+    `stream` (AP-1) is decided by the caller from live state before this call: an effective
+    approval-owner device with `approvals` available. It is False by default, which is the
+    synchronous DS-6 route exactly as before. It is never re-decided after a failure."""
     import asyncio
 
     if request.expected_head is None:
@@ -738,17 +823,7 @@ async def handle_direct_send(
     # endpoint or Hermes call. Off the event loop: this read can hydrate a secret source.
     endpoint: DirectSendEndpoint | None = None
     if flag_enabled:
-        qualified_ok = True
-        if deps.qualified is not None:
-            try:
-                qualified_ok = bool(await asyncio.to_thread(deps.qualified))
-            except Exception as exc:
-                log_bridge_exception(exc)
-                qualified_ok = False
-        # A stale direct-send fingerprint (AP-1 / T4) never resolves an endpoint, so the gate
-        # stays closed and this call does not read the API key.
-        if qualified_ok:
-            endpoint = await asyncio.to_thread(deps.bridge.direct_send_endpoint, profile)
+        endpoint = await asyncio.to_thread(deps.bridge.direct_send_endpoint, profile)
     effective_gate = gate_module.direct_send_gate(
         base_write_gate=base_write_gate, flag_enabled=flag_enabled, endpoint=endpoint
     )
@@ -795,7 +870,13 @@ async def handle_direct_send(
     # coroutine never cancels, even if it stops waiting on it below.
     task = asyncio.ensure_future(
         _execute(
-            deps, iid=iid, user_id=user_id, profile=profile, request=request, endpoint=endpoint
+            deps,
+            iid=iid,
+            user_id=user_id,
+            profile=profile,
+            request=request,
+            endpoint=endpoint,
+            stream=stream,
         )
     )
     deps.tasks.put(key, task)
@@ -838,6 +919,7 @@ async def _execute(
     profile: str,
     request: DirectSendRequest,
     endpoint: DirectSendEndpoint,
+    stream: bool = False,
 ) -> DirectSendOutcome:
     """The DS-4 guard, DS-6's call and DS-7/DS-7a's finalize, run to a conclusion regardless of
     whether anyone is still awaiting this task. Every exit path finalizes the row
@@ -920,14 +1002,10 @@ async def _execute(
             )
             raise _refuse(ErrorCode.NO_BOT_CHAT, retryable=False)
 
-        # Evaluated before the profile lock and the fresh head/lease checks so a slow qualification
-        # probe never widens the window between those checks and the send. Exact True, fail closed.
-        approvals_open = False
-        if deps.prompt_store is not None:
-            try:
-                approvals_open = await asyncio.to_thread(deps.approval_qualified) is True
-            except Exception as exc:  # fail closed
-                log_bridge_exception(exc)
+        # The transport was decided by the caller before this task started (AP-1): only an
+        # approval-owner send with `approvals` available streams, and only with a prompt store to
+        # bind. Nothing here re-decides it, and a stream failure never falls back to the sync call.
+        approvals_open = stream and deps.prompt_store is not None
 
         root_id = _lineage_root(target)
         lock = deps.locks.get(profile, root_id)
@@ -998,7 +1076,8 @@ async def _execute(
                         )
                     )
                 try:
-                    result = await deps.loopback_call(
+                    call = deps.stream_call if stream else deps.loopback_call
+                    result = await call(
                         endpoint, fresh.live_tip_session_id, request.text
                     )
                 except (TimeoutError, aiohttp.ClientError) as exc:

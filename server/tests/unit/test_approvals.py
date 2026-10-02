@@ -14,7 +14,7 @@ from aiohttp.test_utils import TestClient
 
 from hmp_plugin import direct_send as ds
 from hmp_plugin import prompts
-from hmp_plugin.contract import AuthzState, DirectSendEndpoint, ErrorCode
+from hmp_plugin.contract import AuthzState, DirectSendEndpoint
 from hmp_plugin.direct_send import DirectSendDeps, ProfileLocks, StreamBind
 from hmp_plugin.logging_policy import LOGGER_NAME
 from hmp_plugin.prompts import AdapterHooks, PromptRow, PromptStore
@@ -411,55 +411,18 @@ async def test_stream_dying_before_done_is_an_error() -> None:
         await ds.consume_sse(parts(), bind=None)
 
 
-@pytest.mark.asyncio
-async def test_unqualified_build_does_not_call_loopback(tmp_path: Path) -> None:
-    from hmp_plugin.store import Store
+def test_no_exact_build_gate_symbols_remain() -> None:
+    """The exact-build qualification of the legacy lane is gone (spec 034 R5): nothing in the
+    compatibility module can fingerprint, latch or list-match an approval build."""
+    from hmp_plugin import compat
 
-    calls: list[str] = []
-
-    async def loopback(*_a: Any) -> ds.LoopbackResult:
-        calls.append("loopback")
-        return ds.LoopbackResult(status=200, body=None, effective_session_id=None)
-
-    class Bridge:
-        def direct_send_endpoint(self, _profile: str) -> DirectSendEndpoint:
-            calls.append("endpoint")
-            return DirectSendEndpoint(host="127.0.0.1", port=9, api_key="k" * 20, path_prefix="")
-
-        def resolve_bot_chat(self, _profile: str) -> None:
-            return None
-
-    sqlite = Store(tmp_path / "h.sqlite3")
-    sqlite.migrate()
-    deps = DirectSendDeps(
-        bridge=Bridge(),  # type: ignore[arg-type]
-        store=sqlite,
-        locks=ProfileLocks(),
-        now=lambda: 1,
-        loopback_call=loopback,
-        qualified=lambda: False,
-    )
-    from hmp_plugin.contract import DirectSendRequest, WriteGate, WriteGateState
-    from hmp_plugin.direct_send import DirectSendError, handle_direct_send
-
-    with pytest.raises(DirectSendError) as caught:
-        await handle_direct_send(
-            deps,
-            iid=IID,
-            user_id=USER,
-            profile=PROFILE,
-            request=DirectSendRequest(client_message_id="c1", expected_head=0, text="hi"),
-            flag_enabled=True,
-            base_write_gate=WriteGate(state=WriteGateState.CLOSED, reason="write_gate_closed"),
-        )
-    assert caught.value.failure.code is ErrorCode.WRITE_GATE_CLOSED
-    assert calls == []
-
-
-def test_shipped_fingerprint_is_not_qualified() -> None:
-    from hmp_plugin.compat import direct_send_build_qualified
-
-    assert direct_send_build_qualified() is False
+    for gone in (
+        "direct_send_build_qualified",
+        "approval_build_qualified",
+        "approval_listener_qualifier",
+        "APPROVAL_DEPENDENCIES",
+    ):
+        assert not hasattr(compat, gone), gone
 
 
 @pytest.mark.asyncio
@@ -605,7 +568,7 @@ async def test_binder_requires_exactly_one_match_and_text_fallback_is_not_a_card
         choices = ("once", "deny")
 
     hooks = AdapterHooks(
-        store=store, bridge=Bridge([]), now=lambda: 9, iid=IID, approval_qualified=lambda: True
+        store=store, bridge=Bridge([]), now=lambda: 9, iid=IID, phone_available=lambda: True
     )
     assert await hooks.on_exec_approval(Prompt()) is False
     hooks.bridge = Bridge(  # type: ignore[assignment]
@@ -626,6 +589,33 @@ async def test_binder_requires_exactly_one_match_and_text_fallback_is_not_a_card
     assert len(store.list_visible(IID, USER, PROFILE)) == 1
 
 
+@pytest.mark.asyncio
+async def test_hooks_with_phone_chat_closed_call_no_helper_and_store_no_row() -> None:
+    store = PromptStore(clock=lambda: 1)
+    session = "namespace:hmp:dm:phone"
+    store.remember_session(session, IID, USER, PROFILE, "c_chat")
+    listed: list[str] = []
+
+    class Bridge:
+        def list_gateway_approvals(self, key: str) -> list[dict[str, str]]:
+            listed.append(key)
+            return [{"command": "echo hi", "request_id": REQ}]
+
+    class Prompt:
+        session_key = session
+        command = "echo hi"
+        description = "why"
+        choices = ("once", "deny")
+
+    hooks = AdapterHooks(
+        store=store, bridge=Bridge(), now=lambda: 9, iid=IID, phone_available=lambda: False
+    )
+    assert await hooks.on_exec_approval(Prompt()) is False
+    await hooks.reconcile_chat("c_chat")
+    assert listed == []  # no Hermes helper was called
+    assert not store._rows  # and no actionable row was stored
+
+
 def test_inert_reply_is_not_stored() -> None:
     store = PromptStore(clock=lambda: 1)
     store.remember_session("k", IID, USER, PROFILE, "c_chat")
@@ -640,9 +630,10 @@ def test_inert_reply_is_not_stored() -> None:
 def _arm(env: Env, *, flag: bool) -> None:
     env.bridge.authz_state = lambda *_a, **_k: AuthzState.AUTHORIZED  # type: ignore[method-assign]
     env.ctx.direct_send_flag = lambda: flag
-    # Test-only premise: these fixtures exercise F3 behavior on an approval-qualified build. The
-    # shipped production default is closed (see test_approval_route_qualification.py).
-    env.ctx.approval_qualified = lambda: True
+    # Test-only premise: these fixtures exercise F3 behavior with both eligibility members
+    # available. The production default for both is closed (see test_approval_availability.py).
+    env.ctx.approvals_available = lambda: True
+    env.ctx.phone_chat_available = lambda: True
     env.ctx.prompt_store = PromptStore(clock=lambda: 1)
     env.bridge.direct_send_endpoint = lambda *_a, **_k: DirectSendEndpoint(  # type: ignore[method-assign]
         host="127.0.0.1", port=9, api_key="k" * 20, path_prefix=""

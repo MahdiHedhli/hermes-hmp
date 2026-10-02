@@ -1,5 +1,12 @@
 # Approval process qualification matrix (draft test tooling)
 
+> **HISTORICAL (superseded by [spec 034](../034-approval-minimum-version-admission/spec.md), 2026-10-01).**
+> The exact-build qualification gate, process latch, receipt tooling and the empty approval
+> manifest described below were replaced by minimum-version availability (`approvals` and
+> `phone_chat` members). It is kept as a record of the reviewed design and of sampled fixture
+> evidence. Nothing below is a runtime requirement, and no document here admits or refuses a build.
+
+
 Status: draft test/qualification tooling. Approvals stay unreleased and closed: the public
 `approval_supported_builds.json` remains empty and nothing here promotes a receipt to it. This spec
 is the frozen architecture decision for the slice; changing it needs a new spec revision.

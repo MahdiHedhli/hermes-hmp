@@ -686,7 +686,7 @@ def test_e10_session_routes_are_not_registered_when_browsing_is_unavailable(
     expected = sorted(
         (m, server.full_path(p))
         for m, p, _ in (
-            *server.F1_ROUTES, *server.F2_DIRECT_SEND_ROUTES,
+            *server.F1_ROUTES, *server.F2_DIRECT_SEND_ROUTES, *server.F3_APPROVAL_ROUTES,
             *server.MOBILE_CRON_ROUTES, *server.MOBILE_MODEL_ROUTES,
         )
     )

@@ -45,7 +45,12 @@ REPORTABLE_CODES: Mapping[str, frozenset[str]] = {
     "send": frozenset({"write_gate_closed", "api_server_unavailable"}),
     "jobs": frozenset({"cron_unavailable"}),
     "model": frozenset({"model_unavailable"}),
+    "approvals": frozenset({"write_gate_closed", "api_server_unavailable"}),
+    "phone_chat": frozenset({"write_gate_closed", "api_server_unavailable"}),
 }
+
+# The members whose drafts may carry the neutral session-stream hook fact (spec 034 R4, R16).
+_APPROVAL_MEMBERS: frozenset[str] = frozenset({"approvals", "phone_chat"})
 
 # Permission, routing and authorization outcomes. They are real and have their own explanation, so
 # they are never turned into a Hermes-version report. `not_found` is one of them for every feature
@@ -72,7 +77,7 @@ _STATIC_REASONS = frozenset(
 
 
 def _label(spec: compat.DependencySpec) -> str:
-    return f"{spec.module}.{spec.qualname}" if spec.qualname else spec.module
+    return spec.label
 
 
 # HMP's own constant dependency labels, per feature. A label outside its own feature's table is
@@ -85,6 +90,9 @@ _FEATURE_LABELS: Mapping[compat.Feature, frozenset[str]] = {
     compat.Feature.SEND: frozenset(_label(s) for s in compat.DIRECT_SEND_DEPENDENCIES),
     compat.Feature.JOBS: frozenset(_label(s) for s in compat.CRON_DEPENDENCIES),
     compat.Feature.MODEL: frozenset(_label(s) for s in compat.MODEL_DEPENDENCIES),
+    # `approvals` has no dependency table of its own (it needs read and send).
+    compat.Feature.APPROVALS: frozenset(),
+    compat.Feature.PHONE_CHAT: frozenset(_label(s) for s in compat.PHONE_CHAT_DEPENDENCIES),
 }
 
 
@@ -285,6 +293,13 @@ def _version_lines(
     ]
 
 
+def _hook_line(eligibility: compat.Eligibility | None) -> str:
+    """The neutral stream-hook fact as one of three fixed words; never a value from the input."""
+    hook = eligibility.stream_approval_hook if eligibility is not None else None
+    word = "present" if hook is True else "absent" if hook is False else "unknown"
+    return f"- session_stream_approval_hook: {word} (informational; never gates)"
+
+
 def build_draft(
     eligibility: object,
     report: object,
@@ -306,7 +321,13 @@ def build_draft(
     version = _safe_hmp_version(plugin_version if plugin_version is not None else hmp_version())
     plat = _safe_platform(platform if platform is not None else platform_text())
 
-    lines = ["## Environment", *_version_lines(safe_eligibility, version, plat), ""]
+    approval_related = (checked is not None and checked.feature in _APPROVAL_MEMBERS) or any(
+        feature.value in _APPROVAL_MEMBERS for feature, _status in failures
+    )
+    environment = _version_lines(safe_eligibility, version, plat)
+    if approval_related:
+        environment.append(_hook_line(safe_eligibility))
+    lines = ["## Environment", *environment, ""]
     if failures:
         lines += [
             "## Observed by HMP's static dependency check",

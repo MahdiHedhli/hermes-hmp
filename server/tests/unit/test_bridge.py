@@ -789,9 +789,11 @@ def test_every_reached_internal_is_probed() -> None:
     # e.g. `hermes_cli.active_sessions.active_session_registry_snapshot`). An import reached only
     # for direct send is still probed, just by the other tuple -- the union is what this AST-level
     # defense-in-depth check actually needs to cover.
-    probed = {(d.module, d.qualname) for d in compat.READ_DEPENDENCIES} | {
-        (d.module, d.qualname) for d in compat.DIRECT_SEND_DEPENDENCIES
-    }
+    probed = (
+        {(d.module, d.qualname) for d in compat.READ_DEPENDENCIES}
+        | {(d.module, d.qualname) for d in compat.DIRECT_SEND_DEPENDENCIES}
+        | {(d.module, d.qualname) for d in compat.PHONE_CHAT_DEPENDENCIES}
+    )
     # Model and cron writers have independent exact-build fingerprints and
     # isolated Hermes integration checks. FastAPI is a declared dependency.
     optional = {
@@ -1199,15 +1201,35 @@ async def test_phone_delivery_ticket_outcome_overrides_scheduling_flag(
     assert actual is expected
 
 
-def test_prompt_timeout_hints_use_target_profile_a_b_a(br, world, monkeypatch) -> None:
-    approval = types.ModuleType("tools.approval_context")
+def _install_phone_helper_modules(world, monkeypatch) -> dict[str, types.ModuleType]:
+    approval = types.ModuleType("tools.approval")
+    approval_context = types.ModuleType("tools.approval_context")
     clarify = types.ModuleType("tools.clarify_gateway")
-    approval._get_approval_timeout = lambda: {"alpha": 73, "beta": 241}[world.runner.scope]
+    approval.list_gateway_approvals = lambda session_key: []
+    approval.resolve_gateway_approval = lambda *a, **k: 1
+    approval_context._get_approval_timeout = lambda: {"alpha": 73, "beta": 241}[
+        world.runner.scope
+    ]
     clarify.get_clarify_timeout = lambda: {"alpha": 51, "beta": 0}[world.runner.scope]
-    monkeypatch.setitem(sys.modules, "tools.approval_context", approval)
-    monkeypatch.setitem(sys.modules, "tools.clarify_gateway", clarify)
+    clarify.resolve_gateway_clarify = lambda clarify_id, response: True
+    clarify.mark_awaiting_text = lambda clarify_id: True
+    for name, module in (
+        ("tools.approval", approval),
+        ("tools.approval_context", approval_context),
+        ("tools.clarify_gateway", clarify),
+    ):
+        monkeypatch.setitem(sys.modules, name, module)
+    return {"approval": approval, "approval_context": approval_context, "clarify": clarify}
+
+
+def test_prompt_timeout_hints_use_target_profile_a_b_a(br, world, monkeypatch) -> None:
+    _install_phone_helper_modules(world, monkeypatch)
+    assert br.bind_phone_chat_helpers() is True
     for profile, expected in (("alpha", (73, 51)), ("beta", (241, 0)), ("alpha", (73, 51))):
-        assert (br.approval_timeout_s(profile), br.clarify_timeout_s(profile)) == expected
+        got = (br.phone_approval_timeout_s(profile), br.phone_clarify_timeout_s(profile))
+        assert got == expected
+        # Bot Chat's display hint is not a Phone helper: same value, no binding involved.
+        assert br.approval_timeout_s(profile) == expected[0]
         assert world.runner.scope is None
 
 
@@ -1239,3 +1261,194 @@ def test_real_hermes_approval_qualification(src: Path) -> None:
             cwd=REPO_ROOT,
         )
         assert proc.returncode == 0, proc.stderr
+
+
+# --------------------------------------------------------------------------------------------------
+# Spec 034: Phone-chat helper binding (AP-10, R10) and use-time failures (AP-7a, R15)
+# --------------------------------------------------------------------------------------------------
+
+_PHONE_CALLS = (
+    ("list_gateway_approvals", "tools.approval", lambda b: b.list_gateway_approvals("k")),
+    (
+        "resolve_gateway_approval",
+        "tools.approval",
+        lambda b: b.resolve_gateway_approval("k", "once", "req"),
+    ),
+    (
+        "resolve_gateway_clarify",
+        "tools.clarify_gateway",
+        lambda b: b.resolve_gateway_clarify("c", "x"),
+    ),
+    ("mark_awaiting_text", "tools.clarify_gateway", lambda b: b.mark_clarify_awaiting_text("c")),
+    (
+        "get_clarify_timeout",
+        "tools.clarify_gateway",
+        lambda b: b.phone_clarify_timeout_s("alpha"),
+    ),
+    (
+        "_get_approval_timeout",
+        "tools.approval_context",
+        lambda b: b.phone_approval_timeout_s("alpha"),
+    ),
+)
+
+
+def test_unbound_phone_helpers_are_refused_not_silently_used(br, world, monkeypatch) -> None:
+    from hmp_plugin.prompts import HelperUnavailableError
+
+    modules = _install_phone_helper_modules(world, monkeypatch)
+    calls: list[str] = []
+    modules["approval"].list_gateway_approvals = lambda k: calls.append(k) or []
+    with pytest.raises(HelperUnavailableError):
+        br.list_gateway_approvals("k")
+    assert calls == []  # nothing reached Hermes before the helpers were bound
+
+
+def test_binding_fails_closed_when_a_helper_module_is_missing(br, monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "tools.approval", None)  # an import raises ImportError
+    assert br.bind_phone_chat_helpers() is False
+    from hmp_plugin.prompts import HelperUnavailableError
+
+    with pytest.raises(HelperUnavailableError):
+        br.list_gateway_approvals("k")
+
+
+@pytest.mark.parametrize(("name", "module", "call"), _PHONE_CALLS, ids=[c[0] for c in _PHONE_CALLS])
+def test_a_rebound_helper_is_detected_before_it_is_called_and_closes_the_generation(
+    br, world, monkeypatch, name, module, call
+) -> None:
+    from hmp_plugin.prompts import HelperChangedError
+
+    modules = _install_phone_helper_modules(world, monkeypatch)
+    closed: list[int] = []
+    assert br.bind_phone_chat_helpers(lambda: closed.append(1)) is True
+    reached: list[str] = []
+    target = {
+        "tools.approval": modules["approval"],
+        "tools.approval_context": modules["approval_context"],
+        "tools.clarify_gateway": modules["clarify"],
+    }[module]
+    setattr(target, name, lambda *a, **k: reached.append(name) or 1)  # a different object
+    with pytest.raises(HelperChangedError):
+        call(br)
+    assert reached == []  # the rebound helper was never called
+    assert closed == [1]
+
+
+def test_reassigning_the_same_object_is_not_a_change(br, world, monkeypatch) -> None:
+    modules = _install_phone_helper_modules(world, monkeypatch)
+    closed: list[int] = []
+    assert br.bind_phone_chat_helpers(lambda: closed.append(1)) is True
+    modules["approval"].list_gateway_approvals = modules["approval"].list_gateway_approvals
+    assert br.list_gateway_approvals("k") == []
+    assert closed == []
+
+
+def test_a_behaviorally_equal_rebinding_still_counts_as_changed(br, world, monkeypatch) -> None:
+    """The fence is object identity on the helpers HMP calls: not authenticity, not bytecode."""
+    from hmp_plugin.prompts import HelperChangedError
+
+    modules = _install_phone_helper_modules(world, monkeypatch)
+    assert br.bind_phone_chat_helpers() is True
+    original = modules["approval"].list_gateway_approvals
+    modules["approval"].list_gateway_approvals = lambda k: original(k)
+    with pytest.raises(HelperChangedError):
+        br.list_gateway_approvals("k")
+
+
+@pytest.mark.parametrize("error", [ImportError("x"), AttributeError("x"), TypeError("x")])
+def test_r15_use_time_failures_become_a_fixed_unavailable_without_hermes_text(
+    br, world, monkeypatch, error
+) -> None:
+    from hmp_plugin.prompts import HelperUnavailableError
+
+    modules = _install_phone_helper_modules(world, monkeypatch)
+
+    def boom(*_a, **_k):
+        raise type(error)("SECRET command text from Hermes")
+
+    modules["approval"].resolve_gateway_approval = boom
+    assert br.bind_phone_chat_helpers() is True
+    with pytest.raises(HelperUnavailableError) as caught:
+        br.resolve_gateway_approval("k", "once", "req")
+    assert "SECRET" not in str(caught.value) and caught.value.__cause__ is None
+    assert caught.value.__suppress_context__ is True
+
+
+def test_r15_other_exceptions_are_not_disguised_as_unavailable_or_success(
+    br, world, monkeypatch
+) -> None:
+    modules = _install_phone_helper_modules(world, monkeypatch)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("not a capability failure")
+
+    modules["approval"].resolve_gateway_approval = boom
+    assert br.bind_phone_chat_helpers() is True
+    with pytest.raises(RuntimeError):
+        br.resolve_gateway_approval("k", "once", "req")
+
+
+def test_a_helper_that_disappears_after_binding_is_unavailable(br, world, monkeypatch) -> None:
+    from hmp_plugin.prompts import HelperUnavailableError
+
+    modules = _install_phone_helper_modules(world, monkeypatch)
+    assert br.bind_phone_chat_helpers() is True
+    del modules["clarify"].mark_awaiting_text  # `from ... import` now raises ImportError
+    with pytest.raises(HelperUnavailableError):
+        br.mark_clarify_awaiting_text("c")
+
+
+def test_resolve_is_always_exact_id_and_never_all(br, world, monkeypatch) -> None:
+    modules = _install_phone_helper_modules(world, monkeypatch)
+    seen: list[tuple[tuple, dict]] = []
+    modules["approval"].resolve_gateway_approval = lambda *a, **k: seen.append((a, k)) or 1
+    assert br.bind_phone_chat_helpers() is True
+    assert br.resolve_gateway_approval("key", "deny", "req-1") == 1
+    assert seen == [(("key", "deny"), {"resolve_all": False, "request_id": "req-1"})]
+
+
+@pytest.mark.asyncio
+async def test_n13_an_event_without_allow_gateway_control_is_never_delivered(
+    br, directory, monkeypatch
+) -> None:
+    from hmp_plugin.prompts import HelperUnavailableError
+
+    _install_fake_event_module(monkeypatch, defer=True, control=False, admission=True)
+    directory.chats[(USER, "alpha")] = CHAT
+    delivered: list[object] = []
+
+    async def deliver(event):
+        delivered.append(event)
+
+    br._adapter.handle_message = deliver
+    with pytest.raises(HelperUnavailableError):
+        await br.deliver_phone_message(
+            user_id=USER, profile="alpha", text="/approve all", message_id=CMID
+        )
+    assert delivered == []  # nothing reached Hermes: text can never become gateway control
+
+
+def test_the_bot_chat_timeout_hint_is_not_a_bound_phone_helper(br, world, monkeypatch) -> None:
+    _install_phone_helper_modules(world, monkeypatch)
+    assert br.approval_timeout_s("alpha") == 73  # works without any binding
+    monkeypatch.setitem(sys.modules, "tools.approval_context", None)
+    with pytest.raises(ImportError):  # the caller (`direct_send`) takes its documented default
+        br.approval_timeout_s("alpha")
+
+
+def test_phone_chat_imports_belong_to_their_own_boundary_not_the_read_or_send_lists() -> None:
+    """The bridge imports the Phone helpers function-locally. The committed read and send file
+    lists must not have to grow for them (the sample manifests stay byte for byte), so the tool
+    classifies them to `PHONE_CHAT_DEPENDENCIES`, which has no manifest at all."""
+    tool = _load_bridge_files_tool()
+    assert "PHONE_CHAT_DEPENDENCIES" in tool._ALL_DEPENDENCY_ATTRS
+    source = tool.BRIDGE_PATH.read_text(encoding="utf-8")
+    phone_only = {"tools.approval", "tools.approval_context", "tools.clarify_gateway"}
+    read = frozenset(s.module for s in compat.READ_DEPENDENCIES)
+    assert not phone_only & read  # nothing in the read table covers them
+    excluded = frozenset({s.module for s in compat.PHONE_CHAT_DEPENDENCIES} - read)
+    included, _feature = tool.split_ast_imports(source, typed_modules=read)
+    assert phone_only <= set(included)  # the bridge really does import them
+    kept, _feature = tool.split_ast_imports(source, exclude_modules=excluded, typed_modules=read)
+    assert not phone_only & set(kept)  # and the read check no longer demands their files

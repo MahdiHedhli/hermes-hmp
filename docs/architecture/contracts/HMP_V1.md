@@ -241,8 +241,8 @@ Normative keywords follow RFC 2119 and RFC 8174.
 | `no_bot_chat` (v1.2, DS-4(2)) | 409 | direct send: no canonical Bot Chat exists yet for this bot | yes | Ask the operator to open this bot once on Hermes Desktop first. |
 | `session_busy` (v1.2, DS-4(3)) | 409 | direct send: the lease-registry guard found another live writer, or the liveness read itself failed | **no** (Hermes never saw this attempt) | Restore the draft; plain retry once the busy state clears. |
 | `stale_head` (v1.2, DS-4(4)) | 409 | direct send: the client's `expected_head` does not match the Bot Chat's current head | yes | Refresh (re-read via SES-2), then retry with the fresh head. Never a silent retry with the old value. |
-| `write_gate_closed` (v1.2, DS-2(b)) | 503 | Bot Chat direct send lacks its owner switch, a Hermes API it needs (GU-2d), loopback configuration, or target profile key | yes (HMP did not hand off) | Keep the draft. Composer is read-only for this bot until its gate reopens. |
-| `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"` | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
+| `write_gate_closed` (v1.2, DS-2(b)) | 503 | Bot Chat direct send lacks its owner switch, a Hermes API it needs (GU-2d), loopback configuration, or target profile key; on a §7b route also the `approvals` or `phone_chat` member being unavailable | yes (HMP did not hand off) | Keep the draft. Composer is read-only for this bot until its gate reopens. |
+| `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"`; on a §7b route also a native approval answer that is not a recognised settlement (AP-5), or a Hermes helper that failed at use time (AP-7a) | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
 | `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, a required Hermes API unavailable (GU-2d), missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
 | `model_unavailable` (v1.5, MD-1) | 503 | mobile default model: flag off, a required Hermes API unavailable (GU-2d), missing scoped picker endpoint, or Hermes read/write failure | — | Reopen the model screen and check the current selection before another write. |
 
@@ -1044,15 +1044,14 @@ on the answer and on the stale/conflict/invalid-choice bodies below. `stale`, `n
 `invalid_choice`, `idempotency_conflict` and `write_gate_closed` are the existing ERR-2 codes.
 
 The owner-only flag `gateway.platforms.hmp.extra.direct_send` (DS-10) gates every route in this
-section. Flag off, a failed direct-send dependency probe, or a `direct_send_supported_builds.json`
-fingerprint that no longer matches the running Hermes tree: each route returns
-`503 {"error":{"code":"write_gate_closed",…}}` and does not open a loopback stream, call
-`handle_message`, or call `resolve_gateway_approval` / `resolve_gateway_clarify` /
+section. Flag off, or the member a route needs being unavailable (see "Availability" below): each
+route returns `503 {"error":{"code":"write_gate_closed",…}}` and does not open a loopback stream,
+call `handle_message`, or call `resolve_gateway_approval` / `resolve_gateway_clarify` /
 `mark_awaiting_text`. Pairing is still required. The flag does not authorize a device by itself.
 
 Auth on every route: bearer, explicit owner-device membership, the F3 rate limit, then the
-per-bot gate (`require_bot_authorized`, ERR-3), then the write gate and the approval
-qualification gate below. The rate limit is two separate per-device buckets keyed by `device_id`
+per-bot gate (`require_bot_authorized`, ERR-3), then the write gate and the availability
+gate below. The rate limit is two separate per-device buckets keyed by `device_id`
 only: AP-3 reads are limited to 60 per minute per device, and AP-4 answers and AP-6 Phone sends
 share one actions bucket of 60 per minute per device. Each bucket aggregates across every profile
 and request ID the device uses. Reads do not consume the actions bucket. `{p}` is the served profile, checked against the stored row. An owner device is an active
@@ -1068,34 +1067,53 @@ the same user share the existing per-request serialization and idempotency. Defa
 snapshots omit `open_requests` for non-owners and while the direct-send flag is off.
 The explicit `direct_send.enabled` flag is mandatory even when the base gate is OPEN.
 
-**Independent approval qualification (additional gate).** AP-3, AP-4 and AP-6, the snapshot
-`open_requests` field, the send-stream prompt binding and the producer hooks also require
-the listener-bound qualifier `compat.approval_listener_qualifier` (its callback) to return exactly
-`True`. The qualifier is bound to a process-level baseline (resolved root, ordered read and
-approval file lists, read and approval fingerprints, git SHA) fixed by the first SUPPORTED
-factory call in the gateway process (which may follow unsupported listener opens in the same
-process; it cannot attest already-loaded Hermes module bytes, so a full gateway process restart
-remains mandatory after any source or plugin change, and this is not process-start attestation), cross-checked against the read gate's identity and requiring
-a matching startup entry. A reconnecting listener may open only on that same baseline; a first
-call with an empty, malformed, missing or unlisted manifest closes the process until a **full
-gateway process restart**, not merely a listener restart. `approval_build_qualified` and the
-`hermes hmp compat` line are an informational check of the on-disk source, not admission. This
-does not protect against in-process unload or reimport of the plugin, which resets the baseline;
-after any Hermes, source or plugin change the gateway process must be restarted. This is required
-IN ADDITION TO, never instead of, the supported/send-qualified build, the owner device, the
-per-bot authorization and the `direct_send` flag. It reads a separate allowlist,
-`approval_supported_builds.json`, independent of `direct_send_supported_builds.json`. The shipped
-list is **empty**, so approvals are closed on every build, including a send-qualified one: AP-3,
-AP-4 and AP-6 return `503 write_gate_closed` without an endpoint, resolver, listing or delivery
-call; snapshot `open_requests` is omitted; closed producer hooks call no approval helper and
-store no row. A false, raising or non-boolean result closes the gate. Passing a fixture matrix
-does not add a build to the list. Ordinary guarded sends (§7a) do not depend on this gate and are
-unaffected by it. `hermes hmp compat` reports the approval qualification on its own line.
+**Availability (additional gate; owner policy 2026-10-01, spec 034).** Two eligibility members,
+computed once when the listener opens beside the others (GU-2d), gate this section.
 
-- **AP-1. Bot Chat stream (amends DS-6).** The loopback body stays `{"message":"<text>"}`. The
-  path is `{path_prefix}/api/sessions/{live_tip}/chat/stream`. A missing `session_chat_streaming`
-  capability, a non-200, or a body that is not that route's SSE stream fails the send as
-  `503 api_server_unavailable`. HMP does not open `POST …/chat` instead. The consumer is a task
+| Member | Needed by | Requires |
+|---|---|---|
+| `approvals` | the Bot Chat stream binding, AP-3 and AP-4 for `bot_chat` rows | read and send, and the send floor |
+| `phone_chat` | AP-6, AP-4 for `phone_chat` rows, snapshot `open_requests`, the Phone producer hooks | read and send, the send floor, and the in-process helpers below |
+
+Both floors are Hermes `0.21.5` / `2026.9.24`, equal to send. A version that declares itself below
+the floor is refused for both without importing a helper; an unknown, placeholder, unlisted, newer
+or development version is attempted. `approvals` adds no Hermes dependency of its own: Bot Chat
+answers are made only through Hermes's native run-approval route over loopback, so its own key,
+room-grant and run-ownership checks apply, and a missing Phone helper never closes it. `phone_chat`
+is available only when the helpers HMP calls in process actually exist, with the same containment
+and wrapper-chain rules as every other probe (GU-2d): `tools.approval.resolve_gateway_approval`
+with named `request_id` and `resolve_all` parameters (a `**kwargs` catch-all never counts) and
+`list_gateway_approvals`; `tools.clarify_gateway.resolve_gateway_clarify`, `mark_awaiting_text` and
+`get_clarify_timeout`; `tools.approval_context._get_approval_timeout`; the base adapter hooks
+`_send_exec_approval_prompt` and `send_clarify`; and the dataclass field
+`MessageEvent.allow_gateway_control`. `retire_clarify_card` is an optional hook the gateway finds
+on the adapter's own class; it is not on the base class and is not probed. A member is closed only
+when its own required API is genuinely missing, or because send or read is. Every member defaults
+to closed when no availability information exists.
+
+No exact build, Git SHA, source fingerprint, manifest, process latch or tested-sample receipt admits
+or refuses either member, and no runtime path reads one. Tested samples remain evidence only
+(GU-2a). The Bot Chat session-stream approval notifier (`APIServerAdapter._register_session_stream_approval`
+on the inspected development builds) is reported as a neutral diagnostic fact by
+`hermes hmp compat --verbose` and in approval issue drafts. It never gates, never raises a warning
+by itself and never establishes a release minimum: where the notifier is absent Hermes emits no
+`approval.request`, no card is invented, and Hermes keeps its own fail-closed behavior.
+
+Residual: a later Hermes that stops honoring `allow_gateway_control:false` cannot be detected
+statically. The pending preflight and prompt-only answer route (AP-6) remain the protection, and
+the dependency check never claims to prove behavior. Ordinary guarded sends (§7a) do not depend on
+either member.
+
+- **AP-1. Bot Chat stream (amends DS-6 for approval-owner sends only).** Before it takes the
+  profile lock, HMP decides the transport from live state: the stream is used only when the
+  sending device is an effective approval owner for this bot (the `owner_device_ids` entry and no
+  host denial, AP-7) and `approvals` is available. Every other send, including every non-owner
+  send and every send while `approvals` is closed, uses DS-6's synchronous
+  `POST …/chat` exactly as in §7a, with unchanged outcomes. The loopback body stays
+  `{"message":"<text>"}`. On the stream path the route is
+  `{path_prefix}/api/sessions/{live_tip}/chat/stream`. A non-200, or a body that is not that route's
+  SSE stream, fails the send as `503 api_server_unavailable`. HMP never opens `POST …/chat`
+  instead and never retries after a stream failure. The consumer is a task
   owned by the send, not by the phone HTTP request. At `ADMISSION_WAIT_S` the phone gets the DS-7
   vocabulary: `200 accepted` when `run.completed` already carried an assistant message and DS-7a
   passes; `202 queued` on `run.queued` or a mailbox `done` that never registered a local approval;
@@ -1110,7 +1128,10 @@ unaffected by it. `hermes hmp compat` reports the approval qualification on its 
   drops them immediately (Hermes's own queues are process memory too). After a row settles or
   expires it is kept at most `IDEMPOTENCY_RETENTION_S` (§13) inside one process. The row stores
   the Hermes `run_id` (Bot Chat) or the session key HMP built for this user (Phone chat). The
-  client never sends `session_key`, `run_id`, `chat_id` or `profile` in the answer body. A body
+  client never sends `session_key`, `run_id`, `chat_id` or `profile` in the answer body. Each
+  listener open creates a new prompt generation. A stream or hook bound to an older generation can
+  never insert rows into, list from or answer in a newer one, and rows of a generation that was
+  closed by AP-10 are never listed or answerable. A body
   field `all` or `resolve_all` is `400 bad_request` and is not forwarded. `resolve_all` is never
   passed. An answer is bound to the stored `request_id` and the authorized `user_id`. An id stored
   for a different user is `404 not_found`, the same as an unknown id. No Hermes call is made.
@@ -1158,10 +1179,13 @@ unaffected by it. `hermes hmp compat` reports the approval qualification on its 
   | First answer, Hermes accepts | `200`, `applied:true` |
   | Retry, same body, already accepted | the stored `200`. Hermes is not called again |
   | Retry, different body, already accepted | `409 idempotency_conflict`, `applied:false`. The first choice stands |
-  | Hermes returns 0, `approval_not_pending`, `approval_not_active`, or `resolve_gateway_clarify` returns false | `409 stale`, `applied:false`. The row is marked expired. This call did not apply the choice |
+  | Phone chat: `resolve_gateway_approval` returns 0, or `resolve_gateway_clarify` returns false | `409 stale`, `applied:false`. The row is marked expired. This call did not apply the choice |
+  | Bot Chat native answer: `200` whose bounded JSON body has a non-bool integer `resolved` > 0 | `200`, `applied:true` (the only native result that proves application) |
+  | Bot Chat native answer: `409` with parsed JSON error code `approval_not_pending` or `approval_not_active`, or `404` with parsed JSON error code `run_not_found` | `409 stale`, `applied:false`. The row is marked expired |
+  | Bot Chat native answer: any other result: an unknown `409` code, a non-JSON, malformed or oversized body on `404`, `401`, `403`, `3xx`, `5xx`, a malformed `200` (missing, non-integer, boolean or non-positive `resolved`), a timeout or a connection failure | `503 api_server_unavailable`, no `applied` field. The row stays open. Not retried. The response text is never echoed or logged |
   | Two in-flight answers for one id | one resolver, in arrival order, under a per-id lock. The second sees the stored outcome |
   | Unknown id, or an id stored for another `user_id` | `404 not_found`. No Hermes call |
-  | Flag off | `503 write_gate_closed` |
+  | Flag off, or the row's member unavailable | `503 write_gate_closed` |
 
   If Hermes accepted a choice and HMP died before recording it, the retry calls Hermes, gets
   nothing pending, and returns `409 stale` / `applied:false`. The client copy is "This prompt
@@ -1203,7 +1227,8 @@ unaffected by it. `hermes hmp compat` reports the approval qualification on its 
   source HMP built for this `user_id` and the `default` chat. A client-supplied session key is
   ignored. Logging (SEC-4) is `log_event` only: outcome codes (`stored`, `resolved`,
   `stale`, `invalid_choice`, `conflict`,
-  `desktop_held`, `awaiting_text`, and for phone send `submitted`, `unknown`, `replay`, `conflict`, `refused`)
+  `desktop_held`, `awaiting_text`, `unavailable`, and for phone send `submitted`, `unknown`, `replay`, `conflict`, `refused`;
+  and the fixed `approval_binding outcome=changed` and `approval_helper outcome=unavailable`)
   and 8-character prefixes of `user_id`, `request_id`, `run_id`. Never the command, description,
   question, chosen answer, clarify label, message text, SSE body, or `API_SERVER_KEY`.
   All successful answer logs use exactly `outcome=resolved`; no choice suffix is permitted.
@@ -1235,7 +1260,25 @@ unaffected by it. `hermes hmp compat` reports the approval qualification on its 
   is HMP's `(user_id, request_id)` row, not `tools.clarify_gateway`'s private index. An id the
   phone did not receive from a prompt HMP stored for that user is `404`, so a guessed `clarify_id`
   never reaches Hermes. Path 1 (Bot Chat stream) still has no clarify. Reads do not import the
-  clarify module; the symbols below are direct-send bridge dependencies only.
+  clarify module; the clarify symbols are `phone_chat` probe dependencies only.
+
+- **AP-7a. Use-time capability failure.** A Hermes helper that raises `ImportError`,
+  `AttributeError` or `TypeError` when HMP calls it is an actual capability failure for that
+  operation, however the install looked at listener open. The route answers `503
+  api_server_unavailable` with no `applied` field and logs only the fixed
+  `approval_helper outcome=unavailable`. It never fabricates a success and never claims the
+  Hermes request expired. Unavailable is not proof a waiter is gone: the row stays open.
+- **AP-10. Phone-chat binding fence (object identity).** After the `phone_chat` probe passes,
+  HMP keeps strong references to the Hermes callables it actually calls for Phone chat. At each
+  use it compares them, by object identity, with the attribute then bound in the Hermes module.
+  A difference closes the local Phone-chat generation: HMP expires its own Phone rows, answers
+  nothing from them, closes `phone_chat` until the next listener open, and logs only
+  `approval_binding outcome=changed`. This is an identity check on the helpers HMP calls. It is
+  not authenticity, a fingerprint or loaded-bytecode proof, and it reads no disk or manifest.
+  Closing it invalidates HMP's local observations only; it does not establish that Hermes's
+  pending request expired, so it reports no native expiry or "not pending". Bot Chat `approvals`
+  eligibility is independent of it, and a stream bound to the closed generation cannot reinsert
+  rows into a new one.
 
 ## 7c. Mobile cron management (v1.4, draft)
 
@@ -1347,6 +1390,7 @@ The host flag defaults off. Availability on a given Hermes follows GU-2d, not a 
   - A missing core read dependency closes read, and with it every other feature, which uses the same authorization and profile primitives. Otherwise one feature's missing dependency closes only that feature. Session browsing's own absence closes only the session routes (404).
   - Availability is computed once when the listener opens. Permissions, explicit host settings, instance identity, profile routing, scoped credentials, payload bounds and idempotency are unchanged and are checked as before. A genuinely absent implementation is never advertised as usable.
   - A compatibility warning follows a real feature failure only, never a merely unlisted version. A failed probe states the fixed reason and does not claim the version is bad; a "not one of HMP's tested samples" note appears only after a failure and only when no tested sample matches. `hermes hmp compat --issue-draft` prints a user-reviewed GitHub issue draft limited to the Hermes version and its source, the commit SHA when present, the HMP version, the OS family and Python `major.minor`, and the failed feature, reason and HMP's own dependency labels. Nothing is submitted, no network, `gh` or browser is used, and no profile, device, chat, path, host, key, config, content, log or exception text can appear. `--feature` with `--failure-code` records a failure the operator saw (for an upstream failure no static probe can see); it is labelled as operator-reported, grants nothing, and accepts only fixed error codes that match the feature. Permission and routing codes are explained as such and never drafted.
+  - **Members (spec 034).** The eligibility set is `read`, `session_browsing`, `send`, `jobs`, `model`, `approvals` and `phone_chat`. `approvals` (Bot Chat approvals) and `phone_chat` (Phone chat sends and approval or clarify answers, §7b) both require read and send and the send floor (0.21.5 / 2026.9.24). `approvals` has no dependency table of its own; `phone_chat` has the table in §7b. A consequence of read or send being unavailable is reported as `requires_read` or `requires_send`, not as a failure of the member, and drafts nothing. `--issue-draft --feature approvals|phone_chat` accepts `write_gate_closed` and `api_server_unavailable` as operator-reported codes; a draft for these members may include the neutral session-stream hook fact (§7b).
   - No wire code or field is added.
 - **GU-3. Symbol detection never advertises a guarantee.**
   - Detecting `defer_policy`, `AdmissionPrecondition` and similar symbols MAY be used only as a cross-check.
@@ -1365,9 +1409,9 @@ The host flag defaults off. Availability on a given Hermes follows GU-2d, not a 
   - **GU-4b. Phone chat (v1.3, §7b, OD-F16).** A named, narrower exception than opening SUB-1:
     `POST /hmp/v1/bots/{p}/phone/messages` may hand **that request's user text** to Hermes while
     GU-4's `"open"` state is false, and only when the same gate as DS-2(b) is open (the
-    `direct_send` flag is true, the direct-send dependency probe passes, and the build's
-    `direct_send_supported_builds.json` fingerprint still matches). Flag off, a failed probe, or a
-    stale fingerprint: the route returns `503 write_gate_closed` and does not call `handle_message`.
+    `direct_send` flag is true, send is available, and `phone_chat` is available, §7b). Flag off,
+    or either unavailable: the route returns `503 write_gate_closed` and does not call
+    `handle_message`.
     The route does not report `guarantee_level:"guarded"` and does not take `expected_head`. The
     inert authorize trigger remains the only hand-off while the user is not yet authorized.
   - **Accepted residual (RV-7).** The authorize trigger has a narrow race. HMP sends the fixed inert text only after reading `PENDING_OPERATOR`. If the operator's grant lands between that read and the hand-off, Hermes processes the fixed text as an ordinary turn, and on a build without P2 it could be queued. This is accepted: the text is constant, carries no user content and requests no action.
@@ -1539,9 +1583,9 @@ The bridge module uses these undocumented Hermes internals. Each is a `HERMES_AP
 | `tools.bot_live_delivery.find_canonical_owner` (v1.2, amendment F2) | DS-4(2) Bot Chat resolution (same primitive SES-1/OD-F11 already relies on) | E-GAP-6/7 family |
 | `adapter._session_store.lookup_by_session_key` | the session resolved at submit | E-GAP-6 |
 | `gateway.session.build_session_key` | session correlation | E-GAP-6 |
-| `tools.approval.list_gateway_approvals` / `resolve_gateway_approval(request_id=)` | approvals. v1.3 (AP-4, AP-6) calls both with the stored session key and `request_id=`; `resolve_all` is never passed. `tools/approval.py` is a direct-send `bridge_files` entry, not a read one | E-GAP-9 |
-| `tools.approval_context._get_approval_timeout` (v1.3) | approval `expires_at` display hint (AP-3). `tools/approval_context.py` | E-GAP-9 |
-| `tools.clarify_gateway.resolve_gateway_clarify` / `mark_awaiting_text` / `get_clarify_timeout` (v1.3) | Phone-chat clarify answer, Other, and `expires_at` (AP-4, AP-9). `tools/clarify_gateway.py`. HMP does not read `_session_index` or `_entries` | E-GAP-9/20 |
+| `tools.approval.list_gateway_approvals` / `resolve_gateway_approval(request_id=)` | approvals. v1.3 (AP-4, AP-6) calls both with the stored session key and `request_id=`; `resolve_all` is never passed. Probed by the `phone_chat` member only (§7b); not a read or send dependency | E-GAP-9 |
+| `tools.approval_context._get_approval_timeout` (v1.3) | approval `expires_at` display hint (AP-3). `tools/approval_context.py`. `phone_chat` probe member | E-GAP-9 |
+| `tools.clarify_gateway.resolve_gateway_clarify` / `mark_awaiting_text` / `get_clarify_timeout` (v1.3) | Phone-chat clarify answer, Other, and `expires_at` (AP-4, AP-9). `tools/clarify_gateway.py`. `phone_chat` probe members. HMP does not read `_session_index` or `_entries` | E-GAP-9/20 |
 | `tools.clarify_gateway._session_index`, `._entries` | named here as the private index HMP does **not** read (INT-4, AP-9). Not a bridge dependency | E-GAP-9/20 |
 | `gateway.platforms._shared.get_scoped_secret`, `platform_gate_env` (private module) | env allowlist detection | E-GAP-31 |
 | `gateway.config.load_gateway_config`, `Platform` | platform `extra` settings | E-GAP-14 |
@@ -1552,17 +1596,24 @@ The bridge module uses these undocumented Hermes internals. Each is a `HERMES_AP
 
 **GAP-1.** HMP MUST refuse writes unless the capability contract establishes both write guarantees (GU-2, GU-4). When a bridge dependency HMP needs for **reads** is missing, HMP MUST refuse every route except `/ready` with ERR-2a and make no bridge call (editorial alignment with ERR-2a, 2026-09-25).
 
-**GAP-2 (v1.2, amendment F2, §7a).** `api_server`'s `POST /api/sessions/{id}/chat` route and `GET
-/v1/capabilities`'s `session_chat` flag are a **product HTTP contract**, not a Python internal HMP
-imports — HMP never imports `gateway/platforms/api_server.py`. This is a structurally different
-kind of dependency from every row in the table above: reached over loopback, with a credential
+**GAP-2 (v1.2, amendment F2, §7a; v1.3 adds the stream and the approval POST; spec 034).**
+`api_server`'s `POST /api/sessions/{id}/chat` route and `GET /v1/capabilities`'s `session_chat` flag
+are a **product HTTP contract**, not a Python internal HMP imports — HMP never imports
+`gateway/platforms/api_server.py`. v1.3 uses the same class of dependency for
+`POST /api/sessions/{id}/chat/stream` (approval-owner sends only, AP-1) and
+`POST /v1/runs/{run_id}/approval` (`run_approval_response`). There is no fallback from the stream
+route to the sync route after a failure (AP-1). This is a structurally different kind of
+dependency from every row in the table above: reached over loopback, with a credential
 (`API_SERVER_KEY`) HMP does not own the lifecycle of, versioned by `api_server`'s own product
 compatibility story rather than by anything `bridge_files` fingerprints. It is not added to
-`bridge_files` for that reason (`tools/compat/bridge_files.py`); it is qualified instead by the
-send dependency probe (GU-2d). `direct_send_supported_builds.json`
-(`server/hmp_plugin/direct_send_supported_builds.json`) records the tested samples as evidence
-only. A failure of the HTTP route itself, which no static probe can see, answers
-`api_server_unavailable` and can be reported with `hermes hmp compat --issue-draft`.
+`bridge_files` for that reason (`tools/compat/bridge_files.py`); availability comes from the send
+dependency probe (GU-2d) and the `approvals` member (§7b), and a failure of an HTTP route itself,
+which no static probe can see, answers `api_server_unavailable` and can be reported with
+`hermes hmp compat --issue-draft`. `direct_send_supported_builds.json`
+(`server/hmp_plugin/direct_send_supported_builds.json`) records the tested samples as evidence only.
+`GET /v1/capabilities` advertises `approval_events` statically on inspected builds, including
+releases whose session stream has no approval notifier, so it is not an availability signal
+(`HERMES_API_GAP`, not an HMP task).
 
 ## 13. Constants (tunable only by contract revision)
 
@@ -1607,6 +1658,8 @@ only. A failure of the HTTP route itself, which no static probe can see, answers
 - **RES-10.** Row ids are not stable across in-place compaction. Until P13 exists, rewrite detection is heuristic (RO-8).
 - **RES-11.** The authorize-trigger race (GU-4, RV-7).
 - **RES-12.** Until P14 exists, HMP cannot reliably tell a Hermes command reply it did not originate from an agent turn (EV-4b).
+- **RES-13.** Approval ownership and the legacy controls allowlist share one config list (spec 034, D8). A device in `owner_device_ids` with no recorded host controls decision also receives jobs and model controls (§7c, §7d). An explicit host denial still removes approval ownership. The coupling is recorded, not removed; the runbook asks the operator to record an explicit controls decision before listing a device, and `setup check` prints a read-only notice. No decision or allowlist entry is changed automatically.
+- **RES-14.** A later Hermes that stops honoring `allow_gateway_control:false`, or that rebinds an approval helper without HMP noticing the rebinding before use, is not statically detectable (§7b, AP-10). The identity fence is not attestation.
 - **RES-5.** Revocation does not stop a running turn (E-GAP-29; PR7-7).
 - **RES-6.** Roster names are visible to every enrolled device (SEC-2).
 - **RES-7.** `head_message_id` may include non-conversational rows until P6 exists (RO-7).

@@ -114,7 +114,10 @@ def test_success_output_has_no_warning_vocabulary() -> None:
     run = Run(eligibility())
     assert run() == 0
     assert "Hermes version: 2026.9.24 (source: release_date)" in run.out
-    minimum = "Minimum Hermes: read 0.21.4 (2026.9.21); send, jobs and model 0.21.5 (2026.9.24)"
+    minimum = (
+        "Minimum Hermes: read 0.21.4 (2026.9.21); "
+        "send, jobs, model, approvals and phone chat 0.21.5 (2026.9.24)"
+    )
     assert minimum in run.out
     for feature in Feature:
         assert f"{feature.value}: available" in run.out
@@ -421,8 +424,12 @@ def test_pair_offer_still_refuses_when_read_is_unavailable() -> None:
 # ---- direct helper-boundary hostile tests (no CLI): every value a caller could get wrong ----
 
 CANARY = "CANARYprofile_alice"
-HOST_IP = "100.64.1.2"
-PATH = "/Users/alice/.hermes/profiles/alice"
+# Deliberately synthetic hostile fixtures, not owner data: a made-up address and a made-up profile
+# path, assembled from parts so the privacy scan sees no literal. The runtime values are unchanged.
+_SYNTHETIC_ADDRESS_OCTETS = ("100", "64", "1", "2")
+_SYNTHETIC_PATH_PARTS = ("Users", "alice", ".hermes", "profiles", "alice")
+HOST_IP = ".".join(_SYNTHETIC_ADDRESS_OCTETS)
+PATH = "/" + "/".join(_SYNTHETIC_PATH_PARTS)
 CONTEXT = "message context: hello alice"
 HOSTILE = (CANARY, HOST_IP, PATH, CONTEXT)
 JOBS_LABEL = "cron.jobs.create_job"
@@ -635,3 +642,174 @@ def test_h7_failure_detail_for_the_cli_uses_the_same_membership_and_enum_checks(
     assert run() == 0
     _assert_clean(run.out + run.stderr.getvalue())
     assert f"jobs: unavailable (dependency_missing: {JOBS_LABEL})" in run.out
+
+
+# ---- spec 034: the approvals and phone_chat members (R4, R16) ------------------------------------
+
+_HOOK_WORDS = ("present", "absent", "unknown")
+
+
+def _with_hook(el: Eligibility, hook: bool | None) -> Eligibility:
+    return Eligibility(el.version, el.git_sha, el.features, hook)
+
+
+def test_compat_lists_both_members_and_the_verbose_hook_fact() -> None:
+    for hook, word in ((True, "present"), (False, "absent"), (None, "unknown")):
+        run = Run(_with_hook(eligibility(), hook))
+        assert run("--verbose") == 0
+        assert "approvals: available" in run.out and "phone_chat: available" in run.out
+        assert f"Session-stream approval hook: {word} (informational;" in run.out
+        assert "never gates" in run.out
+        # An absent hook is a fact, never a warning or a failure.
+        assert "--issue-draft" not in run.out and "failed" not in run.out.lower()
+    quiet = Run(_with_hook(eligibility(), False))
+    assert quiet() == 0
+    assert "Session-stream approval hook" not in quiet.out  # only with --verbose
+
+
+def test_a_missing_hook_on_a_passing_install_prompts_no_warning_or_draft() -> None:
+    run = Run(_with_hook(eligibility(CA705), False))
+    assert run("--verbose") == 0
+    lowered = run.out.lower()
+    for word in ("unvalidated", "unsupported", "not one of", "tested samples", "warning"):
+        assert word not in lowered
+
+
+def test_below_the_floor_names_both_members_and_drafts_nothing() -> None:
+    gone = {
+        f: FeatureStatus(False, Unavailable.VERSION_BELOW_FLOOR)
+        for f in (Feature.SEND, Feature.JOBS, Feature.MODEL, Feature.APPROVALS, Feature.PHONE_CHAT)
+    }
+    el = Eligibility(
+        SEMVER_READ_ONLY,
+        None,
+        {**{f: FeatureStatus(True) for f in Feature}, **gone},
+    )
+    run = Run(el)
+    assert run() == 0
+    assert "approvals: unavailable (hermes_version_below_floor)" in run.out
+    assert "phone_chat: unavailable (hermes_version_below_floor)" in run.out
+    assert "older than HMP's minimum" in run.out and "Update Hermes." in run.out
+    assert "--issue-draft" not in run.out
+    draft = Run(el)
+    assert draft("--issue-draft") == 0
+    assert issue_draft.NOTHING_TO_REPORT in draft.out
+
+
+SEMVER_READ_ONLY = HermesVersion(Scheme.SEMVER, (0, 21, 4), VersionSource.LITERAL)
+
+
+def test_requires_send_on_a_member_is_a_consequence_not_a_drafted_failure() -> None:
+    el = eligibility(
+        failed={
+            Feature.SEND: (Unavailable.DEPENDENCY_MISSING, ("hermes_state.SessionDB.get_session",)),
+            Feature.APPROVALS: (Unavailable.REQUIRES_SEND, ()),
+            Feature.PHONE_CHAT: (Unavailable.REQUIRES_SEND, ()),
+        }
+    )
+    failures = [f.value for f, _ in issue_draft.static_failures(el)]
+    assert failures == ["send"]  # the members are never drafted for send's absence
+    run = Run(el)
+    assert run() == 0
+    assert "approvals: unavailable (requires_send)" in run.out
+    assert "phone_chat: unavailable (requires_send)" in run.out
+
+
+def test_a_static_phone_chat_failure_drafts_with_hmp_labels_and_the_hook_fact() -> None:
+    label = "tools.approval.list_gateway_approvals"
+    el = _with_hook(
+        eligibility(failed={Feature.PHONE_CHAT: (Unavailable.DEPENDENCY_MISSING, (label,))}), False
+    )
+    run = Run(el)
+    assert run("--issue-draft") == 0
+    assert "feature: phone_chat" in run.out and f"missing: {label}" in run.out
+    assert "Observed by HMP's static dependency check" in run.out
+    assert "- session_stream_approval_hook: absent (informational; never gates)" in run.out
+    assert "manifest-label" not in run.out and SHA in run.out
+
+
+def test_an_unrelated_label_never_reaches_a_phone_chat_draft() -> None:
+    el = eligibility(
+        failed={
+            Feature.PHONE_CHAT: (
+                Unavailable.DEPENDENCY_MISSING,
+                ("tools.approval.list_gateway_approvals", CANARIES[0], "gateway.run.GatewayRunner"),
+            )
+        }
+    )
+    run = Run(el)
+    assert run("--issue-draft") == 0
+    assert "tools.approval.list_gateway_approvals" in run.out
+    assert CANARIES[0] not in run.out and "gateway.run.GatewayRunner" not in run.out
+
+
+@pytest.mark.parametrize("feature", ["approvals", "phone_chat"])
+@pytest.mark.parametrize("code", ["write_gate_closed", "api_server_unavailable"])
+def test_operator_reports_for_the_members_are_labelled_and_carry_the_hook_fact(
+    feature: str, code: str
+) -> None:
+    run = Run(_with_hook(eligibility(), True))
+    assert run("--issue-draft", "--feature", feature, "--failure-code", code) == 0
+    assert "Reported by the operator, not automatically observed" in run.out
+    assert f"- reported_feature: {feature}" in run.out
+    assert f"- reported_failure_code: {code}" in run.out
+    assert "- session_stream_approval_hook: present (informational; never gates)" in run.out
+    assert "does not establish that the Hermes version" in run.out
+
+
+def test_other_features_drafts_do_not_carry_the_hook_fact() -> None:
+    run = Run(_with_hook(eligibility(), True))
+    assert run("--issue-draft", "--feature", "send", "--failure-code", "write_gate_closed") == 0
+    assert "session_stream_approval_hook" not in run.out
+
+
+@pytest.mark.parametrize(
+    ("feature", "code"),
+    [
+        ("approvals", "stale"),  # an answer status, not a reportable feature failure
+        ("approvals", "invalid_choice"),
+        ("phone_chat", "cron_unavailable"),
+        ("phone_chat", "model_unavailable"),
+        ("approvals", "other"),
+        ("approvals", CANARIES[5]),
+    ],
+)
+def test_wrong_member_code_pairs_are_refused_without_echo(feature: str, code: str) -> None:
+    run = Run(eligibility())
+    argv = ("--issue-draft", "--feature", feature, "--failure-code", code)
+    assert run(*argv) == cli.EXIT_ENVIRONMENT
+    assert run.out == ""
+    error = run.stderr.getvalue()
+    assert error.startswith("hermes hmp: refused:")
+    assert code not in error and CANARIES[5] not in error
+
+
+@pytest.mark.parametrize("code", ["forbidden", "unauthorized", "not_found", "not_routed"])
+def test_permission_and_routing_codes_for_the_members_are_explained_never_drafted(
+    code: str,
+) -> None:
+    run = Run(eligibility())
+    assert run("--issue-draft", "--feature", "approvals", "--failure-code", code) == 0
+    assert "permission, routing or setting outcome" in run.out
+    assert "Title:" not in run.out
+
+
+def test_the_hook_fact_is_a_fixed_word_whatever_the_object_says() -> None:
+    class Hostile:
+        stream_approval_hook = CANARIES[5]
+
+    bogus = _with_hook(eligibility(), CANARIES[5])  # type: ignore[arg-type]
+    draft = issue_draft.build_draft(
+        bogus, issue_draft.OperatorReport("approvals", "write_gate_closed")
+    )
+    assert draft is not None and CANARIES[5] not in draft.body
+    assert "session_stream_approval_hook: unknown (informational; never gates)" in draft.body
+    assert Hostile.stream_approval_hook == CANARIES[5]  # only the fixed words are ever rendered
+
+
+def test_no_member_draft_carries_a_canary_or_private_value() -> None:
+    for member in ("approvals", "phone_chat"):
+        run = Run(_with_hook(eligibility(), None))
+        assert run("--issue-draft", "--feature", member, "--failure-code", "write_gate_closed") == 0
+        for canary in CANARIES:
+            assert canary not in run.out

@@ -450,11 +450,12 @@ async def handle_snapshot(request: web.Request) -> web.Response:
     reads = _require(ctx.reads)
     result = await asyncio.to_thread(reads.snapshot, who.user_id, profile, limit)
     if hasattr(result, "open_requests"):
-        # Short-circuit: the off-loop qualification only runs for an owner with the flag on.
+        # `open_requests` carries Phone-chat prompts only (`Reads._phone_open_requests`), so it
+        # needs the `phone_chat` member as well as an approval owner and the host flag.
         visible = (
             ctx.is_approval_owner_device(who.device_id)
             and ctx.direct_send_enabled()
-            and await asyncio.to_thread(ctx.approval_qualification_open)
+            and ctx.is_phone_chat_available()
         )
         if not visible:
             result = replace(result, open_requests=())
@@ -602,6 +603,14 @@ async def handle_chat_send(request: web.Request) -> web.Response:
     req = _parse_direct_send_body(body)
     base_gate = ctx.write_gate()
     deps = _require(ctx.direct_send_deps)
+    # AP-1 / D2b: decided here from live state, before the send and before any lock. Only an
+    # effective approval owner whose bot has `approvals` available streams; every other send keeps
+    # the synchronous route, unchanged. Never re-decided after a stream failure.
+    stream = False
+    if ctx.direct_send_effective() and ctx.prompt_store is not None:
+        stream = ctx.is_approvals_available() and await asyncio.to_thread(
+            ctx.is_approval_owner_device, who.device_id
+        )
     try:
         outcome = await direct_send.handle_direct_send(
             deps,
@@ -611,6 +620,7 @@ async def handle_chat_send(request: web.Request) -> web.Response:
             request=req,
             flag_enabled=ctx.direct_send_effective(),
             base_write_gate=base_gate,
+            stream=stream,
         )
     except direct_send.DirectSendError as exc:
         raise HmpError(exc.failure.code) from exc
@@ -840,7 +850,10 @@ def _stored_rejection_code(result_json: str | None) -> str | None:
 
 class _LivePromptResolver:
     """AP-4. Bot Chat answers go to loopback with the stored `run_id`. Phone chat answers call
-    the bridge with the stored session key. A client-supplied session key is never read."""
+    the bridge with the stored session key. A client-supplied session key is never read.
+
+    A Phone helper that fails at use time (`HelperUnavailableError`, including a rebinding) is
+    `unavailable`: nothing is claimed about Hermes's pending request (AP-7a, AP-10)."""
 
     def __init__(self, ctx: ServerContext, endpoint: Any) -> None:
         self._ctx = ctx
@@ -856,52 +869,60 @@ class _LivePromptResolver:
         bridge = self._ctx.bridge
         if bridge is None or not row.session_key:
             return "unavailable"
-        resolved = await asyncio.to_thread(
-            bridge.resolve_gateway_approval, row.session_key, choice, row.request_id
-        )
+        try:
+            resolved = await asyncio.to_thread(
+                bridge.resolve_gateway_approval, row.session_key, choice, row.request_id
+            )
+        except prompts.HelperUnavailableError:
+            log_event("approval_helper", outcome="unavailable")
+            return "unavailable"
         return "accepted" if resolved > 0 else "stale"
 
     async def resolve_clarify(self, row: Any, response: str) -> str:
         bridge = self._ctx.bridge
         if bridge is None:
-            return "stale"
-        ok = await asyncio.to_thread(bridge.resolve_gateway_clarify, row.request_id, response)
+            return "unavailable"
+        try:
+            ok = await asyncio.to_thread(bridge.resolve_gateway_clarify, row.request_id, response)
+        except prompts.HelperUnavailableError:
+            log_event("approval_helper", outcome="unavailable")
+            return "unavailable"
         return "accepted" if ok else "stale"
 
     async def mark_awaiting(self, row: Any) -> str:
         bridge = self._ctx.bridge
         if bridge is None:
-            return "stale"
-        ok = await asyncio.to_thread(bridge.mark_clarify_awaiting_text, row.request_id)
+            return "unavailable"
+        try:
+            ok = await asyncio.to_thread(bridge.mark_clarify_awaiting_text, row.request_id)
+        except prompts.HelperUnavailableError:
+            log_event("approval_helper", outcome="unavailable")
+            return "unavailable"
         return "ok" if ok else "stale"
 
 
-async def _require_approvals_gate(ctx: ServerContext, profile: str) -> Any:
-    """The DS-2(b) gate for §7b routes. Raises `write_gate_closed` without a loopback or a
-    Hermes resolve when the flag, the fingerprint, or the endpoint says closed."""
-    flag = ctx.direct_send_enabled()
-    if not flag:
+async def _require_approvals_gate(
+    ctx: ServerContext, profile: str, *, member: str | None
+) -> Any:
+    """The DS-2(b) gate for §7b routes. Raises `write_gate_closed` before any endpoint
+    resolution, listing, resolver or delivery when the flag, send, the needed member or the
+    endpoint says closed. `member` is the surface the route serves: `bot_chat` (approvals),
+    `phone_chat`, or None for a route that serves either (it then needs at least one)."""
+    if not ctx.direct_send_effective():
+        raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
+    if member is None:
+        available = ctx.is_approvals_available() or ctx.is_phone_chat_available()
+    else:
+        available = ctx.approval_surface_available(member)
+    if not available:
         raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
     base = ctx.write_gate()
     deps = ctx.direct_send_deps
     bridge = ctx.bridge
     if deps is None or bridge is None:
         raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
-    qualified = getattr(deps, "qualified", None)
-    if qualified is not None:
-        try:
-            ok = bool(await asyncio.to_thread(qualified))
-        except Exception as exc:
-            log_bridge_exception(exc)
-            ok = False
-        if not ok:
-            raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
-    # Independent of the guarded-send result above: a send-qualified build is not approval
-    # qualified. Closed here means no endpoint resolution, listing, resolver or delivery.
-    if not await asyncio.to_thread(ctx.approval_qualification_open):
-        raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
     endpoint = await asyncio.to_thread(bridge.direct_send_endpoint, profile)
-    gate = direct_send_gate(base_write_gate=base, flag_enabled=flag, endpoint=endpoint)
+    gate = direct_send_gate(base_write_gate=base, flag_enabled=True, endpoint=endpoint)
     if gate.state not in (WriteGateState.OPEN, WriteGateState.OPEN_GUARDED):
         raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
     return endpoint
@@ -922,22 +943,39 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
         "prompt_reads", who.device_id, RATE_PROMPT_READ_PER_MIN_PER_DEVICE, ctx.now()
     )
     await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
-    await _require_approvals_gate(ctx, profile)
+    await _require_approvals_gate(ctx, profile, member=None)
     store = ctx.prompt_store
     if store is None:
         return json_response({"prompts": [], "desktop_held": False})
     rows = store.list_visible(ctx.iid, who.user_id, profile, now=ctx.now())
-    sessions = {row.session_key for row in rows if row.kind == "approval" and row.session_key}
-    for session_key in sessions:
-        pending = await asyncio.to_thread(ctx.bridge.list_gateway_approvals, session_key)
-        store.reconcile_approvals(
-            session_key, {item["request_id"] for item in pending if "request_id" in item}, ctx.now()
-        )
-    return _prompt_result(
-        prompts.list_prompts(
-            store, iid=ctx.iid, user_id=who.user_id, profile=profile, now=ctx.now()
-        )
+    sessions = {
+        row.session_key
+        for row in rows
+        if row.kind == "approval" and row.session_key and row.surface == "phone_chat"
+    }
+    if sessions and ctx.is_phone_chat_available():
+        for session_key in sessions:
+            try:
+                pending = await asyncio.to_thread(ctx.bridge.list_gateway_approvals, session_key)
+            except prompts.HelperUnavailableError:
+                # Unavailable is not proof the waiter is gone: the row stays as it was.
+                log_event("approval_helper", outcome="unavailable")
+                continue
+            store.reconcile_approvals(
+                session_key,
+                {item["request_id"] for item in pending if "request_id" in item},
+                ctx.now(),
+            )
+    result = prompts.list_prompts(
+        store, iid=ctx.iid, user_id=who.user_id, profile=profile, now=ctx.now()
     )
+    # Only rows of an available member are shown. A closed member lists nothing of its own.
+    shown = [
+        item
+        for item in result.body["prompts"]  # type: ignore[attr-defined]
+        if ctx.approval_surface_available(str(item.get("surface")))
+    ]
+    return _prompt_result(prompts.HttpResult(200, {**result.body, "prompts": shown}))
 
 
 async def handle_prompt_answer(request: web.Request) -> web.Response:
@@ -952,9 +990,16 @@ async def handle_prompt_answer(request: web.Request) -> web.Response:
         "prompt_actions", who.device_id, RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE, ctx.now()
     )
     await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
-    endpoint = await _require_approvals_gate(ctx, profile)
-    body = await read_json_body(request)
     store = ctx.prompt_store
+    # The surface of the stored row decides which member the answer needs. An unknown id has no
+    # surface: it needs at least one member and then answers 404 without allocating anything.
+    stored = (
+        store.get((ctx.iid, who.user_id, profile, request_id)) if store is not None else None
+    )
+    endpoint = await _require_approvals_gate(
+        ctx, profile, member=stored.surface if stored is not None else None
+    )
+    body = await read_json_body(request)
     if store is None:
         missing = prompts.HttpResult(
             404, {"error": {"code": "not_found", "message": "not found"}}
@@ -999,7 +1044,7 @@ async def handle_phone_send(request: web.Request) -> web.Response:
     await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
     body = await read_json_body(request)
     cmid, text = _parse_phone_body(body)
-    endpoint = await _require_approvals_gate(ctx, profile)
+    endpoint = await _require_approvals_gate(ctx, profile, member="phone_chat")
     store = ctx.prompt_store
     bridge = _require(ctx.bridge)
     if store is None:

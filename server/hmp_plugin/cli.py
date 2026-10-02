@@ -746,7 +746,12 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "--feature",
         default=None,
         help="With --issue-draft and --failure-code: the feature that failed "
-        "(read, session_browsing, send, jobs, model)",
+        "(read, session_browsing, send, jobs, model, approvals, phone_chat)",
+    )
+    compat_cmd.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Also print informational diagnostics (the Bot Chat approval hook fact)",
     )
     compat_cmd.add_argument(
         "--failure-code",
@@ -846,6 +851,25 @@ class _Context:
 
     def now(self) -> int:
         return int(self.env.clock())
+
+
+def _undecided_active_devices(store_path: Path) -> int | None:
+    """Active paired devices with no recorded host controls decision, read through a read-only
+    connection. `None` when the store cannot be read. Names no device and writes nothing."""
+    path = store_path.resolve()
+    mode = "mode=ro" if path.with_name(path.name + "-wal").exists() else "mode=ro&immutable=1"
+    try:
+        conn = sqlite3.connect(path.as_uri() + f"?{mode}", uri=True)
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM devices d LEFT JOIN device_owner_controls c "
+                "ON c.device_id = d.device_id WHERE d.state = 'ACTIVE' AND c.device_id IS NULL"
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+    return int(row[0]) if row else None
 
 
 class _ReadOnlyEpoch:
@@ -1808,7 +1832,7 @@ def _version_floor_text() -> str:
     write = hermes_version.FEATURE_FLOORS["send"]
     return (
         f"read {read.semver_text} ({read.calver_text}); "
-        f"send, jobs and model {write.semver_text} ({write.calver_text})"
+        f"send, jobs, model, approvals and phone chat {write.semver_text} ({write.calver_text})"
     )
 
 
@@ -1891,6 +1915,13 @@ def _cmd_compat(env: CliEnv, args: argparse.Namespace | None = None) -> int:
             out.write(f"{feat.value}: available\n")
             continue
         out.write(f"{feat.value}: unavailable ({issue_draft.failure_detail(feat, status)})\n")
+    if getattr(args, "verbose", False):
+        hook = getattr(eligibility, "stream_approval_hook", None)
+        word = "present" if hook is True else "absent" if hook is False else "unknown"
+        out.write(
+            f"Session-stream approval hook: {word} (informational; it never gates a feature "
+            "and sets no minimum Hermes version)\n"
+        )
 
     below = [
         f.value
@@ -2002,6 +2033,16 @@ def _checked_setup(env: CliEnv) -> tuple[int, ListenerRecord | None]:
     out.write("HMP listener: running with the expected TLS identity.\n")
     count = len(record.profiles or ())
     out.write(f"Served bot count: {count} (routing and access are not verified here).\n")
+    undecided = _undecided_active_devices(store_path)
+    if undecided:
+        out.write(
+            f"Approvals note: {undecided} active paired device(s) have no recorded controls "
+            "decision. A device listed in owner_device_ids with no decision also receives jobs "
+            "and model controls. Record an explicit decision with `hermes hmp devices "
+            "grant-controls` before listing an approval owner. Approval ownership requires "
+            "grant-controls (or no decision, legacy); deny-controls removes approval "
+            "ownership. This check changed nothing.\n"
+        )
     out.write("Review docs/INSTALL.md and server/DEPLOYMENT.md before pairing.\n")
     return (EXIT_OK, record) if supported and count > 0 else (EXIT_REFUSED, None)
 

@@ -190,12 +190,12 @@ class ServerContext:
     direct_send_deps: Any = None
     # v1.3 prompt rows (process memory). None until a supported listener builds one.
     prompt_store: Any = None
-    # Independent approval qualification (specs/004-approval-qualification-lane). Default closed.
-    # A passing guarded-send build never implies this; `adapter.py` binds it to
-    # `compat.approval_listener_qualifier(read identity)`, bound to the PROCESS-level baseline
-    # (`approval_build_qualified` is the informational CLI check, not admission). May block on file
-    # reads, so callers run it off the event loop.
-    approval_qualified: Callable[[], bool] = field(default=lambda: False)
+    # Approval availability (spec 034, owner policy 2026-10-01): the `approvals` and `phone_chat`
+    # eligibility members, computed once at listener open from the actual API checks. Both default
+    # CLOSED, so a context built without availability information never opens an approval route.
+    # No exact build, manifest, fingerprint or latch is consulted.
+    approvals_available: Callable[[], bool] = field(default=lambda: False)
+    phone_chat_available: Callable[[], bool] = field(default=lambda: False)
     # Mobile cron is a separate persistent-execution gate. Both settings are
     # read from live HMP config for every request, and default to deny.
     owner_device_ids: Callable[[], frozenset[str]] = field(default=lambda: frozenset())
@@ -209,13 +209,34 @@ class ServerContext:
     send_available: Callable[[], bool] = field(default=lambda: True)
     session_browsing_available: bool = True
 
-    def approval_qualification_open(self) -> bool:
-        """Only an exact `True` opens the gate; an exception, a falsy or a non-bool closes it."""
+    def is_approvals_available(self) -> bool:
+        """Bot Chat approvals. Only an exact `True` opens it; anything else closes it."""
         try:
-            return self.approval_qualified() is True
+            if self.approvals_available() is not True:
+                return False
+            store = self.prompt_store
+            return store is None or not store.closed
         except Exception as exc:  # fail closed
             log_bridge_exception(exc)
             return False
+
+    def is_phone_chat_available(self) -> bool:
+        """Phone chat sends and answers. Closed when the eligibility member is closed, and for the
+        life of this listener once the binding fence closed its local generation (AP-10)."""
+        try:
+            if self.phone_chat_available() is not True:
+                return False
+            store = self.prompt_store
+            return store is None or not (store.closed or store.phone_closed)
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
+
+    def approval_surface_available(self, surface: str) -> bool:
+        """The member a row's or route's surface needs: `bot_chat` -> approvals, else phone chat."""
+        if surface == "bot_chat":
+            return self.is_approvals_available()
+        return self.is_phone_chat_available()
 
     def is_owner_device(self, device_id: str) -> bool:
         try:

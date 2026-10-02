@@ -1,8 +1,12 @@
-"""Approvals and Phone chat (`HMP_V1.md` §7b, amendment F3).
+"""Approvals and Phone chat (`HMP_V1.md` §7b, amendment F3; spec 034).
 
 Prompt rows are process memory (AP-2). This module does not import Hermes. Loopback approval
 POSTs and `resolve_gateway_*` are injected. `adapter.py` reaches the hooks through the object
 `connect` builds; it does not import `tools.approval`.
+
+Each listener open builds a new `PromptStore`: that is the prompt generation. A store that has been
+`close`d (listener stop) or whose Phone-chat side was closed by the binding fence (AP-10) refuses
+new rows, so a stream or hook bound to an older generation can never surface a row in a newer one.
 """
 
 from __future__ import annotations
@@ -27,6 +31,16 @@ EXPIRY_GRACE_S = 30
 OBSERVATION_TTL_S = 60
 OBSERVATION_CAP = 256
 OBSERVATION_MAX_BYTES = 8192
+
+
+class HelperUnavailableError(RuntimeError):
+    """A Hermes helper HMP calls failed to import, resolve or accept its call at use time
+    (`ImportError`, `AttributeError` or `TypeError`), or is not bound. Fixed text; never carries
+    Hermes-provided data (AP-7a)."""
+
+
+class HelperChangedError(HelperUnavailableError):
+    """A bound Hermes helper is no longer the object HMP captured (AP-10)."""
 
 
 def _log(event: str, outcome: str, **ids: str) -> None:
@@ -95,11 +109,11 @@ class PromptResolver(Protocol):
         ...
 
     async def resolve_clarify(self, row: PromptRow, response: str) -> str:
-        """`accepted` or `stale`."""
+        """`accepted`, `stale`, or `unavailable` (the Hermes helper failed at use time)."""
         ...
 
     async def mark_awaiting(self, row: PromptRow) -> str:
-        """`ok` or `stale`."""
+        """`ok`, `stale`, or `unavailable`."""
         ...
 
 
@@ -111,6 +125,12 @@ def _error(code: str, message: str, *, applied: bool | None = None) -> HttpResul
     if applied is not None:
         body["applied"] = applied
     return HttpResult(http, body)
+
+
+def _unavailable() -> HttpResult:
+    """An answer whose Hermes side could not settle it: `503`, no `applied`, the row stays open."""
+    _log("prompt_answer", "unavailable")
+    return _error("api_server_unavailable", "direct send delivery is unavailable")
 
 
 def _not_found() -> HttpResult:
@@ -135,6 +155,34 @@ class PromptStore:
         self._locks: dict[tuple[str, str, str, str], asyncio.Lock] = {}
         self._lock_users: dict[tuple[str, str, str, str], int] = {}
         self._phone_tasks: dict[tuple[str, str, str, str], asyncio.Task[HttpResult]] = {}
+        # Generation fences. `closed`: this listener generation ended. `phone_closed`: the binding
+        # fence (AP-10) closed the Phone-chat side of this generation. Both only ever go True.
+        self.closed = False
+        self.phone_closed = False
+
+    def close(self, now: int) -> None:
+        """The listener that owned this generation stopped: expire everything, refuse new rows."""
+        with self._guard:
+            self.closed = True
+            for row in self._rows.values():
+                self.expire(row, now)
+            self._desktop.clear()
+        _log("prompt_store", "closed")
+
+    def close_phone_chat(self, now: int) -> None:
+        """AP-10: a helper HMP bound is no longer the bound object. Invalidate HMP's own Phone-chat
+        state for this generation. This says nothing about Hermes's pending request: nothing here
+        reports native expiry. Bot Chat rows are untouched."""
+        with self._guard:
+            if self.phone_closed:
+                return
+            self.phone_closed = True
+            for row in self._rows.values():
+                if row.surface == "phone_chat":
+                    self.expire(row, now)
+            self._sessions.clear()
+            self._observations.clear()
+        log_event("approval_binding", outcome="changed")
 
     @asynccontextmanager
     async def answer_row(self, key: tuple[str, str, str, str]) -> AsyncIterator[PromptRow | None]:
@@ -206,6 +254,8 @@ class PromptStore:
     def put(self, row: PromptRow) -> None:
         key = (row.iid, row.user_id, row.profile, row.request_id)
         with self._guard:
+            if self.closed or (self.phone_closed and row.surface == "phone_chat"):
+                return
             current = self._rows.get(key)
             if current is not None:
                 return
@@ -274,6 +324,8 @@ class PromptStore:
         if not session_key:
             return
         with self._guard:
+            if self.closed or self.phone_closed:
+                return
             self._sessions[session_key] = (iid, user_id, profile, chat_id)
 
     def owner_of_session(self, session_key: str) -> tuple[str, str, str, str] | None:
@@ -330,6 +382,8 @@ class PromptStore:
             return
         key = (iid, user_id, profile)
         with self._guard:
+            if self.closed or self.phone_closed:
+                return
             self._purge_observations(now)
             self._observations.setdefault(key, []).append((role, text, now))
             while sum(map(len, self._observations.values())) > OBSERVATION_CAP:
@@ -585,7 +639,7 @@ async def _apply(
             return _error("invalid_choice", "choice not offered", applied=False)
         verdict = await resolver.resolve_approval(row, value)
         if verdict == "unavailable":
-            return _error("api_server_unavailable", "direct send delivery is unavailable")
+            return _unavailable()
         if verdict != "accepted":
             return _error("stale", "request is no longer answerable", applied=False)
         _log(
@@ -599,6 +653,8 @@ async def _apply(
 
     if form == "other":
         verdict = await resolver.mark_awaiting(row)
+        if verdict == "unavailable":
+            return _unavailable()
         if verdict != "ok":
             return _error("stale", "request is no longer answerable", applied=False)
         return HttpResult(200, {"status": "awaiting_text", "applied": False})
@@ -608,6 +664,8 @@ async def _apply(
             return _error("invalid_choice", "choice not offered", applied=False)
         text = value if isinstance(value, str) else ""
         verdict = await resolver.resolve_clarify(row, text)
+        if verdict == "unavailable":
+            return _unavailable()
         if verdict != "accepted":
             return _error("stale", "request is no longer answerable", applied=False)
         _log("prompt_answer", "resolved", user_id=user_id, request_id=row.request_id)
@@ -634,6 +692,8 @@ async def _apply(
         response = strip_recommended(matched)
 
     verdict = await resolver.resolve_clarify(row, response)
+    if verdict == "unavailable":
+        return _unavailable()
     if verdict != "accepted":
         return _error("stale", "request is no longer answerable", applied=False)
     _log("prompt_answer", "resolved", user_id=user_id, request_id=row.request_id)
@@ -648,13 +708,13 @@ class AdapterHooks:
     bridge: object
     now: Callable[[], int]
     iid: str
-    # Independent approval qualification, default closed. While closed, the producer hooks below
+    # `phone_chat` availability (spec 034), default closed. While closed, the producer hooks below
     # neither call the bridge's approval helpers nor store an actionable row.
-    approval_qualified: Callable[[], bool] = field(default=lambda: False)
+    phone_available: Callable[[], bool] = field(default=lambda: False)
 
-    async def _approvals_open(self) -> bool:
+    def _phone_open(self) -> bool:
         try:
-            return await asyncio.to_thread(self.approval_qualified) is True
+            return self.phone_available() is True
         except Exception:
             return False
 
@@ -685,7 +745,7 @@ class AdapterHooks:
         return True
 
     async def reconcile_chat(self, chat_id: str) -> None:
-        if not await self._approvals_open():
+        if not self._phone_open():
             return
         with self.store._guard:
             keys = [key for key, owner in self.store._sessions.items()
@@ -708,7 +768,7 @@ class AdapterHooks:
         return self.store.owner_of_chat(self.iid, chat_id)
 
     async def on_exec_approval(self, prompt: object) -> bool:
-        if not await self._approvals_open():
+        if not self._phone_open():
             return False
         session_key = str(getattr(prompt, "session_key", "") or "")
         command = getattr(prompt, "command", None)
@@ -754,7 +814,7 @@ class AdapterHooks:
         )
         if not choices:
             return False
-        timeout_s = await self._timeout("approval_timeout_s", 300, profile)
+        timeout_s = await self._timeout("phone_approval_timeout_s", 300, profile)
         description = getattr(prompt, "description", "") or ""
         if recovery:
             if "deny" not in choices:
@@ -792,14 +852,14 @@ class AdapterHooks:
         session_key: str,
     ) -> bool:
         del chat_id
-        if not await self._approvals_open():
+        if not self._phone_open():
             return False
         owner = self.store.owner_of_session(session_key)
         if owner is None or not clarify_id:
             return False
         iid, user_id, profile, _chat = owner
         offered = tuple(choice for choice in (choices or []) if isinstance(choice, str))
-        timeout_s = await self._timeout("clarify_timeout_s", 3600, profile)
+        timeout_s = await self._timeout("phone_clarify_timeout_s", 3600, profile)
         # `send_clarify` does not carry `multi_select`, and HMP does not read the private
         # clarify index (AP-9). The answer path still honors the flag when a row has it.
         self.store.put(
@@ -931,7 +991,9 @@ async def handle_phone_send(
                 pending_approvals=pending_approvals,
                 deliver=deliver,
             )
-        except Exception:
+        except Exception as exc:
+            if isinstance(exc, HelperUnavailableError):
+                log_event("approval_helper", outcome="unavailable")
             result = _error("api_server_unavailable", "direct send delivery is unavailable")
             status_name = "unknown"
         await asyncio.to_thread(

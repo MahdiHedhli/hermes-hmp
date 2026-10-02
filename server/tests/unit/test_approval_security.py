@@ -288,7 +288,7 @@ async def test_http_redirects_and_content_type() -> None:
             host="127.0.0.1", port=server.port, api_key="test-fixture-key", path_prefix=""
         )
         assert await ds.aiohttp_approval_call(endpoint, RUN, REQ, "once") == "unavailable"
-        assert (await ds.aiohttp_loopback_call(endpoint, "s", "hi")).status == 307
+        assert (await ds.aiohttp_stream_call(endpoint, "s", "hi")).status == 307
         assert not calls
 
 
@@ -307,7 +307,7 @@ async def test_clients_set_finite_timeouts_and_disable_redirects(monkeypatch) ->
     )
     await ds.aiohttp_approval_call(endpoint, RUN, REQ, "deny")
     with pytest.raises(aiohttp.ClientError):
-        await ds.aiohttp_loopback_call(endpoint, "s", "hi")
+        await ds.aiohttp_stream_call(endpoint, "s", "hi")
     assert len(captured) == 2
     for kwargs in captured:
         assert kwargs["trust_env"] is False
@@ -414,11 +414,11 @@ async def test_profile_timeout_is_used_by_both_adapter_hooks():
         def list_gateway_approvals(self, key):
             return [{"command": "cmd", "request_id": REQ}]
 
-        def approval_timeout_s(self, profile):
+        def phone_approval_timeout_s(self, profile):
             calls.append(("approval", profile))
             return 0
 
-        def clarify_timeout_s(self, profile):
+        def phone_clarify_timeout_s(self, profile):
             calls.append(("clarify", profile))
             return 0
 
@@ -523,7 +523,7 @@ async def test_http_response_policy_without_network(monkeypatch, status, content
     endpoint = DirectSendEndpoint(host="127.0.0.1", port=9, api_key="fixture-key", path_prefix="")
     if status == 307:
         assert await ds.aiohttp_approval_call(endpoint, RUN, REQ, "once") == "unavailable"
-    result = await ds.aiohttp_loopback_call(endpoint, "s", "hi")
+    result = await ds.aiohttp_stream_call(endpoint, "s", "hi")
     assert result.status == (307 if status == 307 else 502)
 
 
@@ -576,6 +576,44 @@ async def test_snapshot_cannot_bypass_prompt_ownership(tmp_path, monkeypatch, ow
     )
     response = await server.handle_snapshot(request)
     assert bool(json.loads(response.body)["open_requests"]) is (owner and flag)
+    env.store.close()
+
+
+@pytest.mark.asyncio
+async def test_snapshot_hides_a_phone_row_while_phone_chat_is_closed(tmp_path, monkeypatch):
+    import json
+    from dataclasses import dataclass
+
+    @dataclass
+    class Snapshot:
+        open_requests: tuple
+
+    env, who, request = _request_env(tmp_path, monkeypatch)
+    env.ctx.owner_device_ids = lambda: frozenset({who.device_id})
+    env.ctx.approvals_available = lambda: True  # Bot Chat approvals open
+    env.ctx.phone_chat_available = lambda: False  # Phone chat closed
+    store = env.ctx.prompt_store
+    store.put(
+        prompts.PromptRow(
+            iid=IID, user_id=USER, profile="b", request_id=REQ, kind="approval",
+            surface="phone_chat", choices=("once", "deny"), command="cmd", session_key="sess",
+            observed_at=1, expires_at=301,
+        )
+    )
+    rows = tuple(
+        prompts.phone_open_request(row)
+        for row in store.list_visible(IID, USER, "b", now=1)
+        if row.surface == "phone_chat"
+    )
+    assert rows  # the phone row is stored and would be visible
+    env.ctx.reads = SimpleNamespace(snapshot=lambda *args: Snapshot(open_requests=rows))
+    monkeypatch.setattr(
+        server,
+        "_result_response",
+        lambda value: server.json_response({"open_requests": value.open_requests}),
+    )
+    response = await server.handle_snapshot(request)
+    assert json.loads(response.body)["open_requests"] == []
     env.store.close()
 
 

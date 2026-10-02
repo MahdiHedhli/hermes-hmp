@@ -1,5 +1,10 @@
 # Approval and app-pin integration: source and test evidence
 
+> **HISTORICAL (spec 034, 2026-10-01).** This records the exact-build qualified candidate before
+> its gate was removed. Receipts, fingerprints and the process latch named here are sampled
+> evidence for those builds and runtime `f584b91`, not a runtime requirement. The converted lane
+> is new, unreviewed code; none of this evidence covers it.
+
 Date: 2026-09-30. Status: integrated candidate, frozen for independent review after the first local
 draft `821ddcb`, the root-only routing addition and the CI/documentation corrections below. Nothing here qualifies, admits or
 packages a Hermes build, and no live host, device, bot or provider was touched.

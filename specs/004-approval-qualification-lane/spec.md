@@ -1,5 +1,12 @@
 # Approval qualification lane (draft groundwork)
 
+> **HISTORICAL (superseded by [spec 034](../034-approval-minimum-version-admission/spec.md), 2026-10-01).**
+> The exact-build qualification gate, process latch, receipt tooling and the empty approval
+> manifest described below were replaced by minimum-version availability (`approvals` and
+> `phone_chat` members). It is kept as a record of the reviewed design and of sampled fixture
+> evidence. Nothing below is a runtime requirement, and no document here admits or refuses a build.
+
+
 Status: draft. Approvals are not released and not enabled. The gate is wired to the prompt routes
 and producers but closed for every build, because the shipped list is empty.
 

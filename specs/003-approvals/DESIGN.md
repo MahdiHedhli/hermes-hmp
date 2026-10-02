@@ -1,5 +1,12 @@
 # F3 approvals and Phone chat — security revision
 
+> **HISTORICAL (superseded by [spec 034](../034-approval-minimum-version-admission/spec.md), 2026-10-01).**
+> The exact-build qualification gate, process latch, receipt tooling and the empty approval
+> manifest described below were replaced by minimum-version availability (`approvals` and
+> `phone_chat` members). It is kept as a record of the reviewed design and of sampled fixture
+> evidence. Nothing below is a runtime requirement, and no document here admits or refuses a build.
+
+
 Status: remediation implemented for review; **not qualified for release or enablement**.
 The direct-send fingerprint remains stale. No live configuration is changed by this patch.
 Contract: HMP v1.3, `docs/architecture/contracts/HMP_V1.md` §7b, under OD-F16.

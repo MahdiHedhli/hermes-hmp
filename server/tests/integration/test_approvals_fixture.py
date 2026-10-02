@@ -4,9 +4,17 @@ Same harness as `test_direct_send_fixture.py`: one real Hermes, real pairing, re
 T7 is the Bot Chat stream. T8 is the Phone-chat platform turn. Both need a PTY for pairing,
 loopback sockets and extracted qualified builds. Collection alone is not execution evidence.
 
-T4 leaves `direct_send_supported_builds.json`'s fingerprint stale, so a gateway built from this
-tree keeps the direct-send gate closed until a human requalifies that row. These tests are the
-behavioral pin for after that requalification. They do not update the fingerprint.
+Spec 034 (owner policy 2026-10-01): availability comes from the minimum version and the actual
+Hermes APIs, never from an exact-build receipt or manifest. Nothing here installs a receipt or edits
+a manifest to open a lane, and a pass is sampled evidence for one build, not an admission list.
+
+Bot Chat cards need Hermes's session-stream approval notifier. A build either has it (positive
+cases: a card, an exact-ID answer) or does not (negative cases: the send still succeeds, no card is
+invented, the dangerous command does not run, nothing warns). Each test below branches on the
+build's own source, so exactly one expectation applies per build and no case is skipped. Run it
+only against locally present pinned builds in an isolated home, after review. A real listener
+reconnect has no public gateway hook, so the generation fence is covered by
+`tests/unit/test_approval_fences.py` through the real `open_components` factory instead.
 """
 
 from __future__ import annotations
@@ -28,7 +36,7 @@ assert _spec is not None and _spec.loader is not None
 _f2 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_f2)
 
-import approval_fixture as af  # noqa: E402 -- tools/fixtures is on sys.path once _f2 loaded
+from hmp_plugin import compat  # noqa: E402 -- the server package is on the test path
 
 Client = _f2.Client
 DirectSendFixture = _f2.DirectSendFixture
@@ -50,12 +58,34 @@ pytestmark = _f2.pytestmark
 def gateway(request: pytest.FixtureRequest, tmp_path: Path):
     """The F2 direct-send gateway, including its pairing pty. Reused, not reimplemented.
 
-    Approvals open only with a fixture receipt (`HMP_APPROVAL_QUALIFICATION`, written by
-    `tools/compat/approval_matrix.py` after boundary and behavior probes); the direct-send receipt
-    alone never opens them. Without it these tests skip, and the matrix rejects any skip."""
-    if not os.environ.get(af.RECEIPT_ENV):
-        pytest.skip(f"needs {af.RECEIPT_ENV} (tools/compat/approval_matrix.py fixture receipt)")
+    The primary device is enrolled as an approval owner for these cases only (the host controls
+    decision is granted, and `_rewrite_config` allowlists it). Generic pairing keeps its denied
+    default. No receipt or manifest is involved."""
     yield from _f2.gateway.__wrapped__(request, tmp_path, approval_owner_enrollment=True)
+
+
+def _notifier(gateway: DirectSendFixture) -> bool:
+    """Whether this build's Bot Chat session stream has the approval notifier (a source fact).
+
+    The neutral diagnostic `compat.stream_hook_present` reads one file of the build's own tree. An
+    undeterminable result is treated as absent so a positive expectation is never assumed."""
+    return compat.stream_hook_present(gateway.build.src_dir) is True
+
+
+def _assert_no_card_and_command_not_run(
+    gateway: DirectSendFixture, target: Path, *, seconds: float = 10.0
+) -> None:
+    """The notifier-absent expectation: Hermes keeps its own fail-closed behavior. No Bot Chat card
+    is invented at any point in the window, and the flagged command never runs."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        code, payload = _prompts(gateway.client)
+        assert code == 200, payload
+        assert not [
+            item for item in payload.get("prompts", []) if item.get("surface") == "bot_chat"
+        ], payload
+        time.sleep(1.0)
+    assert (target / "sentinel").exists(), "a flagged command ran with no way to answer it"
 
 
 def _prompts(client: Client, profile: str = DEFAULT_PROFILE) -> tuple[int, Any]:
@@ -112,6 +142,12 @@ def test_t7_local_run_approval_unblocks_and_clarify_and_execute_code_do_not_card
     status, body = send(
         client, DEFAULT_PROFILE, cmid=str(uuid.uuid7()), expected_head=head, text="run the checks"
     )
+    if not _notifier(gateway):
+        # No notifier on this build's session stream: the send still succeeds, no card is invented
+        # and Hermes's own fail-closed behavior stops the command. No warning is expected.
+        assert status in (200, 202), body
+        _assert_no_card_and_command_not_run(gateway, target)
+        return
     assert status == 202, (
         "Session-chat stream completed before a human answered. This Hermes route must "
         "register a notifier, emit approval.request and keep the run waiting; "
@@ -400,6 +436,10 @@ def test_t7_bot_chat_exact_id_deny_blocks_command(gateway: DirectSendFixture) ->
     status, body = send(
         client, DEFAULT_PROFILE, cmid=str(uuid.uuid7()), expected_head=head, text="run the checks"
     )
+    if not _notifier(gateway):
+        assert status in (200, 202), body
+        _assert_no_card_and_command_not_run(gateway, target)
+        return
     assert status == 202, body
     prompt = wait_for(
         lambda: (lambda c: c if c and c.get("surface") == "bot_chat" else None)(
@@ -468,6 +508,10 @@ def test_t7_real_timeout_expires_wait_without_running_command(gateway: DirectSen
     status, body = send(
         client, DEFAULT_PROFILE, cmid=str(uuid.uuid7()), expected_head=head, text="let it expire"
     )
+    if not _notifier(gateway):
+        assert status in (200, 202), body
+        _assert_no_card_and_command_not_run(gateway, target)
+        return
     assert status == 202, body
     prompt = wait_for(lambda: _pending_approval(client), timeout=30)
     assert prompt, _prompts(client)
@@ -481,27 +525,16 @@ def test_t7_real_timeout_expires_wait_without_running_command(gateway: DirectSen
     assert (target / "sentinel").exists(), "a late answer ran the expired command"
 
 
-@pytest.mark.parametrize(
-    "closed_by", ["owner", "flag", "direct-send-list", "approval-list"]
-)
+@pytest.mark.parametrize("closed_by", ["owner", "flag"])
 def test_approvals_fixture_fails_closed(gateway: DirectSendFixture, closed_by: str) -> None:
-    """Fixture-only qualification never removes ACL, explicit flag or build checks, and each
-    lane's list closes approvals independently (approval list empty leaves reads/sends open)."""
+    """The owner allowlist and the explicit host flag each close every approval route on their own
+    (the approval lane has no build list left to close it)."""
     if closed_by == "owner":
         gateway._rewrite_config(owner_device_ids=())
         # Hermes loads platform extras when the adapter connects, just like the flag.
         gateway.restart_gateway()
-    elif closed_by == "flag":
-        gateway.set_direct_send_flag(False)
-    elif closed_by == "direct-send-list":
-        path = gateway.paths.out_dir / "_hmp_plugin" / "direct_send_supported_builds.json"
-        data = json.loads(path.read_text(encoding="utf-8"))
-        data["builds"] = []
-        path.write_text(json.dumps(data), encoding="utf-8")
-        gateway.restart_gateway()
     else:
-        af.remove_approval_fixture_entry(gateway.paths.out_dir)
-        gateway.restart_gateway()
+        gateway.set_direct_send_flag(False)
     before = len(gateway.fake_model.main_requests())
     for status, body in (
         _prompts(gateway.client),
@@ -512,3 +545,51 @@ def test_approvals_fixture_fails_closed(gateway: DirectSendFixture, closed_by: s
         assert body["error"]["code"] == (
             "not_found" if closed_by == "owner" else "write_gate_closed")
     assert len(gateway.fake_model.main_requests()) == before
+
+
+def test_manifest_mutation_changes_no_availability(gateway: DirectSendFixture) -> None:
+    """Editing or emptying the tested-sample manifests in the scratch plugin copy changes nothing
+    after a gateway restart: they are evidence only (spec 034 R5, N30)."""
+    manifests = gateway.paths.out_dir / "_hmp_plugin"
+    for name in (
+        "direct_send_supported_builds.json",
+        "read_compat_builds.json",
+        "write_supported_builds.json",
+    ):
+        path = manifests / name
+        if not path.is_file():
+            continue
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if "builds" in data:
+            data["builds"] = []
+        path.write_text(json.dumps(data), encoding="utf-8")
+    gateway.restart_gateway()
+    status, body = _prompts(gateway.client)
+    assert status == 200 and body["prompts"] == [], body
+
+
+def test_non_owner_bot_chat_send_stays_synchronous_and_never_waits_for_a_card(
+    gateway: DirectSendFixture,
+) -> None:
+    """A device that is not an approval owner keeps the synchronous Bot Chat route exactly as
+    before: no stream, so a flagged command does not make the turn wait for `approvals.timeout`,
+    no card exists, and every approval route answers 404 (spec 034 D2b, N1, N26)."""
+    gateway._rewrite_config(owner_device_ids=())
+    gateway.restart_gateway()
+    model = gateway.fake_model_module
+    command, target = _probe_command(gateway)
+    gateway.fake_model.push(
+        model.ToolCall(name="terminal", args={"command": command}), model.Text("done")
+    )
+    client = gateway.client
+    ref = _f2.bot_chat_ref(client, DEFAULT_PROFILE)
+    head = _f2.bot_chat_head(client, DEFAULT_PROFILE, ref)
+    started = time.monotonic()
+    status, body = send(
+        client, DEFAULT_PROFILE, cmid=str(uuid.uuid7()), expected_head=head, text="not an owner"
+    )
+    assert status in (200, 202), body
+    assert time.monotonic() - started < gateway.approval_timeout, "the turn waited for a card"
+    status, body = _prompts(client)
+    assert (status, body["error"]["code"]) == (404, "not_found"), body
+    assert (target / "sentinel").exists(), "a non-owner turn ran a flagged command"

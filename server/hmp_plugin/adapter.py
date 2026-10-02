@@ -49,7 +49,7 @@ import contextlib
 import secrets
 import threading
 import time
-from collections.abc import Callable, Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -134,6 +134,12 @@ def open_components(adapter: Any) -> server.ServerContext:
         return eligibility is not None and eligibility.available(feature)
 
     send_available = result.supported and _available(compat.Feature.SEND)
+    # Spec 034: the `approvals` and `phone_chat` members, decided once here from the same
+    # eligibility evaluation (no per-request lookup). No build list, fingerprint or latch is read.
+    approvals_member = result.supported and _available(compat.Feature.APPROVALS)
+    phone_member = result.supported and _available(compat.Feature.PHONE_CHAT)
+    # Set only after the bridge captured the Phone-chat helpers (AP-10); closed until then.
+    phone_bound = [False]
 
     # Amendment F2 (direct send, OD-F14/OD-F15): `gateway.platforms.hmp.extra.direct_send.enabled`,
     # default False. A malformed (non-mapping) `direct_send` block fails closed to disabled, never
@@ -177,6 +183,8 @@ def open_components(adapter: Any) -> server.ServerContext:
         session_browsing_enabled=session_browsing is not False,
         direct_send_flag=_read_direct_send_enabled,
         owner_device_ids=_read_owner_device_ids,
+        approvals_available=lambda: approvals_member,
+        phone_chat_available=lambda: phone_member and phone_bound[0],
         cron_flag=_read_cron_enabled,
         cron_available=lambda: result.supported and _available(compat.Feature.JOBS),
         model_flag=_read_model_enabled,
@@ -226,14 +234,19 @@ def open_components(adapter: Any) -> server.ServerContext:
             now=ctx.now,
             prompt_store=prompt_store,
             approval_timeout=_approval_timeout,
-            approval_qualified=ctx.approval_qualification_open,
         )
+        if phone_member:
+            # AP-10: capture the Phone-chat helpers now, after the probe passed. A later rebinding
+            # closes this generation's Phone-chat side; Bot Chat `approvals` is independent.
+            phone_bound[0] = ctx.bridge.bind_phone_chat_helpers(  # type: ignore[attr-defined]
+                lambda: prompt_store.close_phone_chat(ctx.now())
+            )
         adapter._hmp_hooks = prompts.AdapterHooks(  # type: ignore[attr-defined]
             store=prompt_store,
             bridge=ctx.bridge,
             now=ctx.now,
             iid=ident.iid,
-            approval_qualified=ctx.approval_qualification_open,
+            phone_available=ctx.is_phone_chat_available,
         )
     log_event("adapter_open", outcome=result.status.value)
     return ctx
@@ -311,6 +324,7 @@ class HmpAdapter(BasePlatformAdapter):
         try:
             await srv.start()
         except Exception as exc:
+            self._close_generation(ctx)
             ctx.store.close()
             log_event("adapter_connect", outcome="listener_failed")
             raise ConnectionError("HMP listener did not start") from exc
@@ -487,6 +501,7 @@ class HmpAdapter(BasePlatformAdapter):
         if task is not None:
             task.cancel()  # fire-and-forget: this callback itself is synchronous (server.py)
         self._drop_record()
+        self._close_generation(srv.ctx)
         srv.ctx.store.close()
         # PR7-6 step 3: stay closed until the gateway restarts (a later `connect` would load the
         # new key and start a new listener; nothing here restarts it).
@@ -498,8 +513,16 @@ class HmpAdapter(BasePlatformAdapter):
         self._drop_record()
         if srv is not None:
             await srv.stop(notify=False)
+            self._close_generation(srv.ctx)
             srv.ctx.store.close()
         self._mark_disconnected()
+
+    @staticmethod
+    def _close_generation(ctx: server.ServerContext) -> None:
+        """R9: the listener that owned this prompt generation stopped. Its rows expire and a
+        stream still bound to it can never insert into a later generation."""
+        if ctx.prompt_store is not None:
+            ctx.prompt_store.close(ctx.now())
 
     def _hooks(self) -> prompts.AdapterHooks | None:
         hooks = getattr(self, "_hmp_hooks", None)
