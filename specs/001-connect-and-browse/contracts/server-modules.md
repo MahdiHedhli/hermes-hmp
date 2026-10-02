@@ -17,8 +17,24 @@ exceptions, each an exact (module, name) allow-list entry in the surface check:
 - `compat.py` may import Hermes modules dynamically, but only inside its dependency probe, and only
   for a build already on the read-compatible list (see "Startup order"; ruling on T013).
 
-The spike is reference only. Code is rewritten and reviewed, never copied wholesale (constitution
-VIII).
+The spike is reference only. Code is rewritten and reviewed, never copied wholesale.
+
+**Proposed outbound-network exception (spec 014 T011; source-only, not implemented).** The three
+exceptions above are import allow-list entries. Spec 014 proposes one different kind of closed
+exception, on network use rather than imports: a single module, `push_relay.py`, may be the one
+outbound non-loopback HTTPS client of the plugin, and its destination comes only from host
+configuration (`push.relay_url`, `push.relay_audience`, `push.relay_kids`, and the optional `push.relay_spki_pins`), never
+from the wire, a phone, a sealed value, a redirect or a default. It is governed by the frozen relay
+policies of `docs/architecture/contracts/HMP_PUSH_RELAY_V1.md` (no redirects, no proxy environment,
+bounded response, signed request, one provider-side attempt, retry only before a provider attempt)
+and HMP v1 §7f. Standard trust-store chain and host-name validation are always required; the optional
+pin setting is omitted or an exact list of 1 to 8 distinct canonical SHA-256 SPKI digests that additionally
+constrains only the relay's leaf certificate, with no environment fallback and no trust fallback (R-PIN, the
+unreviewed root clock and pin delta of 2026-10-02). It imports only packages the surface check already allows (`aiohttp`,
+`cryptography`), so it needs no new import exception. The exception adds no registration, hook,
+tool or dependency, and widens no other socket: every other network call stays on loopback. It takes
+effect only after implementation, independent review and root acceptance. This note describes no
+current runtime or scanner behavior, and `tools/ci/check_plugin_surface.py` is unchanged by it.
 
 ```text
 server/

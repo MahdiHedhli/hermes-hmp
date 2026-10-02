@@ -1,5 +1,8 @@
 # Feature: Approval push registration, issuance, hint resolution and relay delivery
 
+
+**Current contract review status (2026-10-02):** The clock mechanism, optional pin grammar and N3–N6 were accepted by the prior focused review. The independent D1/D2/D3 sentence review accepted the capacity/retention qualifications, per-`(app, env)` APNs connections and seal-expiry wording. Root resolved its remaining editorial status finding M1 by dating the pre-review statements below. This is contract-text acceptance only. Source, causal tests/vectors, interoperability, provider/device/deployment/release and owner choices O1–O6 remain pending. No task checkbox or security mechanism changed.
+
 Status: **design frozen by root, 2026-10-02**, after independent design, amendment and focused
 C1–C3 closure reviews. Not implemented or provider-verified. The accepted decisions and bounds
 are in [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md); `⟨Dn⟩` refers to that frozen mapping.
@@ -7,6 +10,41 @@ Owner/account choices, deployment budgets and public relay activation remain pen
 documentation only: no runtime, test, dependency, account, credential, provider or host change.
 The C1–C8 text records design decisions; the tests it names are future work (tasks T020–T024, T030,
 T040) and nothing here is source evidence.
+
+**Root interoperability amendment, 2026-10-02 (authoritative; supersedes any earlier line of this
+file that conflicts).** Root architecture direction for spec 014 contract text only
+([`ROOT_DECISIONS.md`](ROOT_DECISIONS.md), section "Root interoperability amendment"): decisions
+B1 to B6 address the six former relay-contract items (labels GAP-1 to GAP-6, since removed from the relay contract; distinct from the live `GAP-1` and `GAP-2` rules of HMP v1 §12, about which no claim is made) and the former HMP item `GAP-PN-1`, and P1 to P3 sharpen
+the relay's admission, replay and result semantics. The text below is synchronized to it (PN-AV-2,
+PN-REG-2, PN-REG-3, PN-ISS-1, PN-DSP-5, PN-REL-2 to PN-REL-6, PN-SEAL-1 and PN-SEAL-2, section 11).
+The amendment authorizes no source, key, relay, deployment, provider action or owner choice.
+A scoped independent review of an earlier candidate of this text accepted it with conditions; a later review
+of the clarified text accepted its other clauses and required the clock and pin gates, now written below and
+pending focused review, and nothing here is implementation, vector,
+interoperability, provider or device evidence. HMP-specific signature, JCS and seal vectors are
+implementation follow-up (T025, T030, T043); they are not blocked by an open gap.
+
+**Root review clarifications, 2026-10-02 (authoritative; F1 to F7).** Contract-text clarifications
+([`ROOT_DECISIONS.md`](ROOT_DECISIONS.md), section "Root review clarifications") that preserve B1 to B6,
+P1 to P3 and every authority and security requirement. F1 (relay atomic skew re-check), F4 (strict DER
+signature), F5 (APNs environment per allowed `(app, env)` pair) and F6 (rolling 3,600-second hourly
+windows) are synchronized in PN-REL-2, PN-REL-3 and PN-REL-6; F2 (push-off never expires registrations on
+kid liveness; why precedence; `PUT` check order) in PN-AV-2, PN-AV-4, PN-REG-1, PN-REG-2, PN-ISS-5, PN-BND
+and PN-REV; F3 (gap labels) above; F7 (status wording) here and in `analysis.md`. They authorize no source,
+key, relay, deployment, provider action or owner choice, and there is no vector or interoperability
+evidence.
+
+**Root clock and pin delta, 2026-10-02 (authoritative; pre-review status recorded below).** A later independent review
+accepted the other clauses of the clarified text and required two source gates. This delta writes them and
+Pre-review history: **none is accepted**; a focused independent sentence review is pending, and there is no source, vector,
+device or provider evidence. The clock-count repair of 2026-10-02 followed a focused review of that delta: the review accepted the mechanism, the pins and N3 to N6, and required text repairs for the 4,800-nonce and 240 s qualification under clock steps (its finding D1) and for one APNs connection granularity per allowed `(app, env)` pair (D2), with editorial wording (D3). At that checkpoint, the repaired capacity and connection sentences awaited a focused check of those sentences only. That check has now accepted D1/D2/D3 as contract text; implementation and verification remain pending. **R-F1a** (relay clock): the relay's acceptance instant is
+`max(raw wall now, last_now)` inside the atomic nonce section, reused by the seal-expiry check, with
+monotonic rolling windows (PN-REL-3, PN-REL-6). **R-PIN** (optional relay pin): host setting
+`push.relay_spki_pins` (PN-AV-2, PN-REL-1). **N3** narrows the relay's APNs separation to connections;
+credential and signing-key provisioning stays pending owner choice O3. **N4** syncs the settings list and
+the all-off purge reasons (PN-AV-2, PN-BND, T020). **N5** counts an inert active row against D24, not D25.
+**N6** marks the earlier "six gaps resolved" and skew-replay wording as superseded history; the live `GAP-1`
+and `GAP-2` of HMP v1 §12 stay open. Section: [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md), "Root clock and pin delta".
 
 Base: HMP `4d6863e` (minimum-version policy, spec 013; no approval lane). The approval lane this
 feature consumes is spec 034. Root states that its source `150bd0f` (PR #73) is independently
@@ -145,10 +183,38 @@ complete this feature (section 9).
 - **PN-AV-2** Host settings, read live per request and per dispatch: `push.enabled` (default
   `false`), `push.relay_url` (no default, `⟨D3⟩`), `push.relay_kids` (a closed list of relay key IDs
   the phone may seal to), `push.relay_audience` (the relay identifier bound into every signature,
-  PN-REL-2). A missing, malformed or non-HTTPS value means push is off. No host setting comes from
-  the wire.
+  PN-REL-2), and the optional `push.relay_spki_pins` (R-PIN, below). A missing, malformed or
+  non-HTTPS required value means push is off. No host setting comes from the wire. Grammars (decision B4): a `kid` is ASCII and fully matches
+  `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`; the audience is ASCII and fully matches
+  `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`; comparison is case-sensitive and exact, with no URL
+  semantics, whitespace, Unicode normalization or trimming. A non-matching `relay_kids` entry or
+  audience is malformed, so push is off. Host configuration, `PUT`/`GET` and the relay's wire
+  parsing use the same two grammars. They define no real key, audience, endpoint or account.
+  **Optional relay pins (R-PIN).** `push.relay_spki_pins` **omitted** (key absent) means no optional pin.
+  **Configured**, it is an exact, nonempty list of 1 to 8 distinct entries, each the canonical unpadded
+  base64url of a SHA-256 digest of a DER `SubjectPublicKeyInfo`: 43 ASCII characters that decode to 32
+  bytes and re-encode to the identical text. An explicit `None`, an empty list, a non-list, a duplicate
+  or any other entry is malformed and gives `relay_unconfigured`; omission is distinct from `None` and
+  from an empty list. The setting holds only public digests, has no environment-variable or other
+  fallback, and never replaces the standard trust-store chain and host-name validation (PN-REL-1).
 - **PN-AV-3** A relay failure is a delivery outcome, not a Hermes compatibility finding. It never
   closes approvals and never produces a spec 013 issue draft.
+- **PN-AV-4 Why precedence and kid liveness (F2).** Availability is evaluated once per call; the first
+  condition that holds names the `why`: (1) `push.enabled` is not exactly `true`: `push_disabled`;
+  (2) a missing, malformed or non-HTTPS relay configuration (URL, audience, nonempty kid list,
+  and a configured `push.relay_spki_pins` that is not a well-formed list):
+  `relay_unconfigured`; (3) both approval members closed, or the direct-send flag off:
+  `approvals_unavailable`. A well-formed relay configuration is independent of availability. An
+  invalid or missing kid or audience configuration is `relay_unconfigured`, never an empty list of
+  live keys, and one malformed `relay_kids` entry closes the whole push configuration. An explicitly
+  empty list is `relay_unconfigured`. A configured `push.relay_spki_pins` that is malformed (explicit
+  `None`, empty, non-list, duplicate or bad entry) is also `relay_unconfigured`, never discarded or
+  replaced by a trust fallback; an omitted optional pin setting is allowed. `GET` omits
+  `relay_kids` unless `available` is true. **Kid liveness is applied only while push is available**
+  (PN-AV-1 for at least one member): `GET` and the purge apply removed-kid expiry only then, and
+  dispatch already requires availability. While push is off for any reason, an otherwise valid active
+  row is kept inert and is never destructively expired for kid liveness; absolute expiry, revocation,
+  family and hash checks and the retained-row purge operate unchanged.
 
 ### PN-REG Registration routes (bearer, own device, pinned instance)
 
@@ -162,7 +228,8 @@ addition is four values of the closed `why` set (`OtherWhy`): `push_disabled`, `
 `approvals_unavailable` and `push_capacity`, each allowed only on `503 write_gate_closed` (T010).
 Gate order on every route: bearer → effective approval owner (else
 `404 not_found`, the AP-3 non-disclosure pattern) → per-device bucket (`429 rate_limited`) → body
-shape and size (`400 bad_request`, `413 too_large`) → route logic. None of them uses
+shape and size (`400 bad_request`, `413 too_large`) → route logic. `DELETE` adds no push-availability
+gate to this order (PN-REG-3). None of them uses
 `/bots/{p}/authorize`, the owner-controls `GRANT` path, any access card or any privilege-grant path.
 Registration is device-scoped, not per bot.
 
@@ -174,14 +241,16 @@ Registration is device-scoped, not per bot.
   - `why` is one of `push_disabled`, `relay_unconfigured`, `approvals_unavailable` and appears only
     when `available` is false (a field of this `200` body; the same codes are the `why` values of
     `503 write_gate_closed`). `approvals_unavailable` covers every closed approval prerequisite:
-    both members closed, or the direct-send flag off. The route handle is never echoed.
-    `relay_kids` lets the phone choose its seal key; the iid binding is the pinned `iid` the phone
+    both members closed, or the direct-send flag off. When several apply, PN-AV-4 chooses the `why`.
+    The route handle is never echoed. `relay_kids` is omitted unless `available` is true; it lets the
+    phone choose its seal key; the iid binding is the pinned `iid` the phone
     already holds.
   - **Which row.** The device's active row, when one exists and is not in the delete fence, is
     reported `active` if usable and `expired` (re-register needed) if not. Unusable means past
-    `expires_at`, its `relay_kid` no longer in the live list, its `family_id` not the bearer's
-    family, or its stored route hash not re-derivable (PN-ISS-4; this includes an unreadable
-    `k_grace`, PN-ISS-5). A row in the delete fence is reported as `registration: null`. With no
+    `expires_at`, its `relay_kid` no longer in the live list (tested only while `available` is true;
+    while push is off for any reason a row is not reported `expired` for kid liveness, PN-AV-4), its
+    `family_id` not the bearer's family, or its stored route hash not re-derivable (PN-ISS-4; this
+    includes an unreadable `k_grace`, PN-ISS-5). A row in the delete fence is reported as `registration: null`. With no
     active row, the device's latest row is reported (state `provider_gone` or `expired`) only if it
     left `active` by relay feedback or by the purge's expiry (PN-BND) and no write has advanced `G`
     since, that is, the row's `generation + 1` equals the current `G`. Every other case, including
@@ -195,19 +264,30 @@ Registration is device-scoped, not per bot.
   "relay_kid": kid, "sealed": b64u, "seal_expires_at": int}`.
   - `request_id`: 16 to 32 random bytes, canonical b64u, chosen once per app registration intent
     (030 FR-1) and reused, with the identical body bytes, on every retry of that intent (PN-APP-2).
-  - `sealed`: canonical b64u, decoded length within `⟨D10⟩`. HMP cannot open it and never tries.
-  - `relay_kid` must be in the live `push.relay_kids` list, else `400 bad_request`.
+  - `sealed` (decision B3): canonical b64u of `enc ‖ ct`, a 65-byte uncompressed SEC1 P-256 point
+    followed by the AES-128-GCM output including its 16-byte tag, with a **decoded length of 82 to
+    1,105 bytes inclusive** (65 + 16 + a 1 to 1,024 byte plaintext, inside the `⟨D10⟩` 2,048-byte
+    ceiling). Any other decoded length is `400 bad_request`. HMP checks only canonical b64u and
+    these bounds, cannot open the value and never tries; a malformed point, tag or plaintext is
+    found by the relay (`422 sealed_invalid`, feedback `expired`, PN-DSP-9).
+  - `relay_kid` must match the kid grammar (PN-AV-2), else `400 bad_request`, whether or not push is
+    available. Membership in the live `push.relay_kids` list is checked later, in the order below.
   - `addr_kind` must match `platform` (`apns_token` for `apns`; `fcm_token` or `fcm_fid` for `fcm`).
     `env` is required for `apns` and forbidden for `fcm`. Else `400 bad_request`. These declared
     values are signed into every relay request, and the relay rejects any mismatch with the sealed
     plaintext (PN-REL-3), so the host's checks and the seal agree.
   - `seal_expires_at` must lie in `(now + ⟨D9 min⟩, now + ⟨D9 max⟩]`, else `400 bad_request`. The
     row's `expires_at` is defined as exactly `seal_expires_at` (the purge acts on it, PN-BND).
-  - Requires push available (PN-AV-1 for at least one member), else
-    `503 write_gate_closed {why}` with the PN-REG-1 code.
-  - **Idempotent replay first**, after the configuration checks above. A replay of a request whose
-    `relay_kid` was removed since gets `400 bad_request`, and one made after push became unavailable
-    gets `503 write_gate_closed {why}`; neither reaches the replay check. The app treats both like
+  - **Check order after the body checks (F2).** The body grammar and size checks above (shape, I-JSON,
+    size, the lexical kid grammar, `addr_kind`/`env`/`platform`, `seal_expires_at`, `sealed`) run
+    independent of availability. Then, in this order: (1) push available (PN-AV-1 for at least one
+    member), else `503 write_gate_closed {why}` with the PN-REG-1 code; (2) `relay_kid` in the live
+    `push.relay_kids` list, else `400 bad_request`; (3) transactional liveness, replay and CAS below. A
+    lexically malformed kid is therefore `400` even while push is off, and a well-formed kid that is not
+    live (for example removed) is `503` while push is off and `400` while it is available.
+  - **Idempotent replay first**, after the checks above. A replay made after push became unavailable
+    gets `503 write_gate_closed {why}`, and one whose `relay_kid` was removed since, while push is
+    available, gets `400 bad_request`; neither reaches the replay check. The app treats both like
     `409 stale`: `GET`, then a new intent. Otherwise, if the device's current active row has the same
     `request_hash`:
     - a different body hash is `409 idempotency_conflict`;
@@ -250,6 +330,19 @@ Registration is device-scoped, not per bot.
   `200 {"generation": G}`. Only a `200` confirms removal; every other outcome is "not confirmed"
   (§11, PN-APP-3). Deleting with no row is still a CAS and still advances `G`, so a late older `PUT`
   cannot land.
+  - **Independent of delivery availability (decision B5).** `DELETE` does not require
+    `push.enabled`, a configured relay, a live `relay_kid`, an available approval member or an
+    effective direct-send flag, and none of those closed states changes its answer. A disabled
+    delivery lane must not prevent the removal of an existing registration. It makes no Hermes,
+    relay or provider call and does not read `k_grace`. `GET` stays readable while push is
+    unavailable (`available: false`, PN-REG-1). The resolver keeps its own frozen gate order
+    (PN-RES-1), independent of this rule.
+  - **Still required.** Bearer and `HMP-Instance`, effective approval owner (`404`), the
+    per-device bucket, body shape and size, CAS, and, inside the write transaction before CAS, the
+    re-read of the device as `ACTIVE` and its bearer family as live (`401 revoked`, no write).
+    Terminal revocation and the capacity rules below are unchanged. It never resurrects a row,
+    never bypasses authentication, and never claims removal before a `200`. The only `why` a
+    `DELETE` can carry is `push_capacity`.
   - **Capacity.** `DELETE` of an existing registration is never refused for capacity and never
     inserts into a capped table: retiring is an in-place update, and the device already has its
     generation row. Only a `DELETE` from a device with no generation row would create one, so it is
@@ -281,7 +374,9 @@ Registration is device-scoped, not per bot.
 
 - **PN-ISS-1 Route handle.**
   `R = b64u(HMAC-SHA256(k_grace, transcript("HMP1-PUSH-ROUTE", iid, H, device_id, family_id, G,
-  salt)))`, which is 43 characters and inside app 030's 22 to 64 character shape. The store keeps
+  salt)))`, which is 43 characters and inside app 030's 22 to 64 character shape. Field types
+  (TR-13, decision B1): `iid`, `device_id` and `family_id` UTF-8, `H` and `G` u64, `salt` raw 32
+  bytes. `SHA-256(R)` is over the raw decoded bytes. The store keeps
   `SHA-256(R)` and the inputs, including the salt; it never keeps `R`. `R` can be re-derived only
   with the store **and** the `k_grace` file, the same custody as the refresh retry grace (R16,
   CS-13). The dispatcher re-derives `R` for the payload; a replay re-derives it for the response.
@@ -332,8 +427,8 @@ Registration is device-scoped, not per bot.
     transient read error therefore never creates, rewrites or deletes the secret, and by itself
     never changes a row's state. The purge's expiry of a hash mismatch (PN-BND) changes state only
     after a successful read whose derived hash differs. Independent authoritative expiry (past
-    `expires_at`, removed kid) and revocation still change row state in the purge, with the
-    secret unreadable.
+    `expires_at`; a removed kid, only while push is available, PN-AV-4) and revocation still change
+    row state in the purge, with the secret unreadable.
   - This needs its own source tests (T021, T024). No current source is edited by this spec.
 
 ### PN-RES Hint resolver (`POST /push/hints/resolve`)
@@ -400,7 +495,9 @@ Registration is device-scoped, not per bot.
   one trailing send fires at the window end after the PN-DSP-3 re-check. The newest hint wins. The
   collapse identifier is
   `C = b64u(HMAC-SHA256(k_grace, transcript("HMP1-PUSH-COLLAPSE", SHA-256(R), scope)))` truncated
-  to `⟨D5⟩`, at most 64 bytes. It is opaque and reveals no profile, but it is a stable pseudonym per
+  to `⟨D5⟩`: the first 32 characters of the b64u string, which decode to 24 bytes (at most 64 bytes
+  as an APNs collapse ID). `scope` is the exact canonical profile locator as UTF-8, with no
+  normalization (decision B1). It is opaque and reveals no profile, but it is a stable pseudonym per
   (registration, bot) for the registration's lifetime (analysis A6).
 - **PN-DSP-6 TTL.** `ttl_s = clamp(expiry_estimate - now + EXPIRY_GRACE_S, ⟨D7 floor⟩, ⟨D7 cap⟩)`,
   or `⟨D7 default⟩` when no estimate exists. The estimate is HMP's config-derived display hint, not
@@ -419,7 +516,9 @@ Registration is device-scoped, not per bot.
 - **PN-DSP-9 Feedback CAS.** `provider_gone` marks the registration `provider_gone`, and
   `sealed_invalid` marks it `expired`, only if `(SHA-256(R), G)` is still the device's current
   active registration. The same transaction advances `G` by exactly one (PN-REV rule). Late feedback never touches a
-  newer registration.
+  newer registration. No other result changes a registration: `502 provider_unavailable` (which
+  now includes every provider refusal other than gone, decision B6), `401`, `400`, `409`, `429`,
+  `503` and every ambiguous outcome leave it as it is (analysis residual, HMP v1 §14 RES-27).
 - **PN-DSP-10 Lifecycle and isolation.** The worker never holds the prompt-store lock or a store
   transaction across an `await`. Store writes from the worker are single short transactions. A
   circuit breaker opens after `⟨D8 breaker⟩` consecutive retriable failures or post-write timeouts
@@ -435,7 +534,7 @@ devices, so push sets its own caps. Values use the frozen D mapping; owner-set d
 
 | Object | Scope | Cardinality bound | Overflow rule |
 | --- | --- | --- | --- |
-| Active registration rows | store, per instance | ≤ 1 per device and ≤ `⟨D24⟩` | A `PUT` from a device without an active row is refused `503 write_gate_closed {why: "push_capacity"}`, nothing changed. Replacement, `DELETE` of an existing registration and every retirement are never refused. A row that can never deliver again (past `expires_at`, kid no longer live, hash no longer re-derivable) is expired by the purge and stops counting: capacity frees no later than the seal maximum `⟨D9 max⟩` (14 d) plus the next purge interval (up to 1 h while the listener runs) for expiry, and within one purge interval for kid removal or a hash mismatch after a successful `k_grace` read. A stopped listener delivers nothing and purges nothing; the purge runs again at the next listener open. A row of a device that lost owner status stays active and inert until its `expires_at`, because owner status is live and reversible. |
+| Active registration rows | store, per instance | ≤ 1 per device and ≤ `⟨D24⟩` | A `PUT` from a device without an active row is refused `503 write_gate_closed {why: "push_capacity"}`, nothing changed. Replacement, `DELETE` of an existing registration and every retirement are never refused. A row that can never deliver again (past `expires_at`, kid no longer live, hash no longer re-derivable) is expired by the purge and stops counting: capacity frees no later than the seal maximum `⟨D9 max⟩` (14 d) plus the next purge interval (up to 1 h while the listener runs) for expiry, and within one purge interval for kid removal (only while push is available, PN-AV-4; while it is off for any reason, including an empty kid list or malformed pins, a kid-removed row stays active and inert, and keeps counting against this active cap `⟨D24⟩` (not the retained cap `⟨D25⟩`), until push is available again or `expires_at`) or a hash mismatch after a successful `k_grace` read. A stopped listener delivers nothing and purges nothing; the purge runs again at the next listener open. A row of a device that lost owner status stays active and inert until its `expires_at`, because owner status is live and reversible. |
 | Retained rows (`retired`, `provider_gone`, `expired`) | store, per instance | ≤ `⟨D25 per device⟩` per device and ≤ `⟨D25 total⟩` in total, each for at most `⟨D9 retention⟩` from its state change | Enforced only inside a `PUT` transaction and the push purge step, by deleting the oldest retained rows first (per device, then globally). Retirement in `DELETE`, feedback CAS, purge expiry or post-commit cleanup (PN-REV) does not enforce caps, so the table may transiently exceed `⟨D25 total⟩` by at most `⟨D24⟩` rows until the next `PUT` or purge. |
 | Device generation rows (`G`) | store | ≤ `⟨D28⟩` rows whose device is not REVOKED | A first `PUT`, or a `DELETE`, from a device without a generation row while `⟨D28⟩` such rows exist is refused `503 write_gate_closed {why: "push_capacity"}`, nothing changed and no write. The purge deletes the generation and registration rows of REVOKED devices (below), so they do not count. A generation row of a non-REVOKED device is never deleted or decreased. An active registration implies its device's generation row. After 256 distinct non-REVOKED devices have written, a new device remains capacity-blocked until the operator revokes some; registration expiry alone does not release a generation slot. |
 | Dispatch queue | memory, per listener | `⟨D12 queue⟩` events | Drop the new event, `queue_full`. |
@@ -471,8 +570,11 @@ short store transactions, each bounded by `⟨D24⟩`, `⟨D25⟩` or `⟨D28⟩
 - retire active rows whose device is no longer `ACTIVE` or whose family is revoked (advancing `G`);
 - **expire** (`state := expired`, advance that device's `G` once, wipe the secret columns) every
   active row that is past `expires_at`, whose `relay_kid` is no longer in the live list, or whose
-  route hash no longer re-derives after a **successful** `k_grace` read. Only the hash-mismatch
-  case needs a successful read. Past-`expires_at` and removed-kid expiry, the REVOKED and
+  route hash no longer re-derives after a **successful** `k_grace` read. The removed-kid case
+  applies only while push is available (PN-AV-4, F2): while push is off for any reason (`push_disabled`,
+  `relay_unconfigured` including an empty kid list or malformed pins, or `approvals_unavailable`) the purge
+  never expires a row for kid liveness and keeps otherwise valid active rows inert, and every other
+  step runs unchanged. Only the hash-mismatch case needs a successful read. Past-`expires_at` and removed-kid expiry, the REVOKED and
   retired-row cleanup, and the retained-row purge do not read `k_grace` and proceed whether or not
   it is readable. An unreadable `k_grace` therefore never expires a row merely because it is
   unreadable, and never blocks the other steps.
@@ -489,8 +591,13 @@ replay with fresh handle bytes; after such a restore it can, harmlessly (PN-REG-
 ### PN-REL Relay contract (HMP to relay, relay to providers)
 
 - **PN-REL-1 Endpoint.** `POST {push.relay_url}/v1/push`, HTTPS only, from host configuration only.
-  Use `aiohttp.ClientSession(trust_env=False)`, no redirects, bounded response (at most 1 KiB),
-  platform trust store, optional SPKI pins `⟨D3⟩`. No phone-supplied URL, host or kid can change the
+  Use `aiohttp.ClientSession(trust_env=False)`, no redirects, bounded response (at most 1 KiB) and the
+  platform trust store `⟨D3⟩`. Standard certificate-chain and host-name validation are always required.
+  When `push.relay_spki_pins` is configured (PN-AV-2, R-PIN), the relay's **leaf** certificate must also
+  match one configured digest (SHA-256 over its DER `SubjectPublicKeyInfo`): a pin is an additional
+  constraint, never a replacement trust anchor, self-signed bypass or chain match. A mismatch occurs
+  before any HTTP request byte is written, is a pre-write TLS failure under the same bounded RES-C retry
+  as any other, and has no trust fallback. No phone-supplied URL, host or kid can change the
   destination. A kid not in the host list is refused at registration and skipped at dispatch.
 - **PN-REL-2 Request.**
   `{"v": 1, "kind": "approval", "aud": push.relay_audience, "iid_spki": b64u(SPKI DER), "ts": int,
@@ -498,34 +605,95 @@ replay with fresh handle bytes; after such a restore it can, harmlessly (PN-REG-
   "route": R, "hint": K, "collapse": C, "ttl_s": int}` (at most 4 KiB),
   plus header `HMP-Relay-Signature: b64u(ECDSA-P256(instance key,
   transcript("HMP1-PUSH-RELAY", aud, iid, ts, nonce, kid, platform, addr_kind, env, SHA-256(S), R,
-  K, C, ttl_s, kind)))`, with an absent `env` encoded as the empty string. The instance key already
-  signs pairing transcripts under distinct tags; reuse is decision `⟨D2⟩` under the conditions in
-  plan §7.3. The audience stops a request signed for one relay (for example the owner relay) from
+  K, C, ttl_s, kind)))`, with an absent `env` encoded as the empty string. **Signature encoding (F4):** the
+  header is the canonical b64u of a strict minimal ASN.1 DER `SEQUENCE` of exactly two positive
+  `INTEGER`s `r` and `s`, each in `1` to `n − 1` (`n` the P-256 group order), with no trailing bytes;
+  a non-minimal, zero, negative or out-of-range value, wrong structure or trailing bytes is `400`, and
+  a syntactically valid, in-range pair that does not verify is `401`. Low-S and high-S both verify
+  (TR-13). Verification uses a vetted implementation, never a homemade verifier; vectors are pending
+  (implementation follow-up). **Decision B1:** `R` and
+  `K` enter the transcript as their raw decoded 32 bytes and `C` as its raw decoded 24 bytes, never as
+  base64url text; their wire forms stay canonical b64u of 43, 43 and 32 characters, and `SHA-256(S)`
+  is over the raw decoded `sealed` bytes. `iid` is the 52-character value derived from the supplied
+  SPKI, never a wire field. The base TR framing is unchanged. The instance key already signs pairing
+  transcripts under distinct tags; reuse is decision `⟨D2⟩` under the conditions in plan §7.3.
+  Wire shapes: `aud` per the audience grammar, `ts` a nonnegative JSON integer below 2^53, `ttl_s` a
+  JSON integer 60 to 900 inclusive, `sealed` 82 to 1,105 decoded bytes. The audience stops a request signed for one relay (for example the owner relay) from
   being replayed to another that shares kids.
-- **PN-REL-3 Relay verification order.** Size and shape; then the per-source pre-verification limit
-  and the global verify budget (`⟨D17 verify⟩`); then signature with the supplied SPKI. Then `aud`
-  equals the relay's own audience, `iid := base32(SHA-256(SPKI))` (52 characters, lowercase,
-  unpadded, as `crypto.spki_fingerprint`), `ts` within the skew, nonce unseen, kid known, `iid`
-  allowed when the relay runs an allowlist (`⟨D23⟩`). Each nonce is kept until `ts + CLOCK_SKEW_S`
-  (not measured from receipt), so a nonce lives at most 240 s. At the verify budget of 20/s the
-  cache therefore holds at most 4,800 nonces, below `⟨D18 cache⟩` (16,384): a full cache is a
-  defensive path, not an expected one. A seen nonce is `409 replayed`. If the replay cache is full,
-  the request is refused `503 unavailable` and no unexpired nonce is evicted. Then HPKE-open `S`
-  and check its bindings: `iid` equals the computed iid, `app` is in the relay's app allowlist,
-  `platform` and `addr_kind` match the signed values and each other, `not_after > now` and
-  `not_after ≤ now + ⟨D9 max⟩`, and `env`. For `apns`, `env` matches both the relay's APNs mode
-  and the signed `env`. For `fcm`, `env` is absent from the signed request and from the seal (a
-  signed `env` on an `fcm` request is `400 bad_request`, a sealed one `422 sealed_invalid`), and the
-  relay's environment mode does not apply. Then the per-key rate limits and the global hourly
-  budget in the order of PN-REL-6. Only then is any provider called.
+- **PN-REL-3 Relay verification order** (the numbered table is
+  [`HMP_PUSH_RELAY_V1.md`](../../docs/architecture/contracts/HMP_PUSH_RELAY_V1.md) §5; decisions B6,
+  P1, P2). 1 Size, I-JSON, shape, identifier grammars, canonical b64u and decoded lengths, `ts`,
+  `ttl_s`, the `platform`/`addr_kind`/`env` combination (`400`). 2 Pre-verification admission: the
+  per-source limit and the global verify budget (`⟨D17 verify⟩`, at most 20 checks in any rolling
+  1-second interval on a monotonic clock, no burst), checked atomically and **both charged immediately, only if both
+  admit, even if a later check fails** (`429`). 3 Load the supplied SPKI (malformed or off-curve
+  is `400`), derive `iid := base32(SHA-256(SPKI))` (52 characters, lowercase, unpadded, as
+  `crypto.spki_fingerprint`) **from it before building the transcript**, and verify the signature
+  (a well-formed signature that does not verify is `401`). 4 `aud` equals the relay's own audience
+  (`401`). 6 Early skew screen: `ts` within the skew, `ts ≤ now + CLOCK_SKEW_S` and
+  `now < ts + CLOCK_SKEW_S` (`401`), against a raw wall-clock `now` read for the screen only (it only
+  rejects). 7 and 8 One **atomic** nonce section (F1, R-F1a): it obtains one **effective acceptance
+  instant** `now := max(raw_wall_now, last_now)` and sets `last_now := now`, re-checks both skew inequalities (a failure is
+  `401`, with no new nonce and no provider work), then purges, checks seen/full and reserves with that
+  same instant (a seen nonce is `409 replayed`; a full cache is `503 unavailable` and no unexpired
+  nonce is evicted), before any decrypt or provider work, so two concurrent identical requests cannot
+  both dispatch. No step relies on an instant captured before another worker purged. Concurrent and
+  boundary conformance is required (relay contract §14). The nonce is retained over
+  `[receipt, ts + CLOCK_SKEW_S)` (at most 240 s under normal clock progress), purged when `expiry ≤ now`, and is not released
+  when a later check refuses. Under normal clock progress and at the verify budget the cache holds at most 4,800 nonces, below
+  `⟨D18 cache⟩` (16,384): a full cache is a defensive path. If `last_now` is ahead of the raw wall clock
+  (a backward step, a clock that ran ahead and was corrected, or a forward jump), the effective instant stalls, nothing
+  purges, retention in real time can exceed 240 s, the live count can exceed 4,800, and repeated stalls or steps can reach
+  16,384; the relay then refuses `503 unavailable` with no eviction, no early release and no new replay acceptance
+  (relay CLK-1; no other clock progression, no new TTL, no reservation reset). 9 kid known (`401`). 10 `iid` allowed
+  when the relay runs an allowlist (`⟨D23⟩`, `401`). 11 to 15 RFC 9180 §7.1.4 validation, HPKE open
+  of `S`, the exact plaintext schema and JCS check (PN-SEAL-1), and the bindings: `iid` equals the
+  derived iid, `app` is in the relay's app allowlist, `platform` and `addr_kind` match the signed
+  values and each other, `not_after > now` and `not_after ≤ now + ⟨D9 max⟩` (the same effective acceptance instant as step 7,
+  never a later raw wall-clock reading), and `env` (F5: for `apns`
+  the sealed and signed `env` equal each other and the pair (sealed `app`, `env`) is an allowed pair of
+  the relay's `(app, env)` allowlist, whose own provider connection is used, with no global APNs mode
+  and no environment fallback; for `fcm` it is absent from the seal and only the package allowlist
+  applies; a signed `env` on an `fcm` request was refused at step 1 as `400`). Failures are
+  `422 sealed_invalid`; the `iid` allowlist of step 10 stays `401`. 16 The four counters (per `iid`,
+  per destination, per `(destination, iid)`, global), each over a rolling 3,600-second window (F6; monotonic clock), are
+  checked atomically and charged only if all admit (`429`); no provider is contacted. 17 One provider attempt: the first and only step at
+  which any provider is called. A relay restart empties the replay cache, `last_now` and counters; the restart
+  replay window (at most 240 s, in relay-clock time) is recorded and not closed (HMP v1 §14 RES-26).
+  **Relay clock (R-F1a; contract text accepted, source pending).** `last_now` is memory only, never persisted. The nonce, skew,
+  purge, capacity and reserve decisions and the seal-expiry check use the one effective instant, so a
+  backward wall-clock step cannot reopen a purged nonce within one relay lifetime. While `last_now` is
+  ahead of the raw wall clock (a forward step, or a backward correction of a clock that ran ahead), the raw and
+  effective skew screens can refuse otherwise valid requests with `401` (step 6 or 7), and step 14 can refuse a seal
+  whose `not_after` is at or before the effective instant (below `ts + CLOCK_SKEW_S` for a request that passed step 7)
+  with `422`, which HMP treats under RES-E as `expired`, until the wall clock catches up or the operator restarts the
+  relay; there is no automatic restart or reserve reset. Pending tests: retained capacity under repeated backward steps,
+  and a full cache under repeated steps that refuses `503` and evicts nothing. The rolling windows of steps 2 and
+  16, including the per-source 600 per rolling 3,600 seconds, are measured on monotonic elapsed time.
+  Nothing claims nonce persistence or restart immunity. Causal rollback and forward-jump tests and
+  vectors are required and **pending; none exists** (T030).
 - **PN-REL-4 Responses** (closed set, JSON `{"result": ...}`): `202 accepted`;
   `410 provider_gone`; `422 sealed_invalid`; `409 replayed`; `429 rate_limited` (the relay's own limits only;
   provider not attempted; provider throttling is never `429`); `401 unauthorized`; `400 bad_request`;
-  `502 provider_unavailable` (the provider was attempted and answered 5xx, throttled us (APNs `TooManyRequests`, FCM `QUOTA_EXCEEDED`), timed out or the outcome
-  is otherwise ambiguous); `503 unavailable` (the provider was **not** attempted). The relay never
+  `502 provider_unavailable` (the provider was attempted and the result is anything other than
+  accepted or a definitive gone: 5xx, throttling (APNs `TooManyRequests`, FCM `QUOTA_EXCEEDED`), a
+  timeout, an ambiguous outcome, or **any other refusal**, including APNs `BadDeviceToken`,
+  `DeviceTokenNotForTopic`, `Forbidden`, `PayloadTooLarge` and the FCM topic, payload and
+  permission refusals; decision B6); `503 unavailable` (the provider was **not** attempted). The relay never
   returns `503 unavailable` after a provider attempt began, and never retries a provider call itself.
+  Code meaning (decision B6): `400` is a malformed request, shape, SPKI, signature encoding,
+  identifier or `ttl_s` (a JSON integer 60 to 900; `ts` a nonnegative integer below 2^53), always
+  before any provider work; `401` is a well-formed but invalid signature, a different audience, a
+  `ts` outside the skew, an unknown kid or an allowlist miss; `422` is an RFC 9180 validation, open,
+  plaintext, JCS or binding failure; `409`, `429` and `503` are unchanged. There is no new code. No
+  result after a provider attempt is retried, and HMP does not retire a registration on any of them
+  except `410` and `422` (PN-DSP-9).
+  Definitiveness (P3): `202` means the provider accepted the message, not that it was shown;
+  `410 provider_gone` is the only definitive provider result; `502` is never definitive. The
+  relay's body is only `{"result": code}`. No provider body or text crosses HMP logs or the
+  response, and HMP never logs or echoes relay text.
   HMP treats anything outside this set, malformed, oversized or timed out after the request was
-  written as ambiguous (PN-DSP-8). HMP never logs or echoes relay text.
+  written as ambiguous (PN-DSP-8).
 - **PN-REL-5 Payload templates are fixed by the relay.** The host contributes no visible text.
   - **APNs (direct, iOS):** `apns-push-type: alert`, `apns-priority: 10`,
     `apns-expiration: now + ttl_s` (nonzero), `apns-topic: <bundle ID from the allowlist>`,
@@ -536,21 +704,30 @@ replay with fresh handle bytes; after such a restore it can, harmlessly (PN-REG-
   - **FCM HTTP v1 (Android):** the target field is chosen from the sealed `addr_kind`: `token` for
     `fcm_token` (marked deprecated in the v1 reference, which says to use `fid`), `fid` for
     `fcm_fid`. `android.priority: "HIGH"`, `android.ttl: "<ttl_s>s"`,
-    `android.collapse_key: <one constant>` (FCM allows at most four distinct keys at a time),
+    `android.collapse_key: "hmp_approval_v1"` (the one global constant for every message and every
+    bot; FCM allows at most four distinct keys at a time; there is no per-bot FCM collapse key),
     `android.restricted_package_name: <package from the allowlist>`,
-    `android.notification: {"title": "Approval needed", "channel_id": <approval channel>,
-    "tag": C}`, `android.data: {"hmp_v": "1", "hmp_route": R, "hmp_hint": K}`. A notification
+    `android.notification: {"title": "Approval needed", "channel_id": "hmp_approval_v1",
+    "tag": C}` (the channel's user-visible name and localization are separate app work and the
+    user's channel settings prevail), `android.data: {"hmp_v": "1", "hmp_route": R, "hmp_hint": K}`. A notification
     message lets the system show the generic alert **while the app is in the background** without
     app code or a host fetch. In the foreground, app code decides presentation (PN-PLAT). The Play
     services proxy setting is `⟨D16⟩`.
   - **iOS through FCM is not used.** FCM's own APNs example uses `apns-priority: 5`. Direct APNs
     alerts use priority 10 and an explicit expiration. Mixing the two is a defect.
-- **PN-REL-6 Relay rate and abuse limits** `⟨D17⟩`, per relay replica: a global verify budget and a
-  per-source-address limit (both before signature verification), then per host `iid`, per
-  destination (`HMAC(relay secret, provider address)`), per `(destination, iid)` (at most the HMP
-  per-device hourly rate), and a global hourly budget `B`. **Order:** every per-key cap is checked
-  before the global budget, and a request is counted against any of them only if all of them admit
-  it, so only admitted requests charge the global budget. The per-`(destination, iid)` cap stops
+- **PN-REL-6 Relay rate and abuse limits** `⟨D17⟩`, per relay replica, in two separate admissions
+  (decision P2). **Pre-verification:** the per-source-address limit and the global verify budget
+  (at most 20 checks in any rolling 1-second interval, no additional burst; the per-source limit is 600
+  per rolling 3,600 seconds; both on a monotonic clock, PN-REL-3) are checked together,
+  atomically, and both are charged immediately, only if both admit, even when the signature or seal
+  later fails; CPU is never charged later. **Post-seal hourly:** per host `iid`, per destination
+  (`HMAC(relay secret, provider address)`), per `(destination, iid)` (at most the HMP per-device
+  hourly rate) and the global hourly budget `B` are checked together, atomically, and charged only
+  if every one admits, so only admitted requests charge the global budget. **Rolling windows (F6):**
+  these four counters use rolling 3,600-second windows, not fixed clock hours, so a fixed-window
+  boundary allows no double burst; no cap value changes, and this does not alter HMP's own per-device
+  dispatch rate window (PN-DSP-7, D6). The pre-verification windows and these four use monotonic
+  elapsed time, never a raw wall clock that can step backwards. The per-`(destination, iid)` cap stops
   **one** `iid` from exhausting the destination ceiling and suppressing another host's alerts to
   the same phone; the per-destination cap stays as a ceiling that bounds spam to one phone.
   Residuals, recorded and not closed (analysis A14, A17):
@@ -580,15 +757,30 @@ replay with fresh handle bytes; after such a restore it can, harmlessly (PN-REG-
 
 ### PN-SEAL Sealed provider address (phone to relay, opaque to HMP)
 
-- **PN-SEAL-1** Plaintext, canonical JSON (at most `⟨D10⟩` bytes):
+- **PN-SEAL-1** Plaintext, RFC 8785 JCS in UTF-8 without a BOM (at most `⟨D10⟩` bytes, decision B2):
   `{"v": 1, "iid": iid, "platform": "apns"|"fcm",
   "addr_kind": "apns_token"|"fcm_token"|"fcm_fid", "env": "production"|"sandbox" (apns only),
   "app": bundle-or-package, "addr": provider address, "not_after": seal_expires_at,
   "n": b64u(16 B)}`. `addr_kind` must match `platform`; the relay rejects a mismatch as
-  `sealed_invalid`. Make no assumption about the address size beyond the bound.
+  `sealed_invalid`. Make no assumption about the address size beyond the bound. **Restricted JCS
+  domain:** member names are the fixed ASCII names; every value is a string except `v` (the integer
+  1) and `not_after` (a nonnegative JSON integer below 2^53, never a boolean, float or a lexeme
+  with a fraction or exponent). The relay rejects duplicate names, extra or missing members,
+  invalid Unicode and lone surrogates, and any bytes unequal to the JCS reserialization of the
+  validated object (RFC 8785 §3.2.1 to §3.2.4: no whitespace, UTF-16 code unit member sorting,
+  string escaping, UTF-8). No Unicode normalization. Canonical order for `apns`: `addr`,
+  `addr_kind`, `app`, `env`, `iid`, `n`, `not_after`, `platform`, `v`; for `fcm` the same without
+  `env`. No HMP vector is invented here.
 - **PN-SEAL-2** HPKE (RFC 9180) base mode to the relay public key named by `kid`, with
-  `info = "HMP push seal v1"` and `aad = kid`. The suite is `⟨D1⟩`. Relay public keys ship in the
-  app build as a closed `kid → key` list; there is no runtime key fetch.
+  `info = "HMP push seal v1"` and `aad = kid` (the UTF-8 bytes of the ASCII kid). The suite is
+  `⟨D1⟩`. Relay public keys ship in the app build as a closed `kid → key` list; there is no runtime
+  key fetch and nothing is negotiated. The serialized value is `sealed = b64u(enc ‖ ct)` with `enc`
+  exactly 65 bytes and `ct` the AEAD output including its 16-byte tag, with no version, key or length
+  prefix inside the blob (decision B3). The relay performs RFC 9180 §7.1.4 input and output
+  validation, authenticates and opens, then checks the exact schema and JCS form; a malformed point,
+  tag or plaintext is `422 sealed_invalid`. Use a vetted HPKE implementation, no homemade curve
+  validation, and a fresh CSPRNG ephemeral key for every production seal; a deterministic-key hook
+  exists only for the RFC 9180 vectors and never ships.
 - **PN-SEAL-3** The phone re-seals and re-registers when the provider address or its kind changes,
   the kid list changes, the registration reads `expired` or `provider_gone`, or fewer than
   `⟨D9 refresh⟩` remain before `not_after`. Apple says not to cache device tokens and to expect a
@@ -636,10 +828,10 @@ reentrant, and nesting the transaction would hang the cause.
 | Identity change, `rotate-key`, clone/restore (`revoke_all_for_identity_change`) | every row → `retired`, then the REVOKED purge deletes them; `H` and `iid` change | listener restarts; memory gone |
 | New `PUT`/`DELETE` | the previous row → `retired`, `G` advances once | old `R`/`K` never resolve |
 | Relay `provider_gone` / `sealed_invalid` | CAS to `provider_gone` / `expired`, `G` advances once (PN-DSP-9) | none |
-| `expires_at` (= `seal_expires_at`) passed, kid removed from the host list, `k_grace` re-created | inert; reported `expired` by `GET`; the purge sets them `expired`, advances `G` and frees capacity (PN-BND). Only the `k_grace` re-created (hash mismatch) case needs a successful read | skipped |
+| `expires_at` (= `seal_expires_at`) passed, kid removed from the host list (only while push is available, PN-AV-4), `k_grace` re-created | inert; reported `expired` by `GET`; the purge sets them `expired`, advances `G` and frees capacity (PN-BND). Only the `k_grace` re-created (hash mismatch) case needs a successful read | skipped |
 | Owner removed from `owner_device_ids`, host denial | rows kept but inert: dispatch and resolve re-check live; the purge expires them at `expires_at` | skipped; resolve `404` |
 | Bot grant revoked in Hermes | per-profile re-check | skipped for that bot; resolve `404` |
-| `push.enabled` off, relay unset | rows kept, inert; expired at `expires_at` | nothing dispatched; resolve `404` |
+| Push off for any reason (`push.enabled` not `true`, relay unset or malformed including a malformed or empty kid list or malformed pins, approvals closed, direct send off) | rows kept, inert, and never expired for kid liveness (PN-AV-4); absolute expiry at `expires_at` and revocation still apply | nothing dispatched; resolve `404` |
 | Listener close, gateway restart | rows kept | queue, coalescing slots, counters and hint map discarded |
 
 Non-active rows keep only `route_hash`, the salt and the generation fields, and are purged under
@@ -841,7 +1033,8 @@ review and runtime gates before dispatch becomes available.
   `409 idempotency_conflict` is a client defect.
 - **`DELETE` mapping.** `200` means removed, and only a `200` is confirmation. `409 stale` means
   `GET`, then retry with the new generation. `503 other` (including a store write failure),
-  `503 write_gate_closed` (including `push_capacity`) and `429` mean **not confirmed**: keep the
+  `503 write_gate_closed` (only `push_capacity` can occur; `DELETE` is never refused because push is
+  disabled, unconfigured or unavailable, PN-REG-3) and `429` mean **not confirmed**: keep the
   pending delete intent and retry on resume (PN-APP-3). `404` means the device is not an effective
   approval owner now: no alert is dispatched while that holds, but removal is not confirmed. `401`
   means the pairing itself is gone and the intent is moot. The UI never says alerts stopped before
@@ -873,6 +1066,8 @@ review and runtime gates before dispatch becomes available.
 | Instance-level pending-approval summary, so prompts of other bots without their own alert are discoverable without a roster scan | `UX_CONTRACT_GAP` / `HMP_CONTRACT_GAP` | App and HMP |
 | Registration, issuer, resolver, dispatcher, post-commit cleanup, store, purge, CLI | `HMP_CONTRACT_GAP` (this spec) | HMP |
 | Relay service, HPKE keys, rate limits, deployment | Our infrastructure | Project and owner |
+| HMP-specific signature (raw `R`, `K`, `C`; strict DER and range cases, F4), JCS plaintext, `enc ‖ ct` seal, atomic skew-boundary (F1), relay-clock rollback and forward-jump (R-F1a) and rolling-window (F6) vectors and tests from an independent generator, with independent review (the RFC 9180 vector entry is the primitive bar) | Implementation follow-up (T025, T030, T043); not blocked by a contract gap | HMP, relay, app |
+| Relay restart replay window (at most 240 s in relay-clock time, memory-only cache and `last_now`; no nonce persistence or restart immunity is claimed) and provider refusals that do not retire a registration (HMP v1 §14 RES-26, RES-27) | Recorded residuals, not closed | Project |
 | APNs key, Firebase project, App ID capabilities, store privacy answers | Provider and account | Owner |
 | APNs registration, FCM SDK, channel, permission, Time Sensitive entitlement, foreground presentation, native input, encrypted route persistence, sealing, PN-APP-1/2 | App, native, OS (`PLATFORM_GAP`) | App |
 | Physical delivery, Doze, Focus, force-quit and force-stop, rotation | `PLATFORM_GAP` | Owner devices |

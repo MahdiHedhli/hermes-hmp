@@ -1,9 +1,52 @@
 # Implementation plan: approval push registration, issuance, hint resolution and relay delivery
 
+
+**Current contract review status (2026-10-02):** The clock mechanism, optional pin grammar and N3–N6 were accepted by the prior focused review. The independent D1/D2/D3 sentence review accepted the capacity/retention qualifications, per-`(app, env)` APNs connections and seal-expiry wording. Root resolved its remaining editorial status finding M1 by dating the pre-review statements below. This is contract-text acceptance only. Source, causal tests/vectors, interoperability, provider/device/deployment/release and owner choices O1–O6 remain pending. No task checkbox or security mechanism changed.
+
 Status: design frozen by root on 2026-10-02 after independent review and C1–C3 closure.
 Implementation still requires the separately accepted approval inputs (T003) and contract updates.
 Account, credential, deployment and device actions retain their own gates. Values written `⟨Dn⟩`
 use the frozen mapping in [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md); owner budgets remain pending.
+
+**Root interoperability amendment, 2026-10-02 (authoritative where it conflicts with an earlier line
+of this plan).** Decisions B1 to B6 and P1 to P3 in `ROOT_DECISIONS.md` (section "Root
+interoperability amendment") fix the relay signature transcript bytes (raw `R`, `K`, `C`), the JCS
+seal plaintext, the `enc ‖ ct` seal framing and its 82 to 1,105 byte range, the `kid` and `aud`
+grammars, the literal `hmp_approval_v1` FCM channel and collapse key, `DELETE` independence from
+delivery availability, the result-code map, and the relay's atomic admission and nonce rules. §3,
+§5.1, §6.1, §6.2, §6.5 and §8 below are synchronized to it. Contract text only: it authorizes
+nothing, and is not implementation, vector or device evidence. A scoped independent review of an earlier
+candidate accepted it with conditions; a later review of the clarified text accepted its other clauses and
+required the clock and pin gates, now written (next paragraph) and pending focused review.
+
+**Root review clarifications, 2026-10-02 (authoritative; F1 to F7).** Contract-text clarifications
+(`ROOT_DECISIONS.md`, section "Root review clarifications") that preserve B1 to B6, P1 to P3 and every
+authority and security requirement: F1 the relay's atomic nonce section reads one current instant (the effective instant of R-F1a below) and
+re-checks both skew inequalities; F2 push-off never expires registrations on kid liveness, with the
+`why` precedence and the `PUT` check order; F3 the removed relay-contract GAP-1 to GAP-6 labels are not
+HMP v1's live `GAP-1` and `GAP-2`; F4 strict DER signature encoding; F5 APNs environment per allowed
+`(app, env)` pair; F6 rolling 3,600-second post-seal counters; F7 status wording. §5.1, §6.1, §6.5, §8.1
+and §8.2 are synchronized. They authorize nothing and are not vector, interoperability, provider or
+device evidence.
+
+**Root clock and pin delta, 2026-10-02 (authoritative; pre-review status recorded below).** A later independent review
+accepted the other clauses and required two source gates. Pre-review history: this delta writes them; none is accepted, a
+focused independent sentence review is pending, and there is no source, vector, device or provider
+evidence. The clock-count repair of 2026-10-02 followed a focused review of that delta: the review accepted the mechanism, the pins and N3 to N6, and required text repairs for the 4,800-nonce and 240 s qualification under clock steps (its finding D1) and for one APNs connection granularity per allowed `(app, env)` pair (D2), with editorial wording (D3). At that checkpoint, the repaired capacity and connection sentences awaited a focused check of those sentences only. That check has now accepted D1/D2/D3 as contract text; implementation and verification remain pending. **R-F1a:** the relay computes one effective acceptance instant `max(raw wall now, last_now)`
+inside the atomic nonce section and stores it in memory; skew re-check, purge, seen, capacity, reserve
+and the step 14 seal expiry use it, step 6 may use the raw clock, and the rolling windows of steps 2 and
+16 (including the per-source 600 per rolling 3,600 s) use monotonic elapsed time. A backward step cannot
+reopen a purged nonce within one relay lifetime; a forward step can cause `401`/`422` availability
+refusals until the wall clock catches up or the operator restarts, with no automatic restart or reserve
+reset; no nonce persistence or restart immunity is claimed (§6.1, §6.5, §8.2). **R-PIN:** host setting
+`push.relay_spki_pins`, omitted means no pin, configured means exactly 1 to 8 distinct canonical unpadded
+base64url SHA-256 digests (43 characters, 32 bytes) of the leaf DER `SubjectPublicKeyInfo`, additional to
+mandatory chain and host-name validation, a mismatch before any request byte under the bounded RES-C retry,
+malformed (explicit `None`, empty, non-list, duplicate, bad entry) gives `relay_unconfigured`, no
+environment fallback (§6.1, §8.1). **N3:** separation of APNs connections per allowed `(app, env)` pair;
+credential and signing-key provisioning is pending owner choice O3. **N4** and **N5** sync the settings
+list, the all-off purge reasons and D24 (not D25) counting for inert rows (§8.1). **N6** marks earlier
+"six gaps resolved" and skew-replay wording as superseded history; the live `GAP-1`/`GAP-2` stay open.
 
 ## 1. Context
 
@@ -101,7 +144,7 @@ same text. The phone needs the tailnet only at tap time.
 | `store.py` | Schema 3: `push_registrations` and `push_device_generations`. A bounded push purge step (expiry of stale active rows, deletion of REVOKED devices' rows, retained caps, the D28 cap). A guard in `Store.set_device_state` that refuses to change a REVOKED device. No push statement runs inside any cause's transaction. | Migration tests from schema 1 and 2; idempotent migrate; a test that `set_device_state` cannot revive REVOKED; purge tests |
 | `revoke.py`, `tokens.py`, `pairing.py` | After the cause's transaction commits (before `REVOKED` is raised in the refresh-reuse path), call one best-effort cleanup in its own `Store.transaction()`. The cause's outcome is unchanged on any cleanup error. | Causal negative tests; a real `SQLITE_FULL` (for example `max_page_count`) injected into the post-commit cleanup leaves each cause's committed outcome and rows unchanged |
 | `identity.py` | A new read-only `k_grace` accessor for push only: never creates or rewrites; off-loop reads; an unreadable file means not re-derivable. No change to existing callers | Own source tests: absent, unreadable, wrong-length and transient-error reads never write or delete the file; existing refresh tests unchanged |
-| new `push_registration.py` | Route handlers PN-REG-1..4, issuer PN-ISS-1/2, CAS, idempotency, capacity | Route-level tests with the real `Authenticator` |
+| new `push_registration.py` | Route handlers PN-REG-1..4, issuer PN-ISS-1/2, CAS, idempotency, capacity. `DELETE` does not consult push availability (B5) and never calls Hermes, the relay or a provider | Route-level tests with the real `Authenticator`, including `DELETE` with push disabled, relay unset, kid removed and approval members closed |
 | new `push_resolve.py` | PN-RES, using approval-lane inputs I-2..I-4 and I-6 | Route-level tests; masking tests |
 | new `push_dispatch.py` | Queue, recipients, coalescing, TTL, rate, hint map, breaker, bounds (I-1, I-5, I-6) | Fake clock and fake relay tests |
 | new `push_relay.py` | Signed client, bounded response parser, retry policy | Fake HTTPS server tests: redirects, oversize, slow, malformed, connect failure vs post-write timeout |
@@ -172,8 +215,12 @@ generation row; the transaction that inserts a device's first active row creates
    intent. It draws `request_id` once for the intent, seals the provider address for the pinned
    `iid` and a kid from `GET` (`relay_kids`), and persists the exact body (PN-APP-2).
 2. `PUT` with `expected_generation = G` from the last `GET` or `PUT`.
-3. Server before the store transaction: authenticate → owner → bucket → shape (kid live, `addr_kind`/`env`
-   consistent, seal lifetime in range) → available → read `k_grace` off-loop. In one
+3. Server before the store transaction: authenticate → owner → bucket → shape (kid matches the grammar,
+   `addr_kind`/`env` consistent, seal lifetime in range, `sealed` canonical b64u of 82 to 1,105 decoded
+   bytes; all independent of availability) → available (`503` with the PN-AV precedence `why`) → the
+   kid is in the live list (`400`; F2) → read `k_grace` off-loop. (`DELETE` skips the availability and
+   `k_grace` steps: authenticate → owner → bucket → shape → the write transaction with its `ACTIVE`
+   device and live-family re-check, then CAS.) In one
    `BEGIN IMMEDIATE` transaction, re-check device ACTIVE and bearer family live (`401 revoked` on
    failure), then replay check on the active row with the
    same `request_hash`: body mismatch `409 idempotency_conflict`; family mismatch or expired
@@ -183,8 +230,9 @@ generation row; the transaction that inserts a device's first active row creates
    push_capacity`: active-row cap D24 and generation-row cap D28), retire the old row, advance `G`
    by one, create the generation row if absent, draw the salt, insert, enforce retained caps,
    return. A `route_hash` UNIQUE violation, or `G` reaching 2^53, rolls everything back
-   (`503 other`, `G` unchanged). A replay made after the kid was removed or push became unavailable
-   answers `400` or `503` before the replay check; the app does `GET`, then a new intent.
+   (`503 other`, `G` unchanged). A replay made after push became unavailable answers `503`, and one made
+   after the kid was removed while push is available answers `400`, before the replay check; the app does
+   `GET`, then a new intent.
 4. The app commits the intent with `R`. If the acknowledgement is lost, the same bytes return the
    same `R` (030 FR-6). A provider token change, kid change, `expired`/`provider_gone` state or
    nearing expiry (`⟨D9 refresh⟩`) starts a new intent; 030 `begin` closes the old handle locally at
@@ -224,10 +272,14 @@ resolve) recheck exact generations, so ordering races fail closed.
 
 A single stateless HTTPS service, run as **one replica** (`⟨D27⟩`), with four parts:
 
-1. Request verifier: size, per-source pre-verification limit, signature over the transcript,
-   audience, skew, a bounded replay cache, kid, optional `iid` allowlist.
-2. HPKE opener and binding checker: `iid`, app allowlist, environment, `not_after`, platform,
-   `addr_kind`.
+1. Request verifier: size and shape, the atomic pre-verification admission (per-source limit and
+   global verify budget, charged together at once), the `iid` derived from the supplied SPKI, the
+   signature over the transcript with raw `R`, `K`, `C` (strict DER, F4), audience, the early skew screen,
+   the atomic nonce section that computes one effective acceptance instant `max(raw wall now, last_now)`
+   (R-F1a, memory only), re-checks skew at it and then purges and reserves in a bounded replay cache (F1),
+   kid, optional `iid` allowlist. Rolling windows are measured on a monotonic clock.
+2. HPKE opener and binding checker: RFC 9180 §7.1.4 validation, open `enc ‖ ct`, restricted JCS
+   plaintext check, then `iid`, the `(app, env)` allowlist pair (F5), `not_after`, platform, `addr_kind`.
 3. Provider senders: an APNs HTTP/2 client with token authentication, using an ES256 JWT
    refreshed no more than every 20 minutes and no less than every 60. FCM HTTP v1 with OAuth 2.0
    short-lived access tokens derived from a service account or the platform's default credentials,
@@ -236,7 +288,7 @@ A single stateless HTTPS service, run as **one replica** (`⟨D27⟩`), with fou
 4. Limiter: per source, per `iid`, per destination HMAC, per `(destination, iid)`, global.
 
 It has no database of tokens, users or instances. Its configuration is: its audience, the app
-allowlist (bundle IDs and packages, environment), kid keys, APNs team and key IDs, the FCM project,
+allowlist (`(bundle ID, environment)` pairs for APNs and packages for FCM, F5), kid keys, APNs team and key IDs, the FCM project,
 the optional `iid` allowlist and limits.
 
 ### 6.2 Provider facts this design relies on (primary sources, fetched 2026-10-02; see analysis §6)
@@ -249,7 +301,9 @@ the optional `iid` allowlist and limits.
 - An APNs `410 Unregistered` or `ExpiredToken` means stop sending to that token. Do not retry
   `BadDeviceToken`, `DeviceTokenNotForTopic`, `Forbidden`, `ExpiredToken`, `Unregistered` or
   `PayloadTooLarge`. 5xx may be retried after 15 minutes, which exceeds the alert TTL, so the relay
-  answers `provider_unavailable` and nobody retries. `TooManyRequests` may be retried with a delay;
+  answers `provider_unavailable` and nobody retries. The relay also answers `provider_unavailable`
+  for every one of those refusals (decision B6); only `Unregistered`/`ExpiredToken` and FCM
+  `UNREGISTERED` are `provider_gone`, and HMP retires no registration on a refusal. `TooManyRequests` may be retried with a delay;
   the relay does not retry it and answers `provider_unavailable`, never `429` (which means the
   provider was not attempted).
 - Time Sensitive notifications break through Notification Summary and Focus, and the user can turn
@@ -281,7 +335,7 @@ the optional `iid` allowlist and limits.
 | R3. Third-party push service | Not recommended | Extra processor and privacy disclosures; no simplification of authentication. |
 
 Staging R2 then R1 uses one relay codebase and one contract. Only `push.relay_url`,
-`push.relay_audience`, pins, kids and the allowlist mode differ.
+`push.relay_audience`, `push.relay_spki_pins`, kids and the allowlist mode differ.
 
 ### 6.4 Custody and lifecycle
 
@@ -306,14 +360,14 @@ Staging R2 then R1 uses one relay codebase and one contract. Only `push.relay_ur
 | Object | Cardinality bound | Overflow rule |
 | --- | --- | --- |
 | Request body / response | 4 KiB / fixed small JSON | `400 bad_request` before any other work |
-| Pre-verification signature checks | `⟨D17 verify⟩` per second, global | `429 rate_limited`, provider not attempted. Exhausting it with unauthenticated traffic denies every R1 alert (A17) |
-| Per-source table (pre-verification) | 4,096 entries, LRU | Eviction can only loosen one source's limit; the global verify budget still bounds CPU |
-| Replay nonce cache | `⟨D18 cache⟩` = 16,384 entries, each kept until `ts + CLOCK_SKEW_S` (at most 240 s). At the verify budget of 20/s at most 4,800 are live | Refuse `503 unavailable` (provider not attempted); never evict an unexpired nonce. A full cache is a defensive path, not an expected one |
-| Per-`iid`, per-destination, per-`(destination, iid)` tables | `B` entries each, hourly windows; an entry is created only when the request is admitted by every per-key cap and the global budget | Cannot overflow while global admission holds. If full anyway, refuse `429 rate_limited` (fail closed, no eviction of a live counter) |
-| Admission order | all per-key caps are checked first, then the global hourly budget `B` | A request is counted against any limiter only if all admit it, so only admitted requests charge `B`. Sybil `iid`s and random addresses can still exhaust `B` in public mode (A17) |
+| Pre-verification signature checks | `⟨D17 verify⟩`: at most 20 in any rolling 1-second interval on a monotonic clock, global, no extra burst (a sliding log of at most 20 timestamps), checked atomically with the per-source limit and charged immediately only if both admit, even if a later check fails | `429 rate_limited`, provider not attempted, nothing charged. Exhausting it with unauthenticated traffic denies every R1 alert (A17) |
+| Per-source table (pre-verification) | 4,096 entries, LRU; the limit is 600 per rolling 3,600 s on a monotonic clock | Eviction can only loosen one source's limit; the global verify budget still bounds CPU |
+| Replay nonce cache | `⟨D18 cache⟩` = 16,384 entries, each kept over `[receipt, ts + CLOCK_SKEW_S)` (at most 240 s under normal clock progress) and purged when `expiry ≤ now`. Under normal clock progress at the verify budget (20 per rolling second) at most 4,800 are live; clock stalls or backward steps (`last_now` ahead of the raw clock) can prolong retention and exceed 4,800, and repeated steps can reach 16,384 (relay CLK-1) | Atomic check-and-reserve before decrypt or provider work; refuse `503 unavailable` when full (provider not attempted); never evict an unexpired nonce; never release a reservation early; a full cache under repeated steps refuses `503` with no eviction and no new replay acceptance; one effective instant `max(raw wall now, last_now)` inside the atomic section re-checks skew, drives purge, check and reserve (F1) and is reused by the step 14 seal expiry; a backward wall-clock step cannot reopen a purged nonce in one relay lifetime, and while `last_now` is ahead of the raw clock (a forward step or a backward correction) the relay can refuse requests until the clock catches up or the operator restarts (R-F1a, no automatic reset, no other progression or TTL). A full cache is a defensive path, not an expected one. Memory only: a restart empties it (HMP v1 §14 RES-26) |
+| Per-`iid`, per-destination, per-`(destination, iid)` tables | `B` entries each, rolling 3,600-second windows (F6); an entry is created only when the request is admitted by every per-key cap and the global budget | Cannot overflow while global admission holds. If full anyway, refuse `429 rate_limited` (fail closed, no eviction of a live counter) |
+| Admission (post-seal) | the four counters (per `iid`, per destination, per `(destination, iid)`, global `B`), each over a rolling 3,600-second window on a monotonic clock (F6; no new cap value), are checked together, atomically | A request is counted against any of them only if all admit it, so only admitted requests charge `B`. Separate from the pre-verification admission above. Sybil `iid`s and random addresses can still exhaust `B` in public mode (A17) |
 | `iid` allowlist (R2 mode) | ≤ `⟨D23 allowlist⟩` = 8 entries, from relay config | Not in list: `401 unauthorized` |
 | Negative cache of gone destinations (optional) | 4,096 HMACs, LRU, 30-day entry lifetime | Eviction only costs one more provider attempt |
-| Provider connections | APNs: one HTTP/2 connection per environment; FCM: ≤ 8 concurrent requests | Queue inside the request's own timeout; on timeout answer `502 provider_unavailable` if the provider call began, else `503 unavailable` |
+| Provider connections | APNs: one HTTP/2 connection per allowed `(app, env)` pair (F5, N3; credential provisioning is pending O3); FCM: ≤ 8 concurrent requests | Queue inside the request's own timeout; on timeout answer `502 provider_unavailable` if the provider call began, else `503 unavailable` |
 
 ## 7. Security and compatibility review
 
@@ -375,7 +429,7 @@ CAS; replay with a different bearer family (`409 stale`); replay after `k_grace`
 evicted (`409 stale`, never `200`); forced `route_hash` collision (`503 other`, `G` unchanged, old
 row active); capacity full (`503 push_capacity`; replacement and `DELETE` of an existing registration still
 succeed); generation-row cap (first `PUT` and no-generation `DELETE` refused, nothing written); kid not
-configured at `PUT`; kid removed before dispatch (skipped, `GET` reads `expired`); `addr_kind`/`env`
+configured at `PUT`; kid removed before dispatch while push is available (skipped, `GET` reads `expired`); `addr_kind`/`env`
 mismatch; seal lifetime out of range; bounds; post-commit cleanup for each cause in PN-REV including the P4
 re-issue; a real `SQLITE_FULL` injected into each post-commit cleanup leaves the committed revoke,
 refresh, P4 and identity-change outcomes and their store rows unchanged (no savepoint is promised);
@@ -384,32 +438,63 @@ between enqueue and send (no request) and at resolve (`404`, never `not_pending`
 (`404`); gate closed (`503`); `not_pending` only for authoritative causes; log canaries for `R`,
 `K`, `C`, `S`, salt and `request_id` never appearing; default-closed config; existing route suites
 unchanged with push off; relay client against redirect, oversize, slow, malformed, unknown-code,
-TLS-failure, pre-write connect failure (retried) and post-write timeout (not retried) fakes; breaker
+TLS-failure, pre-write connect failure (retried) and post-write timeout (not retried) fakes; R-PIN config reader and client (tests pending): `push.relay_spki_pins` omitted allowed (no pin), versus explicit `None`, an empty list, a non-list, a duplicate, a padded, wrong-length, non-canonical or non-base64url entry, a non-string entry and more than 8 entries, each `relay_unconfigured` (never ignored, never a trust fallback); exactly 1 and exactly 8 valid distinct entries accepted; no environment-variable fallback; a leaf pin match still requires a valid chain and host name; a self-signed certificate with a matching pin, a chain-certificate-only match and a leaf mismatch all fail before any request byte, the failure retried only under the bounded RES-C pre-write rule; breaker
 opens and drops without waiting; listener close completes within its bound while the relay hangs.
-Purge and invariants: stale active rows (past expiry, kid removed, hash mismatch) are expired, `G`
+Purge and invariants: stale active rows (past expiry, kid removed while push is available, hash mismatch) are expired, `G`
 advances once and capacity frees; the read-only accessor writes no secret-file bytes, expires no row merely for an unreadable `k_grace`, and still lets
 past-expiry, removed-kid, REVOKED and retained-row purge steps run; a negative test combines an
 unreadable `k_grace` with an expired row and a removed-kid row (both expired, `G` advanced once,
-capacity freed) and a valid unexpired live-kid row (stays active); REVOKED
+capacity freed) and a valid unexpired live-kid row (stays active); F2: for each off reason
+(`push_disabled`, `relay_unconfigured` including one malformed kid among valid ones, an empty kid list or malformed
+configured `push.relay_spki_pins` (N4), and
+`approvals_unavailable`) a removed-kid row stays active and inert after a purge and `GET`, still counting against the D24 active cap and not the D25 retained cap (N5), absolute
+expiry, revocation, family, hash and retained-row purge still run, and kid-removal expiry resumes when
+push is available again; `GET` omits `relay_kids` unless available; the `why` precedence (`push_disabled`,
+then `relay_unconfigured`, then `approvals_unavailable`); `PUT` order: a lexically malformed kid `400` even
+while off, a removed well-formed kid `503` while off and `400` while available, grammar and size failures
+independent of availability; REVOKED
 devices' rows are deleted only with the `set_device_state` guard in place, and a test shows that
 function cannot revive REVOKED; `G` never decreases for a non-REVOKED device; an active row always
 has a generation row; exactly one `G` increment per transaction; `G` at the 2^53 bound refuses
 `503 other`; the error envelope uses only allowed extras and the closed `why` values; `GET` reports a
-fenced row as not active and applies the latest-row rules; a replay after kid removal gets `400` and
+fenced row as not active and applies the latest-row rules; a replay after kid removal while push is available gets `400` (and `503` while it is off) and
 the app path is `GET`; the consistent-restore replay outcome is documented (A19); counters keyed by
 device survive re-registration; coalescing-slot eviction never exceeds the hourly cap; every
-`k_grace` read is off the event loop. Mutation checks: removing each fence kills a named test.
+`k_grace` read is off the event loop; `DELETE` succeeds (`200`, same CAS and `G` rules) with push disabled,
+relay unset, kid removed, approval members closed and direct send off, and still answers `404` for a non-owner,
+`401 revoked` after a revoke between authentication and the write, `429` over the bucket and `409 stale` on a
+CAS miss; `GET` stays readable (`available: false`) in the same states; `PUT` of `sealed` at 81, 82, 1,105
+and 1,106 decoded bytes and with padded or non-canonical b64u; kid grammar bounds (64 and 128 characters, a
+leading `.` or `-`, non-ASCII, whitespace, case difference). Mutation checks: removing each fence kills a
+named test.
 
 ### 8.2 Relay
 
-Signature, audience, skew and replay negatives (nonce kept until `ts + skew`; full cache refuses);
+Signature, audience, skew and replay negatives (nonce kept until `ts + skew`; full cache refuses); F1 concurrent
+and boundary tests (a request passing the early screen before `ts + 120` and reaching the atomic section after it
+is `401` with no reservation and no provider call; no reliance on an instant captured before another worker's
+purge); F4 strict DER and range cases (non-minimal, zero, negative, `n`, above `n`, trailing bytes `400`; valid
+in-range non-verifying `401`; low-S and high-S valid; vectors from an independent generator, pending); F5
+environment pairs (sandbox-only, production-only and both; pair not allowed or env mismatch `422`; no
+fallback; separate connection per allowed `(app, env)` pair; `iid` allowlist miss `401`); F6 rolling-window boundary tests
+(no double burst across a fixed hour, all-admit-or-none charge, no new cap value); R-F1a causal clock tests
+and vectors (**pending; none exists**): a backward wall-clock step after a purge leaves the replayed request
+`401` with no reservation and no provider call; a forward step across `ts + 120` refuses `401` at step 7
+until the clock catches up, with no automatic restart or reserve reset; the step 14 expiry check reuses the
+step 7 instant and never a later raw reading; the verify budget, the per-source limit and the four counters
+neither double-count nor un-count across backward and forward steps because they use monotonic elapsed time;
+a cold restart resets `last_now` and the cache together (documented residual, no persistence claim); causal retained-capacity tests under repeated backward steps (live count may exceed 4,800, no exact bound promised) and a full-cache test under repeated steps (`503`, nothing evicted, no replay accepted) (**pending**);
 seal binding mismatch (iid, app, env, expiry, platform, `addr_kind`); unknown kid; allowlist mode;
 payload template fixed (host text ignored); `token` vs `fid` targeting; provider response mapping
 (`provider_unavailable` after any provider attempt, never `unavailable`); per-`(destination, iid)`
-cap stops one `iid` from suppressing another host (not sybil `iid`s, see the two-`iid` test below); log canaries (no `iid` prefix); limiter tables fail closed
+cap stops one `iid` from suppressing another host (not sybil `iid`s, see the two-`iid` test below); the signature
+transcript with raw `R`, `K`, `C` and the derived `iid` (vectors from an independent generator, reviewed: implementation
+follow-up); the result-code map (`400`, `401`, `422` and every provider refusal as `502`); two concurrent identical
+requests never both reach a provider; the nonce interval boundary and `expiry ≤ now` purge; a rolling-second
+verify budget with no burst; the JCS plaintext negatives and the `enc ‖ ct` length and `422` negatives; log canaries (no `iid` prefix, no provider body); limiter tables fail closed
 when full; no persistence of addresses; per-key caps run before the global count and only admitted
 requests charge it; a verify-budget exhaustion test returns `429` with no provider call; a
-two-`iid` destination-ceiling test documents the A14 residual; the replay cache never exceeds 4,800
+two-`iid` destination-ceiling test documents the A14 residual; under normal clock progress (clock-step tests excluded) the replay cache never exceeds 4,800
 live nonces at the verify budget; FCM requests carry no `env`; provider throttling maps to
 `502 provider_unavailable`.
 

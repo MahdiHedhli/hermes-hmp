@@ -1,12 +1,21 @@
 # Analysis: approval push registration (spec 014)
 
+
+**Current contract review status (2026-10-02):** The clock mechanism, optional pin grammar and N3–N6 were accepted by the prior focused review. The independent D1/D2/D3 sentence review accepted the capacity/retention qualifications, per-`(app, env)` APNs connections and seal-expiry wording. Root resolved its remaining editorial status finding M1 by dating the pre-review statements below. This is contract-text acceptance only. Source, causal tests/vectors, interoperability, provider/device/deployment/release and owner choices O1–O6 remain pending. No task checkbox or security mechanism changed.
+
 Consistency analysis of the proposal against the constitution, spec 013, spec 034 (accepted source
 `150bd0f`, per root), app spec 030 and the app security requirements. The author checked these
 artifacts; this is not independent review. It was amended on 2026-10-02 after an independent design
 review (verdict `NEEDS_AMENDMENT`, blockers B1–B4, findings N1–N23), and again in one bounded pass
 after the independent delta review (verdict `NEEDS_AMENDMENT`, findings C1–C8, root's decisions
-recorded in `ROOT_DECISIONS.md`). Root checks the final text against C1–C8; nothing is frozen and no
-checklist box is ticked.
+recorded in `ROOT_DECISIONS.md`). Root froze the design on 2026-10-02 after checking the final text against
+C1–C8. This analysis is author analysis, not a review. A scoped independent contract review of an earlier
+eight-document candidate accepted it with conditions; the clarified candidate (root review clarifications
+F1–F7, `ROOT_DECISIONS.md`) was later independently reviewed: that review accepted its other clauses and required two
+source gates, the relay clock source (R-F1a) and the optional pin grammar (R-PIN). The root clock and pin delta of
+2026-10-02 (R-F1a, R-PIN, N3–N6) writes them; before review, the gates were written, not accepted, and that delta was new and
+unreviewed, awaiting a focused independent sentence review. The clock-count repair of 2026-10-02 followed a focused review of that delta: the review accepted the mechanism, the pins and N3 to N6, and required text repairs for the 4,800-nonce and 240 s qualification under clock steps (its finding D1) and for one APNs connection granularity per allowed `(app, env)` pair (D2), with editorial wording (D3). At that checkpoint, the repaired capacity and connection sentences awaited a focused check of those sentences only. That check has now accepted D1/D2/D3 as contract text; implementation and verification remain pending. No checklist box is ticked, and nothing here is
+implementation, vector, interoperability, provider or device evidence.
 
 ## 1. Constitution
 
@@ -99,6 +108,8 @@ work or the owner's choice.
 | A20 | Visibility is evaluated now (root choice). A row hidden earlier, settled by Hermes meanwhile and visible now may answer `not_pending`; the resolver does not reconcile Phone rows, so `located` can name a Phone row Hermes has withdrawn | Low | `not_pending` is a true statement about Hermes; `located` for a withdrawn Phone row is the same residual as "located but settled elsewhere" (the fresh AP-3 read shows the truth). Local expiry and the AP-3 seam are shared through I-6, with an equivalence test |
 | A21 | Generation rows: a delayed `PUT` can land after capacity frees, after a no-generation `DELETE` was refused `push_capacity` | Low | Documented race, no invariant waiver (PN-REG-3). The app's pending delete intent retries as a normal CAS `DELETE`. After 256 distinct non-REVOKED devices have written, new devices remain blocked until the operator revokes some; expired registrations do not free generation slots. The read-only CLI reports both counts. REVOKED devices' rows are purged only with the terminal-state guard on `set_device_state` (PN-BND, T020) |
 | A22 | Evicting an idle coalescing slot forgets its last send time and loosens the D6 minimum interval; counters are memory only and a restart resets them | Low | The per-device hourly counter (keyed by `device_id`, kept across re-registration while the device is eligible and active) still bounds the rate; the relay's per-`(destination, iid)` cap bounds it again. Self-only effect |
+| A23 | Relay wall clock (R-F1a, contract text accepted, source pending). With the effective instant `max(raw wall now, last_now)` a backward wall-clock step cannot reopen a purged nonce within one relay lifetime, but a large forward step makes the relay refuse otherwise valid requests (`401` at step 7; `422` at step 14 for a seal near its expiry, which RES-E marks `expired`) until real time catches up or the operator restarts it; the same refusals follow whenever `last_now` is ahead of the raw clock. The 240 s retention and 4,800 live bound hold only under normal clock progress: stalls or backward steps can prolong retention, exceed 4,800 and reach the 16,384 cap (`503`, no eviction, no new replay), with no other progression, TTL or reset stated. `last_now` and the cache are memory only, so a cold restart or memory rollback keeps the RES-26 replay residual, bounded in relay-clock time | Low (availability); the restart residual is unchanged | Fail closed on availability only; no automatic restart or reserve reset; no nonce persistence or restart immunity is claimed. Causal rollback and forward-jump tests and vectors are pending, none exists (T030) |
+| A24 | Optional relay pin (R-PIN, contract text accepted, source pending). A configured leaf pin is only an additional constraint on a validated chain and host name; it must be rotated with the relay's certificate key, and a stale pin closes delivery (`relay_unconfigured` only for a malformed value; a mismatch is a pre-write TLS failure under RES-C). The setting holds public digests only | Low (operability) | Omitted means no pin; no environment fallback, no trust fallback. Pin tests are pending (T022, T025) |
 
 ## 5. Coverage of the end state
 
