@@ -44,6 +44,7 @@ TABLES: Mapping[str, Sequence[DependencySpec]] = {
     "send": compat.DIRECT_SEND_DEPENDENCIES,
     "jobs": compat.CRON_DEPENDENCIES,
     "model": compat.MODEL_DEPENDENCIES,
+    "phone_chat": compat.PHONE_CHAT_DEPENDENCIES,
 }
 
 
@@ -130,7 +131,9 @@ def test_read_only_release_serves_read_and_browsing_but_not_the_write_features()
     eligibility = evaluate(SEMVER_READ_ONLY, probe)
     assert eligibility.available(Feature.READ)
     assert eligibility.available(Feature.SESSION_BROWSING)
-    for feature in (Feature.SEND, Feature.JOBS, Feature.MODEL):
+    for feature in (
+        Feature.SEND, Feature.JOBS, Feature.MODEL, Feature.APPROVALS, Feature.PHONE_CHAT
+    ):
         assert eligibility.features[feature].reason is Unavailable.VERSION_BELOW_FLOOR
     assert probe.calls == ["read", "session_browsing"]  # below-floor features are not probed
 
@@ -144,7 +147,7 @@ def test_e2_e3_unlisted_newer_and_unknown_versions_are_attempted(
     eligibility = evaluate(version, probe, root=fake_hermes, evidence={})
     assert "gateway.run" in sys.modules
     assert all(eligibility.available(f) for f in Feature)
-    assert probe.calls == ["read", "session_browsing", "send", "jobs", "model"]
+    assert probe.calls == ["read", "session_browsing", "send", "jobs", "model", "phone_chat"]
 
 
 def test_e3_unknown_version_closes_only_the_feature_whose_probe_fails() -> None:
@@ -158,11 +161,18 @@ def test_e3_unknown_version_closes_only_the_feature_whose_probe_fails() -> None:
 
 
 def test_e6_e7_e8_each_write_feature_fails_alone() -> None:
+    members = {Feature.APPROVALS, Feature.PHONE_CHAT}  # both need only read and send
     for broken, expected_open in (
-        ("jobs", {Feature.READ, Feature.SESSION_BROWSING, Feature.SEND, Feature.MODEL}),
-        ("model", {Feature.READ, Feature.SESSION_BROWSING, Feature.SEND, Feature.JOBS}),
+        ("jobs", {Feature.READ, Feature.SESSION_BROWSING, Feature.SEND, Feature.MODEL} | members),
+        ("model", {Feature.READ, Feature.SESSION_BROWSING, Feature.SEND, Feature.JOBS} | members),
         ("send", {Feature.READ, Feature.SESSION_BROWSING, Feature.JOBS, Feature.MODEL}),
-        ("session_browsing", {Feature.READ, Feature.SEND, Feature.JOBS, Feature.MODEL}),
+        ("session_browsing", {Feature.READ, Feature.SEND, Feature.JOBS, Feature.MODEL} | members),
+        # Spec 034: the Phone helpers closing never closes send or Bot Chat approvals.
+        (
+            "phone_chat",
+            {Feature.READ, Feature.SESSION_BROWSING, Feature.SEND, Feature.JOBS, Feature.MODEL,
+             Feature.APPROVALS},
+        ),
     ):
         eligibility = evaluate(SEMVER_FLOOR, Probe({broken: ["x.y"]}))
         assert {f for f in Feature if eligibility.available(f)} == expected_open, broken
@@ -189,6 +199,11 @@ def test_missing_get_session_disables_send_and_browsing_but_not_core_jobs_or_mod
     for feature in (Feature.SEND, Feature.SESSION_BROWSING):
         status = eligibility.features[feature]
         assert (status.reason, status.missing) == (Unavailable.DEPENDENCY_MISSING, (label,))
+    # Both approval members need send: closed by it, with a non-failure reason and no probe.
+    for member in (Feature.APPROVALS, Feature.PHONE_CHAT):
+        assert eligibility.features[member] == compat.FeatureStatus(
+            False, Unavailable.REQUIRES_SEND
+        )
 
 
 def test_e9_missing_core_read_dependency_requires_read_for_everything_else() -> None:
@@ -258,8 +273,11 @@ def test_e11_evidence_never_changes_availability(version: HermesVersion) -> None
     assert untested.features[Feature.READ].tested_label is None
 
 
-def test_the_feature_set_has_no_media_or_approval_member() -> None:
-    assert {f.value for f in Feature} == {"read", "session_browsing", "send", "jobs", "model"}
+def test_the_feature_set_has_the_two_approval_members_and_no_media_member() -> None:
+    assert {f.value for f in Feature} == {
+        "read", "session_browsing", "send", "jobs", "model", "approvals", "phone_chat"
+    }
+    assert not any("media" in f.value for f in Feature)
 
 
 def test_gate_result_maps_to_the_existing_err_2a_values(fake_hermes: Path) -> None:

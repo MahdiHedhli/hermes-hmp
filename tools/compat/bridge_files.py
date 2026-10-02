@@ -327,7 +327,11 @@ def _refuse_real_home(path: Path) -> None:
 # Every compat target's own DependencySpec tuple in `hmp_plugin.compat`, by the CLI's
 # `--dependencies-attr` spelling. Used only to compute each target's cross-target exclude set
 # above -- never to change which specs are actually probed for a given `--dependencies-attr`.
-_ALL_DEPENDENCY_ATTRS: tuple[str, ...] = ("READ_DEPENDENCIES", "DIRECT_SEND_DEPENDENCIES")
+_ALL_DEPENDENCY_ATTRS: tuple[str, ...] = (
+    "READ_DEPENDENCIES",
+    "DIRECT_SEND_DEPENDENCIES",
+    "PHONE_CHAT_DEPENDENCIES",
+)
 
 
 def compute(
@@ -384,7 +388,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--dependencies-attr",
         default="READ_DEPENDENCIES",
         help="name of the hmp_plugin.compat tuple to probe "
-        "(READ_DEPENDENCIES or DIRECT_SEND_DEPENDENCIES, amendment F2)",
+        "(READ_DEPENDENCIES, DIRECT_SEND_DEPENDENCIES or PHONE_CHAT_DEPENDENCIES)",
     )
     args = parser.parse_args(argv)
 

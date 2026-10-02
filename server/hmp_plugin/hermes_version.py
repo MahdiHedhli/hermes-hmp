@@ -129,6 +129,8 @@ FEATURE_FLOORS: dict[str, Floor] = {
     "send": _WRITE_FLOOR,
     "jobs": _WRITE_FLOOR,
     "model": _WRITE_FLOOR,
+    "approvals": _WRITE_FLOOR,  # spec 034: the send floor; no notifier floor is claimed
+    "phone_chat": _WRITE_FLOOR,
 }
 
 

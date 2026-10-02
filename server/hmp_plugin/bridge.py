@@ -43,7 +43,7 @@ import json
 import os
 import re
 import secrets
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
@@ -64,6 +64,7 @@ from .contract import (
     WireToolCall,
 )
 from .logging_policy import log_bridge_exception, log_event
+from .prompts import HelperChangedError, HelperUnavailableError
 
 # P6 inert trigger (PR6-1, GU-4 exception, RV-7): fixed text, no user content, no request. It does
 # not start with "/", and `allow_gateway_control` is off, so it is never a gateway command.
@@ -214,11 +215,17 @@ REACHED_DATA_ATTRIBUTES: frozenset[str] = frozenset(
         "profile_route_rejected",
         "config",
         "extra",
+        "_gateway_accepted",
+        "defer_policy",
+        "admission_ticket",
+        "reported",
+        "value",
     }
 )
 
 # HMP-originated rows carry `platform_message_id = "hmp:<chat_id>:<cmid>"` (§2, `chat_id` row).
 _CMID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+PHONE_ADMISSION_WAIT_S = 5.0
 
 
 class BridgeError(RuntimeError):
@@ -641,6 +648,11 @@ class HermesReadBridge:
         # P6 hand-off with `run_coroutine_threadsafe`, which returns that type regardless of
         # which thread calls it from.
         self._pending_triggers: set[Any] = set()
+        # AP-10: strong references to the Hermes callables Phone chat calls, captured after the
+        # `phone_chat` probe passes, and the callback that closes the local generation when one of
+        # them is later found rebound. Both are set by `adapter.open_components`.
+        self._phone_bound: dict[str, object] | None = None
+        self._on_phone_binding_changed: Callable[[], None] | None = None
 
     # ------------------------------------------------------------------------------------------
     # Runner and sources
@@ -844,6 +856,8 @@ class HermesReadBridge:
             return AuthorizeResult(authz=AuthzState.UNVERIFIABLE)
         self._pending_triggers.add(future)
         future.add_done_callback(self._trigger_done)
+        if hasattr(self._adapter, "note_inert_reply"):
+            self._adapter.note_inert_reply(chat_id)
         log_event("p6_trigger", outcome="sent")
         return AuthorizeResult(authz=AuthzState.PENDING_OPERATOR)
 
@@ -1245,3 +1259,211 @@ class HermesReadBridge:
             return None  # no usable key: the gate stays closed (never a short key, never a 401)
         prefix = "" if is_default else f"/p/{quote(profile, safe='')}"
         return DirectSendEndpoint(host=host, port=port, api_key=key, path_prefix=prefix)
+
+    # ------------------------------------------------------------------------------------------
+    # Amendment F3 (HMP_V1.md §7b). Function-local imports, only called once the direct-send
+    # gate is open. `resolve_all` is never passed. Private clarify indexes are not read.
+    # ------------------------------------------------------------------------------------------
+
+    def phone_session_key(self, user_id: str, profile: str) -> str | None:
+        """The session key `handle_message` will derive for this user's Phone chat. Not the
+        Bot Chat key, and not a value the phone sent."""
+        chat_id = self._directory.chat_id(user_id, profile)
+        if chat_id is None:
+            return None
+        source = self._source(chat_id=chat_id, user_id=user_id, profile=profile, user_name=None)
+        if _not_routed(source, profile):
+            return None
+        key = self._hermes.build_session_key(source, profile)
+        return key if isinstance(key, str) and key else None
+
+    # Phone-chat helper binding (AP-10) and use-time failures (AP-7a). The six helpers below are
+    # reached only through `_phone_helper`, which refuses anything that is not the object bound
+    # at listener open. This compares object identity. It reads no file or manifest, and it is not
+    # authenticity or loaded-bytecode proof.
+
+    @staticmethod
+    def _phone_helpers_now() -> dict[str, object]:
+        from tools.approval import list_gateway_approvals, resolve_gateway_approval
+        from tools.approval_context import _get_approval_timeout
+        from tools.clarify_gateway import (
+            get_clarify_timeout,
+            mark_awaiting_text,
+            resolve_gateway_clarify,
+        )
+
+        return {
+            "list_gateway_approvals": list_gateway_approvals,
+            "resolve_gateway_approval": resolve_gateway_approval,
+            "resolve_gateway_clarify": resolve_gateway_clarify,
+            "mark_awaiting_text": mark_awaiting_text,
+            "get_clarify_timeout": get_clarify_timeout,
+            "_get_approval_timeout": _get_approval_timeout,
+        }
+
+    def bind_phone_chat_helpers(self, on_changed: Callable[[], None] | None = None) -> bool:
+        """Capture the Phone-chat helpers (blocking; call after the probe, at listener open).
+        `False` when any of them could not be imported: Phone chat then stays closed."""
+        try:
+            captured = self._phone_helpers_now()
+        except (ImportError, AttributeError, TypeError):
+            return False
+        self._phone_bound = dict(captured)
+        self._on_phone_binding_changed = on_changed
+        return True
+
+    def _phone_helper(self, name: str) -> Any:
+        bound = self._phone_bound
+        if bound is None or name not in bound:
+            raise HelperUnavailableError("phone chat helpers are not bound")
+        try:
+            current = self._phone_helpers_now()
+        except (ImportError, AttributeError, TypeError):
+            raise HelperUnavailableError("phone chat helper unavailable") from None
+        if current.get(name) is not bound[name]:
+            callback = self._on_phone_binding_changed
+            if callback is not None:
+                try:
+                    callback()
+                except Exception as exc:  # the fence still raises below
+                    log_bridge_exception(exc)
+            raise HelperChangedError("phone chat helper was rebound")
+        return bound[name]
+
+    def _call_phone(self, name: str, *args: Any, **kwargs: Any) -> Any:
+        """Call one bound helper. An `ImportError`, `AttributeError` or `TypeError` at call time is
+        an actual capability failure (AP-7a): fixed text, never the Hermes exception text."""
+        helper = self._phone_helper(name)
+        try:
+            return helper(*args, **kwargs)
+        except (ImportError, AttributeError, TypeError):
+            raise HelperUnavailableError("phone chat helper failed") from None
+
+    def list_gateway_approvals(self, session_key: str) -> list[dict[str, object]]:
+        rows = self._call_phone("list_gateway_approvals", session_key)
+        if not isinstance(rows, list):
+            raise BridgeError("approval list is not a list")
+        return [row for row in rows if isinstance(row, dict)]
+
+    def resolve_gateway_approval(self, session_key: str, choice: str, request_id: str) -> int:
+        resolved = self._call_phone(
+            "resolve_gateway_approval",
+            session_key,
+            choice,
+            resolve_all=False,
+            request_id=request_id,
+        )
+        return resolved if isinstance(resolved, int) and not isinstance(resolved, bool) else 0
+
+    def resolve_gateway_clarify(self, clarify_id: str, response: str) -> bool:
+        return bool(self._call_phone("resolve_gateway_clarify", clarify_id, response))
+
+    def mark_clarify_awaiting_text(self, clarify_id: str) -> bool:
+        return bool(self._call_phone("mark_awaiting_text", clarify_id))
+
+    def approval_timeout_s(self, profile: str) -> int:
+        """Bot Chat's display hint. Not a Phone-chat helper: it is unbound, and a missing helper is
+        the caller's default (AP-3)."""
+        from tools.approval_context import _get_approval_timeout
+
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = _get_approval_timeout()
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 300
+        return value
+
+    def phone_approval_timeout_s(self, profile: str) -> int:
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = self._call_phone("_get_approval_timeout")
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 300
+        return value
+
+    def phone_clarify_timeout_s(self, profile: str) -> int:
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = self._call_phone("get_clarify_timeout")
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 3600
+        return value
+
+    async def deliver_phone_message(
+        self, *, user_id: str, profile: str, text: str, message_id: str
+    ) -> bool | None:
+        """AP-6. Builds the event off the loop (the Hermes import) and hands it to
+        `handle_message` on the loop. `allow_gateway_control` is false. On builds with
+        admission tickets, task scheduling is not a successful submission: wait for the
+        definitive admission outcome. None means the result is ambiguous."""
+        event = await asyncio.to_thread(
+            self._phone_event, user_id=user_id, profile=profile, text=text, message_id=message_id
+        )
+        await self._adapter.handle_message(event)
+        accepted = getattr(event, "_gateway_accepted", None) is True
+        if getattr(event, "defer_policy", None) != "reject":
+            # Older stock builds have no admission ticket. `_gateway_accepted` is only set True on
+            # acceptance; False or missing also covers a busy-queued event that was retained but
+            # never flagged, so it is unknown, never a definitive refusal.
+            return True if accepted else None
+        # Reject policy: the reported admission ticket is authoritative. The initial scheduling
+        # flag is deliberately not consulted (busy queue debounce leaves it False while the event
+        # is retained).
+        ticket = getattr(event, "admission_ticket", None)
+        if ticket is None:
+            return None
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + PHONE_ADMISSION_WAIT_S
+        while True:
+            reported = getattr(ticket, "reported", None)
+            if reported is not None:
+                outcome = getattr(reported, "value", None)
+                if outcome == "admitted":
+                    return True
+                if outcome in {
+                    "refused_busy",
+                    "refused_draining",
+                    "refused_precondition_head",
+                    "refused_precondition_expired",
+                    "refused_lease_timeout",
+                    "refused_unauthorized",
+                }:
+                    return False
+                # REFUSED_OTHER includes persist_failed and unreported_exit. Its detail
+                # is not on the ticket, so this cannot safely be called definitive.
+                return None
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return None
+            await asyncio.sleep(min(0.025, remaining))
+
+    def _phone_event(self, *, user_id: str, profile: str, text: str, message_id: str) -> Any:
+        try:
+            from gateway.platforms.event import MessageEvent, MessageType
+        except (ImportError, AttributeError):
+            raise HelperUnavailableError("phone chat event is unavailable") from None
+
+        chat_id = self._directory.chat_id(user_id, profile)
+        if chat_id is None:
+            raise BridgeError("no chat for the phone message")
+        label = self._directory.operator_label(user_id) or OPERATOR_LABEL_UNKNOWN
+        source = self._source(chat_id=chat_id, user_id=user_id, profile=profile, user_name=label)
+        if _not_routed(source, profile):
+            raise BridgeError("source is not routed to the profile")
+        names = {f.name for f in dataclasses.fields(MessageEvent)}
+        kwargs: dict[str, Any] = {
+            "text": text,
+            "message_type": MessageType.TEXT,
+            "message_id": message_id,
+            "source": source,
+            "user_id": user_id,
+            "user_name": label,
+        }
+        if "internal" in names:
+            kwargs["internal"] = False
+        if "allow_gateway_control" not in names:
+            raise HelperUnavailableError("MessageEvent lacks allow_gateway_control")
+        kwargs["allow_gateway_control"] = False
+        if "defer_policy" in names:
+            kwargs["defer_policy"] = "reject"
+        try:
+            return MessageEvent(**kwargs)
+        except TypeError:
+            raise HelperUnavailableError("phone chat event is unavailable") from None

@@ -201,6 +201,21 @@ CREATE TABLE IF NOT EXISTS direct_send_idempotency (
     PRIMARY KEY (iid, user_id, profile, cmid)
 );
 
+-- Amendment F3 (Phone chat, HMP_V1.md §7b AP-6): same shape as direct_send_idempotency, hash of
+-- `text` only (no expected_head). No message text is stored (SEC-4).
+CREATE TABLE IF NOT EXISTS phone_send_idempotency (
+    iid TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    profile TEXT NOT NULL,
+    cmid TEXT NOT NULL,
+    payload_hash BLOB NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending','submitted','rejected','unknown')),
+    result_json TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (iid, user_id, profile, cmid)
+);
+
 CREATE TABLE IF NOT EXISTS roster_state (
     user_id TEXT PRIMARY KEY,
     served_set_hash TEXT NOT NULL,
@@ -840,6 +855,50 @@ class Store:
         `'pending'` until it concludes. Never auto-resent."""
         self._require_conn().execute(
             "UPDATE direct_send_idempotency SET status = ?, result_json = ?, updated_at = ? "
+            "WHERE iid = ? AND user_id = ? AND profile = ? AND cmid = ?",
+            (status, result_json, updated_at, iid, user_id, profile, cmid),
+        )
+
+    def reserve_phone_cmid(
+        self,
+        iid: str,
+        user_id: str,
+        profile: str,
+        cmid: str,
+        payload_hash: bytes,
+        now: int,
+    ) -> tuple[sqlite3.Row, bool]:
+        """AP-6: reserve before `handle_message`. `(row, inserted)` matches `reserve_cmid`."""
+        with self.transaction() as conn:
+            cur = conn.execute(
+                "INSERT INTO phone_send_idempotency "
+                "(iid, user_id, profile, cmid, payload_hash, status, result_json, "
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?) "
+                "ON CONFLICT (iid, user_id, profile, cmid) DO NOTHING",
+                (iid, user_id, profile, cmid, payload_hash, now, now),
+            )
+            inserted = cur.rowcount == 1
+            row = conn.execute(
+                "SELECT * FROM phone_send_idempotency "
+                "WHERE iid = ? AND user_id = ? AND profile = ? AND cmid = ?",
+                (iid, user_id, profile, cmid),
+            ).fetchone()
+        assert row is not None
+        return row, inserted
+
+    def finalize_phone_cmid(
+        self,
+        iid: str,
+        user_id: str,
+        profile: str,
+        cmid: str,
+        *,
+        status: str,
+        result_json: str | None,
+        updated_at: int,
+    ) -> None:
+        self._require_conn().execute(
+            "UPDATE phone_send_idempotency SET status = ?, result_json = ?, updated_at = ? "
             "WHERE iid = ? AND user_id = ? AND profile = ? AND cmid = ?",
             (status, result_json, updated_at, iid, user_id, profile, cmid),
         )
