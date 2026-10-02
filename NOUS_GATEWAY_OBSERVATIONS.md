@@ -64,7 +64,7 @@ owner testing. This is a client repair, not an upstream defect.
 
 The spec 034 candidate removes the approval exact-build runtime gate while retaining actual
 authorization, explicit settings, required APIs and separate Bot Chat/Phone-chat availability.
-Independent source review accepted it at [`150bd0f`](https://github.com/MahdiHedhli/hermes-hmp/commit/150bd0f1535b41495e5fc31ded128b9452221052) ([draft #73](https://github.com/MahdiHedhli/hermes-hmp/pull/73)); CI passed at that head. Locked native environments are prepared, but the real gateway fixtures have not yet run. The installed
+Independent source review accepted it at [`150bd0f`](https://github.com/MahdiHedhli/hermes-hmp/commit/150bd0f1535b41495e5fc31ded128b9452221052) ([draft #73](https://github.com/MahdiHedhli/hermes-hmp/pull/73)); CI passed at that head. Locked native preflight, imports and capability probes passed on two samples. The first 13-case approval attempt failed in setup before any case body: our fixture builder still required a fingerprint that the minimum-policy gate does not emit. The bounded test-tool correction at `2c153e2` has independent source acceptance; root passed 166 fixture-tool cases and 17 final focused cases, plus configured lint and privacy checks. The corrected native matrix is pending. This is our test setup defect, not an upstream capability failure. The installed
 `4d6863e` baseline remains unchanged and has no approval lane.
 
 On inspected Hermes `f97608f1`, `8afaab37` and `ac0cfa7d`, `retire_clarify_card` is optional
@@ -73,13 +73,8 @@ resolves the adapter's optional hook. Requiring that attribute on the base class
 incorrectly disable Phone chat. This is a source finding on those samples, not a universal
 private-API guarantee.
 
-The notification registration/issuer/resolver/relay proposal (spec 014) completed independent
-design review with amendments required before freeze: preserve Desktop-owned prompt visibility,
-align the resolver with the accepted app interface, handle registration retry-state loss and
-correct unsupported coverage claims. A subsequent bounded review also requires post-commit cleanup that cannot roll back the original revocation, finite registration-generation storage, and explicit error-envelope additions. Those proposal corrections are in progress; no push runtime is deployed. Its initial scope
-covers approval rows observed by HMP. Broader
-Desktop/CLI/cron coverage needs a separate source check; that limited scope alone does not
-prove a new upstream API gap. No provider delivery or permission expansion is implemented.
+The notification registration/issuer/resolver/relay design (spec 014) is frozen at
+[`32b53cd`](https://github.com/MahdiHedhli/hermes-hmp/commit/32b53cd) ([draft #74](https://github.com/MahdiHedhli/hermes-hmp/pull/74)) after independent design, amendment and focused closure reviews. It preserves Desktop-owned prompt visibility and the accepted app resolver interface, uses post-commit cleanup that cannot roll back revocation, bounds registration-generation storage, and records explicit error-envelope additions. Separate approval insertion, authoritative settlement and shared visibility inputs remain prerequisite work. No push runtime is deployed. Its initial scope covers approval rows observed by HMP. Broader Desktop/CLI/cron coverage needs a separate source check; that limited scope alone does not prove an upstream API gap. Provider setup and physical delivery are pending; no permission expansion is implemented.
 
 ## Native observation and access diagnostics checkpoint (2026-10-01)
 
