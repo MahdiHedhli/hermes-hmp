@@ -1,17 +1,16 @@
 # Feature: Approval-lane inputs for priority notifications (I-1, I-2, I-6)
 
-Status: **design frozen by root, 2026-10-02**, after independent architecture review and the
-bounded amendments for findings F1–F11. Implementation and runtime verification remain pending. Root
-decisions are in [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md) (`RD-n`). This change set is
-documentation only.
+Status: **source accepted by root, 2026-10-02**, after independent focused review and
+bounded test repairs. This implements the three in-process inputs; it is not native, device,
+push or deployment acceptance. Root decisions remain in [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md).
 
-Base: HMP `150bd0f` (spec 034 approval lane, accepted as source; native sample evidence T14 and
-packaging T15 pending). Consumer: spec 014 (approval push registration, design frozen, docs-only
-PR #74), section 10. Spec 014's owner and provisioning choices are pending and are not touched here.
+Base: HMP `150bd0f` (spec 034 source and two isolated native samples accepted; owner deployment
+pending). Consumer: spec 014 (approval push registration, design frozen, docs-only PR #74).
+Its owner and provisioning choices remain pending. The native samples cover the base, not 015.
 
 ## Summary
 
-Spec 014 needs three inputs from the approval lane that the accepted source does not have:
+Spec 014 needs three inputs absent from base `150bd0f`, now implemented by this amendment:
 
 - **I-1** a non-throwing notification, delivered outside the prompt-store lock, when an approval
   row is actually inserted;

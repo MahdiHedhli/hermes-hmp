@@ -199,15 +199,39 @@ async def test_clarify_choice_accepted_is_answer_applied() -> None:
 async def test_each_native_code_on_a_bot_chat_row_is_native_not_pending(
     monkeypatch: pytest.MonkeyPatch, status: int, body: bytes
 ) -> None:
-    _fake_session(monkeypatch, status, body)
+    seen = _fake_session(monkeypatch, status, body)
     row = _approval()
     store = _store(row)
     result = await _answer(store, _live(), {"choice": "once"})
     assert (result.status, result.body["error"]["code"]) == (409, "stale")  # type: ignore[index]
     assert _settled(row) == ("expired", PRE_AWAIT, "native_not_pending")
     assert is_authoritative(row.settle_cause)
-    replay = await _answer(store, _live(), {"choice": "once"})  # stored stale, no second call
+    assert seen["posts"] == 1
+    # The row is now expired, so the second answer returns stale before any Hermes call.
+    replay = await _answer(store, _live(), {"choice": "once"})
     assert replay.status == 409 and row.settle_cause == "native_not_pending"
+    assert seen["posts"] == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("surface", ["bot_chat", "phone_chat"])
+async def test_the_stale_branch_writes_the_replay_fields_but_never_the_answer_hash(
+    monkeypatch: pytest.MonkeyPatch, surface: str
+) -> None:
+    """After the real answer path settles a row as stale, `_remember(row, result, None)` has
+    stored the stale result in the existing replay fields and left `answer_hash` unset. The
+    expired-row branch returns before `_replay`, so this pins the write itself, not a replay."""
+    if surface == "bot_chat":
+        _fake_session(monkeypatch, 409, _error("approval_not_pending"))
+        resolver = _live()
+    else:
+        resolver = _live(_PhoneBridge(approval=0))
+    row = _approval(surface)
+    result = await _answer(_store(row), resolver, {"choice": "once"})
+    assert (result.status, result.body["error"]["code"]) == (409, "stale")  # type: ignore[index]
+    assert row.status == "expired"
+    assert row.stored_status == 409 and row.stored_body == result.body
+    assert row.answer_hash is None
 
 
 @pytest.mark.asyncio
@@ -546,11 +570,18 @@ async def test_a_writer_waits_for_the_guard_and_nothing_is_written_before_it_is_
             time.sleep(0.25)
             observed.append(_settled(row))
 
-    async def during(_row: PromptRow) -> None:
-        threading.Thread(target=holder).start()
-        await asyncio.to_thread(held.wait)
+    thread = threading.Thread(target=holder)
 
-    await _answer(store, _Resolver("accepted", during=during), {"choice": "once"})
+    async def during(_row: PromptRow) -> None:
+        thread.start()
+        assert await asyncio.to_thread(held.wait, 5)  # bounded: fail rather than hang
+
+    try:
+        await _answer(store, _Resolver("accepted", during=during), {"choice": "once"})
+    finally:
+        if thread.ident is not None:
+            thread.join(5)
+    assert not thread.is_alive()
     assert observed == [("open", None, None)]  # the answer's writes waited for the lock
     assert _settled(row) == ("resolved", PRE_AWAIT, "answer_applied")
 

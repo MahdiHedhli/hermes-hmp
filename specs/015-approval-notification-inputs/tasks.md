@@ -60,19 +60,19 @@ the previous one is committed.
 
 ## Phase 3: verification and review
 
-- [ ] T050 Run the focused new and existing approval tests, the full unit suite, Ruff,
+- [x] T050 Run the focused new and existing approval tests, the full unit suite, Ruff,
       `check_plugin_surface.py`, `scan_private.py` and `scan_logs.py` (`CONTRIBUTING.md`).
       Record counts and skips; preexisting skips stay explained.
-- [ ] T051 Mutation check: apply each mutant in plan §4 once and record the test that fails.
+- [x] T051 Mutation check: apply each mutant in plan §4 once and record the test that fails.
       Revert every mutant.
-- [ ] T052 Diff audit: `git diff 150bd0f` touches only `prompts.py`, `request_ctx.py`,
+- [x] T052 Diff audit: `git diff 150bd0f` touches only `prompts.py`, `request_ctx.py`,
       `server.py` (`handle_prompts_list` only), the four new test files and spec docs. No change to
       `direct_send.py`, `bridge.py`, `adapter.py`, `reads.py`, `HMP_V1.md`, manifests or fixtures.
       `_remember` has no `settle` parameter and writes no `settled_at`.
-- [ ] T053 Add the 015 row to `specs/README.md`.
-- [ ] T060 Independent focused review (not the author) of T020–T040 against
+- [x] T053 Add the 015 row to `specs/README.md`.
+- [x] T060 Independent focused review (not the author) of T020–T040 against
       `checklists/security.md`, including thread and lock behavior.
-- [ ] T061 Root verification: rerun T050, defeat each guard once, accept or return findings as
+- [x] T061 Root verification: rerun T050, defeat each guard once, accept or return findings as
       bounded defect tasks.
 - [ ] T062 Root updates spec 014 section 10 status for I-1, I-2 and I-6 on its own branch. 014
       stays unwired until then (014 T003).
@@ -136,3 +136,32 @@ reconciliation, immutable views, exposure and lock placement. The original missi
 three malformed mutant transformations failed before tests; corrected runs killed those mutants.
 No mutation changed the source files. This records source verification only; it does not prove
 native integration, device behavior, push delivery or deployment. Final T060/T061 remain open.
+
+## Final root source acceptance — 2026-10-02
+
+T050–T061 have root acceptance for the three in-process inputs. Independent focused security
+review accepted the unchanged production sources at `3fb19ec`, with no runtime blockers.
+Root reviewed the bounded test-only repairs for N1, N2, N4 and N11: final-snapshot held changes
+during the real listing await, stale replay-field writes, bounded and joined lock-holder work,
+and the trailing blank line. Their four new cases detect mutants the prior tests missed.
+
+Root passed 482 focused cases with three unconfigured native-probe skips, then 2,004 complete
+source cases with 16 explained native-fixture or Python-version skips and one existing aiohttp
+warning. Ruff, plugin-surface, zero-baseline source privacy and diff checks passed. The log scan
+had no captured logs to scan; it is not a log-canary result. Root's final clean control passed
+180 cases. Fifteen additional causal mutants failed actual assertions; the earlier four I-2,
+eleven I-1 and eighteen I-6 checks remain recorded above. Some guards were checked more than
+once; these counts do not describe distinct security guarantees. Transformation and collection
+errors were preserved and excluded from the kills; all scratch mutations were restored.
+
+The production-source hashes are unchanged from independent review. The finite diff audit
+confirms only the three allowed production modules, four new test files, the 015 specification
+and its index entry. The copied AP-3 oracle remains unchanged. `_remember` writes replay fields
+only. No production observer, push runtime, native dependency, authorization or wire change
+is present. The no-await-between-settlement-and-replay invariant is confirmed by source reading;
+its semantically equivalent mutant survives and no test proof is claimed. The preexisting
+`retire` clock callback under the guard is outside the new visibility seam.
+
+Spec 034's two-sample native evidence covers `150bd0f`, not this 015 amendment. No native, device,
+provider, operational notification or deployment acceptance is claimed here. T062 is still the
+separate update on the 014 branch; runtime implementation follows its own contract gates.

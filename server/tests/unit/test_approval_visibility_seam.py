@@ -725,6 +725,34 @@ def test_the_gate_runs_before_the_seam(tmp_path: Path) -> None:
 # --------------------------------------------------------------------------------------------
 
 
+@pytest.mark.parametrize("flip", ["hold", "release"])
+def test_desktop_held_flipped_during_reconciliation_comes_from_the_final_snapshot(
+    tmp_path: Path, flip: str
+) -> None:
+    """The Desktop-held marker changes while the awaited Phone listing runs. `desktop_held` and the
+    Bot Chat rows must both come from the final snapshot, not from the reconcile candidates."""
+    holds = flip == "hold"
+
+    def flipper(env: Env, store: PromptStore) -> None:
+        user_id = next(iter(store._rows.values())).user_id
+        original = env.bridge.list_gateway_approvals
+
+        def lister(session_key: str) -> Any:
+            change = store.set_desktop_held if holds else store.clear_desktop_held
+            change(env.iid, user_id, BOT)  # runs on the listing's worker thread
+            return original(session_key)
+
+        env.bridge.list_gateway_approvals = lister  # type: ignore[method-assign]
+
+    s = S(rows=(B("a1"), P("b1", session="s1")), held=not holds, clock=(0, 10, 11, 12))
+    new = _drive(tmp_path / "new", s, oracle=False, pre=flipper)
+    old = _drive(tmp_path / "old", s, oracle=True, pre=flipper)
+    assert new.calls["list"] == ["s1"] and new.state[-1] == ("held", 1 if holds else 0)
+    assert (_held(new), _ids(new)) == ((True, ["b1"]) if holds else (False, ["a1", "b1"]))
+    assert _held(new) == ("a1" not in _ids(new))  # one snapshot: the flag matches the rows
+    assert new.body == old.body
+
+
 def test_clock_sequence_purge_once_per_phase_and_fresh_reconcile_samples(tmp_path: Path) -> None:
     rows = (B("a1"), P("b1", session="s1"), P("c1", session="s2"))
     new = _drive(tmp_path, S(rows=rows, lister="omit", clock=(0, 10, 20, 30, 40)), oracle=False)
@@ -1242,4 +1270,3 @@ def test_the_seam_runs_no_code_that_logs_or_awaits(tmp_path: Path) -> None:
         logger.removeHandler(handler)
         logger.setLevel(previous)
     assert handler.lines == []
-

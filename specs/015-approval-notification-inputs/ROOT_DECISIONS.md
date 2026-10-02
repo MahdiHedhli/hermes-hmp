@@ -2,7 +2,8 @@
 
 Root accepts the recommended choices RD-1–RD-9 and the explicit root choices RD-10–RD-13.
 The independent architecture review required F1–F11; root reviewed and accepted their bounded
-documentation amendments. This is design acceptance only; implementation review and tests remain pending.
+documentation amendments. The original freeze was design acceptance. Final source acceptance is recorded in `tasks.md`;
+native, device, push and deployment evidence for this amendment remain pending.
 All items are **R** (root design choice, reversible in source). None is an owner, account or
 provider action, and none authorizes one.
 
@@ -37,7 +38,7 @@ provider action, and none authorizes one.
 
 | Gap | Kind | Owner |
 | --- | --- | --- |
-| Native sample evidence for the 034 lane (T14) is pending; the obsolete fixture fingerprint bootstrap has a reviewed tooling correction, and the corrected native matrix is in progress. This spec neither runs nor repairs it, so 015 evidence is source-only. | `EVIDENCE_GAP` | Root (034 T14) |
+| 034 T14 now has two-sample native evidence for base `150bd0f` (13 selected cases per sample, no skips). It does not cover this amendment. This spec neither runs nor repairs that matrix; 015 evidence remains source-only. | `EVIDENCE_GAP` | Root (034 T14) |
 | Phone hook thread and wait bound read on one sampled build (`ac0cfa7d`) only. NI-1.4 does not depend on it. | `EVIDENCE_GAP` (bounded) | HMP |
 | Cross-surface coverage (Desktop, CLI, cron, other platforms) is unchanged. 015 notifies only for rows the 034 lane inserts. | `EVIDENCE_GAP` (014 T005) | Project |
 | RO-3 snapshot renders live rows on a worker thread, and the legacy `list_visible`, `get`, `open_clarifies` and `answer_row` still return live rows; AP-3 propagates a `BridgeError` from a non-list Phone listing; AP-3 reads the owner predicate synchronously on the loop. All preexisting and preserved for equivalence. | Residual | HMP (later lane) |

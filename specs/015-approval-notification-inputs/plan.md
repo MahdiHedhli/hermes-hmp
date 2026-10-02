@@ -1,8 +1,8 @@
 # Implementation plan: approval-lane inputs I-1, I-2, I-6
 
-Status: design frozen by root, 2026-10-02, after independent review and the bounded amendments
-for findings F1–F11. No implementation or runtime evidence is claimed. No source is changed by this plan. Line numbers refer to HMP
-`150bd0f`.
+Status: source accepted by root on 2026-10-02 after independent focused review and final
+source verification (`tasks.md`). The design was frozen before implementation. This plan adds no
+native or deployment claim. Historical source anchors below refer to HMP `150bd0f`.
 
 ## Constitution check
 
