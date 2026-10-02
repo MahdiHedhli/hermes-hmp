@@ -74,8 +74,8 @@ the previous one is committed.
       `checklists/security.md`, including thread and lock behavior.
 - [x] T061 Root verification: rerun T050, defeat each guard once, accept or return findings as
       bounded defect tasks.
-- [ ] T062 Root updates spec 014 section 10 status for I-1, I-2 and I-6 on its own branch. 014
-      stays unwired until then (014 T003).
+- [x] T062 Root updates spec 014 section 10 status for I-1, I-2 and I-6 on its own branch. 014
+      T003 is source accepted at `66874cf`; 014 runtime consumers remain unwired.
 
 ## Not tasks here
 
@@ -163,5 +163,6 @@ its semantically equivalent mutant survives and no test proof is claimed. The pr
 `retire` clock callback under the guard is outside the new visibility seam.
 
 Spec 034's two-sample native evidence covers `150bd0f`, not this 015 amendment. No native, device,
-provider, operational notification or deployment acceptance is claimed here. T062 is still the
-separate update on the 014 branch; runtime implementation follows its own contract gates.
+provider, operational notification or deployment acceptance is claimed here. T062 is closed by the
+separate 014 branch update at `66874cf399209cde1704985dfc83ecc9a3c9cf6f`: section 10 and
+T003 record the accepted inputs. Runtime implementation follows its own contract gates.
