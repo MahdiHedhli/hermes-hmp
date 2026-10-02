@@ -34,7 +34,13 @@ is independently documentation-reviewed and published. It aligns client planning
 with minimum-version/API admission while preserving authorization and image limits.
 The combined app source baseline is independently accepted in
 [mobile draft #68](https://github.com/MahdiHedhli/HermesBotMobile/pull/68).
-Phone image wiring remains open. The mobile MEDIA-C1/F1 source and exact
+Phone image wiring remains open. The [v2 Phone media contract](https://github.com/MahdiHedhli/HermesBotMobile/blob/4fa4764bbad7799850755ce4e7262b2fc38b0b28/specs/029-host-local-images/phone-media-contract.md)
+has independent architecture acceptance, with bounded controller/read-port work
+in progress. It separates media activity from send readiness and retains the
+original card permit through actual shared-refresh/fetch/decode settlement.
+Implementation review, viewer/screen wiring, combined CI and physical delivery
+remain open; this is mobile work requiring no new upstream Hermes API.
+The mobile MEDIA-C1/F1 source and exact
 registry repair are independently accepted in [draft #69](https://github.com/MahdiHedhli/HermesBotMobile/pull/69):
 219 focused passes and full serial CI pass (app 925 / 3 skips). This repairs the
 demonstrated client accounting/API settlement mechanism; installed devices and

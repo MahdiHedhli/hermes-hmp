@@ -236,6 +236,17 @@ Bot Chat media / separate Phone screen source baseline has independent acceptanc
 in [mobile draft #68](https://github.com/MahdiHedhli/HermesBotMobile/pull/68); it does
 not enable Phone image cards or change installed hosts/devices.
 
+The [v2 Phone media contract](https://github.com/MahdiHedhli/HermesBotMobile/blob/4fa4764bbad7799850755ce4e7262b2fc38b0b28/specs/029-host-local-images/phone-media-contract.md)
+now has independent architecture acceptance. Its separate media stamp/activity,
+exact owned-viewer routing, actual applied-read proof and stable screen budget
+preserve the existing send fences. Every participating card must retain its
+original permit through the actual shared refresh Future, including cancellation
+and binding replacement, plus fetch/decode settlement. This closes the design
+gap where UI abandonment could outlive accounting while a read kept running.
+Bounded controller/read-port implementation is in progress; exact-source review,
+UI wiring, combined CI and device/release evidence remain open. It introduces
+no new upstream Hermes API requirement or installed capability.
+
 ### Mobile public-image lifetime (2026-10-02)
 
 MEDIA-C1 is a mobile resource-accounting defect, not a missing Hermes API. Repeated
