@@ -35,7 +35,9 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from bridge_files import _isolate_hermes_home, _refuse_real_home
 
-SYNTHETIC_COMMAND = "rm -rf /hmp-synthetic-approval-probe-target"
+# Classification input only; the fake executor records it without running a command.
+# A relative synthetic target exercises recursive-delete approval without a root-path target.
+SYNTHETIC_COMMAND = "rm -rf hmp-synthetic-approval-probe-target"
 SYNTHETIC_PROMPT = "synthetic approval probe prompt"
 KEY = "hmp-synthetic-api-key"
 WAIT_S = 15.0
