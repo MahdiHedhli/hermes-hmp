@@ -687,3 +687,13 @@ fetch authority; native reads are non-atomic and native materialization/pruning 
 No native cost, S5 route, four-fetch T12, phone rendering, Linux integration, live flag or deployment
 acceptance follows. Native cost is measured separately on sampled fixtures, never an admission gate.
 Full delivery rows and S4/S5 release checkboxes stay open until their stated scope is proved.
+
+
+### C6b r2 execution evidence (2026-10-02)
+
+The independently reviewed measurement repair passed a fresh preflight and complete disposable
+native run: 58 steps, 9,686 semantic checks, 500 writer phases. Root verified all 1,000 phase
+outcomes and the declared public native prompt content; native/HMP/foundation/runtime hashes
+and isolation/cleanup receipts held. [Sampled evidence](../../docs/research/local-media-complete-binding-sample-2026-10-02.md)
+distinguishes 194 native-writer refusals from 42 synthetic-store refusals and preserves 60
+residual-window accepts plus 50 ABA controls. No S4/S5/T12 or deployment acceptance follows.

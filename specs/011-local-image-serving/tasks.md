@@ -366,3 +366,13 @@ causal mutant kills. Reviewer checkboxes and S6/S6b stay open for their full sco
 Three earlier baseline contract-table failures remain recorded; no full-suite green
 is claimed. No build entry, native admission or serving route is present. See the
 [root acceptance scope](ROOT_DECISIONS.md#s6b-bounded-source-acceptance--2026-10-01).
+
+
+## C6b sampled complete-binding evidence (2026-10-02)
+
+The [r2 native sample](../../docs/research/local-media-complete-binding-sample-2026-10-02.md)
+completed 58 steps with 9,686 semantic checks and 500 writer phases. Root rechecked all 1,000
+first/second outcomes, including closed refusal reasons. Public native prompts prove the declared
+large-prompt fixture. This is M3 binding/mint research on the stated native sample, not S4 route
+cost or S5/T12 evidence. Native materialization and non-atomic residual/ABA remain; no gate,
+ceiling or release checkbox is implied. Earlier r1 measurement defects remain historical.
