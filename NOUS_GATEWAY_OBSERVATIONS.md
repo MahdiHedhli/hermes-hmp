@@ -1220,9 +1220,19 @@ inherit that limit; the configured child limits, including `NOFILE` 32, remain
 unchanged. Its ordinary child actually forked and was reaped, but exited 125
 during limit setup: `FORKED, SETUP_ERROR`, no payload or child log bytes, no
 signals or identity loss. The collector correctly failed, and all 270 pinned
-inputs remained unchanged. The exact failing resource/error is unattributed;
-a bounded diagnostic is next. No startup-stall or TERM/KILL case was attempted,
-and neither failed ordinary attempt is a startup/resource/crypto pass.
+inputs remained unchanged. That attempt did not identify the failing resource
+or error. No startup-stall or TERM/KILL case was attempted, and neither failed
+ordinary attempt is a startup/resource/crypto pass.
+
+A later diagnostic-only ordinary attempt identified the exact failing call on
+this macOS test runtime: setting the unchanged 256 MiB address-space limit raised
+`ValueError`, with no errno available. The child was actually reaped after
+`FORKED, SETUP_ERROR`, exit 125, with no child log bytes, signals or identity loss.
+All 296 pinned source/history inputs remained unchanged. This identifies the
+resource call, not the operating-system cause or resource enforcement. The
+limits remain unchanged; no later startup-stall or TERM/KILL case ran. Supported
+fixed-limit runtime validation remains open, and all 151 crypto definitions
+remain unexecuted.
 
 ### Shared Desktop ownership repair contract
 
