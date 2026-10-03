@@ -466,6 +466,16 @@ and mount lifetime, loader closure and other denial/reaping controls still need
 verification. Execution admission remains closed. Owner provisioning choices
 are not prerequisites for this test-only work.
 
+A separate startup-supervisor v2 source repair is independently accepted. The
+caller now retains the exact child handle before startup and through observation
+construction, handoff and receipt failures. All 140 frozen input hashes matched;
+46 synthetic control definitions remain unexecuted. The prior failed v1 review
+is preserved. This repairs the observation/handoff ownership defect in source;
+it does not qualify runtime cleanup or execute any crypto vector. Exceptional
+holding can remain indefinite. Actual resource collectors, trusted receipt
+provenance and immutable runtime/mount lifetime remain open. Admission is NONE;
+a separate pure-source-test recipe is being prepared for review.
+
 ### Shared Desktop ownership repair contract
 
 Independent review accepted the revised contract only; backend/mobile integration
@@ -524,8 +534,18 @@ Independent source review accepted the four-file repair. Author and independent
 focused runs each passed 113 cases: 65 new and 48 existing controls. Exact-head
 [run 37114626278](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/37114626278)
 passed 2,680 cases with 17 skips and one existing warning, including lint,
-closed-surface and hygiene gates. Integration and deployment remain pending.
+closed-surface and hygiene gates. Combined source/CI status is recorded below.
 Old readers may reject large records; an out-of-domain (>128) failed refresh can
 retain an older snapshot fresh for up to 45 seconds. Freshness does not prove
 current live roster completeness. The same OS user remains the authority
 boundary. Neither finding establishes an owner incident.
+
+The three repairs are now composed in [draft PR #96](https://github.com/MahdiHedhli/hermes-hmp/pull/96),
+at `df30e09309569550232af6fbec4596817a75f464`. Independent source review verified
+exact CLI composition, eight unchanged carried files and 283 untouched common-parent
+files. Exact combined-head [CI run 37116039263](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/37116039263)
+passed: 2,710 tests, 17 skips and one existing warning, with lint, closed-surface,
+log hygiene and privacy checks. This accepts the combined source and configured
+CI scope. Native, mobile/device integration, activation and deployment remain
+pending; the residual limits above still apply. No new upstream API is required
+for these three repairs.
