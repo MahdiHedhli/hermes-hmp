@@ -1068,3 +1068,26 @@ release acceptance remain separate gates. The fake relay accepts opaque seal syn
 open a seal or contact a provider. This one development sample is not a runtime allowlist or a
 qualification of future versions. No production module, live home, device, deployment or provider
 configuration changed.
+
+## Desktop ownership source trace (2026-10-03 UTC)
+
+Independent source and fixture-plan review on Hermes
+`8afaab3703e336d72a72c812dd2dd249f04f166a` and HMP
+`3e676ec10266ef958ca631b6f8384c6aa297745e` distinguishes two native leases:
+the API agent holds a durable SessionDB turn lease, while Desktop claims the
+active-session registry lease at `prompt.submit`. The durable lease serializes
+model turns. Desktop submit-time transcript persistence precedes its worker's
+turn-lease admission. HMP's shared AP3 visibility currently uses a stream-derived
+held marker, which does not observe a new Desktop registry claim during an
+already-open API approval. This is a source hypothesis for stale visibility and
+transcript ordering; no causal runtime defect or concurrent model execution is
+claimed. The native snapshot read exists, so an upstream missing primitive has
+not been established.
+
+The independently accepted experiment warms the real Desktop backend before
+arming one pending push barrier, uses actual `/api/ws` resume/submit, observes
+registry ownership, transcript ordering, AP3 and relay capture, then denies the
+original approval for cleanup. Implementation and fresh confinement/runtime
+review remain required. The prior three-case native receipt is unchanged;
+**T029 remains open**. No production module, deployed build or availability gate
+changed, and this sample is not an exact-version allowlist.
