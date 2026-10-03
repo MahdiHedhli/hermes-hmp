@@ -132,7 +132,7 @@ remain pending. No additional upstream Hermes API is required by these pure help
 
 At that earlier amendment checkpoint, no production observer, registration route,
 notification resolver or dispatcher was wired. The newer registration checkpoint
-below adds source routes; the newer resolver checkpoint records its bounded acceptance. Observer and dispatch remain unfinished. This amendment
+below adds source routes; the newer resolver and dispatcher checkpoints record their bounded acceptance. HTTPS transport and delivery remain unfinished. This amendment
 has no native, provider or device acceptance, and no operational push exists. Initial alert scope
 covers HMP Bot Chat and Phone-chat rows. The static
 [cross-surface census](https://github.com/MahdiHedhli/hermes-hmp/blob/docs/nous-observations-sync/docs/research/approval-cross-channel-source-census-2026-10-02.md)
@@ -144,6 +144,32 @@ that consumer. CLI process loading and durable cross-surface lifecycle mapping r
 evidence/design work; observer events are not answer authority. Cron applies unattended
 automatic policy, and clarify is separate. No generic upstream API gap is established
 by this census. Provider setup and physical delivery remain pending.
+
+## Approval push dispatcher checkpoint (2026-10-03)
+
+[Draft PR #87](https://github.com/MahdiHedhli/hermes-hmp/pull/87), source
+`e6e20a61ddcaf44d76c73e0a1ff35688e8e27e96`, adds the bounded insertion
+worker and listener lifecycle through an injected relay port. Independent v2
+review accepted all 48 frozen source pins after resolving v1's recipient-order
+defect: registration insertion order now remains correct when wall-clock
+timestamps tie or move backwards. Focused verification passed 380 tests; the
+full suite passed 2,486 tests with 16 existing skips and one existing warning.
+Both exact-source hosted CI runs passed.
+
+The worker bounds queued callbacks, recipients, concurrent requests, coalescing
+slots and per-device counters; repeats current owner, grant, family, generation,
+visibility and live-setting checks; restricts retry to certain pre-write failures
+and relay `unavailable`; and applies feedback only to the matching active
+registration. Listener close detaches the observer, cancels work and bounds client
+shutdown. These tests use a fake relay port and establish source behavior only.
+
+**Still open:** the T025 HTTPS/signing client and production adapter factory are
+under development and independent review, with no accepted transport or delivery
+claim yet. Relay/seal interoperability, app registration/taps, provider setup,
+physical delivery, owner deployment choices and release gates remain incomplete.
+No live host, app, credential, grant or provider was changed by this checkpoint.
+The generation-ceiling disposition remains open. Push carries navigation hints
+and never authorizes an approval answer.
 
 ## Approval push hint resolver checkpoint (2026-10-02)
 
@@ -168,7 +194,9 @@ This accepts the bounded T023 source slice. Production insertion dispatch and
 hint minting (T024), HTTPS/signing relay transport (T025), relay/seal and app
 integration, owner provisioning, physical delivery and release remain open.
 T022 is incomplete at feature scope. No host, phone, provider or release changed;
-there is no operational push delivery. The separate dispatcher work is unreviewed
+there was no operational push delivery at this resolver checkpoint. The later
+dispatcher checkpoint above supersedes its source-consumer status; transport and
+delivery remain incomplete. The separate dispatcher work was unreviewed
 and is not credited by this checkpoint. Earlier checkpoints below preserve the
 scope and unfinished work at their own dates.
 

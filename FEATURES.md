@@ -64,12 +64,38 @@ physical/native/global memory/release gates remain unchanged. See [current mobil
 | Available | Bot roster and Bot Chat reads | Profile list, snapshots, history, and access state through the root Hermes gateway. |
 | Preview | Bot Chat sends | Explicit owner gate, per-bot authorization, freshness checks and retry-safe handling. Current development follows the minimum-version policy and attempts the required APIs on later or unknown builds; an untested fingerprint alone does not disable the feature. Actual API failures remain explicit. |
 | Draft; not enabled live | Approvals and choices | Minimum-version candidate `150bd0f` is independently source-reviewed; two prepared native samples passed 13 cases each. Corrected exact-source package is prepared. Live activation and physical card/answer acceptance remain open; earlier setup failures are historical evidence below. |
-| Source registration/resolver/configuration/maintenance reviewed; delivery unwired | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` are independently source-reviewed, with exact hosted CI passing. Dispatch, relay/app integration, provisioning and physical delivery remain open. No notification is delivered by this source slice. |
+| Source registration/resolver/dispatcher/configuration reviewed; transport and delivery pending | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` and injected-port dispatcher `e6e20a6` are independently source-reviewed, with exact hosted CI passing. HTTPS transport, relay/app integration, provisioning and physical delivery remain open. No notification is delivered by this source slice. |
 | Owner dogfood; source follow-up reviewed | Linked chat images | Owner confirmed public-CDN rendering. Accepted public-image settlement repair `16c2095` and Phone media wiring `11cbf29` passed hosted CI; integrated Play source `8671061` also passed hosted CI. Native allocation, host-local HTTP serving and device/release evidence remain open. No new installed image capability is claimed. |
 | Planning | Phone photo/file attachments | Root reproduced native adapter primitives in isolated discovery tests on an archive, not a Git attestation (73 checks, 30 focused tests, 315 fixture and CI-tool tests together; no full CI gate claimed); the complete upload, busy-handler, admission and read-back flow remains unqualified. Canonical Desktop-owned multimodal admission and reusable authorized media history remain upstream contract gaps. |
 
 See the [roadmap](ROADMAP.md), [wire contract](docs/architecture/contracts/HMP_V1.md), and [upstream requests for Nous Research](NOUS_GATEWAY_OBSERVATIONS.md).
 
+
+## Approval push dispatcher checkpoint (2026-10-03)
+
+[Draft PR #87](https://github.com/MahdiHedhli/hermes-hmp/pull/87), source
+`e6e20a61ddcaf44d76c73e0a1ff35688e8e27e96`, adds the bounded insertion
+worker and listener lifecycle through an injected relay port. Independent v2
+review accepted all 48 frozen source pins after resolving v1's recipient-order
+defect: registration insertion order now remains correct when wall-clock
+timestamps tie or move backwards. Focused verification passed 380 tests; the
+full suite passed 2,486 tests with 16 existing skips and one existing warning.
+Both exact-source hosted CI runs passed.
+
+The worker bounds queued callbacks, recipients, concurrent requests, coalescing
+slots and per-device counters; repeats current owner, grant, family, generation,
+visibility and live-setting checks; restricts retry to certain pre-write failures
+and relay `unavailable`; and applies feedback only to the matching active
+registration. Listener close detaches the observer, cancels work and bounds client
+shutdown. These tests use a fake relay port and establish source behavior only.
+
+**Still open:** the T025 HTTPS/signing client and production adapter factory are
+under development and independent review, with no accepted transport or delivery
+claim yet. Relay/seal interoperability, app registration/taps, provider setup,
+physical delivery, owner deployment choices and release gates remain incomplete.
+No live host, app, credential, grant or provider was changed by this checkpoint.
+The generation-ceiling disposition remains open. Push carries navigation hints
+and never authorizes an approval answer.
 
 ## Approval push hint resolver checkpoint (2026-10-02)
 
@@ -94,7 +120,9 @@ This accepts the bounded T023 source slice. Production insertion dispatch and
 hint minting (T024), HTTPS/signing relay transport (T025), relay/seal and app
 integration, owner provisioning, physical delivery and release remain open.
 T022 is incomplete at feature scope. No host, phone, provider or release changed;
-there is no operational push delivery. The separate dispatcher work is unreviewed
+there was no operational push delivery at this resolver checkpoint. The later
+dispatcher checkpoint above supersedes its source-consumer status; transport and
+delivery remain incomplete. The separate dispatcher work was unreviewed
 and is not credited by this checkpoint. Earlier checkpoints below preserve the
 scope and unfinished work at their own dates.
 
