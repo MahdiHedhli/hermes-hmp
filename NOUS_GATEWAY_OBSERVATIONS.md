@@ -1401,3 +1401,22 @@ slice. The public feature remains incomplete: asset encryption, picker ownership
 custody/upload/send, native atomic admission, authorized readback and physical
 device gates are still open. Source CI does not qualify those missing capabilities
 or make the **+** media route available.
+
+
+## Signed Android reporting validation (2026-10-03)
+
+The exact signed Free Android code 2 (`8671061`, APK SHA-256
+`04c247fff5e4e35ec2d6e4df2127aaf62d9bdd2443dd6a364d846c362d0a96df`)
+passed a bounded, independently inspected emulator-5570 report walkthrough.
+Initial excerpt-off, privacy/consent, editable opt-in synthetic preview, Cancel
+and reopened reset were observed. One explicitly sent synthetic report with
+excerpt off produced the Android success acknowledgement and one independently
+correlated receiver record with a receipt and approximately 30-day expiry.
+No private receipt token, KV key or test content is published here.
+
+This supersedes earlier locked-emulator/report-pending checkpoints. Physical
+Android, paired/live reviewer coverage and an opt-in excerpt submission were not
+tested. No wire capture, extra Send/retry, host or receiver deployment, Play upload
+or submission occurred. Provider-aware Data safety, full reviewer access,
+exact-source automated release-security-review PASS and replacement upload/submission
+remain open. No usable Android beta install link or release acceptance is claimed.
