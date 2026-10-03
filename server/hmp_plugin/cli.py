@@ -170,7 +170,15 @@ _PROFILE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 LISTENER_RECORD_FILENAME = "listener.json"
 LISTENER_RECORD_FORMAT = 1
 RECORD_MODE = 0o600
-MAX_RECORD_BYTES = 16_384  # bounded profile inventory and status-only health snapshot
+MAX_LEGACY_LISTENER_RECORD_BYTES = 16_384
+MAX_LISTENER_FILE_BYTES = 65_536
+MAX_READY_RESPONSE_BYTES = 16_384
+MAX_EXTENDED_LISTENER_PROFILES = 128
+_MAX_RECORD_INPUT_ROWS = 4096
+_MAX_RECORD_INPUT_STRING = 16_384
+_RECORD_FIELDS = frozenset({
+    "format", "host", "port", "iid", "pid", "nonce", "profiles", "health_checked_at", "health",
+})
 HEALTH_MAX_AGE_S = 45
 HEALTH_STATES = frozenset({"ready", "disabled", "unsupported", "unavailable"})
 
@@ -200,6 +208,96 @@ def listener_record_path(anchor_dir: Path) -> Path:
     return Path(anchor_dir).parent / LISTENER_RECORD_FILENAME
 
 
+def _record_scalar(value: object) -> object:
+    """Coarse projection bounds; not permission to use the extended file budget."""
+    if type(value) is str:
+        if len(value) <= _MAX_RECORD_INPUT_STRING:
+            return value
+    elif value is None or type(value) is bool or (
+        type(value) is int and value.bit_length() <= 4 * _MAX_RECORD_INPUT_STRING
+    ):
+        return value
+    raise OSError("the listener record is malformed")
+
+
+def _record_rows(value: object, width: int) -> list[list[object]] | None:
+    if value is None:
+        return None
+    if type(value) not in (list, tuple):
+        raise OSError("the listener record is malformed")
+    if len(value) > _MAX_RECORD_INPUT_ROWS:
+        raise OSError("the listener record is malformed")
+    rows = []
+    for row in value:
+        if type(row) not in (list, tuple) or len(row) != width:
+            raise OSError("the listener record is malformed")
+        rows.append([_record_scalar(v) for v in row])
+        if len(rows) > _MAX_RECORD_INPUT_ROWS:
+            raise OSError("the listener record is malformed")
+    return rows
+
+
+def _printable_ascii(value: object, limit: int) -> bool:
+    return (
+        type(value) is str and 0 < len(value) <= limit
+        and all(0x20 <= ord(char) <= 0x7E for char in value)
+    )
+
+
+def _extended_record_valid(data: object) -> bool:
+    """Only this closed schema can receive a larger-than-legacy budget (SD1)."""
+    from . import wire
+
+    if not isinstance(data, dict) or set(data) != _RECORD_FIELDS:
+        return False
+    if type(data["format"]) is not int or data["format"] != LISTENER_RECORD_FORMAT:
+        return False
+    if not _printable_ascii(data["host"], 128) or not _printable_ascii(data["nonce"], 128):
+        return False
+    try:
+        ipaddress.ip_address(data["host"])
+        wire.require_iid(data["iid"])
+    except (ValueError, wire.WireError):
+        return False
+    for name, lo, hi in (
+        ("port", 1, 65_535), ("pid", 1, 2**31), ("health_checked_at", 0, 2**63 - 1),
+    ):
+        if type(data[name]) is not int or not lo <= data[name] <= hi:
+            return False
+    profiles = data["profiles"]
+    if not isinstance(profiles, list) or len(profiles) > MAX_EXTENDED_LISTENER_PROFILES:
+        return False
+    names = set()
+    for row in profiles:
+        if (
+            not isinstance(row, list) or len(row) != 2
+            or not _valid_profile_name(row[0]) or row[0] in names
+            or not _printable_ascii(row[1], 64)
+        ):
+            return False
+        names.add(row[0])
+    try:
+        _parse_record_health(data["health_checked_at"], data["health"], tuple(map(tuple, profiles)))
+    except ListenerRecordError:
+        return False
+    return True
+
+
+def _encode_listener_record(data: dict[str, object]) -> bytes:
+    budget = (
+        MAX_LISTENER_FILE_BYTES if _extended_record_valid(data)
+        else MAX_LEGACY_LISTENER_RECORD_BYTES
+    )
+    body = bytearray()
+    # Default JSONEncoder preserves the original dumps escaping/separators/order.
+    for piece in json.JSONEncoder().iterencode(data):
+        chunk = piece.encode("utf-8")
+        if len(body) + len(chunk) > budget:
+            raise OSError("listener record exceeds size limit")
+        body.extend(chunk)
+    return bytes(body)
+
+
 def write_listener_record(
     path: Path,
     *,
@@ -225,21 +323,21 @@ def write_listener_record(
     has a bridge); omitted (`None`) otherwise, so an unsupported-build listener's record looks
     exactly as it did before this field existed.
     """
-    body = json.dumps(
-        {
+    try:
+        data = {
             "format": LISTENER_RECORD_FORMAT,
-            "host": host,
-            "port": port,
-            "iid": iid,
+            "host": _record_scalar(host),
+            "port": _record_scalar(port),
+            "iid": _record_scalar(iid),
             "pid": os.getpid(),
-            "nonce": nonce if nonce is not None else secrets.token_hex(16),
-            "profiles": [[p, d] for p, d in profiles] if profiles is not None else None,
-            "health_checked_at": health_checked_at,
-            "health": [list(row) for row in health] if health is not None else None,
+            "nonce": _record_scalar(nonce if nonce is not None else secrets.token_hex(16)),
+            "profiles": _record_rows(profiles, 2),
+            "health_checked_at": _record_scalar(health_checked_at),
+            "health": _record_rows(health, 4),
         }
-    ).encode("utf-8")
-    if len(body) > MAX_RECORD_BYTES:
-        raise OSError("listener record exceeds size limit")
+        body = _encode_listener_record(data)
+    except (TypeError, ValueError, OverflowError, RecursionError) as exc:
+        raise OSError("the listener record is malformed") from exc
     tmp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(tmp, flags, RECORD_MODE)
@@ -256,7 +354,7 @@ def write_listener_record(
         raise
 
 
-def _read_fd(fd: int, *, limit: int = MAX_RECORD_BYTES) -> bytes | None:
+def _read_fd(fd: int, *, limit: int = MAX_LISTENER_FILE_BYTES) -> bytes | None:
     """Every byte from `fd` (already `O_NOFOLLOW`-opened), or `None` if it exceeds `limit`."""
     chunks: list[bytes] = []
     total = 0
@@ -313,7 +411,7 @@ def remove_listener_record(path: Path) -> None:
         return
     try:
         data = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError):
+    except (UnicodeDecodeError, ValueError, RecursionError):
         return
     if not (isinstance(data, dict) and data.get("pid") == os.getpid()):
         return
@@ -506,6 +604,15 @@ def _valid_profile_name(name: str) -> bool:
     return isinstance(name, str) and _PROFILE_NAME_RE.fullmatch(name) is not None
 
 
+def _unique_record_members(pairs: list[tuple[str, object]]) -> dict[str, object]:
+    out: dict[str, object] = {}
+    for key, value in pairs:
+        if key in out:
+            raise ValueError("duplicate listener record member")
+        out[key] = value
+    return out
+
+
 def read_listener_record(
     path: Path, *, iid: str, pid_alive: Callable[[int], bool] = _pid_alive
 ) -> ListenerRecord:
@@ -534,9 +641,15 @@ def read_listener_record(
     if raw is None:
         raise ListenerRecordError("the listener record is malformed")
     try:
-        data = json.loads(raw.decode("utf-8"))
-    except (UnicodeDecodeError, ValueError) as exc:
+        extended = len(raw) > MAX_LEGACY_LISTENER_RECORD_BYTES
+        data = json.loads(
+            raw.decode("utf-8"),
+            object_pairs_hook=_unique_record_members if extended else None,
+        )
+    except (UnicodeDecodeError, ValueError, RecursionError) as exc:
         raise ListenerRecordError("the listener record is unreadable") from exc
+    if extended and not _extended_record_valid(data):
+        raise ListenerRecordError("the listener record is malformed")
     if not isinstance(data, dict) or data.get("format") != LISTENER_RECORD_FORMAT:
         raise ListenerRecordError("the listener record is malformed")
     host, port, rec_iid, pid = data.get("host"), data.get("port"), data.get("iid"), data.get("pid")
@@ -657,7 +770,7 @@ def _default_verify_listener_live(
         resp = conn.getresponse()
         if resp.status != 200:
             return False
-        raw = resp.read(MAX_RECORD_BYTES)
+        raw = resp.read(MAX_READY_RESPONSE_BYTES)
         payload = json.loads(raw.decode("utf-8"))
     except (OSError, _ssl.SSLError, ValueError, AttributeError):
         return False
@@ -838,10 +951,15 @@ def _command(args: argparse.Namespace) -> tuple[str | None, str | None]:
     return group, action
 
 
-def _check_mutation_allowed(env: CliEnv) -> None:
-    """PR1-2 / PR3-2 mitigations (SEC-1)."""
+def _check_operator_session(env: CliEnv) -> None:
+    """SEC-1 mitigation for operator-only mutations and device metadata."""
     if any(name.startswith(SESSION_ENV_PREFIX) for name in env.environ):
         raise RefusedError("refused: run this from an operator shell, not a Hermes session")
+
+
+def _check_mutation_allowed(env: CliEnv) -> None:
+    """PR1-2 / PR3-2 mitigations (SEC-1)."""
+    _check_operator_session(env)
     if not env.interactive():
         raise RefusedError("refused: this command needs an interactive terminal")
 
@@ -2210,6 +2328,8 @@ def dispatch(args: argparse.Namespace, env: Optional[CliEnv] = None) -> int:  # 
             return EXIT_ENVIRONMENT
         if (group, action) in MUTATING_COMMANDS:
             _check_mutation_allowed(env)
+        elif (group, action) == ("devices", "list"):
+            _check_operator_session(env)
         with _open(env, needs_identity=(group, action) in IDENTITY_COMMANDS) as ctx:
             return handler(ctx, args)
     except RefusedError as refusal:

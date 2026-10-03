@@ -701,6 +701,36 @@ def test_direct_send_endpoint_default_profile_short_extra_key_fails_closed(
     assert br.direct_send_endpoint(profile) is None
 
 
+
+@pytest.mark.parametrize(
+    "scoped_key",
+    [None, 16, b"x" * 16, "", " " * 20, "x" * 15, "  " + "x" * 15 + "  "],
+    ids=["none", "integer", "bytes", "empty", "blank", "fifteen", "padded-fifteen"],
+)
+def test_direct_send_endpoint_default_scoped_unusable_key_fails_closed(
+    world: World, br: HermesReadBridge, caplog: pytest.LogCaptureFixture, scoped_key: object
+) -> None:
+    world.api.api_server_keys["alpha"] = scoped_key  # type: ignore[assignment]
+    assert br.direct_send_endpoint("alpha") is None
+    # Rejected credentials must not leak through diagnostics.
+    assert not caplog.records
+
+
+@pytest.mark.parametrize(
+    "scoped_key", ["x" * 16, "x" * 17, "  " + "x" * 16 + "  "],
+    ids=["sixteen", "seventeen", "padded-sixteen"],
+)
+def test_direct_send_endpoint_default_scoped_key_boundary_retains_raw_bytes(
+    world: World, br: HermesReadBridge, scoped_key: str
+) -> None:
+    world.api.api_server_keys["alpha"] = scoped_key
+    endpoint = br.direct_send_endpoint("alpha")
+    assert endpoint is not None
+    assert endpoint.api_key == scoped_key
+    assert endpoint.host == "127.0.0.1"
+    assert endpoint.path_prefix == ""
+
+
 def test_resolve_bot_chat_unions_ancestors_when_lineage_returns_only_the_tip(
     world: World, br: HermesReadBridge
 ) -> None:
