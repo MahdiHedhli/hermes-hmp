@@ -1,0 +1,18 @@
+{
+  "tags": [
+    "HMP1-GRACE",
+    "HMP1-HOST",
+    "HMP1-OFFER",
+    "HMP1-PAIR-DONE",
+    "HMP1-PAIR-REQ",
+    "HMP1-PAIR-RESP",
+    "HMP1-PUSH-COLLAPSE",
+    "HMP1-PUSH-RELAY",
+    "HMP1-PUSH-ROUTE",
+    "HMP1-SELF-REVOKE",
+    "HMP1-TOKEN"
+  ],
+  "source": "literal complete HMP1 domain inventory in frozen HMP_V1 and HMP_PUSH_RELAY_V1; not phone verifier allowlist",
+  "hmp_v1_sha256": "bae136e2ef6be12771eac5301a61c4d6ae900f7eb753a1f0503dff37ac906d10",
+  "relay_contract_sha256": "7c7cb585b8513cd25122fe532a03d3cefa7b0213bea831c1891c28af5d9720a3"
+}

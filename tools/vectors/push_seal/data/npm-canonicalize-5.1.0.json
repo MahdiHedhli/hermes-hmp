@@ -1,0 +1,38 @@
+{
+  "format": "hmp-public-registry-provenance-v1",
+  "source_url": "https://registry.npmjs.org/canonicalize/5.1.0",
+  "raw_response_sha256": "4b666dcd3571edac1ee1db182b5e523703879d99023204c1869640df48a95d14",
+  "selection": "package identity, license, runtime/dependency requirements, distribution integrity and repository only; publisher contact fields omitted",
+  "selected_metadata": {
+    "name": "canonicalize",
+    "version": "5.1.0",
+    "license": "Apache-2.0",
+    "engines": {
+      "node": ">=22"
+    },
+    "dist": {
+      "shasum": "4e429a81a542933e8db7647b7e916cbdb60d272c",
+      "tarball": "https://registry.npmjs.org/canonicalize/-/canonicalize-5.1.0.tgz",
+      "fileCount": 6,
+      "integrity": "sha512-bab9+WefZljqQ8jT0qRwVmTyzAUU63K97QIQD3agynIBrb6sa5M2eAy8Hv8K3p4V9+ONVYZKtGYl4Dg+/5Gumw==",
+      "signatures": [
+        {
+          "sig": "MEUCIAJIFapJnNmSEens1O7RMuHVcQG0KR1avwmtShbt2mUIAiEAwdyEn3AMnGY0SavXfXUqaKOySYnXanfkCZZOluSfDkA=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/canonicalize@5.1.0",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 24474
+    },
+    "repository": {
+      "url": "git+https://github.com/erdtman/canonicalize.git",
+      "type": "git"
+    }
+  },
+  "signature_attestation_verification": "NOT_PERFORMED"
+}

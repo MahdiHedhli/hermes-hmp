@@ -1,0 +1,58 @@
+{
+  "synthetic_only": true,
+  "warning": "PUBLIC TEST PRIVATE KEY. NEVER USE IN A DEPLOYMENT.",
+  "signing": {
+    "label": "TEST-ONLY",
+    "role": "instance key (IK); signs HMP1-PAIR-RESP (isig); self-signed TLS cert key (TR-1, TR-8)",
+    "curve": "P-256",
+    "private_scalar_hex": "32c507d49904f2f1cd4843f247465ff022280d792c1da852639668b98f482e29",
+    "spki_der_hex": "3059301306072a8648ce3d020106082a8648ce3d03010703420004698524cf6df9582a66646e4034924d3e717b0228d560909b20575547163e46c0ad9b85e251ecf1fcdcded65d4fee3b878bb9ad28de395cf86bd9b311431b50e6",
+    "iid": "xqvbyswvlfi7u5jua4kj3wa5tvh5r6wn5glpriavvbuyltcnby4a"
+  },
+  "der_negative_cases": [
+    {
+      "expected": "400; scalar range",
+      "label": "r-zero",
+      "signature_der_hex": "3006020100020101"
+    },
+    {
+      "expected": "400; scalar range",
+      "label": "s-zero",
+      "signature_der_hex": "3006020101020100"
+    },
+    {
+      "expected": "400; scalar range",
+      "label": "r-equals-order",
+      "signature_der_hex": "3026022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551020101"
+    },
+    {
+      "expected": "400; scalar range",
+      "label": "s-equals-order",
+      "signature_der_hex": "3026020101022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551"
+    },
+    {
+      "expected": "400; DER must be minimal",
+      "label": "nonminimal-r-integer",
+      "signature_der_hex": "3045022200a28be1eab7b30895f96637f2c3a93c0fe0c18af78be30030b06d6d77ef8f4348022011a237f1e5e4767de37480b5729e921bb289a348a234df18dfab244db0723b62"
+    },
+    {
+      "expected": "400; negative INTEGER",
+      "label": "negative-r",
+      "signature_der_hex": "3006020180020101"
+    },
+    {
+      "expected": "400; trailing bytes",
+      "label": "trailing-byte",
+      "signature_der_hex": "3045022100a28be1eab7b30895f96637f2c3a93c0fe0c18af78be30030b06d6d77ef8f4348022011a237f1e5e4767de37480b5729e921bb289a348a234df18dfab244db0723b6200"
+    },
+    {
+      "expected": "401; valid range/DER but signature does not verify",
+      "label": "in-range-nonverifying",
+      "signature_der_hex": "3006020101020101"
+    }
+  ],
+  "source_files": {
+    "hmp_v1_vectors.json": "d77608873b216939297cdfc045eb833e66c09e40aed44848d306267ca174c131",
+    "hmp_push_relay_vectors.json": "94a98f24245ad25cbc08b7c2a8181ad6bb492b3f985415284496c17bfcf4afed"
+  }
+}

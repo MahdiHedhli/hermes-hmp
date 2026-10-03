@@ -1,0 +1,956 @@
+{
+  "format": "hmp-push-seal-case-definitions-v1",
+  "synthetic_only": true,
+  "status": "UNEXECUTED_SOURCE_DEFINITIONS",
+  "cases": [
+    {
+      "id": "apns_sandbox",
+      "expected": "eligible"
+    },
+    {
+      "id": "apns_production",
+      "expected": "eligible",
+      "plain_patch": {
+        "env": "production"
+      },
+      "outer_patch": {
+        "env": "production"
+      }
+    },
+    {
+      "id": "fcm_token",
+      "expected": "eligible",
+      "platform": "fcm",
+      "addr_kind": "fcm_token"
+    },
+    {
+      "id": "fcm_fid",
+      "expected": "eligible",
+      "platform": "fcm",
+      "addr_kind": "fcm_fid"
+    },
+    {
+      "id": "unicode_scalars",
+      "expected": "eligible",
+      "plain_patch": {
+        "addr": "SYNTHETIC/\u00e9/\u4e2d/\ud83d\ude00/\\\"\n\t"
+      }
+    },
+    {
+      "id": "unicode_nfc",
+      "expected": "eligible",
+      "plain_patch": {
+        "addr": "SYNTHETIC-\u00e9"
+      }
+    },
+    {
+      "id": "unicode_nfd",
+      "expected": "eligible",
+      "plain_patch": {
+        "addr": "SYNTHETIC-e\u0301"
+      }
+    },
+    {
+      "id": "minimum_ids",
+      "expected": "eligible",
+      "outer_patch": {
+        "kid": "A",
+        "aud": "A"
+      },
+      "aud_config": "A"
+    },
+    {
+      "id": "maximum_ids",
+      "expected": "eligible",
+      "outer_patch": {
+        "kid": "Azzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz",
+        "aud": "Azzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+      },
+      "aud_config": "Azzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzz"
+    },
+    {
+      "id": "plaintext_1024",
+      "expected": "eligible",
+      "plain_mode": "size1024"
+    },
+    {
+      "id": "expiry_max_window",
+      "expected": "eligible",
+      "plain_patch": {
+        "not_after": 1701209600
+      }
+    },
+    {
+      "id": "unknown_outer_ignored",
+      "expected": "eligible",
+      "outer_patch": {
+        "unknown_test_field": "synthetic-ignored"
+      }
+    },
+    {
+      "id": "domain_expiry_zero",
+      "expected": "domain_ok",
+      "plain_patch": {
+        "not_after": 0
+      }
+    },
+    {
+      "id": "domain_expiry_u53max",
+      "expected": "domain_ok",
+      "plain_patch": {
+        "not_after": 9007199254740991
+      }
+    },
+    {
+      "id": "plaintext_empty",
+      "expected": "shape400",
+      "plain_mode": "empty"
+    },
+    {
+      "id": "plaintext_1",
+      "expected": "plain422",
+      "plain_mode": "one"
+    },
+    {
+      "id": "plaintext_1025",
+      "expected": "shape400",
+      "plain_mode": "size1025"
+    },
+    {
+      "id": "kid_empty",
+      "expected": "shape400",
+      "outer_patch": {
+        "kid": ""
+      }
+    },
+    {
+      "id": "kid_65",
+      "expected": "shape400",
+      "outer_patch": {
+        "kid": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }
+    },
+    {
+      "id": "kid_unicode",
+      "expected": "shape400",
+      "outer_patch": {
+        "kid": "\u00e9"
+      }
+    },
+    {
+      "id": "kid_leading_dot",
+      "expected": "shape400",
+      "outer_patch": {
+        "kid": ".bad"
+      }
+    },
+    {
+      "id": "aud_empty",
+      "expected": "shape400",
+      "outer_patch": {
+        "aud": ""
+      }
+    },
+    {
+      "id": "aud_129",
+      "expected": "shape400",
+      "outer_patch": {
+        "aud": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+      }
+    },
+    {
+      "id": "aud_unicode",
+      "expected": "shape400",
+      "outer_patch": {
+        "aud": "\u00e9"
+      }
+    },
+    {
+      "id": "aud_leading_dash",
+      "expected": "shape400",
+      "outer_patch": {
+        "aud": "-bad"
+      }
+    },
+    {
+      "id": "v_bool",
+      "expected": "shape400",
+      "outer_patch": {
+        "v": true
+      }
+    },
+    {
+      "id": "v_two",
+      "expected": "shape400",
+      "outer_patch": {
+        "v": 2
+      }
+    },
+    {
+      "id": "ts_negative",
+      "expected": "shape400",
+      "outer_patch": {
+        "ts": -1
+      }
+    },
+    {
+      "id": "ts_u53",
+      "expected": "shape400",
+      "outer_patch": {
+        "ts": 9007199254740992
+      }
+    },
+    {
+      "id": "ts_bool",
+      "expected": "shape400",
+      "outer_patch": {
+        "ts": true
+      }
+    },
+    {
+      "id": "ttl_59",
+      "expected": "shape400",
+      "outer_patch": {
+        "ttl_s": 59
+      }
+    },
+    {
+      "id": "ttl_901",
+      "expected": "shape400",
+      "outer_patch": {
+        "ttl_s": 901
+      }
+    },
+    {
+      "id": "ttl_bool",
+      "expected": "shape400",
+      "outer_patch": {
+        "ttl_s": true
+      }
+    },
+    {
+      "id": "kind_other",
+      "expected": "shape400",
+      "outer_patch": {
+        "kind": "other"
+      }
+    },
+    {
+      "id": "platform_other",
+      "expected": "shape400",
+      "outer_patch": {
+        "platform": "other"
+      }
+    },
+    {
+      "id": "env_other",
+      "expected": "shape400",
+      "outer_patch": {
+        "env": "other"
+      }
+    },
+    {
+      "id": "route_wrongsize",
+      "expected": "shape400",
+      "outer_patch": {
+        "route": "AA"
+      }
+    },
+    {
+      "id": "hint_wrongsize",
+      "expected": "shape400",
+      "outer_patch": {
+        "hint": "AA"
+      }
+    },
+    {
+      "id": "collapse_wrongsize",
+      "expected": "shape400",
+      "outer_patch": {
+        "collapse": "AA"
+      }
+    },
+    {
+      "id": "nonce_wrongsize",
+      "expected": "shape400",
+      "outer_patch": {
+        "nonce": "AA"
+      }
+    },
+    {
+      "id": "fcm_outer_env",
+      "expected": "shape400",
+      "platform": "fcm",
+      "addr_kind": "fcm_token",
+      "outer_patch": {
+        "env": "sandbox"
+      }
+    },
+    {
+      "id": "missing_outer_env",
+      "expected": "shape400",
+      "outer_remove": [
+        "env"
+      ]
+    },
+    {
+      "id": "missing_outer_kind",
+      "expected": "shape400",
+      "outer_remove": [
+        "kind"
+      ]
+    },
+    {
+      "id": "outer_fraction_ts",
+      "expected": "shape400",
+      "wire_mode": "fraction_ts"
+    },
+    {
+      "id": "outer_exponent_v",
+      "expected": "shape400",
+      "wire_mode": "exponent_v"
+    },
+    {
+      "id": "outer_duplicate",
+      "expected": "shape400",
+      "wire_mode": "duplicate"
+    },
+    {
+      "id": "outer_escaped_duplicate",
+      "expected": "shape400",
+      "wire_mode": "escaped_duplicate"
+    },
+    {
+      "id": "outer_4097",
+      "expected": "shape400",
+      "wire_mode": "oversize"
+    },
+    {
+      "id": "outer_invalid_utf8",
+      "expected": "shape400",
+      "wire_mode": "invalid_utf8"
+    },
+    {
+      "id": "outer_bom",
+      "expected": "shape400",
+      "wire_mode": "bom"
+    },
+    {
+      "id": "sealed_padding",
+      "expected": "shape400",
+      "sealed_wire_mode": "padding"
+    },
+    {
+      "id": "sealed_whitespace",
+      "expected": "shape400",
+      "sealed_wire_mode": "whitespace"
+    },
+    {
+      "id": "sealed_wrongalphabet",
+      "expected": "shape400",
+      "sealed_wire_mode": "alphabet"
+    },
+    {
+      "id": "sealed_trailingbits",
+      "expected": "shape400",
+      "sealed_wire_mode": "trailingbits"
+    },
+    {
+      "id": "sealed_2048",
+      "expected": "shape400",
+      "sealed_wire_mode": "size2048"
+    },
+    {
+      "id": "sealed_81",
+      "expected": "shape400",
+      "sealed_wire_mode": "size81"
+    },
+    {
+      "id": "sealed_1106",
+      "expected": "shape400",
+      "sealed_wire_mode": "size1106"
+    },
+    {
+      "id": "spki_badprefix",
+      "expected": "shape400",
+      "spki_mode": "prefix"
+    },
+    {
+      "id": "spki_offcurve",
+      "expected": "shape400",
+      "spki_mode": "offcurve"
+    },
+    {
+      "id": "spki_zero",
+      "expected": "shape400",
+      "spki_mode": "zero"
+    },
+    {
+      "id": "spki_wrongsize",
+      "expected": "shape400",
+      "spki_mode": "short"
+    },
+    {
+      "id": "wrong_audience",
+      "expected": "auth401",
+      "outer_patch": {
+        "aud": "Other"
+      }
+    },
+    {
+      "id": "kid_unknown",
+      "expected": "auth401",
+      "outer_patch": {
+        "kid": "Unknown"
+      },
+      "kid_config": false
+    },
+    {
+      "id": "iid_not_allowlisted",
+      "expected": "auth401",
+      "iid_allowlisted": false
+    },
+    {
+      "id": "skew_old_at_120",
+      "expected": "auth401",
+      "outer_patch": {
+        "ts": 1699999880
+      }
+    },
+    {
+      "id": "skew_future_121",
+      "expected": "auth401",
+      "outer_patch": {
+        "ts": 1700000121
+      }
+    },
+    {
+      "id": "signature_nonverifying",
+      "expected": "auth401",
+      "signature_mode": "nonverifying"
+    },
+    {
+      "id": "signature_route_tamper",
+      "expected": "auth401",
+      "post_sign_patch": {
+        "route": "AQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQA"
+      }
+    },
+    {
+      "id": "signature_aud_tamper",
+      "expected": "auth401",
+      "post_sign_patch": {
+        "aud": "Other"
+      }
+    },
+    {
+      "id": "skew_old_119",
+      "expected": "eligible",
+      "outer_patch": {
+        "ts": 1699999881
+      }
+    },
+    {
+      "id": "skew_future_120",
+      "expected": "eligible",
+      "outer_patch": {
+        "ts": 1700000120
+      }
+    },
+    {
+      "id": "tag_bit",
+      "expected": "hpke422",
+      "seal_mutation": "tagbit"
+    },
+    {
+      "id": "ciphertext_bit",
+      "expected": "hpke422",
+      "seal_mutation": "ctbit"
+    },
+    {
+      "id": "enc_bit",
+      "expected": "hpke422",
+      "seal_mutation": "encbit"
+    },
+    {
+      "id": "enc_zero",
+      "expected": "hpke422",
+      "seal_mutation": "enczero"
+    },
+    {
+      "id": "enc_hybrid",
+      "expected": "hpke422",
+      "seal_mutation": "enchybrid"
+    },
+    {
+      "id": "enc_compressed",
+      "expected": "hpke422",
+      "seal_mutation": "enccompressed"
+    },
+    {
+      "id": "enc_offcurve",
+      "expected": "hpke422",
+      "seal_mutation": "encoffcurve"
+    },
+    {
+      "id": "enc_out_of_range",
+      "expected": "hpke422",
+      "seal_mutation": "encoutofrange"
+    },
+    {
+      "id": "wrong_info",
+      "expected": "hpke422",
+      "seal_info": "HMP push seal v2"
+    },
+    {
+      "id": "wrong_aad_same_key",
+      "expected": "hpke422",
+      "seal_aad": "TestKidB"
+    },
+    {
+      "id": "wrong_recipient",
+      "expected": "hpke422",
+      "recipient": "alternate"
+    },
+    {
+      "id": "auth_mode",
+      "expected": "hpke422",
+      "seal_mode": "auth"
+    },
+    {
+      "id": "psk_mode",
+      "expected": "hpke422",
+      "seal_mode": "psk"
+    },
+    {
+      "id": "aead256",
+      "expected": "hpke422",
+      "seal_suite": "aead256"
+    },
+    {
+      "id": "duplicate_plain",
+      "expected": "plain422",
+      "plain_mode": "duplicate"
+    },
+    {
+      "id": "escaped_duplicate_plain",
+      "expected": "plain422",
+      "plain_mode": "escaped_duplicate"
+    },
+    {
+      "id": "plain_fraction_v",
+      "expected": "plain422",
+      "plain_mode": "fraction_v"
+    },
+    {
+      "id": "plain_exponent_v",
+      "expected": "plain422",
+      "plain_mode": "exponent_v"
+    },
+    {
+      "id": "plain_exponent_expiry",
+      "expected": "plain422",
+      "plain_mode": "exponent_expiry"
+    },
+    {
+      "id": "plain_fraction_expiry",
+      "expected": "plain422",
+      "plain_mode": "fraction_expiry"
+    },
+    {
+      "id": "plain_invalid_utf8",
+      "expected": "plain422",
+      "plain_mode": "invalid_utf8"
+    },
+    {
+      "id": "plain_bom",
+      "expected": "plain422",
+      "plain_mode": "bom"
+    },
+    {
+      "id": "plain_lone_surrogate",
+      "expected": "plain422",
+      "plain_mode": "lone_surrogate"
+    },
+    {
+      "id": "plain_whitespace",
+      "expected": "plain422",
+      "plain_mode": "whitespace"
+    },
+    {
+      "id": "plain_unsorted",
+      "expected": "plain422",
+      "plain_mode": "unsorted"
+    },
+    {
+      "id": "plain_alternate_escape",
+      "expected": "plain422",
+      "plain_mode": "alternate_escape"
+    },
+    {
+      "id": "plain_escaped_slash",
+      "expected": "plain422",
+      "plain_mode": "escaped_slash"
+    },
+    {
+      "id": "plain_extra",
+      "expected": "plain422",
+      "plain_patch": {
+        "extra": "bad"
+      }
+    },
+    {
+      "id": "plain_v_bool",
+      "expected": "plain422",
+      "plain_patch": {
+        "v": true
+      }
+    },
+    {
+      "id": "plain_v_two",
+      "expected": "plain422",
+      "plain_patch": {
+        "v": 2
+      }
+    },
+    {
+      "id": "plain_expiry_bool",
+      "expected": "plain422",
+      "plain_patch": {
+        "not_after": true
+      }
+    },
+    {
+      "id": "plain_expiry_negative",
+      "expected": "plain422",
+      "plain_patch": {
+        "not_after": -1
+      }
+    },
+    {
+      "id": "plain_expiry_u53",
+      "expected": "plain422",
+      "plain_patch": {
+        "not_after": 9007199254740992
+      }
+    },
+    {
+      "id": "plain_expiry_string",
+      "expected": "plain422",
+      "plain_patch": {
+        "not_after": "1"
+      }
+    },
+    {
+      "id": "plain_nested",
+      "expected": "plain422",
+      "plain_patch": {
+        "addr": {
+          "bad": "nested"
+        }
+      }
+    },
+    {
+      "id": "plain_addr_number",
+      "expected": "plain422",
+      "plain_patch": {
+        "addr": 1
+      }
+    },
+    {
+      "id": "plain_n_padded",
+      "expected": "plain422",
+      "plain_patch": {
+        "n": "AAAAAAAAAAAAAAAAAAAAAA=="
+      }
+    },
+    {
+      "id": "plain_n_trailingbits",
+      "expected": "plain422",
+      "plain_patch": {
+        "n": "AAAAAAAAAAAAAAAAAAAAAB"
+      }
+    },
+    {
+      "id": "plain_n_wrongsize",
+      "expected": "plain422",
+      "plain_patch": {
+        "n": "AA"
+      }
+    },
+    {
+      "id": "plain_iid_bad",
+      "expected": "plain422",
+      "plain_patch": {
+        "iid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "plain_pair_bad",
+      "expected": "plain422",
+      "plain_patch": {
+        "addr_kind": "fcm_token"
+      }
+    },
+    {
+      "id": "plain_env_bad",
+      "expected": "plain422",
+      "plain_patch": {
+        "env": "other"
+      }
+    },
+    {
+      "id": "plain_missing",
+      "expected": "plain422",
+      "plain_remove": [
+        "addr"
+      ]
+    },
+    {
+      "id": "plain_fcm_env",
+      "expected": "plain422",
+      "platform": "fcm",
+      "addr_kind": "fcm_token",
+      "plain_patch": {
+        "env": "sandbox"
+      }
+    },
+    {
+      "id": "binding_iid",
+      "expected": "binding422",
+      "plain_patch": {
+        "iid": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    },
+    {
+      "id": "binding_app",
+      "expected": "binding422",
+      "plain_patch": {
+        "app": "test.other"
+      }
+    },
+    {
+      "id": "binding_env",
+      "expected": "binding422",
+      "plain_patch": {
+        "env": "production"
+      }
+    },
+    {
+      "id": "binding_expiry_now",
+      "expected": "binding422",
+      "plain_patch": {
+        "not_after": 1700000000
+      }
+    },
+    {
+      "id": "binding_expiry_over",
+      "expected": "binding422",
+      "plain_patch": {
+        "not_after": 1701209601
+      }
+    },
+    {
+      "id": "binding_platform",
+      "expected": "binding422",
+      "platform": "fcm",
+      "addr_kind": "fcm_token",
+      "plain_patch": {
+        "platform": "apns",
+        "addr_kind": "apns_token",
+        "env": "sandbox"
+      }
+    },
+    {
+      "id": "binding_fcm_kind",
+      "expected": "binding422",
+      "platform": "fcm",
+      "addr_kind": "fcm_token",
+      "plain_patch": {
+        "addr_kind": "fcm_fid"
+      }
+    },
+    {
+      "id": "binding_app_env_notallowed",
+      "expected": "binding422",
+      "plain_patch": {
+        "env": "production"
+      },
+      "outer_patch": {
+        "env": "production"
+      },
+      "allow_production": false
+    },
+    {
+      "id": "der_r_zero",
+      "expected": "shape400",
+      "signature_der_hex": "3006020100020101"
+    },
+    {
+      "id": "der_s_zero",
+      "expected": "shape400",
+      "signature_der_hex": "3006020101020100"
+    },
+    {
+      "id": "der_r_equals_order",
+      "expected": "shape400",
+      "signature_der_hex": "3026022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551020101"
+    },
+    {
+      "id": "der_s_equals_order",
+      "expected": "shape400",
+      "signature_der_hex": "3026020101022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551"
+    },
+    {
+      "id": "der_nonminimal_r_integer",
+      "expected": "shape400",
+      "signature_der_hex": "3045022200a28be1eab7b30895f96637f2c3a93c0fe0c18af78be30030b06d6d77ef8f4348022011a237f1e5e4767de37480b5729e921bb289a348a234df18dfab244db0723b62"
+    },
+    {
+      "id": "der_negative_r",
+      "expected": "shape400",
+      "signature_der_hex": "3006020180020101"
+    },
+    {
+      "id": "der_trailing_byte",
+      "expected": "shape400",
+      "signature_der_hex": "3045022100a28be1eab7b30895f96637f2c3a93c0fe0c18af78be30030b06d6d77ef8f4348022011a237f1e5e4767de37480b5729e921bb289a348a234df18dfab244db0723b6200"
+    },
+    {
+      "id": "der_in_range_nonverifying",
+      "expected": "auth401",
+      "signature_der_hex": "3006020101020101"
+    },
+    {
+      "id": "signature_hint_tamper",
+      "expected": "auth401",
+      "post_sign_patch": {
+        "hint": "AQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQA"
+      }
+    },
+    {
+      "id": "signature_collapse_tamper",
+      "expected": "auth401",
+      "post_sign_patch": {
+        "collapse": "AQAQAQAQAQAQAQAQAQAQAQAQAQAQAQAQ"
+      }
+    },
+    {
+      "id": "signature_sealed_tamper",
+      "expected": "auth401",
+      "post_sign_sealed_bit": true
+    },
+    {
+      "id": "known_other_kid_same_key",
+      "expected": "hpke422",
+      "outer_patch": {
+        "kid": "TestKidB"
+      },
+      "seal_aad": "TestKidA"
+    },
+    {
+      "id": "known_other_kid_different_key",
+      "expected": "hpke422",
+      "outer_patch": {
+        "kid": "TestKidC"
+      }
+    },
+    {
+      "id": "kid_whitespace",
+      "expected": "shape400",
+      "outer_patch": {
+        "kid": "A "
+      }
+    },
+    {
+      "id": "aud_newline",
+      "expected": "shape400",
+      "outer_patch": {
+        "aud": "A\n"
+      }
+    },
+    {
+      "id": "plain_expiry_negative_zero",
+      "expected": "plain422",
+      "plain_mode": "negative_zero_expiry",
+      "plain_patch": {
+        "not_after": 0
+      }
+    },
+    {
+      "id": "plain_v_string",
+      "expected": "plain422",
+      "plain_patch": {
+        "v": "1"
+      }
+    },
+    {
+      "id": "plain_array",
+      "expected": "plain422",
+      "plain_mode": "array"
+    },
+    {
+      "id": "der_s_negative",
+      "expected": "shape400",
+      "signature_der_hex": "3006020101020180"
+    },
+    {
+      "id": "der_r_above_order",
+      "expected": "shape400",
+      "signature_der_hex": "3026022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632552020101"
+    },
+    {
+      "id": "der_wrong_sequence",
+      "expected": "shape400",
+      "signature_der_hex": "3106020101020101"
+    },
+    {
+      "id": "der_one_integer",
+      "expected": "shape400",
+      "signature_der_hex": "3003020101"
+    },
+    {
+      "id": "der_nonminimal_length",
+      "expected": "shape400",
+      "signature_der_hex": "308106020101020101"
+    },
+    {
+      "id": "outer_apns_fcm_token",
+      "expected": "shape400",
+      "outer_patch": {
+        "addr_kind": "fcm_token"
+      }
+    },
+    {
+      "id": "outer_apns_fcm_fid",
+      "expected": "shape400",
+      "outer_patch": {
+        "addr_kind": "fcm_fid"
+      }
+    },
+    {
+      "id": "outer_fcm_apns_token",
+      "expected": "shape400",
+      "platform": "fcm",
+      "addr_kind": "fcm_token",
+      "outer_patch": {
+        "addr_kind": "apns_token"
+      }
+    },
+    {
+      "id": "unknown_outer_fraction_ignored",
+      "expected": "eligible",
+      "outer_patch": {
+        "unknown_test_field": 3.14
+      }
+    },
+    {
+      "id": "unknown_outer_exponent_ignored",
+      "expected": "eligible",
+      "outer_patch": {
+        "unknown_test_field": 0
+      },
+      "wire_mode": "unknown_exponent"
+    }
+  ]
+}

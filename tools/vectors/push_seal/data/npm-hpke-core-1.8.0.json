@@ -1,0 +1,41 @@
+{
+  "format": "hmp-public-registry-provenance-v1",
+  "source_url": "https://registry.npmjs.org/@hpke%2Fcore/1.8.0",
+  "raw_response_sha256": "7cfa5943dddb1ca3ee29c24d05cbafa29acecb1bb123d50bf6525ba05b8b5bc4",
+  "selection": "package identity, license, runtime/dependency requirements, distribution integrity and repository only; publisher contact fields omitted",
+  "selected_metadata": {
+    "name": "@hpke/core",
+    "version": "1.8.0",
+    "license": "MIT",
+    "dependencies": {
+      "@hpke/common": "^1.9.0"
+    },
+    "engines": {
+      "node": ">=16.0.0"
+    },
+    "dist": {
+      "shasum": "d92bac47db59a9e43b1bd4c72470b6b656cfea6c",
+      "tarball": "https://registry.npmjs.org/@hpke/core/-/core-1.8.0.tgz",
+      "fileCount": 143,
+      "integrity": "sha512-yHuo+2q4HSPUFuxcg87Kiy7QZRk4IeR+cwBB0qW8fHnr71bnRCArM39Cq1bWHBt75gTyeERGD/v1H14yPB2wyw==",
+      "signatures": [
+        {
+          "sig": "MEUCID/D0y6+8HF+jFXH1YkQMKieXzIOdWk0CkU8Tpip5tFVAiEA2CKxy15lEK6VTI3WpZahlq1xvQkcl4vbW8NN8ZXe+2U=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/@hpke%2fcore@1.8.0",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 229422
+    },
+    "repository": {
+      "url": "git+https://github.com/dajiaji/hpke-js.git",
+      "type": "git"
+    }
+  },
+  "signature_attestation_verification": "NOT_PERFORMED"
+}

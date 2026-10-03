@@ -1,0 +1,91 @@
+[
+  {
+    "repo": "dajiaji/hpke-js",
+    "tag": "@hpke/core@1.8.0",
+    "commit": "acee4bde952041c075ebc94c9e84cd717b181fe1",
+    "chain": [
+      {
+        "url": "https://api.github.com/repos/dajiaji/hpke-js/git/ref/tags/%40hpke%2Fcore%401.8.0",
+        "sha256": "250cf4565eef5d8cd1cd65cbed7c621553e248ba804ec2668555dace6a58ceb6",
+        "object": {
+          "sha": "acee4bde952041c075ebc94c9e84cd717b181fe1",
+          "type": "commit",
+          "url": "https://api.github.com/repos/dajiaji/hpke-js/git/commits/acee4bde952041c075ebc94c9e84cd717b181fe1"
+        }
+      }
+    ]
+  },
+  {
+    "repo": "dajiaji/hpke-js",
+    "tag": "@hpke/common@1.9.0",
+    "commit": "d17a860f971f927bdbb40a6c6d27845c1502d188",
+    "chain": [
+      {
+        "url": "https://api.github.com/repos/dajiaji/hpke-js/git/ref/tags/%40hpke%2Fcommon%401.9.0",
+        "sha256": "d15e77bbf269cd1dfbb5c7dfb1013016e404dab8087f74552c6f7c7f46ef5cf1",
+        "object": {
+          "sha": "d17a860f971f927bdbb40a6c6d27845c1502d188",
+          "type": "commit",
+          "url": "https://api.github.com/repos/dajiaji/hpke-js/git/commits/d17a860f971f927bdbb40a6c6d27845c1502d188"
+        }
+      }
+    ]
+  },
+  {
+    "repo": "erdtman/canonicalize",
+    "tag": "v5.1.0",
+    "commit": "31fb117afde3ef305b2e1d99bde539bf6300bc62",
+    "chain": [
+      {
+        "url": "https://api.github.com/repos/erdtman/canonicalize/git/ref/tags/v5.1.0",
+        "sha256": "10853ede25435d4f4659669eda55c76e47d4649e0c996c6c5cdcc4d7d152df6e",
+        "object": {
+          "sha": "b9213f27772b05ac03ff0536fcfa29bda41b7b5a",
+          "type": "tag",
+          "url": "https://api.github.com/repos/erdtman/canonicalize/git/tags/b9213f27772b05ac03ff0536fcfa29bda41b7b5a"
+        }
+      },
+      {
+        "url": "https://api.github.com/repos/erdtman/canonicalize/git/tags/b9213f27772b05ac03ff0536fcfa29bda41b7b5a",
+        "sha256": "729fa99a2049c38e842ee8c69985779f88ce78ab1a862a912c4e984724b59496",
+        "object": {
+          "sha": "31fb117afde3ef305b2e1d99bde539bf6300bc62",
+          "type": "commit",
+          "url": "https://api.github.com/repos/erdtman/canonicalize/git/commits/31fb117afde3ef305b2e1d99bde539bf6300bc62"
+        }
+      }
+    ]
+  },
+  {
+    "repo": "Legrandin/pycryptodome",
+    "tag": "v3.23.0",
+    "commit": "cde63f8f9b64f1c8cd86249128cfd5986c2c43af",
+    "chain": [
+      {
+        "url": "https://api.github.com/repos/Legrandin/pycryptodome/git/ref/tags/v3.23.0",
+        "sha256": "717f3b401ec624e6a4fcc07d5a40e7314d4339cdc5580a62aceef2724b84ef51",
+        "object": {
+          "sha": "cde63f8f9b64f1c8cd86249128cfd5986c2c43af",
+          "type": "commit",
+          "url": "https://api.github.com/repos/Legrandin/pycryptodome/git/commits/cde63f8f9b64f1c8cd86249128cfd5986c2c43af"
+        }
+      }
+    ]
+  },
+  {
+    "repo": "trailofbits/rfc8785.py",
+    "tag": "v0.1.4",
+    "commit": "4d9b161f6054301d98d0566e813d020fb019ee10",
+    "chain": [
+      {
+        "url": "https://api.github.com/repos/trailofbits/rfc8785.py/git/ref/tags/v0.1.4",
+        "sha256": "084a5f55246e70255671cf472e439169de2d9e34c171c552380c9b088354a76b",
+        "object": {
+          "sha": "4d9b161f6054301d98d0566e813d020fb019ee10",
+          "type": "commit",
+          "url": "https://api.github.com/repos/trailofbits/rfc8785.py/git/commits/4d9b161f6054301d98d0566e813d020fb019ee10"
+        }
+      }
+    ]
+  }
+]
