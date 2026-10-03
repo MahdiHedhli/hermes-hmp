@@ -1518,3 +1518,31 @@ actual own-row readback and physical/device/provider/release gates remain open. 
 complete attachment flow are not complete. The next independent local prerequisite is the D4-A/F
 encrypted-asset/file-custody contract; no real native crypto or file-attacker custody is established
 by synthetic storage tests. No attachment UI or release is enabled by these source publications.
+
+## Pure phone asset layout source (2026-10-03 UTC)
+
+[Draft PR #75](https://github.com/MahdiHedhli/HermesBotMobile/pull/75), source
+`c998ef9edb880798864f40650d050aaa301a5fef`, adds the internal canonical context/header,
+chunk AAD and completion encoders on the reviewed pending-owner branch. Interface and exact
+three-path source received independent review. The seven byte-layout fixtures are synthetic
+encoding data; their declared hashes do not establish authenticated ciphertext or key entropy.
+
+Root ran 64 focused cached synthetic tests: 17 new layout tests and 47 existing attachment-domain
+tests, with no failures. Controls cover all six MIME discriminants, 128 chunk ordinals, exact
+integer timestamp endpoints, malformed Unicode/IDs/hex, field bounds, buffer mutation and fixed
+error privacy. Focused analysis exited zero with one nonblocking test-local const style info.
+The network guard and source private-value scan passed. The unchanged captured-log scanner passed
+against four historical logs and its existing reviewed baseline; this creates no new runtime-log
+or device evidence. Hosted exact-source CI was in progress at publication; it is separate from
+these focused results.
+
+The new class only encodes bounded declared data. It does not encrypt, verify digests or tags,
+create a file/key/source capability, publish a tray, upload or enable attachment Send. Full D4-A/F
+remains open: native purpose and ABI, cryptographic controls, catalog/current generation, clocks,
+quotas/orphans, descriptor custody, normalization/picker integration, atomic native admission,
+actual own-row readback, complete device flow and release verification are still required.
+Native AES preparation can follow the existing iOS Keychain construction and an Android path
+that verifies StrongBox/TEE protection and refuses unverified/software outcomes. No optional
+software fallback or new native operation is adopted by this encoder checkpoint; existing
+release residuals remain open.
+

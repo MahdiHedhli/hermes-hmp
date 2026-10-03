@@ -66,7 +66,7 @@ physical/native/global memory/release gates remain unchanged. See [current mobil
 | Draft; not enabled live | Approvals and choices | Minimum-version candidate `150bd0f` is independently source-reviewed; two prepared native samples passed 13 cases each. Corrected exact-source package is prepared. Live activation and physical card/answer acceptance remain open; earlier setup failures are historical evidence below. |
 | Source reviewed; Desktop native case failed; remote delivery pending | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` and injected-port dispatcher `e6e20a6` are independently source-reviewed, with exact hosted CI passing. HTTPS client/factory `fcd10e0` is independently source-reviewed, with exact hosted CI passing. Remote relay/seal interoperability, relay/app integration, provisioning and physical delivery remain open. Verified-TLS component `9e21614` and native fixture `871ebb0` are independently accepted within their scopes: three selected approval/revoke/restart cases passed on one development sample. The new genuine Desktop interleave failed shared visibility/capture and close-registry checks; T029 and remote relay/provider/app/device gates remain open. No notification is delivered by these source slices. |
 | Owner dogfood; source follow-up reviewed | Linked chat images | Owner confirmed public-CDN rendering. Accepted public-image settlement repair `16c2095` and Phone media wiring `11cbf29` passed hosted CI; integrated Play source `8671061` also passed hosted CI. Native allocation, host-local HTTP serving and device/release evidence remain open. No new installed image capability is claimed. |
-| Implementation | Phone photo/file attachments | Pure codec, scoped slot adapter and internal pending owner/restore source published with focused synthetic passes; the complete picker/Send flow, upload/readback and encrypted staging remain unimplemented. The inspected Phone dispatch has a separate atomic no-defer admission gap; canonical Desktop multimodal remains an upstream gap. Historical archive primitive tests do not qualify the complete flow. See the [admission checkpoint](#phone-attachment-admission-checkpoint-2026-10-03). |
+| Implementation | Phone photo/file attachments | Pure codecs, scoped slot/owner and canonical asset layout source published; 64 focused layout/domain tests passed; the complete picker/Send flow, upload/readback and encrypted staging remain unimplemented. The inspected Phone dispatch has a separate atomic no-defer admission gap; canonical Desktop multimodal remains an upstream gap. Historical archive primitive tests do not qualify the complete flow. See the [admission checkpoint](#phone-attachment-admission-checkpoint-2026-10-03). |
 
 See the [roadmap](ROADMAP.md), [wire contract](docs/architecture/contracts/HMP_V1.md), and [upstream requests for Nous Research](NOUS_GATEWAY_OBSERVATIONS.md).
 
@@ -819,3 +819,31 @@ actual own-row readback and physical/device/provider/release gates remain open. 
 complete attachment flow are not complete. The next independent local prerequisite is the D4-A/F
 encrypted-asset/file-custody contract; no real native crypto or file-attacker custody is established
 by synthetic storage tests. No attachment UI or release is enabled by these source publications.
+
+## Pure phone asset layout source (2026-10-03 UTC)
+
+[Draft PR #75](https://github.com/MahdiHedhli/HermesBotMobile/pull/75), source
+`c998ef9edb880798864f40650d050aaa301a5fef`, adds the internal canonical context/header,
+chunk AAD and completion encoders on the reviewed pending-owner branch. Interface and exact
+three-path source received independent review. The seven byte-layout fixtures are synthetic
+encoding data; their declared hashes do not establish authenticated ciphertext or key entropy.
+
+Root ran 64 focused cached synthetic tests: 17 new layout tests and 47 existing attachment-domain
+tests, with no failures. Controls cover all six MIME discriminants, 128 chunk ordinals, exact
+integer timestamp endpoints, malformed Unicode/IDs/hex, field bounds, buffer mutation and fixed
+error privacy. Focused analysis exited zero with one nonblocking test-local const style info.
+The network guard and source private-value scan passed. The unchanged captured-log scanner passed
+against four historical logs and its existing reviewed baseline; this creates no new runtime-log
+or device evidence. Hosted exact-source CI was in progress at publication; it is separate from
+these focused results.
+
+The new class only encodes bounded declared data. It does not encrypt, verify digests or tags,
+create a file/key/source capability, publish a tray, upload or enable attachment Send. Full D4-A/F
+remains open: native purpose and ABI, cryptographic controls, catalog/current generation, clocks,
+quotas/orphans, descriptor custody, normalization/picker integration, atomic native admission,
+actual own-row readback, complete device flow and release verification are still required.
+Native AES preparation can follow the existing iOS Keychain construction and an Android path
+that verifies StrongBox/TEE protection and refuses unverified/software outcomes. No optional
+software fallback or new native operation is adopted by this encoder checkpoint; existing
+release residuals remain open.
+
