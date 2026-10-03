@@ -1,1 +1,38 @@
-{"bin":{"canonicalize":"bin/canonicalize.js"},"bugs":{"url":"https://github.com/erdtman/canonicalize/issues"},"dist":{"shasum":"4e429a81a542933e8db7647b7e916cbdb60d272c","tarball":"https://registry.npmjs.org/canonicalize/-/canonicalize-5.1.0.tgz","fileCount":6,"integrity":"sha512-bab9+WefZljqQ8jT0qRwVmTyzAUU63K97QIQD3agynIBrb6sa5M2eAy8Hv8K3p4V9+ONVYZKtGYl4Dg+/5Gumw==","signatures":[{"sig":"MEUCIAJIFapJnNmSEens1O7RMuHVcQG0KR1avwmtShbt2mUIAiEAwdyEn3AMnGY0SavXfXUqaKOySYnXanfkCZZOluSfDkA=","keyid":"SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"}],"attestations":{"url":"https://registry.npmjs.org/-/npm/v1/attestations/canonicalize@5.1.0","provenance":{"predicateType":"https://slsa.dev/provenance/v1"}},"unpackedSize":24474},"main":"lib/canonicalize.js","name":"canonicalize","type":"module","types":"lib/canonicalize.d.ts","engines":{"node":">=22"},"exports":{".":{"types":"./lib/canonicalize.d.ts","import":"./lib/canonicalize.js","default":"./lib/canonicalize.js"}},"gitHead":"31fb117afde3ef305b2e1d99bde539bf6300bc62","license":"Apache-2.0","scripts":{"lint":"eslint .","test":"node --test test/*.js","coverage":"c8 npm test","lint:fix":"eslint --fix .","coveragehtml":"c8 report -r html","prepublishOnly":"npm run lint && npm test","precoveragehtml":"npm run coverage"},"_npmUser":{"name":"GitHub Actions","email":"npm-oidc-no-reply@github.com","approver":{"name":"samuelerdtman","email":"samuel@erdtman.se"},"trustedPublisher":{"id":"github","oidcConfigId":"oidc:34722c95-a026-4671-b343-a58eac0401e0"}},"homepage":"https://github.com/erdtman/canonicalize#readme","keywords":["json","canonical","canonicalize","signing","crypto"],"repository":{"url":"git+https://github.com/erdtman/canonicalize.git","type":"git"},"_npmVersion":"12.0.2","description":"JSON canonicalize function","directories":{},"maintainers":[{"name":"samuelerdtman","email":"samuel@erdtman.se"}],"_nodeVersion":"22.23.2","contributors":[{"name":"Samuel Erdtman","email":"samuel@erdtman.se"},{"name":"Anders Rundgren","email":"anders.rundgren.net@gmail.com"}],"publishConfig":{"access":"public","registry":"https://registry.npmjs.org/"},"_hasShrinkwrap":false,"devDependencies":{"c8":"^12.0.0","eslint":"^9.0.0","globals":"^15.0.0","@eslint/js":"^9.0.0"},"_npmOperationalInternal":{"tmp":"tmp/canonicalize_5.1.0_1789764404011_0.06727641027281339","host":"s3://npm-registry-packages-npm-production"},"_id":"canonicalize@5.1.0","version":"5.1.0"}
+{
+  "format": "hmp-public-registry-provenance-v1",
+  "source_url": "https://registry.npmjs.org/canonicalize/5.1.0",
+  "raw_response_sha256": "4b666dcd3571edac1ee1db182b5e523703879d99023204c1869640df48a95d14",
+  "selection": "package identity, license, runtime/dependency requirements, distribution integrity and repository only; publisher contact fields omitted",
+  "selected_metadata": {
+    "name": "canonicalize",
+    "version": "5.1.0",
+    "license": "Apache-2.0",
+    "engines": {
+      "node": ">=22"
+    },
+    "dist": {
+      "shasum": "4e429a81a542933e8db7647b7e916cbdb60d272c",
+      "tarball": "https://registry.npmjs.org/canonicalize/-/canonicalize-5.1.0.tgz",
+      "fileCount": 6,
+      "integrity": "sha512-bab9+WefZljqQ8jT0qRwVmTyzAUU63K97QIQD3agynIBrb6sa5M2eAy8Hv8K3p4V9+ONVYZKtGYl4Dg+/5Gumw==",
+      "signatures": [
+        {
+          "sig": "MEUCIAJIFapJnNmSEens1O7RMuHVcQG0KR1avwmtShbt2mUIAiEAwdyEn3AMnGY0SavXfXUqaKOySYnXanfkCZZOluSfDkA=",
+          "keyid": "SHA256:DhQ8wR5APBvFHLF/+Tc+AYvPOdTpcIDqOhxsBHRwC7U"
+        }
+      ],
+      "attestations": {
+        "url": "https://registry.npmjs.org/-/npm/v1/attestations/canonicalize@5.1.0",
+        "provenance": {
+          "predicateType": "https://slsa.dev/provenance/v1"
+        }
+      },
+      "unpackedSize": 24474
+    },
+    "repository": {
+      "url": "git+https://github.com/erdtman/canonicalize.git",
+      "type": "git"
+    }
+  },
+  "signature_attestation_verification": "NOT_PERFORMED"
+}

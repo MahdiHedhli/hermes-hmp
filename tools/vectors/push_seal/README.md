@@ -48,9 +48,12 @@ See `SOURCE_PRECISION.md`: unknown outer members are ignored per frozen PR-3;
 opened plaintext unknown members are rejected per PN-SEAL-1.
 
 `dependencies.lock.json` pins exact archive/wheel digests and every retained
-archive entry's bytes. `data/*` retains official registry/tag/advisory/license
-metadata as data. Integrity equality is not a registry-signature/provenance
-attestation or safety proof. No archive hooks or source were executed. Private
+archive entry's bytes. `data/*` retains tag/advisory/license metadata as data.
+The five registry records retain only selected package provenance fields and
+original response digests; public publisher contact/description fields are omitted.
+Original registry responses remain in private review evidence. See
+`SOURCE_PRECISION.md` for the selection boundary. Integrity equality is not a
+registry-signature/provenance attestation or safety proof. No archive hooks or source were executed. Private
 archives/receipts and existing-runtime hash evidence are supplied separately
 for the independent preparation reviewer, not downloaded during execution.
 

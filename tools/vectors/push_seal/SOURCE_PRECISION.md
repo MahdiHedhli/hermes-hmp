@@ -52,3 +52,24 @@ plaintext keeps the closed schema, numeric-lexeme rejection and exact JCS check.
 The two new eligible numeric controls also assert removal leaves the transcript
 unchanged. All151 definitions and six pure methods remain unexecuted pending
 targeted independent review and separate runtime admission.
+
+## Public registry metadata minimization
+
+The five `npm-*.json` / `pypi-*.json` records are selected-fields provenance
+records, not complete registry responses. Each records the official source URL
+and SHA256 of its original response. Original responses are preserved privately
+for independent comparison; they are not downloaded or read during execution.
+
+Npm retains name/version/license, dependency and engine requirements, distribution
+metadata (including declared integrity/signature/attestation references), and
+repository metadata. PyPI retains package identity/license, requirements/project
+URLs, and each release file's filename, digests, URL, size, type, interpreter
+requirements, yanked state/reason, upload timestamp, core-metadata and signature
+flag when present. No signature or attestation is verified by this selection.
+
+Author/maintainer/publisher contact, description and unrelated registry fields are
+omitted. This removes public contact fields flagged by the repository privacy
+gate without adding scanner suppressions or modifying package/archive/license
+bytes, source algorithms, case definitions or execution admission. A raw-response
+hash binds the original evidence; it does not prove safety or certify provenance.
+All151 definitions and six pure methods remain unexecuted.
