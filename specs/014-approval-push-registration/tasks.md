@@ -198,12 +198,23 @@ evidence. The clock-count repair of 2026-10-02 followed a focused review of that
   transactional ACTIVE/family re-check before replay/CAS, pre-provider-only retry) and record the named test that
   fails.
 - [ ] T029 Isolated fixture (no live home): an approval lane plus a local fake relay on an isolated
-  Hermes build. Approval → signed request; revoke between enqueue and send produces no request;
+  Hermes build. Native harness continuation: positively observe production slot.pending and the real
+  elapsed coalescing wait before actual revoke/restart; only content-free scratch observations.
+  Independent harness/confinement review preceded execution; the bounded receipt is below.
+  Positive cases require an approval notifier; absent capability fails their prerequisite and
+  is never counted as positive coverage. Native smoke requires the passed preflight receipt.
+  Approval → signed request; revoke between enqueue and send produces no request;
   Desktop held between enqueue and send produces no request; restart drops the queue and hints.
   Sample evidence, not a gate on future builds.
-  Focused branch checkpoint: implement the bounded verified-TLS fake receiver and production-client
-  seam first. Component tests do not complete this task. Native-origin and positively synchronized
-  interleaves, independent review and sampled runtime receipts remain required.
+  Bounded native checkpoint (2026-10-03 UTC): three selected notifier-present cases passed on
+  Hermes `8afaab3703e336d72a72c812dd2dd249f04f166a` / Python 3.14.7, zero skips and nine unrelated
+  parameters deselected. Actual approval → verified signed request, actual revoke after positively
+  pending work → bearer 401/no second request, and actual restart → cancellation/old-hint 404
+  passed. Independent receipt review accepts this sample with a journal limitation: teardown
+  overwrites the old dispatcher's close file; the in-test assertion passed, and the old current
+  journal retains cancellation. See plan §4. Protected/prepared trees were unchanged and no
+  children remained. Desktop-held interleave is unverified, so this box remains unticked.
+  HPKE, remote relay/provider/app/device and release evidence are separate gates.
 
 ## Phase 3: relay (separate repository; after T012)
 

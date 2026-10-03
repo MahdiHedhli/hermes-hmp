@@ -163,15 +163,36 @@ refactor.
 
 ## 4. Data model (schema 3, additive)
 
-### T029 fixture implementation checkpoint
+### T029 fixture implementation checkpoint (2026-10-03 UTC)
 
-The focused fixture branch first adds a test-only, loopback HTTPS receiver with a disposable
-synthetic CA. It captures a bounded number of requests and checks the signature using an
-independent transcript encoder. The production `RelayClient` retains chain, hostname and leaf
-pin verification. The receiver does not open a seal, contact a provider or represent T030.
-Its component tests establish only the receiver/client seam. T029 stays incomplete until a real
-isolated native approval drives that seam, with positively observed queued work before each
-revocation, Desktop-hold and restart interleave. No test hook or receiver is installed in a live home.
+The native harness uses a disposable copied-plugin observation subclass. It calls the
+production scheduler/send/close implementations and records bounded counts and booleans.
+Its controlled release barrier follows the real coalescing sleep; it changes no authority, gate,
+clock, row, signature or production package. Independent source and confinement reviews preceded
+execution. All three positive cases require a native approval notifier and fail explicitly when
+it is absent. Native smoke requires a passed current-receipt preflight. Journal reads open
+nonblocking before checking file type, so a FIFO cannot stall that check.
+
+The loopback HTTPS receiver uses a disposable synthetic CA, bounded capture and an independent
+signature transcript encoder. The production client retains chain, hostname and leaf-pin checks.
+The receiver accepts opaque seal syntax; it neither opens a seal nor contacts a provider.
+
+Three selected native tests passed without skips on development sample Hermes
+`8afaab3703e336d72a72c812dd2dd249f04f166a`, Python 3.14.7 and its locked dependency set:
+actual approval callbacks and AP3/AP4 drive a signed request; actual native revocation after
+positively pending work invalidates the bearer and suppresses the second request; graceful
+restart cancels positively pending work and the assertions verify cleared slots/queue/hints and
+old-hint 404. Independent receipt review accepts this bounded sample with an artifact limitation:
+final teardown overwrites the old dispatcher's close journal. Its assertion passed and the old
+current journal retains cancellation, but the final close journal is the new dispatcher's state.
+Nine unrelated parameters were deselected, not tested. Protected/prepared trees stayed unchanged;
+no child processes remained. The original failed preflight is retained separately; the successful
+preflight and smoke precede this run. Dependency wheel-byte provenance remains a residual.
+
+**T029 stays incomplete:** the genuine combined Desktop-held transition is unverified. No manual
+held flag, fabricated stream or synthetic lease counts as that case. Remote relay/HPKE/provider,
+app/device and release gates remain separate. This sample is not an availability allowlist or
+qualification of future versions. No test hook or receiver is installed in a live home.
 
 ```sql
 CREATE TABLE IF NOT EXISTS push_device_generations (
