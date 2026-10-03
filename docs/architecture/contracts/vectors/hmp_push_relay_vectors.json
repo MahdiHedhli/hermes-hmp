@@ -1,0 +1,204 @@
+{
+  "cases": [
+    {
+      "high_s_signature_der_b64u": "MEYCIQCii-Hqt7MIlflmN_LDqTwP4MGK94vjADCwbW13749DSAIhAO5dyA0aG4mDHIt_So1hbeQKXVdlBOK_bBQOpnVL8Onv",
+      "high_s_verified": true,
+      "label": "apns_sandbox_utf8",
+      "low_s_verified": true,
+      "r_hex": "a28be1eab7b30895f96637f2c3a93c0fe0c18af78be30030b06d6d77ef8f4348",
+      "raw_fields_hex": {
+        "collapse": "404142434445464748494a4b4c4d4e4f5051525354555657",
+        "hint": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+        "nonce": "000102030405060708090a0b0c0d0e0f",
+        "route": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "sealed": "00070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef5fc030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0",
+        "spki_der": "3059301306072a8648ce3d020106082a8648ce3d03010703420004927f647d5631d1c80d38d2333b2cdd46c102ea7efa2a0a80a921d68c7c351be9fa440012f54326dcfd77231144d6e4dc8e30bad2f7b62b8b5faecac3b06916f4"
+      },
+      "s_high_hex": "ee5dc80d1a1b89831c8b7f4a8d616de40a5d576504e2bf6c140ea6754bf0e9ef",
+      "s_low_hex": "11a237f1e5e4767de37480b5729e921bb289a348a234df18dfab244db0723b62",
+      "signature_der_b64u": "MEUCIQCii-Hqt7MIlflmN_LDqTwP4MGK94vjADCwbW13749DSAIgEaI38eXkdn3jdIC1cp6SG7KJo0iiNN8Y36skTbByO2I",
+      "signature_der_hex": "3045022100a28be1eab7b30895f96637f2c3a93c0fe0c18af78be30030b06d6d77ef8f4348022011a237f1e5e4767de37480b5729e921bb289a348a234df18dfab244db0723b62",
+      "transcript_hex": "484d50312d505553482d52454c41590000001773796e7468657469632d72656c61792d766563746f727300000034677a7568326d6279346a6e3333796537666c726c69326e7978726163706534696d7966786177676f64703671706f35366e71656100000008000000006553f10000000010000102030405060708090a0b0c0d0e0f00000008746573742d6b69640000000461706e730000000a61706e735f746f6b656e0000000773616e64626f7800000020f096e640fc64eb048311d84ff017f74fc504a44a4056bca00590a4780701450200000020000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f00000020202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f00000018404142434445464748494a4b4c4d4e4f505152535455565700000008000000000000014a00000008617070726f76616c",
+      "transcript_sha256": "201eef39db27360b52d69c3905e866565b89682fe9e05df9781551944315c3b1",
+      "wire_fields": {
+        "addr_kind": "apns_token",
+        "aud": "synthetic-relay-vectors",
+        "collapse": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZX",
+        "env": "sandbox",
+        "hint": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
+        "iid_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEkn9kfVYx0cgNONIzOyzdRsEC6n76KgqAqSHWjHw1G-n6RAAS9UMm3P13IxFE1uTcjjC60ve2K4tfrsrDsGkW9A",
+        "kid": "test-kid",
+        "kind": "approval",
+        "nonce": "AAECAwQFBgcICQoLDA0ODw",
+        "platform": "apns",
+        "route": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+        "sealed": "AAcOFRwjKjE4P0ZNVFtiaXB3foWMk5qhqK-2vcTL0tng5-71_AMKERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4-rx-P8GDRQbIikwNz5FTFNaYWhvdn2Ei5KZoA",
+        "ts": 1700000000,
+        "ttl_s": 330,
+        "v": 1
+      }
+    },
+    {
+      "high_s_signature_der_b64u": "MEUCIFxmSmWy8Ir54edPCZCa9SZH3RN9YkusmeY-Zl9JHfW4AiEAyHS8BJTkZLeJV6C34QqB-6TTKL02bE5HocMFGacg4VI",
+      "high_s_verified": true,
+      "label": "fcm_fid_env_absent_u53max",
+      "low_s_verified": true,
+      "r_hex": "5c664a65b2f08af9e1e74f09909af52647dd137d624bac99e63e665f491df5b8",
+      "raw_fields_hex": {
+        "collapse": "404142434445464748494a4b4c4d4e4f5051525354555657",
+        "hint": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+        "nonce": "000102030405060708090a0b0c0d0e0f",
+        "route": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+        "sealed": "00070e151c232a31383f464d545b626970777e858c939aa1a8afb6bdc4cbd2d9e0e7eef5fc030a11181f262d343b424950575e656c737a81888f969da4abb2b9c0c7ced5dce3eaf1f8ff060d141b222930373e454c535a61686f767d848b9299a0",
+        "spki_der": "3059301306072a8648ce3d020106082a8648ce3d03010703420004927f647d5631d1c80d38d2333b2cdd46c102ea7efa2a0a80a921d68c7c351be9fa440012f54326dcfd77231144d6e4dc8e30bad2f7b62b8b5faecac3b06916f4"
+      },
+      "s_high_hex": "c874bc0494e464b78957a0b7e10a81fba4d328bd366c4e47a1c30519a720e152",
+      "s_low_hex": "378b43fa6b1b9b4976a85f481ef57e041813d1f070ab503d51f6c5a9554243ff",
+      "signature_der_b64u": "MEQCIFxmSmWy8Ir54edPCZCa9SZH3RN9YkusmeY-Zl9JHfW4AiA3i0P6axubSXaoX0ge9X4EGBPR8HCrUD1R9sWpVUJD_w",
+      "signature_der_hex": "304402205c664a65b2f08af9e1e74f09909af52647dd137d624bac99e63e665f491df5b80220378b43fa6b1b9b4976a85f481ef57e041813d1f070ab503d51f6c5a9554243ff",
+      "transcript_hex": "484d50312d505553482d52454c41590000001773796e7468657469632d72656c61792d766563746f727300000034677a7568326d6279346a6e3333796537666c726c69326e7978726163706534696d7966786177676f64703671706f35366e71656100000008001fffffffffffff00000010000102030405060708090a0b0c0d0e0f00000008746573742d6b69640000000366636d0000000766636d5f6669640000000000000020f096e640fc64eb048311d84ff017f74fc504a44a4056bca00590a4780701450200000020000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f00000020202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f00000018404142434445464748494a4b4c4d4e4f505152535455565700000008000000000000038400000008617070726f76616c",
+      "transcript_sha256": "b55e97e03956d2f3195c7baefed540488c55757afacfe128e37cf3093d678227",
+      "wire_fields": {
+        "addr_kind": "fcm_fid",
+        "aud": "synthetic-relay-vectors",
+        "collapse": "QEFCQ0RFRkdISUpLTE1OT1BRUlNUVVZX",
+        "hint": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
+        "iid_spki": "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEkn9kfVYx0cgNONIzOyzdRsEC6n76KgqAqSHWjHw1G-n6RAAS9UMm3P13IxFE1uTcjjC60ve2K4tfrsrDsGkW9A",
+        "kid": "test-kid",
+        "kind": "approval",
+        "nonce": "AAECAwQFBgcICQoLDA0ODw",
+        "platform": "fcm",
+        "route": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+        "sealed": "AAcOFRwjKjE4P0ZNVFtiaXB3foWMk5qhqK-2vcTL0tng5-71_AMKERgfJi00O0JJUFdeZWxzeoGIj5adpKuyucDHztXc4-rx-P8GDRQbIikwNz5FTFNaYWhvdn2Ei5KZoA",
+        "ts": 9007199254740991,
+        "ttl_s": 900,
+        "v": 1
+      }
+    }
+  ],
+  "format": "HMP1 PN-REL independent known-answer evidence v1",
+  "generator": "Python stdlib manual u32/u64 framing/base64/hashlib + cryptography P-256; no HMP plugin helper/import",
+  "iid": "gzuh2mby4jn33ye7flrli2nyxracpe4imyfxawgodp6qpo56nqea",
+  "notes": [
+    "Transcript: literal HMP1-PUSH-RELAY tag plus each u32be length and field data; integer fields are u64be; strings UTF-8; byte fields raw.",
+    "Case 2 omits env in JSON but encodes empty field in transcript.",
+    "Signatures use cryptography ECDSA/SHA-256; both canonical low-S and mathematically equivalent high-S DER signatures independently verify. Strict DER rejection/range behavior is a relay verifier responsibility, outside this HMP client.",
+    "Strict DER/range cases are independent relay-side expected classifications per PN-REL-2/F4; this HMP client only emits signatures and does not implement that verifier."
+  ],
+  "p256_order_hex": "ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551",
+  "spki_der_hex": "3059301306072a8648ce3d020106082a8648ce3d03010703420004927f647d5631d1c80d38d2333b2cdd46c102ea7efa2a0a80a921d68c7c351be9fa440012f54326dcfd77231144d6e4dc8e30bad2f7b62b8b5faecac3b06916f4",
+  "strict_der_vectors": [
+    {
+      "der_cases": [
+        {
+          "expected": "accept; valid ECDSA signature",
+          "label": "canonical-low-s",
+          "signature_der_hex": "3045022100a28be1eab7b30895f96637f2c3a93c0fe0c18af78be30030b06d6d77ef8f4348022011a237f1e5e4767de37480b5729e921bb289a348a234df18dfab244db0723b62"
+        },
+        {
+          "expected": "accept; valid ECDSA signature",
+          "label": "canonical-high-s",
+          "signature_der_hex": "3046022100a28be1eab7b30895f96637f2c3a93c0fe0c18af78be30030b06d6d77ef8f4348022100ee5dc80d1a1b89831c8b7f4a8d616de40a5d576504e2bf6c140ea6754bf0e9ef"
+        },
+        {
+          "expected": "400; scalar range",
+          "label": "r-zero",
+          "signature_der_hex": "3006020100020101"
+        },
+        {
+          "expected": "400; scalar range",
+          "label": "s-zero",
+          "signature_der_hex": "3006020101020100"
+        },
+        {
+          "expected": "400; scalar range",
+          "label": "r-equals-order",
+          "signature_der_hex": "3026022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551020101"
+        },
+        {
+          "expected": "400; scalar range",
+          "label": "s-equals-order",
+          "signature_der_hex": "3026020101022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551"
+        },
+        {
+          "expected": "400; DER must be minimal",
+          "label": "nonminimal-r-integer",
+          "signature_der_hex": "3045022200a28be1eab7b30895f96637f2c3a93c0fe0c18af78be30030b06d6d77ef8f4348022011a237f1e5e4767de37480b5729e921bb289a348a234df18dfab244db0723b62"
+        },
+        {
+          "expected": "400; negative INTEGER",
+          "label": "negative-r",
+          "signature_der_hex": "3006020180020101"
+        },
+        {
+          "expected": "400; trailing bytes",
+          "label": "trailing-byte",
+          "signature_der_hex": "3045022100a28be1eab7b30895f96637f2c3a93c0fe0c18af78be30030b06d6d77ef8f4348022011a237f1e5e4767de37480b5729e921bb289a348a234df18dfab244db0723b6200"
+        },
+        {
+          "expected": "401; valid range/DER but signature does not verify",
+          "label": "in-range-nonverifying",
+          "signature_der_hex": "3006020101020101"
+        }
+      ],
+      "name": "apns_sandbox_utf8"
+    },
+    {
+      "der_cases": [
+        {
+          "expected": "accept; valid ECDSA signature",
+          "label": "canonical-low-s",
+          "signature_der_hex": "304402205c664a65b2f08af9e1e74f09909af52647dd137d624bac99e63e665f491df5b80220378b43fa6b1b9b4976a85f481ef57e041813d1f070ab503d51f6c5a9554243ff"
+        },
+        {
+          "expected": "accept; valid ECDSA signature",
+          "label": "canonical-high-s",
+          "signature_der_hex": "304502205c664a65b2f08af9e1e74f09909af52647dd137d624bac99e63e665f491df5b8022100c874bc0494e464b78957a0b7e10a81fba4d328bd366c4e47a1c30519a720e152"
+        },
+        {
+          "expected": "400; scalar range",
+          "label": "r-zero",
+          "signature_der_hex": "3006020100020101"
+        },
+        {
+          "expected": "400; scalar range",
+          "label": "s-zero",
+          "signature_der_hex": "3006020101020100"
+        },
+        {
+          "expected": "400; scalar range",
+          "label": "r-equals-order",
+          "signature_der_hex": "3026022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551020101"
+        },
+        {
+          "expected": "400; scalar range",
+          "label": "s-equals-order",
+          "signature_der_hex": "3026020101022100ffffffff00000000ffffffffffffffffbce6faada7179e84f3b9cac2fc632551"
+        },
+        {
+          "expected": "400; DER must be minimal",
+          "label": "nonminimal-r-integer",
+          "signature_der_hex": "30450221005c664a65b2f08af9e1e74f09909af52647dd137d624bac99e63e665f491df5b80220378b43fa6b1b9b4976a85f481ef57e041813d1f070ab503d51f6c5a9554243ff"
+        },
+        {
+          "expected": "400; negative INTEGER",
+          "label": "negative-r",
+          "signature_der_hex": "3006020180020101"
+        },
+        {
+          "expected": "400; trailing bytes",
+          "label": "trailing-byte",
+          "signature_der_hex": "304402205c664a65b2f08af9e1e74f09909af52647dd137d624bac99e63e665f491df5b80220378b43fa6b1b9b4976a85f481ef57e041813d1f070ab503d51f6c5a9554243ff00"
+        },
+        {
+          "expected": "401; valid range/DER but signature does not verify",
+          "label": "in-range-nonverifying",
+          "signature_der_hex": "3006020101020101"
+        }
+      ],
+      "name": "fcm_fid_env_absent_u53max"
+    }
+  ],
+  "synthetic_only": true,
+  "test_private_scalar_hex": "01dce8d2ec6184cca38a4f2a3508ac5af3f09437a9281729a4b3c2d1e0f12345"
+}
