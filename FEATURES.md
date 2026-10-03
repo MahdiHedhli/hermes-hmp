@@ -500,10 +500,20 @@ passing. Native startup already checks key strength; this was a false-availabili
 prerequisite, not a demonstrated authentication bypass. No live deployment or
 credential change is claimed.
 
-Two source-confirmed findings remain open: device-list metadata lacks the CLI's
-Hermes-session guard, and 128 legal long-name profile/health records can exceed
-the shared 16 KiB listener-record cap. The planned repair preserves full bounded
-128-profile inventory/health in a separate listener-file envelope, with final
-field bounds and independent implementation review still pending. The network
-ready-read cap remains unchanged. Neither finding establishes a live exposure
-or owner incident.
+[Draft PR #94](https://github.com/MahdiHedhli/hermes-hmp/pull/94), at
+`69bd1d6f2d03d78ebe0ea8cfe36d1e5ac039dfc1`, adds the existing Hermes-session
+presence guard to device listings before store opening. Operator listings still
+work without a TTY; mutation ordering and other read paths are unchanged.
+Independent source review accepted the three-file repair. Twenty new cases cover
+18 session refusals and two populated operator controls. Exact-head hosted
+[run 37112555432](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/37112555432)
+passed 2,635 cases with 17 skips and one existing warning, including lint,
+closed-surface and privacy checks. This mitigates accidental metadata disclosure;
+the same OS user remains the authority boundary. No live deployment is claimed.
+
+The large-inventory finding remains open: 128 legal long-name profile/health
+records can exceed the shared 16 KiB listener-record cap. The repair will preserve
+full bounded inventory and health in a separate listener-file envelope, with
+legacy small-record behavior and the 16 KiB network ready-read cap preserved.
+Independent implementation review and execution remain pending. Neither finding
+establishes an owner incident.
