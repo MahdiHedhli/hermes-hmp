@@ -214,6 +214,33 @@ class ServerContext:
     send_available: Callable[[], bool] = field(default=lambda: True)
     session_browsing_available: bool = True
 
+    # PN-REG-3: volatile delete-failure fence, at most the 64 active route digests.
+    # Unknown/unreadable or over-cap state closes every route for this listener.
+    # Future dispatch and resolve MUST consult push_route_fenced too.
+    push_delete_fence: set[bytes] = field(default_factory=set, repr=False)
+    push_delete_fence_closed: bool = False
+
+    def push_route_fenced(self, route_hash: bytes) -> bool:
+        return self.push_delete_fence_closed or route_hash in self.push_delete_fence
+
+    def fence_push_delete(self, route_hash: bytes | None, *, unreadable: bool = False) -> None:
+        if unreadable:
+            self.push_delete_fence_closed = True
+        elif route_hash is not None:
+            if len(self.push_delete_fence) >= 64 and route_hash not in self.push_delete_fence:
+                self.push_delete_fence_closed = True
+            else:
+                self.push_delete_fence.add(route_hash)
+
+    def prune_push_delete_fence(self) -> None:
+        # Only successful committed retirement may clear a known fence. A global
+        # unreadable-state failure stays closed until listener restart (RES-21).
+        self.push_delete_fence.intersection_update(
+            digest
+            for digest in tuple(self.push_delete_fence)
+            if self.store.active_push_hash(digest)
+        )
+
     def push_availability(self) -> push_config.PushAvailability:
         # Adapter supplies only current host config. Neither wire nor environment
         # values enter this snapshot, and availability never changes approval gates.

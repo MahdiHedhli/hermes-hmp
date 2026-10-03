@@ -18,9 +18,10 @@ import threading
 from collections.abc import Iterator, Sequence
 from pathlib import Path
 
+from . import crypto
 from .contract import LIMITER_TABLE_MAX, ErrorCode, HmpError
 from .logging_policy import log_event
-from .push_issuer import RouteInputs, rederive_route
+from .push_issuer import RouteInputs, derive_route, rederive_route, route_text
 
 SCHEMA_VERSION = 3
 
@@ -393,14 +394,13 @@ class Store:
             conn.execute("BEGIN IMMEDIATE")
             try:
                 yield conn
+                conn.execute("COMMIT")
             except BaseException:
                 # SQLITE_FULL/IOERR can already have aborted the transaction. Preserve
                 # that original failure rather than masking it with a second ROLLBACK.
                 if conn.in_transaction:
                     conn.execute("ROLLBACK")
                 raise
-            else:
-                conn.execute("COMMIT")
 
     # ------------------------------------------------------------------------------------------
     # meta / identity (ID-2; the `IdentityStore` surface `identity.py`/T022 uses)
@@ -648,6 +648,130 @@ class Store:
             (device_id, generation),
         )
         return generation
+
+    def active_push_in(self, conn: sqlite3.Connection, device_id: str) -> sqlite3.Row | None:
+        return conn.execute(
+            "SELECT * FROM push_registrations WHERE device_id = ? AND state = 'active'",
+            (device_id,),
+        ).fetchone()
+
+    def active_push_hash(self, route_hash: bytes) -> bool:
+        return (
+            self._require_conn()
+            .execute(
+                "SELECT 1 FROM push_registrations WHERE route_hash = ? AND state = 'active'",
+                (route_hash,),
+            )
+            .fetchone()
+            is not None
+        )
+
+    def require_push_liveness_in(
+        self, conn: sqlite3.Connection, device_id: str, family_id: str
+    ) -> None:
+        row = conn.execute(
+            "SELECT d.state, f.revoked_at FROM devices d JOIN token_families f "
+            "ON f.device_id = d.device_id WHERE d.device_id = ? AND f.family_id = ?",
+            (device_id, family_id),
+        ).fetchone()
+        if row is None or row["state"] != "ACTIVE" or row["revoked_at"] is not None:
+            raise HmpError(ErrorCode.REVOKED)
+
+    def push_status_snapshot(
+        self, device_id: str, *, family_id: str | None = None
+    ) -> tuple[int, int, sqlite3.Row | None]:
+        """Coherent read-only view, serialized with writers on this connection. No G creation."""
+        with self._write_lock:
+            conn = self._require_conn()
+            conn.execute("BEGIN")
+            try:
+                if family_id is not None:
+                    self.require_push_liveness_in(conn, device_id, family_id)
+                generation = self.push_generation_in(conn, device_id)
+                epoch = conn.execute(
+                    "SELECT store_revocation_epoch FROM meta WHERE id = 1"
+                ).fetchone()[0]
+                row = self.active_push_in(conn, device_id)
+                if row is None:
+                    row = conn.execute(
+                        "SELECT * FROM push_registrations WHERE device_id = ? "
+                        "ORDER BY generation DESC, state_changed_at DESC, route_hash DESC LIMIT 1",
+                        (device_id,),
+                    ).fetchone()
+                conn.execute("COMMIT")
+            except BaseException:
+                if conn.in_transaction:
+                    conn.execute("ROLLBACK")
+                raise
+        return generation, epoch, row
+
+    def replace_push_in(
+        self,
+        conn: sqlite3.Connection,
+        *,
+        device_id: str,
+        family_id: str,
+        iid: str,
+        key: bytes,
+        body: dict,
+        sealed: bytes,
+        request_hash: bytes,
+        body_hash: bytes,
+        now: int,
+    ) -> dict:
+        """Validated new intent, AFTER caller liveness/replay/CAS. One atomic G advance."""
+        self.check_push_capacity_in(conn, device_id)
+        previous = self.active_push_in(conn, device_id)
+        if previous is not None:
+            self._leave_active_push_in(conn, previous, state="retired", now=now)
+            generation = self.push_generation_in(conn, device_id)
+        else:
+            generation = self.advance_push_generation_in(conn, device_id)
+        epoch = conn.execute("SELECT store_revocation_epoch FROM meta WHERE id = 1").fetchone()[0]
+        salt = crypto.random_bytes(32)
+        route = derive_route(key, RouteInputs(iid, epoch, device_id, family_id, generation, salt))
+        conn.execute(
+            "INSERT INTO push_registrations "
+            "(route_hash, device_id, family_id, iid, host_generation, generation, salt, "
+            "platform, addr_kind, env, relay_kid, sealed, request_hash, body_hash, state, "
+            "created_at, expires_at, state_changed_at) VALUES "
+            "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, ?)",
+            (
+                crypto.sha256(route),
+                device_id,
+                family_id,
+                iid,
+                epoch,
+                generation,
+                salt,
+                body["platform"],
+                body["addr_kind"],
+                body.get("env"),
+                body["relay_kid"],
+                sealed,
+                request_hash,
+                body_hash,
+                now,
+                body["seal_expires_at"],
+                now,
+            ),
+        )
+        # Age/per-device trimming precedes global trimming, inside this same write.
+        while self._trim_retained_push_batch_in(conn, now=now):
+            pass
+        return {
+            "route": route_text(route),
+            "generation": generation,
+            "expires_at": body["seal_expires_at"],
+            "state": "active",
+        }
+
+    def delete_push_in(self, conn: sqlite3.Connection, device_id: str, *, now: int) -> int:
+        previous = self.active_push_in(conn, device_id)
+        if previous is None:
+            return self.advance_push_generation_in(conn, device_id)
+        self._leave_active_push_in(conn, previous, state="retired", now=now)
+        return self.push_generation_in(conn, device_id)
 
     def _delete_revoked_push_batch_in(self, conn: sqlite3.Connection) -> int:
         # Purge only, never cause cleanup. REVOKED rows can exceed D28 after a
