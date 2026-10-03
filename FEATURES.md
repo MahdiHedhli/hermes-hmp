@@ -64,7 +64,7 @@ physical/native/global memory/release gates remain unchanged. See [current mobil
 | Available | Bot roster and Bot Chat reads | Profile list, snapshots, history, and access state through the root Hermes gateway. |
 | Preview | Bot Chat sends | Explicit owner gate, per-bot authorization, freshness checks and retry-safe handling. Current development follows the minimum-version policy and attempts the required APIs on later or unknown builds; an untested fingerprint alone does not disable the feature. Actual API failures remain explicit. |
 | Draft; not enabled live | Approvals and choices | Minimum-version candidate `150bd0f` is independently source-reviewed; two prepared native samples passed 13 cases each. Corrected exact-source package is prepared. Live activation and physical card/answer acceptance remain open; earlier setup failures are historical evidence below. |
-| Source registration/resolver/dispatcher/HTTPS client reviewed; interoperability and delivery pending | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` and injected-port dispatcher `e6e20a6` are independently source-reviewed, with exact hosted CI passing. HTTPS client/factory `fcd10e0` is independently source-reviewed, with exact hosted CI passing. Remote relay/seal interoperability, relay/app integration, provisioning and physical delivery remain open. No notification is delivered by this source slice. |
+| Source registration/resolver/dispatcher/HTTPS client reviewed; interoperability and delivery pending | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` and injected-port dispatcher `e6e20a6` are independently source-reviewed, with exact hosted CI passing. HTTPS client/factory `fcd10e0` is independently source-reviewed, with exact hosted CI passing. Remote relay/seal interoperability, relay/app integration, provisioning and physical delivery remain open. Verified-TLS receiver/client fixture component `9e21614` is independently accepted; native T029 interleaves remain unfinished. No notification is delivered by these source slices. |
 | Owner dogfood; source follow-up reviewed | Linked chat images | Owner confirmed public-CDN rendering. Accepted public-image settlement repair `16c2095` and Phone media wiring `11cbf29` passed hosted CI; integrated Play source `8671061` also passed hosted CI. Native allocation, host-local HTTP serving and device/release evidence remain open. No new installed image capability is claimed. |
 | Planning | Phone photo/file attachments | Root reproduced native adapter primitives in isolated discovery tests on an archive, not a Git attestation (73 checks, 30 focused tests, 315 fixture and CI-tool tests together; no full CI gate claimed); the complete upload, busy-handler, admission and read-back flow remains unqualified. Canonical Desktop-owned multimodal admission and reusable authorized media history remain upstream contract gaps. |
 
@@ -296,3 +296,28 @@ primitive dependencies. Provider/device delivery, relay/seal interoperability, a
 provisioning and remote release gates remain open.
 
 The diagnostics reader now rejects opened nonregular targets before reading, uses nonblocking open to avoid FIFO waits, and preserves native symlinks to regular configuration files. Four isolated FIFO/symlink tests have subprocess timeouts; regular filesystem stalls remain outside a universal wall-clock guarantee. The accepted v3 fixes the blocking-read edge identified by the v2 rejection. No live installation or notification delivery is implied.
+
+## Native approval relay fixture component checkpoint (2026-10-03 UTC)
+
+The independently accepted receiver/client component at
+`9e21614f44edf984072353a21d94ce78d9457365`
+([HMP draft PR #90](https://github.com/MahdiHedhli/hermes-hmp/pull/90)) adds a disposable
+loopback HTTPS receiver. The real production relay client sends requests through verified chain
+and hostname checks plus the configured leaf pin; the receiver independently frames and verifies
+the P-256 signature. Untrusted CA and wrong-pin cases fail before a request is captured.
+
+The receiver has bounded headers, body, capture count and connection/close time, fixed responses,
+no request logging, and synthetic private certificate files in fresh scratch directories.
+Independent review found that deeply nested JSON could reach the standard traceback path;
+the accepted repair returns fixed 400 with no capture or stderr. No request-body disclosure was
+demonstrated. Independent focused tests passed 2/2; the full local CI-equivalent suite passed
+2,610 cases, with 16 skips and one existing aiohttp warning. Exact-head hosted CI
+[run 37094865602](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/37094865602)
+also completed successfully.
+
+**T029 remains incomplete.** These tests use a synthetic signing identity and do not originate
+from a native Hermes approval. The next fixture must positively observe queued work before
+revocation, Desktop hold and restart, then prove that no request survives those interleaves and
+that restart drops hints. HPKE opening, relay admission/replay/provider behavior, app registration,
+APNs/FCM delivery, runtime privacy canaries and release qualification remain separate work.
+No production module, live home, deployment, provider or device was changed by this component.

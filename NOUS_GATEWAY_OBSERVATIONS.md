@@ -995,3 +995,28 @@ primitive dependencies. Provider/device delivery, relay/seal interoperability, a
 provisioning and remote release gates remain open.
 
 The diagnostics reader now rejects opened nonregular targets before reading, uses nonblocking open to avoid FIFO waits, and preserves native symlinks to regular configuration files. Four isolated FIFO/symlink tests have subprocess timeouts; regular filesystem stalls remain outside a universal wall-clock guarantee. The accepted v3 fixes the blocking-read edge identified by the v2 rejection. No live installation or notification delivery is implied.
+
+## Native approval relay fixture component checkpoint (2026-10-03 UTC)
+
+The independently accepted receiver/client component at
+`9e21614f44edf984072353a21d94ce78d9457365`
+([HMP draft PR #90](https://github.com/MahdiHedhli/hermes-hmp/pull/90)) adds a disposable
+loopback HTTPS receiver. The real production relay client sends requests through verified chain
+and hostname checks plus the configured leaf pin; the receiver independently frames and verifies
+the P-256 signature. Untrusted CA and wrong-pin cases fail before a request is captured.
+
+The receiver has bounded headers, body, capture count and connection/close time, fixed responses,
+no request logging, and synthetic private certificate files in fresh scratch directories.
+Independent review found that deeply nested JSON could reach the standard traceback path;
+the accepted repair returns fixed 400 with no capture or stderr. No request-body disclosure was
+demonstrated. Independent focused tests passed 2/2; the full local CI-equivalent suite passed
+2,610 cases, with 16 skips and one existing aiohttp warning. Exact-head hosted CI
+[run 37094865602](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/37094865602)
+also completed successfully.
+
+**T029 remains incomplete.** These tests use a synthetic signing identity and do not originate
+from a native Hermes approval. The next fixture must positively observe queued work before
+revocation, Desktop hold and restart, then prove that no request survives those interleaves and
+that restart drops hints. HPKE opening, relay admission/replay/provider behavior, app registration,
+APNs/FCM delivery, runtime privacy canaries and release qualification remain separate work.
+No production module, live home, deployment, provider or device was changed by this component.
