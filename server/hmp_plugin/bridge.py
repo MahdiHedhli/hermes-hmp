@@ -1314,7 +1314,7 @@ class HermesReadBridge:
             if isinstance(raw_key, str) and raw_key.strip():
                 key = raw_key if _has_usable_secret(raw_key) else ""
             else:
-                key = scoped_key if isinstance(scoped_key, str) else ""
+                key = scoped_key if _has_usable_secret(scoped_key) else ""
         else:
             key = scoped_key if _has_usable_secret(scoped_key) else ""
         if not key:
