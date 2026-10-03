@@ -1307,3 +1307,47 @@ log hygiene and privacy checks. This accepts the combined source and configured
 CI scope. Native, mobile/device integration, activation and deployment remain
 pending; the residual limits above still apply. No new upstream API is required
 for these three repairs.
+
+## Ownership and attachment source progress (2026-10-03 UTC)
+
+### Desktop ownership seam
+
+[HMP draft #97](https://github.com/MahdiHedhli/hermes-hmp/pull/97) at
+`b65f6aa` adds the reviewed tri-state Desktop ownership port: `owned`, `unowned`
+and `unknown`. The production default cannot observe. Unknown ownership hides
+Bot approval cards; independent Phone cards and settled replay/conflict/expiry
+handling remain. Open Bot answers check the injected port under their row lock
+and cannot call the resolver for owned or unknown state.
+
+Root passed 225 focused fake-port cases and the full HMP unit suite
+(2,394 passed, 15 skipped). Three deliberately removed guards each failed their
+targeted assertion. Exact-head [hosted CI](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/37126002690)
+passed lint, unit/tool tests, plugin surface, log hygiene and privacy checks.
+The earlier 220-pass/5-fail fixture run is retained; its test-only repairs and
+a snapshot file-mode correction are documented in the private evidence.
+
+This draft is a source foundation, not a deployable ownership provider. No
+native registry observer is included, and the point-in-time check/use race
+remains open. It does not verify genuine Desktop interleaving, urgent
+notification delivery, native approval coverage or physical-device behavior.
+
+### Attachment parser review
+
+The Python/Dart attachment DTO, hash, pending-record codec and declarative ports
+are authored in isolated branches. Independent review found that the Python
+raw parser checks object/member and array bounds during or after generic JSON
+decoding, while the accepted contract requires them before decoding. This
+source defect must be repaired and reviewed before candidate test execution.
+No upload route, picker, native admission, custody store, encrypted staging
+adapter or operational attachment Send is enabled.
+
+### Push diagnostic test repair
+
+A separate test copy repaired the missing-resource diagnostic fixture by using
+an explicit delegate rather than a Mock side effect for builtin `getattr`.
+All 20 guarded synthetic collector cases then passed with zero boundary
+refusals; all 358 source/history pins matched after execution. The original
+19-pass/1-error result remains retained. This verifies the mocked diagnostic
+contract only: the actual macOS fixed-AS setup failure is unchanged, later
+startup controls and 151 crypto case definitions remain unexecuted, and no
+native resource, relay, provider or notification-delivery readiness is claimed.
