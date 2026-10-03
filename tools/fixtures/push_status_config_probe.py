@@ -43,6 +43,7 @@ with tempfile.TemporaryDirectory(prefix="hmp-push-status-native-") as t:
     initial_env = dict(os.environ)
     from gateway.config import PlatformConfig
     from gateway.config_loader import merge_platform_sections, read_yaml_layers
+
     from hmp_plugin.bridge import read_push_settings_for_diagnostics
     from hmp_plugin.push_config import configuration_summary
 
