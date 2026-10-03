@@ -59,7 +59,11 @@ from .contract import (
     WriteGateState,
 )
 from .logging_policy import log_bridge_exception, log_event
-from .prompts import MemberState
+from .prompts import (
+    DesktopOwnershipPort,
+    MemberState,
+    UnavailableDesktopOwnershipPort,
+)
 from .push_hints import HintMap
 
 # --------------------------------------------------------------------------------------------------
@@ -197,6 +201,11 @@ class ServerContext:
     push_hints: HintMap = field(default_factory=HintMap, repr=False)
     # v1.3 prompt rows (process memory). None until a supported listener builds one.
     prompt_store: Any = None
+    # NI-6: the closed Desktop ownership seam. The safe default never does native or
+    # canonical-target observation work; a native provider remains separately gated.
+    desktop_ownership: DesktopOwnershipPort = field(
+        default_factory=UnavailableDesktopOwnershipPort, repr=False
+    )
     # Approval availability (spec 034, owner policy 2026-10-01): the `approvals` and `phone_chat`
     # eligibility members, computed once at listener open from the actual API checks. Both default
     # CLOSED, so a context built without availability information never opens an approval route.

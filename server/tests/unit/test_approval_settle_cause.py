@@ -92,9 +92,12 @@ def _live(bridge: Any = None, endpoint: Any = ENDPOINT) -> Any:
 
 
 async def _answer(store: PromptStore, resolver: Any, body: dict[str, Any], now: int = 2_000):
+    async def unowned(_row: PromptRow) -> prompts.DesktopOwnership:
+        return prompts.DesktopOwnership.UNOWNED
+
     return await prompts.answer_prompt(
         store, iid=IID, user_id=USER, profile=PROFILE, request_id=REQ, body=body,
-        resolver=resolver, now=now,
+        resolver=resolver, now=now, ownership_check=unowned,
     )
 
 

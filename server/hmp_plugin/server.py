@@ -950,6 +950,51 @@ def _prompt_result(result: prompts.HttpResult) -> web.Response:
     return json_response(result.body, status=result.status)
 
 
+async def _observe_desktop_ownership(
+    ctx: ServerContext, profile: str, *, eligible: bool = True
+) -> prompts.DesktopOwnership:
+    """One fail-closed HMP observation through the injected, closed port.
+
+    The unavailable default short-circuits before resolving a native profile or canonical target.
+    That avoids doing observation-only work when no accepted observer is configured. A future
+    provider must be separately admitted; this function never falls back to `lease_snapshot`.
+    """
+    if not eligible:
+        return prompts.DesktopOwnership.UNKNOWN
+    port = ctx.desktop_ownership
+    try:
+        if getattr(port, "can_observe", False) is not True:
+            return prompts.DesktopOwnership.UNKNOWN
+    except Exception:
+        return prompts.DesktopOwnership.UNKNOWN
+    bridge = ctx.bridge
+    if bridge is None:
+        return prompts.DesktopOwnership.UNKNOWN
+    try:
+        target = await asyncio.to_thread(bridge.resolve_bot_chat, profile)
+    except Exception:
+        log_event("desktop_ownership", outcome="unknown")
+        return prompts.DesktopOwnership.UNKNOWN
+    try:
+        if target is None:
+            return prompts.DesktopOwnership.UNKNOWN
+        lineage = getattr(target, "compression_chain", None)
+        if (
+            type(lineage) is not tuple
+            or not lineage
+            or not all(type(session_id) is str and session_id for session_id in lineage)
+            or len(set(lineage)) != len(lineage)
+        ):
+            return prompts.DesktopOwnership.UNKNOWN
+    except Exception:
+        return prompts.DesktopOwnership.UNKNOWN
+    try:
+        result = await port.observe(profile=profile, canonical_lineage=lineage)
+    except Exception:
+        return prompts.DesktopOwnership.UNKNOWN
+    return result if type(result) is prompts.DesktopOwnership else prompts.DesktopOwnership.UNKNOWN
+
+
 async def handle_prompts_list(request: web.Request) -> web.Response:
     """AP-3: `GET /bots/{p}/prompts`."""
     who = bearer(request)
@@ -962,7 +1007,9 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
     await _require_approvals_gate(ctx, profile, member=None)
     store = ctx.prompt_store
     if store is None:
-        return json_response({"prompts": [], "desktop_held": False})
+        return json_response(
+            {"prompts": [], "desktop_held": False, "desktop_ownership": "unknown"}
+        )
     t1 = ctx.now()
     store.purge(t1)
     candidates = store.view_visible(
@@ -996,12 +1043,30 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
     final = store.view_visible(
         ctx.iid, who.user_id, profile, now=t2, members=members, include_wire=True
     )
+    has_open_bot_row = any(
+        view.surface == "bot_chat" and view.open_now for view in final.rows
+    )
+    ownership = await _observe_desktop_ownership(
+        ctx,
+        profile,
+        eligible=members.bot_chat and has_open_bot_row,
+    )
+    hide_bot = ownership in {
+        prompts.DesktopOwnership.OWNED,
+        prompts.DesktopOwnership.UNKNOWN,
+    }
+    shown = [
+        view.wire
+        for view in final.rows
+        if view.visible_now and not (hide_bot and view.surface == "bot_chat")
+    ]
     return _prompt_result(
         prompts.HttpResult(
             200,
             {
-                "prompts": [view.wire for view in final.rows if view.visible_now],
-                "desktop_held": final.held,
+                "prompts": shown,
+                "desktop_held": final.held or ownership is prompts.DesktopOwnership.OWNED,
+                "desktop_ownership": ownership.value,
             },
         )
     )
@@ -1030,6 +1095,13 @@ async def handle_prompt_answer(request: web.Request) -> web.Response:
     if store is None:
         missing = prompts.HttpResult(404, {"error": {"code": "not_found", "message": "not found"}})
         return _prompt_result(missing)
+
+    async def ownership_check(_row: prompts.PromptRow) -> prompts.DesktopOwnership:
+        # `answer_prompt` invokes this while holding the exact row lock and only after its
+        # missing/expiry/replay/conflict/stale decisions. The default port exits before the
+        # canonical Bot Chat bridge read.
+        return await _observe_desktop_ownership(ctx, profile)
+
     result = await prompts.answer_prompt(
         store,
         iid=ctx.iid,
@@ -1039,6 +1111,7 @@ async def handle_prompt_answer(request: web.Request) -> web.Response:
         body=body,
         resolver=_LivePromptResolver(ctx, endpoint),
         now=ctx.now(),
+        ownership_check=ownership_check,
     )
     return _prompt_result(result)
 

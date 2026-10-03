@@ -12,6 +12,7 @@ new rows, so a stream or hook bound to an older generation can never surface a r
 from __future__ import annotations
 
 import asyncio
+import enum
 import hashlib
 import itertools
 import json
@@ -224,6 +225,44 @@ class PromptResolver(Protocol):
     async def mark_awaiting(self, row: PromptRow) -> str:
         """`ok`, `stale`, or `unavailable`."""
         ...
+
+
+class DesktopOwnership(enum.Enum):
+    """Closed HMP view of cross-surface Desktop ownership; no native record data crosses it."""
+
+    OWNED = "owned"
+    UNOWNED = "unowned"
+    UNKNOWN = "unknown"
+
+
+class DesktopOwnershipPort(Protocol):
+    """Narrow seam for an already-authorized AP-3/AP-4 ownership decision."""
+
+    @property
+    def can_observe(self) -> bool:
+        """Only the literal `True` permits observation-only profile/target resolution."""
+        ...
+
+    async def observe(
+        self, *, profile: str, canonical_lineage: tuple[str, ...]
+    ) -> DesktopOwnership:
+        """Return one closed state. Implementations must not expose source metadata."""
+        ...
+
+
+class UnavailableDesktopOwnershipPort:
+    """Safe production default until a separately accepted native provider exists."""
+
+    can_observe = False
+
+    async def observe(
+        self, *, profile: str, canonical_lineage: tuple[str, ...]
+    ) -> DesktopOwnership:
+        return DesktopOwnership.UNKNOWN
+
+
+class DesktopOwnershipCheck(Protocol):
+    async def __call__(self, row: PromptRow) -> DesktopOwnership: ...
 
 
 def _error(code: str, message: str, *, applied: bool | None = None) -> HttpResult:
@@ -812,6 +851,7 @@ async def answer_prompt(
     body: Mapping[str, object],
     resolver: PromptResolver,
     now: int,
+    ownership_check: DesktopOwnershipCheck | None = None,
 ) -> HttpResult:
     """AP-4 / AP-5. The stored row decides the kind. A client session key in `body` is ignored."""
     if len(request_id) > _REQUEST_ID_MAX or not request_id:
@@ -842,6 +882,17 @@ async def answer_prompt(
             )
         if row.status == "expired":
             return _error("stale", "request is no longer answerable", applied=False)
+        if row.surface == "bot_chat":
+            ownership = DesktopOwnership.UNKNOWN
+            if ownership_check is not None:
+                try:
+                    candidate = await ownership_check(row)
+                except Exception:
+                    candidate = DesktopOwnership.UNKNOWN
+                if type(candidate) is DesktopOwnership:
+                    ownership = candidate
+            if ownership is not DesktopOwnership.UNOWNED:
+                return _unavailable()
         result = await _apply(row, form, value, resolver, user_id)
         if result.status == 200 and result.body.get("status") == "resolved":
             store.settle_answer(row, status="resolved", cause="answer_applied", now=now)
