@@ -1380,3 +1380,24 @@ The mobile **+** picker, encrypted asset storage, shared message-ID/CAS adapter,
 upload/send routes, native admission and authorized own-row readback still require implementation
 and separate verification. Local host `MEDIA:` output remains blocked by its provenance/read
 authority gap. No upload route, device/provider qualification or release availability is implied.
+
+## Published attachment codec CI (2026-10-03 UTC)
+
+The pure codec slice is now published in draft [HMP PR 98](https://github.com/MahdiHedhli/hermes-hmp/pull/98)
+at `7cbdf8199e0b372911d02e15fc41cd1dc9babc59` and draft
+[Mobile PR 72](https://github.com/MahdiHedhli/HermesBotMobile/pull/72)
+at `b0107a70b22cabfa3e2f134da888714141f3aae6`.
+[HMP source CI](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/37130502909)
+passed, including 2,767 unit/tool tests with 17 skips and one warning.
+[Mobile source CI](https://github.com/MahdiHedhli/HermesBotMobile/actions/runs/37130507541)
+passed app/client analysis and tests, security hygiene, source gates, and 145
+release-wrapper/scanner regression checks. The second same-commit
+[Mobile CI run](https://github.com/MahdiHedhli/HermesBotMobile/actions/runs/37130504615)
+also passed. These are complete results for the named source workflows, with
+no skip or warning recast as a pass and no release security gate waiver.
+
+D4-S shared-slot storage and lifecycle integration is the next implementation
+slice. The public feature remains incomplete: asset encryption, picker ownership,
+custody/upload/send, native atomic admission, authorized readback and physical
+device gates are still open. Source CI does not qualify those missing capabilities
+or make the **+** media route available.
