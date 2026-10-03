@@ -156,6 +156,11 @@ def open_components(adapter: Any) -> server.ServerContext:
         block = live_extra.get("direct_send") if isinstance(live_extra, Mapping) else None
         return isinstance(block, Mapping) and block.get("enabled") is True
 
+    def _read_push_settings() -> object:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        return live_extra.get("push") if isinstance(live_extra, Mapping) else None
+
     def _read_owner_device_ids() -> frozenset[str]:
         live_config = getattr(adapter, "config", None)
         live_extra = getattr(live_config, "extra", None)
@@ -182,6 +187,7 @@ def open_components(adapter: Any) -> server.ServerContext:
         compat=result,
         session_browsing_enabled=session_browsing is not False,
         direct_send_flag=_read_direct_send_enabled,
+        push_settings=_read_push_settings,
         owner_device_ids=_read_owner_device_ids,
         approvals_available=lambda: approvals_member,
         phone_chat_available=lambda: phone_member and phone_bound[0],

@@ -781,12 +781,22 @@ class Store:
     def purge_push(
         self, *, now: int, key: bytes | None, push_available: bool, live_kids: frozenset[str]
     ) -> None:
+        """Synchronous host/test caller; listener yields between committed bounded passes."""
+        for _ in self.purge_push_steps(
+            now=now, key=key, push_available=push_available, live_kids=live_kids
+        ):
+            pass
+
+    def purge_push_steps(
+        self, *, now: int, key: bytes | None, push_available: bool, live_kids: frozenset[str]
+    ) -> Iterator[None]:
         """PN-BND purge, no file/network I/O. The listener must read the key once off-loop.
 
         push_available is the complete PN-AV predicate, including valid relay keys/pins
         and approval/direct-send availability. While off, kid loss alone expires nothing.
         None key skips ONLY hash expiry; expiry, revocation and retained cleanup still run.
-        Listener-open/hourly scheduling is a future integration gate, not enabled here.
+        Each yield is AFTER the transaction commits; no store lock is held across it.
+        The listener can yield/cancel between bounded passes, never mid-transaction.
         """
         # Recover failed/skipped cleanup BEFORE any revoked-row deletion. The
         # bounded active cohort must durably advance G, wipe secrets and audit
@@ -809,19 +819,23 @@ class Store:
                     mismatch = rederive_route(key, inputs, bytes(row["route_hash"])) is None
                 if expired or kid_removed or mismatch:
                     self._leave_active_push_in(conn, row, state="expired", now=now)
+        yield None
         while True:
             with self.transaction() as conn:
                 deleted = self._delete_revoked_push_batch_in(conn)
+            yield None
             if not deleted:
                 break
         while True:
             with self.transaction() as conn:
                 wiped = self._wipe_retained_push_batch_in(conn)
+            yield None
             if not wiped:
                 break
         while True:
             with self.transaction() as conn:
                 deleted = self._trim_retained_push_batch_in(conn, now=now)
+            yield None
             if not deleted:
                 break
 

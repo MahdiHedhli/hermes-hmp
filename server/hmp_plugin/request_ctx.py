@@ -45,7 +45,7 @@ from typing import Any, Protocol
 
 from aiohttp import web
 
-from . import gate, wire
+from . import gate, push_config, wire
 from .auth import AuthContext, Authenticator
 from .compat import CompatResult
 from .contract import (
@@ -151,6 +151,8 @@ class ServingIdentity(Protocol):
 
     def k_grace(self) -> bytes: ...
 
+    async def read_k_grace_for_push(self) -> bytes | None: ...
+
     def still_current(self) -> bool: ...
 
     def server_ssl_context(self) -> ssl.SSLContext: ...
@@ -189,6 +191,8 @@ class ServerContext:
     direct_send_flag: Callable[[], bool] = field(default=lambda: False)
     # `direct_send.DirectSendDeps`, only on a supported build (mirrors `reads`/`authorize` above).
     direct_send_deps: Any = None
+    # PN-AV live host settings; default off, no wire/environment fallback.
+    push_settings: Callable[[], object] = field(default=lambda: None)
     # v1.3 prompt rows (process memory). None until a supported listener builds one.
     prompt_store: Any = None
     # Approval availability (spec 034, owner policy 2026-10-01): the `approvals` and `phone_chat`
@@ -209,6 +213,21 @@ class ServerContext:
     # whether the owner turned a feature on.
     send_available: Callable[[], bool] = field(default=lambda: True)
     session_browsing_available: bool = True
+
+    def push_availability(self) -> push_config.PushAvailability:
+        # Adapter supplies only current host config. Neither wire nor environment
+        # values enter this snapshot, and availability never changes approval gates.
+        try:
+            block = self.push_settings()
+            return push_config.evaluate(
+                block,
+                direct_send=self.direct_send_effective(),
+                approvals=self.is_approvals_available(),
+                phone_chat=self.is_phone_chat_available(),
+            )
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return push_config.PushAvailability(False, "relay_unconfigured", None)
 
     def is_approvals_available(self) -> bool:
         """Bot Chat approvals. Only an exact `True` opens it; anything else closes it."""

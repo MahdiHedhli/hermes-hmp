@@ -24,6 +24,7 @@ CONTRACT_MODULES = {
     "pairing.py",
     "tokens.py",
     "push_issuer.py",
+    "push_config.py",
     "auth.py",
     "reads.py",
     "authorize.py",

@@ -186,6 +186,7 @@ PARSER_MAX_HEADERS = 64
 # Graceful shutdown bound. Direct-send background tasks are cancelled and awaited up to this
 # same bound (`HmpServer.stop`); the HTTP runner uses it too.
 SHUTDOWN_TIMEOUT_S = 2.0
+PUSH_PURGE_INTERVAL_S = 3600
 
 ACCESS_LOGGER_NAME = LOGGER_NAME + ".access"
 STORE_FILENAME = "hmp.sqlite3"
@@ -1325,6 +1326,7 @@ class HmpServer:
         self._on_closed = on_closed
         self._runner: web.AppRunner | None = None
         self._watch: asyncio.Task[None] | None = None
+        self._push_watch: asyncio.Task[None] | None = None
         self._stopping: asyncio.Task[None] | None = None
         self.bound: tuple[str, int] | None = None
         self.closed = asyncio.Event()
@@ -1348,6 +1350,7 @@ class HmpServer:
             runner, self.settings.bind, self.settings.port, ssl_context=ssl_ctx, reuse_address=True
         )
         try:
+            await self._purge_push_once()
             await site.start()
         except BaseException:
             await runner.cleanup()
@@ -1358,7 +1361,46 @@ class HmpServer:
             host, port = sockets[0].getsockname()[:2]
             self.bound = (str(host), int(port))
         self._watch = asyncio.get_running_loop().create_task(self._watchdog())
+        self._push_watch = asyncio.get_running_loop().create_task(self._push_purge_loop())
         log_event("listener_start", outcome="ok")
+
+    async def _purge_push_once(self) -> None:
+        """PN-BND listener-open/hourly maintenance; no network or repairing key accessor.
+
+        Read the push key once off-loop, then take one live settings snapshot. The
+        store yields only outside its short transactions so cancellation/backlog
+        cannot leave an open transaction or hold its lock across an await.
+        """
+        try:
+            try:
+                reader = getattr(self.ctx.identity, "read_k_grace_for_push", None)
+                key = await reader() if reader is not None else None
+                if type(key) is not bytes or len(key) != 32:
+                    key = None
+            except Exception:
+                # Key loss skips hash expiry ONLY; other maintenance still runs.
+                # Cancellation propagates and never starts another key reader.
+                key = None
+            if not self.ctx.identity.still_current():
+                return
+            availability = self.ctx.push_availability()
+            for _ in self.ctx.store.purge_push_steps(
+                now=self.ctx.now(),
+                key=key,
+                push_available=availability.available,
+                live_kids=availability.live_kids,
+            ):
+                await asyncio.sleep(0)
+                if not self.ctx.identity.still_current():
+                    return
+        except Exception:
+            with contextlib.suppress(Exception):
+                log_event("push_purge", outcome="cleanup_failed")
+
+    async def _push_purge_loop(self) -> None:
+        while True:
+            await asyncio.sleep(PUSH_PURGE_INTERVAL_S)
+            await self._purge_push_once()
 
     async def _watchdog(self) -> None:
         # PR7-6 polls on-disk custody by design; there is no event to wait on.
@@ -1394,6 +1436,11 @@ class HmpServer:
         await self._cancel_pending_sends()
         if not notify:
             self._on_closed = None
+        push_watch, self._push_watch = self._push_watch, None
+        if push_watch is not None and push_watch is not asyncio.current_task():
+            push_watch.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await push_watch
         watch, self._watch = self._watch, None
         if watch is not None and watch is not asyncio.current_task():
             watch.cancel()
