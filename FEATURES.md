@@ -66,7 +66,7 @@ physical/native/global memory/release gates remain unchanged. See [current mobil
 | Draft; not enabled live | Approvals and choices | Minimum-version candidate `150bd0f` is independently source-reviewed; two prepared native samples passed 13 cases each. Corrected exact-source package is prepared. Live activation and physical card/answer acceptance remain open; earlier setup failures are historical evidence below. |
 | Source reviewed; Desktop native case failed; remote delivery pending | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` and injected-port dispatcher `e6e20a6` are independently source-reviewed, with exact hosted CI passing. HTTPS client/factory `fcd10e0` is independently source-reviewed, with exact hosted CI passing. Remote relay/seal interoperability, relay/app integration, provisioning and physical delivery remain open. Verified-TLS component `9e21614` and native fixture `871ebb0` are independently accepted within their scopes: three selected approval/revoke/restart cases passed on one development sample. The new genuine Desktop interleave failed shared visibility/capture and close-registry checks; T029 and remote relay/provider/app/device gates remain open. No notification is delivered by these source slices. |
 | Owner dogfood; source follow-up reviewed | Linked chat images | Owner confirmed public-CDN rendering. Accepted public-image settlement repair `16c2095` and Phone media wiring `11cbf29` passed hosted CI; integrated Play source `8671061` also passed hosted CI. Native allocation, host-local HTTP serving and device/release evidence remain open. No new installed image capability is claimed. |
-| Implementation | Phone photo/file attachments | Pure codec and scoped pending-slot adapter published with focused synthetic passes; the complete picker/Send flow, upload/readback and encrypted staging remain unimplemented. The inspected Phone dispatch has a separate atomic no-defer admission gap; canonical Desktop multimodal remains an upstream gap. Historical archive primitive tests do not qualify the complete flow. See the [admission checkpoint](#phone-attachment-admission-checkpoint-2026-10-03). |
+| Implementation | Phone photo/file attachments | Pure codec, scoped slot adapter and internal pending owner/restore source published with focused synthetic passes; the complete picker/Send flow, upload/readback and encrypted staging remain unimplemented. The inspected Phone dispatch has a separate atomic no-defer admission gap; canonical Desktop multimodal remains an upstream gap. Historical archive primitive tests do not qualify the complete flow. See the [admission checkpoint](#phone-attachment-admission-checkpoint-2026-10-03). |
 
 See the [roadmap](ROADMAP.md), [wire contract](docs/architecture/contracts/HMP_V1.md), and [upstream requests for Nous Research](NOUS_GATEWAY_OBSERVATIONS.md).
 
@@ -770,7 +770,8 @@ commit: the network guard rejected two local `File.open` calls, and the app
 analyzer reported two warnings. A focused reviewed repair is needed; no CI pass,
 physical durability or release qualification is claimed.
 
-The next independently accepted contract covers private pending-slot inspection,
+The next-contract status below is historical; the implemented owner checkpoint follows.
+That independently accepted contract covers private pending-slot inspection,
 conservative restart normalization from `messageMayTransmit` to `unknown`, actual
 operation accounting through invalidation/close, and explicit clear refusal.
 Source authoring has begun on the exact published adapter base; no source tests
@@ -780,3 +781,41 @@ current capture. Successful clear needs a separate publication-currency decision
 and actual native/owned-cleanup proofs. Full D4-S, encrypted assets, native atomic
 admission/upload/readback and the **+** media route remain open. No upstream
 Hermes change, live host change, deployment or release is implied.
+
+## Phone pending owner and repaired source CI (2026-10-03 UTC)
+
+The scoped slot parent is now `a3fa1febb95127762ae936edec70663a9b98edfd`, in
+[draft PR #73](https://github.com/MahdiHedhli/HermesBotMobile/pull/73).
+Actual hosted App CI [37147527021](https://github.com/MahdiHedhli/HermesBotMobile/actions/runs/37147527021)
+passed on that exact head. Earlier failures remain historical evidence: local File.open calls
+needed a reviewed exact-blob lexical allowance; test lint and a shallow-checkout historical-object
+assertion also needed correction. The allowance exempts only `open` for unchanged reviewed local
+file bytes. All network/import/type/acceptance guards remain enforced, with matched negative
+controls and actual depth-one regression checks.
+
+The internal pending owner is published at `d31fafa520a5f1c505f35ec8d591d8104a29b9e6`, in
+[draft PR #74](https://github.com/MahdiHedhli/HermesBotMobile/pull/74), stacked on that parent.
+Independent review accepted the exact two source/test paths and their disjoint composition.
+Root's cached pure Dart owner/lower-slot/send suites passed 83 aggregate checks, with zero failures;
+those executed source bytes are unchanged in the published composition. Cached client analysis
+exited zero with three infos, including one new initializing-formal suggestion; the existing public
+named environment parameter is retained. Current combined-source network and privacy scans passed;
+new-head hosted CI was pending at the initial checkpoint. Subsequently, exact-head App CI
+[37148001498](https://github.com/MahdiHedhli/HermesBotMobile/actions/runs/37148001498) and
+[37147969675](https://github.com/MahdiHedhli/HermesBotMobile/actions/runs/37147969675) passed.
+These CI results do not establish full D4-S, native/device behaviour or release qualification. The adapter's earlier 110 app and
+19 client focused results remain separate evidence, not extra owner tests.
+
+This owner permits current scoped inspection and only conservative restart normalization of
+attachment `messageMayTransmit` to `unknown`. Private captures compare instance/profile, all
+foreground/lifecycle/slot/page/session generations and exact identities. Its single actual pipeline
+stays reserved through reads, admitted CAS, fresh typed post-read, invalidation and close. It joins
+already admitted normalization after UI currency loss and returns stale without claiming the write
+was prevented. Every clear request still refuses with no I/O.
+
+Production Phone environment/route/session derivation, successful clear with native and joined
+cleanup proof, encrypted owned assets/quotas/orphans, picker/tray, upload, atomic native admission,
+actual own-row readback and physical/device/provider/release gates remain open. Full D4-S and the
+complete attachment flow are not complete. The next independent local prerequisite is the D4-A/F
+encrypted-asset/file-custody contract; no real native crypto or file-attacker custody is established
+by synthetic storage tests. No attachment UI or release is enabled by these source publications.
