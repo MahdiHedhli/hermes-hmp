@@ -64,12 +64,36 @@ physical/native/global memory/release gates remain unchanged. See [current mobil
 | Available | Bot roster and Bot Chat reads | Profile list, snapshots, history, and access state through the root Hermes gateway. |
 | Preview | Bot Chat sends | Explicit owner gate, per-bot authorization, freshness checks and retry-safe handling. Current development follows the minimum-version policy and attempts the required APIs on later or unknown builds; an untested fingerprint alone does not disable the feature. Actual API failures remain explicit. |
 | Draft; not enabled live | Approvals and choices | Minimum-version candidate `150bd0f` is independently source-reviewed; two prepared native samples passed 13 cases each. Corrected exact-source package is prepared. Live activation and physical card/answer acceptance remain open; earlier setup failures are historical evidence below. |
-| Source registration/resolver/dispatcher/configuration reviewed; transport and delivery pending | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` and injected-port dispatcher `e6e20a6` are independently source-reviewed, with exact hosted CI passing. HTTPS transport, relay/app integration, provisioning and physical delivery remain open. No notification is delivered by this source slice. |
+| Source registration/resolver/dispatcher/HTTPS client reviewed; interoperability and delivery pending | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` and injected-port dispatcher `e6e20a6` are independently source-reviewed, with exact hosted CI passing. HTTPS client/factory `fcd10e0` is independently source-reviewed, with exact hosted CI passing. Remote relay/seal interoperability, relay/app integration, provisioning and physical delivery remain open. No notification is delivered by this source slice. |
 | Owner dogfood; source follow-up reviewed | Linked chat images | Owner confirmed public-CDN rendering. Accepted public-image settlement repair `16c2095` and Phone media wiring `11cbf29` passed hosted CI; integrated Play source `8671061` also passed hosted CI. Native allocation, host-local HTTP serving and device/release evidence remain open. No new installed image capability is claimed. |
 | Planning | Phone photo/file attachments | Root reproduced native adapter primitives in isolated discovery tests on an archive, not a Git attestation (73 checks, 30 focused tests, 315 fixture and CI-tool tests together; no full CI gate claimed); the complete upload, busy-handler, admission and read-back flow remains unqualified. Canonical Desktop-owned multimodal admission and reusable authorized media history remain upstream contract gaps. |
 
 See the [roadmap](ROADMAP.md), [wire contract](docs/architecture/contracts/HMP_V1.md), and [upstream requests for Nous Research](NOUS_GATEWAY_OBSERVATIONS.md).
 
+
+## Approval push HTTPS client checkpoint (2026-10-03)
+
+[Draft PR #88](https://github.com/MahdiHedhli/hermes-hmp/pull/88), source
+`fcd10e0370be185a445f25a1f77ce1e6b7a1d62b`, adds the signed HTTPS client
+and production adapter factory. Independent source review accepted the client
+and its integrated independent synthetic vectors: all 52 frozen pins matched,
+22 fixed-vector/DER reference cases passed, and a scratch raw-route framing
+mutation failed. Root passed 277 focused and 2,562 full tests, with 16 existing
+skips and one existing warning. Both exact-source hosted CI runs `37089728685` and `37089727146` passed.
+
+The client requires standard certificate-chain and hostname validation; optional
+leaf SPKI pins are additional constraints checked before HTTP request bytes. It
+ignores proxy environment variables, refuses redirects, caps responses, signs
+raw fields and distinguishes certain pre-write failure from post-write timeout
+and ambiguous outcomes. Local HTTPS tests establish this source behavior. The
+DER cases verify vetted primitive/reference classifications, not the separate
+remote relay's verifier.
+
+This supersedes the dispatcher checkpoint's pending-client source status only.
+Remote relay/seal interoperability, app registration/taps, provider provisioning,
+physical notification delivery and release remain unverified. No live host,
+app, flag, grant, credential, provider or deployment changed. Push remains a
+navigation hint and never authorizes an approval answer.
 
 ## Approval push dispatcher checkpoint (2026-10-03)
 

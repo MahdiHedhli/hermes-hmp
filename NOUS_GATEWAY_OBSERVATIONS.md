@@ -145,6 +145,30 @@ evidence/design work; observer events are not answer authority. Cron applies una
 automatic policy, and clarify is separate. No generic upstream API gap is established
 by this census. Provider setup and physical delivery remain pending.
 
+## Approval push HTTPS client checkpoint (2026-10-03)
+
+[Draft PR #88](https://github.com/MahdiHedhli/hermes-hmp/pull/88), source
+`fcd10e0370be185a445f25a1f77ce1e6b7a1d62b`, adds the signed HTTPS client
+and production adapter factory. Independent source review accepted the client
+and its integrated independent synthetic vectors: all 52 frozen pins matched,
+22 fixed-vector/DER reference cases passed, and a scratch raw-route framing
+mutation failed. Root passed 277 focused and 2,562 full tests, with 16 existing
+skips and one existing warning. Both exact-source hosted CI runs `37089728685` and `37089727146` passed.
+
+The client requires standard certificate-chain and hostname validation; optional
+leaf SPKI pins are additional constraints checked before HTTP request bytes. It
+ignores proxy environment variables, refuses redirects, caps responses, signs
+raw fields and distinguishes certain pre-write failure from post-write timeout
+and ambiguous outcomes. Local HTTPS tests establish this source behavior. The
+DER cases verify vetted primitive/reference classifications, not the separate
+remote relay's verifier.
+
+This supersedes the dispatcher checkpoint's pending-client source status only.
+Remote relay/seal interoperability, app registration/taps, provider provisioning,
+physical notification delivery and release remain unverified. No live host,
+app, flag, grant, credential, provider or deployment changed. Push remains a
+navigation hint and never authorizes an approval answer.
+
 ## Approval push dispatcher checkpoint (2026-10-03)
 
 [Draft PR #87](https://github.com/MahdiHedhli/hermes-hmp/pull/87), source
