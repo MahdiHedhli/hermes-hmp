@@ -1141,6 +1141,31 @@ relay verifies signatures and captures requests; it does not open HPKE seals or
 contact APNs/FCM. The live visibility/capture failure is distinct from the
 unqualified close/release transition.
 
+### Phone attachment admission checkpoint (2026-10-03)
+
+The revised Photos/Files contract is accepted as input for normative amendments
+and pure interface work only. It preserves attachment-first composition, the
+existing Phone pending-send slot, bounded device-upload custody and fresh native
+own-CMID row authority. The exact encrypted staging envelope, portable host
+validator, complete upload/admission/readback implementation and OS/device tests
+remain pending. No operational attachment Send or product + entry is available.
+
+On inspected Hermes `8afaab3703e336d72a72c812dd2dd249f04f166a`, a synchronous
+adapter busy refusal cannot guarantee no deferred execution: [startup restore
+queues before plugin hooks](https://github.com/NousResearch/hermes-agent/blob/8afaab3703e336d72a72c812dd2dd249f04f166a/gateway/run_inbound.py#L212-L217),
+and [cold entry can encounter runner busy handling or orphan FIFO rescue](https://github.com/NousResearch/hermes-agent/blob/8afaab3703e336d72a72c812dd2dd249f04f166a/gateway/run_inbound.py#L1243-L1344).
+That [event type](https://github.com/NousResearch/hermes-agent/blob/8afaab3703e336d72a72c812dd2dd249f04f166a/gateway/platforms/event.py#L36-L123)
+has no reject-policy admission ticket. This is a separate
+`PHONE_ATTACHMENT_ATOMIC_ADMISSION_GAP`: native settlement must cover all
+retaining/effectful exits, preserve the original CMID and ordered media, and
+compare/create an exact absent session for an attachment-first Send. A refusal
+must leave no deferred instruction or user row; an unresolved outcome remains
+unknown. HMP will not patch private runner queues or ship FIFO as an alternative.
+Later builds use actual required APIs under the minimum-version policy; this
+revision is source evidence, not an availability allowlist or a universal
+absence claim. Desktop-owned canonical multimodal admission remains a separate
+upstream gap.
+
 ### HPKE/JCS vector preparation
 
 The test-only source in [draft PR #92](https://github.com/MahdiHedhli/hermes-hmp/pull/92)
@@ -1155,25 +1180,32 @@ publisher-contact hygiene failures; the repair minimizes the five registry
 records to selected provenance fields while preserving original-response hashes
 and the existing privacy scanner. Package/archive/license bytes are unchanged.
 
-**All 151 definitions and six pure methods remain unexecuted.** No generated
-known-answer corpus, installed/imported crypto package, production consumer,
+**All 151 crypto case definitions remain unexecuted.** The separate fixed
+stdlib-only codec run passed six methods and 33 subtests, with zero boundary
+refusals and all 226 pinned inputs unchanged. It extracted ten pure functions
+and two classes from the exact PR #92 checker source without importing the
+whole checker, crypto packages, preflight or main. This verifies only the tested
+JSON/base64/request-shape/transcript rules. No generated known-answer corpus,
+installed/imported crypto package, production consumer,
 relay/provider delivery or native app interoperability is qualified. Independent
 containment review requires a startup watchdog, specific allocation-failure
 observations with small positive controls, and exact accepted-canary/profile
 receipt bindings. Runtime startup, hard resource enforcement, immutable input
 and mount lifetime, loader closure and other denial/reaping controls still need
-verification. Execution admission remains closed. Owner provisioning choices
+verification. Native and crypto execution admission remains closed. Owner provisioning choices
 are not prerequisites for this test-only work.
 
-A separate startup-supervisor v2 source repair is independently accepted. The
-caller now retains the exact child handle before startup and through observation
-construction, handoff and receipt failures. All 140 frozen input hashes matched;
-46 synthetic control definitions remain unexecuted. The prior failed v1 review
-is preserved. This repairs the observation/handoff ownership defect in source;
-it does not qualify runtime cleanup or execute any crypto vector. Exceptional
-holding can remain indefinite. Actual resource collectors, trusted receipt
-provenance and immutable runtime/mount lifetime remain open. Admission is NONE;
-a separate pure-source-test recipe is being prepared for review.
+The startup-supervisor v2 ownership repair is independently accepted in source.
+The caller retains the exact child handle before startup and through observation,
+handoff and receipt failures. All 140 source-review input hashes matched. A
+separately reviewed fixed recipe then ran all 46 isolated synthetic controls:
+46 passed, zero boundary refusals, and all 206 execution-review inputs remained
+unchanged. The prior failed v1 source review and both failed recipe attempts are
+preserved. This verifies the ownership repair under mocked failure cases; it
+does not qualify native startup or runtime cleanup, or execute any crypto vector.
+Exceptional holding can remain indefinite. Actual resource collectors, trusted
+receipt provenance and immutable runtime/mount lifetime remain open. Native
+startup and crypto admission remain NONE.
 
 ### Shared Desktop ownership repair contract
 

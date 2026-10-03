@@ -66,7 +66,7 @@ physical/native/global memory/release gates remain unchanged. See [current mobil
 | Draft; not enabled live | Approvals and choices | Minimum-version candidate `150bd0f` is independently source-reviewed; two prepared native samples passed 13 cases each. Corrected exact-source package is prepared. Live activation and physical card/answer acceptance remain open; earlier setup failures are historical evidence below. |
 | Source reviewed; Desktop native case failed; remote delivery pending | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` and injected-port dispatcher `e6e20a6` are independently source-reviewed, with exact hosted CI passing. HTTPS client/factory `fcd10e0` is independently source-reviewed, with exact hosted CI passing. Remote relay/seal interoperability, relay/app integration, provisioning and physical delivery remain open. Verified-TLS component `9e21614` and native fixture `871ebb0` are independently accepted within their scopes: three selected approval/revoke/restart cases passed on one development sample. The new genuine Desktop interleave failed shared visibility/capture and close-registry checks; T029 and remote relay/provider/app/device gates remain open. No notification is delivered by these source slices. |
 | Owner dogfood; source follow-up reviewed | Linked chat images | Owner confirmed public-CDN rendering. Accepted public-image settlement repair `16c2095` and Phone media wiring `11cbf29` passed hosted CI; integrated Play source `8671061` also passed hosted CI. Native allocation, host-local HTTP serving and device/release evidence remain open. No new installed image capability is claimed. |
-| Planning | Phone photo/file attachments | Root reproduced native adapter primitives in isolated discovery tests on an archive, not a Git attestation (73 checks, 30 focused tests, 315 fixture and CI-tool tests together; no full CI gate claimed); the complete upload, busy-handler, admission and read-back flow remains unqualified. Canonical Desktop-owned multimodal admission and reusable authorized media history remain upstream contract gaps. |
+| Planning | Phone photo/file attachments | Revised contract input accepted for normative/pure interface work; upload/readback and encrypted staging remain unimplemented. The inspected Phone dispatch has a separate atomic no-defer admission gap; canonical Desktop multimodal remains an upstream gap. Historical archive primitive tests do not qualify the complete flow. See the [admission checkpoint](#phone-attachment-admission-checkpoint-2026-10-03). |
 
 See the [roadmap](ROADMAP.md), [wire contract](docs/architecture/contracts/HMP_V1.md), and [upstream requests for Nous Research](NOUS_GATEWAY_OBSERVATIONS.md).
 
@@ -442,6 +442,31 @@ relay verifies signatures and captures requests; it does not open HPKE seals or
 contact APNs/FCM. The live visibility/capture failure is distinct from the
 unqualified close/release transition.
 
+### Phone attachment admission checkpoint (2026-10-03)
+
+The revised Photos/Files contract is accepted as input for normative amendments
+and pure interface work only. It preserves attachment-first composition, the
+existing Phone pending-send slot, bounded device-upload custody and fresh native
+own-CMID row authority. The exact encrypted staging envelope, portable host
+validator, complete upload/admission/readback implementation and OS/device tests
+remain pending. No operational attachment Send or product + entry is available.
+
+On inspected Hermes `8afaab3703e336d72a72c812dd2dd249f04f166a`, a synchronous
+adapter busy refusal cannot guarantee no deferred execution: [startup restore
+queues before plugin hooks](https://github.com/NousResearch/hermes-agent/blob/8afaab3703e336d72a72c812dd2dd249f04f166a/gateway/run_inbound.py#L212-L217),
+and [cold entry can encounter runner busy handling or orphan FIFO rescue](https://github.com/NousResearch/hermes-agent/blob/8afaab3703e336d72a72c812dd2dd249f04f166a/gateway/run_inbound.py#L1243-L1344).
+That [event type](https://github.com/NousResearch/hermes-agent/blob/8afaab3703e336d72a72c812dd2dd249f04f166a/gateway/platforms/event.py#L36-L123)
+has no reject-policy admission ticket. This is a separate
+`PHONE_ATTACHMENT_ATOMIC_ADMISSION_GAP`: native settlement must cover all
+retaining/effectful exits, preserve the original CMID and ordered media, and
+compare/create an exact absent session for an attachment-first Send. A refusal
+must leave no deferred instruction or user row; an unresolved outcome remains
+unknown. HMP will not patch private runner queues or ship FIFO as an alternative.
+Later builds use actual required APIs under the minimum-version policy; this
+revision is source evidence, not an availability allowlist or a universal
+absence claim. Desktop-owned canonical multimodal admission remains a separate
+upstream gap.
+
 ### HPKE/JCS vector preparation
 
 The test-only source in [draft PR #92](https://github.com/MahdiHedhli/hermes-hmp/pull/92)
@@ -456,25 +481,32 @@ publisher-contact hygiene failures; the repair minimizes the five registry
 records to selected provenance fields while preserving original-response hashes
 and the existing privacy scanner. Package/archive/license bytes are unchanged.
 
-**All 151 definitions and six pure methods remain unexecuted.** No generated
-known-answer corpus, installed/imported crypto package, production consumer,
+**All 151 crypto case definitions remain unexecuted.** The separate fixed
+stdlib-only codec run passed six methods and 33 subtests, with zero boundary
+refusals and all 226 pinned inputs unchanged. It extracted ten pure functions
+and two classes from the exact PR #92 checker source without importing the
+whole checker, crypto packages, preflight or main. This verifies only the tested
+JSON/base64/request-shape/transcript rules. No generated known-answer corpus,
+installed/imported crypto package, production consumer,
 relay/provider delivery or native app interoperability is qualified. Independent
 containment review requires a startup watchdog, specific allocation-failure
 observations with small positive controls, and exact accepted-canary/profile
 receipt bindings. Runtime startup, hard resource enforcement, immutable input
 and mount lifetime, loader closure and other denial/reaping controls still need
-verification. Execution admission remains closed. Owner provisioning choices
+verification. Native and crypto execution admission remains closed. Owner provisioning choices
 are not prerequisites for this test-only work.
 
-A separate startup-supervisor v2 source repair is independently accepted. The
-caller now retains the exact child handle before startup and through observation
-construction, handoff and receipt failures. All 140 frozen input hashes matched;
-46 synthetic control definitions remain unexecuted. The prior failed v1 review
-is preserved. This repairs the observation/handoff ownership defect in source;
-it does not qualify runtime cleanup or execute any crypto vector. Exceptional
-holding can remain indefinite. Actual resource collectors, trusted receipt
-provenance and immutable runtime/mount lifetime remain open. Admission is NONE;
-a separate pure-source-test recipe is being prepared for review.
+The startup-supervisor v2 ownership repair is independently accepted in source.
+The caller retains the exact child handle before startup and through observation,
+handoff and receipt failures. All 140 source-review input hashes matched. A
+separately reviewed fixed recipe then ran all 46 isolated synthetic controls:
+46 passed, zero boundary refusals, and all 206 execution-review inputs remained
+unchanged. The prior failed v1 source review and both failed recipe attempts are
+preserved. This verifies the ownership repair under mocked failure cases; it
+does not qualify native startup or runtime cleanup, or execute any crypto vector.
+Exceptional holding can remain indefinite. Actual resource collectors, trusted
+receipt provenance and immutable runtime/mount lifetime remain open. Native
+startup and crypto admission remain NONE.
 
 ### Shared Desktop ownership repair contract
 
