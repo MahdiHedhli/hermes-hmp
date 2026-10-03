@@ -53,7 +53,7 @@ from typing import Any
 from aiohttp import web
 from aiohttp.http_exceptions import LineTooLong
 
-from . import direct_send, mobile_cron, mobile_model, prompts, wire
+from . import direct_send, mobile_cron, mobile_model, prompts, push_registration, wire
 from .authorize import ensure_chat
 from .contract import (
     CONTRACT_REVISION,
@@ -159,6 +159,12 @@ F3_APPROVAL_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("GET", "/bots/{p}/prompts", "AP-3"),
     ("POST", "/bots/{p}/prompts/{request_id}", "AP-4"),
     ("POST", "/bots/{p}/phone/messages", "AP-6"),
+)
+
+PUSH_REGISTRATION_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/push/registration", "PN-REG-1"),
+    ("PUT", "/push/registration", "PN-REG-2"),
+    ("DELETE", "/push/registration", "PN-REG-3"),
 )
 
 MOBILE_CRON_ROUTES: tuple[tuple[str, str, str], ...] = (
@@ -1128,6 +1134,7 @@ def build_app(ctx: ServerContext) -> web.Application:
     app.on_response_prepare.append(_server_header)
     handlers: dict[str, Handler] = {
         "/ready": handle_ready,
+        "/push/registration": push_registration.handle_push_get,
         "/pair/request": handle_pair_request,
         "/pair/complete": handle_pair_complete,
         "/auth/token": handle_token,
@@ -1151,8 +1158,12 @@ def build_app(ctx: ServerContext) -> web.Application:
         "/bots/{p}/model/options": handle_model_options,
     }
     routes = (
-        list(F1_ROUTES) + list(F2_DIRECT_SEND_ROUTES) + list(F3_APPROVAL_ROUTES)
-        + list(MOBILE_CRON_ROUTES) + list(MOBILE_MODEL_ROUTES)
+        list(F1_ROUTES)
+        + list(F2_DIRECT_SEND_ROUTES)
+        + list(F3_APPROVAL_ROUTES)
+        + list(MOBILE_CRON_ROUTES)
+        + list(MOBILE_MODEL_ROUTES)
+        + list(PUSH_REGISTRATION_ROUTES)
     )
     if ctx.session_browsing_enabled and ctx.session_browsing_available:
         # Amendment A1 kill switch: when off, SES-1/SES-2 are never added to the router at all,
@@ -1169,6 +1180,12 @@ def build_app(ctx: ServerContext) -> web.Application:
             handler = handle_cron_delete
         elif path == "/bots/{p}/model/default" and method == "PUT":
             handler = handle_model_update
+        if path == "/push/registration":
+            handler = {
+                "GET": push_registration.handle_push_get,
+                "PUT": push_registration.handle_push_put,
+                "DELETE": push_registration.handle_push_delete,
+            }[method]
         if method == "GET":
             app.router.add_get(full_path(path), handler, allow_head=False)
         else:
@@ -1390,6 +1407,7 @@ class HmpServer:
                 push_available=availability.available,
                 live_kids=availability.live_kids,
             ):
+                self.ctx.prune_push_delete_fence()
                 await asyncio.sleep(0)
                 if not self.ctx.identity.still_current():
                     return

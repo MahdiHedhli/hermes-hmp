@@ -25,6 +25,7 @@ CONTRACT_MODULES = {
     "tokens.py",
     "push_issuer.py",
     "push_config.py",
+    "push_registration.py",
     "auth.py",
     "reads.py",
     "authorize.py",
