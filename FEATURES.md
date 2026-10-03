@@ -64,12 +64,38 @@ physical/native/global memory/release gates remain unchanged. See [current mobil
 | Available | Bot roster and Bot Chat reads | Profile list, snapshots, history, and access state through the root Hermes gateway. |
 | Preview | Bot Chat sends | Explicit owner gate, per-bot authorization, freshness checks and retry-safe handling. Current development follows the minimum-version policy and attempts the required APIs on later or unknown builds; an untested fingerprint alone does not disable the feature. Actual API failures remain explicit. |
 | Draft; not enabled live | Approvals and choices | Minimum-version candidate `150bd0f` is independently source-reviewed; two prepared native samples passed 13 cases each. Corrected exact-source package is prepared. Live activation and physical card/answer acceptance remain open; earlier setup failures are historical evidence below. |
-| Source primitives reviewed; not wired | Priority approval notifications | Pure issuer `9611b5d` is independently source-reviewed. Registration storage/routes, resolver, dispatch, relay/app integration, provisioning and physical delivery remain open. No notification is delivered by this source slice. |
+| Source primitives reviewed; not wired | Priority approval notifications | Pure issuer `9611b5d` and bounded storage `d41f5e7` are independently source-reviewed. Live settings/listener scheduling, registration routes/writers, resolver, dispatch, relay/app integration, provisioning and physical delivery remain open. No notification is delivered by this source slice. |
 | Owner dogfood; source follow-up reviewed | Linked chat images | Owner confirmed public-CDN rendering. Accepted public-image settlement repair `16c2095` and Phone media wiring `11cbf29` passed hosted CI; integrated Play source `8671061` also passed hosted CI. Native allocation, host-local HTTP serving and device/release evidence remain open. No new installed image capability is claimed. |
 | Planning | Phone photo/file attachments | Root reproduced native adapter primitives in isolated discovery tests on an archive, not a Git attestation (73 checks, 30 focused tests, 315 fixture and CI-tool tests together; no full CI gate claimed); the complete upload, busy-handler, admission and read-back flow remains unqualified. Canonical Desktop-owned multimodal admission and reusable authorized media history remain upstream contract gaps. |
 
 See the [roadmap](ROADMAP.md), [wire contract](docs/architecture/contracts/HMP_V1.md), and [upstream requests for Nous Research](NOUS_GATEWAY_OBSERVATIONS.md).
 
+
+## Approval push storage source checkpoint (2026-10-02)
+
+HMP [draft #83](https://github.com/MahdiHedhli/hermes-hmp/pull/83), source
+`d41f5e7b271338bd2af88f1674c3115d3d9c237b`, builds on the reviewed issuer.
+It adds additive schema 3 migration, bounded generation/capacity and purge helpers,
+a terminal REVOKED setter guard, and separate post-commit retirement at five existing
+HMP cause sites. Retirement advances G, wipes the sealed/request/body fields and
+records a device-prefix-only audit before a later purge deletes revoked rows.
+Cause cleanup does not purge historical backlogs. An independent source review
+accepted the third revision after two concrete recovery/bounding repairs; the earlier
+rejected receipts remain preserved. Root and reviewer each passed the same 63 focused
+cases, including 15 actual SQLite disk-full cases (five causes by three cleanup write
+stages). Independent post-COMMIT reads prove recovery retirement is durable before
+deletion; a scratch mutation that bypassed the active-state deletion guard was caught.
+Root's full locked suite passed 1,450 cases, with 10 existing skips and one existing
+warning. These counts overlap and prove only the tested source slice.
+
+The integer-ceiling contract disposition remains open: at G = 2^53 - 1 an increment
+fails closed with 503 and leaves the row/G unchanged, while unconditional capacity
+reclamation and G-advance wording are in tension at that boundary. No overflow,
+wrap, reset or invariant waiver was introduced. Listener-open/hourly scheduling,
+complete live availability configuration, registration routes/writers, resolver,
+dispatch, relay/app interoperability, owner provisioning and device/release evidence
+remain unfinished. T020/T021/T022 are not marked complete. No new phone build, host
+activation or operational push delivery follows from this checkpoint.
 
 ## Approval push issuer source checkpoint (2026-10-02)
 

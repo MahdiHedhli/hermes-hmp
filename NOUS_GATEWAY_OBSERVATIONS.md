@@ -124,8 +124,9 @@ mutants fail. The complete root locked suite passed 1,387 cases, with 10 existin
 skips and one existing warning. A narrow independent amendment review accepted the
 explicit module-tree addition and showed unexpected modules are still refused.
 These overlapping source checks do not establish registration authority or delivery.
-The contract task audit at `ef94560` closes research/text only. Store lifecycle,
-registration routes, resolver, dispatch, relay/seal interoperability and app/native
+The contract task audit at `ef94560` closes research/text only. The bounded storage
+checkpoint below advances migration and post-commit cleanup; listener scheduling, live
+settings, registration routes/writers, resolver, dispatch, relay/seal interoperability and app/native
 integration remain implementation work; owner provisioning and physical delivery
 remain pending. No additional upstream Hermes API is required by these pure helpers.
 
@@ -141,6 +142,32 @@ that consumer. CLI process loading and durable cross-surface lifecycle mapping r
 evidence/design work; observer events are not answer authority. Cron applies unattended
 automatic policy, and clarify is separate. No generic upstream API gap is established
 by this census. Provider setup and physical delivery remain pending.
+
+## Approval push storage source checkpoint (2026-10-02)
+
+HMP [draft #83](https://github.com/MahdiHedhli/hermes-hmp/pull/83), source
+`d41f5e7b271338bd2af88f1674c3115d3d9c237b`, builds on the reviewed issuer.
+It adds additive schema 3 migration, bounded generation/capacity and purge helpers,
+a terminal REVOKED setter guard, and separate post-commit retirement at five existing
+HMP cause sites. Retirement advances G, wipes the sealed/request/body fields and
+records a device-prefix-only audit before a later purge deletes revoked rows.
+Cause cleanup does not purge historical backlogs. An independent source review
+accepted the third revision after two concrete recovery/bounding repairs; the earlier
+rejected receipts remain preserved. Root and reviewer each passed the same 63 focused
+cases, including 15 actual SQLite disk-full cases (five causes by three cleanup write
+stages). Independent post-COMMIT reads prove recovery retirement is durable before
+deletion; a scratch mutation that bypassed the active-state deletion guard was caught.
+Root's full locked suite passed 1,450 cases, with 10 existing skips and one existing
+warning. These counts overlap and prove only the tested source slice.
+
+The integer-ceiling contract disposition remains open: at G = 2^53 - 1 an increment
+fails closed with 503 and leaves the row/G unchanged, while unconditional capacity
+reclamation and G-advance wording are in tension at that boundary. No overflow,
+wrap, reset or invariant waiver was introduced. Listener-open/hourly scheduling,
+complete live availability configuration, registration routes/writers, resolver,
+dispatch, relay/app interoperability, owner provisioning and device/release evidence
+remain unfinished. T020/T021/T022 are not marked complete. No new phone build, host
+activation or operational push delivery follows from this checkpoint.
 
 ## Installer and local-media integration checkpoint (2026-10-02)
 
