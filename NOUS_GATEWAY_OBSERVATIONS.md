@@ -1396,8 +1396,8 @@ release-wrapper/scanner regression checks. The second same-commit
 also passed. These are complete results for the named source workflows, with
 no skip or warning recast as a pass and no release security gate waiver.
 
-D4-S shared-slot storage and lifecycle integration is the next implementation
-slice. The public feature remains incomplete: asset encryption, picker ownership,
+The next checkpoint below supersedes the earlier shared-slot implementation
+status. The public feature remains incomplete: asset encryption, picker ownership,
 custody/upload/send, native atomic admission, authorized readback and physical
 device gates are still open. Source CI does not qualify those missing capabilities
 or make the **+** media route available.
@@ -1448,3 +1448,34 @@ basis, category/retention mapping and the older inactive upload's relevance rema
 explicit gaps. **PLAY-VOICE-1** remains open. No new report Send/retry, host or
 receiver deployment, permission/provider connection, Play upload or submission
 occurred during this review.
+
+## Published Phone pending-slot adapter (2026-10-03 UTC)
+
+The scoped shared-slot persistence adapter is published in draft
+[Mobile PR 73](https://github.com/MahdiHedhli/HermesBotMobile/pull/73), exact source
+`416dbe5b5a1e351ad446232a4c2aea4d7f71fa22`, stacked on the reviewed attachment
+contract branch. Its fourteen committed files match the frozen V5 source.
+Independent reviews accepted the bounded persistence/source changes. Root cached
+focused app suites passed **110 cases with zero failures**; unchanged client
+source retains **19 passing cases**. Earlier compile and V3/V4 failures remain
+historical evidence. Transparent real type-query delegation in the tests does
+not establish the original SDK failure cause or qualify native OS cryptography.
+
+The adapter reads one sealed pending slot for legacy text or attachments, uses
+registered read revisions and lifecycle-scoped compare-and-write, and preserves
+malformed/unavailable distinctions. This is source implementation, not a working
+mobile picker or attachment Send feature. Hosted source CI failed at this exact
+commit: the network guard rejected two local `File.open` calls, and the app
+analyzer reported two warnings. A focused reviewed repair is needed; no CI pass,
+physical durability or release qualification is claimed.
+
+The next independently accepted contract covers private pending-slot inspection,
+conservative restart normalization from `messageMayTransmit` to `unknown`, actual
+operation accounting through invalidation/close, and explicit clear refusal.
+Source authoring has begun on the exact published adapter base; no source tests
+or production Phone route are accepted yet. A lifecycle-admitted conservative
+normalization may finish after page/session loss; stale work must issue no
+current capture. Successful clear needs a separate publication-currency decision
+and actual native/owned-cleanup proofs. Full D4-S, encrypted assets, native atomic
+admission/upload/readback and the **+** media route remain open. No upstream
+Hermes change, live host change, deployment or release is implied.

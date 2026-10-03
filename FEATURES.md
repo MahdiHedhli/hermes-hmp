@@ -66,7 +66,7 @@ physical/native/global memory/release gates remain unchanged. See [current mobil
 | Draft; not enabled live | Approvals and choices | Minimum-version candidate `150bd0f` is independently source-reviewed; two prepared native samples passed 13 cases each. Corrected exact-source package is prepared. Live activation and physical card/answer acceptance remain open; earlier setup failures are historical evidence below. |
 | Source reviewed; Desktop native case failed; remote delivery pending | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` and injected-port dispatcher `e6e20a6` are independently source-reviewed, with exact hosted CI passing. HTTPS client/factory `fcd10e0` is independently source-reviewed, with exact hosted CI passing. Remote relay/seal interoperability, relay/app integration, provisioning and physical delivery remain open. Verified-TLS component `9e21614` and native fixture `871ebb0` are independently accepted within their scopes: three selected approval/revoke/restart cases passed on one development sample. The new genuine Desktop interleave failed shared visibility/capture and close-registry checks; T029 and remote relay/provider/app/device gates remain open. No notification is delivered by these source slices. |
 | Owner dogfood; source follow-up reviewed | Linked chat images | Owner confirmed public-CDN rendering. Accepted public-image settlement repair `16c2095` and Phone media wiring `11cbf29` passed hosted CI; integrated Play source `8671061` also passed hosted CI. Native allocation, host-local HTTP serving and device/release evidence remain open. No new installed image capability is claimed. |
-| Planning | Phone photo/file attachments | Revised contract input accepted for normative/pure interface work; upload/readback and encrypted staging remain unimplemented. The inspected Phone dispatch has a separate atomic no-defer admission gap; canonical Desktop multimodal remains an upstream gap. Historical archive primitive tests do not qualify the complete flow. See the [admission checkpoint](#phone-attachment-admission-checkpoint-2026-10-03). |
+| Implementation | Phone photo/file attachments | Pure codec and scoped pending-slot adapter published with focused synthetic passes; the complete picker/Send flow, upload/readback and encrypted staging remain unimplemented. The inspected Phone dispatch has a separate atomic no-defer admission gap; canonical Desktop multimodal remains an upstream gap. Historical archive primitive tests do not qualify the complete flow. See the [admission checkpoint](#phone-attachment-admission-checkpoint-2026-10-03). |
 
 See the [roadmap](ROADMAP.md), [wire contract](docs/architecture/contracts/HMP_V1.md), and [upstream requests for Nous Research](NOUS_GATEWAY_OBSERVATIONS.md).
 
@@ -697,8 +697,8 @@ release-wrapper/scanner regression checks. The second same-commit
 also passed. These are complete results for the named source workflows, with
 no skip or warning recast as a pass and no release security gate waiver.
 
-D4-S shared-slot storage and lifecycle integration is the next implementation
-slice. The public feature remains incomplete: asset encryption, picker ownership,
+The next checkpoint below supersedes the earlier shared-slot implementation
+status. The public feature remains incomplete: asset encryption, picker ownership,
 custody/upload/send, native atomic admission, authorized readback and physical
 device gates are still open. Source CI does not qualify those missing capabilities
 or make the **+** media route available.
@@ -749,3 +749,34 @@ basis, category/retention mapping and the older inactive upload's relevance rema
 explicit gaps. **PLAY-VOICE-1** remains open. No new report Send/retry, host or
 receiver deployment, permission/provider connection, Play upload or submission
 occurred during this review.
+
+## Published Phone pending-slot adapter (2026-10-03 UTC)
+
+The scoped shared-slot persistence adapter is published in draft
+[Mobile PR 73](https://github.com/MahdiHedhli/HermesBotMobile/pull/73), exact source
+`416dbe5b5a1e351ad446232a4c2aea4d7f71fa22`, stacked on the reviewed attachment
+contract branch. Its fourteen committed files match the frozen V5 source.
+Independent reviews accepted the bounded persistence/source changes. Root cached
+focused app suites passed **110 cases with zero failures**; unchanged client
+source retains **19 passing cases**. Earlier compile and V3/V4 failures remain
+historical evidence. Transparent real type-query delegation in the tests does
+not establish the original SDK failure cause or qualify native OS cryptography.
+
+The adapter reads one sealed pending slot for legacy text or attachments, uses
+registered read revisions and lifecycle-scoped compare-and-write, and preserves
+malformed/unavailable distinctions. This is source implementation, not a working
+mobile picker or attachment Send feature. Hosted source CI failed at this exact
+commit: the network guard rejected two local `File.open` calls, and the app
+analyzer reported two warnings. A focused reviewed repair is needed; no CI pass,
+physical durability or release qualification is claimed.
+
+The next independently accepted contract covers private pending-slot inspection,
+conservative restart normalization from `messageMayTransmit` to `unknown`, actual
+operation accounting through invalidation/close, and explicit clear refusal.
+Source authoring has begun on the exact published adapter base; no source tests
+or production Phone route are accepted yet. A lifecycle-admitted conservative
+normalization may finish after page/session loss; stale work must issue no
+current capture. Successful clear needs a separate publication-currency decision
+and actual native/owned-cleanup proofs. Full D4-S, encrypted assets, native atomic
+admission/upload/readback and the **+** media route remain open. No upstream
+Hermes change, live host change, deployment or release is implied.
