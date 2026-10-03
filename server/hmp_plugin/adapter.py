@@ -61,6 +61,7 @@ from .authorize import Authorize
 from .cli import listener_record_path
 from .contract import PLATFORM_NAME, OtherWhy, WriteGateState
 from .logging_policy import log_event
+from .push_relay import RelayClient
 from .reads import Reads, _fallback_display_name
 from .store import Store
 
@@ -326,7 +327,12 @@ class HmpAdapter(BasePlatformAdapter):
         except identity.IdentityError:
             log_event("adapter_connect", outcome="identity_error")
             return False
-        srv = server.HmpServer(ctx, settings, on_closed=self._listener_closed)
+        srv = server.HmpServer(
+            ctx,
+            settings,
+            on_closed=self._listener_closed,
+            push_relay_factory=lambda: RelayClient(ctx.identity),
+        )
         try:
             await srv.start()
         except Exception as exc:
