@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import builtins
+import contextlib
 import io
 import json
 import os
@@ -1262,3 +1263,65 @@ def test_identity_precheck_with_the_gateway_stopped(c: Cli, tmp_path: Path) -> N
     assert c.run("instance", "show") == cli.EXIT_ENVIRONMENT
     assert _disk(tmp_path) == before
     assert not store_path.with_name(store_path.name + "-wal").exists()
+
+
+# ---- spec 034 D8: the read-only controls-decision notice in `setup check` ----------------------
+
+
+def _active_device(env: hmp_kit.Env, device_id: str, user_id: str = "hmpu_" + "ab" * 16) -> None:
+    with contextlib.suppress(Exception):  # the user row may already exist
+        env.store.insert_user(user_id, "label", env.clock.now)
+    env.store.insert_device(
+        device_id, user_id, "f" * 64, b"x", "phone", env.clock.now, state="ACTIVE"
+    )
+
+
+def test_setup_check_notes_devices_without_a_controls_decision_and_changes_nothing(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "synthetic")])
+    _active_device(c.env, "hmpd_undecided_one")
+    _active_device(c.env, "hmpd_undecided_two")
+    _active_device(c.env, "hmpd_denied_one")
+    assert c.env.store.set_owner_controls("hmpd_denied_one", allowed=False, now=c.env.clock.now)
+    before = c.env.store_path.read_bytes()
+
+    assert c.run("setup", "check") == cli.EXIT_OK
+    assert "Approvals note: 2 active paired device(s) have no recorded controls decision." in c.out
+    assert "owner_device_ids" in c.out and "grant-controls" in c.out
+    assert "This check changed nothing." in c.out
+    for private in ("hmpd_undecided_one", "hmpd_undecided_two", "hmpd_denied_one", "label"):
+        assert private not in c.out  # names no device
+    assert c.env.store_path.read_bytes() == before  # read-only
+
+
+def test_setup_check_prints_no_note_when_every_active_device_has_a_decision(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "synthetic")])
+    _active_device(c.env, "hmpd_decided")
+    assert c.env.store.set_owner_controls("hmpd_decided", allowed=True, now=c.env.clock.now)
+    assert c.run("setup", "check") == cli.EXIT_OK
+    assert "Approvals note" not in c.out
+
+
+def test_setup_check_ignores_revoked_and_pending_devices_in_the_note(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "synthetic")])
+    c.env.store.insert_user("hmpu_" + "cd" * 16, "label", c.env.clock.now)
+    for device_id, state in (("hmpd_revoked", "REVOKED"), ("hmpd_pending", "PENDING")):
+        c.env.store.insert_device(
+            device_id, "hmpu_" + "cd" * 16, "f" * 64, b"x", "phone", c.env.clock.now, state=state
+        )
+    assert c.run("setup", "check") == cli.EXIT_OK
+    assert "Approvals note" not in c.out
+
+
+def test_setup_check_does_not_grant_deny_or_edit_the_allowlist(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "synthetic")])
+    _active_device(c.env, "hmpd_untouched")
+    assert c.run("setup", "check") == cli.EXIT_OK
+    assert c.env.store.owner_controls_decision("hmpd_untouched") is None  # still no decision
+
+
+def test_the_cli_has_no_routes_group_and_no_manifest_package_command() -> None:
+    parser = argparse.ArgumentParser(prog="hermes hmp")
+    cli.setup_parser(parser)
+    with pytest.raises(SystemExit):
+        parser.parse_args(["routes", "add", "beta"])
+    assert ("routes", "add") not in cli.MUTATING_COMMANDS

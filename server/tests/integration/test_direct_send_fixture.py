@@ -194,13 +194,15 @@ class DirectSendFixture:
         self.no_bot_chat_key = no_bot_chat_key
         self.user_id = user_id
         self._lease_holders: list[Any] = []
+        self.approval_timeout = 120  # `approvals.timeout` seconds written by `_rewrite_config`
 
-    def acquire_lease(self, profile: str, session_id: str) -> None:
+    def acquire_lease(self, profile: str, session_id: str, *, desktop_held: bool = False) -> None:
         """A synthetic lease that stays live until this fixture tears down (`stop`) -- see
         `direct_send_fixture.start_lease_holder`'s own docstring for why the holder process must
         keep running rather than exit after acquiring."""
         self._lease_holders.append(dsf.start_lease_holder(
-            self.build, self.paths, profile=profile, session_id=session_id
+            self.build, self.paths, profile=profile, session_id=session_id,
+            desktop_held=desktop_held,
         ))
 
     def stop(self) -> None:
@@ -210,14 +212,22 @@ class DirectSendFixture:
 
     def _rewrite_config(
         self, *, direct_send_enabled: bool = True, api_server_host: str = "127.0.0.1",
+        owner_device_ids: tuple[str, ...] | None = None,
+        approval_timeout: int | None = None,
         cron_enabled: bool = False, model_enabled: bool = False,
     ) -> None:
+        if approval_timeout is not None:
+            self.approval_timeout = approval_timeout
         dsf.write_direct_send_config(
             self.paths, (DEFAULT_PROFILE, NO_BOT_CHAT_PROFILE, "f1-pending", "f1-roles"),
             hmp_port=self.hmp_port, api_server_port=self.api_server_port, api_key=self.api_key,
             model_base_url=self.fake_model.base_url,
             named_profile_keys={NO_BOT_CHAT_PROFILE: self.no_bot_chat_key},
             direct_send_enabled=direct_send_enabled, api_server_host=api_server_host,
+            approval_timeout=self.approval_timeout,
+            owner_device_ids=(
+                (self.reference_device_id,) if owner_device_ids is None else owner_device_ids
+            ),
             cron_enabled=cron_enabled, model_enabled=model_enabled,
         )
 
@@ -257,11 +267,19 @@ class DirectSendFixture:
 
     def restart_gateway(self) -> None:
         dsf.stop_gateway(self.gateway_proc)
+        gateway_log = self.paths.home / "logs" / "gateway.log"
+        prior_ready_count = (
+            gateway_log.read_text(encoding="utf-8", errors="replace").count("Press Ctrl+C to stop")
+            if gateway_log.exists()
+            else 0
+        )
         log_path = self.paths.out_dir / f"gateway-restart-{int(time.time())}.log"
-        self.gateway_proc = dsf.start_gateway(self.build, self.paths, log_path=log_path)
-        if not dsf.wait_for_port(self.hmp_port, timeout=45.0):
-            tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
-            raise RuntimeError(f"HMP listener did not come back up after restart.\n{tail}")
+        # Process-aware readiness under the same 45s hard deadline: a listener never counts once
+        # the spawned gateway has exited. Readiness only, not ownership. A failure stops the new
+        # process first.
+        self.gateway_proc = dsf.start_native_gateway(
+            self.build, self.paths, port=self.hmp_port, phase="restart", log_path=log_path
+        )
         # The TLS listener accepting connections does not mean Hermes's own profile-reconcile
         # scan has finished re-populating `served_profile_names()` yet -- poll the roster until
         # the default profile this suite targets is actually served again, so a request sent
@@ -275,24 +293,37 @@ class DirectSendFixture:
         )
         if not found:
             raise RuntimeError(f"{DEFAULT_PROFILE!r} never reappeared in the roster after restart")
+        # Experimental Hermes rejects reject-policy messages during startup restore even after
+        # HMP's listener and profile roster are live. This marker follows the restore gate.
+        ready = wait_for(
+            lambda: gateway_log.read_text(
+                encoding="utf-8", errors="replace"
+            ).count("Press Ctrl+C to stop") > prior_ready_count,
+            timeout=30.0,
+        )
+        if not ready:
+            tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+            raise RuntimeError(f"Gateway never finished startup restore.\n{tail}")
 
 
 @pytest.fixture(params=BUILDS)
-def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSendFixture]:
+def gateway(
+    request: pytest.FixtureRequest, tmp_path: Path, *, approval_owner_enrollment: bool = False
+) -> Iterator[DirectSendFixture]:
     label = request.param
     if label not in ("stock-base",) and not (
         Path(BUILDS_DIR_ENV) / label / "src"
     ).is_dir():
         pytest.skip(f"build {label!r} not extracted on this host")
     build = fc.resolve_build(BUILDS_DIR_ENV, label)
+    hmp_port = fc.find_free_port()
+    api_server_port = fc.find_free_port()
     out = tmp_path / "fixture"
     info = dsf.build_offline(label, out, builds_dir=BUILDS_DIR_ENV, instances="A")
     paths = fc.instance_paths(out, "A")
     profile_names = tuple(p["name"] for p in info["instances"][0]["profiles"])
     assert profile_names[0] == DEFAULT_PROFILE, profile_names
 
-    hmp_port = fc.find_free_port()
-    api_server_port = fc.find_free_port()
     api_key = dsf.synthetic_api_key()
     no_bot_chat_key = dsf.synthetic_api_key()
 
@@ -307,18 +338,20 @@ def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSe
             named_profile_keys={NO_BOT_CHAT_PROFILE: no_bot_chat_key},
         )
         log_path = out / "gateway.log"
-        proc = dsf.start_gateway(build, paths, log_path=log_path)
+        proc = dsf.start_native_gateway(
+            build, paths, port=hmp_port, phase="first_start", log_path=log_path
+        )
         direct_send_fixture: DirectSendFixture | None = None
         try:
-            if not dsf.wait_for_port(hmp_port, timeout=45.0):
-                tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
-                raise RuntimeError(f"HMP listener did not come up.\nLog tail:\n{tail}")
             authorized_user_id = next(
                 p["user_id"] for p in info["instances"][0]["profiles"] if p.get("user_id")
             )
             ref = dsf.pair_reference_device(
                 build, paths, port=hmp_port, user_id=authorized_user_id,
                 label="direct-send-fixture",
+                # Opt-in for the approval wrappers only. The grant just clears the host's explicit
+                # denial; `_rewrite_config` still has to allowlist this device as approval owner.
+                grant_owner_controls=approval_owner_enrollment,
             )
             client = Client(hmp_port, ref["iid"], ref["device"]["access_token"])
             direct_send_fixture = DirectSendFixture(
@@ -327,6 +360,9 @@ def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSe
                 fake_model_module=fake_model_module, client=client,
                 no_bot_chat_key=no_bot_chat_key, user_id=authorized_user_id,
             )
+            direct_send_fixture.reference_device_id = ref["device"]["device_id"]
+            direct_send_fixture._rewrite_config()
+            direct_send_fixture.restart_gateway()
             try:
                 yield direct_send_fixture
             finally:

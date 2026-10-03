@@ -59,6 +59,7 @@ from .contract import (
     WriteGateState,
 )
 from .logging_policy import log_bridge_exception, log_event
+from .prompts import MemberState
 
 # --------------------------------------------------------------------------------------------------
 # Peer address parsing: shared by `server.address_allowed` (TR-4 bind/peer policy) and `peer_key`
@@ -188,6 +189,14 @@ class ServerContext:
     direct_send_flag: Callable[[], bool] = field(default=lambda: False)
     # `direct_send.DirectSendDeps`, only on a supported build (mirrors `reads`/`authorize` above).
     direct_send_deps: Any = None
+    # v1.3 prompt rows (process memory). None until a supported listener builds one.
+    prompt_store: Any = None
+    # Approval availability (spec 034, owner policy 2026-10-01): the `approvals` and `phone_chat`
+    # eligibility members, computed once at listener open from the actual API checks. Both default
+    # CLOSED, so a context built without availability information never opens an approval route.
+    # No exact build, manifest, fingerprint or latch is consulted.
+    approvals_available: Callable[[], bool] = field(default=lambda: False)
+    phone_chat_available: Callable[[], bool] = field(default=lambda: False)
     # Mobile cron is a separate persistent-execution gate. Both settings are
     # read from live HMP config for every request, and default to deny.
     owner_device_ids: Callable[[], frozenset[str]] = field(default=lambda: frozenset())
@@ -201,11 +210,71 @@ class ServerContext:
     send_available: Callable[[], bool] = field(default=lambda: True)
     session_browsing_available: bool = True
 
+    def is_approvals_available(self) -> bool:
+        """Bot Chat approvals. Only an exact `True` opens it; anything else closes it."""
+        try:
+            if self.approvals_available() is not True:
+                return False
+            store = self.prompt_store
+            return store is None or not store.closed
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
+
+    def is_phone_chat_available(self) -> bool:
+        """Phone chat sends and answers. Closed when the eligibility member is closed, and for the
+        life of this listener once the binding fence closed its local generation (AP-10)."""
+        try:
+            if self.phone_chat_available() is not True:
+                return False
+            store = self.prompt_store
+            return store is None or not (store.closed or store.phone_closed)
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
+
+    def approval_surface_available(self, surface: str) -> bool:
+        """The member a row's or route's surface needs: `bot_chat` -> approvals, else phone chat."""
+        if surface == "bot_chat":
+            return self.is_approvals_available()
+        return self.is_phone_chat_available()
+
+    def approval_members_now(self) -> MemberState:
+        """Both approval members as the existing predicates report them now (spec 015 NI-6.2).
+        Call it before entering a prompt-store view, never under `_guard`. Composes the existing
+        checks and adds no authorization; any failure closes that member."""
+        try:
+            bot_chat = self.is_approvals_available() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            bot_chat = False
+        try:
+            phone_chat = self.is_phone_chat_available() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            phone_chat = False
+        return MemberState(bot_chat=bot_chat, phone_chat=phone_chat)
+
     def is_owner_device(self, device_id: str) -> bool:
         try:
             decision = self.store.owner_controls_decision(device_id)
             if decision is not None:
                 return decision
+            return device_id in self.owner_device_ids()
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def is_approval_owner_device(self, device_id: str) -> bool:
+        """Approval/clarify and Phone-send routes: the configured allowlist AND no host denial.
+
+        The per-device controls grant (`is_owner_device`) is a separate privilege for jobs and
+        model management. It never opens an approval route on its own: only an exact
+        `owner_device_ids` entry does, and an explicit host denial still closes it. Any failed
+        read denies."""
+        try:
+            if self.store.owner_controls_decision(device_id) is False:
+                return False
             return device_id in self.owner_device_ids()
         except Exception as exc:
             log_bridge_exception(exc)

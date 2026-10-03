@@ -129,3 +129,37 @@ HMP already fails closed with an explicit, documented state rather than a silent
 
 If a bot's roster entry shows `"not_routed"` or `"not_served"` after pairing, re-check this
 checklist before assuming a plugin or pairing problem.
+
+## Approvals and Phone chat (owner dogfood, spec 034)
+
+Approvals follow the same minimum-version policy as every other HMP feature: HMP attempts them on
+Hermes `0.21.5` or later and closes them only when a Hermes API they need is actually missing.
+There is no build list, receipt or restart latch to satisfy. The feature is still not released or
+independently reviewed, and nothing here changes a grant, a config file or a device.
+
+1. **Check availability.** `hermes hmp compat` lists `approvals` and `phone_chat`. `approvals`
+   needs read and send. `phone_chat` also needs the Hermes helpers HMP calls in process. Add
+   `--verbose` to see whether this Hermes has the Bot Chat session-stream approval hook. That is a
+   neutral fact: without it Bot Chat sends still work and Hermes keeps its own fail-closed
+   behavior, and no card is shown. Availability is computed when the listener opens, so after a
+   Hermes upgrade restart the gateway in the usual drained way and check again.
+2. **Record the controls decision first.** An approval owner is a device listed in
+   `gateway.platforms.hmp.extra.owner_device_ids` that the host has not explicitly denied. That
+   list is the same legacy allowlist the jobs and default-model controls fall back to, so a listed
+   device with **no recorded controls decision also receives jobs and model controls**. Before
+   adding a device ID, record an explicit decision for it on the host with
+   `hermes hmp devices grant-controls <id>`. Approval ownership requires `grant-controls` (or no
+   decision, legacy); `deny-controls` removes approval ownership, so a denied device gets 404 on
+   every approval route. This coupling is recorded, not removed (HMP v1 RES-13).
+   `hermes hmp setup check` prints a read-only notice when active paired devices have no recorded
+   decision. It cannot read the config allowlist, names no device and changes nothing.
+3. **Then list the device.** Add its ID to `owner_device_ids` through your normal Hermes config
+   workflow. HMP reads the live config on each request. Keep `direct_send.enabled` as it is; the
+   routes need it. Removing the ID closes the device's next request.
+4. **What changes for the phone.** Only a listed, undenied device's guarded Bot Chat send opens
+   the session stream and may answer Hermes's own approval card through Hermes's native route.
+   Every other device's send is unchanged and synchronous. Phone chat is a separate hand-off with
+   its own prompt-only answer route.
+
+To roll back, remove the device ID from `owner_device_ids`. Nothing on disk besides that list needs
+undoing.

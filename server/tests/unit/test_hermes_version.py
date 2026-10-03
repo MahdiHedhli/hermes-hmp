@@ -266,7 +266,12 @@ def test_v9_known_releases_are_increasing_and_floors_are_rows() -> None:
         assert floor in KNOWN_RELEASES
     assert FEATURE_FLOORS["read"].semver == (0, 21, 4)
     assert FEATURE_FLOORS["session_browsing"] == FEATURE_FLOORS["read"]
-    for name in ("send", "jobs", "model"):
+    # Spec 034: both approval members sit exactly at the send floor. No notifier floor exists.
+    for name in ("send", "jobs", "model", "approvals", "phone_chat"):
         assert FEATURE_FLOORS[name].semver == (0, 21, 5)
         assert FEATURE_FLOORS[name].calver == (2026, 9, 24, 0)
-    assert set(FEATURE_FLOORS) == {"read", "session_browsing", "send", "jobs", "model"}
+    assert FEATURE_FLOORS["approvals"] == FEATURE_FLOORS["send"]
+    assert FEATURE_FLOORS["phone_chat"] == FEATURE_FLOORS["send"]
+    assert set(FEATURE_FLOORS) == {
+        "read", "session_browsing", "send", "jobs", "model", "approvals", "phone_chat"
+    }
