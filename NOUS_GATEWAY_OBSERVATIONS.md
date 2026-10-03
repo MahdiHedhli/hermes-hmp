@@ -1210,9 +1210,21 @@ passed 2,635 cases with 17 skips and one existing warning, including lint,
 closed-surface and privacy checks. This mitigates accidental metadata disclosure;
 the same OS user remains the authority boundary. No live deployment is claimed.
 
-The large-inventory finding remains open: 128 legal long-name profile/health
-records can exceed the shared 16 KiB listener-record cap. The repair will preserve
-full bounded inventory and health in a separate listener-file envelope, with
-legacy small-record behavior and the 16 KiB network ready-read cap preserved.
-Independent implementation review and execution remain pending. Neither finding
-establishes an owner incident.
+[Draft PR #95](https://github.com/MahdiHedhli/hermes-hmp/pull/95), at
+`c0d0945b64058e3f337c8ff7181ec3294387df9a`, repairs the large-inventory finding
+in reviewed source. The local listener-file read/write/removal limit is 64 KiB;
+legacy small-record parsing and the pinned network ready-read limit remain
+16 KiB. Larger records require a closed schema, canonical identity, bounded
+ASCII fields and complete unique profile/health coverage. All 128 supported
+maximum-length profiles and derived names are preserved without truncation.
+Bounded projection and incremental encoding retain atomic failure behavior.
+
+Independent source review accepted the four-file repair. Author and independent
+focused runs each passed 113 cases: 65 new and 48 existing controls. Exact-head
+[run 37114626278](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/37114626278)
+passed 2,680 cases with 17 skips and one existing warning, including lint,
+closed-surface and hygiene gates. Integration and deployment remain pending.
+Old readers may reject large records; an out-of-domain (>128) failed refresh can
+retain an older snapshot fresh for up to 45 seconds. Freshness does not prove
+current live roster completeness. The same OS user remains the authority
+boundary. Neither finding establishes an owner incident.
