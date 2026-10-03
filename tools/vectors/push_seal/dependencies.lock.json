@@ -1,0 +1,3663 @@
+{
+  "format": "hmp-push-seal-deps-v1",
+  "synthetic_only": true,
+  "packages": [
+    {
+      "ecosystem": "npm",
+      "name": "@hpke/core",
+      "version": "1.8.0",
+      "artifact": "hpke-core-1.8.0.tgz",
+      "sha256": "a363cec1588d8ef580798887b5d581e4f158900aed0a7485d1cdac01305db6fb",
+      "integrity": "sha512-yHuo+2q4HSPUFuxcg87Kiy7QZRk4IeR+cwBB0qW8fHnr71bnRCArM39Cq1bWHBt75gTyeERGD/v1H14yPB2wyw==",
+      "dependencies": {
+        "@hpke/common": "^1.9.0"
+      },
+      "license": "MIT",
+      "gitHead": "acee4bde952041c075ebc94c9e84cd717b181fe1",
+      "files": [
+        {
+          "path": "package/LICENSE",
+          "bytes": 1072,
+          "sha256": "ab49bdfb96b9c0117f908b82eb1f690be42028658f5a52fba5553b95fa90cd35"
+        },
+        {
+          "path": "package/esm/src/interfaces/aeadParams.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/aeadParams.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/aeads/aesGcm.js",
+          "bytes": 4387,
+          "sha256": "b73b4642034f60430c20130be3025ab1ebcf0ccfcc4a792e6569b15d9cf3c279"
+        },
+        {
+          "path": "package/script/src/aeads/aesGcm.js",
+          "bytes": 5680,
+          "sha256": "6ef80b653cae3a5ca37bafdbcb75ce11265f3a289324aef84bac84a0bbbf3c66"
+        },
+        {
+          "path": "package/esm/src/cipherSuiteNative.js",
+          "bytes": 12780,
+          "sha256": "b20370ab99703d1345fcf4b531d748424cccc4b97e37825f3b77d72178670965"
+        },
+        {
+          "path": "package/script/src/cipherSuiteNative.js",
+          "bytes": 14945,
+          "sha256": "76a5d7daa6b707bcdebdba595e6eeef62f3f84e6907a8e3524e14584c3993fc6"
+        },
+        {
+          "path": "package/esm/src/interfaces/cipherSuiteParams.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/cipherSuiteParams.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemNative.js",
+          "bytes": 3526,
+          "sha256": "3c425619d0ac1133874c718bf6e1620f739489b15d2c6e922051a645512cd8b0"
+        },
+        {
+          "path": "package/script/src/kems/dhkemNative.js",
+          "bytes": 4822,
+          "sha256": "748a51e3100e9f9ebb2bb7e0d3913532090c0e0785da303da039ade15b41a948"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemX25519.js",
+          "bytes": 1860,
+          "sha256": "e7238aa23cc50c40ec1f1f38ee62fbe0f8c61b160d5a7d12fde79cb11394c91f"
+        },
+        {
+          "path": "package/script/src/kems/dhkemX25519.js",
+          "bytes": 2732,
+          "sha256": "f8878af15f88f3741043d22fe48d3dfb67ea6cff523401797bef2cf754786361"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemX448.js",
+          "bytes": 1840,
+          "sha256": "8cbdccdb49eae32444b0ff61998ad6bf1f2ccf27457f67d945eb56dc26ed85bb"
+        },
+        {
+          "path": "package/script/src/kems/dhkemX448.js",
+          "bytes": 2702,
+          "sha256": "534d44baad98470c9852a5ccd3e919fd37534ea3f66a51d9ee56cb4930e39b15"
+        },
+        {
+          "path": "package/esm/src/utils/emitNotSupported.js",
+          "bytes": 200,
+          "sha256": "d75a9834de4d86f7d548d69aa2e6453a4c7be0d71e72359cc9f54854c4d05d23"
+        },
+        {
+          "path": "package/script/src/utils/emitNotSupported.js",
+          "bytes": 715,
+          "sha256": "d2538231f2ffa0a2dded85d2a811763f9ea3a50b166d2b83de381aee278fe8fe"
+        },
+        {
+          "path": "package/esm/src/interfaces/encapsulator.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/encapsulator.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/encryptionContext.js",
+          "bytes": 2365,
+          "sha256": "1b30cabd063fab65dd79de4ab9ec4a5cb856e0bf7d4571a09d45554acc61db1b"
+        },
+        {
+          "path": "package/esm/src/interfaces/encryptionContext.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/encryptionContext.js",
+          "bytes": 3238,
+          "sha256": "f1e64ae4323f69b4f684af953aab8e140d1b6cfd854ce632facab1fdcc4234d6"
+        },
+        {
+          "path": "package/script/src/interfaces/encryptionContext.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/interfaces/exporter.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/exporter.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/exporterContext.js",
+          "bytes": 1933,
+          "sha256": "7c15c79c22810f2018b1fa13805802796f467dca0213abe0fd469c5d0c87bbb9"
+        },
+        {
+          "path": "package/script/src/exporterContext.js",
+          "bytes": 2992,
+          "sha256": "89b9e86c3f18ad973294a78f10a70ccdab5fb58f2f0a5fb1b238066d53a0382f"
+        },
+        {
+          "path": "package/esm/src/aeads/exportOnly.js",
+          "bytes": 1453,
+          "sha256": "eb6e7f116a30095e3c69f4c26e61a93060fa8056dd685620c7f9c76dfe5c0d89"
+        },
+        {
+          "path": "package/script/src/aeads/exportOnly.js",
+          "bytes": 2190,
+          "sha256": "0e08680a1a630c613b681c4e0351abf43a2817135da9853344688adf5024d698"
+        },
+        {
+          "path": "package/esm/src/interfaces/keyInfo.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/keyInfo.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/mod.js",
+          "bytes": 654,
+          "sha256": "69af8f9a74c9915e18a87ed7a6737d9065a13834dca09ff8004245df83b2b45a"
+        },
+        {
+          "path": "package/script/mod.js",
+          "bytes": 5224,
+          "sha256": "7ac4c5c5a9fab28376d2e0ca0e5c72780fae604155fc5f8c9a4b11b2bcfa00e9"
+        },
+        {
+          "path": "package/esm/src/mutex.js",
+          "bytes": 1582,
+          "sha256": "f8d9da85bb40d1a57b0594b74728fbdc01382b0d80d236a0fd44e3b231eabe4d"
+        },
+        {
+          "path": "package/script/src/mutex.js",
+          "bytes": 2130,
+          "sha256": "c0d908638fa22db5666d96f9d7a6da05b72440451ac7c80b23f892fb46ba6544"
+        },
+        {
+          "path": "package/esm/src/native.js",
+          "bytes": 6637,
+          "sha256": "273584c3770d330c8f95a8edb447d41441d07b11b2d9f54327cd91094efe2c4b"
+        },
+        {
+          "path": "package/script/src/native.js",
+          "bytes": 8529,
+          "sha256": "323483b620b4b02ca0bf2cae16322fc90e58208b4237bfcb9a6280b976a33ba6"
+        },
+        {
+          "path": "package/esm/src/recipientContext.js",
+          "bytes": 2083,
+          "sha256": "caec3308f6d6b360b1b87db9612e10a5b0422cee90d096deafe3e2b6f6cfafd9"
+        },
+        {
+          "path": "package/script/src/recipientContext.js",
+          "bytes": 2825,
+          "sha256": "0c735a08aabd6475be87437d608e24d8031cae2de74e8a493500e66ab44b7def"
+        },
+        {
+          "path": "package/esm/src/interfaces/responses.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/responses.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/senderContext.js",
+          "bytes": 2284,
+          "sha256": "c4ffadb087ba485b640f743b3e22196f2f3459758766c792914c2ade7985ab2b"
+        },
+        {
+          "path": "package/script/src/senderContext.js",
+          "bytes": 3045,
+          "sha256": "27976ab2d1c2446f114f864bf865f10ba1f58ea1a9c550c46df9e4cc73670e4f"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemPrimitives/x25519.js",
+          "bytes": 7040,
+          "sha256": "f41411b2af0cdde223f3bba090ba88d71d213d1b3728d33a5ecc5fe0560b4a61"
+        },
+        {
+          "path": "package/script/src/kems/dhkemPrimitives/x25519.js",
+          "bytes": 8416,
+          "sha256": "bcb14d0b319fd2aba6e501ccb8cdc4981c3b3fe52975b1a7979af85459b09166"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemPrimitives/x448.js",
+          "bytes": 7025,
+          "sha256": "3e022c93cdfa338c095af54ab85fb0a03dc299ae24c5d71165af8811c36a7324"
+        },
+        {
+          "path": "package/script/src/kems/dhkemPrimitives/x448.js",
+          "bytes": 8395,
+          "sha256": "3248d500ae32962290ba7e1b3a70ce9dbc06965475331714a4fe54bb86c3bf70"
+        },
+        {
+          "path": "package/esm/package.json",
+          "bytes": 23,
+          "sha256": "3ca9d4afd21425087cf31893b8f9f63c81b0b8408db5e343ca76e5f8aa26ab9a"
+        },
+        {
+          "path": "package/package.json",
+          "bytes": 985,
+          "sha256": "d14f6ed58da9ee32fc153b01b4198b58a84de295e0acd2827fee5e272030dfb0"
+        },
+        {
+          "path": "package/script/package.json",
+          "bytes": 25,
+          "sha256": "8005a3491db7d92f36ac66369861589f9c47123d3a7c71e643fc2c06168cd45a"
+        },
+        {
+          "path": "package/esm/src/interfaces/aeadParams.d.ts.map",
+          "bytes": 426,
+          "sha256": "d75f32d68813508520bfcf8fe5b772485c90a95b8a0adecebea9bc34f0b1bb26"
+        },
+        {
+          "path": "package/script/src/interfaces/aeadParams.d.ts.map",
+          "bytes": 426,
+          "sha256": "d75f32d68813508520bfcf8fe5b772485c90a95b8a0adecebea9bc34f0b1bb26"
+        },
+        {
+          "path": "package/esm/src/aeads/aesGcm.d.ts.map",
+          "bytes": 1057,
+          "sha256": "c5c745f80af78400488ceea6836374302c34f233443b139ce5162132d888d05d"
+        },
+        {
+          "path": "package/script/src/aeads/aesGcm.d.ts.map",
+          "bytes": 1057,
+          "sha256": "c5c745f80af78400488ceea6836374302c34f233443b139ce5162132d888d05d"
+        },
+        {
+          "path": "package/esm/src/cipherSuiteNative.d.ts.map",
+          "bytes": 1281,
+          "sha256": "98d1ada407926aa981f2d87f64193a1388cbddb4ceacc1bed08eceebee63a52e"
+        },
+        {
+          "path": "package/script/src/cipherSuiteNative.d.ts.map",
+          "bytes": 1281,
+          "sha256": "98d1ada407926aa981f2d87f64193a1388cbddb4ceacc1bed08eceebee63a52e"
+        },
+        {
+          "path": "package/esm/src/interfaces/cipherSuiteParams.d.ts.map",
+          "bytes": 430,
+          "sha256": "c7ac52b3935cda09f1e85f5c544fcc8478c851837e11235d2965a2368616f594"
+        },
+        {
+          "path": "package/script/src/interfaces/cipherSuiteParams.d.ts.map",
+          "bytes": 430,
+          "sha256": "c7ac52b3935cda09f1e85f5c544fcc8478c851837e11235d2965a2368616f594"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemNative.d.ts.map",
+          "bytes": 679,
+          "sha256": "60fff5232e0d089001c18202d0d82abe30d70b1b2879d907df27d0eb36338e2f"
+        },
+        {
+          "path": "package/script/src/kems/dhkemNative.d.ts.map",
+          "bytes": 679,
+          "sha256": "60fff5232e0d089001c18202d0d82abe30d70b1b2879d907df27d0eb36338e2f"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemX25519.d.ts.map",
+          "bytes": 433,
+          "sha256": "9895b9a02e7e5da24fafe1391fd440e5afb8df7bd94a47db31c0a2dd6f3bc119"
+        },
+        {
+          "path": "package/script/src/kems/dhkemX25519.d.ts.map",
+          "bytes": 433,
+          "sha256": "9895b9a02e7e5da24fafe1391fd440e5afb8df7bd94a47db31c0a2dd6f3bc119"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemX448.d.ts.map",
+          "bytes": 429,
+          "sha256": "97bb6c5b82f49b06ce3245e60782d4e8e10f58c48191e74f3cf503a070dd3ce9"
+        },
+        {
+          "path": "package/script/src/kems/dhkemX448.d.ts.map",
+          "bytes": 429,
+          "sha256": "97bb6c5b82f49b06ce3245e60782d4e8e10f58c48191e74f3cf503a070dd3ce9"
+        },
+        {
+          "path": "package/esm/src/utils/emitNotSupported.d.ts.map",
+          "bytes": 201,
+          "sha256": "3c4c8dd95f3c9c236906625c4366bad5d642ecbbe9e49b60522913390550e70d"
+        },
+        {
+          "path": "package/script/src/utils/emitNotSupported.d.ts.map",
+          "bytes": 201,
+          "sha256": "3c4c8dd95f3c9c236906625c4366bad5d642ecbbe9e49b60522913390550e70d"
+        },
+        {
+          "path": "package/esm/src/interfaces/encapsulator.d.ts.map",
+          "bytes": 214,
+          "sha256": "de8225134ad52438b4414b7f5ebf422e63fc7fe8b4d83ee9e990acd3f1dae016"
+        },
+        {
+          "path": "package/script/src/interfaces/encapsulator.d.ts.map",
+          "bytes": 214,
+          "sha256": "de8225134ad52438b4414b7f5ebf422e63fc7fe8b4d83ee9e990acd3f1dae016"
+        },
+        {
+          "path": "package/esm/src/encryptionContext.d.ts.map",
+          "bytes": 701,
+          "sha256": "2576e0be717ad26f8a40e9c7683bb1e6b70f07fd2188b48e810d1c34022cbcaf"
+        },
+        {
+          "path": "package/esm/src/interfaces/encryptionContext.d.ts.map",
+          "bytes": 590,
+          "sha256": "3655d3b47475e9a50dd85a1e2ecc8257bf48d97ccba015d08e4ae84198ecde8d"
+        },
+        {
+          "path": "package/script/src/encryptionContext.d.ts.map",
+          "bytes": 701,
+          "sha256": "2576e0be717ad26f8a40e9c7683bb1e6b70f07fd2188b48e810d1c34022cbcaf"
+        },
+        {
+          "path": "package/script/src/interfaces/encryptionContext.d.ts.map",
+          "bytes": 590,
+          "sha256": "3655d3b47475e9a50dd85a1e2ecc8257bf48d97ccba015d08e4ae84198ecde8d"
+        },
+        {
+          "path": "package/esm/src/interfaces/exporter.d.ts.map",
+          "bytes": 266,
+          "sha256": "e725ba3503e83f472f95a1fb53f55cb187f04aa976c9bf1e45defa39e5c82570"
+        },
+        {
+          "path": "package/script/src/interfaces/exporter.d.ts.map",
+          "bytes": 266,
+          "sha256": "e725ba3503e83f472f95a1fb53f55cb187f04aa976c9bf1e45defa39e5c82570"
+        },
+        {
+          "path": "package/esm/src/exporterContext.d.ts.map",
+          "bytes": 913,
+          "sha256": "4525a12905a277c6dfd65ee69ccd76fbffff29320776706f70979fbbd6d8a316"
+        },
+        {
+          "path": "package/script/src/exporterContext.d.ts.map",
+          "bytes": 913,
+          "sha256": "4525a12905a277c6dfd65ee69ccd76fbffff29320776706f70979fbbd6d8a316"
+        },
+        {
+          "path": "package/esm/src/aeads/exportOnly.d.ts.map",
+          "bytes": 468,
+          "sha256": "d6ea8cba0883164336473979ba79cea2803025692c93c85c8c85ce74b448d6ff"
+        },
+        {
+          "path": "package/script/src/aeads/exportOnly.d.ts.map",
+          "bytes": 468,
+          "sha256": "d6ea8cba0883164336473979ba79cea2803025692c93c85c8c85ce74b448d6ff"
+        },
+        {
+          "path": "package/esm/src/interfaces/keyInfo.d.ts.map",
+          "bytes": 281,
+          "sha256": "1d692eb949ba2ff5929c36676386c0689ddce768b5d2d0a92fa768252907050b"
+        },
+        {
+          "path": "package/script/src/interfaces/keyInfo.d.ts.map",
+          "bytes": 281,
+          "sha256": "1d692eb949ba2ff5929c36676386c0689ddce768b5d2d0a92fa768252907050b"
+        },
+        {
+          "path": "package/esm/mod.d.ts.map",
+          "bytes": 885,
+          "sha256": "8dc322f51936b9bf9a4a446c65619089f847cad5e367008a21bc12b80fddaa8b"
+        },
+        {
+          "path": "package/script/mod.d.ts.map",
+          "bytes": 885,
+          "sha256": "8dc322f51936b9bf9a4a446c65619089f847cad5e367008a21bc12b80fddaa8b"
+        },
+        {
+          "path": "package/esm/src/mutex.d.ts.map",
+          "bytes": 173,
+          "sha256": "b4b473fd519ebcda7e2bb42f1f2145519c747212289be5af77141b95be5d44bc"
+        },
+        {
+          "path": "package/script/src/mutex.d.ts.map",
+          "bytes": 173,
+          "sha256": "b4b473fd519ebcda7e2bb42f1f2145519c747212289be5af77141b95be5d44bc"
+        },
+        {
+          "path": "package/esm/src/native.d.ts.map",
+          "bytes": 823,
+          "sha256": "34258079cec0d1eec3a0b15d49e1a4f344722bd4347811f8ffb1806f1f970332"
+        },
+        {
+          "path": "package/script/src/native.d.ts.map",
+          "bytes": 823,
+          "sha256": "34258079cec0d1eec3a0b15d49e1a4f344722bd4347811f8ffb1806f1f970332"
+        },
+        {
+          "path": "package/esm/src/recipientContext.d.ts.map",
+          "bytes": 294,
+          "sha256": "d54feb441859893ffabcd0d9d0f334c02d1a09f8ac233dfc051344cc15ec7c21"
+        },
+        {
+          "path": "package/script/src/recipientContext.d.ts.map",
+          "bytes": 294,
+          "sha256": "d54feb441859893ffabcd0d9d0f334c02d1a09f8ac233dfc051344cc15ec7c21"
+        },
+        {
+          "path": "package/esm/src/interfaces/responses.d.ts.map",
+          "bytes": 249,
+          "sha256": "741eb7f91524d362ff11e5090f3c14e0f212d75d36ddf114410b5d6fa7624fb5"
+        },
+        {
+          "path": "package/script/src/interfaces/responses.d.ts.map",
+          "bytes": 249,
+          "sha256": "741eb7f91524d362ff11e5090f3c14e0f212d75d36ddf114410b5d6fa7624fb5"
+        },
+        {
+          "path": "package/esm/src/senderContext.d.ts.map",
+          "bytes": 556,
+          "sha256": "1da6c6666d6ee1c563429921381ac85e1c0698344a013459fe0664773c6013d2"
+        },
+        {
+          "path": "package/script/src/senderContext.d.ts.map",
+          "bytes": 556,
+          "sha256": "1da6c6666d6ee1c563429921381ac85e1c0698344a013459fe0664773c6013d2"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemPrimitives/x25519.d.ts.map",
+          "bytes": 1073,
+          "sha256": "f3a11c907f93910e73db42d7a7f8d4b039d09a80cd65090c297177e4db7dfb67"
+        },
+        {
+          "path": "package/script/src/kems/dhkemPrimitives/x25519.d.ts.map",
+          "bytes": 1073,
+          "sha256": "f3a11c907f93910e73db42d7a7f8d4b039d09a80cd65090c297177e4db7dfb67"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemPrimitives/x448.d.ts.map",
+          "bytes": 1069,
+          "sha256": "d73fe97bdd9ff68fc7d6a2cac718182f991a3d8a4309f24936459395b5b05f7d"
+        },
+        {
+          "path": "package/script/src/kems/dhkemPrimitives/x448.d.ts.map",
+          "bytes": 1069,
+          "sha256": "d73fe97bdd9ff68fc7d6a2cac718182f991a3d8a4309f24936459395b5b05f7d"
+        },
+        {
+          "path": "package/README.md",
+          "bytes": 5613,
+          "sha256": "b6b8e9cb3ce263f344e73361ea6aac99885e91ebff484051995be52cb2493fa1"
+        },
+        {
+          "path": "package/esm/src/interfaces/aeadParams.d.ts",
+          "bytes": 487,
+          "sha256": "9b9987bfa8f37746d0093436372c0654abfe9bb255bbd554574f9ea0289e0c2f"
+        },
+        {
+          "path": "package/script/src/interfaces/aeadParams.d.ts",
+          "bytes": 487,
+          "sha256": "9b9987bfa8f37746d0093436372c0654abfe9bb255bbd554574f9ea0289e0c2f"
+        },
+        {
+          "path": "package/esm/src/aeads/aesGcm.d.ts",
+          "bytes": 2177,
+          "sha256": "811445e5e894985b037a0d25d4425274ffea6d1b1fa7a9224d476344c88be05b"
+        },
+        {
+          "path": "package/script/src/aeads/aesGcm.d.ts",
+          "bytes": 2177,
+          "sha256": "811445e5e894985b037a0d25d4425274ffea6d1b1fa7a9224d476344c88be05b"
+        },
+        {
+          "path": "package/esm/src/cipherSuiteNative.d.ts",
+          "bytes": 5613,
+          "sha256": "2f37f442b732296d8ec314b0f540b4d81977a7d5fb84f20a82ee68c3a3ad8bb9"
+        },
+        {
+          "path": "package/script/src/cipherSuiteNative.d.ts",
+          "bytes": 5613,
+          "sha256": "2f37f442b732296d8ec314b0f540b4d81977a7d5fb84f20a82ee68c3a3ad8bb9"
+        },
+        {
+          "path": "package/esm/src/interfaces/cipherSuiteParams.d.ts",
+          "bytes": 598,
+          "sha256": "f57358da18accb9511885540ff105c5f8d9e796ca88b13f6d3ea6bfc1fb573c0"
+        },
+        {
+          "path": "package/script/src/interfaces/cipherSuiteParams.d.ts",
+          "bytes": 598,
+          "sha256": "f57358da18accb9511885540ff105c5f8d9e796ca88b13f6d3ea6bfc1fb573c0"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemNative.d.ts",
+          "bytes": 683,
+          "sha256": "e00c92d28ef38e752f520aedb1930510e30965a7311a51175b8655b198c0d18a"
+        },
+        {
+          "path": "package/script/src/kems/dhkemNative.d.ts",
+          "bytes": 683,
+          "sha256": "e00c92d28ef38e752f520aedb1930510e30965a7311a51175b8655b198c0d18a"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemX25519.d.ts",
+          "bytes": 914,
+          "sha256": "39f65c58d19b7650425d2eb838abe81e3f2663f190804607472b8bf447a05542"
+        },
+        {
+          "path": "package/script/src/kems/dhkemX25519.d.ts",
+          "bytes": 914,
+          "sha256": "39f65c58d19b7650425d2eb838abe81e3f2663f190804607472b8bf447a05542"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemX448.d.ts",
+          "bytes": 902,
+          "sha256": "03323704d74902eb905d8fccce100bc0f180cfa632908d08d3431e5011af5ed6"
+        },
+        {
+          "path": "package/script/src/kems/dhkemX448.d.ts",
+          "bytes": 902,
+          "sha256": "03323704d74902eb905d8fccce100bc0f180cfa632908d08d3431e5011af5ed6"
+        },
+        {
+          "path": "package/esm/src/utils/emitNotSupported.d.ts",
+          "bytes": 105,
+          "sha256": "27d6641a1860dcd01bfd8aa7d9bd479614829d9a7f246e16d169c478afd9df2d"
+        },
+        {
+          "path": "package/script/src/utils/emitNotSupported.d.ts",
+          "bytes": 105,
+          "sha256": "27d6641a1860dcd01bfd8aa7d9bd479614829d9a7f246e16d169c478afd9df2d"
+        },
+        {
+          "path": "package/esm/src/interfaces/encapsulator.d.ts",
+          "bytes": 223,
+          "sha256": "08706379dcb0c933699f616e57b77a62cd9bce98695b190f697eb836294de9e6"
+        },
+        {
+          "path": "package/script/src/interfaces/encapsulator.d.ts",
+          "bytes": 223,
+          "sha256": "08706379dcb0c933699f616e57b77a62cd9bce98695b190f697eb836294de9e6"
+        },
+        {
+          "path": "package/esm/src/encryptionContext.d.ts",
+          "bytes": 685,
+          "sha256": "c80fb3ad866257ffeba201c752d5cfd6c1533037b76b5ad39d8e8d0911c964db"
+        },
+        {
+          "path": "package/esm/src/interfaces/encryptionContext.d.ts",
+          "bytes": 1344,
+          "sha256": "ecb4903ce599854da50e74e5d7c10e338a2bc1c97a867299ddf41f445254b10c"
+        },
+        {
+          "path": "package/script/src/encryptionContext.d.ts",
+          "bytes": 685,
+          "sha256": "c80fb3ad866257ffeba201c752d5cfd6c1533037b76b5ad39d8e8d0911c964db"
+        },
+        {
+          "path": "package/script/src/interfaces/encryptionContext.d.ts",
+          "bytes": 1344,
+          "sha256": "ecb4903ce599854da50e74e5d7c10e338a2bc1c97a867299ddf41f445254b10c"
+        },
+        {
+          "path": "package/esm/src/interfaces/exporter.d.ts",
+          "bytes": 576,
+          "sha256": "088446fb3a5a755f9abc7482d3d09cec5e36dfbff8df5a1935f9f143a8cbcbc3"
+        },
+        {
+          "path": "package/script/src/interfaces/exporter.d.ts",
+          "bytes": 576,
+          "sha256": "088446fb3a5a755f9abc7482d3d09cec5e36dfbff8df5a1935f9f143a8cbcbc3"
+        },
+        {
+          "path": "package/esm/src/exporterContext.d.ts",
+          "bytes": 1036,
+          "sha256": "dde6400a63b65197508f4018a735ec25c9335adf7f2ffea75044d141e8bd4944"
+        },
+        {
+          "path": "package/script/src/exporterContext.d.ts",
+          "bytes": 1036,
+          "sha256": "dde6400a63b65197508f4018a735ec25c9335adf7f2ffea75044d141e8bd4944"
+        },
+        {
+          "path": "package/esm/src/aeads/exportOnly.d.ts",
+          "bytes": 948,
+          "sha256": "7065556c5b52927f456c89cbeab8c58c0503a2b7105d710d2684e37fe5ee13d0"
+        },
+        {
+          "path": "package/script/src/aeads/exportOnly.d.ts",
+          "bytes": 948,
+          "sha256": "7065556c5b52927f456c89cbeab8c58c0503a2b7105d710d2684e37fe5ee13d0"
+        },
+        {
+          "path": "package/esm/src/interfaces/keyInfo.d.ts",
+          "bytes": 201,
+          "sha256": "0fe5ec90c77bd4ef1465d8d6d3663536d962bc694a3fad9454c9774640c7d90f"
+        },
+        {
+          "path": "package/script/src/interfaces/keyInfo.d.ts",
+          "bytes": 201,
+          "sha256": "0fe5ec90c77bd4ef1465d8d6d3663536d962bc694a3fad9454c9774640c7d90f"
+        },
+        {
+          "path": "package/esm/mod.d.ts",
+          "bytes": 1141,
+          "sha256": "fba41a37f39b284fdd6ab6d5f476df444c609dde3147b4691e2d4d71c5f10927"
+        },
+        {
+          "path": "package/script/mod.d.ts",
+          "bytes": 1141,
+          "sha256": "fba41a37f39b284fdd6ab6d5f476df444c609dde3147b4691e2d4d71c5f10927"
+        },
+        {
+          "path": "package/esm/src/mutex.d.ts",
+          "bytes": 113,
+          "sha256": "f9d527d2820d1841163856cd2f0b7fbd55d8dafd1dfe19836e4938710d642a1e"
+        },
+        {
+          "path": "package/script/src/mutex.d.ts",
+          "bytes": 113,
+          "sha256": "f9d527d2820d1841163856cd2f0b7fbd55d8dafd1dfe19836e4938710d642a1e"
+        },
+        {
+          "path": "package/esm/src/native.d.ts",
+          "bytes": 6727,
+          "sha256": "5fd0ddd7a750846d1700d1b9e51afcc1fdce5656178f9bfa27b2c12090c210e9"
+        },
+        {
+          "path": "package/script/src/native.d.ts",
+          "bytes": 6727,
+          "sha256": "5fd0ddd7a750846d1700d1b9e51afcc1fdce5656178f9bfa27b2c12090c210e9"
+        },
+        {
+          "path": "package/esm/src/recipientContext.d.ts",
+          "bytes": 270,
+          "sha256": "a05254a67c954c45ff7869f59d288c4de1502e88a8187377bbe4dc5bcfca49c0"
+        },
+        {
+          "path": "package/script/src/recipientContext.d.ts",
+          "bytes": 270,
+          "sha256": "a05254a67c954c45ff7869f59d288c4de1502e88a8187377bbe4dc5bcfca49c0"
+        },
+        {
+          "path": "package/esm/src/interfaces/responses.d.ts",
+          "bytes": 249,
+          "sha256": "e1a0f4cf94dbb64c2aade8f69387f0d8f0eca56842dbdb1b0ad8e09d03b5361c"
+        },
+        {
+          "path": "package/script/src/interfaces/responses.d.ts",
+          "bytes": 249,
+          "sha256": "e1a0f4cf94dbb64c2aade8f69387f0d8f0eca56842dbdb1b0ad8e09d03b5361c"
+        },
+        {
+          "path": "package/esm/src/senderContext.d.ts",
+          "bytes": 590,
+          "sha256": "a52ccbe6481c187b98775dcf487b74665516c57700b2f781a2cdae467c3dbd7a"
+        },
+        {
+          "path": "package/script/src/senderContext.d.ts",
+          "bytes": 590,
+          "sha256": "a52ccbe6481c187b98775dcf487b74665516c57700b2f781a2cdae467c3dbd7a"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemPrimitives/x25519.d.ts",
+          "bytes": 1059,
+          "sha256": "e3786eb5add663136d04a5d65998446dfc861efd7f42506441ae034425d90d53"
+        },
+        {
+          "path": "package/script/src/kems/dhkemPrimitives/x25519.d.ts",
+          "bytes": 1059,
+          "sha256": "e3786eb5add663136d04a5d65998446dfc861efd7f42506441ae034425d90d53"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemPrimitives/x448.d.ts",
+          "bytes": 1055,
+          "sha256": "d05112f3a924f21a76ddcbb01dadd9c443d84e7c9401fab2c45ab95ac9ad32fa"
+        },
+        {
+          "path": "package/script/src/kems/dhkemPrimitives/x448.d.ts",
+          "bytes": 1055,
+          "sha256": "d05112f3a924f21a76ddcbb01dadd9c443d84e7c9401fab2c45ab95ac9ad32fa"
+        }
+      ],
+      "bytes": 27444
+    },
+    {
+      "ecosystem": "npm",
+      "name": "@hpke/common",
+      "version": "1.9.0",
+      "artifact": "hpke-common-1.9.0.tgz",
+      "sha256": "2d190a4be7477b93aff1c81d197e9545c78212cdef687fe496e37c09f70c14bc",
+      "integrity": "sha512-Sdxj4KqtmBt8FiwRkNLxXF+peqLR3FwVxtnsemiiEzClgslckRpFv3yK8mchoCwvyRwLOMS3Y2Z9ND2bq3sRVg==",
+      "dependencies": {},
+      "license": "MIT",
+      "gitHead": "d17a860f971f927bdbb40a6c6d27845c1502d188",
+      "files": [
+        {
+          "path": "package/LICENSE",
+          "bytes": 1072,
+          "sha256": "95e193aa2d18b52a542e5ad897ffff83d0d68a1bb045b5a9c370e853ca6d0e4d"
+        },
+        {
+          "path": "package/esm/_dnt.shims.js",
+          "bytes": 1806,
+          "sha256": "964bd4f895fc78959f40b3f3c87aa031389468a0221e5650b00445ff059d3715"
+        },
+        {
+          "path": "package/script/_dnt.shims.js",
+          "bytes": 2497,
+          "sha256": "6dccc9c8dd766775cd97341c5699523b91f48e22cbaac0be008c6eb39d549af6"
+        },
+        {
+          "path": "package/esm/src/interfaces/aeadEncryptionContext.js",
+          "bytes": 79,
+          "sha256": "1e80fce686c45cc44ff3c5acb36f81fa3784bca25ffd0c45f869f5a4e9b100b7"
+        },
+        {
+          "path": "package/script/src/interfaces/aeadEncryptionContext.js",
+          "bytes": 548,
+          "sha256": "c9042cd9ba9d50b4236dcdae7add0d8905a88940749a1ca4e959c9eb6eb92912"
+        },
+        {
+          "path": "package/esm/src/interfaces/aeadInterface.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/aeadInterface.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/algorithm.js",
+          "bytes": 950,
+          "sha256": "5993e61af2ed16a810b8ef80c16a1081e4fc973076e9cf60a6204ecd8a73ecd1"
+        },
+        {
+          "path": "package/script/src/algorithm.js",
+          "bytes": 2933,
+          "sha256": "f10b37a8f885139eb9eb7aec383f44a05a19300f2618ff665578bf53b0496b93"
+        },
+        {
+          "path": "package/esm/src/utils/bignum.js",
+          "bytes": 1184,
+          "sha256": "212a4d6482648caa9acfa11bd73a8ba971cfcc0fe0fa506d0b632eb861a5b063"
+        },
+        {
+          "path": "package/script/src/utils/bignum.js",
+          "bytes": 1859,
+          "sha256": "8e70e524aa04ce62145f146c2446979ca660723c77d5aebac9ce2dff32871e2f"
+        },
+        {
+          "path": "package/esm/src/consts.js",
+          "bytes": 644,
+          "sha256": "3f50b567e52e9ed09ba7fc2d059271874bd30c1d13c16fe48f4d2d265a878bc0"
+        },
+        {
+          "path": "package/script/src/consts.js",
+          "bytes": 1171,
+          "sha256": "6fc41c1bd22c3b29503b88c2d405d94f62eb3310ef72977c0a190a3c31c92504"
+        },
+        {
+          "path": "package/esm/src/curve/curve.js",
+          "bytes": 565,
+          "sha256": "c31b1223eec021c583edc1bf43f4af6e7237752ba6076c5a895969526ac41442"
+        },
+        {
+          "path": "package/script/src/curve/curve.js",
+          "bytes": 1063,
+          "sha256": "0334357d3a13ece87e05a19ccd0ea02ca6b14c9dd8aacc1ce161664503e74093"
+        },
+        {
+          "path": "package/esm/src/kems/dhkem.js",
+          "bytes": 7132,
+          "sha256": "748617a1410d864f751c1ebf46955b2d3b6d0746acb9df5938b497090f03a5d6"
+        },
+        {
+          "path": "package/script/src/kems/dhkem.js",
+          "bytes": 8634,
+          "sha256": "a429031c33e0a3ce03a59168e00936015e2c6ce3dc7663d87b8cfbb6015e479a"
+        },
+        {
+          "path": "package/esm/src/interfaces/dhkemInterface.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/dhkemInterface.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/interfaces/dhkemPrimitives.js",
+          "bytes": 288,
+          "sha256": "91eb3f0ef77809195a42db1306ab84da5bcf25b98fcea65e5b5956120bbc588b"
+        },
+        {
+          "path": "package/script/src/interfaces/dhkemPrimitives.js",
+          "bytes": 805,
+          "sha256": "1811a02dfe8c5820da1602fa671c019b5e9bfb864e221360a60d6605121d112d"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemPrimitives/ec.js",
+          "bytes": 14505,
+          "sha256": "9a68615bb20bdac1ee7c83ed74e9537021c2feff8db3a60dfe58d198214057da"
+        },
+        {
+          "path": "package/script/src/kems/dhkemPrimitives/ec.js",
+          "bytes": 16986,
+          "sha256": "f2c5ef5205ff909cb7d540b30db1bd9f7e0eda5ea872d1771c35204e17fbee8c"
+        },
+        {
+          "path": "package/esm/src/errors.js",
+          "bytes": 1704,
+          "sha256": "2276ea69b2766af2a19ad9bc6a7b72fc6d0c8e083c9d7a6a14cdd848a9f6f61a"
+        },
+        {
+          "path": "package/script/src/errors.js",
+          "bytes": 3326,
+          "sha256": "61c914f7001d42861886c8a332878afbddbe81e71e115e86aa338102786b7916"
+        },
+        {
+          "path": "package/esm/src/hash/hash.js",
+          "bytes": 1057,
+          "sha256": "2d44196f61395a80262e6b397bafae96061cd31cc0f5a76ff342a9dbfcd16b5d"
+        },
+        {
+          "path": "package/script/src/hash/hash.js",
+          "bytes": 1696,
+          "sha256": "42d2bd096af7b71553557ba47ebd56252a5a5c2985b9b225350afce2d87e011b"
+        },
+        {
+          "path": "package/esm/src/kdfs/hkdf.js",
+          "bytes": 7719,
+          "sha256": "21a865dd7ebaf9c13a65c85d25fc97a6226d4a5380c6006b1943debfc89e5dd0"
+        },
+        {
+          "path": "package/script/src/kdfs/hkdf.js",
+          "bytes": 9668,
+          "sha256": "c6840d7888468d1dd9e56d05d3bd7bd97b31b47720ccd626b0489d5fde9d2182"
+        },
+        {
+          "path": "package/esm/src/hash/hmac.js",
+          "bytes": 4285,
+          "sha256": "85f949fbd7ba2e12718e1fc6f915ab18f224e10e899e9eb5987853fb42a29609"
+        },
+        {
+          "path": "package/script/src/hash/hmac.js",
+          "bytes": 5445,
+          "sha256": "e7e4909e874948b0b237389f56f23322ca0be41576885f3133889e6139b06b86"
+        },
+        {
+          "path": "package/esm/src/kems/hybridkem.js",
+          "bytes": 8834,
+          "sha256": "85525dc5f9748cab0c699b7ff22e67b937bc1224593138919f73f47d2e3ed669"
+        },
+        {
+          "path": "package/script/src/kems/hybridkem.js",
+          "bytes": 10706,
+          "sha256": "fc8b1a917025d69a40b8118841bb26c29241f341e17dddfe2f4fb57a3e296f13"
+        },
+        {
+          "path": "package/esm/src/identifiers.js",
+          "bytes": 1124,
+          "sha256": "36d32d1da7b5b48b5091b8c8d2e635793ef4a2bd3bd6e1a28e0ae02b68f78b61"
+        },
+        {
+          "path": "package/script/src/identifiers.js",
+          "bytes": 1812,
+          "sha256": "9370900fb95d5744622f947595db6a01ec45b72c123412d3417abd03df534706"
+        },
+        {
+          "path": "package/esm/src/interfaces/jsonWebKeyExtended.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/jsonWebKeyExtended.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/interfaces/kdfInterface.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/kdfInterface.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/interfaces/kemInterface.js",
+          "bytes": 120,
+          "sha256": "4a27f9b0a9dda6ea89809ed4a93eba2c286ab52b9c9d999f856f788586b27ee9"
+        },
+        {
+          "path": "package/script/src/interfaces/kemInterface.js",
+          "bytes": 605,
+          "sha256": "4fd4f86d0e772c29a3bddcd99c5f6e5b4089a9708c72b9151f81f8e2ae52602d"
+        },
+        {
+          "path": "package/esm/src/interfaces/keyScheduleParams.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/keyScheduleParams.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/hash/md.js",
+          "bytes": 7471,
+          "sha256": "2adf57ddce78e2db1a92adf722c167df9fde866162f657e6c1b26c12f136c5b0"
+        },
+        {
+          "path": "package/script/src/hash/md.js",
+          "bytes": 9052,
+          "sha256": "baea2c6dd0d4ecfd6848ab3d62c25ca68b0d41a7b73ff7bd1604fbf2aa6c8b87"
+        },
+        {
+          "path": "package/esm/src/utils/misc.js",
+          "bytes": 4859,
+          "sha256": "7bd9278812d26dfca552dfc419ca01900e7794f6dcda45499c73bfc69cb7dc87"
+        },
+        {
+          "path": "package/script/src/utils/misc.js",
+          "bytes": 8038,
+          "sha256": "1fe83d6d6166cc46eb7477fe60206d11eb3dde67b80bd5a153c21b1642b8dded"
+        },
+        {
+          "path": "package/esm/mod.js",
+          "bytes": 1345,
+          "sha256": "ba896c1e2a2c8bf55bf8dcd5b7b1de28f3a5ae78f616e448ca05970be33d31fd"
+        },
+        {
+          "path": "package/script/mod.js",
+          "bytes": 9504,
+          "sha256": "66763438e383608b7129e0b8c0f4131ebc569913e57577b34c4c140f81af521a"
+        },
+        {
+          "path": "package/esm/src/curve/modular.js",
+          "bytes": 1031,
+          "sha256": "6b8a0d17302dfaff1ea75cc8be55bf310fe45a4f6fa1a51f941b287b6a375cce"
+        },
+        {
+          "path": "package/script/src/curve/modular.js",
+          "bytes": 1638,
+          "sha256": "45a80559cc1ad7d96068ca36c43a4cfb92beba499310ddb47e26ac1dae2fb09b"
+        },
+        {
+          "path": "package/esm/src/curve/montgomery.js",
+          "bytes": 6541,
+          "sha256": "725c179c0976fa752fe60e6501be7e1ad1c6db9ab2383a673492a803c15c9341"
+        },
+        {
+          "path": "package/script/src/curve/montgomery.js",
+          "bytes": 8006,
+          "sha256": "8309ee4f1edb94af8731405f48b273e67182721f01c4c30da8ab1b7a8d33cf7a"
+        },
+        {
+          "path": "package/esm/src/utils/noble.js",
+          "bytes": 11887,
+          "sha256": "1a36a5ff2ae7623791e76b3c20d7f75754afe4a6eb5ada902da3537489b6a805"
+        },
+        {
+          "path": "package/script/src/utils/noble.js",
+          "bytes": 14652,
+          "sha256": "e74f2f573c42c10d122d404d4ff3ad0e52bc416f05d18b3f980390a14a746650"
+        },
+        {
+          "path": "package/esm/src/interfaces/preSharedKey.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/preSharedKey.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/interfaces/recipientContextParams.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/recipientContextParams.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/interfaces/senderContextParams.js",
+          "bytes": 11,
+          "sha256": "8e609bb71c20b858c77f0e9f90bb1319db8477b13f9f965f1a1e18524bf50881"
+        },
+        {
+          "path": "package/script/src/interfaces/senderContextParams.js",
+          "bytes": 432,
+          "sha256": "61b26653537c0151337cb087ccf9b7c77dfc0826b24d159d73474bc09d060720"
+        },
+        {
+          "path": "package/esm/src/hash/sha2.js",
+          "bytes": 20784,
+          "sha256": "7f160a691b3231afc0ea9cc398c1480672ce92d995a976f5cc9103190920b33e"
+        },
+        {
+          "path": "package/script/src/hash/sha2.js",
+          "bytes": 25603,
+          "sha256": "c1da15921dc3e5f98c44c7785c4184ab0ae1388ccb30d78e4d40c0d5ea27312c"
+        },
+        {
+          "path": "package/esm/src/hash/sha3.js",
+          "bytes": 11358,
+          "sha256": "ede3ac69f8f8e81f47d62c7c0c24632daebc865c22629fc6a56611cfad4b0328"
+        },
+        {
+          "path": "package/script/src/hash/sha3.js",
+          "bytes": 13545,
+          "sha256": "641aa732b4f12c96eaf6fd63d77e3b7249ac023520d28f5786c2a4224ac3e36f"
+        },
+        {
+          "path": "package/esm/src/hash/u64.js",
+          "bytes": 3408,
+          "sha256": "90274717214d6093b44118c3d6754e0ef76d1242d78d7b7f88450d76e9d880de"
+        },
+        {
+          "path": "package/script/src/hash/u64.js",
+          "bytes": 5035,
+          "sha256": "10b2bce8aee420960fdba0dc31de75ec9c5e8c31c1134e98ee8ee5aeb32a4bdb"
+        },
+        {
+          "path": "package/esm/src/xCryptoKey.js",
+          "bytes": 1157,
+          "sha256": "2702f2520096ec919cc3e36039a47eb5380988df4e4a0c9ad21d9a9b6e7b23dc"
+        },
+        {
+          "path": "package/script/src/xCryptoKey.js",
+          "bytes": 1816,
+          "sha256": "eabd6f28ebc62b413ff5f28b347032410d83cc1373231abe436fbc210eb18c58"
+        },
+        {
+          "path": "package/esm/package.json",
+          "bytes": 23,
+          "sha256": "3ca9d4afd21425087cf31893b8f9f63c81b0b8408db5e343ca76e5f8aa26ab9a"
+        },
+        {
+          "path": "package/package.json",
+          "bytes": 944,
+          "sha256": "602d9de63754bfbd9a82842767254fcf0c29a54c2c5434ed4f0b11aaf4fa1be8"
+        },
+        {
+          "path": "package/script/package.json",
+          "bytes": 25,
+          "sha256": "8005a3491db7d92f36ac66369861589f9c47123d3a7c71e643fc2c06168cd45a"
+        },
+        {
+          "path": "package/esm/_dnt.shims.d.ts.map",
+          "bytes": 145,
+          "sha256": "d7749cd9116e09c0cba694a4ad505cedc87735d0d7b0a50d2f8d80280b2cf5f4"
+        },
+        {
+          "path": "package/script/_dnt.shims.d.ts.map",
+          "bytes": 145,
+          "sha256": "d7749cd9116e09c0cba694a4ad505cedc87735d0d7b0a50d2f8d80280b2cf5f4"
+        },
+        {
+          "path": "package/esm/src/interfaces/aeadEncryptionContext.d.ts.map",
+          "bytes": 473,
+          "sha256": "486bc635a6d819eed5c452d32dd0692af6a990eb70b552fb71830ef2a7700724"
+        },
+        {
+          "path": "package/script/src/interfaces/aeadEncryptionContext.d.ts.map",
+          "bytes": 473,
+          "sha256": "486bc635a6d819eed5c452d32dd0692af6a990eb70b552fb71830ef2a7700724"
+        },
+        {
+          "path": "package/esm/src/interfaces/aeadInterface.d.ts.map",
+          "bytes": 535,
+          "sha256": "feafb5804ff191ff0e0861698e88f3838e6992ca75627d6a26b51ab2bee751eb"
+        },
+        {
+          "path": "package/script/src/interfaces/aeadInterface.d.ts.map",
+          "bytes": 535,
+          "sha256": "feafb5804ff191ff0e0861698e88f3838e6992ca75627d6a26b51ab2bee751eb"
+        },
+        {
+          "path": "package/esm/src/algorithm.d.ts.map",
+          "bytes": 199,
+          "sha256": "48d3ef42f90fe0a6ddf79231e08974b418525ac288f654f6f620069676db72d9"
+        },
+        {
+          "path": "package/script/src/algorithm.d.ts.map",
+          "bytes": 199,
+          "sha256": "48d3ef42f90fe0a6ddf79231e08974b418525ac288f654f6f620069676db72d9"
+        },
+        {
+          "path": "package/esm/src/utils/bignum.d.ts.map",
+          "bytes": 325,
+          "sha256": "6dce628ea92d608e4cd698f2f2a06f0a877186a28a5dd32114b595524e79c757"
+        },
+        {
+          "path": "package/script/src/utils/bignum.d.ts.map",
+          "bytes": 325,
+          "sha256": "6dce628ea92d608e4cd698f2f2a06f0a877186a28a5dd32114b595524e79c757"
+        },
+        {
+          "path": "package/esm/src/consts.d.ts.map",
+          "bytes": 471,
+          "sha256": "5d634c19eb8db6a74abf51b1a10d541fe967c366020d209259e756d623b9570d"
+        },
+        {
+          "path": "package/script/src/consts.d.ts.map",
+          "bytes": 471,
+          "sha256": "5d634c19eb8db6a74abf51b1a10d541fe967c366020d209259e756d623b9570d"
+        },
+        {
+          "path": "package/esm/src/curve/curve.d.ts.map",
+          "bytes": 652,
+          "sha256": "56d83d2ece86bfe0685b7925c743d826112e42d6ae5e4c2c10625737c474b2ae"
+        },
+        {
+          "path": "package/script/src/curve/curve.d.ts.map",
+          "bytes": 652,
+          "sha256": "56d83d2ece86bfe0685b7925c743d826112e42d6ae5e4c2c10625737c474b2ae"
+        },
+        {
+          "path": "package/esm/src/kems/dhkem.d.ts.map",
+          "bytes": 1358,
+          "sha256": "0fb8cc3ecd8331993efb05a3352a1e2978891a18d2a5f78b177add4b3f115c16"
+        },
+        {
+          "path": "package/script/src/kems/dhkem.d.ts.map",
+          "bytes": 1358,
+          "sha256": "0fb8cc3ecd8331993efb05a3352a1e2978891a18d2a5f78b177add4b3f115c16"
+        },
+        {
+          "path": "package/esm/src/interfaces/dhkemInterface.d.ts.map",
+          "bytes": 321,
+          "sha256": "4d07a49489ab8d21cf3d0768fb9150d06376da406c58fa6881138720519ad18d"
+        },
+        {
+          "path": "package/script/src/interfaces/dhkemInterface.d.ts.map",
+          "bytes": 321,
+          "sha256": "4d07a49489ab8d21cf3d0768fb9150d06376da406c58fa6881138720519ad18d"
+        },
+        {
+          "path": "package/esm/src/interfaces/dhkemPrimitives.d.ts.map",
+          "bytes": 905,
+          "sha256": "cf6509103576e9d6909646bb4f7651865b80397490b55789e3bdb9f510d5b216"
+        },
+        {
+          "path": "package/script/src/interfaces/dhkemPrimitives.d.ts.map",
+          "bytes": 905,
+          "sha256": "cf6509103576e9d6909646bb4f7651865b80397490b55789e3bdb9f510d5b216"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemPrimitives/ec.d.ts.map",
+          "bytes": 1264,
+          "sha256": "bb865b1cb74e47acee221684b578219bca0455456cbfa93de5a552e44bc9eccc"
+        },
+        {
+          "path": "package/script/src/kems/dhkemPrimitives/ec.d.ts.map",
+          "bytes": 1264,
+          "sha256": "bb865b1cb74e47acee221684b578219bca0455456cbfa93de5a552e44bc9eccc"
+        },
+        {
+          "path": "package/esm/src/errors.d.ts.map",
+          "bytes": 715,
+          "sha256": "7b88d7a8308b4f38d0744b076d0db42eb544b3a7100f8e9e5a8589c8151a160f"
+        },
+        {
+          "path": "package/script/src/errors.d.ts.map",
+          "bytes": 715,
+          "sha256": "7b88d7a8308b4f38d0744b076d0db42eb544b3a7100f8e9e5a8589c8151a160f"
+        },
+        {
+          "path": "package/esm/src/hash/hash.d.ts.map",
+          "bytes": 1668,
+          "sha256": "3b6b4e03172946c624a36f55fc39898c4fac3457d456e42582da034244435d36"
+        },
+        {
+          "path": "package/script/src/hash/hash.d.ts.map",
+          "bytes": 1668,
+          "sha256": "3b6b4e03172946c624a36f55fc39898c4fac3457d456e42582da034244435d36"
+        },
+        {
+          "path": "package/esm/src/kdfs/hkdf.d.ts.map",
+          "bytes": 1850,
+          "sha256": "a6c9f19efc3289ef194ebb5bbb2c4f04a86eb3f3a5c26253370af51c3be85c52"
+        },
+        {
+          "path": "package/script/src/kdfs/hkdf.d.ts.map",
+          "bytes": 1850,
+          "sha256": "a6c9f19efc3289ef194ebb5bbb2c4f04a86eb3f3a5c26253370af51c3be85c52"
+        },
+        {
+          "path": "package/esm/src/hash/hmac.d.ts.map",
+          "bytes": 926,
+          "sha256": "5388de8e3679377a79eda0230c33c2177f00e1580bad23f5e0d17b56602f778c"
+        },
+        {
+          "path": "package/script/src/hash/hmac.d.ts.map",
+          "bytes": 926,
+          "sha256": "5388de8e3679377a79eda0230c33c2177f00e1580bad23f5e0d17b56602f778c"
+        },
+        {
+          "path": "package/esm/src/kems/hybridkem.d.ts.map",
+          "bytes": 1529,
+          "sha256": "cbfbfd64855d8e63b50af453302f6dd7e198c0e174601d1cc6a1510056d03033"
+        },
+        {
+          "path": "package/script/src/kems/hybridkem.d.ts.map",
+          "bytes": 1529,
+          "sha256": "cbfbfd64855d8e63b50af453302f6dd7e198c0e174601d1cc6a1510056d03033"
+        },
+        {
+          "path": "package/esm/src/identifiers.d.ts.map",
+          "bytes": 623,
+          "sha256": "ac767fb3aeb01198dd3de5786a6aaede030a0a6d216cebcf78054f8999d01874"
+        },
+        {
+          "path": "package/script/src/identifiers.d.ts.map",
+          "bytes": 623,
+          "sha256": "ac767fb3aeb01198dd3de5786a6aaede030a0a6d216cebcf78054f8999d01874"
+        },
+        {
+          "path": "package/esm/src/interfaces/jsonWebKeyExtended.d.ts.map",
+          "bytes": 288,
+          "sha256": "7d3e9a31a27499f3d93fa4da6300af96d5b1fd4157ac8f9c95c94d2286d6b990"
+        },
+        {
+          "path": "package/script/src/interfaces/jsonWebKeyExtended.d.ts.map",
+          "bytes": 288,
+          "sha256": "7d3e9a31a27499f3d93fa4da6300af96d5b1fd4157ac8f9c95c94d2286d6b990"
+        },
+        {
+          "path": "package/esm/src/interfaces/kdfInterface.d.ts.map",
+          "bytes": 1276,
+          "sha256": "bec3444e73bb1e45d9df2afbd04d311bea2c3044f2ae6ed39fb1a102875ef233"
+        },
+        {
+          "path": "package/script/src/interfaces/kdfInterface.d.ts.map",
+          "bytes": 1276,
+          "sha256": "bec3444e73bb1e45d9df2afbd04d311bea2c3044f2ae6ed39fb1a102875ef233"
+        },
+        {
+          "path": "package/esm/src/interfaces/kemInterface.d.ts.map",
+          "bytes": 1430,
+          "sha256": "4367ebfdbf041a5664052b29257008536fb63a75c8f0bb6291f05ad4050d2446"
+        },
+        {
+          "path": "package/script/src/interfaces/kemInterface.d.ts.map",
+          "bytes": 1430,
+          "sha256": "4367ebfdbf041a5664052b29257008536fb63a75c8f0bb6291f05ad4050d2446"
+        },
+        {
+          "path": "package/esm/src/interfaces/keyScheduleParams.d.ts.map",
+          "bytes": 322,
+          "sha256": "25d67aaf93f7b438f72c86e7129e406a9bdd6cb6d8ccb2724bb4ae5540a1c08d"
+        },
+        {
+          "path": "package/script/src/interfaces/keyScheduleParams.d.ts.map",
+          "bytes": 322,
+          "sha256": "25d67aaf93f7b438f72c86e7129e406a9bdd6cb6d8ccb2724bb4ae5540a1c08d"
+        },
+        {
+          "path": "package/esm/src/hash/md.d.ts.map",
+          "bytes": 1476,
+          "sha256": "d8e4aefbbb9a10c77e69165c1608fb0650587d5daddd0021dcc669ca2cf3e178"
+        },
+        {
+          "path": "package/script/src/hash/md.d.ts.map",
+          "bytes": 1476,
+          "sha256": "d8e4aefbbb9a10c77e69165c1608fb0650587d5daddd0021dcc669ca2cf3e178"
+        },
+        {
+          "path": "package/esm/src/utils/misc.d.ts.map",
+          "bytes": 1000,
+          "sha256": "b1af31784a4bd985c33f351a5df9643f9e28346c1cbf61c4d1d50629c72b3a20"
+        },
+        {
+          "path": "package/script/src/utils/misc.d.ts.map",
+          "bytes": 1000,
+          "sha256": "b1af31784a4bd985c33f351a5df9643f9e28346c1cbf61c4d1d50629c72b3a20"
+        },
+        {
+          "path": "package/esm/mod.d.ts.map",
+          "bytes": 1755,
+          "sha256": "34f1494aa462bd9825bb1a844f8e8ec8135a1aa81389ce6581accad8db534e78"
+        },
+        {
+          "path": "package/script/mod.d.ts.map",
+          "bytes": 1755,
+          "sha256": "34f1494aa462bd9825bb1a844f8e8ec8135a1aa81389ce6581accad8db534e78"
+        },
+        {
+          "path": "package/esm/src/curve/modular.d.ts.map",
+          "bytes": 318,
+          "sha256": "f7639ac65454c2c23afd85435858234e46009ffb12654fa610bd9a4b0cc2b67a"
+        },
+        {
+          "path": "package/script/src/curve/modular.d.ts.map",
+          "bytes": 318,
+          "sha256": "f7639ac65454c2c23afd85435858234e46009ffb12654fa610bd9a4b0cc2b67a"
+        },
+        {
+          "path": "package/esm/src/curve/montgomery.d.ts.map",
+          "bytes": 1060,
+          "sha256": "2a2aed135da30c025bbd74485f2a023ea19311e1893096d13ff8dd5760611d15"
+        },
+        {
+          "path": "package/script/src/curve/montgomery.d.ts.map",
+          "bytes": 1060,
+          "sha256": "2a2aed135da30c025bbd74485f2a023ea19311e1893096d13ff8dd5760611d15"
+        },
+        {
+          "path": "package/esm/src/utils/noble.d.ts.map",
+          "bytes": 3434,
+          "sha256": "284c06108b62d444f2cd4e3758d917bd3db8030da1213a999719e941fc5952ad"
+        },
+        {
+          "path": "package/script/src/utils/noble.d.ts.map",
+          "bytes": 3434,
+          "sha256": "284c06108b62d444f2cd4e3758d917bd3db8030da1213a999719e941fc5952ad"
+        },
+        {
+          "path": "package/esm/src/interfaces/preSharedKey.d.ts.map",
+          "bytes": 253,
+          "sha256": "e5c53987d327f091eaa56dab9ff9ed24e889cc9eeedc131bde2d77d4af112a19"
+        },
+        {
+          "path": "package/script/src/interfaces/preSharedKey.d.ts.map",
+          "bytes": 253,
+          "sha256": "e5c53987d327f091eaa56dab9ff9ed24e889cc9eeedc131bde2d77d4af112a19"
+        },
+        {
+          "path": "package/esm/src/interfaces/recipientContextParams.d.ts.map",
+          "bytes": 391,
+          "sha256": "bacaa5470d7ac0fe9fe09b0712d615d0cc114026bafb4aa92b7bf700360a1e66"
+        },
+        {
+          "path": "package/script/src/interfaces/recipientContextParams.d.ts.map",
+          "bytes": 391,
+          "sha256": "bacaa5470d7ac0fe9fe09b0712d615d0cc114026bafb4aa92b7bf700360a1e66"
+        },
+        {
+          "path": "package/esm/src/interfaces/senderContextParams.d.ts.map",
+          "bytes": 402,
+          "sha256": "8945dbe36807350de708ce41b313df49ca45b99ec0ad6bcbc532fda6dbe60506"
+        },
+        {
+          "path": "package/script/src/interfaces/senderContextParams.d.ts.map",
+          "bytes": 402,
+          "sha256": "8945dbe36807350de708ce41b313df49ca45b99ec0ad6bcbc532fda6dbe60506"
+        },
+        {
+          "path": "package/esm/src/hash/sha2.d.ts.map",
+          "bytes": 4520,
+          "sha256": "cf183640379e14b2102ed8e41fa3a6e312c241cbdcc10a4e862a370d6279e3cb"
+        },
+        {
+          "path": "package/script/src/hash/sha2.d.ts.map",
+          "bytes": 4520,
+          "sha256": "cf183640379e14b2102ed8e41fa3a6e312c241cbdcc10a4e862a370d6279e3cb"
+        },
+        {
+          "path": "package/esm/src/hash/sha3.d.ts.map",
+          "bytes": 1759,
+          "sha256": "07e79ac2f177e3e9c344eef83bd8464f4d03c94899f3f5c968f8eced68946644"
+        },
+        {
+          "path": "package/script/src/hash/sha3.d.ts.map",
+          "bytes": 1759,
+          "sha256": "07e79ac2f177e3e9c344eef83bd8464f4d03c94899f3f5c968f8eced68946644"
+        },
+        {
+          "path": "package/esm/src/hash/u64.d.ts.map",
+          "bytes": 4029,
+          "sha256": "91df9c329172f52ac39729cdd3a7d2f736d4665c9b299cdf81485121e95e73e8"
+        },
+        {
+          "path": "package/script/src/hash/u64.d.ts.map",
+          "bytes": 4029,
+          "sha256": "91df9c329172f52ac39729cdd3a7d2f736d4665c9b299cdf81485121e95e73e8"
+        },
+        {
+          "path": "package/esm/src/xCryptoKey.d.ts.map",
+          "bytes": 425,
+          "sha256": "7cd0054d05c2785bea6837dc4ef70884b03e28d140c75939d9a4373a380578bf"
+        },
+        {
+          "path": "package/script/src/xCryptoKey.d.ts.map",
+          "bytes": 425,
+          "sha256": "7cd0054d05c2785bea6837dc4ef70884b03e28d140c75939d9a4373a380578bf"
+        },
+        {
+          "path": "package/README.md",
+          "bytes": 888,
+          "sha256": "884aea79b101cf202c76bf32148a87db20a34f436037ab36b8a880b2b89bba79"
+        },
+        {
+          "path": "package/esm/_dnt.shims.d.ts",
+          "bytes": 108,
+          "sha256": "1548178b72773d7d986eacb6568d184a79086db5017845d295fb0e1d3e6a359d"
+        },
+        {
+          "path": "package/script/_dnt.shims.d.ts",
+          "bytes": 108,
+          "sha256": "1548178b72773d7d986eacb6568d184a79086db5017845d295fb0e1d3e6a359d"
+        },
+        {
+          "path": "package/esm/src/interfaces/aeadEncryptionContext.d.ts",
+          "bytes": 1031,
+          "sha256": "6ddcf53f73e590165a8c576828f4488cc6383bebeb347ee7ba8f808d8b5a611b"
+        },
+        {
+          "path": "package/script/src/interfaces/aeadEncryptionContext.d.ts",
+          "bytes": 1031,
+          "sha256": "6ddcf53f73e590165a8c576828f4488cc6383bebeb347ee7ba8f808d8b5a611b"
+        },
+        {
+          "path": "package/esm/src/interfaces/aeadInterface.d.ts",
+          "bytes": 810,
+          "sha256": "1eb114fefb87b4c44fa81e560726bda9684b1f4368f2159b255e45b09a687da6"
+        },
+        {
+          "path": "package/script/src/interfaces/aeadInterface.d.ts",
+          "bytes": 810,
+          "sha256": "1eb114fefb87b4c44fa81e560726bda9684b1f4368f2159b255e45b09a687da6"
+        },
+        {
+          "path": "package/esm/src/algorithm.d.ts",
+          "bytes": 184,
+          "sha256": "d846d91239e54a0f96e8b9993672e635fbbc1aa71aa102b325babf00a1749042"
+        },
+        {
+          "path": "package/script/src/algorithm.d.ts",
+          "bytes": 184,
+          "sha256": "d846d91239e54a0f96e8b9993672e635fbbc1aa71aa102b325babf00a1749042"
+        },
+        {
+          "path": "package/esm/src/utils/bignum.d.ts",
+          "bytes": 326,
+          "sha256": "0863bd3aa54737fd60c4b94b341fef109ab2f991eeb05202c4404ed15a0aeacf"
+        },
+        {
+          "path": "package/script/src/utils/bignum.d.ts",
+          "bytes": 326,
+          "sha256": "0863bd3aa54737fd60c4b94b341fef109ab2f991eeb05202c4404ed15a0aeacf"
+        },
+        {
+          "path": "package/esm/src/consts.d.ts",
+          "bytes": 462,
+          "sha256": "28db70381e55593560b01253e45ee9ba0b26af144137963f2b253438c54690ce"
+        },
+        {
+          "path": "package/script/src/consts.d.ts",
+          "bytes": 462,
+          "sha256": "28db70381e55593560b01253e45ee9ba0b26af144137963f2b253438c54690ce"
+        },
+        {
+          "path": "package/esm/src/curve/curve.d.ts",
+          "bytes": 1014,
+          "sha256": "0c1487e7d72880177b002d133876615faa69a4bd9fe31b5430e8ea511db6dffe"
+        },
+        {
+          "path": "package/script/src/curve/curve.d.ts",
+          "bytes": 1014,
+          "sha256": "0c1487e7d72880177b002d133876615faa69a4bd9fe31b5430e8ea511db6dffe"
+        },
+        {
+          "path": "package/esm/src/kems/dhkem.d.ts",
+          "bytes": 1505,
+          "sha256": "38e6e29ea13ee94884cb50965e7940fd62f68330b524f5abb6e12d03fdd4b724"
+        },
+        {
+          "path": "package/script/src/kems/dhkem.d.ts",
+          "bytes": 1505,
+          "sha256": "38e6e29ea13ee94884cb50965e7940fd62f68330b524f5abb6e12d03fdd4b724"
+        },
+        {
+          "path": "package/esm/src/interfaces/dhkemInterface.d.ts",
+          "bytes": 275,
+          "sha256": "72a1343bc490afe8bc6830fe05b66dc978e4b6fde1b9e500b71231757a37e370"
+        },
+        {
+          "path": "package/script/src/interfaces/dhkemInterface.d.ts",
+          "bytes": 275,
+          "sha256": "72a1343bc490afe8bc6830fe05b66dc978e4b6fde1b9e500b71231757a37e370"
+        },
+        {
+          "path": "package/esm/src/interfaces/dhkemPrimitives.d.ts",
+          "bytes": 805,
+          "sha256": "73a2dbf9c93a0d68be7396a9949c65eca59ac8fe63988638b5e47487f45d5d00"
+        },
+        {
+          "path": "package/script/src/interfaces/dhkemPrimitives.d.ts",
+          "bytes": 805,
+          "sha256": "73a2dbf9c93a0d68be7396a9949c65eca59ac8fe63988638b5e47487f45d5d00"
+        },
+        {
+          "path": "package/esm/src/kems/dhkemPrimitives/ec.d.ts",
+          "bytes": 1308,
+          "sha256": "c1cb2dbc6f69b422ab3f70648d3176df8cdb701ceaa79d3ac30177ac89bad86f"
+        },
+        {
+          "path": "package/script/src/kems/dhkemPrimitives/ec.d.ts",
+          "bytes": 1308,
+          "sha256": "c1cb2dbc6f69b422ab3f70648d3176df8cdb701ceaa79d3ac30177ac89bad86f"
+        },
+        {
+          "path": "package/esm/src/errors.d.ts",
+          "bytes": 1553,
+          "sha256": "4536ddd8e8c0e0d9c5f2dded736f46bed8299b19bde3202fd8372658dd765d02"
+        },
+        {
+          "path": "package/script/src/errors.d.ts",
+          "bytes": 1553,
+          "sha256": "4536ddd8e8c0e0d9c5f2dded736f46bed8299b19bde3202fd8372658dd765d02"
+        },
+        {
+          "path": "package/esm/src/hash/hash.d.ts",
+          "bytes": 3192,
+          "sha256": "10be48353bd6fd83e4aa5ba3a012c712f839a25d72c27573283d50ea21052001"
+        },
+        {
+          "path": "package/script/src/hash/hash.d.ts",
+          "bytes": 3192,
+          "sha256": "10be48353bd6fd83e4aa5ba3a012c712f839a25d72c27573283d50ea21052001"
+        },
+        {
+          "path": "package/esm/src/kdfs/hkdf.d.ts",
+          "bytes": 2215,
+          "sha256": "8d0824fe6f3c2117cdc3b42098bb50de075f66bc4af304eac7d585ba5515d73b"
+        },
+        {
+          "path": "package/script/src/kdfs/hkdf.d.ts",
+          "bytes": 2215,
+          "sha256": "8d0824fe6f3c2117cdc3b42098bb50de075f66bc4af304eac7d585ba5515d73b"
+        },
+        {
+          "path": "package/esm/src/hash/hmac.d.ts",
+          "bytes": 992,
+          "sha256": "1840e09b5e9552672043e5392f07962c2b3e153a17bedae893f073eebd037dd8"
+        },
+        {
+          "path": "package/script/src/hash/hmac.d.ts",
+          "bytes": 992,
+          "sha256": "1840e09b5e9552672043e5392f07962c2b3e153a17bedae893f073eebd037dd8"
+        },
+        {
+          "path": "package/esm/src/kems/hybridkem.d.ts",
+          "bytes": 1677,
+          "sha256": "cc924b170da6ba4e27b96ed29b760506a2b982877edfda6420064c1814180ec3"
+        },
+        {
+          "path": "package/script/src/kems/hybridkem.d.ts",
+          "bytes": 1677,
+          "sha256": "cc924b170da6ba4e27b96ed29b760506a2b982877edfda6420064c1814180ec3"
+        },
+        {
+          "path": "package/esm/src/identifiers.d.ts",
+          "bytes": 1795,
+          "sha256": "ccc3b800c572a1273f524bebffcd0e8fec7e9d2480154ebc608c311d59bbe6b0"
+        },
+        {
+          "path": "package/script/src/identifiers.d.ts",
+          "bytes": 1795,
+          "sha256": "ccc3b800c572a1273f524bebffcd0e8fec7e9d2480154ebc608c311d59bbe6b0"
+        },
+        {
+          "path": "package/esm/src/interfaces/jsonWebKeyExtended.d.ts",
+          "bytes": 629,
+          "sha256": "929c2d2be2c4183478672c37878f00bbd18d18bcb746c86c2910ed9e46602357"
+        },
+        {
+          "path": "package/script/src/interfaces/jsonWebKeyExtended.d.ts",
+          "bytes": 629,
+          "sha256": "929c2d2be2c4183478672c37878f00bbd18d18bcb746c86c2910ed9e46602357"
+        },
+        {
+          "path": "package/esm/src/interfaces/kdfInterface.d.ts",
+          "bytes": 3379,
+          "sha256": "84b80d64b2000fe07909606fb335e2e220cc891295aafc525d601ee502e4b6b1"
+        },
+        {
+          "path": "package/script/src/interfaces/kdfInterface.d.ts",
+          "bytes": 3379,
+          "sha256": "84b80d64b2000fe07909606fb335e2e220cc891295aafc525d601ee502e4b6b1"
+        },
+        {
+          "path": "package/esm/src/interfaces/kemInterface.d.ts",
+          "bytes": 4825,
+          "sha256": "27c03c98afc1b6fcdcb6c9100220639aece4c491986f554185e2f7668a9ee24c"
+        },
+        {
+          "path": "package/script/src/interfaces/kemInterface.d.ts",
+          "bytes": 4825,
+          "sha256": "27c03c98afc1b6fcdcb6c9100220639aece4c491986f554185e2f7668a9ee24c"
+        },
+        {
+          "path": "package/esm/src/interfaces/keyScheduleParams.d.ts",
+          "bytes": 517,
+          "sha256": "b30a60657b7055bc5fa2446623570e605cdb02c72aaf327084fa38d40a7d1697"
+        },
+        {
+          "path": "package/script/src/interfaces/keyScheduleParams.d.ts",
+          "bytes": 517,
+          "sha256": "b30a60657b7055bc5fa2446623570e605cdb02c72aaf327084fa38d40a7d1697"
+        },
+        {
+          "path": "package/esm/src/hash/md.d.ts",
+          "bytes": 1784,
+          "sha256": "a483e8e2aee08baed93eb958db4b0dd45ad52422d5a887aac5fd176bea9dfc7b"
+        },
+        {
+          "path": "package/script/src/hash/md.d.ts",
+          "bytes": 1784,
+          "sha256": "a483e8e2aee08baed93eb958db4b0dd45ad52422d5a887aac5fd176bea9dfc7b"
+        },
+        {
+          "path": "package/esm/src/utils/misc.d.ts",
+          "bytes": 1840,
+          "sha256": "38a3920ce76b9ecde6389db0cf0d56c12993b1ddf0382f9f45c7148d189184cc"
+        },
+        {
+          "path": "package/script/src/utils/misc.d.ts",
+          "bytes": 1840,
+          "sha256": "38a3920ce76b9ecde6389db0cf0d56c12993b1ddf0382f9f45c7148d189184cc"
+        },
+        {
+          "path": "package/esm/mod.d.ts",
+          "bytes": 2314,
+          "sha256": "5370d00b34608214bdf45dc09fd6db195f6d35126418be6a189f4bd82b707706"
+        },
+        {
+          "path": "package/script/mod.d.ts",
+          "bytes": 2314,
+          "sha256": "5370d00b34608214bdf45dc09fd6db195f6d35126418be6a189f4bd82b707706"
+        },
+        {
+          "path": "package/esm/src/curve/modular.d.ts",
+          "bytes": 552,
+          "sha256": "adb73d9bdd3f6b029b254ea01b5bf1a28f41865e6f97d24a40bc71cf746cf851"
+        },
+        {
+          "path": "package/script/src/curve/modular.d.ts",
+          "bytes": 552,
+          "sha256": "adb73d9bdd3f6b029b254ea01b5bf1a28f41865e6f97d24a40bc71cf746cf851"
+        },
+        {
+          "path": "package/esm/src/curve/montgomery.d.ts",
+          "bytes": 1260,
+          "sha256": "cda9e51b0e1da33632b64ab2d2a27ecf93f1f0915d2deb23c2cf09b55ef735db"
+        },
+        {
+          "path": "package/script/src/curve/montgomery.d.ts",
+          "bytes": 1260,
+          "sha256": "cda9e51b0e1da33632b64ab2d2a27ecf93f1f0915d2deb23c2cf09b55ef735db"
+        },
+        {
+          "path": "package/esm/src/utils/noble.d.ts",
+          "bytes": 5520,
+          "sha256": "b4cdc6f8d73abbb0b5d31d40bcabd039c08b8b84c46516cafd75720ffc0880f2"
+        },
+        {
+          "path": "package/script/src/utils/noble.d.ts",
+          "bytes": 5520,
+          "sha256": "b4cdc6f8d73abbb0b5d31d40bcabd039c08b8b84c46516cafd75720ffc0880f2"
+        },
+        {
+          "path": "package/esm/src/interfaces/preSharedKey.d.ts",
+          "bytes": 234,
+          "sha256": "55d2ae3ec5b1151097c2b82b5af73bc2cfbd91190d332c5f649a1d1ac23bc221"
+        },
+        {
+          "path": "package/script/src/interfaces/preSharedKey.d.ts",
+          "bytes": 234,
+          "sha256": "55d2ae3ec5b1151097c2b82b5af73bc2cfbd91190d332c5f649a1d1ac23bc221"
+        },
+        {
+          "path": "package/esm/src/interfaces/recipientContextParams.d.ts",
+          "bytes": 520,
+          "sha256": "90b9d40ee2e0d653d6b1e37cc44cf7fa5e7bb1e9bd8b0df32641fd7422b4010b"
+        },
+        {
+          "path": "package/script/src/interfaces/recipientContextParams.d.ts",
+          "bytes": 520,
+          "sha256": "90b9d40ee2e0d653d6b1e37cc44cf7fa5e7bb1e9bd8b0df32641fd7422b4010b"
+        },
+        {
+          "path": "package/esm/src/interfaces/senderContextParams.d.ts",
+          "bytes": 515,
+          "sha256": "85d382fec148a82a345e226e8e777887b8841c5cb49f5bcf3cb391d05c5a3ea8"
+        },
+        {
+          "path": "package/script/src/interfaces/senderContextParams.d.ts",
+          "bytes": 515,
+          "sha256": "85d382fec148a82a345e226e8e777887b8841c5cb49f5bcf3cb391d05c5a3ea8"
+        },
+        {
+          "path": "package/esm/src/hash/sha2.d.ts",
+          "bytes": 4884,
+          "sha256": "dc239cbe91d20f03c8492c165698dbcd0bb0162a43e6bdf8104cb44c8e9329ff"
+        },
+        {
+          "path": "package/script/src/hash/sha2.d.ts",
+          "bytes": 4884,
+          "sha256": "dc239cbe91d20f03c8492c165698dbcd0bb0162a43e6bdf8104cb44c8e9329ff"
+        },
+        {
+          "path": "package/esm/src/hash/sha3.d.ts",
+          "bytes": 2290,
+          "sha256": "34780ed147b1f0e2e5705bd3e517b30e11ba0a454cfc061bd7f31e0db1da73cf"
+        },
+        {
+          "path": "package/script/src/hash/sha3.d.ts",
+          "bytes": 2290,
+          "sha256": "34780ed147b1f0e2e5705bd3e517b30e11ba0a454cfc061bd7f31e0db1da73cf"
+        },
+        {
+          "path": "package/esm/src/hash/u64.d.ts",
+          "bytes": 3129,
+          "sha256": "756403266112f5eb494b2c0b0c279c615271557c94f9453c45145d74d9451da0"
+        },
+        {
+          "path": "package/script/src/hash/u64.d.ts",
+          "bytes": 3129,
+          "sha256": "756403266112f5eb494b2c0b0c279c615271557c94f9453c45145d74d9451da0"
+        },
+        {
+          "path": "package/esm/src/xCryptoKey.d.ts",
+          "bytes": 371,
+          "sha256": "f06a02da31099d08d2aa1b579ce1bc9a4ed6b40fd1bd203cd27b492bb57f518c"
+        },
+        {
+          "path": "package/script/src/xCryptoKey.d.ts",
+          "bytes": 371,
+          "sha256": "f06a02da31099d08d2aa1b579ce1bc9a4ed6b40fd1bd203cd27b492bb57f518c"
+        }
+      ],
+      "bytes": 70081
+    },
+    {
+      "ecosystem": "npm",
+      "name": "canonicalize",
+      "version": "5.1.0",
+      "artifact": "canonicalize-5.1.0.tgz",
+      "sha256": "c6fad63ee98f4c497875a1d3ca66052d276477893e0f32deba1b512088bbc1e2",
+      "integrity": "sha512-bab9+WefZljqQ8jT0qRwVmTyzAUU63K97QIQD3agynIBrb6sa5M2eAy8Hv8K3p4V9+ONVYZKtGYl4Dg+/5Gumw==",
+      "dependencies": {},
+      "license": "Apache-2.0",
+      "gitHead": "31fb117afde3ef305b2e1d99bde539bf6300bc62",
+      "files": [
+        {
+          "path": "package/LICENSE",
+          "bytes": 11357,
+          "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+        },
+        {
+          "path": "package/bin/canonicalize.js",
+          "bytes": 395,
+          "sha256": "cf81826eee228ef4d56f14f2272e635f38bc262dd4d0faa0e2b1065a0ae388f0"
+        },
+        {
+          "path": "package/lib/canonicalize.js",
+          "bytes": 7145,
+          "sha256": "c1d0195af2a0748454b06af8f218e5c90415c19d39154d0058fee8229c12d859"
+        },
+        {
+          "path": "package/package.json",
+          "bytes": 1553,
+          "sha256": "ca7454aac0f76429b5d56bbc3bd61fa706fb1088a19f45d64cf38e055fbf4670"
+        },
+        {
+          "path": "package/README.md",
+          "bytes": 3934,
+          "sha256": "30255a8b29cdcc39f9773c8767243b6f1c62ef735fd61b11f85de44958c3e9af"
+        },
+        {
+          "path": "package/lib/canonicalize.d.ts",
+          "bytes": 90,
+          "sha256": "5eba409e1fe34c86e46af829f1f236645b654e405e3377277b2baeb5e5352124"
+        }
+      ],
+      "bytes": 8688
+    },
+    {
+      "ecosystem": "pypi",
+      "name": "pycryptodome",
+      "version": "3.23.0",
+      "artifact": "pycryptodome-3.23.0-cp37-abi3-macosx_10_9_universal2.whl",
+      "sha256": "187058ab80b3281b1de11c2e6842a357a1f71b42cb1e15bce373f3d238135c27",
+      "dependencies": [],
+      "license": "BSD, Public Domain",
+      "vulnerabilities_at_fetch": [],
+      "files": [
+        {
+          "path": "Crypto/__init__.pyi",
+          "bytes": 99,
+          "sha256": "7b911ae39272d9174eafa6e62c5f63892d81c3ae569d84c3d4d30b2656c601ac"
+        },
+        {
+          "path": "Crypto/__init__.py",
+          "bytes": 185,
+          "sha256": "4051cc37a6a43b5ca1cd6bc08284ba3593831a92f71d9faa46f559eeffe9bd4f"
+        },
+        {
+          "path": "Crypto/py.typed",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "Crypto/PublicKey/_edwards.py",
+          "bytes": 4663,
+          "sha256": "58957e498031d7d396689e91139a1bcdea0bdd64a195cb746a5e8e4bf58ad371"
+        },
+        {
+          "path": "Crypto/PublicKey/ElGamal.pyi",
+          "bytes": 674,
+          "sha256": "facdedcb4bffa3ef11abcfe7ad8877d95a3a8a1afc39a49675cfc7eff095182a"
+        },
+        {
+          "path": "Crypto/PublicKey/_openssh.py",
+          "bytes": 5126,
+          "sha256": "d6ff2ffb45db56de93b822e4cb818b6460eae39259b675fd13133a0868bf2bf7"
+        },
+        {
+          "path": "Crypto/PublicKey/DSA.pyi",
+          "bytes": 1381,
+          "sha256": "b7acb7b7fc3fa1da397b12d34b82b7fddefa39b76a7cde91d501ca39f7ff2c0e"
+        },
+        {
+          "path": "Crypto/PublicKey/_montgomery.py",
+          "bytes": 5227,
+          "sha256": "795b60d30441f5ee3c256435b1e27c289227bffdc21a9a4e90d2178647d305e1"
+        },
+        {
+          "path": "Crypto/PublicKey/__init__.pyi",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "Crypto/PublicKey/_openssh.pyi",
+          "bytes": 324,
+          "sha256": "cb00b2f540eedbf01023ad02856c46c72a87899a18c0c282dd3557267fd95483"
+        },
+        {
+          "path": "Crypto/PublicKey/_point.pyi",
+          "bytes": 1721,
+          "sha256": "1027ed2f620ea30e0017a08696062635cc80ea2456b8fc36916be9591506620b"
+        },
+        {
+          "path": "Crypto/PublicKey/RSA.py",
+          "bytes": 31093,
+          "sha256": "54948a1a8201ba259dd926963f8adcd0b352c758381ee649ca68e857d99b53b5"
+        },
+        {
+          "path": "Crypto/PublicKey/__init__.py",
+          "bytes": 3142,
+          "sha256": "0aed688b8fb441ef105e9b2669caee1e3e788a2c513ab08fc16b9cee39b4d61a"
+        },
+        {
+          "path": "Crypto/PublicKey/ECC.py",
+          "bytes": 47883,
+          "sha256": "554c4bbbafbfae196361822d11e2c755f91d571ebbf0d865bb4f488f814d3bd3"
+        },
+        {
+          "path": "Crypto/PublicKey/_curve25519.abi3.so",
+          "bytes": 118104,
+          "sha256": "e5a526219903af1a4b55b9b98d5590692e2ec9e8f789f3edf8fc80498777cafd"
+        },
+        {
+          "path": "Crypto/PublicKey/RSA.pyi",
+          "bytes": 2521,
+          "sha256": "47918905288345ea485a5012e4b47738ded906bf7a3848c71bedf3053869adba"
+        },
+        {
+          "path": "Crypto/PublicKey/DSA.py",
+          "bytes": 22378,
+          "sha256": "74b1024a6f6562dfeaa22945dc05e2ce4250b11ea777f41c69e299d2ca0653ca"
+        },
+        {
+          "path": "Crypto/PublicKey/ECC.pyi",
+          "bytes": 2583,
+          "sha256": "a7ee6a2cb4cc65eb0f89c9654740ed08454405e7318168779bdb545b84385511"
+        },
+        {
+          "path": "Crypto/PublicKey/ElGamal.py",
+          "bytes": 8615,
+          "sha256": "cd6cf9d8120b66ff585330673496e3e371bf43936d515da8c592bab237d0789e"
+        },
+        {
+          "path": "Crypto/PublicKey/_ec_ws.abi3.so",
+          "bytes": 1492608,
+          "sha256": "9bba188fecde6f347a23587302cc1604f93245e4d35af1ea1f344464ce56a438"
+        },
+        {
+          "path": "Crypto/PublicKey/_ed448.abi3.so",
+          "bytes": 157712,
+          "sha256": "0578369d522e8c598a0879cb40936693e25f43c5ec9977a1e72f3e26977a7bc3"
+        },
+        {
+          "path": "Crypto/PublicKey/_curve.py",
+          "bytes": 1812,
+          "sha256": "539b760ed0d60b2be2891f03364ca3b9e31ad5a2b55defbe9dc20f5ed21c340d"
+        },
+        {
+          "path": "Crypto/PublicKey/_point.py",
+          "bytes": 16455,
+          "sha256": "977c1e6b4fa06f1e43e078a79df7f7f3fc95b639b5d5bdaf2aa6a7ff72803e4c"
+        },
+        {
+          "path": "Crypto/PublicKey/_ed25519.abi3.so",
+          "bytes": 135200,
+          "sha256": "18a2f09a9bccedbf932c82d64d987dd3249d361afd5125f755e3f2f77d0f19c3"
+        },
+        {
+          "path": "Crypto/PublicKey/_curve448.abi3.so",
+          "bytes": 157104,
+          "sha256": "e3e0f13a3747879688b3bf67dc83b15314603671f9c8a73701977262645b6c4b"
+        },
+        {
+          "path": "Crypto/PublicKey/_nist_ecc.py",
+          "bytes": 10161,
+          "sha256": "a8744f757c32df733c7b2654adede72162dbf5eb47cf5aa90fc08c658d95d132"
+        },
+        {
+          "path": "Crypto/Util/py3compat.py",
+          "bytes": 5825,
+          "sha256": "347d6ab99290190edcdc0537f7b983cb7bbdfb0222c327ab217d4056542cc406"
+        },
+        {
+          "path": "Crypto/Util/RFC1751.pyi",
+          "bytes": 159,
+          "sha256": "078d8bbec13a1bbf3aacd12cae1b5afc100d6b382ba5bd16a1204fa8aca3b798"
+        },
+        {
+          "path": "Crypto/Util/_raw_api.pyi",
+          "bytes": 906,
+          "sha256": "3a1736aebe914be9e1b3a4f900bd58c90b5aaacc7a055ac96b4f760a2c00bcd3"
+        },
+        {
+          "path": "Crypto/Util/py3compat.pyi",
+          "bytes": 837,
+          "sha256": "95c2c05d557ab7877fcbf12c51939811882b394733733325ff721ac08b71629c"
+        },
+        {
+          "path": "Crypto/Util/number.py",
+          "bytes": 96371,
+          "sha256": "3b7a2af24f4ca360aed2e6108b28b7f9fdc8d6ba6bcc5852e86c19bd814cd425"
+        },
+        {
+          "path": "Crypto/Util/_strxor.abi3.so",
+          "bytes": 66320,
+          "sha256": "a84a6e055e0edb83a0d240029ebfb2a0287457c6a5c1d489fe9ec97ee52eb775"
+        },
+        {
+          "path": "Crypto/Util/__init__.py",
+          "bytes": 1927,
+          "sha256": "3e4749c1c86b4b1778b72ef5b1dd1e757b2df434a29c8e60060cde45faba364a"
+        },
+        {
+          "path": "Crypto/Util/_file_system.pyi",
+          "bytes": 100,
+          "sha256": "e50aee1163c4e2eacfb65093e4483cb41432855f5f7c17d92008e6328ef6edd3"
+        },
+        {
+          "path": "Crypto/Util/_raw_api.py",
+          "bytes": 10552,
+          "sha256": "4e2c3e290cf7d03c048a12fe6e462deaec836e3931d46524d876fdcef7f346fc"
+        },
+        {
+          "path": "Crypto/Util/number.pyi",
+          "bytes": 975,
+          "sha256": "8b15f5052f04befb8f5cdd7ff1aa2c7581ca9ad5c607d36544d548f53f4c000f"
+        },
+        {
+          "path": "Crypto/Util/_cpu_features.py",
+          "bytes": 1989,
+          "sha256": "85d9a98dc9f1263933d9dc9fb0f04d9f26b292a6b7cd71a3f60506b969350368"
+        },
+        {
+          "path": "Crypto/Util/asn1.pyi",
+          "bytes": 3805,
+          "sha256": "820bb663c9edc582a8c7bbd199c14979e69b44d42c54bd49d6a9eb7995ecf3e4"
+        },
+        {
+          "path": "Crypto/Util/RFC1751.py",
+          "bytes": 21192,
+          "sha256": "bd77ff191e5ecdfe9060879da8d3892228805328248d47cd36d1a9d7375ab552"
+        },
+        {
+          "path": "Crypto/Util/_file_system.py",
+          "bytes": 2171,
+          "sha256": "3917ef9a5c0a26d9460393c236beb8e94f21bb34da6ecd9be3777f1436ae1be2"
+        },
+        {
+          "path": "Crypto/Util/_cpuid_c.abi3.so",
+          "bytes": 66352,
+          "sha256": "0a876fbce215ae4c8e65d5727e96da8466fc762e07737ad9f95156d86172899d"
+        },
+        {
+          "path": "Crypto/Util/Padding.pyi",
+          "bytes": 238,
+          "sha256": "e3b4771f6904eba3ed28ef36793fd57397824a035ee2a38582a3883d1765a7d7"
+        },
+        {
+          "path": "Crypto/Util/Counter.pyi",
+          "bytes": 290,
+          "sha256": "d89ad31c962adbadd7a2c4120bf3483f44ee7d4b13946ed652bfa546a8c90ae0"
+        },
+        {
+          "path": "Crypto/Util/_cpu_features.pyi",
+          "bytes": 59,
+          "sha256": "df029767467c965736bb1003bdb873ddd1d5e982f246b0ee8ceb1a6d795f7c24"
+        },
+        {
+          "path": "Crypto/Util/Padding.py",
+          "bytes": 4348,
+          "sha256": "05e67e479b95e5a070e375aaa7c7bf8e7522ac5b545af79e7017b65e7359d4b9"
+        },
+        {
+          "path": "Crypto/Util/Counter.py",
+          "bytes": 3213,
+          "sha256": "0a7c57ee5b5c107806cd8aea449c3f67aa07468b486a1d1af0b7d11766569ef4"
+        },
+        {
+          "path": "Crypto/Util/strxor.py",
+          "bytes": 5441,
+          "sha256": "21d904f48e49e6ff527099a18db55fac600a2149ee9012ed75820fce1d5e4796"
+        },
+        {
+          "path": "Crypto/Util/strxor.pyi",
+          "bytes": 243,
+          "sha256": "3ae06fbae2bf7b3ab779a1d8d7427cf71a4447d210f70718cc523b8f5b69965d"
+        },
+        {
+          "path": "Crypto/Util/asn1.py",
+          "bytes": 36169,
+          "sha256": "fc6971008075738af32fafc3495c70b58f399672730902a0acdaf7f3529a22d0"
+        },
+        {
+          "path": "Crypto/Signature/PKCS1_PSS.py",
+          "bytes": 2099,
+          "sha256": "443775f2d8e0d039b366040306051e30eef11a67dfb36b2b33c0603cb8002a2c"
+        },
+        {
+          "path": "Crypto/Signature/DSS.pyi",
+          "bytes": 1094,
+          "sha256": "29ffa0aefecaadfd597d34c22f04c1db55cebe1051955e784d3bf76009152a47"
+        },
+        {
+          "path": "Crypto/Signature/pkcs1_15.pyi",
+          "bytes": 564,
+          "sha256": "16341388d003c24f1f08299b1a6c56f75d8a0b2851f5420db52cbef492e35a01"
+        },
+        {
+          "path": "Crypto/Signature/eddsa.pyi",
+          "bytes": 726,
+          "sha256": "c92810b3c8c71c80ad7889a17de9c34d956913d13d7c2a5d5da9f298205f6776"
+        },
+        {
+          "path": "Crypto/Signature/PKCS1_v1_5.py",
+          "bytes": 1989,
+          "sha256": "a84b6f70189c49d9a82f481be41d87fe8fbd5c3d6cfac392eb9571464247aa4f"
+        },
+        {
+          "path": "Crypto/Signature/__init__.py",
+          "bytes": 1695,
+          "sha256": "9e450e0c7007c2a985bde99d44b293157098d2587a59dc6616526e2c3d0805fc"
+        },
+        {
+          "path": "Crypto/Signature/PKCS1_v1_5.pyi",
+          "bytes": 451,
+          "sha256": "7fb532897d26aa4b4f4abb4ea0bf108f4da728ee884d019b68ead0561ba4189e"
+        },
+        {
+          "path": "Crypto/Signature/pss.pyi",
+          "bytes": 1041,
+          "sha256": "cfdcbc36502ed1f50d3c762f9e28d08e214bad41fd1bcc40a67c04f85d0b6c31"
+        },
+        {
+          "path": "Crypto/Signature/pkcs1_15.py",
+          "bytes": 8865,
+          "sha256": "b233332ff720d9bd98c50afb44c65034f126242fae80f0475847c85ac0387a93"
+        },
+        {
+          "path": "Crypto/Signature/PKCS1_PSS.pyi",
+          "bytes": 867,
+          "sha256": "7a5a50ac183fd7a9572277b09f513f6baeab3b949501869b3e7fac6e25685e13"
+        },
+        {
+          "path": "Crypto/Signature/pss.py",
+          "bytes": 13583,
+          "sha256": "03a4352afb2832c4a3b4e8f8736d713e06eace6c52d36fd84253eaf3a4b8d2c2"
+        },
+        {
+          "path": "Crypto/Signature/eddsa.py",
+          "bytes": 12444,
+          "sha256": "8cf93caa63c27052bc87e90df4b419ab42becde0209e1cff0ff1a4348021f093"
+        },
+        {
+          "path": "Crypto/Signature/DSS.py",
+          "bytes": 15304,
+          "sha256": "43aecda5e65295d96bc79fa37cba2aac944bdb58a08f2aca86f7767de3de3906"
+        },
+        {
+          "path": "Crypto/Hash/SHA1.pyi",
+          "bytes": 536,
+          "sha256": "bcdb41fdbe0ccad26af08a35c6e7dd38ee952fe9cc05c0a70cf220250b8d3c23"
+        },
+        {
+          "path": "Crypto/Hash/_BLAKE2b.abi3.so",
+          "bytes": 116752,
+          "sha256": "5c53a3d0ebacfa751ca497ebdd8c71b85a133372c9c8d36ec7f4ef1a2cc924c5"
+        },
+        {
+          "path": "Crypto/Hash/MD2.py",
+          "bytes": 6111,
+          "sha256": "dc16eafad2949250fcd28cbfd365c47292eacf13e459eb84e2d2b863b4a42d39"
+        },
+        {
+          "path": "Crypto/Hash/RIPEMD.pyi",
+          "bytes": 94,
+          "sha256": "4c43b3d4efb9bf70ee7736242932d00e34bab3473f308b179ea5685becbddf9d"
+        },
+        {
+          "path": "Crypto/Hash/_SHA256.abi3.so",
+          "bytes": 117392,
+          "sha256": "9db8cabe9f83cc2a6de82c4b0f6311fe0174d0c741ad8b42d388edd2d25dc630"
+        },
+        {
+          "path": "Crypto/Hash/SHA.pyi",
+          "bytes": 161,
+          "sha256": "2e1a6a511c09acd73132dadfa52ba5535ea732a6ab85cf22128669bab6ed5c89"
+        },
+        {
+          "path": "Crypto/Hash/_keccak.abi3.so",
+          "bytes": 117328,
+          "sha256": "1dd7ffa9ae2d8245c300121906219b5bef4578cca28fe0bc266979206abe7a4c"
+        },
+        {
+          "path": "Crypto/Hash/_SHA224.abi3.so",
+          "bytes": 117392,
+          "sha256": "440415165a94b404c841dcda79c1ba1e36a172226458536a7a69fbd917d964ff"
+        },
+        {
+          "path": "Crypto/Hash/keccak.py",
+          "bytes": 7543,
+          "sha256": "f798f27e64aa5bd3ebd9dbea293cba4930de3c26d6579a0e805b8c2abac6a244"
+        },
+        {
+          "path": "Crypto/Hash/_RIPEMD160.abi3.so",
+          "bytes": 116768,
+          "sha256": "fc7c50e8436f6c9ba05496e4adc767384b468ae7e399196afeae7ecefc6e819e"
+        },
+        {
+          "path": "Crypto/Hash/BLAKE2s.pyi",
+          "bytes": 739,
+          "sha256": "f63b0be232d0ab9fcc6fc58cf7d2cfbab1f50fe14bfa02c0799c817fc4225add"
+        },
+        {
+          "path": "Crypto/Hash/SHA512.pyi",
+          "bytes": 622,
+          "sha256": "55f3331f1fb453879f0b2642ae0b3f68ecf5ed6f2dd191cbff7b91f33698cc25"
+        },
+        {
+          "path": "Crypto/Hash/SHA3_224.py",
+          "bytes": 6179,
+          "sha256": "0d8cabac2a3ec1e6713b0ed322ea5d08f563c0ebffc7baf496dc66e5f51c352d"
+        },
+        {
+          "path": "Crypto/Hash/TupleHash128.py",
+          "bytes": 4752,
+          "sha256": "d81e657aa850b0cd477f6b8801b94f893fdd925766abdd6cf8dbf18adc8d8c5a"
+        },
+        {
+          "path": "Crypto/Hash/SHA512.py",
+          "bytes": 7720,
+          "sha256": "b9cd12b3ba917147f471b42f5c364ea1c819280ae73b8e352d5d7db740befb7f"
+        },
+        {
+          "path": "Crypto/Hash/SHA3_384.pyi",
+          "bytes": 605,
+          "sha256": "737c1bd1ce918e570c70adb6995e11656b0399403636ccda8212c05c8acdf13f"
+        },
+        {
+          "path": "Crypto/Hash/SHAKE256.pyi",
+          "bytes": 477,
+          "sha256": "cab8d7a853e01386eb295ff7eba3a885304ad84b583281f8cc1eb286a74f759e"
+        },
+        {
+          "path": "Crypto/Hash/BLAKE2b.pyi",
+          "bytes": 906,
+          "sha256": "5382b799aa5d61e1d51eb9481207df295f487c02d56ea90ead56c946e8e7b35d"
+        },
+        {
+          "path": "Crypto/Hash/CMAC.pyi",
+          "bytes": 822,
+          "sha256": "9195c0794cf1437f2763e6986c83eb6599913b18236b61e7bd4cfbc6e017ba81"
+        },
+        {
+          "path": "Crypto/Hash/TupleHash128.pyi",
+          "bytes": 666,
+          "sha256": "9800dd2a4b45d663df2ad5dffb15b2b63d1b7e0ca7ce3c2da6977545d30bd6ea"
+        },
+        {
+          "path": "Crypto/Hash/SHA3_224.pyi",
+          "bytes": 605,
+          "sha256": "60dbcdf86c55a4f2baffe79ed3f9feef080086aec9cc168169e1a235d56841d9"
+        },
+        {
+          "path": "Crypto/Hash/__init__.pyi",
+          "bytes": 2028,
+          "sha256": "f9ea4fc042320032e119a38a1392c8d4e04018af7f9ad2cd1486600c99be4842"
+        },
+        {
+          "path": "Crypto/Hash/_ghash_portable.abi3.so",
+          "bytes": 116264,
+          "sha256": "9f80aacf65a8c71b993a815e6052ae8866b92316cc83ef87429e48fcef4d5df6"
+        },
+        {
+          "path": "Crypto/Hash/SHA3_256.pyi",
+          "bytes": 605,
+          "sha256": "2653ce895b4454d25eac6591b810ee9d7053d7d597ffa39ba54b8c697ed0744b"
+        },
+        {
+          "path": "Crypto/Hash/TurboSHAKE128.py",
+          "bytes": 3835,
+          "sha256": "68b1a9215eeef54a1253749e7862bd656e14cec12775eab211a2b3f5338c09b7"
+        },
+        {
+          "path": "Crypto/Hash/MD2.pyi",
+          "bytes": 492,
+          "sha256": "c1aec6498529ccbdbbb28e18822244668d1d3b6d352b21caf3b436d0fbe6f9b3"
+        },
+        {
+          "path": "Crypto/Hash/TurboSHAKE128.pyi",
+          "bytes": 574,
+          "sha256": "1ed6ceb9937db9f8262d36b0d8316179329667ff4d68ba0db4714cb3fb199d0a"
+        },
+        {
+          "path": "Crypto/Hash/SHA384.py",
+          "bytes": 6899,
+          "sha256": "70fcbd3597ce460e48fd979ecb892bc9880ff925bd4400d9127faf261cdc6f8a"
+        },
+        {
+          "path": "Crypto/Hash/cSHAKE128.py",
+          "bytes": 6363,
+          "sha256": "5f6f511e56b60ae42d69002e2a499dede2648ff1792a49d166fb98aedcb0f12c"
+        },
+        {
+          "path": "Crypto/Hash/SHA256.py",
+          "bytes": 6897,
+          "sha256": "e879e087f1868153f63222da9be10c5e002e176fb552977526380fa68d5d6f5f"
+        },
+        {
+          "path": "Crypto/Hash/KMAC256.pyi",
+          "bytes": 226,
+          "sha256": "a0078a832b5ada2aa357d62ff35f31a16e5e2768b178b3f88e850ff17522d9ed"
+        },
+        {
+          "path": "Crypto/Hash/SHA1.py",
+          "bytes": 6690,
+          "sha256": "ad4bd1bd9e9c2dd68d6bdbd13999f826ee39b724ea0031f8ef45c62e6f62b0cf"
+        },
+        {
+          "path": "Crypto/Hash/_MD2.abi3.so",
+          "bytes": 116656,
+          "sha256": "b268cba360444bad271cddc288a3971a4d02912615ede3ada26bee5a05a8e7db"
+        },
+        {
+          "path": "Crypto/Hash/_SHA384.abi3.so",
+          "bytes": 117392,
+          "sha256": "07bf0a81eaf5356a7af9dbb33b7a1b9aada0ad7a6c7c376a77611ec07b11b35c"
+        },
+        {
+          "path": "Crypto/Hash/KMAC256.py",
+          "bytes": 2906,
+          "sha256": "5f8c2a59c17bfc91f08674afb4dfad1785abdc77439e44573426f53bd02bfd50"
+        },
+        {
+          "path": "Crypto/Hash/CMAC.py",
+          "bytes": 10504,
+          "sha256": "a5f84e105c3398aa5414897ae18030638d0ef4f854f1619cebab2f8908f4c5d2"
+        },
+        {
+          "path": "Crypto/Hash/MD4.pyi",
+          "bytes": 532,
+          "sha256": "ed9b594048090b022cc2779bd0d068bffb8bd3f4e882587d10f3272d5146ab0a"
+        },
+        {
+          "path": "Crypto/Hash/cSHAKE128.pyi",
+          "bytes": 499,
+          "sha256": "20b7a71438b39e3d5c8c85db8c806fcc4a9f14e8ce6ca5d6c8cb0eafaddac14a"
+        },
+        {
+          "path": "Crypto/Hash/__init__.py",
+          "bytes": 2939,
+          "sha256": "df08b30541432c1e94800f18f0e228fb50928adc7de6a2f79e4b4cabb857911b"
+        },
+        {
+          "path": "Crypto/Hash/MD5.pyi",
+          "bytes": 492,
+          "sha256": "738302247bd84e2d982f8866a84bbd8af6d2be4049751f92da5754a84a732bcb"
+        },
+        {
+          "path": "Crypto/Hash/KangarooTwelve.py",
+          "bytes": 7170,
+          "sha256": "c04edf9e147ac5f5b160fe77e91586f0983650ab441078cb9c36cebe0f7106f4"
+        },
+        {
+          "path": "Crypto/Hash/SHAKE128.py",
+          "bytes": 5257,
+          "sha256": "bb3142a6c74653faaeffbf8dc4153f0f6ec1b79fbb0f31111217b1801bc0d59f"
+        },
+        {
+          "path": "Crypto/Hash/BLAKE2s.py",
+          "bytes": 9429,
+          "sha256": "1ddc5e888a0ceed1ff76da6ce91cf2307021da0359a299bc2b6046053af781be"
+        },
+        {
+          "path": "Crypto/Hash/_SHA512.abi3.so",
+          "bytes": 117408,
+          "sha256": "bd43cfe5156caa0231a87b962a2021034b26e8df587a05b597202dbbb4c12e3a"
+        },
+        {
+          "path": "Crypto/Hash/_SHA1.abi3.so",
+          "bytes": 117376,
+          "sha256": "2c7e2a10a3f6c1bba7a1d3f94d01aa97fba84cc2228bee75f7321e023297d0fb"
+        },
+        {
+          "path": "Crypto/Hash/TurboSHAKE256.pyi",
+          "bytes": 306,
+          "sha256": "bb00d513daa6c3861832b08a3243923d32502f2d4586eb069b9f62fa28bc1ee2"
+        },
+        {
+          "path": "Crypto/Hash/KMAC128.pyi",
+          "bytes": 903,
+          "sha256": "08772389a34a8ef59080b5ec6b06f7571b6dc66b7f8552be0effb9455b3aa0e1"
+        },
+        {
+          "path": "Crypto/Hash/TupleHash256.py",
+          "bytes": 2832,
+          "sha256": "b909caaa03646c244e8d8c08fbd1509eaa3aaa24617f19d296ef033ebbc14509"
+        },
+        {
+          "path": "Crypto/Hash/SHA3_512.pyi",
+          "bytes": 605,
+          "sha256": "6d9d16a334c3fe643fe6dff3e12582a429fad5884255a985e74d63b107548e9b"
+        },
+        {
+          "path": "Crypto/Hash/SHA.py",
+          "bytes": 1148,
+          "sha256": "9d2099cf87236c3049c2846dd26fdafb7963db15a3c6ccbb82471cb494e07fa1"
+        },
+        {
+          "path": "Crypto/Hash/SHA384.pyi",
+          "bytes": 544,
+          "sha256": "28859b0fe9416ddee5bd6805aae22a50031a8aca2f7b2d075743669aafa9bce6"
+        },
+        {
+          "path": "Crypto/Hash/Poly1305.py",
+          "bytes": 8074,
+          "sha256": "b7803188689802cccbe341a9953c44458e21f9a6bf53fe11b7ed8c7c3f798a2f"
+        },
+        {
+          "path": "Crypto/Hash/SHA224.py",
+          "bytes": 6901,
+          "sha256": "581ea18a73d0e69481379bec072a5ad1e153a27b9adf58cc0218f93b2581cd2c"
+        },
+        {
+          "path": "Crypto/Hash/SHA3_512.py",
+          "bytes": 6131,
+          "sha256": "2f418c25f01105283d09f200e6de1801ac32780d3e378704ce9cdf25d4af5f4e"
+        },
+        {
+          "path": "Crypto/Hash/cSHAKE256.pyi",
+          "bytes": 231,
+          "sha256": "77f6cd841cd2758481279ffaf8fa88709e990ca0db5db56a02326b0d3a8331aa"
+        },
+        {
+          "path": "Crypto/Hash/keccak.pyi",
+          "bytes": 741,
+          "sha256": "a5701968d7dac9909733107b20316bd85f078b4ebf870141dc65e337363bb013"
+        },
+        {
+          "path": "Crypto/Hash/SHA224.pyi",
+          "bytes": 544,
+          "sha256": "f11b1bc88c087cef0573f7e95b0d4c9c5c34e19e27faa2f41b4d6a090670bf1f"
+        },
+        {
+          "path": "Crypto/Hash/RIPEMD160.pyi",
+          "bytes": 516,
+          "sha256": "450f725f18c7d4149a5379b086c0a7f7eebb0b46bf05cbf730375a7d00a2b8fb"
+        },
+        {
+          "path": "Crypto/Hash/RIPEMD160.py",
+          "bytes": 6398,
+          "sha256": "b652335d46ba199f8f0ca8b79ab8a0b8dc5656c870154af1e0d7795926c612fa"
+        },
+        {
+          "path": "Crypto/Hash/cSHAKE256.py",
+          "bytes": 2202,
+          "sha256": "b5095169813336585630b8cd0201b28267089356910a77551b2902e7535b6f0f"
+        },
+        {
+          "path": "Crypto/Hash/MD4.py",
+          "bytes": 6582,
+          "sha256": "d8cc571dc961875c49780f7885524b0ca0aa0d6121863a555abcf135f0c26272"
+        },
+        {
+          "path": "Crypto/Hash/_MD5.abi3.so",
+          "bytes": 117376,
+          "sha256": "eb556d249784be7e4d9e03cf10097ef71fc0a53fe19ef77d30fed82c7caef1df"
+        },
+        {
+          "path": "Crypto/Hash/SHA256.pyi",
+          "bytes": 612,
+          "sha256": "ce774d123bfa0d939668ea6ea142ac0368538b627bfa824580e435d2c4919d71"
+        },
+        {
+          "path": "Crypto/Hash/_BLAKE2s.abi3.so",
+          "bytes": 116752,
+          "sha256": "3641efdab3682a4e11556104d2e3f83a8ae37f31ed677dd1241ffe75a8143cba"
+        },
+        {
+          "path": "Crypto/Hash/TurboSHAKE256.py",
+          "bytes": 757,
+          "sha256": "0d3ca20bdb1e67d473902d8544ae7d33c98d87f34574407ced04d533fe652a42"
+        },
+        {
+          "path": "Crypto/Hash/HMAC.py",
+          "bytes": 8145,
+          "sha256": "54e102a2e4c8897200917af85acdc6bdaf6721d61e2a4f31b03466cf9bf56fed"
+        },
+        {
+          "path": "Crypto/Hash/KMAC128.py",
+          "bytes": 5949,
+          "sha256": "4416606d6b03ee3ecd6f4eabf3e26e65e7bfc2e1766e267a0a12afc4ba451112"
+        },
+        {
+          "path": "Crypto/Hash/BLAKE2b.py",
+          "bytes": 9423,
+          "sha256": "a6c9a0cd71b869969ceb2f4e33f06e10e47e31c10ecf11d88402a568a2a1cb2b"
+        },
+        {
+          "path": "Crypto/Hash/KangarooTwelve.pyi",
+          "bytes": 572,
+          "sha256": "b217ff835f04431a09f0ef4acee6a1d7b8f0e89fafce632cbaacf5980518e561"
+        },
+        {
+          "path": "Crypto/Hash/SHAKE128.pyi",
+          "bytes": 477,
+          "sha256": "02cf754a1f5a44880515160be7429385604e4a56f563d13856c303407a760c14"
+        },
+        {
+          "path": "Crypto/Hash/Poly1305.pyi",
+          "bytes": 665,
+          "sha256": "4d21a8b6d8ab2cf211ca2bd28d9b9c401eda3da61f86b5249fca28b7a3ab9a65"
+        },
+        {
+          "path": "Crypto/Hash/SHAKE256.py",
+          "bytes": 5258,
+          "sha256": "830aa583d8dcd189482a9787473f5f58a639a33a4381ae777c3bfd4868901a97"
+        },
+        {
+          "path": "Crypto/Hash/SHA3_256.py",
+          "bytes": 6179,
+          "sha256": "6a3b79b5b3128ec5985807a1670a4dcbb7c1e12cf390dc67040bd1ad166f7acb"
+        },
+        {
+          "path": "Crypto/Hash/MD5.py",
+          "bytes": 6618,
+          "sha256": "882db1c33d0e850bc31e7ede654aedb44adde6c36ffd95e59aedf688b170a66e"
+        },
+        {
+          "path": "Crypto/Hash/_MD4.abi3.so",
+          "bytes": 116672,
+          "sha256": "9e5aa30f0ade1e633aaa4fb8f8bc88659bfd357d8507b29a4e6c57a4ef21db6c"
+        },
+        {
+          "path": "Crypto/Hash/HMAC.pyi",
+          "bytes": 624,
+          "sha256": "7c0c870447f911ee8ba226184d9f4f66998846f8ad53a3ab88a19f8c550cff87"
+        },
+        {
+          "path": "Crypto/Hash/SHA3_384.py",
+          "bytes": 6274,
+          "sha256": "b9edb8cb1a4c8e65025363a4b486d90cdff702cb14121415cba5ff6a311c8097"
+        },
+        {
+          "path": "Crypto/Hash/TupleHash256.pyi",
+          "bytes": 144,
+          "sha256": "7acba8b968761e60aedcce242e30a0bb98eb43cecdac1414e61f68e71db5925d"
+        },
+        {
+          "path": "Crypto/Hash/RIPEMD.py",
+          "bytes": 1199,
+          "sha256": "2a50a426013def3538737d8e66403398170e4b039841492e2f8cc66787d2f192"
+        },
+        {
+          "path": "Crypto/Hash/_poly1305.abi3.so",
+          "bytes": 116976,
+          "sha256": "c1297ce8728a496b36134a463d22b3898b413d4454d5de226a45559c59956da1"
+        },
+        {
+          "path": "Crypto/IO/PKCS8.pyi",
+          "bytes": 600,
+          "sha256": "9b19a4ee5b03fe4dcf955a79ca2a419702db100d608a58f293e385b6c72089d7"
+        },
+        {
+          "path": "Crypto/IO/PEM.py",
+          "bytes": 7037,
+          "sha256": "512862b61b1bd9278394dd0be8630dc07b0ebe81effa7c4437b8146dc03667ce"
+        },
+        {
+          "path": "Crypto/IO/_PBES.py",
+          "bytes": 19931,
+          "sha256": "88541a939042639d6bfc66fc962ac3dd4fab6dee53cb72c20ddbdae16bbf6b33"
+        },
+        {
+          "path": "Crypto/IO/__init__.py",
+          "bytes": 1540,
+          "sha256": "414be7a035a59ae386123c5787fb971cca129a83e2fe749e87e12decc4a87de8"
+        },
+        {
+          "path": "Crypto/IO/_PBES.pyi",
+          "bytes": 755,
+          "sha256": "2044ff248388dde32e28566059b9c3396792359b29a534de9f7398bc66b0b5c5"
+        },
+        {
+          "path": "Crypto/IO/PEM.pyi",
+          "bytes": 303,
+          "sha256": "6b51b4ed142d66f12d5c79726f17437284cf3379ea31b74e34d8f3733e471ad1"
+        },
+        {
+          "path": "Crypto/IO/PKCS8.py",
+          "bytes": 7811,
+          "sha256": "82612ffae115f976add1f99fc09c4f25d3abc1a671cd76aba7d437bb356619a1"
+        },
+        {
+          "path": "Crypto/SelfTest/st_common.py",
+          "bytes": 1945,
+          "sha256": "d2ee2bf947be3b5bbb9bd08529f1c0b517cf6a649fb52fc4a0439f52b22f3101"
+        },
+        {
+          "path": "Crypto/SelfTest/__init__.py",
+          "bytes": 3209,
+          "sha256": "0374b3e665f8f6429f7a3274f004e009a184d30f82c97013fa7a851b1ec091db"
+        },
+        {
+          "path": "Crypto/SelfTest/loader.py",
+          "bytes": 8518,
+          "sha256": "cb2a5fa1a28f88447a99b67154c603ee77b759f7507b58f3a0a1bf9ad702e029"
+        },
+        {
+          "path": "Crypto/SelfTest/__main__.py",
+          "bytes": 1569,
+          "sha256": "721ae32c0b0b884ca89ce41226f4b09ac4dd860edaf1b700b44db3970700df97"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_ECC_Curve25519.py",
+          "bytes": 11987,
+          "sha256": "06b58b0cbcc2542aa4bd921b7b81d928f8464d2b9f59bd4b5e4d560728bf0508"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_import_Curve25519.py",
+          "bytes": 14364,
+          "sha256": "bfdaca1da576dfc8ea2bc9c600967383e3585defdfefe6a7f15d7c2b9e9b97be"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_RSA.py",
+          "bytes": 12624,
+          "sha256": "fd8a680c57f1fa46fc4a600f137bf59a302d67a5a2c2abc5b2d4cfd2dea9163e"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_import_ECC.py",
+          "bytes": 109147,
+          "sha256": "c41b3b050c5450bf06a8005806f5fe20488718eefce7a7c13799da3f8c4c3ddf"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/__init__.py",
+          "bytes": 2680,
+          "sha256": "0dbc22275e6c1e12a8f96c729f901957f02ab03e9e555c2893eda026ce9e5c85"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_ECC_Ed25519.py",
+          "bytes": 13924,
+          "sha256": "193c7430874384dd157c61661bdff357f9eccb38db9bdeed0b31384f526cb581"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_ECC_NIST.py",
+          "bytes": 51822,
+          "sha256": "9e65ecfea32e579d40f04ad33c18ce2606f9f70c00350e7d7804f83e5349550c"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_import_RSA.py",
+          "bytes": 27023,
+          "sha256": "9ee884deb5c9703349d7b660ed3ff806c93eff2c62850b9e46aa7500a2697e08"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_import_DSA.py",
+          "bytes": 25509,
+          "sha256": "d9a5613097b67f8a4d22d08366ca7adc805dc1fc6a8f3042400e1ac6fa9685e8"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_ECC_Ed448.py",
+          "bytes": 14992,
+          "sha256": "059dafdd8deb2338e05376cf0714555bcd66aa46942d660629cfad52fe7a2a4f"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_ECC_Curve448.py",
+          "bytes": 10197,
+          "sha256": "a0e1f0c33c4616c234068c5ad3ee6940121b15339a9e47601b81bec40145c1b5"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_import_Curve448.py",
+          "bytes": 12492,
+          "sha256": "b203749cad96095587d575fb82bc575fe1ff20088339284cbdfb9d819634fbb2"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_DSA.py",
+          "bytes": 9600,
+          "sha256": "33edc5e0ef34d726161c3a932cd9819a6e64f8e31f90e1c18b7781360e14eb38"
+        },
+        {
+          "path": "Crypto/SelfTest/PublicKey/test_ElGamal.py",
+          "bytes": 8648,
+          "sha256": "e58b3c7f3e206f7c00502e40a9ade955f3b7d67055544fa30469c8e429658547"
+        },
+        {
+          "path": "Crypto/SelfTest/Util/__init__.py",
+          "bytes": 1997,
+          "sha256": "de33ba8a33eda13031a2d12b713a744ee95c73c482e2c8582e06eda7990529de"
+        },
+        {
+          "path": "Crypto/SelfTest/Util/test_strxor.py",
+          "bytes": 10215,
+          "sha256": "1992c6d81218e036f9c718f61d75b78b24bbfc2f8ab97f42c2c7e3677581dac6"
+        },
+        {
+          "path": "Crypto/SelfTest/Util/test_rfc1751.py",
+          "bytes": 1113,
+          "sha256": "8e4285100ea8107381efd43abe76dd4b9c1901eb69e4bca2edbcf20ac2d7ad0a"
+        },
+        {
+          "path": "Crypto/SelfTest/Util/test_Counter.py",
+          "bytes": 2272,
+          "sha256": "3e774a1be6f1d7715a0edbd9a6f69a0886b44ffb0bb0013d6c8d00ba11cd37b8"
+        },
+        {
+          "path": "Crypto/SelfTest/Util/test_Padding.py",
+          "bytes": 5777,
+          "sha256": "edd687000517ce5b4cc06e05430360c379d63a4db6df48638256268449af6de6"
+        },
+        {
+          "path": "Crypto/SelfTest/Util/test_asn1.py",
+          "bytes": 31256,
+          "sha256": "73eb5d9600ef47de94e826460f225d7aa7a7d99697abdeb2d6c2fbf80e3eacea"
+        },
+        {
+          "path": "Crypto/SelfTest/Util/test_number.py",
+          "bytes": 8518,
+          "sha256": "0ea9a13a74a6738d7b429dbc97c4900c9192e57a9c5c3456d6f57d67aadba0ed"
+        },
+        {
+          "path": "Crypto/SelfTest/Signature/test_eddsa.py",
+          "bytes": 25042,
+          "sha256": "1e2944a3065e44aef1e8c24e8bd6fcf0c417472a73fa6bd530306d33d086a9cc"
+        },
+        {
+          "path": "Crypto/SelfTest/Signature/__init__.py",
+          "bytes": 1558,
+          "sha256": "e01c48381f4831ecb57755e2c7297b991609627bb33695e4f372a5cc60621043"
+        },
+        {
+          "path": "Crypto/SelfTest/Signature/test_pss.py",
+          "bytes": 15811,
+          "sha256": "012d42139e56f5beb7541a3b32308f790f34b23da248c601b23159631e24924b"
+        },
+        {
+          "path": "Crypto/SelfTest/Signature/test_dss.py",
+          "bytes": 57090,
+          "sha256": "94a4758915f608f1ea9adfb27853c2c04ae59ca27e7524bf91a8f394f01ef05b"
+        },
+        {
+          "path": "Crypto/SelfTest/Signature/test_pkcs1_15.py",
+          "bytes": 13541,
+          "sha256": "bdb790f946c6555061688e09522d8dcf69bdd7774714d9d2a0f4434a971891ac"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_RIPEMD160.py",
+          "bytes": 2663,
+          "sha256": "c500e9964f159666cc5c4980d77f34806efc680e65df3f204b70984890b8632a"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_SHA224.py",
+          "bytes": 2533,
+          "sha256": "7bb1efd0c80bcaf519ee4e929be42291e357e4c4f8cdbf761410d03dd9773e7e"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_TurboSHAKE.py",
+          "bytes": 15009,
+          "sha256": "177884d33c11c739a6cb0c29b688766c0e1badc88bba6853345c75758494ad20"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_MD2.py",
+          "bytes": 2324,
+          "sha256": "0e62b0139b0e3a26734da1bc999b2be0662c0be94740985d0cfc03c0a6b2a309"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_cSHAKE.py",
+          "bytes": 6792,
+          "sha256": "6e20c0ae22383c37cd679125c923710803fc7f53c7d0186604b317ba949b89b5"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_SHA3_224.py",
+          "bytes": 2830,
+          "sha256": "2270115691798a314703471a3b119aff650c1ff15c218db59501f8e597d4e9e1"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/__init__.py",
+          "bytes": 3817,
+          "sha256": "bc381b35303e642823592927c8d9a61dca65c1d50c1261ef1b69df1607295cbb"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_CMAC.py",
+          "bytes": 13360,
+          "sha256": "f9801f4f8c0f914a5d1a80adbdf44e49cb668f9eb3052e6e0fd9a156d2dd1b86"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_SHA1.py",
+          "bytes": 2926,
+          "sha256": "e4934aab0f5904b16c20ea8a2e054625368ca20fb5872fd39fb06cf26a0d3894"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_MD4.py",
+          "bytes": 2347,
+          "sha256": "ecc2d1ed8e27e2c47e9fd628351c4b44483bb40d110faa021edbac694bfd8a17"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_BLAKE2.py",
+          "bytes": 16314,
+          "sha256": "5dc9fc7a5ed51283d34451a094b3b1afe1daf39bd907c4bc4a6569d87117d81e"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_keccak.py",
+          "bytes": 8889,
+          "sha256": "71f6500c17048cd37cf84b1fc5c06c4f8746605474293f48099d4a08f0c354b3"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/common.py",
+          "bytes": 9878,
+          "sha256": "ad1128b398c2f36f90b463aabf1e7dacb6277b6b1c645323443dc354136ffc42"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_SHA512.py",
+          "bytes": 5198,
+          "sha256": "b60953c74568900922358db2fbb8cc97381c923e21d4a63aee390d9804e2a8f4"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_SHA3_256.py",
+          "bytes": 2831,
+          "sha256": "0a319e7900d921b1448d9ac2d6b7153049b92779bec8bed06420d5f87cac41ee"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_KMAC.py",
+          "bytes": 11704,
+          "sha256": "e9d0db915f7009095d69035ed711f377d64b4da908ae865a68f648b436963ee5"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_MD5.py",
+          "bytes": 3284,
+          "sha256": "77fbcefeb58ebc555b394d8a18422ecd58d47b8e1ddc01282c66381af9af1345"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_SHA3_384.py",
+          "bytes": 2830,
+          "sha256": "08c3e92f3aa98eff7412eadac709e6d54b1eda41b388df639f85a060690ae94d"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_KangarooTwelve.py",
+          "bytes": 11718,
+          "sha256": "32c24aec8be41b22ea2f87f419283636562aa78239d18eb45f656182da283a87"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_TupleHash.py",
+          "bytes": 8698,
+          "sha256": "e9e328bd6f8816ac3101f5c355e18f42c0110b29efd2fa7c43cc6643cea046fa"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_SHAKE.py",
+          "bytes": 4914,
+          "sha256": "11559c9b904d2f8fa4615027a32b62dd3dc6977e9b8d90c462dc307b040b7791"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_SHA384.py",
+          "bytes": 2714,
+          "sha256": "3904165ed1f3da4d2088dfa6a34d0a68eb2c1e8115eac69b5208bd4925013c15"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_SHA256.py",
+          "bytes": 3617,
+          "sha256": "25af79da2aa72aca04f1a2cedc7c419cc64f919d7ec5c0007f06bcd64a5589ac"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_SHA3_512.py",
+          "bytes": 2831,
+          "sha256": "5e2bddd1f3ba789e4373ed9c60fcba1dba2e584a657c544fb9568c7adf804f0a"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_HMAC.py",
+          "bytes": 19941,
+          "sha256": "17b60f8d82f41646814f695c38016f39169b832bf9d0f46d26e21c8cb5f02cbe"
+        },
+        {
+          "path": "Crypto/SelfTest/Hash/test_Poly1305.py",
+          "bytes": 18297,
+          "sha256": "1d4ac87965ebb54a39a4001c26719a70d27acf63b43dbc56b4ef5b4c5eb9708a"
+        },
+        {
+          "path": "Crypto/SelfTest/IO/test_PKCS8.py",
+          "bytes": 19106,
+          "sha256": "c534844a12b174dd22be924b3591595a2f0e1717f336acd231d8c239a2678a84"
+        },
+        {
+          "path": "Crypto/SelfTest/IO/__init__.py",
+          "bytes": 1994,
+          "sha256": "ff89b19231eba7b4d12a0e10fbde5f110b5f1115059bc429bd340bfec28d6a3d"
+        },
+        {
+          "path": "Crypto/SelfTest/IO/test_PBES.py",
+          "bytes": 4349,
+          "sha256": "198b8264754483538855d54101571ed0b3f704860aa7e560e044fe341fda1186"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_AES.py",
+          "bytes": 71731,
+          "sha256": "6e02dcfb996aec1b849a4471c96edeec07d733f43d39a63d1d857706b0e6892a"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_CAST.py",
+          "bytes": 3279,
+          "sha256": "bbdf1f1eebb3cd713f799b0499ca163c5fa79df393591f915c9b19baa9a21961"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_ARC4.py",
+          "bytes": 24979,
+          "sha256": "aba9d82e0e8eac92d50b0749810cebc326a6028e166122f10f2f103714763f1a"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_CCM.py",
+          "bytes": 38481,
+          "sha256": "e686e256434d3e1bf0134a3356813aa96b82e73116f8add3bc4dd44658cbff5e"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_pkcs1_oaep.py",
+          "bytes": 22290,
+          "sha256": "30fce75b0ceabdbc3814890b732942e54afab32330aae76884112caec5ae4bd3"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_OCB.py",
+          "bytes": 32639,
+          "sha256": "f010ecfb8331ab64ca8120984c204771d35ba39852eecbe72ffed39f64f2158c"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_DES3.py",
+          "bytes": 6561,
+          "sha256": "2a9abeffb7291bc095b0342ffc1e4655b2c2dd9fb9c246ec3bf256cd718067bc"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_KW.py",
+          "bytes": 5610,
+          "sha256": "1ffeda0dd8c397b4f10aaf462fff6c85872f42de1a1d228c21d76129154042de"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/__init__.py",
+          "bytes": 3710,
+          "sha256": "11f1de9d454dde65d71524319c846d2fbc5071209df0fd32c0469a4a7c2614f3"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_OFB.py",
+          "bytes": 9367,
+          "sha256": "58f3e8f81c82f773b625e8ff50143748744a9857e53b4ce8f780b4bbcfab5476"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_CBC.py",
+          "bytes": 20202,
+          "sha256": "7570d4dd8e7b6cecdf133eb6a205a90fbc9f9e4ad8589ba5917474c8ef5107d8"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_CFB.py",
+          "bytes": 16061,
+          "sha256": "0685ff0ae1c624b98193e8a75a23887f926760316a42f2df7047041532f09e68"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/common.py",
+          "bytes": 17316,
+          "sha256": "9efcd13eebf037b185b799bcc10cd225dd6639575afcdd0670ccc2ef01c5f8c8"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_DES.py",
+          "bytes": 15943,
+          "sha256": "e09cf65cd157cd83f3a2a551eb1cc8cbefc3c4e4bc4514033c01738611677439"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_GCM.py",
+          "bytes": 37276,
+          "sha256": "a4c94d630f518e38a45a73075d460b66e809797d893da6bd2e9d5db63bab6668"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_Salsa20.py",
+          "bytes": 16591,
+          "sha256": "ac0b741b2dc3528f55b1bccbdff9df6cdbbdb0caec8779808f55e4d027c8e6d4"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_SIV.py",
+          "bytes": 19939,
+          "sha256": "d08effb15baab5a2e30a38843e403597549eef0e4313f648da04396976dd0f10"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_OpenPGP.py",
+          "bytes": 8477,
+          "sha256": "650b2396cd78caf42c3fd73721f73817c738c582a9919e82ca7af8e9b1de7fd1"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_CTR.py",
+          "bytes": 21314,
+          "sha256": "7fd3ca1a8e458105cff3cd059f4af1af5512a19aa825fed2eb5f830294944cae"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_EAX.py",
+          "bytes": 28821,
+          "sha256": "74e072935bf7d69b4d22463fdac327fdf4803d085dc5455db0d3b69c3692d744"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_ChaCha20.py",
+          "bytes": 20316,
+          "sha256": "3c35745f1e4e4a9ae6d16929e2324f21d0ccf27665cf90725fd148b6db0bad31"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_ARC2.py",
+          "bytes": 6454,
+          "sha256": "91a63e95cf3df4f5984f814e29036efb10e81ab9596021f6dba1cdfa6b66c85f"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_Blowfish.py",
+          "bytes": 7230,
+          "sha256": "f96898d870c4a9a78009b8afbf88581f204d8e4b2fdabeed7f6dbeb24818e380"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_ChaCha20_Poly1305.py",
+          "bytes": 30714,
+          "sha256": "77d28d13485f7297a3f26d1f1611691f981ee70334aa4f768e471bf588cafbdc"
+        },
+        {
+          "path": "Crypto/SelfTest/Cipher/test_pkcs1_15.py",
+          "bytes": 10944,
+          "sha256": "9f7ae293bbedfdaf32bd892c9b81679a1d0fe82a480624d77827d98f5602c906"
+        },
+        {
+          "path": "Crypto/SelfTest/Protocol/__init__.py",
+          "bytes": 1902,
+          "sha256": "a42d06fd4abc9c8f1465cb8ba67fe8287acac4017d14f4205b8ea7964a7b2869"
+        },
+        {
+          "path": "Crypto/SelfTest/Protocol/test_HPKE.py",
+          "bytes": 17642,
+          "sha256": "781403bbe4693c1f9714ba6db9fe88608de76e7b6030947f848291255229c221"
+        },
+        {
+          "path": "Crypto/SelfTest/Protocol/test_SecretSharing.py",
+          "bytes": 10178,
+          "sha256": "f11c04b2d835fed9f64af1b189ee8f1b15c645f12a82ceaf43ea73bd820c0b1b"
+        },
+        {
+          "path": "Crypto/SelfTest/Protocol/test_rfc1751.py",
+          "bytes": 2208,
+          "sha256": "2d1dccf572e4fecc4ec9aa4fab7d8f11ff7749433012b170c3394734a8546b38"
+        },
+        {
+          "path": "Crypto/SelfTest/Protocol/test_ecdh.py",
+          "bytes": 30544,
+          "sha256": "8674342fed4d50b426d8caef411ded6de97d407bc288acfdd2831221e392fc60"
+        },
+        {
+          "path": "Crypto/SelfTest/Protocol/test_KDF.py",
+          "bytes": 36840,
+          "sha256": "abef71cbf58fdf8dd14eb361fb5995f9f59be70af9a873dd9e7a1c2e0a602638"
+        },
+        {
+          "path": "Crypto/SelfTest/Math/test_Primality.py",
+          "bytes": 4881,
+          "sha256": "7ee06270a4917796e60a1ea3cb0ff248290af438227e8d80f50233a4c85f9bf6"
+        },
+        {
+          "path": "Crypto/SelfTest/Math/test_modexp.py",
+          "bytes": 8103,
+          "sha256": "a17906b7f756c29632deb58902420010041f7edd6ae6e6d909d230e645dcfa9b"
+        },
+        {
+          "path": "Crypto/SelfTest/Math/test_Numbers.py",
+          "bytes": 32384,
+          "sha256": "113a915258d18ddc144f4c3faee8fb3a91ff3b2686c6098051f4665abe31210d"
+        },
+        {
+          "path": "Crypto/SelfTest/Math/__init__.py",
+          "bytes": 2202,
+          "sha256": "05da736e23a3551166c33c906885f41f521943b8d8549aacc46b82dfaf008be9"
+        },
+        {
+          "path": "Crypto/SelfTest/Math/test_modmult.py",
+          "bytes": 4860,
+          "sha256": "55ee5569706330e910b8c8fc216ddbd192b4571d45d21cff56b6b75c59d64e25"
+        },
+        {
+          "path": "Crypto/SelfTest/Random/__init__.py",
+          "bytes": 1542,
+          "sha256": "104daeab2df002ec221ad193b81b110b8bcae3e628d13765f3f3bde29f59365c"
+        },
+        {
+          "path": "Crypto/SelfTest/Random/test_random.py",
+          "bytes": 6990,
+          "sha256": "ca27fe3ce5b7b2f159fc658e942c2e45453e95e089c3771809ac177e46c65820"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_ocb.abi3.so",
+          "bytes": 116864,
+          "sha256": "037305312830662e748207b5e5ba59bff6383e96e2b725b39d43c2ec2d56c061"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_gcm.pyi",
+          "bytes": 1541,
+          "sha256": "e6def6407412d200eaeb0b7361f695a93c668c1ce952fb10bc368fd83a8dbcb1"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_siv.pyi",
+          "bytes": 1261,
+          "sha256": "b326f79179f2ba1a1057a157be8cc88ee75609004269d39bd48d81b95fba022d"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_kw.py",
+          "bytes": 4446,
+          "sha256": "508dace344b60b1bd7706b93d85763932a91ea830788617c3b152c4998d79636"
+        },
+        {
+          "path": "Crypto/Cipher/CAST.py",
+          "bytes": 6071,
+          "sha256": "0c8a1af42b261aa23e875878537b411773f360555d59b7c7a938bf4de58455c9"
+        },
+        {
+          "path": "Crypto/Cipher/_pkcs1_oaep_decode.py",
+          "bytes": 1824,
+          "sha256": "fe1b4330b72c77dbbc06ee632cad8ce5f8af50c725688629e7c7c40b6951bf19"
+        },
+        {
+          "path": "Crypto/Cipher/ARC4.py",
+          "bytes": 5116,
+          "sha256": "fec34bd81bcc461b606d38196fc1921cd9e35f88dae52ea202b53427aebd91db"
+        },
+        {
+          "path": "Crypto/Cipher/_pkcs1_decode.abi3.so",
+          "bytes": 116088,
+          "sha256": "e1303404134f17bbcdb9ddc02cb5dcc38f2e77fc4d5f1c4e73af7cfb0d2583eb"
+        },
+        {
+          "path": "Crypto/Cipher/ChaCha20_Poly1305.pyi",
+          "bytes": 1079,
+          "sha256": "36b0511365588733f330a7c068fcc62d5c9bf1cdc697d9f197b41f536a3c4861"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_ocb.pyi",
+          "bytes": 1231,
+          "sha256": "4973146b5b35758fb6ef6964b7148eb723a8a8b76d3ef7cd9115ea9978c1138a"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_ccm.pyi",
+          "bytes": 1670,
+          "sha256": "5dad51f9b5e1529dd674e577ff9b6e024c98a9cfa165c19c41c76574ed5d6a36"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_ctr.abi3.so",
+          "bytes": 116656,
+          "sha256": "8a20f8c1ef2884fa81ce678b91956ed9810c19d68519c324f7976d88b58c28ad"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_eax.py",
+          "bytes": 14453,
+          "sha256": "3a1314462668fdd9d6e3240884d48d7988bcbcf8d393c5ece5687b970d403359"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_arc2.abi3.so",
+          "bytes": 116384,
+          "sha256": "6b2ab6e7159b6d7db48c321c0e2438854738a12da648058e18f6f6027e82b58b"
+        },
+        {
+          "path": "Crypto/Cipher/__init__.pyi",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_ctr.py",
+          "bytes": 15812,
+          "sha256": "84f5e96b8bde9c907c4615ea901010779dbc423b0fd5706190ee3041e7514a69"
+        },
+        {
+          "path": "Crypto/Cipher/Salsa20.pyi",
+          "bytes": 744,
+          "sha256": "dc761abeea18e132325f92310b3826a3601d745d1b292d01e8a9344bdc3d3c45"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_ctr.pyi",
+          "bytes": 800,
+          "sha256": "2446474cef3ccb72f5b832f2c9297c0113d2be869a941ebf0f6610efcb43fe4e"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_eksblowfish.abi3.so",
+          "bytes": 116648,
+          "sha256": "892d075d2f386c51041b9ee755c195d99dcb003dd2dc83f68e0a4ac12bb9f87c"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_openpgp.py",
+          "bytes": 7053,
+          "sha256": "28598cb125d24076bf8bc89a2b4e832568c06780bde78101fbdd6415fa99feec"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_des3.abi3.so",
+          "bytes": 182832,
+          "sha256": "f1d9e8b44bb6babeb7e827885a802073df66a2dbaf8f77ca5ced71f6ce99c05a"
+        },
+        {
+          "path": "Crypto/Cipher/AES.py",
+          "bytes": 9029,
+          "sha256": "4c53dcad57877a4c991f1d0416a81219678f09e2a6dfeb86bdb788f3acd28a8a"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_siv.py",
+          "bytes": 13977,
+          "sha256": "560a891a6558cad6d00b1e27c167dee0181a4fadb38d99a1b2b4bf5849911d8e"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_gcm.py",
+          "bytes": 21297,
+          "sha256": "c2d25893ed70e9e276dee5130823ed938b96d9feecef9b2dfdcaaa05826613f0"
+        },
+        {
+          "path": "Crypto/Cipher/_EKSBlowfish.pyi",
+          "bytes": 266,
+          "sha256": "2fe18762da0beb53fdadd3dc6402a614967134c53d378b1f5ed40d334bbc9c87"
+        },
+        {
+          "path": "Crypto/Cipher/_EKSBlowfish.py",
+          "bytes": 5205,
+          "sha256": "948d296bc5ce1b719345f5d342da56f01cd3b3a007c386125d2c3a036ccabc9f"
+        },
+        {
+          "path": "Crypto/Cipher/PKCS1_v1_5.py",
+          "bytes": 7019,
+          "sha256": "cd629cfb43857dd81d85d2f8ae3dc7871234262ca9e1c945ac5f38962dd69ff8"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_cbc.abi3.so",
+          "bytes": 116400,
+          "sha256": "9a59b0b29ed4febf6f9497cf87a6f3589d03faa477fe8e37029f08cb4048c10c"
+        },
+        {
+          "path": "Crypto/Cipher/__init__.py",
+          "bytes": 3590,
+          "sha256": "86502693d2b347a65de1b5dd813c74303f9c0c495cfa7e0614ca2e2b995e8ead"
+        },
+        {
+          "path": "Crypto/Cipher/DES3.py",
+          "bytes": 6925,
+          "sha256": "1c41b391c5eb969560ea8b828d1498a4bafb82c3534273829f06b1bdea2d1ea0"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_cfb.pyi",
+          "bytes": 727,
+          "sha256": "950d8bbe29176f40ab1ea47bdbe8fb43cca06ccc8985bd0ec2a9e15449a4c91f"
+        },
+        {
+          "path": "Crypto/Cipher/ChaCha20_Poly1305.py",
+          "bytes": 11521,
+          "sha256": "3d4980b6016ebb177b4449c98956eebb8787bcc0a5c9f9c86468878ea6f90dd0"
+        },
+        {
+          "path": "Crypto/Cipher/DES3.pyi",
+          "bytes": 1036,
+          "sha256": "5089f3886c6b19eca39dd2a7846e5e202e31163d5767ed64b5240f285366b813"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_aes.abi3.so",
+          "bytes": 149552,
+          "sha256": "b45bf13fc9aa043d8f69291305eded49e147f09b5bbc6590db85124966078ff8"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_kwp.py",
+          "bytes": 3935,
+          "sha256": "6c6a83ae9c80eadbceb965e1948b46373f7dc37ab6a5423d5edae7ec0bfda120"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_ecb.abi3.so",
+          "bytes": 66592,
+          "sha256": "4fddb8a87150accc9d465ab115c676c8a47d1c1f7b1312aa7ebeee10b76d5ca5"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_ofb.py",
+          "bytes": 10209,
+          "sha256": "732c33133654e65aa805c68320dfe7b4863042b114c9bd21e4827df38f32b672"
+        },
+        {
+          "path": "Crypto/Cipher/_chacha20.abi3.so",
+          "bytes": 116512,
+          "sha256": "fb257ebb2de7243c7aeb65f37aca18546749a3a510afee8300aad119b5c893cd"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_cfb.abi3.so",
+          "bytes": 116640,
+          "sha256": "de4f1944db6e6c3e5526bc8117139b408b50220fad33b5bdf9b65a3bbf540e00"
+        },
+        {
+          "path": "Crypto/Cipher/AES.pyi",
+          "bytes": 3619,
+          "sha256": "9c122553fd2cf747a17111cb4c002f4230fb00f8b3c036b547f0295c8cf30fe9"
+        },
+        {
+          "path": "Crypto/Cipher/PKCS1_v1_5.pyi",
+          "bytes": 686,
+          "sha256": "293210a5109be669112ef23d11d3c451e0712e8cd14be4ce99d7836893fc01dd"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_ofb.pyi",
+          "bytes": 691,
+          "sha256": "4fe495512d0de761a9bc5bb5b40b16357d6634c5c8ab8375be8d30415dae57c2"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_cfb.py",
+          "bytes": 10721,
+          "sha256": "38a5cf4c8c7ad6f48b48554623a1c1ed1181488fdc978e48f017d63c8124ad1d"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_des.abi3.so",
+          "bytes": 182816,
+          "sha256": "d67bf862345ccf2f68b0ea31b9372cb7fa009d444d63125a414318c576f2e810"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_openpgp.pyi",
+          "bytes": 556,
+          "sha256": "1682eb16a9efc497f417f9e91ce80f5117d4c864ade83c72229da29285e2f822"
+        },
+        {
+          "path": "Crypto/Cipher/PKCS1_OAEP.pyi",
+          "bytes": 1179,
+          "sha256": "27667022b10a7c543819e8a5ab4bf9686b5b3bbe25221fdda8d50408fa4df12a"
+        },
+        {
+          "path": "Crypto/Cipher/Salsa20.py",
+          "bytes": 6349,
+          "sha256": "b138e6b34aef7b7613484aa5e772a64de00a46fcef3f043e09531e9b4e89333b"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_cbc.py",
+          "bytes": 10888,
+          "sha256": "17d319dc84bcf14f67dbf941296995141ca2f1ad65ce8ef7b4e1324b5b2faac3"
+        },
+        {
+          "path": "Crypto/Cipher/ChaCha20.py",
+          "bytes": 10839,
+          "sha256": "b75c169183e65bd9fe9060371c1e458833ec48d8136185efe1d14a5049932ef1"
+        },
+        {
+          "path": "Crypto/Cipher/CAST.pyi",
+          "bytes": 986,
+          "sha256": "7e20551ac35a5f4e4e0c80ee13157a419a047b20a2c17a4cd6766fd80e2a2403"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_ocb.py",
+          "bytes": 19935,
+          "sha256": "451e7f910ba39a03f1e1abc9c2f6d04fa5efcddee0aac2dfc246d0a10f424fb5"
+        },
+        {
+          "path": "Crypto/Cipher/Blowfish.py",
+          "bytes": 5964,
+          "sha256": "51ba4b9d194d59a725afd72366ebe02683d7ad323d7d825386a1b65f9348147e"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_ccm.py",
+          "bytes": 25279,
+          "sha256": "792bda9cde0f0f19289061a45e9f07f91559d5abc8e06d8ae29d0390d1d84727"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_eax.pyi",
+          "bytes": 1545,
+          "sha256": "5473ed4dd03ed9bb42bd113ee27a51b460ab02983bac1356a47499575a68f09d"
+        },
+        {
+          "path": "Crypto/Cipher/ChaCha20.pyi",
+          "bytes": 773,
+          "sha256": "f92a6df2523f5f753a8f3f01460c2c6fd0d72966871967b84c609036edda57b6"
+        },
+        {
+          "path": "Crypto/Cipher/Blowfish.pyi",
+          "bytes": 1021,
+          "sha256": "a7f82671a9317b28e3bb6ad2da19349c59287afef94e502615764c1485b89c54"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_ofb.abi3.so",
+          "bytes": 116352,
+          "sha256": "9533d546b746434b1f39cede844261ada8806e96998bc34a37c891b1616cf7e0"
+        },
+        {
+          "path": "Crypto/Cipher/ARC2.py",
+          "bytes": 7010,
+          "sha256": "2f6f8d8f55d3f330636544f2906abc37440e3577ee88d2c9350259cd2ced23f3"
+        },
+        {
+          "path": "Crypto/Cipher/ARC2.pyi",
+          "bytes": 985,
+          "sha256": "df554050216380a83e3a0369914eff4c810777a267461dfba8bf1b40a537ff35"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_cbc.pyi",
+          "bytes": 687,
+          "sha256": "f13f46f1d3f547ba140e5b0d11d5f7cb097a699d16ff7bfcee22fc1e3a9e795b"
+        },
+        {
+          "path": "Crypto/Cipher/_ARC4.abi3.so",
+          "bytes": 116048,
+          "sha256": "d7adda2f733222af4ab9c9d98397f27e54e97770661cb19ebbe6cf54992d0a7e"
+        },
+        {
+          "path": "Crypto/Cipher/PKCS1_OAEP.py",
+          "bytes": 8552,
+          "sha256": "3059a4d0b0c0e69e0ab48f2a500beb8f77628812ebd91d7c0d905f8776d7814b"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_blowfish.abi3.so",
+          "bytes": 116432,
+          "sha256": "562a83ab0a67a2ddb742ad2451a43f56ea1e444e12e8a6c922990dbd8b94c17b"
+        },
+        {
+          "path": "Crypto/Cipher/DES.pyi",
+          "bytes": 966,
+          "sha256": "3dc33e9ee12846174acdc6943cbb6c682868f5b65136251989bf8ef40e31e309"
+        },
+        {
+          "path": "Crypto/Cipher/DES.py",
+          "bytes": 5947,
+          "sha256": "2005f701ebb2e633cd3094359d3313c277737581d9a17869ae883163004386ef"
+        },
+        {
+          "path": "Crypto/Cipher/_Salsa20.abi3.so",
+          "bytes": 116432,
+          "sha256": "78532b2f59ac0f53635270fe9b8516ac6fcdd515fce79f0a0e27c98e0e3e3c72"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_ecb.py",
+          "bytes": 8309,
+          "sha256": "c72dd757ee53e49590153f343f4cf65bb0cecefc14800a2dea3715e272a29edc"
+        },
+        {
+          "path": "Crypto/Cipher/_mode_ecb.pyi",
+          "bytes": 592,
+          "sha256": "c5efce952c21140270708e498b37d1ff3901b66f7cde7e5457a660d8919c29c0"
+        },
+        {
+          "path": "Crypto/Cipher/_raw_cast.abi3.so",
+          "bytes": 116800,
+          "sha256": "23c28f9f50bbf1b3e9781d6a3c382e9acd95fe646387cbdb54daa36f45283de7"
+        },
+        {
+          "path": "Crypto/Cipher/ARC4.pyi",
+          "bytes": 422,
+          "sha256": "2e19723b7003e781d84a3f872d8f8ebab0e9faa5ba648fa85bc4cde1b044a5f9"
+        },
+        {
+          "path": "Crypto/Protocol/SecretSharing.pyi",
+          "bytes": 798,
+          "sha256": "fa512b57646f68d3ee380d33e1ce385a6352bbd8ab0b0fc30dbef03e0092d816"
+        },
+        {
+          "path": "Crypto/Protocol/_scrypt.abi3.so",
+          "bytes": 116032,
+          "sha256": "2d7b3c87d759ecf8657e46b1e29d5af656b19ad43eb5f4490e17dbad29754a0a"
+        },
+        {
+          "path": "Crypto/Protocol/__init__.pyi",
+          "bytes": 43,
+          "sha256": "44d76bc0c823b7d6fd2e672475191a6180b83c2ccd57ed478b64f707630781db"
+        },
+        {
+          "path": "Crypto/Protocol/HPKE.py",
+          "bytes": 16958,
+          "sha256": "c6cc8e8467b47b654e8c55a30e8d550e8bb0de504cea405bfb41a8fa12e450bf"
+        },
+        {
+          "path": "Crypto/Protocol/DH.py",
+          "bytes": 5620,
+          "sha256": "0ee2ce6512ffb4d16554b3c4a9c8ebe6e7284c5edeebbcedc6c6007474f9b199"
+        },
+        {
+          "path": "Crypto/Protocol/__init__.py",
+          "bytes": 1554,
+          "sha256": "a17d783139cdad6b3c07a13af15affc80fdc2397b6d32f171bb81ef60860920a"
+        },
+        {
+          "path": "Crypto/Protocol/KDF.pyi",
+          "bytes": 2152,
+          "sha256": "2635ab2397ec2ae7e2fcb4ca37f3d1df6b9ef26f233f33fcf521b473172bfe4d"
+        },
+        {
+          "path": "Crypto/Protocol/SecretSharing.py",
+          "bytes": 9122,
+          "sha256": "4c54e5c91f3a1c9f07ec3c79f4dd223850cd0471be155921ebe706d1706a6ce6"
+        },
+        {
+          "path": "Crypto/Protocol/KDF.py",
+          "bytes": 22373,
+          "sha256": "66e57be59cb46fd9db74ead51d0a3056cfba964c0210c8a784cdfe48e8f20549"
+        },
+        {
+          "path": "Crypto/Protocol/DH.pyi",
+          "bytes": 705,
+          "sha256": "c431baebe500659991bf6c60b28ecf2b5a2a65e706402e84751cb4941f0d9c4d"
+        },
+        {
+          "path": "Crypto/Math/_IntegerCustom.py",
+          "bytes": 5731,
+          "sha256": "6e318083aec0578312bffb8009b6e175d4c87b652f30bbeebc26d061cb993bb0"
+        },
+        {
+          "path": "Crypto/Math/_IntegerBase.pyi",
+          "bytes": 3743,
+          "sha256": "7bc901e4d03ce2f99db7be9b22135b5d4d4fab4c2cf8ff0faf775fc81cfe5cca"
+        },
+        {
+          "path": "Crypto/Math/_IntegerNative.py",
+          "bytes": 11324,
+          "sha256": "328deaf0bd681b9b93cb2822e0c88aeda16818ab4f21cdab1791c3a3dab420e8"
+        },
+        {
+          "path": "Crypto/Math/_IntegerGMP.pyi",
+          "bytes": 78,
+          "sha256": "51c24e18c613d5df86d0f8db0b90724a1165e68ca8ac547c877f1f16dd2e63db"
+        },
+        {
+          "path": "Crypto/Math/__init__.py",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "Crypto/Math/Numbers.py",
+          "bytes": 2108,
+          "sha256": "bd407e9689757a721d1e2c66813853aa6e12842779c94dd2030189f7f07762cc"
+        },
+        {
+          "path": "Crypto/Math/Primality.pyi",
+          "bytes": 823,
+          "sha256": "897018d20526722212fc5bc7e552708507cafb4b4399a1f6bdc0cb1c7172c481"
+        },
+        {
+          "path": "Crypto/Math/_IntegerCustom.pyi",
+          "bytes": 135,
+          "sha256": "b3d5198a0044814bc74b820e76df235e1b19df73bd8f5f69ee589ea1bd51f846"
+        },
+        {
+          "path": "Crypto/Math/_IntegerGMP.py",
+          "bytes": 27869,
+          "sha256": "f4ac2a299d8a2b6655537050252247c9f2c40681c5e1e9dbdb2a6aa5a740ddc0"
+        },
+        {
+          "path": "Crypto/Math/_IntegerBase.py",
+          "bytes": 11269,
+          "sha256": "c2e9ece086a1b3225fe14af3c2691b827a12875d1d633ae0b728bc0d36ea176c"
+        },
+        {
+          "path": "Crypto/Math/Primality.py",
+          "bytes": 11371,
+          "sha256": "2d4c39e5a556ba91c31d9bcdad71460328a03ff64de875c157c8f06c4c54ba89"
+        },
+        {
+          "path": "Crypto/Math/_modexp.abi3.so",
+          "bytes": 156176,
+          "sha256": "61a962a46e554866ca456cf347c50905cedc77efccf54d4508384fb7b91cd847"
+        },
+        {
+          "path": "Crypto/Math/Numbers.pyi",
+          "bytes": 82,
+          "sha256": "4cbb3b52ca2aee1aeab9c8c95029aded8185f7d935a0da033d7ba9d076072a6b"
+        },
+        {
+          "path": "Crypto/Math/_IntegerNative.pyi",
+          "bytes": 81,
+          "sha256": "a5968dd715e707cbbb55facc829ea3aa2fe309a278c78b7411cb3ba99ff6c7ee"
+        },
+        {
+          "path": "Crypto/Random/random.pyi",
+          "bytes": 832,
+          "sha256": "b97116e3e9aa91d02fcce25259332ffd95aeee9e15c028ac9fe0263a3d8a4c71"
+        },
+        {
+          "path": "Crypto/Random/__init__.pyi",
+          "bytes": 367,
+          "sha256": "89e89f868301daf78abac451059590a7a8a03eb8b9d36ed5aea7dd74ee5bf965"
+        },
+        {
+          "path": "Crypto/Random/__init__.py",
+          "bytes": 1809,
+          "sha256": "0e6fa0ba105775fe0b12bf73aa4f883e7c30a651ec405a55ac996bd75fa40460"
+        },
+        {
+          "path": "Crypto/Random/random.py",
+          "bytes": 5234,
+          "sha256": "1c20cf5b3219d3f1ceb0b7e2ee22b94964c6807cc17b3725b64a0457a9bed06e"
+        },
+        {
+          "path": "pycryptodome-3.23.0.dist-info/RECORD",
+          "bytes": 30305,
+          "sha256": "313e6121e38620d370851e0bd6cf1c829b75e46990beed3971d3a4c28d6dc747"
+        },
+        {
+          "path": "pycryptodome-3.23.0.dist-info/WHEEL",
+          "bytes": 112,
+          "sha256": "63b6393d9a7e1b3e79a04703dc0d173dac315901b39eaaeff77f3b5e5527a074"
+        },
+        {
+          "path": "pycryptodome-3.23.0.dist-info/LICENSE.rst",
+          "bytes": 2926,
+          "sha256": "4e04660d77c1c64e89d79537919fb8240fa21484a7e3db29f358b2c7f84ea073"
+        },
+        {
+          "path": "pycryptodome-3.23.0.dist-info/AUTHORS.rst",
+          "bytes": 764,
+          "sha256": "1cb670b6cc5bc3a1c38d7e12cdf944442ca790425cf2a628ffbe3012445fe1e4"
+        },
+        {
+          "path": "pycryptodome-3.23.0.dist-info/top_level.txt",
+          "bytes": 7,
+          "sha256": "f96db04ed9317354273d43d1a816746ccc2b843f31443d771c8a1b157fb00ceb"
+        },
+        {
+          "path": "pycryptodome-3.23.0.dist-info/METADATA",
+          "bytes": 3368,
+          "sha256": "fc29b3a17474c193f016e46d3be8226cbc5a77d76d1a12e360b1797bf47dda66"
+        }
+      ],
+      "bytes": 2495627
+    },
+    {
+      "ecosystem": "pypi",
+      "name": "rfc8785",
+      "version": "0.1.4",
+      "artifact": "rfc8785-0.1.4-py3-none-any.whl",
+      "sha256": "520d690b448ecf0703691c76e1a34a24ddcd4fc5bc41d589cb7c58ec651bcd48",
+      "dependencies": [
+        "rfc8785[doc,lint,test]; extra == \"dev\"",
+        "build; extra == \"dev\"",
+        "pdoc; extra == \"doc\"",
+        "ruff~=0.3; extra == \"lint\"",
+        "mypy>=1.0; extra == \"lint\"",
+        "interrogate; extra == \"lint\"",
+        "pytest; extra == \"test\"",
+        "pytest-cov; extra == \"test\"",
+        "coverage; extra == \"test\""
+      ],
+      "license": null,
+      "vulnerabilities_at_fetch": [],
+      "files": [
+        {
+          "path": "rfc8785/__init__.py",
+          "bytes": 496,
+          "sha256": "fa44927afd547caf7547247078bcf28863d1e69caf116d258c532b3f20ffd154"
+        },
+        {
+          "path": "rfc8785/_impl.py",
+          "bytes": 7251,
+          "sha256": "c25bc3a046528482d53bee3487b837f31dd9c05f33e8f13288c7aab320932cec"
+        },
+        {
+          "path": "rfc8785/py.typed",
+          "bytes": 0,
+          "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        {
+          "path": "rfc8785-0.1.4.dist-info/LICENSE",
+          "bytes": 10174,
+          "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+        },
+        {
+          "path": "rfc8785-0.1.4.dist-info/WHEEL",
+          "bytes": 81,
+          "sha256": "1196c6921ec87b83e865f450f08d19b8ff5592537f4ef719e83484e546abe33e"
+        },
+        {
+          "path": "rfc8785-0.1.4.dist-info/METADATA",
+          "bytes": 3379,
+          "sha256": "9dfbf420c8c18077dd7697ec12fe2838b5901683573ae128df2d3403330f7aa9"
+        },
+        {
+          "path": "rfc8785-0.1.4.dist-info/RECORD",
+          "bytes": 513,
+          "sha256": "a6a9131be557aa3e3764604df469eb92d457289548885c7085e58943e7ce8e87"
+        }
+      ],
+      "bytes": 9240
+    }
+  ],
+  "install_authorized": false,
+  "execution_authorized": false
+}

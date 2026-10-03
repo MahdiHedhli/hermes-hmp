@@ -1,0 +1,26 @@
+{
+  "status": "RETAINED_LICENSE_DATA_NOT_LEGAL_APPROVAL",
+  "files": [
+    {
+      "file": "data/license-canonicalize-5.1.0-data-package__LICENSE",
+      "sha256": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+    },
+    {
+      "file": "data/license-hpke-core-1.8.0-data-package__LICENSE",
+      "sha256": "ab49bdfb96b9c0117f908b82eb1f690be42028658f5a52fba5553b95fa90cd35"
+    },
+    {
+      "file": "data/license-rfc8785-data-rfc8785-0.1.4.dist-info__LICENSE",
+      "sha256": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+    },
+    {
+      "file": "data/license-hpke-common-1.9.0-data-package__LICENSE",
+      "sha256": "95e193aa2d18b52a542e5ad897ffff83d0d68a1bb045b5a9c370e853ca6d0e4d"
+    },
+    {
+      "file": "data/pycryptodome-LICENSE.rst",
+      "sha256": "4e04660d77c1c64e89d79537919fb8240fa21484a7e3db29f358b2c7f84ea073"
+    }
+  ],
+  "notes": "PyCryptodome public-domain original PyCrypto portions plus BSD clauses; see complete license. MIT hpke core/common; Apache2 canonicalize/rfc8785. No runtime dev/extras dependencies selected."
+}

@@ -1,0 +1,17 @@
+{
+  "name": "hmp-push-seal-test-only",
+  "private": true,
+  "type": "module",
+  "version": "0.0.0",
+  "engines": {
+    "node": "22.22.3"
+  },
+  "dependencies": {
+    "@hpke/core": "1.8.0",
+    "@hpke/common": "1.9.0",
+    "canonicalize": "5.1.0"
+  },
+  "overrides": {
+    "@hpke/common": "1.9.0"
+  }
+}

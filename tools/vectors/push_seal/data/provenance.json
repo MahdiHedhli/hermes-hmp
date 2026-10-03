@@ -1,0 +1,25 @@
+{
+  "format": "hmp-push-seal-data-provenance-v1",
+  "synthetic_only": true,
+  "source_base": "3e676ec10266ef958ca631b6f8384c6aa297745e",
+  "contract_sha256": "7c7cb585b8513cd25122fe532a03d3cefa7b0213bea831c1891c28af5d9720a3",
+  "official": {
+    "url": "https://raw.githubusercontent.com/cfrg/draft-irtf-cfrg-hpke/5f503c564da00b0687b3de75f1dfbdfc4079ad31/test-vectors.json",
+    "sha256": "61fc662f01996cd06d713dacf5e133167bd309a1f329442d53f1e21a47b3ede6",
+    "selector": {
+      "mode": 0,
+      "kem_id": 16,
+      "kdf_id": 1,
+      "aead_id": 1
+    },
+    "selector_count": 1,
+    "encryptions": 257,
+    "exports": 3
+  },
+  "signing": "published TEST-ONLY hmp_v1_vectors.json instance key; no key creation in source preparation",
+  "recipient": "official RFC published recipient; alternate is first mode0/P256 entry with a different pkRm; never owner material",
+  "ephemeral": "SHA256 of fixed ASCII HMP-TEST-ONLY-EKM/<finite_case_id>, library derives only during later admitted crypto run",
+  "body_unknown_rule": "SOURCE_PRECISION.md, frozen PR-3 ignore unknown outer; sealed plaintext remains closed",
+  "coverage_status": "UNEXECUTED_SOURCE_ONLY",
+  "results": null
+}

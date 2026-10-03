@@ -1,0 +1,440 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$comment": "Documentation only; no remote schema fetch. check.py is dependency-free structural enforcement plus independent HPKE/JCS semantic checks. IDs must also occur in exact catalog order. No generated corpus exists yet.",
+  "type": "object",
+  "required": [
+    "api_coverage",
+    "cases",
+    "cases_sha256",
+    "contract_sha256",
+    "dependency_lock_sha256",
+    "format",
+    "info_hex",
+    "official_counts",
+    "official_sha256",
+    "runtime",
+    "signature_policy",
+    "source_pins_sha256",
+    "status",
+    "suite",
+    "synthetic_only"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "suite": {
+      "const": {
+        "mode": 0,
+        "kem_id": 16,
+        "kdf_id": 1,
+        "aead_id": 1
+      }
+    },
+    "dependency_lock_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "synthetic_only": {
+      "const": true
+    },
+    "official_counts": {
+      "const": {
+        "encryptions": 257,
+        "exports": 3
+      }
+    },
+    "runtime": {
+      "const": "v22.22.3"
+    },
+    "api_coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pkRm",
+        "skRm",
+        "pkEm",
+        "skEm",
+        "enc",
+        "shared_secret",
+        "ct",
+        "exports",
+        "key_schedule_context",
+        "secret",
+        "key",
+        "base_nonce",
+        "exporter_secret",
+        "nonce"
+      ],
+      "properties": {
+        "pkRm": {
+          "const": "compared"
+        },
+        "skRm": {
+          "const": "compared"
+        },
+        "pkEm": {
+          "const": "compared"
+        },
+        "skEm": {
+          "const": "compared"
+        },
+        "enc": {
+          "const": "compared"
+        },
+        "shared_secret": {
+          "const": "compared"
+        },
+        "ct": {
+          "const": "257 compared"
+        },
+        "exports": {
+          "const": "3 compared"
+        },
+        "key_schedule_context": {
+          "const": "not exposed"
+        },
+        "secret": {
+          "const": "not exposed"
+        },
+        "key": {
+          "const": "not exposed"
+        },
+        "base_nonce": {
+          "const": "not exposed"
+        },
+        "exporter_secret": {
+          "const": "not exposed"
+        },
+        "nonce": {
+          "const": "not exposed"
+        }
+      }
+    },
+    "source_pins_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "cases": {
+      "type": "array",
+      "minItems": 151,
+      "maxItems": 151,
+      "items": {
+        "type": "object",
+        "required": [
+          "ct_hex",
+          "enc_hex",
+          "expected",
+          "expected_opener_calls",
+          "id",
+          "plaintext_bytes",
+          "plaintext_hex",
+          "provider_calls",
+          "raw_sealed_hex",
+          "recipient_test_private_hex",
+          "recipient_test_public_hex",
+          "request_body_hex",
+          "seal_aad_hex",
+          "seal_aead_id",
+          "seal_info_hex",
+          "seal_mode",
+          "sealed_sha256",
+          "signature_der_hex",
+          "signed_transcript_hex",
+          "synthetic_only",
+          "tag_bytes",
+          "test_ekm_hex"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "signed_transcript_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*$",
+            "maxLength": 16384
+          },
+          "id": {
+            "type": "string",
+            "enum": [
+              "apns_sandbox",
+              "apns_production",
+              "fcm_token",
+              "fcm_fid",
+              "unicode_scalars",
+              "unicode_nfc",
+              "unicode_nfd",
+              "minimum_ids",
+              "maximum_ids",
+              "plaintext_1024",
+              "expiry_max_window",
+              "unknown_outer_ignored",
+              "domain_expiry_zero",
+              "domain_expiry_u53max",
+              "plaintext_empty",
+              "plaintext_1",
+              "plaintext_1025",
+              "kid_empty",
+              "kid_65",
+              "kid_unicode",
+              "kid_leading_dot",
+              "aud_empty",
+              "aud_129",
+              "aud_unicode",
+              "aud_leading_dash",
+              "v_bool",
+              "v_two",
+              "ts_negative",
+              "ts_u53",
+              "ts_bool",
+              "ttl_59",
+              "ttl_901",
+              "ttl_bool",
+              "kind_other",
+              "platform_other",
+              "env_other",
+              "route_wrongsize",
+              "hint_wrongsize",
+              "collapse_wrongsize",
+              "nonce_wrongsize",
+              "fcm_outer_env",
+              "missing_outer_env",
+              "missing_outer_kind",
+              "outer_fraction_ts",
+              "outer_exponent_v",
+              "outer_duplicate",
+              "outer_escaped_duplicate",
+              "outer_4097",
+              "outer_invalid_utf8",
+              "outer_bom",
+              "sealed_padding",
+              "sealed_whitespace",
+              "sealed_wrongalphabet",
+              "sealed_trailingbits",
+              "sealed_2048",
+              "sealed_81",
+              "sealed_1106",
+              "spki_badprefix",
+              "spki_offcurve",
+              "spki_zero",
+              "spki_wrongsize",
+              "wrong_audience",
+              "kid_unknown",
+              "iid_not_allowlisted",
+              "skew_old_at_120",
+              "skew_future_121",
+              "signature_nonverifying",
+              "signature_route_tamper",
+              "signature_aud_tamper",
+              "skew_old_119",
+              "skew_future_120",
+              "tag_bit",
+              "ciphertext_bit",
+              "enc_bit",
+              "enc_zero",
+              "enc_hybrid",
+              "enc_compressed",
+              "enc_offcurve",
+              "enc_out_of_range",
+              "wrong_info",
+              "wrong_aad_same_key",
+              "wrong_recipient",
+              "auth_mode",
+              "psk_mode",
+              "aead256",
+              "duplicate_plain",
+              "escaped_duplicate_plain",
+              "plain_fraction_v",
+              "plain_exponent_v",
+              "plain_exponent_expiry",
+              "plain_fraction_expiry",
+              "plain_invalid_utf8",
+              "plain_bom",
+              "plain_lone_surrogate",
+              "plain_whitespace",
+              "plain_unsorted",
+              "plain_alternate_escape",
+              "plain_escaped_slash",
+              "plain_extra",
+              "plain_v_bool",
+              "plain_v_two",
+              "plain_expiry_bool",
+              "plain_expiry_negative",
+              "plain_expiry_u53",
+              "plain_expiry_string",
+              "plain_nested",
+              "plain_addr_number",
+              "plain_n_padded",
+              "plain_n_trailingbits",
+              "plain_n_wrongsize",
+              "plain_iid_bad",
+              "plain_pair_bad",
+              "plain_env_bad",
+              "plain_missing",
+              "plain_fcm_env",
+              "binding_iid",
+              "binding_app",
+              "binding_env",
+              "binding_expiry_now",
+              "binding_expiry_over",
+              "binding_platform",
+              "binding_fcm_kind",
+              "binding_app_env_notallowed",
+              "der_r_zero",
+              "der_s_zero",
+              "der_r_equals_order",
+              "der_s_equals_order",
+              "der_nonminimal_r_integer",
+              "der_negative_r",
+              "der_trailing_byte",
+              "der_in_range_nonverifying",
+              "signature_hint_tamper",
+              "signature_collapse_tamper",
+              "signature_sealed_tamper",
+              "known_other_kid_same_key",
+              "known_other_kid_different_key",
+              "kid_whitespace",
+              "aud_newline",
+              "plain_expiry_negative_zero",
+              "plain_v_string",
+              "plain_array",
+              "der_s_negative",
+              "der_r_above_order",
+              "der_wrong_sequence",
+              "der_one_integer",
+              "der_nonminimal_length",
+              "outer_apns_fcm_token",
+              "outer_apns_fcm_fid",
+              "outer_fcm_apns_token",
+              "unknown_outer_fraction_ignored",
+              "unknown_outer_exponent_ignored"
+            ]
+          },
+          "test_ekm_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*$",
+            "maxLength": 16384
+          },
+          "expected": {
+            "type": "string",
+            "enum": [
+              "eligible",
+              "domain_ok",
+              "shape400",
+              "auth401",
+              "hpke422",
+              "plain422",
+              "binding422"
+            ]
+          },
+          "enc_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*$",
+            "maxLength": 16384
+          },
+          "raw_sealed_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*$",
+            "maxLength": 16384
+          },
+          "expected_opener_calls": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "seal_info_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*$",
+            "maxLength": 16384
+          },
+          "plaintext_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*$",
+            "maxLength": 16384
+          },
+          "ct_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*$",
+            "maxLength": 16384
+          },
+          "plaintext_bytes": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 1025
+          },
+          "request_body_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*$",
+            "maxLength": 16384
+          },
+          "sealed_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "signature_der_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*$",
+            "maxLength": 16384
+          },
+          "provider_calls": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 0
+          },
+          "seal_aad_hex": {
+            "type": "string",
+            "pattern": "^(?:[0-9a-f]{2})*$",
+            "maxLength": 16384
+          },
+          "synthetic_only": {
+            "const": true
+          },
+          "recipient_test_public_hex": {
+            "type": "string",
+            "pattern": "^04[0-9a-f]{128}$"
+          },
+          "recipient_test_private_hex": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "seal_mode": {
+            "type": "string",
+            "enum": [
+              "base",
+              "auth",
+              "psk"
+            ]
+          },
+          "seal_aead_id": {
+            "type": "integer",
+            "enum": [
+              1,
+              2
+            ]
+          },
+          "tag_bytes": {
+            "const": 16
+          }
+        }
+      }
+    },
+    "format": {
+      "const": "hmp-push-seal-vectors-v1"
+    },
+    "signature_policy": {
+      "const": "randomized DER; regenerate other bytes exactly; independently verify every signature"
+    },
+    "contract_sha256": {
+      "const": "7c7cb585b8513cd25122fe532a03d3cefa7b0213bea831c1891c28af5d9720a3"
+    },
+    "info_hex": {
+      "const": "484d502070757368207365616c207631"
+    },
+    "official_sha256": {
+      "const": "61fc662f01996cd06d713dacf5e133167bd309a1f329442d53f1e21a47b3ede6"
+    },
+    "cases_sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "status": {
+      "const": "GENERATOR_ONLY_NOT_INDEPENDENTLY_VERIFIED"
+    }
+  }
+}
