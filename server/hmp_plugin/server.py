@@ -47,13 +47,14 @@ import logging
 import ssl
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from typing import Any
 
 from aiohttp import web
 from aiohttp.http_exceptions import LineTooLong
 
-from . import direct_send, mobile_cron, mobile_model, prompts, push_registration, wire
+from . import direct_send, mobile_cron, mobile_model, prompts, push_registration, push_resolve, wire
 from .authorize import ensure_chat
 from .contract import (
     CONTRACT_REVISION,
@@ -165,6 +166,10 @@ PUSH_REGISTRATION_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("GET", "/push/registration", "PN-REG-1"),
     ("PUT", "/push/registration", "PN-REG-2"),
     ("DELETE", "/push/registration", "PN-REG-3"),
+)
+
+PUSH_RESOLVE_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("POST", "/push/hints/resolve", "PN-RES-1"),
 )
 
 MOBILE_CRON_ROUTES: tuple[tuple[str, str, str], ...] = (
@@ -1135,6 +1140,8 @@ def build_app(ctx: ServerContext) -> web.Application:
     handlers: dict[str, Handler] = {
         "/ready": handle_ready,
         "/push/registration": push_registration.handle_push_get,
+        "/push/hints/resolve": partial(push_resolve.handle_push_resolve,
+                                       require_gate=_require_approvals_gate),
         "/pair/request": handle_pair_request,
         "/pair/complete": handle_pair_complete,
         "/auth/token": handle_token,
@@ -1164,6 +1171,7 @@ def build_app(ctx: ServerContext) -> web.Application:
         + list(MOBILE_CRON_ROUTES)
         + list(MOBILE_MODEL_ROUTES)
         + list(PUSH_REGISTRATION_ROUTES)
+        + list(PUSH_RESOLVE_ROUTES)
     )
     if ctx.session_browsing_enabled and ctx.session_browsing_available:
         # Amendment A1 kill switch: when off, SES-1/SES-2 are never added to the router at all,
@@ -1451,6 +1459,7 @@ class HmpServer:
 
     async def stop(self, *, notify: bool = True) -> None:
         """Close the listener. `notify=False` for an orderly shutdown by the owner."""
+        self.ctx.push_hints.clear()
         await self._cancel_pending_sends()
         if not notify:
             self._on_closed = None
