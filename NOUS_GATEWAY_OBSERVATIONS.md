@@ -130,7 +130,9 @@ settings, registration routes/writers, resolver, dispatch, relay/seal interopera
 integration remain implementation work; owner provisioning and physical delivery
 remain pending. No additional upstream Hermes API is required by these pure helpers.
 
-No production observer, registration, notification resolver or dispatcher is wired. This amendment
+At that earlier amendment checkpoint, no production observer, registration route,
+notification resolver or dispatcher was wired. The newer registration checkpoint
+below adds source routes only; observer, resolver and dispatch remain unfinished. This amendment
 has no native, provider or device acceptance, and no operational push exists. Initial alert scope
 covers HMP Bot Chat and Phone-chat rows. The static
 [cross-surface census](https://github.com/MahdiHedhli/hermes-hmp/blob/docs/nous-observations-sync/docs/research/approval-cross-channel-source-census-2026-10-02.md)
@@ -142,6 +144,30 @@ that consumer. CLI process loading and durable cross-surface lifecycle mapping r
 evidence/design work; observer events are not answer authority. Cron applies unattended
 automatic policy, and clarify is separate. No generic upstream API gap is established
 by this census. Provider setup and physical delivery remain pending.
+
+## Approval push registration route checkpoint (2026-10-02)
+
+HMP [draft #85](https://github.com/MahdiHedhli/hermes-hmp/pull/85), source
+`71385bb5a7b9352cec62fbe44c7e20e8e90f90a4`, adds authenticated GET/PUT/DELETE
+registration routes to the reviewed runtime. Effective approval ownership is
+separate from controls grants. Reads expose no route; writers validate bounded
+opaque seals, recheck liveness after awaits, enforce replay/CAS and advance G
+once atomically. DELETE works independently of delivery gates; failed DELETE database writes
+fence the route in listener memory. Future resolver and dispatcher consumers
+must enforce that fence. The shared COMMIT-failure rollback defect is repaired
+in this isolated source; no deployed store incident is claimed.
+
+Root passed 247 focused and 2,285 full configured tests (16 existing/native skips,
+one existing warning); independent review passed 326 overlapping cases and
+verified all 33 frozen hashes before and after. Scratch mutations caught owner,
+transactional liveness, CAS, replay-hash, COMMIT rollback and DELETE-fence
+regressions. Both hosted CI runs `37084551333` and `37084527827` passed on the
+exact source commit. Configured lint and privacy/log/surface checks passed.
+
+T022 remains incomplete at full feature scope: resolver/dispatch, hint lifecycle,
+relay and app/native integration are not supplied by these routes. The G-ceiling
+contract tension and volatile-fence restart residual remain open. No live host,
+phone, provider, provisioning or release changed; push delivery is not available.
 
 ## Approval push configuration and listener checkpoint (2026-10-02)
 
@@ -162,8 +188,10 @@ existing/native-dependent skips and one existing warning; configured Ruff passed
 All 26 frozen hashes matched after tests. Counts overlap. Hosted CI remains a
 separate exact-commit check.
 
-Registration routes/writers, resolver, observer/dispatch, relay/app integration,
-provider provisioning and physical delivery remain unfinished. T020/T021/T022 stay
+At this earlier runtime checkpoint, registration routes/writers were unfinished;
+the newer route checkpoint above records their source acceptance. Resolver,
+observer/dispatch, relay/app integration, provider provisioning and physical
+delivery remain unfinished. T020/T021/T022 stay
 open at feature scope, including the documented G-ceiling disposition. This checkpoint
 proves source and isolated listener/SQLite/key behavior only; it enables no delivery,
 live host activation, new phone build or release.
