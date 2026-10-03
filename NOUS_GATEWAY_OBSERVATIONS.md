@@ -1014,9 +1014,57 @@ demonstrated. Independent focused tests passed 2/2; the full local CI-equivalent
 [run 37094865602](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/37094865602)
 also completed successfully.
 
-**T029 remains incomplete.** These tests use a synthetic signing identity and do not originate
-from a native Hermes approval. The next fixture must positively observe queued work before
-revocation, Desktop hold and restart, then prove that no request survives those interleaves and
-that restart drops hints. HPKE opening, relay admission/replay/provider behavior, app registration,
+**At this component checkpoint, T029 remained incomplete.** These tests used a synthetic
+signing identity rather than a native approval. The later native checkpoint below adds bounded
+approval/revocation/restart evidence; the genuine Desktop-held interleave remains unverified. HPKE opening, relay admission/replay/provider behavior, app registration,
 APNs/FCM delivery, runtime privacy canaries and release qualification remain separate work.
 No production module, live home, deployment, provider or device was changed by this component.
+
+## Native approval push origin, revocation and restart checkpoint (2026-10-03 UTC)
+
+The isolated fixture at `871ebb0d322140e834e99b585844ebfa2b0ddf4a`
+([HMP draft PR #91](https://github.com/MahdiHedhli/hermes-hmp/pull/91)) drives actual
+Hermes approval callbacks, AP3/AP4 routes, the production dispatcher and the verified-TLS fake
+receiver. Independent source/confinement review preceded the run; independent receipt review
+accepted these three selected cases on Hermes `8afaab3703e336d72a72c812dd2dd249f04f166a`,
+Python 3.14.7 and its locked messaging dependency set (3 passed, 0 skips, 9 unrelated parameters
+deselected):
+
+- A native approval produced a request whose signature the fake relay independently verified.
+- After positively observing pending work and the real coalescing delay, native device revocation
+  invalidated the bearer and prevented a second relay request.
+- Graceful restart cancelled positively pending work; the test assertions verified cleared
+  queue/slots/hints, old-hint 404 and no second relay request.
+
+**Receipt limitation:** final teardown overwrote the old dispatcher's close journal with the new
+listener's zero counters. The old current journal retains cancellation and the in-test close
+assertion passed, but the final close file is not the old dispatcher's snapshot. This limit is
+retained alongside the accepted receipt, not repaired retroactively.
+
+Fresh sandbox preflight and native imports passed. Prepared/shared/protected tree digests stayed
+unchanged and no child processes remained. An earlier preflight failed its offline package check
+from a working directory denied by the sandbox; the successful check used the private fixture
+directory. Both receipts and the causal diagnostic are retained. The sandbox was not weakened.
+Dependency wheel-byte provenance remains a residual.
+
+The observer exists only in disposable copied fixture code, follows the actual coalescing sleep
+and records bounded counters/booleans. Independent review required a notifier-absent sample to
+fail the positive prerequisite and FIFO reads to fail without blocking; the runner requires a
+passed current-receipt preflight before native imports. Those repairs were independently
+confirmed. Six focused helper tests, Ruff, privacy and closed surface checks passed locally.
+Hosted unit/tool CI initially failed because the FIFO regression's child could not import the
+observer from CI's working directory (2,614 passed, 17 skips, one failure). The independently
+accepted test-only repair at `3e676ec10266ef958ca631b6f8384c6aa297745e` binds that child to
+the imported observer directory, retaining its no-writer setup and three-second timeout. Six
+helper tests passed independently. Exact-head hosted
+[run 37098887364](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/37098887364)
+then completed successfully: 2,615 passed, 17 skips and one existing warning, with lint, closed
+surface and privacy checks passing. The native test/observer/wiring code is unchanged by this
+repair; the three native cases retain their original sealed receipt, not a new native rerun.
+
+**T029 remains incomplete:** the genuine combined Desktop-held interleave is unverified. HPKE
+opening, remote relay admission/replay, app registration, APNs/FCM delivery, physical devices and
+release acceptance remain separate gates. The fake relay accepts opaque seal syntax; it does not
+open a seal or contact a provider. This one development sample is not a runtime allowlist or a
+qualification of future versions. No production module, live home, device, deployment or provider
+configuration changed.
