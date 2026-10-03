@@ -2068,6 +2068,16 @@ still needs the app's fresh read of the approval list and a human choice (INT-1,
 
 ## 12. Hermes internals used (stability gaps; FZ-R-15)
 
+**Optional PN-OPS diagnostics (spec 014 T026).** The read-only `push status` command uses
+`gateway.config_loader.merge_platform_sections`, `hermes_cli.config._expand_env_vars`,
+`._deep_merge`, `._normalize_root_model_keys`, `hermes_cli.managed_scope.get_managed_dir`, and
+`utils.fast_safe_load` through the bridge. These pure primitives resolve host push settings after
+native CLI bootstrap; they are not a global read/send dependency or an exact-build admission
+list. Missing primitives or malformed input produce only `config_unavailable` for diagnostics.
+HMP requests a supported read-only settings projection from Hermes so these optional private
+configuration dependencies can be removed. The command never calls config recovery, plugin
+discovery/hooks, or loader environment bridging. See [push diagnostics](../../../docs/PUSH_STATUS.md).
+
 The bridge module uses these undocumented Hermes internals. Each is a `HERMES_API_GAP` to be replaced by a supported API. Enumerated from `hermes_bridge.py` @ `5fd3d5c`.
 
 | Internal | Used for | Gap |

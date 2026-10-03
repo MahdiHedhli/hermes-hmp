@@ -43,6 +43,8 @@ import json
 import os
 import re
 import secrets
+import stat
+import sys
 from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
@@ -233,6 +235,66 @@ class BridgeError(RuntimeError):
 
     def __init__(self, what: str = "hermes read failed") -> None:
         super().__init__(what)
+
+
+def read_push_settings_for_diagnostics(home: Path) -> object:
+    """PN-OPS configured state, without loader hooks, backups or env bridging.
+
+    Reuse Hermes's pure YAML parser, expansion, managed merge and platform
+    precedence primitives. Read files directly so malformed inputs propagate
+    to the CLI's fixed `config_unavailable`, never native recovery logging.
+    This optional diagnostics API is not a runtime admission gate.
+    """
+    # Hermes's CLI/plugin bootstrap already imports this module. Its first
+    # import can seed SOUL.md on some builds; diagnostics must not trigger it.
+    if "hermes_cli.config" not in sys.modules:
+        raise BridgeError()
+    from gateway.config_loader import merge_platform_sections
+    from hermes_cli.config import _deep_merge, _expand_env_vars, _normalize_root_model_keys
+    from hermes_cli.managed_scope import get_managed_dir
+    from utils import fast_safe_load
+
+    def read_mapping(path: Path, *, legacy: bool = False) -> dict:
+        try:
+            # Native config reads follow symlinks. Inspect the opened target,
+            # not a prior stat, so a path replacement cannot substitute a FIFO
+            # between the check and open. O_NONBLOCK prevents FIFO open waits.
+            fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        except FileNotFoundError:
+            return {}
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise BridgeError()
+            with os.fdopen(fd, "rb", closefd=False) as file:
+                data = file.read(1024 * 1024 + 1)
+        finally:
+            os.close(fd)
+        if len(data) > 1024 * 1024:
+            raise BridgeError()
+        text = data.decode("utf-8-sig")
+        value = (json.loads(text) if legacy else fast_safe_load(text)) or {}
+        if not isinstance(value, dict):
+            raise BridgeError()
+        return value
+
+    legacy = read_mapping(home / "gateway.json", legacy=True)
+    config = _expand_env_vars(read_mapping(home / "config.yaml"))
+    managed_dir = get_managed_dir()
+    if managed_dir is not None:
+        managed = _normalize_root_model_keys(
+            _expand_env_vars(read_mapping(managed_dir / "config.yaml"))
+        )
+        if isinstance(managed.get("model"), str):
+            managed["model"] = {"default": managed["model"]}
+        config = _deep_merge(config, managed)
+    platforms = merge_platform_sections(config, config.get("gateway"), legacy)
+    block = platforms.get("hmp")
+    extra = block.get("extra") if isinstance(block, Mapping) else None
+    # PlatformConfig.from_dict promotes untyped flat fields into `extra`;
+    # explicit `extra` entries win, including a present null/disabled value.
+    if isinstance(extra, Mapping) and "push" in extra:
+        return extra["push"]
+    return block.get("push") if isinstance(block, Mapping) else None
 
 
 # --------------------------------------------------------------------------------------------------

@@ -766,6 +766,10 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     health.add_subparsers(dest="health_command").add_parser(
         "check", help="Read the gateway's current bot-channel health snapshot"
     )
+    push = groups.add_parser("push", help="Read configured push state and store counts")
+    push.add_subparsers(dest="push_command").add_parser(
+        "status", help="Read push configuration and counts; does not contact the relay"
+    )
 
 
 # --------------------------------------------------------------------------------------------------
@@ -811,6 +815,9 @@ class CliEnv:
     # injectable so a unit test never spawns a real process -- a FAKE runner stands in.
     hermes_executable: Callable[[], str | None] = _default_resolve_hermes_executable
     run_hermes_cli: Callable[..., subprocess.CompletedProcess[str] | None] = _default_run_hermes_cli
+    # PN-OPS: tests inject a synthetic settings reader; production uses the
+    # isolated Hermes bridge's read-only configuration path, never `_open`.
+    push_settings_reader: Callable[[Path], object] | None = None
 
     def interactive(self) -> bool:
         try:
@@ -895,6 +902,94 @@ class _ReadOnlyEpoch:
         if not self._path.with_name(self._path.name + "-wal").exists():
             return self._read("mode=ro&immutable=1")
         return self._read("mode=ro")
+
+
+def _push_store_counts(path: Path) -> tuple[int, int] | None:
+    """One committed SQLite view. No migration, pruning, identity or token load."""
+    path = path.resolve()
+    if not path.is_file():
+        return None
+    # An immutable open of a live WAL silently misses uncheckpointed rows.
+    # Use normal read-only WAL handling while the gateway is running.
+    wal = path.with_name(path.name + "-wal").exists()
+    if wal and not path.with_name(path.name + "-shm").exists():
+        # Refuse rather than ask SQLite to create a missing shared-memory file.
+        return None
+    mode = "mode=ro" if wal else "mode=ro&immutable=1"
+    try:
+        with contextlib.closing(
+            sqlite3.connect(path.as_uri() + f"?{mode}", uri=True, timeout=0.2)
+        ) as conn:
+            conn.execute("PRAGMA query_only = ON")
+            # Schema identity and both counts come from a single statement, so
+            # a concurrent registration/revoke cannot tear the two counters.
+            row = conn.execute(
+                "SELECT schema_version, "
+                "(SELECT COUNT(*) FROM push_registrations WHERE state = 'active'), "
+                "(SELECT COUNT(*) FROM push_device_generations g JOIN devices d "
+                "ON d.device_id = g.device_id WHERE d.state <> 'REVOKED') "
+                "FROM meta WHERE id = 1"
+            ).fetchone()
+            if row is None or row[0] != 3:
+                return None
+            return int(row[1]), int(row[2])
+    except (sqlite3.Error, OSError, ValueError):
+        return None
+
+
+def _cmd_push_status(env: CliEnv) -> int:
+    """PN-OPS: fixed codes and booleans/counts only; unavailable is never zero."""
+    from . import identity, push_config, server
+
+    kw = env.identity_kwargs
+    try:
+        custody = identity.resolve_custody(
+            env=kw.get("env", env.environ),
+            hermes_root=kw.get("hermes_root"),
+            binding_root=kw.get("binding_root"),
+        )
+    except identity.NamedProfileError as exc:
+        raise RefusedError(
+            "refused: HMP runs only under the default profile; run this without -p/--profile",
+            EXIT_ENVIRONMENT,
+        ) from exc
+    except identity.IdentityError as exc:
+        raise RefusedError("refused: the HMP custody location is unsafe", EXIT_ENVIRONMENT) from exc
+
+    available = True
+    try:
+        reader = env.push_settings_reader
+        if reader is None:
+            from .compat import CompatStatus
+
+            if env.compat().status != CompatStatus.SUPPORTED:
+                raise ValueError("configuration API unavailable")
+            # Hermes imports remain behind the minimum-version/dependency gate.
+            from .bridge import read_push_settings_for_diagnostics
+
+            reader = read_push_settings_for_diagnostics
+        enabled, configured, kids = push_config.configuration_summary(reader(custody.hermes_root))
+        env.stdout.write(f"push_enabled: {'yes' if enabled else 'no'}\n")
+        env.stdout.write(f"relay_configured: {'yes' if configured else 'no'}\n")
+        env.stdout.write(f"configured_kid_count: {kids}\n")
+    except Exception:
+        # Neither Hermes parse errors nor configuration data may reach output.
+        env.stdout.write(
+            "push_enabled: unavailable\nrelay_configured: unavailable\n"
+            "configured_kid_count: unavailable\nconfiguration_status: config_unavailable\n"
+        )
+        available = False
+    counts = _push_store_counts(server.store_path(custody.anchor_dir))
+    if counts is None:
+        env.stdout.write(
+            "active_registration_count: unavailable\n"
+            "non_revoked_generation_count: unavailable\nstore_status: store_unavailable\n"
+        )
+        available = False
+    else:
+        env.stdout.write(f"active_registration_count: {counts[0]}\n")
+        env.stdout.write(f"non_revoked_generation_count: {counts[1]}\n")
+    return EXIT_OK if available else EXIT_ENVIRONMENT
 
 
 @contextlib.contextmanager
@@ -2105,9 +2200,13 @@ def dispatch(args: argparse.Namespace, env: Optional[CliEnv] = None) -> int:  # 
             return _cmd_setup_check(env)
         if (group, action) == ("health", "check"):
             return _cmd_health_check(env)
+        if (group, action) == ("push", "status"):
+            return _cmd_push_status(env)
         handler = _STORE_COMMANDS.get((group or "", action or ""))
         if handler is None:
-            env.stderr.write("usage: hermes hmp {pair,devices,instance,compat,setup,health} ...\n")
+            env.stderr.write(
+                "usage: hermes hmp {pair,devices,instance,compat,setup,health,push} ...\n"
+            )
             return EXIT_ENVIRONMENT
         if (group, action) in MUTATING_COMMANDS:
             _check_mutation_allowed(env)

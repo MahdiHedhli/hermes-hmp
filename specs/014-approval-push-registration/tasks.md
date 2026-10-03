@@ -178,10 +178,16 @@ evidence. The clock-count repair of 2026-10-02 followed a focused review of that
   (Clarification, F4) The signature header is a strict minimal DER `SEQUENCE` of two positive `INTEGER`s in `1` to
   `n − 1`; the client's test vectors, from an independent generator and pending, cover that encoding and both
   low-S and high-S validity; no homemade signing or verification.
-- [ ] T026 `hermes hmp push status`, read-only, active registrations and non-REVOKED generation-row
+- [x] T026 `hermes hmp push status`, read-only, active registrations and non-REVOKED generation-row
   counts only. Tests: no identifiers, URL
   secrets or handles in output; no dispatch outcome field; no change to `devices list` (SD3) or key
   handling (SD5).
+  Implementation checkpoint: configuration projection and schema-3 read-only counters are in
+  the focused `feat/push-status-readonly` slice. Missing optional configuration APIs or unreadable
+  store state report unavailable; no exact-build admission gate is added. Independent v3 source
+  review accepted the bounded slice after fixing nonregular file reads. Local full regression:
+  2,591 passed, 16 skipped, one existing warning; eight isolated native configuration cases match.
+  Hosted CI, relay interoperability, registration and notification delivery remain separate gates.
 - [ ] T027 Log and privacy canaries: `R`, `K`, `C`, `S`, salt, `request_id`, signatures and profile
   names never reach `log_event`, the audit table, CLI output or issue drafts. Run `scan_logs.py`,
   `scan_private.py`, `check_plugin_surface.py` (with the T011 rule) and Ruff. Existing route suites

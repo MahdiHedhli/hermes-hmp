@@ -884,6 +884,29 @@ decreased, so its `G` never resets except through a consistent restore of the st
   pending) nor key-length handling (SD5 pending).
 - No CLI sends a push, grants push, or edits owner lists or controls decisions.
 
+**T026 diagnostic semantics.** Enabled means the host's literal push opt-in, not listener or
+provider readiness. Relay configured means the relay block passes the same pure validator as
+runtime registration; a disabled host may still have a configured relay. Kid count counts accepted
+configured entries. Store counts describe stored states, not current dispatch eligibility: an
+unpruned expired row whose stored state is active still contributes. Both counts and schema version
+are read in one SQLite statement. Schema other than 3, missing tables/files, or unreadable data
+report `store_unavailable`, never a fabricated zero, and are never migrated by this command.
+
+Configuration diagnostics use only bounded file reads and Hermes's pure parser, expansion,
+managed merge, and platform precedence primitives through the bridge. Explicit `extra.push`
+overrides a flat `push` sibling, including null. The CLI already imports Hermes configuration
+during plugin bootstrap; diagnostics refuse to trigger its first import because some Hermes
+builds seed SOUL.md then. Missing optional primitives, malformed input, or an unavailable native
+bootstrap report `config_unavailable`; no app feature gate changes. No config loader, recovery
+backup, plugin discovery/hook, environment bridge, identity/key read, or network probe is invoked.
+Output is fixed field names with yes/no, decimal counts, or unavailable; exit status is 0 when both
+read paths succeed and 2 when either is unavailable. Existing named-profile refusal stays intact.
+
+Checkpointed stores use an immutable read; live WAL stores use SQLite read-only mode with
+query-only enabled. A live WAL without an existing SHM sidecar is unavailable rather than causing
+sidecar creation. SQLite may update reader bookkeeping in an existing SHM sidecar; this grants no
+database write, migration, cleanup, checkpoint, or authority mutation. No status snapshot is saved.
+
 ### PN-NC No change outside push
 
 - With push off (the default), every existing route, gate, response and test outcome is unchanged.
