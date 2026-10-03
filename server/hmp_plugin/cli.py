@@ -838,10 +838,15 @@ def _command(args: argparse.Namespace) -> tuple[str | None, str | None]:
     return group, action
 
 
-def _check_mutation_allowed(env: CliEnv) -> None:
-    """PR1-2 / PR3-2 mitigations (SEC-1)."""
+def _check_operator_session(env: CliEnv) -> None:
+    """SEC-1 mitigation for operator-only mutations and device metadata."""
     if any(name.startswith(SESSION_ENV_PREFIX) for name in env.environ):
         raise RefusedError("refused: run this from an operator shell, not a Hermes session")
+
+
+def _check_mutation_allowed(env: CliEnv) -> None:
+    """PR1-2 / PR3-2 mitigations (SEC-1)."""
+    _check_operator_session(env)
     if not env.interactive():
         raise RefusedError("refused: this command needs an interactive terminal")
 
@@ -2210,6 +2215,8 @@ def dispatch(args: argparse.Namespace, env: Optional[CliEnv] = None) -> int:  # 
             return EXIT_ENVIRONMENT
         if (group, action) in MUTATING_COMMANDS:
             _check_mutation_allowed(env)
+        elif (group, action) == ("devices", "list"):
+            _check_operator_session(env)
         with _open(env, needs_identity=(group, action) in IDENTITY_COMMANDS) as ctx:
             return handler(ctx, args)
     except RefusedError as refusal:
