@@ -970,3 +970,28 @@ package or new external beta was deployed in this checkpoint.
 [HMP draft PR #74](https://github.com/MahdiHedhli/hermes-hmp/pull/74) now publishes the independently accepted relay contract text at `92a719f`. It uses one atomic effective acceptance instant, `max(raw_wall_now, last_now)`, for nonce admission and seal bounds; monotonic time for rolling rate budgets; explicitly qualified normal-clock retention/capacity bounds; and separate APNs connections for each allowed `(app, env)` pair. Clock stalls/steps may prolong retention and fill the hard cache cap, which fails closed without evicting live nonces. Optional leaf pins constrain an otherwise valid TLS chain/hostname. This paragraph records contract acceptance only; the separate issuer checkpoint records its bounded source evidence. Registration/resolver/dispatch source, relay signature/seal vectors and interoperability, provider/device/deployment/release and owner choices remain pending. No push capability is enabled.
 
 The related mobile image branches passed hosted CI: public repair `16c2095` in [37064933078](https://github.com/MahdiHedhli/HermesBotMobile/actions/runs/37064933078), and accepted Phone image wiring plus the fixture repair `11cbf29` in [37065452665](https://github.com/MahdiHedhli/HermesBotMobile/actions/runs/37065452665). The actual successful-TLS late-delivery cancellation case passed. The former fixture collision is resolved; native serving/allocation, physical device and release gates remain. No new deployed media or approval capability is claimed.
+
+## Read-only push status implementation checkpoint
+
+The independently accepted T026 source slice at `25324c664d7f6147669498562ec7da4bb366ad11` ([HMP PR #89](https://github.com/MahdiHedhli/hermes-hmp/pull/89)) adds `hermes hmp push status`: configured opt-in, validated relay
+configuration, configured kid count, active registration count, and non-revoked generation-row
+count. It emits only fixed names/codes, booleans and counts; unreadable configuration/store data is
+unavailable rather than zero. It loads no identity key, mutates no grant, migrates no store, sends no
+push and reports no dispatch or delivery outcome. A disabled host may still have valid relay config;
+stored active rows are not a claim of current dispatch eligibility.
+
+Local source verification: **2,591 passed, 16 skipped**, one existing aiohttp warning; lint, closed
+surface and privacy checks passed. Eight isolated cases against Hermes source `ac0cfa7db94cefa90cf3e35191f38b53888b9e17`
+matched the native pure configuration primitives, including flat versus explicit `extra` precedence,
+legacy state, environment references and managed leaf overrides. No diagnostic file/environment
+change was observed. Native CLI bootstrap is accounted for separately; the bridge refuses to cause
+Hermes configuration's first import because it can seed SOUL.md. Live WAL uses read-only/query-only
+SQLite; missing SHM reports unavailable, and existing SHM may update ordinary reader bookkeeping.
+
+Independent v3 source review accepted the frozen implementation, verifying pins and inspecting the exact test logs; the reviewer did not rerun pytest. Initial hosted CI stopped at import formatting because the local lint used the wrong configuration. The whitespace-only followup passed canonical repository lint locally and [hosted CI run 37092782098](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/37092782098) succeeded on exact head `25324c664d7f6147669498562ec7da4bb366ad11`, including tests, surface, log hygiene and privacy gates. It changes no minimum-version
+policy or app feature gate. Missing optional configuration primitives affect diagnostics only.
+A supported read-only Hermes settings projection would remove HMP's private parser/expansion/merge
+primitive dependencies. Provider/device delivery, relay/seal interoperability, app registration,
+provisioning and remote release gates remain open.
+
+The diagnostics reader now rejects opened nonregular targets before reading, uses nonblocking open to avoid FIFO waits, and preserves native symlinks to regular configuration files. Four isolated FIFO/symlink tests have subprocess timeouts; regular filesystem stalls remain outside a universal wall-clock guarantee. The accepted v3 fixes the blocking-read edge identified by the v2 rejection. No live installation or notification delivery is implied.
