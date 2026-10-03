@@ -132,7 +132,7 @@ remain pending. No additional upstream Hermes API is required by these pure help
 
 At that earlier amendment checkpoint, no production observer, registration route,
 notification resolver or dispatcher was wired. The newer registration checkpoint
-below adds source routes only; observer, resolver and dispatch remain unfinished. This amendment
+below adds source routes; the newer resolver checkpoint records its bounded acceptance. Observer and dispatch remain unfinished. This amendment
 has no native, provider or device acceptance, and no operational push exists. Initial alert scope
 covers HMP Bot Chat and Phone-chat rows. The static
 [cross-surface census](https://github.com/MahdiHedhli/hermes-hmp/blob/docs/nous-observations-sync/docs/research/approval-cross-channel-source-census-2026-10-02.md)
@@ -144,6 +144,33 @@ that consumer. CLI process loading and durable cross-surface lifecycle mapping r
 evidence/design work; observer events are not answer authority. Cron applies unattended
 automatic policy, and clarify is separate. No generic upstream API gap is established
 by this census. Provider setup and physical delivery remain pending.
+
+## Approval push hint resolver checkpoint (2026-10-02)
+
+HMP [draft #86](https://github.com/MahdiHedhli/hermes-hmp/pull/86), source
+`ef11d01cdcda6194169fd16e4a64cfc4a0379e07`, adds the authenticated,
+owner-gated `POST /push/hints/resolve` route and a 256-entry listener-local
+hint map. Resolution is navigation only. It rechecks exact device/family,
+registration H/G/hash, DELETE fence, prompt generation, bot grant and current
+visibility after async boundaries; hidden or stale rows disclose nothing.
+Only recorded authoritative settlement can return `not_pending`. Immutable
+row snapshots now carry actual settlement time for the 60-second margin;
+this additive input changes neither native answer authority nor AP3 wire data.
+
+Root passed 463 focused and 2,389 full configured tests (16 existing/native
+skips, one existing warning). Independent review passed 694 overlapping cases,
+matched all 41 frozen hashes and detected four causal mutants: hidden visibility,
+non-authoritative settlement, settlement margin and live hint collision. Counts
+are not additive. Both hosted runs `37085947620` and `37085944710` passed on
+the exact commit; configured lint and privacy/log/surface checks passed.
+
+This accepts the bounded T023 source slice. Production insertion dispatch and
+hint minting (T024), HTTPS/signing relay transport (T025), relay/seal and app
+integration, owner provisioning, physical delivery and release remain open.
+T022 is incomplete at feature scope. No host, phone, provider or release changed;
+there is no operational push delivery. The separate dispatcher work is unreviewed
+and is not credited by this checkpoint. Earlier checkpoints below preserve the
+scope and unfinished work at their own dates.
 
 ## Approval push registration route checkpoint (2026-10-02)
 

@@ -64,12 +64,39 @@ physical/native/global memory/release gates remain unchanged. See [current mobil
 | Available | Bot roster and Bot Chat reads | Profile list, snapshots, history, and access state through the root Hermes gateway. |
 | Preview | Bot Chat sends | Explicit owner gate, per-bot authorization, freshness checks and retry-safe handling. Current development follows the minimum-version policy and attempts the required APIs on later or unknown builds; an untested fingerprint alone does not disable the feature. Actual API failures remain explicit. |
 | Draft; not enabled live | Approvals and choices | Minimum-version candidate `150bd0f` is independently source-reviewed; two prepared native samples passed 13 cases each. Corrected exact-source package is prepared. Live activation and physical card/answer acceptance remain open; earlier setup failures are historical evidence below. |
-| Source registration/configuration/maintenance reviewed; delivery unwired | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` are independently source-reviewed, with exact hosted CI passing. Resolver, dispatch, relay/app integration, provisioning and physical delivery remain open. No notification is delivered by this source slice. |
+| Source registration/resolver/configuration/maintenance reviewed; delivery unwired | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` are independently source-reviewed, with exact hosted CI passing. Dispatch, relay/app integration, provisioning and physical delivery remain open. No notification is delivered by this source slice. |
 | Owner dogfood; source follow-up reviewed | Linked chat images | Owner confirmed public-CDN rendering. Accepted public-image settlement repair `16c2095` and Phone media wiring `11cbf29` passed hosted CI; integrated Play source `8671061` also passed hosted CI. Native allocation, host-local HTTP serving and device/release evidence remain open. No new installed image capability is claimed. |
 | Planning | Phone photo/file attachments | Root reproduced native adapter primitives in isolated discovery tests on an archive, not a Git attestation (73 checks, 30 focused tests, 315 fixture and CI-tool tests together; no full CI gate claimed); the complete upload, busy-handler, admission and read-back flow remains unqualified. Canonical Desktop-owned multimodal admission and reusable authorized media history remain upstream contract gaps. |
 
 See the [roadmap](ROADMAP.md), [wire contract](docs/architecture/contracts/HMP_V1.md), and [upstream requests for Nous Research](NOUS_GATEWAY_OBSERVATIONS.md).
 
+
+## Approval push hint resolver checkpoint (2026-10-02)
+
+HMP [draft #86](https://github.com/MahdiHedhli/hermes-hmp/pull/86), source
+`ef11d01cdcda6194169fd16e4a64cfc4a0379e07`, adds the authenticated,
+owner-gated `POST /push/hints/resolve` route and a 256-entry listener-local
+hint map. Resolution is navigation only. It rechecks exact device/family,
+registration H/G/hash, DELETE fence, prompt generation, bot grant and current
+visibility after async boundaries; hidden or stale rows disclose nothing.
+Only recorded authoritative settlement can return `not_pending`. Immutable
+row snapshots now carry actual settlement time for the 60-second margin;
+this additive input changes neither native answer authority nor AP3 wire data.
+
+Root passed 463 focused and 2,389 full configured tests (16 existing/native
+skips, one existing warning). Independent review passed 694 overlapping cases,
+matched all 41 frozen hashes and detected four causal mutants: hidden visibility,
+non-authoritative settlement, settlement margin and live hint collision. Counts
+are not additive. Both hosted runs `37085947620` and `37085944710` passed on
+the exact commit; configured lint and privacy/log/surface checks passed.
+
+This accepts the bounded T023 source slice. Production insertion dispatch and
+hint minting (T024), HTTPS/signing relay transport (T025), relay/seal and app
+integration, owner provisioning, physical delivery and release remain open.
+T022 is incomplete at feature scope. No host, phone, provider or release changed;
+there is no operational push delivery. The separate dispatcher work is unreviewed
+and is not credited by this checkpoint. Earlier checkpoints below preserve the
+scope and unfinished work at their own dates.
 
 ## Approval push registration route checkpoint (2026-10-02)
 
