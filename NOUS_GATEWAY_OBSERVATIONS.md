@@ -1420,3 +1420,31 @@ tested. No wire capture, extra Send/retry, host or receiver deployment, Play upl
 or submission occurred. Provider-aware Data safety, full reviewer access,
 exact-source automated release-security-review PASS and replacement upload/submission
 remain open. No usable Android beta install link or release acceptance is claimed.
+
+
+## Android provider and staged-build review (2026-10-03)
+
+The provider inventory and exact-build reviewer matrix are complete with independent
+factual acceptance; final Data safety answers and release certification remain open.
+Fresh Console reads distinguish Free code 1 (`150dd06`) available to internal
+testers from the closed Alpha release marked **not yet sent for review**. There
+are 13 unsubmitted changes. Verified local replacement code 2 (`8671061`) is not
+among uploaded bundles; no public Android enrollment/install link is verified.
+
+The existing bounded emulator report acknowledgement and independent KV receipt
+correlation remain valid; they do not certify physical, live-host or full reviewer
+access. The saved no-restrictions answer is inaccurate for live pairing and host
+approval. The owner-selected synthetic/BYO-host scope remains: no exposed reviewer
+Hermes, local LLM or automatic removal of product features. A Google access
+clarification is prepared, not sent; no full-access certification is made.
+
+Data-flow review includes HMP host recipients, Cloudflare content versus network
+metadata, consented Android recognizer fallback, TTS, public/host-local image
+requests and relevant-version aggregation. **PLAY-QR-METADATA-1** records ML Kit
+diagnostics/usage metrics separately from on-device QR input processing. Code 2
+APK barcode metadata versions 17.3.0 and 18.3.1 match current primary guidance;
+that is not a telemetry/network capture. Recipient/controller purposes, sharing
+basis, category/retention mapping and the older inactive upload's relevance remain
+explicit gaps. **PLAY-VOICE-1** remains open. No new report Send/retry, host or
+receiver deployment, permission/provider connection, Play upload or submission
+occurred during this review.
