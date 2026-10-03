@@ -37,6 +37,19 @@ class PushAvailability:
         return frozenset(self.relay.kids) if self.available and self.relay else frozenset()
 
 
+def configuration_summary(block: object) -> tuple[bool, bool, int]:
+    """Configured state only, independent of live approval gates or relay reachability.
+
+    No relay URL, key id or pin escapes this projection. A malformed relay is
+    unconfigured even when the host has opted in. Disabled settings may still
+    contain a valid relay configuration.
+    """
+    if not isinstance(block, Mapping):
+        return False, False, 0
+    relay = _relay(block)
+    return block.get("enabled") is True, relay is not None, len(relay.kids) if relay else 0
+
+
 def valid_kid(value: object) -> bool:
     return type(value) is str and _KID.fullmatch(value) is not None
 

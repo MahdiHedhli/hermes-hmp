@@ -797,6 +797,14 @@ def test_every_reached_internal_is_probed() -> None:
     # Model and cron writers have independent exact-build fingerprints and
     # isolated Hermes integration checks. FastAPI is a declared dependency.
     optional = {
+        # PN-OPS: optional pure configuration diagnostics, tried at CLI use;
+        # missing primitives report unavailable and never close app features.
+        ("gateway.config_loader", "merge_platform_sections"),
+        ("hermes_cli.config", "_deep_merge"),
+        ("hermes_cli.config", "_expand_env_vars"),
+        ("hermes_cli.config", "_normalize_root_model_keys"),
+        ("hermes_cli.managed_scope", "get_managed_dir"),
+        ("utils", "fast_safe_load"),
         ("gateway.platforms.base", "PLATFORM_ADAPTER_CAPABILITIES"),  # absent on stock
         ("hermes_cli.config", "load_config"),
         ("hermes_cli.web_routers.profiles", "_write_profile_model"),
