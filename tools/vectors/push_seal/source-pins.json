@@ -6,7 +6,7 @@
     "README.md": "5918c766867571d1c4784218758b9832afb81c0a6df167fbb39f04c54f8db793",
     "SOURCE_PRECISION.md": "3a8a40deb71d92d45a6ed18af2cfdb1c8693141e98ecbd1a827895b37b75c745",
     "cases.json": "7f82f17782d436b91d9ec00dbaaa3fc5fe9bc144fbeab111167a4b3c914e89aa",
-    "check.py": "0040fc994d8bec1f6a238ff21b06e6381e001cde7936dc980eb95f7184d577be",
+    "check.py": "7a1e8bb5e30e3cbad2a55755dc04654e457d61bbbf12fb65ce4d480ccb838303",
     "data/advisories-canonicalize.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
     "data/advisories-hpke-common.json": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945",
     "data/advisories-hpke-core.json": "ae75c6248543c6652a55d63b58c291e083486c7daffa4dcd987c69cf221edd74",
@@ -32,9 +32,9 @@
     "dependencies.lock.json": "835a9b6f60080c4e685d9fd18e41165955f32254224be82e2c1ccd1dd4b7e41a",
     "generate.mjs": "299c614a8371c528c70bcf2ca8617382531c9cb0bd9d007bfbcfbabb66a6f26e",
     "package.json": "5e24cdcdc819229c519e45ec305d6245c6bdad4fd64eb7fdbc88e8bc9e51be1f",
-    "regeneration_check.py": "38ce0ff1d321a0877ab4178402a8c4845619da81e3dd34e6f716b099c529a4d8",
+    "regeneration_check.py": "98e00a30ed6fa3512a7bb5465371b92e6a5170a72b9b4685ffb025053cb05a8b",
     "requirements.txt": "f7c8da1bde31f399b4dc408743fba8ce5f87cd1340384cab04cb08df3a2405fb",
     "schema.json": "42ea385e04454637bb4c0f5034972941a5383f500681a5f0114fa1ab9a1b3ff5",
-    "tests_pure.py": "c5318f00f35488cb053d0d46efe3549f757c9392695d22eebceffe401cc2b9be"
+    "tests_pure.py": "8628029f219eea8f1cf42dc20aecee03ed512c9e2e9312febd8b3a335bb1e154"
   }
 }
