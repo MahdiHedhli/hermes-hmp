@@ -70,8 +70,9 @@ a user-reviewed GitHub issue draft that carries only bounded version and fixed-c
 - No new wire code, field or route, no contract revision bump, no new plugin registration surface.
   The old phone app keeps working unchanged.
 - Availability is computed once when the listener opens. No per-request fingerprint hashing remains.
-- The eligibility feature set is closed: no media and no approvals member. Reaching a floor never
-  implies either.
+- The eligibility feature set is closed: no media member. Spec 034 (owner policy 2026-10-01) adds
+  exactly two members, `approvals` and `phone_chat`, at the send floor. Reaching a floor never implies
+  media.
 - The issue draft never contacts the network, `gh`, a browser or a subprocess.
 - The tested-sample manifests and the tool-native fixtures are unchanged byte for byte.
 
@@ -81,5 +82,7 @@ a user-reviewed GitHub issue draft that carries only bounded version and fixed-c
   `health check` and `--issue-draft` automatically.
 - **F2** Phone-version reporting and phone copy updates (text only).
 - **F3** Convert the approvals branch to a probe, a floor and evidence only before it merges.
+  Implemented by [spec 034](../034-approval-minimum-version-admission/spec.md) (source awaiting
+  independent review).
 - **F4** Make the CI release watch report-only.
 - **F5** Finer read splits. **F6** Retire the `feat/compat-report` `gh` submission path.

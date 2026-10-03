@@ -24,12 +24,14 @@ CONTRACT_MODULES = {
     "pairing.py",
     "tokens.py",
     "push_issuer.py",
+    "push_config.py",
     "auth.py",
     "reads.py",
     "authorize.py",
     "revoke.py",
     "gate.py",
     "direct_send.py",
+    "prompts.py",
     "mobile_cron.py",
     "mobile_model.py",
     "server.py",
@@ -39,7 +41,9 @@ CONTRACT_MODULES = {
     "logging_policy.py",
 }
 DATA_FILES = {
-    "plugin.yaml", "read_compat_builds.json", "write_supported_builds.json",
+    "plugin.yaml",
+    "read_compat_builds.json",
+    "write_supported_builds.json",
     "mobile_cron_supported_builds.json",
     "mobile_model_supported_builds.json",
 }

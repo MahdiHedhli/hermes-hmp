@@ -15,6 +15,9 @@ order is mandatory:
    the bridge's authorization, profile-home and profile-scope primitives.
 5. Independently probe each other feature's own dependencies. One feature's missing dependency
    never closes another.
+5a. `approvals` and `phone_chat` (spec 034) need read and send. Both use the send floor.
+   `approvals` has no dependency table of its own. `phone_chat` probes `PHONE_CHAT_DEPENDENCIES`
+   only when send is available, so below the floor or without send nothing is imported for them.
 6. Exact build fingerprints and git SHAs are read only as test evidence (`tested_label`). No gate
    reads that field.
 
@@ -33,7 +36,7 @@ import os
 import re
 import sysconfig
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, fields, is_dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Protocol
@@ -294,10 +297,13 @@ def _resolve_ref(dirs: _GitDirs, ref: str, *, _seen: frozenset[str] = frozenset(
 
 def resolve_git_head_sha(root: Path) -> str | None:
     """Research R8 step 2: HEAD resolved to a 40-hex SHA by reading git metadata only (no
-    subprocess). `None` means no `.git` at all (a valid "no git metadata" install). Any other
-    failure (a `.git` file pointer, loose ref, or `packed-refs` that cannot be resolved) raises
+    subprocess). `None` means `<root>/.git` itself is absent (`lstat` raises ENOENT): a valid
+    "no git metadata" install. A present `.git` that cannot be resolved (a dangling symlink, an
+    unreadable entry, a bad `.git` file pointer, loose ref, or `packed-refs`) raises `OSError` or
     `ValueError` — R8 step 5 treats that as unidentifiable, never as "no git"."""
-    if not (root / ".git").exists():
+    try:
+        (root / ".git").lstat()  # lstat, not exists(): a dangling link is present, not absent
+    except FileNotFoundError:
         return None
     dirs = _resolve_gitdir(root)
     head_text = (dirs.worktree / "HEAD").read_text(encoding="utf-8").strip()
@@ -363,13 +369,21 @@ class DependencySpec:
     `params` names parameters the callable must declare as real `POSITIONAL_OR_KEYWORD` or
     `KEYWORD_ONLY` parameters. A `**kwargs` catch-all never satisfies a name: a writer that
     silently swallowed `paused` would create an active job. `min_positional` is the number of
-    leading positional parameters the callable must accept."""
+    leading positional parameters the callable must accept. `dataclass_field` names a field the
+    resolved class must declare as a real dataclass field (an attribute alone never counts)."""
 
     module: str
     qualname: str | None = None
     gap: str = ""
     params: frozenset[str] = frozenset()
     min_positional: int = 0
+    dataclass_field: str | None = None
+
+    @property
+    def label(self) -> str:
+        """HMP's own fixed label for this row; never Hermes-provided text."""
+        base = f"{self.module}.{self.qualname}" if self.qualname else self.module
+        return f"{base}.{self.dataclass_field}" if self.dataclass_field else base
 
 
 # HMP_V1.md §12 "Hermes internals used" by the read/roster/authorize bridge. If any row here is
@@ -439,6 +453,35 @@ DIRECT_SEND_DEPENDENCIES: tuple[DependencySpec, ...] = (
     DependencySpec("hermes_state", "SessionDB.get_session", gap="E-GAP-6/7"),
     DependencySpec("hermes_state", "SessionDB.get_session_by_title", gap="E-GAP-6/7"),
     DependencySpec("hermes_state", "SessionDB.get_compression_lineage", gap="E-GAP-6/7"),
+)
+
+# Phone chat (spec 034, HMP_V1.md §7b): only the Hermes callables HMP calls in process. The Bot Chat
+# `approvals` member has no table: its answers use Hermes's native run-approval route. Behavior-
+# bearing classes (busy queue, inbound mixin, turn runner, room grants, pairing, secret scope) are
+# deliberately not listed: importing them never proved behavior. `retire_clarify_card` is not listed
+# either: it is not defined on the base adapter (Hermes finds it on the adapter's own class).
+PHONE_CHAT_DEPENDENCIES: tuple[DependencySpec, ...] = (
+    DependencySpec(
+        "tools.approval",
+        "resolve_gateway_approval",
+        gap="E-GAP-9",
+        params=frozenset({"request_id", "resolve_all"}),
+    ),
+    DependencySpec("tools.approval", "list_gateway_approvals", gap="E-GAP-9"),
+    DependencySpec("tools.clarify_gateway", "resolve_gateway_clarify", gap="E-GAP-9/20"),
+    DependencySpec("tools.clarify_gateway", "mark_awaiting_text", gap="E-GAP-9/20"),
+    DependencySpec("tools.clarify_gateway", "get_clarify_timeout", gap="E-GAP-9/20"),
+    DependencySpec("tools.approval_context", "_get_approval_timeout", gap="E-GAP-9"),
+    DependencySpec(
+        "gateway.platforms.base", "BasePlatformAdapter._send_exec_approval_prompt", gap="E-GAP-9"
+    ),
+    DependencySpec("gateway.platforms.base", "BasePlatformAdapter.send_clarify", gap="E-GAP-9/20"),
+    DependencySpec(
+        "gateway.platforms.event",
+        "MessageEvent",
+        gap="F3 control",
+        dataclass_field="allow_gateway_control",
+    ),
 )
 
 # Mobile jobs (`bridge.create_mobile_cron` / `edit_mobile_cron`). The scheduler wrapper forwards
@@ -593,6 +636,19 @@ def _signature_satisfies(obj: object, spec: DependencySpec) -> bool:
     return True
 
 
+def _field_satisfies(obj: object, spec: DependencySpec) -> bool:
+    """A required dataclass field: `obj` must be a class and a dataclass that declares it. An
+    attribute that is not a declared field (a property, a class variable) does not count."""
+    if spec.dataclass_field is None:
+        return True
+    if not inspect.isclass(obj) or not is_dataclass(obj):
+        return False
+    try:
+        return any(f.name == spec.dataclass_field for f in fields(obj))
+    except TypeError:
+        return False
+
+
 def probe_dependencies(
     *,
     hermes_root: Path | None = None,
@@ -607,7 +663,7 @@ def probe_dependencies(
     it only when a feature's version floor is met.
     """
     root = hermes_root if hermes_root is not None else locate_hermes_root()
-    labels = [f"{s.module}.{s.qualname}" if s.qualname else s.module for s in specs]
+    labels = [s.label for s in specs]
     if root is None:
         return tuple(labels)
     resolved_root = root.resolve()
@@ -643,6 +699,9 @@ def probe_dependencies(
         if not _signature_satisfies(obj, spec):  # shape only; never called
             missing.append(label)
             continue
+        if not _field_satisfies(obj, spec):
+            missing.append(label)
+            continue
 
         # SR-3: an undeterminable chain (a cycle, or any layer whose file cannot be found -- a
         # `functools.partial`, a callable instance, a C function) is MISSING. It never falls back
@@ -668,14 +727,16 @@ def probe_direct_send_dependencies(*, hermes_root: Path | None = None) -> Sequen
 
 
 class Feature(StrEnum):
-    """The closed set of version-gated features. There is deliberately no media and no approvals
-    member: reaching a floor never implies either is allowed."""
+    """The closed set of version-gated features. There is deliberately no media member: reaching a
+    floor never implies it. `approvals` and `phone_chat` (spec 034) both need read and send."""
 
     READ = "read"
     SESSION_BROWSING = "session_browsing"
     SEND = "send"
     JOBS = "jobs"
     MODEL = "model"
+    APPROVALS = "approvals"
+    PHONE_CHAT = "phone_chat"
 
 
 class Unavailable(StrEnum):
@@ -686,6 +747,7 @@ class Unavailable(StrEnum):
     DEPENDENCY_MISSING = "dependency_missing"
     PROBE_FAILED = "probe_failed"
     REQUIRES_READ = "requires_read"
+    REQUIRES_SEND = "requires_send"
 
 
 @dataclass(frozen=True)
@@ -703,6 +765,9 @@ class Eligibility:
     version: hermes_version.HermesVersion
     git_sha: str | None  # evidence only
     features: Mapping[Feature, FeatureStatus]
+    # Neutral diagnostic (spec 034 R4): whether the Bot Chat session-stream approval hook is present
+    # in this Hermes source. Evidence only: no gate reads it. None = not determined.
+    stream_approval_hook: bool | None = None
 
     def available(self, feature: Feature) -> bool:
         status = self.features.get(feature)
@@ -730,6 +795,30 @@ _EVIDENCE_FILES: Mapping[Feature, str] = {
 # `Probe` takes the located root and the table; injectable so each step can be tested alone.
 Probe = Callable[[Path, Sequence[DependencySpec]], Sequence[str]]
 EvidenceMatcher = Callable[[Path], Mapping[Feature, str | None]]
+HookProbe = Callable[[Path], bool | None]
+
+_STREAM_HOOK_FILE = ("gateway", "platforms", "api_server.py")
+_STREAM_HOOK_DEF = b"def _register_session_stream_approval("
+_STREAM_HOOK_READ_CAP = 4 * 1024 * 1024
+
+
+def stream_hook_present(root: Path) -> bool | None:
+    """Neutral diagnostic: does the Bot Chat session-stream approval hook exist in this Hermes
+    source? A bounded file read, with no import and no execution. It never gates and never sets a
+    minimum: where the hook is absent Hermes emits no `approval.request` and HMP invents no card.
+    `None` means it could not be determined (unreadable, outside the tree, or too large)."""
+    try:
+        base = root.resolve()
+        target = base.joinpath(*_STREAM_HOOK_FILE).resolve()
+        if not _is_under(target, base):
+            return None
+        with open(target, "rb") as handle:
+            data = handle.read(_STREAM_HOOK_READ_CAP + 1)
+    except OSError:
+        return None
+    if len(data) > _STREAM_HOOK_READ_CAP:
+        return None
+    return _STREAM_HOOK_DEF in data
 
 
 def _default_probe(root: Path, specs: Sequence[DependencySpec]) -> Sequence[str]:
@@ -766,6 +855,7 @@ def evaluate_eligibility(
     ),
     probe: Probe = _default_probe,
     evidence: EvidenceMatcher = match_evidence,
+    hook_probe: HookProbe = stream_hook_present,
 ) -> Eligibility:
     """Decide, once, which features this Hermes install can serve. Never raises."""
     features: dict[Feature, FeatureStatus] = {}
@@ -821,6 +911,26 @@ def evaluate_eligibility(
                     )
                 else:
                     features[feature] = FeatureStatus(True)
+            # Spec 034: both members need send. A member below its floor was set above and is
+            # skipped; otherwise it is closed without importing anything when send is not
+            # available, and `phone_chat` alone probes its own helpers after that.
+            for member in (Feature.APPROVALS, Feature.PHONE_CHAT):
+                if below[member]:
+                    continue
+                if not features[Feature.SEND].available:
+                    features[member] = FeatureStatus(False, Unavailable.REQUIRES_SEND)
+                elif member is Feature.APPROVALS:
+                    features[member] = FeatureStatus(True)
+                else:
+                    missing = run(PHONE_CHAT_DEPENDENCIES)
+                    if missing is None:
+                        features[member] = FeatureStatus(False, Unavailable.PROBE_FAILED)
+                    elif missing:
+                        features[member] = FeatureStatus(
+                            False, Unavailable.DEPENDENCY_MISSING, missing
+                        )
+                    else:
+                        features[member] = FeatureStatus(True)
     else:
         # Read is below its floor: nothing else is probed, so no Hermes module is imported.
         for feature in Feature:
@@ -839,7 +949,14 @@ def evaluate_eligibility(
         f: FeatureStatus(st.available, st.reason, st.missing, labels.get(f))
         for f, st in features.items()
     }
-    return Eligibility(version, git_sha, {f: resolved[f] for f in Feature})
+    hook: bool | None = None
+    if features[Feature.APPROVALS].available:
+        try:
+            raw_hook = hook_probe(root)
+            hook = raw_hook if isinstance(raw_hook, bool) else None
+        except Exception:
+            hook = None
+    return Eligibility(version, git_sha, {f: resolved[f] for f in Feature}, hook)
 
 
 _READ_WHY: Mapping[Unavailable, OtherWhy] = {
@@ -868,12 +985,14 @@ class CompatGate:
         ),
         probe: Probe = _default_probe,
         evidence: EvidenceMatcher = match_evidence,
+        hook_probe: HookProbe = stream_hook_present,
     ) -> None:
         self._kwargs = {
             "root_locator": root_locator,
             "version_reader": version_reader,
             "probe": probe,
             "evidence": evidence,
+            "hook_probe": hook_probe,
         }
 
     def evaluate(self) -> CompatResult:
