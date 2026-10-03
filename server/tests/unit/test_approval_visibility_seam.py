@@ -37,7 +37,7 @@ from aiohttp import web
 from aiohttp.test_utils import TestClient
 
 from hmp_plugin import prompts as real_prompts
-from hmp_plugin import server
+from hmp_plugin import server, wire
 from hmp_plugin.bridge import BridgeError
 from hmp_plugin.contract import (
     IDEMPOTENCY_RETENTION_S,
@@ -451,11 +451,23 @@ def _without_diagnostics(lines: list[str]) -> list[str]:
     ]
 
 
+def _assert_same_body_except_desktop_ownership(new: Out, old: Out) -> None:
+    """Keep exact JSON bytes except the validated additive AP-3 ownership field."""
+    assert new.status == old.status
+    if new.status == 200:
+        new_body = json.loads(new.body)
+        assert type(new_body) is dict
+        ownership = new_body.pop("desktop_ownership")
+        assert ownership in {"owned", "unowned", "unknown"}
+        assert wire.dump_json(new_body) == old.body
+    else:
+        assert new.body == old.body
+
+
 def _both(tmp_path: Path, s: S) -> tuple[Out, Out]:
     new = _drive(tmp_path / "new", s, oracle=False)
     old = _drive(tmp_path / "old", s, oracle=True)
-    assert new.status == old.status
-    assert new.body == old.body  # serialized bytes, never dict equality
+    _assert_same_body_except_desktop_ownership(new, old)
     assert new.samples == old.samples
     assert new.calls == old.calls
     assert new.recon == old.recon
@@ -496,14 +508,16 @@ def test_oracle_matches_a_frozen_expected_body(tmp_path: Path) -> None:
 
 def test_empty_store(tmp_path: Path) -> None:
     new, _ = _both(tmp_path, S())
-    assert json.loads(new.body) == {"prompts": [], "desktop_held": False}
+    assert json.loads(new.body) == {
+        "prompts": [], "desktop_held": False, "desktop_ownership": "unknown"
+    }
     assert new.samples == 3  # limiter, t1, t2
 
 
 def test_body_key_order_and_serialization(tmp_path: Path) -> None:
     new, _ = _both(tmp_path, S(rows=(B("a1"), C("c1", session="s1"))))
     parsed = json.loads(new.body)
-    assert list(parsed) == ["prompts", "desktop_held"]
+    assert list(parsed) == ["prompts", "desktop_held", "desktop_ownership"]
     assert [list(item) for item in parsed["prompts"]] == [
         ["kind", "surface", "request_id", "expires_at", "choices", "command", "description"],
         ["kind", "surface", "request_id", "expires_at", "question", "multi_select",
@@ -644,7 +658,7 @@ def test_a_raising_member_callable_fails_closed_with_the_same_body(
     rows = (B("a1"), P("b1", session="s1"), B("c1"))
     new, old = _both(tmp_path, S(rows=rows, approvals=approvals, phone=phone, clock=(0, 10, 11)))
     # Only the number of `bridge_exception` diagnostics may differ; the body does not.
-    assert new.body == old.body
+    _assert_same_body_except_desktop_ownership(new, old)
     raised = len([x for x in (approvals, phone) if x == "raise"])
     # The seam asks each member once per request.
     assert (
@@ -708,7 +722,10 @@ def test_first_phase_purge_expires_rows_and_second_phase_runs_again(tmp_path: Pa
 def test_gate_order_and_early_returns(tmp_path: Path, s: S) -> None:
     new, _ = _both(tmp_path, s)
     if s.store is False:
-        assert (new.status, json.loads(new.body)) == (200, {"prompts": [], "desktop_held": False})
+        assert (new.status, json.loads(new.body)) == (
+            200,
+            {"prompts": [], "desktop_held": False, "desktop_ownership": "unknown"},
+        )
         assert new.samples == 1  # only the limiter sampled the clock
     else:
         assert new.status in (404, 503)
@@ -750,7 +767,7 @@ def test_desktop_held_flipped_during_reconciliation_comes_from_the_final_snapsho
     assert new.calls["list"] == ["s1"] and new.state[-1] == ("held", 1 if holds else 0)
     assert (_held(new), _ids(new)) == ((True, ["b1"]) if holds else (False, ["a1", "b1"]))
     assert _held(new) == ("a1" not in _ids(new))  # one snapshot: the flag matches the rows
-    assert new.body == old.body
+    _assert_same_body_except_desktop_ownership(new, old)
 
 
 def test_clock_sequence_purge_once_per_phase_and_fresh_reconcile_samples(tmp_path: Path) -> None:
