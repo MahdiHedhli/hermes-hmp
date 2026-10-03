@@ -165,3 +165,5 @@ its semantically equivalent mutant survives and no test proof is claimed. The pr
 Spec 034's two-sample native evidence covers `150bd0f`, not this 015 amendment. No native, device,
 provider, operational notification or deployment acceptance is claimed here. T062 is still the
 separate update on the 014 branch; runtime implementation follows its own contract gates.
+
+- [ ] T060 Independently review the settlement timestamp input amendment with real-route resolver tests; verify immutable snapshots, no wire exposure and AP-3 equivalence.

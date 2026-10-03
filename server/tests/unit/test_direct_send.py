@@ -1144,7 +1144,8 @@ async def test_server_stop_cancels_pending_send_tasks() -> None:
     background = asyncio.create_task(hang())
     await started.wait()
     tasks.put(("i", "u", "p", "c"), background)
-    ctx = SimpleNamespace(direct_send_deps=SimpleNamespace(tasks=tasks))
+    from hmp_plugin.push_hints import HintMap
+    ctx = SimpleNamespace(direct_send_deps=SimpleNamespace(tasks=tasks), push_hints=HintMap())
     srv = HmpServer(ctx, ListenerSettings("127.0.0.1", 0))  # type: ignore[arg-type]
     await srv.stop(notify=False)
     assert background.cancelled()

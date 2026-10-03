@@ -102,7 +102,7 @@ def test_field_names_and_order_are_frozen() -> None:
     assert names(VisibleSet) == ["held", "rows"]
     assert names(RowView) == [
         "key", "kind", "surface", "generation", "status", "settle_cause", "expires_at",
-        "held", "open_now", "hidden_now", "visible_now", "session_key", "wire",
+        "held", "open_now", "hidden_now", "visible_now", "settled_at", "session_key", "wire",
     ]
 
 

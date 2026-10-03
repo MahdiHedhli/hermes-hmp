@@ -189,7 +189,7 @@ It also records source confirmation for I-3, I-4 and I-5. Those need no lane cha
 - **NI-6.3 Views.** `PromptStore.view_row(key, *, now, members)` and
   `PromptStore.view_visible(iid, user_id, profile, *, now, members, include_wire: bool = False)`
   return frozen `RowView` snapshots: key, kind, surface, generation, status, `settle_cause`,
-  `expires_at`, held, `open_now`, `hidden_now`, `visible_now`, plus `wire` and `session_key`.
+  `expires_at`, `settled_at`, held, `open_now`, `hidden_now`, `visible_now`, plus `wire` and `session_key`.
   Both take `_guard` once, read the held marker and rows in that one section, call no callable,
   and mutate nothing: no purge, no expiry, no deletion.
   - **Row set and order.** `view_visible` returns one `RowView` for every row of
@@ -290,3 +290,14 @@ route or setting; attaching an observer at listener open (014); clarify notifica
 hidden bit or settle history; Phone reconciliation inside the seam; changes to `direct_send.py`,
 `bridge.py`, `adapter.py` or `reads.py`; the native fixture harness or its test-tool fingerprint
 bootstrap; HMP v1 wire text (no observable change); SD3 and SD5; any Hermes core change.
+
+## Settlement timestamp input amendment (2026-10-02; review pending)
+
+The bounded 014 hint lifetime needs the actual settlement timestamp, not the
+time at which a resolver first observes settlement. `RowView` includes immutable
+`settled_at: int | None`, captured with status and cause in the existing `_guard`
+section. Neither view exports it on the wire; AP-3 bytes and all existing writers,
+authority, expiry and retention rules remain unchanged. This is an additive 015
+input amendment, subject to independent review with the resolver candidate.
+Tests must prove coherent cause/timestamp snapshots, no mutation, exact 60-second
+hint settlement margin, frozen prior views and unchanged AP-3 output.

@@ -173,6 +173,7 @@ class RowView:
     open_now: bool
     hidden_now: bool
     visible_now: bool
+    settled_at: int | None = None
     session_key: str | None = None
     wire: Mapping[str, object] | None = field(default=None, compare=False, hash=False)
 
@@ -623,6 +624,7 @@ class PromptStore:
             status=row.status,
             settle_cause=row.settle_cause,
             expires_at=row.expires_at,
+            settled_at=row.settled_at,
             held=held,
             open_now=open_now,
             hidden_now=hidden_now,

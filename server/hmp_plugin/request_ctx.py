@@ -60,6 +60,7 @@ from .contract import (
 )
 from .logging_policy import log_bridge_exception, log_event
 from .prompts import MemberState
+from .push_hints import HintMap
 
 # --------------------------------------------------------------------------------------------------
 # Peer address parsing: shared by `server.address_allowed` (TR-4 bind/peer policy) and `peer_key`
@@ -193,6 +194,7 @@ class ServerContext:
     direct_send_deps: Any = None
     # PN-AV live host settings; default off, no wire/environment fallback.
     push_settings: Callable[[], object] = field(default=lambda: None)
+    push_hints: HintMap = field(default_factory=HintMap, repr=False)
     # v1.3 prompt rows (process memory). None until a supported listener builds one.
     prompt_store: Any = None
     # Approval availability (spec 034, owner policy 2026-10-01): the `approvals` and `phone_chat`

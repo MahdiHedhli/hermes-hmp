@@ -527,6 +527,7 @@ class HmpAdapter(BasePlatformAdapter):
     def _close_generation(ctx: server.ServerContext) -> None:
         """R9: the listener that owned this prompt generation stopped. Its rows expire and a
         stream still bound to it can never insert into a later generation."""
+        ctx.push_hints.clear()
         if ctx.prompt_store is not None:
             ctx.prompt_store.close(ctx.now())
 
