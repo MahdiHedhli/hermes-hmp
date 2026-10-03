@@ -17,8 +17,40 @@ exceptions, each an exact (module, name) allow-list entry in the surface check:
 - `compat.py` may import Hermes modules dynamically, but only inside its dependency probe, and only
   for a build already on the read-compatible list (see "Startup order"; ruling on T013).
 
-The spike is reference only. Code is rewritten and reviewed, never copied wholesale (constitution
-VIII).
+The spike is reference only. Code is rewritten and reviewed, never copied wholesale.
+
+**Spec 028 D4 planned closed slice (normative/interface only).** A future `phone_attachments.py`
+may orchestrate bounded issuer/exact-target custody, a closed injected validator port and
+idempotency claims under `HMP_PHONE_ATTACHMENTS_V1.md`. DTOs/protocols belong in `contract.py`,
+durable schema/transactions only in `store.py`, narrow raw routes only in `server.py`, and every
+native import/file-cache/session/row dependency only in `bridge.py`. No module, route or production
+decoder exists merely because this plan names it; the closed module set/scanner is not widened
+in this documentation slice. Native no-defer settlement/absence binding, encrypted adapter and
+portable validator admission remain separate gates. No extra registration, host path/URL request,
+network destination, arbitrary import, second owner or automatic retry.
+
+**D4 pure-source candidate (independent source review pending).** The exact `phone_attachments.py`
+module now contains only syntactic JSON/hash/wire codecs. Attachment DTOs and the injected validator
+Protocol are pure `contract.py` data. This adds one exact skeleton entry, no scanner waiver/import
+exception. No custody, schema, route, production media/content decoder, auth/native/file/cache
+or operational capability.
+
+**Proposed outbound-network exception (spec 014 T011; source-only, not implemented).** The three
+exceptions above are import allow-list entries. Spec 014 proposes one different kind of closed
+exception, on network use rather than imports: a single module, `push_relay.py`, may be the one
+outbound non-loopback HTTPS client of the plugin, and its destination comes only from host
+configuration (`push.relay_url`, `push.relay_audience`, `push.relay_kids`, and the optional `push.relay_spki_pins`), never
+from the wire, a phone, a sealed value, a redirect or a default. It is governed by the frozen relay
+policies of `docs/architecture/contracts/HMP_PUSH_RELAY_V1.md` (no redirects, no proxy environment,
+bounded response, signed request, one provider-side attempt, retry only before a provider attempt)
+and HMP v1 §7f. Standard trust-store chain and host-name validation are always required; the optional
+pin setting is omitted or an exact list of 1 to 8 distinct canonical SHA-256 SPKI digests that additionally
+constrains only the relay's leaf certificate, with no environment fallback and no trust fallback (R-PIN, the
+unreviewed root clock and pin delta of 2026-10-02). It imports only packages the surface check already allows (`aiohttp`,
+`cryptography`), so it needs no new import exception. The exception adds no registration, hook,
+tool or dependency, and widens no other socket: every other network call stays on loopback. It takes
+effect only after implementation, independent review and root acceptance. This note describes no
+current runtime or scanner behavior, and `tools/ci/check_plugin_surface.py` is unchanged by it.
 
 ```text
 server/
@@ -52,6 +84,14 @@ server/
     pairing.py                    # P2, P4 (PR2-*, PR4-*), sanitization (PR2-3)
     tokens.py                     # P5 exchange, rotation, retry grace (successor = HMAC over the RAW presented
                                   #   token, length-prefixed; R16, CS-13), family revoke (PR5-*)
+    push_issuer.py                # spec 014 T021: pure route/collapse HMAC derivation and saved-hash check;
+                                  #   no I/O, route registration, state mutation or authority decision
+    push_config.py                # PN-AV: immutable live host settings; strict kid/audience/pin grammar, no I/O
+    push_registration.py          # PN-REG authenticated GET/PUT/DELETE; no provider/relay calls
+    push_hints.py                 # bounded listener-memory hint bindings; read-only resolver lookup
+    push_resolve.py               # PN-RES navigation only, no answers, history or relay I/O
+    push_dispatch.py              # PN-DSP bounded insertion worker, relay port injected
+    push_relay.py                 # PN-REL bounded signed HTTPS transport; host-only destination
     auth.py                       # bearer + HMP-Instance middleware (TR-5, PR5-6)
     reads.py                      # roster (RO-1/RO-2), snapshot (RO-3/RO-4/RO-5), history + resets (RO-6/RO-8), baselines;
                                   #   also list_sessions/session_snapshot/session_history (amendment A1, SES-1/SES-2)
@@ -150,6 +190,7 @@ SHA. Unresolvable git metadata or a missing listed file is unidentifiable, hence
 | GET | `/hmp/v1/bots/{p}/conversations/default/messages?after=&limit=` | RO-6 | bearer + per-bot gate |
 | GET | `/hmp/v1/bots/{p}/sessions?cursor=&limit=` | SES-1 (amendment A1, v1.1) | bearer + per-bot gate; only when `gateway.platforms.hmp.extra.session_browsing` is not `false` |
 | GET | `/hmp/v1/bots/{p}/sessions/{ref}/messages?after=&limit=` | SES-2 (amendment A1, v1.1) | bearer + per-bot gate; same kill switch |
+| GET | `/hmp/v1/bots/{p}/sessions/{ref}/messages/from-start?limit=` | SES-2a (phone Bot Chat history paging) | bearer + per-bot gate; same kill switch and read limiter; an older HMP has no route |
 | POST | `/hmp/v1/bots/{p}/chat/messages` | DS-1..DS-7 (amendment F2, v1.2) | bearer + per-bot gate; **always registered** (unlike SES-1/SES-2's kill switch), answers `503 write_gate_closed` rather than `404` when `direct_send`'s flag is off or the guard/gate otherwise fails closed |
 | GET | `/hmp/v1/bots/{p}/chat/messages/by-client-id/{cmid}` | DS-8 (amendment F2, v1.2) | bearer + per-bot gate; always registered, read-only, never re-sends |
 
@@ -232,6 +273,29 @@ one-command flow itself resumes into.
 the roster uses. This is best-effort and additive: a build with no bridge (unsupported), or a
 bridge call that fails, writes no `profiles` field at all, and an older gateway's record never had
 one either; `pair offer` treats both the same, falling back to the placeholder text.
+
+**Full bounded inventory (SD1).** The local listener file read/write/removal bound
+is 65,536 bytes; the pinned `/ready` network read remains 16,384 bytes. Format-1
+records up to 16,384 bytes retain valid legacy parsing. Larger records require
+exactly the nine writer fields, no duplicate members, canonical IID, bounded
+printable ASCII host/nonce (128 characters), exact port/pid/snapshot integer
+ranges, at most 128 unique legal profile IDs, printable ASCII names up to 64
+characters and complete unique three-code health coverage. All 128 maximum-length
+adapter-derived ASCII names fit without truncation; 128 is this record's supported
+domain, not a native global profile ceiling. The default-JSON conservative bound
+is 41,291 bytes, not a claimed attained maximum.
+
+The writer projects only exact built-in list/tuple rows and built-in scalar
+values, with finite input ceilings and bounded incremental default JSON encoding.
+Strict records may use the larger file budget; other small historical inputs
+receive only 16,384 bytes. Oversized loose/Unicode/custom legacy shapes never
+gain a larger budget. No label truncation or partial diagnostics fallback.
+Unsafe/stale/foreign records and malformed larger records fail closed; atomic
+failures leave the old file intact. Removal retains its existing regular-file,
+pid and device/inode checks; reader uid/mode and pinned liveness checks remain.
+Old readers can reject newly large records. A failed out-of-domain refresh may
+leave an older snapshot fresh for up to 45 seconds; health checks do not prove
+equality to the live roster. No native compatibility, route or authority change.
 
 **S1 residual: known plugin-scanner findings.** Approving a pending request from this separate
 `hermes hmp` process cannot go through a Hermes internal (S1) — it goes through Hermes's own

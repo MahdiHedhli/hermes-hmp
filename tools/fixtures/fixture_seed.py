@@ -25,6 +25,7 @@ seeding).
 from __future__ import annotations
 
 import argparse
+import faulthandler
 import json
 import os
 import sqlite3
@@ -37,6 +38,12 @@ REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 SERVER_DIR = REPO_ROOT / "server"
 if str(SERVER_DIR) not in sys.path:
     sys.path.insert(0, str(SERVER_DIR))
+
+
+# Opt-in `--diagnostic-stacks`: one nonfatal all-thread Python stack dump to stderr if the
+# subcommand is still running after this many seconds (below `run_seed_script`'s 120 s deadline).
+# Not a signal handler, no core, no locals/env/argv. Sensitive stderr: capture it privately only.
+_DIAGNOSTIC_STACK_SECONDS = 90.0
 
 
 def _out(payload: dict[str, Any]) -> None:
@@ -407,9 +414,18 @@ def cmd_acquire_lease(args: argparse.Namespace) -> None:
     from hermes_cli.active_sessions import try_acquire_active_session
 
     profile_dir = Path(args.home) / "profiles" / args.profile
+    metadata = None
+    if args.desktop_held:
+        # The lease Hermes treats as a live Bot Chat mailbox owner
+        # (`find_canonical_live_owner`): HMP's DS-4 exempts it, and `api_server` admits the
+        # turn to that mailbox instead of running it locally.
+        metadata = {
+            "bot_live_delivery_consumer": True,
+            "live_session_id": args.session_id,
+        }
     lease, refusal = try_acquire_active_session(
         session_id=args.session_id, surface=args.surface, config={},
-        registry_home=profile_dir,
+        registry_home=profile_dir, metadata=metadata,
     )
     if lease is None:
         _fail(f"acquire-lease refused: {refusal}")
@@ -419,17 +435,20 @@ def cmd_acquire_lease(args: argparse.Namespace) -> None:
 
 
 def cmd_compat_identity(args: argparse.Namespace) -> None:
-    """The GU-2c build identity (fingerprint, git_sha) of THIS venv's Hermes install, computed by
-    the real `compat.default_gate()` -- the exact code path the live gateway and `hermes hmp
-    compat` use. No `--home` needed: identity is a property of the Hermes source tree, not of any
-    instance. Used by `build_fixture.py` to check (never silently assume) whether a build is
-    listed in `read_compat_builds.json` before bootstrapping a fixture-provenance entry for it
-    (see that script's docstring and this task's final report)."""
+    """The production read verdict for THIS venv's Hermes install, computed by the real
+    `compat.default_gate()` -- the exact code path the live gateway and `hermes hmp compat` use.
+    No `--home` needed: it is a property of the Hermes source tree, not of any instance. Used by
+    `build_fixture.py` (`require_read_eligible`), which reads `supported` only. `fingerprint` and
+    `git_sha` are diagnostic and are null for an eligible build (the gate no longer reads a
+    per-build list); `read_reason`/`read_missing` are additive, fixed-vocabulary reasons
+    (`compat.Unavailable` value; HMP's own dependency labels) present only when read is not
+    available."""
     del args
     from hmp_plugin import compat
 
     result = compat.default_gate().evaluate()
     identity = result.identity
+    read = result.eligibility.features[compat.Feature.READ] if result.eligibility else None
     _out(
         {
             "ok": True,
@@ -437,12 +456,19 @@ def cmd_compat_identity(args: argparse.Namespace) -> None:
             "why": getattr(result.why, "value", None),
             "fingerprint": identity.fingerprint if identity else None,
             "git_sha": identity.git_sha if identity else None,
+            "read_reason": getattr(read.reason, "value", None) if read else None,
+            "read_missing": list(read.missing) if read else [],
         }
     )
 
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--diagnostic-stacks", action="store_true",
+        help="before the subcommand: dump all Python thread stacks to stderr once, nonfatally, "
+        f"after {_DIAGNOSTIC_STACK_SECONDS:g} s if still running (stderr is sensitive)",
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     def _home_xdg(p: argparse.ArgumentParser) -> None:
@@ -529,6 +555,11 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--profile", required=True)
     p.add_argument("--session-id", required=True)
     p.add_argument("--surface", default="f1-fixture-synthetic-lease")
+    p.add_argument(
+        "--desktop-held",
+        action="store_true",
+        help="advertise bot_live_delivery_consumer so the Bot Chat mailbox path owns the turn",
+    )
     p.set_defaults(func=cmd_acquire_lease)
 
     p = sub.add_parser("compat-identity")
@@ -539,12 +570,19 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    if args.diagnostic_stacks:
+        faulthandler.dump_traceback_later(
+            _DIAGNOSTIC_STACK_SECONDS, repeat=False, file=sys.stderr, exit=False
+        )
     try:
         args.func(args)
     except SystemExit:
         raise
     except Exception as exc:
         _fail(f"{type(exc).__name__}: {exc}")
+    finally:
+        if args.diagnostic_stacks:
+            faulthandler.cancel_dump_traceback_later()
     return 0
 
 

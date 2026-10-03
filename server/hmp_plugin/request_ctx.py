@@ -45,7 +45,7 @@ from typing import Any, Protocol
 
 from aiohttp import web
 
-from . import gate, wire
+from . import gate, push_config, wire
 from .auth import AuthContext, Authenticator
 from .compat import CompatResult
 from .contract import (
@@ -59,6 +59,8 @@ from .contract import (
     WriteGateState,
 )
 from .logging_policy import log_bridge_exception, log_event
+from .prompts import MemberState
+from .push_hints import HintMap
 
 # --------------------------------------------------------------------------------------------------
 # Peer address parsing: shared by `server.address_allowed` (TR-4 bind/peer policy) and `peer_key`
@@ -150,6 +152,8 @@ class ServingIdentity(Protocol):
 
     def k_grace(self) -> bytes: ...
 
+    async def read_k_grace_for_push(self) -> bytes | None: ...
+
     def still_current(self) -> bool: ...
 
     def server_ssl_context(self) -> ssl.SSLContext: ...
@@ -188,6 +192,180 @@ class ServerContext:
     direct_send_flag: Callable[[], bool] = field(default=lambda: False)
     # `direct_send.DirectSendDeps`, only on a supported build (mirrors `reads`/`authorize` above).
     direct_send_deps: Any = None
+    # PN-AV live host settings; default off, no wire/environment fallback.
+    push_settings: Callable[[], object] = field(default=lambda: None)
+    push_hints: HintMap = field(default_factory=HintMap, repr=False)
+    # v1.3 prompt rows (process memory). None until a supported listener builds one.
+    prompt_store: Any = None
+    # Approval availability (spec 034, owner policy 2026-10-01): the `approvals` and `phone_chat`
+    # eligibility members, computed once at listener open from the actual API checks. Both default
+    # CLOSED, so a context built without availability information never opens an approval route.
+    # No exact build, manifest, fingerprint or latch is consulted.
+    approvals_available: Callable[[], bool] = field(default=lambda: False)
+    phone_chat_available: Callable[[], bool] = field(default=lambda: False)
+    # Mobile cron is a separate persistent-execution gate. Both settings are
+    # read from live HMP config for every request, and default to deny.
+    owner_device_ids: Callable[[], frozenset[str]] = field(default=lambda: frozenset())
+    cron_flag: Callable[[], bool] = field(default=lambda: False)
+    cron_available: Callable[[], bool] = field(default=lambda: False)
+    model_flag: Callable[[], bool] = field(default=lambda: False)
+    model_available: Callable[[], bool] = field(default=lambda: False)
+    # Minimum-version eligibility (owner policy 2026-10-01): whether this Hermes install provides
+    # what send and session browsing need. Kept separate from the host flags above, which only say
+    # whether the owner turned a feature on.
+    send_available: Callable[[], bool] = field(default=lambda: True)
+    session_browsing_available: bool = True
+
+    # PN-REG-3: volatile delete-failure fence, at most the 64 active route digests.
+    # Unknown/unreadable or over-cap state closes every route for this listener.
+    # Future dispatch and resolve MUST consult push_route_fenced too.
+    push_delete_fence: set[bytes] = field(default_factory=set, repr=False)
+    push_delete_fence_closed: bool = False
+
+    def push_route_fenced(self, route_hash: bytes) -> bool:
+        return self.push_delete_fence_closed or route_hash in self.push_delete_fence
+
+    def fence_push_delete(self, route_hash: bytes | None, *, unreadable: bool = False) -> None:
+        if unreadable:
+            self.push_delete_fence_closed = True
+        elif route_hash is not None:
+            if len(self.push_delete_fence) >= 64 and route_hash not in self.push_delete_fence:
+                self.push_delete_fence_closed = True
+            else:
+                self.push_delete_fence.add(route_hash)
+
+    def prune_push_delete_fence(self) -> None:
+        # Only successful committed retirement may clear a known fence. A global
+        # unreadable-state failure stays closed until listener restart (RES-21).
+        self.push_delete_fence.intersection_update(
+            digest
+            for digest in tuple(self.push_delete_fence)
+            if self.store.active_push_hash(digest)
+        )
+
+    def push_availability(self) -> push_config.PushAvailability:
+        # Adapter supplies only current host config. Neither wire nor environment
+        # values enter this snapshot, and availability never changes approval gates.
+        try:
+            block = self.push_settings()
+            return push_config.evaluate(
+                block,
+                direct_send=self.direct_send_effective(),
+                approvals=self.is_approvals_available(),
+                phone_chat=self.is_phone_chat_available(),
+            )
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return push_config.PushAvailability(False, "relay_unconfigured", None)
+
+    def is_approvals_available(self) -> bool:
+        """Bot Chat approvals. Only an exact `True` opens it; anything else closes it."""
+        try:
+            if self.approvals_available() is not True:
+                return False
+            store = self.prompt_store
+            return store is None or not store.closed
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
+
+    def is_phone_chat_available(self) -> bool:
+        """Phone chat sends and answers. Closed when the eligibility member is closed, and for the
+        life of this listener once the binding fence closed its local generation (AP-10)."""
+        try:
+            if self.phone_chat_available() is not True:
+                return False
+            store = self.prompt_store
+            return store is None or not (store.closed or store.phone_closed)
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
+
+    def approval_surface_available(self, surface: str) -> bool:
+        """The member a row's or route's surface needs: `bot_chat` -> approvals, else phone chat."""
+        if surface == "bot_chat":
+            return self.is_approvals_available()
+        return self.is_phone_chat_available()
+
+    def approval_members_now(self) -> MemberState:
+        """Both approval members as the existing predicates report them now (spec 015 NI-6.2).
+        Call it before entering a prompt-store view, never under `_guard`. Composes the existing
+        checks and adds no authorization; any failure closes that member."""
+        try:
+            bot_chat = self.is_approvals_available() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            bot_chat = False
+        try:
+            phone_chat = self.is_phone_chat_available() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            phone_chat = False
+        return MemberState(bot_chat=bot_chat, phone_chat=phone_chat)
+
+    def is_owner_device(self, device_id: str) -> bool:
+        try:
+            decision = self.store.owner_controls_decision(device_id)
+            if decision is not None:
+                return decision
+            return device_id in self.owner_device_ids()
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def is_approval_owner_device(self, device_id: str) -> bool:
+        """Approval/clarify and Phone-send routes: the configured allowlist AND no host denial.
+
+        The per-device controls grant (`is_owner_device`) is a separate privilege for jobs and
+        model management. It never opens an approval route on its own: only an exact
+        `owner_device_ids` entry does, and an explicit host denial still closes it. Any failed
+        read denies."""
+        try:
+            if self.store.owner_controls_decision(device_id) is False:
+                return False
+            return device_id in self.owner_device_ids()
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def cron_enabled(self) -> bool:
+        try:
+            return self.cron_flag() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def is_cron_available(self) -> bool:
+        try:
+            return self.cron_available() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def model_enabled(self) -> bool:
+        try:
+            return self.model_flag() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def is_model_available(self) -> bool:
+        try:
+            return self.model_available() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def is_send_available(self) -> bool:
+        try:
+            return self.send_available() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
+
+    def direct_send_effective(self) -> bool:
+        """The owner's flag AND this Hermes providing what send needs."""
+        return self.direct_send_enabled() and self.is_send_available()
 
     def direct_send_enabled(self) -> bool:
         try:
@@ -226,15 +404,45 @@ class ServerContext:
         return gate.write_gate(self.guarantees())
 
     def reported_write_gate(self) -> WriteGate:
-        """The gate clients see on the roster and `/ready` (it drives the composer).
+        """An instance-level diagnostic for `/ready` and legacy roster fallback.
 
-        With the owner-only `direct_send` flag on and no full-guarantee gate, sends show as
-        `open_guarded` (GU-4a, OD-F14). The send route still re-checks the flag, the endpoint
-        and every guard per request."""
+        It does not know whether each named profile has its own key. `Reads.roster` folds
+        per-profile send gates into a conservative top-level value, and newer clients use each
+        authorized bot's own `send_gate`. The route rechecks everything per request."""
         base = self.write_gate()
-        if base.state is not WriteGateState.OPEN and self.direct_send_enabled():
+        if not self.direct_send_effective():
+            return (
+                gate.direct_send_gate(base_write_gate=base, flag_enabled=False, endpoint=None)
+                if base.state is WriteGateState.OPEN
+                else base
+            )
+        if base.state is not WriteGateState.OPEN:
             return WriteGate(state=WriteGateState.OPEN_GUARDED, reason=None)
         return base
+
+    def reported_send_gate(self, profile: str) -> WriteGate:
+        """Bot Chat send availability for one profile, using the route's actual prerequisites.
+
+        Never send the endpoint or key over the wire. A send that this Hermes cannot serve or a
+        failed secret lookup reports a closed gate and does not turn a global owner flag into
+        per-profile authority.
+        The send route rechecks all prerequisites at submission time.
+        """
+        base = self.write_gate()
+        if not self.direct_send_effective():
+            return gate.direct_send_gate(base_write_gate=base, flag_enabled=False, endpoint=None)
+        deps = self.direct_send_deps
+        bridge = self.bridge
+        if deps is None or bridge is None:
+            return gate.direct_send_gate(base_write_gate=base, flag_enabled=True, endpoint=None)
+        try:
+            endpoint = bridge.direct_send_endpoint(profile)
+        except Exception as exc:
+            log_bridge_exception(exc)
+            endpoint = None
+        return gate.direct_send_gate(
+            base_write_gate=base, flag_enabled=True, endpoint=endpoint
+        )
 
 
 CTX_KEY: web.AppKey[ServerContext] = web.AppKey("hmp_ctx", ServerContext)

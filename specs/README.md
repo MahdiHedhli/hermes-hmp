@@ -12,3 +12,30 @@ HMP uses [GitHub Spec Kit](https://github.com/github/spec-kit) conventions for c
 Start from the [constitution](../.specify/memory/constitution.md) and the [spec](../.specify/templates/spec-template.md), [plan](../.specify/templates/plan-template.md), and [tasks](../.specify/templates/tasks-template.md) templates. Write acceptance scenarios before implementation. Link security findings and explicitly mark unresolved blockers. Keep host and device evidence out of this public tree. Update [HMP v1](../docs/architecture/contracts/HMP_V1.md) and [FEATURES.md](../FEATURES.md) when a change ships.
 
 The migrated F1 and send design notes are reference material. New work should use the structure above.
+
+Several early number prefixes are shared by two directories. Directory names are historical and
+are never renumbered; always refer to a spec by its full directory name.
+
+| Directory | Topic |
+| --- | --- |
+| `000-public-migration` | Public repository migration |
+| `001-connect-and-browse` | Pairing, transport, and read routes |
+| `002-send-messages` | Guarded Bot Chat send |
+| `003-approvals` | Approval and clarify design (§7b); historical, see 034 |
+| `004-approval-qualification-lane` | Exact-build approval gate; historical, superseded by 034 |
+| `004-mobile-cron` | Owner-gated scheduled jobs (§7c) |
+| `005-approval-process-matrix` | Real-process approval matrix tooling; historical, superseded by 034 |
+| `005-bot-default-model` | Owner-gated bot default model (§7d) |
+| `006-per-bot-send-gate` | Per-bot send status |
+| `006-phone-send-refusal` | Phone-send typed refusal |
+| `007-host-setup-check` | Read-only host setup check |
+| `008-bot-health-check` | Read-only bot channel health |
+| `009-owner-pairing-controls` | Per-device jobs and model controls decision |
+| `010-bot-chat-history-start` | Bot Chat history paging (SES-2a) |
+| `013-minimum-version-compatibility` | Minimum supported Hermes version policy |
+| `015-approval-notification-inputs` | In-process insertion, settlement and visibility inputs; source accepted, push unwired |
+| `034-approval-minimum-version-admission` | Approvals and Phone chat under the minimum-version policy |
+
+Per-bot send, per-device controls, and approval availability are separate: a controls grant never
+opens an approval route (see `docs/architecture/contracts/HMP_V1.md` §7b). Spec 034 replaces the exact-build
+approval gate described by specs 003-005 (approval line).

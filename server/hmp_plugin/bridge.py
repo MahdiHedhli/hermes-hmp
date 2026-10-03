@@ -43,7 +43,9 @@ import json
 import os
 import re
 import secrets
-from collections.abc import Iterator, Mapping, Sequence
+import stat
+import sys
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import quote
@@ -64,6 +66,7 @@ from .contract import (
     WireToolCall,
 )
 from .logging_policy import log_bridge_exception, log_event
+from .prompts import HelperChangedError, HelperUnavailableError
 
 # P6 inert trigger (PR6-1, GU-4 exception, RV-7): fixed text, no user content, no request. It does
 # not start with "/", and `allow_gateway_control` is off, so it is never a gateway command.
@@ -214,11 +217,17 @@ REACHED_DATA_ATTRIBUTES: frozenset[str] = frozenset(
         "profile_route_rejected",
         "config",
         "extra",
+        "_gateway_accepted",
+        "defer_policy",
+        "admission_ticket",
+        "reported",
+        "value",
     }
 )
 
 # HMP-originated rows carry `platform_message_id = "hmp:<chat_id>:<cmid>"` (§2, `chat_id` row).
 _CMID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+PHONE_ADMISSION_WAIT_S = 5.0
 
 
 class BridgeError(RuntimeError):
@@ -226,6 +235,66 @@ class BridgeError(RuntimeError):
 
     def __init__(self, what: str = "hermes read failed") -> None:
         super().__init__(what)
+
+
+def read_push_settings_for_diagnostics(home: Path) -> object:
+    """PN-OPS configured state, without loader hooks, backups or env bridging.
+
+    Reuse Hermes's pure YAML parser, expansion, managed merge and platform
+    precedence primitives. Read files directly so malformed inputs propagate
+    to the CLI's fixed `config_unavailable`, never native recovery logging.
+    This optional diagnostics API is not a runtime admission gate.
+    """
+    # Hermes's CLI/plugin bootstrap already imports this module. Its first
+    # import can seed SOUL.md on some builds; diagnostics must not trigger it.
+    if "hermes_cli.config" not in sys.modules:
+        raise BridgeError()
+    from gateway.config_loader import merge_platform_sections
+    from hermes_cli.config import _deep_merge, _expand_env_vars, _normalize_root_model_keys
+    from hermes_cli.managed_scope import get_managed_dir
+    from utils import fast_safe_load
+
+    def read_mapping(path: Path, *, legacy: bool = False) -> dict:
+        try:
+            # Native config reads follow symlinks. Inspect the opened target,
+            # not a prior stat, so a path replacement cannot substitute a FIFO
+            # between the check and open. O_NONBLOCK prevents FIFO open waits.
+            fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)
+        except FileNotFoundError:
+            return {}
+        try:
+            if not stat.S_ISREG(os.fstat(fd).st_mode):
+                raise BridgeError()
+            with os.fdopen(fd, "rb", closefd=False) as file:
+                data = file.read(1024 * 1024 + 1)
+        finally:
+            os.close(fd)
+        if len(data) > 1024 * 1024:
+            raise BridgeError()
+        text = data.decode("utf-8-sig")
+        value = (json.loads(text) if legacy else fast_safe_load(text)) or {}
+        if not isinstance(value, dict):
+            raise BridgeError()
+        return value
+
+    legacy = read_mapping(home / "gateway.json", legacy=True)
+    config = _expand_env_vars(read_mapping(home / "config.yaml"))
+    managed_dir = get_managed_dir()
+    if managed_dir is not None:
+        managed = _normalize_root_model_keys(
+            _expand_env_vars(read_mapping(managed_dir / "config.yaml"))
+        )
+        if isinstance(managed.get("model"), str):
+            managed["model"] = {"default": managed["model"]}
+        config = _deep_merge(config, managed)
+    platforms = merge_platform_sections(config, config.get("gateway"), legacy)
+    block = platforms.get("hmp")
+    extra = block.get("extra") if isinstance(block, Mapping) else None
+    # PlatformConfig.from_dict promotes untyped flat fields into `extra`;
+    # explicit `extra` entries win, including a present null/disabled value.
+    if isinstance(extra, Mapping) and "push" in extra:
+        return extra["push"]
+    return block.get("push") if isinstance(block, Mapping) else None
 
 
 # --------------------------------------------------------------------------------------------------
@@ -275,6 +344,77 @@ class HermesApi:
         from gateway.run import _profile_runtime_scope  # §12, E-GAP-14
 
         return _profile_runtime_scope(Path(profile_home))
+
+    def model_config(self) -> object:
+        """Read the current profile's config inside `profile_runtime_scope`."""
+        from hermes_cli.config import load_config
+
+        config = load_config()
+        return config.get("model") if isinstance(config, Mapping) else None
+
+    def write_profile_model(self, home: Path, provider: str, model: str) -> bool:
+        """Use the same scoped, validated writer as Hermes Desktop/dashboard.
+
+        A validation refusal is data, never a caller-visible upstream exception.
+        Other errors fail the feature closed and are logged by type only.
+        """
+        from fastapi import HTTPException
+        from hermes_cli.web_routers.profiles import _write_profile_model
+
+        try:
+            _write_profile_model(home, provider, model)
+        except HTTPException as exc:
+            if exc.status_code == 400:
+                return False
+            raise
+        return True
+
+    def create_mobile_cron(self, fields: Mapping[str, object]) -> Mapping[str, object]:
+        """Use Hermes's scheduler registration path inside the selected profile scope."""
+        from cron.scheduler import create_job_with_scheduler_registration
+        from tools.cronjob_prompt_scan import _scan_cron_prompt
+
+        prompt = str(fields["prompt"])
+        if _scan_cron_prompt(prompt):
+            raise ValueError("Cron prompt rejected by Hermes")
+        continuity = fields.get("continuity") is True
+        return create_job_with_scheduler_registration(
+            name=fields["name"], schedule=fields["schedule"], prompt=prompt,
+            deliver=fields["deliver"], paused=True, repeat=fields.get("repeat"),
+            context_from=["self"] if continuity else None,
+        )
+
+    def edit_mobile_cron(
+        self, job_id: str, fields: Mapping[str, object]
+    ) -> Mapping[str, object] | None:
+        """Apply only HMP's fields through Hermes's own update writer."""
+        from cron.jobs import get_job, update_job
+        from cron.lifecycle_guard import check_gateway_lifecycle
+        from cron.scheduler import _notify_provider_jobs_changed
+        from tools.cronjob_prompt_scan import _scan_cron_prompt
+
+        if "prompt" in fields and _scan_cron_prompt(str(fields["prompt"])):
+            raise ValueError("Cron prompt rejected by Hermes")
+        if "prompt" in fields:
+            check_gateway_lifecycle(str(fields["prompt"]), None)
+        existing = get_job(job_id)
+        if existing is None:
+            return None
+        if any(existing.get(key) for key in (
+            "script", "no_agent", "workdir", "monitor_script", "monitor_url",
+        )):
+            raise ValueError("This job needs the Hermes desktop cron editor")
+        changes = {k: v for k, v in fields.items() if k != "continuity"}
+        if "continuity" in fields:
+            refs = [r for r in (existing.get("context_from") or []) if isinstance(r, str)
+                    and r.lower() != "self"]
+            if fields["continuity"] is True:
+                refs.append("self")
+            changes["context_from"] = refs or None
+        updated = update_job(job_id, changes)
+        if updated is not None:
+            _notify_provider_jobs_changed()
+        return updated
 
     def build_session_key(self, source: Any, profile: str | None) -> str:
         from gateway.session import build_session_key  # §12, E-GAP-6
@@ -570,6 +710,11 @@ class HermesReadBridge:
         # P6 hand-off with `run_coroutine_threadsafe`, which returns that type regardless of
         # which thread calls it from.
         self._pending_triggers: set[Any] = set()
+        # AP-10: strong references to the Hermes callables Phone chat calls, captured after the
+        # `phone_chat` probe passes, and the callback that closes the local generation when one of
+        # them is later found rebound. Both are set by `adapter.open_components`.
+        self._phone_bound: dict[str, object] | None = None
+        self._on_phone_binding_changed: Callable[[], None] | None = None
 
     # ------------------------------------------------------------------------------------------
     # Runner and sources
@@ -613,6 +758,42 @@ class HermesReadBridge:
             if name not in out:
                 out.append(name)
         return out
+
+    def profile_default_model(self, profile: str) -> Mapping[str, object]:
+        """Read only the routed profile's persisted provider and default model."""
+        home = self._profile_home(profile)
+        with self._hermes.profile_runtime_scope(home):
+            model = self._hermes.model_config()
+        if isinstance(model, Mapping):
+            provider, default = model.get("provider"), model.get("default")
+            return {
+                "provider": provider if isinstance(provider, str) else "",
+                "model": default if isinstance(default, str) else "",
+            }
+        return {"provider": "", "model": model if isinstance(model, str) else ""}
+
+    def set_profile_default_model(
+        self, profile: str, provider: str, model: str
+    ) -> Mapping[str, object] | None:
+        """Validate and save via Hermes, then report the stored (possibly normalized) choice."""
+        home = self._profile_home(profile)
+        if not self._hermes.write_profile_model(home, provider, model):
+            return None
+        return self.profile_default_model(profile)
+
+    def create_mobile_cron(
+        self, profile: str, fields: Mapping[str, object]
+    ) -> Mapping[str, object]:
+        home = self._profile_home(profile)
+        with self._hermes.profile_runtime_scope(home):
+            return self._hermes.create_mobile_cron(fields)
+
+    def edit_mobile_cron(
+        self, profile: str, job_id: str, fields: Mapping[str, object]
+    ) -> Mapping[str, object] | None:
+        home = self._profile_home(profile)
+        with self._hermes.profile_runtime_scope(home):
+            return self._hermes.edit_mobile_cron(job_id, fields)
 
     # ------------------------------------------------------------------------------------------
     # Authorization (ERR-3, PR6-1): fails closed to UNVERIFIABLE
@@ -737,6 +918,8 @@ class HermesReadBridge:
             return AuthorizeResult(authz=AuthzState.UNVERIFIABLE)
         self._pending_triggers.add(future)
         future.add_done_callback(self._trigger_done)
+        if hasattr(self._adapter, "note_inert_reply"):
+            self._adapter.note_inert_reply(chat_id)
         log_event("p6_trigger", outcome="sent")
         return AuthorizeResult(authz=AuthzState.PENDING_OPERATOR)
 
@@ -1131,10 +1314,218 @@ class HermesReadBridge:
             if isinstance(raw_key, str) and raw_key.strip():
                 key = raw_key if _has_usable_secret(raw_key) else ""
             else:
-                key = scoped_key if isinstance(scoped_key, str) else ""
+                key = scoped_key if _has_usable_secret(scoped_key) else ""
         else:
             key = scoped_key if _has_usable_secret(scoped_key) else ""
         if not key:
             return None  # no usable key: the gate stays closed (never a short key, never a 401)
         prefix = "" if is_default else f"/p/{quote(profile, safe='')}"
         return DirectSendEndpoint(host=host, port=port, api_key=key, path_prefix=prefix)
+
+    # ------------------------------------------------------------------------------------------
+    # Amendment F3 (HMP_V1.md §7b). Function-local imports, only called once the direct-send
+    # gate is open. `resolve_all` is never passed. Private clarify indexes are not read.
+    # ------------------------------------------------------------------------------------------
+
+    def phone_session_key(self, user_id: str, profile: str) -> str | None:
+        """The session key `handle_message` will derive for this user's Phone chat. Not the
+        Bot Chat key, and not a value the phone sent."""
+        chat_id = self._directory.chat_id(user_id, profile)
+        if chat_id is None:
+            return None
+        source = self._source(chat_id=chat_id, user_id=user_id, profile=profile, user_name=None)
+        if _not_routed(source, profile):
+            return None
+        key = self._hermes.build_session_key(source, profile)
+        return key if isinstance(key, str) and key else None
+
+    # Phone-chat helper binding (AP-10) and use-time failures (AP-7a). The six helpers below are
+    # reached only through `_phone_helper`, which refuses anything that is not the object bound
+    # at listener open. This compares object identity. It reads no file or manifest, and it is not
+    # authenticity or loaded-bytecode proof.
+
+    @staticmethod
+    def _phone_helpers_now() -> dict[str, object]:
+        from tools.approval import list_gateway_approvals, resolve_gateway_approval
+        from tools.approval_context import _get_approval_timeout
+        from tools.clarify_gateway import (
+            get_clarify_timeout,
+            mark_awaiting_text,
+            resolve_gateway_clarify,
+        )
+
+        return {
+            "list_gateway_approvals": list_gateway_approvals,
+            "resolve_gateway_approval": resolve_gateway_approval,
+            "resolve_gateway_clarify": resolve_gateway_clarify,
+            "mark_awaiting_text": mark_awaiting_text,
+            "get_clarify_timeout": get_clarify_timeout,
+            "_get_approval_timeout": _get_approval_timeout,
+        }
+
+    def bind_phone_chat_helpers(self, on_changed: Callable[[], None] | None = None) -> bool:
+        """Capture the Phone-chat helpers (blocking; call after the probe, at listener open).
+        `False` when any of them could not be imported: Phone chat then stays closed."""
+        try:
+            captured = self._phone_helpers_now()
+        except (ImportError, AttributeError, TypeError):
+            return False
+        self._phone_bound = dict(captured)
+        self._on_phone_binding_changed = on_changed
+        return True
+
+    def _phone_helper(self, name: str) -> Any:
+        bound = self._phone_bound
+        if bound is None or name not in bound:
+            raise HelperUnavailableError("phone chat helpers are not bound")
+        try:
+            current = self._phone_helpers_now()
+        except (ImportError, AttributeError, TypeError):
+            raise HelperUnavailableError("phone chat helper unavailable") from None
+        if current.get(name) is not bound[name]:
+            callback = self._on_phone_binding_changed
+            if callback is not None:
+                try:
+                    callback()
+                except Exception as exc:  # the fence still raises below
+                    log_bridge_exception(exc)
+            raise HelperChangedError("phone chat helper was rebound")
+        return bound[name]
+
+    def _call_phone(self, name: str, *args: Any, **kwargs: Any) -> Any:
+        """Call one bound helper. An `ImportError`, `AttributeError` or `TypeError` at call time is
+        an actual capability failure (AP-7a): fixed text, never the Hermes exception text."""
+        helper = self._phone_helper(name)
+        try:
+            return helper(*args, **kwargs)
+        except (ImportError, AttributeError, TypeError):
+            raise HelperUnavailableError("phone chat helper failed") from None
+
+    def list_gateway_approvals(self, session_key: str) -> list[dict[str, object]]:
+        rows = self._call_phone("list_gateway_approvals", session_key)
+        if not isinstance(rows, list):
+            raise BridgeError("approval list is not a list")
+        return [row for row in rows if isinstance(row, dict)]
+
+    def resolve_gateway_approval(self, session_key: str, choice: str, request_id: str) -> int:
+        resolved = self._call_phone(
+            "resolve_gateway_approval",
+            session_key,
+            choice,
+            resolve_all=False,
+            request_id=request_id,
+        )
+        return resolved if isinstance(resolved, int) and not isinstance(resolved, bool) else 0
+
+    def resolve_gateway_clarify(self, clarify_id: str, response: str) -> bool:
+        return bool(self._call_phone("resolve_gateway_clarify", clarify_id, response))
+
+    def mark_clarify_awaiting_text(self, clarify_id: str) -> bool:
+        return bool(self._call_phone("mark_awaiting_text", clarify_id))
+
+    def approval_timeout_s(self, profile: str) -> int:
+        """Bot Chat's display hint. Not a Phone-chat helper: it is unbound, and a missing helper is
+        the caller's default (AP-3)."""
+        from tools.approval_context import _get_approval_timeout
+
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = _get_approval_timeout()
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 300
+        return value
+
+    def phone_approval_timeout_s(self, profile: str) -> int:
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = self._call_phone("_get_approval_timeout")
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 300
+        return value
+
+    def phone_clarify_timeout_s(self, profile: str) -> int:
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = self._call_phone("get_clarify_timeout")
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 3600
+        return value
+
+    async def deliver_phone_message(
+        self, *, user_id: str, profile: str, text: str, message_id: str
+    ) -> bool | None:
+        """AP-6. Builds the event off the loop (the Hermes import) and hands it to
+        `handle_message` on the loop. `allow_gateway_control` is false. On builds with
+        admission tickets, task scheduling is not a successful submission: wait for the
+        definitive admission outcome. None means the result is ambiguous."""
+        event = await asyncio.to_thread(
+            self._phone_event, user_id=user_id, profile=profile, text=text, message_id=message_id
+        )
+        await self._adapter.handle_message(event)
+        accepted = getattr(event, "_gateway_accepted", None) is True
+        if getattr(event, "defer_policy", None) != "reject":
+            # Older stock builds have no admission ticket. `_gateway_accepted` is only set True on
+            # acceptance; False or missing also covers a busy-queued event that was retained but
+            # never flagged, so it is unknown, never a definitive refusal.
+            return True if accepted else None
+        # Reject policy: the reported admission ticket is authoritative. The initial scheduling
+        # flag is deliberately not consulted (busy queue debounce leaves it False while the event
+        # is retained).
+        ticket = getattr(event, "admission_ticket", None)
+        if ticket is None:
+            return None
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + PHONE_ADMISSION_WAIT_S
+        while True:
+            reported = getattr(ticket, "reported", None)
+            if reported is not None:
+                outcome = getattr(reported, "value", None)
+                if outcome == "admitted":
+                    return True
+                if outcome in {
+                    "refused_busy",
+                    "refused_draining",
+                    "refused_precondition_head",
+                    "refused_precondition_expired",
+                    "refused_lease_timeout",
+                    "refused_unauthorized",
+                }:
+                    return False
+                # REFUSED_OTHER includes persist_failed and unreported_exit. Its detail
+                # is not on the ticket, so this cannot safely be called definitive.
+                return None
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return None
+            await asyncio.sleep(min(0.025, remaining))
+
+    def _phone_event(self, *, user_id: str, profile: str, text: str, message_id: str) -> Any:
+        try:
+            from gateway.platforms.event import MessageEvent, MessageType
+        except (ImportError, AttributeError):
+            raise HelperUnavailableError("phone chat event is unavailable") from None
+
+        chat_id = self._directory.chat_id(user_id, profile)
+        if chat_id is None:
+            raise BridgeError("no chat for the phone message")
+        label = self._directory.operator_label(user_id) or OPERATOR_LABEL_UNKNOWN
+        source = self._source(chat_id=chat_id, user_id=user_id, profile=profile, user_name=label)
+        if _not_routed(source, profile):
+            raise BridgeError("source is not routed to the profile")
+        names = {f.name for f in dataclasses.fields(MessageEvent)}
+        kwargs: dict[str, Any] = {
+            "text": text,
+            "message_type": MessageType.TEXT,
+            "message_id": message_id,
+            "source": source,
+            "user_id": user_id,
+            "user_name": label,
+        }
+        if "internal" in names:
+            kwargs["internal"] = False
+        if "allow_gateway_control" not in names:
+            raise HelperUnavailableError("MessageEvent lacks allow_gateway_control")
+        kwargs["allow_gateway_control"] = False
+        if "defer_policy" in names:
+            kwargs["defer_policy"] = "reject"
+        try:
+            return MessageEvent(**kwargs)
+        except TypeError:
+            raise HelperUnavailableError("phone chat event is unavailable") from None

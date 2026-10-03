@@ -18,22 +18,41 @@ CONTRACT_MODULES = {
     "identity.py",
     "store.py",
     "compat.py",
+    "hermes_version.py",
+    "issue_draft.py",
     "bridge.py",
     "pairing.py",
     "tokens.py",
+    "push_issuer.py",
+    "push_config.py",
+    "push_registration.py",
+    "push_hints.py",
+    "push_resolve.py",
+    "push_dispatch.py",
+    "push_relay.py",
     "auth.py",
     "reads.py",
     "authorize.py",
     "revoke.py",
     "gate.py",
     "direct_send.py",
+    "prompts.py",
+    "phone_attachments.py",
+    "mobile_cron.py",
+    "mobile_model.py",
     "server.py",
     "request_ctx.py",
     "adapter.py",
     "cli.py",
     "logging_policy.py",
 }
-DATA_FILES = {"plugin.yaml", "read_compat_builds.json", "write_supported_builds.json"}
+DATA_FILES = {
+    "plugin.yaml",
+    "read_compat_builds.json",
+    "write_supported_builds.json",
+    "mobile_cron_supported_builds.json",
+    "mobile_model_supported_builds.json",
+}
 
 
 def test_module_set_is_exactly_the_contract_tree() -> None:

@@ -107,19 +107,18 @@ def direct_send_gate(
 ) -> WriteGate:
     """GU-4a / HMP_V1.md §7a DS-2(b): the gate for `POST .../chat/messages` only.
 
-    If the original GU-4 gate is already `OPEN`, that state wins unchanged -- `OPEN_GUARDED` is
-    never returned alongside a genuine `OPEN` (mutually exclusive by construction, §7a). No
-    supported build advertises `OPEN` today, so in practice this function almost always evaluates
-    the guarded branch: `OPEN_GUARDED` requires **both** the owner-dogfood host flag
-    (`gateway.platforms.hmp.extra.direct_send`, default `false`) to be `true` **and** a positively
-    loopback-bound, keyed `DirectSendEndpoint` to have been resolved for the target profile
+    The owner-dogfood host flag (`gateway.platforms.hmp.extra.direct_send`, default `false`)
+    and a positively loopback-bound, keyed endpoint are required for every build. A genuine
+    GU-4 `OPEN` retains its guarantee level only after these route prerequisites pass;
+    otherwise the route is closed. `OPEN_GUARDED` additionally requires the HMP guard on a
+    build without the full Hermes guarantees. The endpoint is resolved for the target profile
     (`bridge.direct_send_endpoint`, DS-6 -- `None` on any ambiguity, by that function's own
     contract, so this function never re-derives loopback-ness itself). Anything else is `CLOSED`
     with `DIRECT_SEND_GATE_CLOSED_REASON` ("write_gate_closed"), the route-specific code ERR-2
     adds -- never the original route's `guarantees_unavailable`.
     """
+    if not flag_enabled or endpoint is None:
+        return WriteGate(state=WriteGateState.CLOSED, reason=DIRECT_SEND_GATE_CLOSED_REASON)
     if base_write_gate.state is WriteGateState.OPEN:
         return base_write_gate
-    if flag_enabled and endpoint is not None:
-        return WriteGate(state=WriteGateState.OPEN_GUARDED, reason=None)
-    return WriteGate(state=WriteGateState.CLOSED, reason=DIRECT_SEND_GATE_CLOSED_REASON)
+    return WriteGate(state=WriteGateState.OPEN_GUARDED, reason=None)

@@ -16,6 +16,7 @@ import ast
 import asyncio
 import dataclasses
 import enum
+import json
 import os
 import subprocess
 import sys
@@ -267,7 +268,7 @@ def test_trigger_result_carries_nothing_from_hermes(
 
 
 def _install_fake_event_module(
-    monkeypatch: pytest.MonkeyPatch, *, defer: bool, control: bool
+    monkeypatch: pytest.MonkeyPatch, *, defer: bool, control: bool, admission: bool = False
 ) -> None:
     class MessageType(enum.Enum):
         TEXT = "text"
@@ -285,6 +286,8 @@ def _install_fake_event_module(
         fields.append(("allow_gateway_control", bool, dataclasses.field(default=True)))
     if defer:
         fields.append(("defer_policy", str, dataclasses.field(default="hermes")))
+    if admission:
+        fields.append(("admission_ticket", object, dataclasses.field(default=None)))
     event_cls = dataclasses.make_dataclass("MessageEvent", fields)
     module = types.ModuleType("gateway.platforms.event")
     module.MessageEvent = event_cls  # type: ignore[attr-defined]
@@ -295,7 +298,7 @@ def _install_fake_event_module(
 
 
 def test_real_trigger_event_on_experimental_shape(monkeypatch: pytest.MonkeyPatch) -> None:
-    _install_fake_event_module(monkeypatch, defer=True, control=True)
+    _install_fake_event_module(monkeypatch, defer=True, control=True, admission=True)
     event = HermesApi().inert_trigger_event(source="src", user_id=USER, user_name="label")
     assert event.text == INERT_TRIGGER_TEXT
     assert event.allow_gateway_control is False and event.internal is False
@@ -698,6 +701,36 @@ def test_direct_send_endpoint_default_profile_short_extra_key_fails_closed(
     assert br.direct_send_endpoint(profile) is None
 
 
+
+@pytest.mark.parametrize(
+    "scoped_key",
+    [None, 16, b"x" * 16, "", " " * 20, "x" * 15, "  " + "x" * 15 + "  "],
+    ids=["none", "integer", "bytes", "empty", "blank", "fifteen", "padded-fifteen"],
+)
+def test_direct_send_endpoint_default_scoped_unusable_key_fails_closed(
+    world: World, br: HermesReadBridge, caplog: pytest.LogCaptureFixture, scoped_key: object
+) -> None:
+    world.api.api_server_keys["alpha"] = scoped_key  # type: ignore[assignment]
+    assert br.direct_send_endpoint("alpha") is None
+    # Rejected credentials must not leak through diagnostics.
+    assert not caplog.records
+
+
+@pytest.mark.parametrize(
+    "scoped_key", ["x" * 16, "x" * 17, "  " + "x" * 16 + "  "],
+    ids=["sixteen", "seventeen", "padded-sixteen"],
+)
+def test_direct_send_endpoint_default_scoped_key_boundary_retains_raw_bytes(
+    world: World, br: HermesReadBridge, scoped_key: str
+) -> None:
+    world.api.api_server_keys["alpha"] = scoped_key
+    endpoint = br.direct_send_endpoint("alpha")
+    assert endpoint is not None
+    assert endpoint.api_key == scoped_key
+    assert endpoint.host == "127.0.0.1"
+    assert endpoint.path_prefix == ""
+
+
 def test_resolve_bot_chat_unions_ancestors_when_lineage_returns_only_the_tip(
     world: World, br: HermesReadBridge
 ) -> None:
@@ -786,10 +819,33 @@ def test_every_reached_internal_is_probed() -> None:
     # e.g. `hermes_cli.active_sessions.active_session_registry_snapshot`). An import reached only
     # for direct send is still probed, just by the other tuple -- the union is what this AST-level
     # defense-in-depth check actually needs to cover.
-    probed = {(d.module, d.qualname) for d in compat.READ_DEPENDENCIES} | {
-        (d.module, d.qualname) for d in compat.DIRECT_SEND_DEPENDENCIES
+    probed = (
+        {(d.module, d.qualname) for d in compat.READ_DEPENDENCIES}
+        | {(d.module, d.qualname) for d in compat.DIRECT_SEND_DEPENDENCIES}
+        | {(d.module, d.qualname) for d in compat.PHONE_CHAT_DEPENDENCIES}
+    )
+    # Model and cron writers have independent exact-build fingerprints and
+    # isolated Hermes integration checks. FastAPI is a declared dependency.
+    optional = {
+        # PN-OPS: optional pure configuration diagnostics, tried at CLI use;
+        # missing primitives report unavailable and never close app features.
+        ("gateway.config_loader", "merge_platform_sections"),
+        ("hermes_cli.config", "_deep_merge"),
+        ("hermes_cli.config", "_expand_env_vars"),
+        ("hermes_cli.config", "_normalize_root_model_keys"),
+        ("hermes_cli.managed_scope", "get_managed_dir"),
+        ("utils", "fast_safe_load"),
+        ("gateway.platforms.base", "PLATFORM_ADAPTER_CAPABILITIES"),  # absent on stock
+        ("hermes_cli.config", "load_config"),
+        ("hermes_cli.web_routers.profiles", "_write_profile_model"),
+        ("fastapi", "HTTPException"),
+        ("cron.jobs", "get_job"),
+        ("cron.jobs", "update_job"),
+        ("cron.scheduler", "create_job_with_scheduler_registration"),
+        ("cron.scheduler", "_notify_provider_jobs_changed"),
+        ("cron.lifecycle_guard", "check_gateway_lifecycle"),
+        ("tools.cronjob_prompt_scan", "_scan_cron_prompt"),
     }
-    optional = {("gateway.platforms.base", "PLATFORM_ADAPTER_CAPABILITIES")}  # absent on stock
     assert _hermes_imports() - optional <= probed
     probed_names = {q.rsplit(".", 1)[-1] for _m, q in probed if q}
     for methods in bridge.REACHED_METHODS.values():
@@ -816,6 +872,198 @@ def _build_sources() -> list[Path]:
 
 BUILD_SOURCES = _build_sources()
 TOOL = REPO_ROOT / "tools" / "compat" / "bridge_files.py"
+
+
+def _load_bridge_files_tool() -> types.ModuleType:
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("hmp_bridge_files_tool", TOOL)
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def test_ast_scan_excludes_known_external_fastapi_but_maps_hermes_write_router() -> None:
+    tool = _load_bridge_files_tool()
+    source = (
+        "def f():\n"
+        "    from fastapi import HTTPException\n"
+        "    from hermes_cli.web_routers.profiles import _write_profile_model\n"
+    )
+    assert tool.ast_imported_modules(source) == ["hermes_cli.web_routers.profiles"]
+    # The real bridge: fastapi never reaches the Hermes file mapping; the native writer module is
+    # classified to the model feature boundary, not silently dropped.
+    real_source = tool.BRIDGE_PATH.read_text(encoding="utf-8")
+    target, feature = tool.split_ast_imports(real_source)
+    assert not any(m.split(".", 1)[0] == "fastapi" for m in target)
+    assert "hermes_cli.web_routers.profiles" not in target
+    assert "hermes_cli.web_routers.profiles" in feature["model"]
+
+
+def test_ast_scan_still_fails_source_mapping_for_arbitrary_unknown_module(tmp_path: Path) -> None:
+    tool = _load_bridge_files_tool()
+    bridge_copy = tmp_path / "bridge.py"
+    bridge_copy.write_text("import some_unknown_third_party\n", encoding="utf-8")
+    assert tool.ast_imported_modules(bridge_copy.read_text(encoding="utf-8")) == [
+        "some_unknown_third_party"
+    ]
+    with pytest.raises(tool.BridgeFilesError, match="not found under the Hermes tree"):
+        tool.ast_set(tmp_path, bridge_copy)
+
+
+def test_write_profile_model_router_maps_to_hermes_file(tmp_path: Path) -> None:
+    tool = _load_bridge_files_tool()
+    router = tmp_path / "hermes_cli" / "web_routers" / "profiles.py"
+    router.parent.mkdir(parents=True)
+    router.write_text("", encoding="utf-8")
+    assert tool.module_file(tmp_path, "hermes_cli.web_routers.profiles") == (
+        "hermes_cli/web_routers/profiles.py"
+    )
+
+
+_FEATURE_BRIDGE = (
+    "class HermesApi:\n"
+    "    def model_config(self):\n"
+    "        from hermes_cli.config import load_config\n"
+    "    def create_mobile_cron(self, f):\n"
+    "        from cron.scheduler import create_job_with_scheduler_registration\n"
+)
+
+
+def _feature_tree(tmp_path: Path, *, model_files: object, cron_files: object) -> tuple[Path, dict]:
+    src = tmp_path / "hermes"
+    for rel in ("hermes_cli/config.py", "cron/scheduler.py"):
+        (src / rel).parent.mkdir(parents=True, exist_ok=True)
+        (src / rel).write_text("", encoding="utf-8")
+    paths = {}
+    for key, files in (("model", model_files), ("cron", cron_files)):
+        paths[key] = tmp_path / f"{key}.json"
+        paths[key].write_text(json.dumps({"bridge_files": files}), encoding="utf-8")
+    return src, paths
+
+
+def _feature_bridge(tmp_path: Path, source: str = _FEATURE_BRIDGE) -> Path:
+    bridge = tmp_path / "bridge.py"
+    bridge.write_text(source, encoding="utf-8")
+    return bridge
+
+
+def test_feature_imports_are_checked_against_their_own_manifests(tmp_path: Path) -> None:
+    tool = _load_bridge_files_tool()
+    src, paths = _feature_tree(
+        tmp_path, model_files=["hermes_cli/config.py"], cron_files=["cron/scheduler.py"]
+    )
+    bridge = _feature_bridge(tmp_path)
+    assert tool.ast_set(src, bridge) == set()  # not leaked into the target set
+    assert tool.feature_boundaries(src, bridge, manifest_paths=paths) == {
+        "cron": ["cron/scheduler.py"],
+        "model": ["hermes_cli/config.py"],
+    }
+
+
+def test_feature_import_missing_from_its_own_manifest_is_refused(tmp_path: Path) -> None:
+    tool = _load_bridge_files_tool()
+    # Covered only by the OTHER feature's manifest: not accepted.
+    src, paths = _feature_tree(
+        tmp_path, model_files=["cron/scheduler.py"], cron_files=["hermes_cli/config.py"]
+    )
+    with pytest.raises(tool.BridgeFilesError, match="lacks"):
+        tool.feature_boundaries(src, _feature_bridge(tmp_path), manifest_paths=paths)
+
+
+def test_feature_import_with_no_hermes_file_is_refused(tmp_path: Path) -> None:
+    tool = _load_bridge_files_tool()
+    src, paths = _feature_tree(
+        tmp_path, model_files=["hermes_cli/config.py"], cron_files=["cron/scheduler.py"]
+    )
+    (src / "cron" / "scheduler.py").unlink()
+    with pytest.raises(tool.BridgeFilesError, match="not found under the Hermes tree"):
+        tool.feature_boundaries(src, _feature_bridge(tmp_path), manifest_paths=paths)
+
+
+@pytest.mark.parametrize("bad", ["missing", "not-json", "not-object", "bad-list"])
+def test_malformed_or_missing_feature_manifest_is_refused(tmp_path: Path, bad: str) -> None:
+    tool = _load_bridge_files_tool()
+    src, paths = _feature_tree(
+        tmp_path, model_files=["hermes_cli/config.py"], cron_files=["cron/scheduler.py"]
+    )
+    target = paths["model"]
+    if bad == "missing":
+        target.unlink()
+    else:
+        target.write_text(
+            {"not-json": "{", "not-object": "[]", "bad-list": '{"bridge_files": [1]}'}[bad],
+            encoding="utf-8",
+        )
+    with pytest.raises(tool.BridgeFilesError):
+        tool.feature_boundaries(src, _feature_bridge(tmp_path), manifest_paths=paths)
+
+
+def test_same_feature_module_outside_the_reviewed_method_stays_in_the_target_set(
+    tmp_path: Path,
+) -> None:
+    tool = _load_bridge_files_tool()
+    src, paths = _feature_tree(
+        tmp_path, model_files=["hermes_cli/config.py"], cron_files=["cron/scheduler.py"]
+    )
+    moved = (
+        "class HermesApi:\n"
+        "    def profile_runtime_scope(self):\n"
+        "        from hermes_cli.config import load_config\n"
+        "def helper():\n"
+        "    from cron.scheduler import x\n"
+        "class Other:\n"
+        "    def model_config(self):\n"
+        "        from hermes_cli.config import load_config\n"
+        "class HermesApi2:\n"
+        "    def create_mobile_cron(self):\n"
+        "        from cron.scheduler import x\n"
+        "class HermesApi:\n"
+        "    def model_config(self):\n"
+        "        def nested():\n"
+        "            from hermes_cli.config import load_config\n"
+    )
+    bridge = _feature_bridge(tmp_path, moved)
+    assert tool.ast_set(src, bridge) == {"hermes_cli/config.py", "cron/scheduler.py"}
+    assert tool.feature_boundaries(src, bridge, manifest_paths=paths) == {}
+
+
+def test_a_known_module_in_a_reviewed_method_but_not_listed_for_it_is_not_classified(
+    tmp_path: Path,
+) -> None:
+    tool = _load_bridge_files_tool()
+    source = (
+        "class HermesApi:\n"
+        "    def model_config(self):\n"
+        "        from cron.scheduler import x\n"  # a cron module in a model method
+    )
+    target, feature = tool.split_ast_imports(source)
+    assert target == ["cron.scheduler"] and feature == {}
+
+
+def test_a_module_in_the_selected_typed_tuple_is_retained_despite_feature_classification(
+    tmp_path: Path,
+) -> None:
+    tool = _load_bridge_files_tool()
+    src, paths = _feature_tree(tmp_path, model_files=[], cron_files=[])
+    bridge = _feature_bridge(tmp_path)
+    typed = frozenset({"hermes_cli.config"})
+    assert tool.ast_set(src, bridge, typed_modules=typed) == {"hermes_cli/config.py"}
+    # The cron import is still a feature import; the retained one is not demanded of a manifest.
+    with pytest.raises(tool.BridgeFilesError, match="cron feature manifest lacks"):
+        tool.feature_boundaries(src, bridge, typed_modules=typed, manifest_paths=paths)
+
+
+def test_real_bridge_feature_modules_are_the_six_reviewed_and_no_others() -> None:
+    tool = _load_bridge_files_tool()
+    _, feature = tool.split_ast_imports(tool.BRIDGE_PATH.read_text(encoding="utf-8"))
+    assert feature == {
+        "model": {"hermes_cli.config", "hermes_cli.web_routers.profiles"},
+        "cron": {
+            "cron.jobs", "cron.lifecycle_guard", "cron.scheduler", "tools.cronjob_prompt_scan",
+        },
+    }
 
 
 @pytest.mark.skipif(
@@ -851,3 +1099,394 @@ def test_committed_bridge_files_contain_probe_set(src: Path, tmp_path: Path) -> 
         cwd=REPO_ROOT,
     )
     assert proc.returncode == 0, proc.stderr
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("text", ["/approve always", "/deny", "/stop", "/reset", "always", "yes"])
+async def test_phone_event_cannot_control_gateway_when_waiter_appears_during_delivery(
+    br, directory, monkeypatch, text
+) -> None:
+    _install_fake_event_module(monkeypatch, defer=True, control=True, admission=True)
+    directory.chats[(USER, "alpha")] = CHAT
+    calls = []
+
+    async def deliver(event):
+        # A waiter arrived after the caller's preflight. The event itself must deny control.
+        calls.append(event)
+        assert event.allow_gateway_control is False
+        assert event.internal is False
+        assert event.defer_policy == "reject"
+        event._gateway_accepted = True
+        event.admission_ticket = types.SimpleNamespace(
+            reported=types.SimpleNamespace(value="admitted")
+        )
+
+    br._adapter.handle_message = deliver
+    assert await br.deliver_phone_message(user_id=USER, profile="alpha", text=text, message_id=CMID)
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("outcome", "expected"),
+    [
+        ("admitted", True),
+        ("refused_busy", False),
+        ("refused_other", None),
+        ("future_outcome", None),
+        (None, None),
+    ],
+)
+async def test_phone_delivery_waits_for_durable_admission(
+    br, directory, monkeypatch, outcome, expected
+) -> None:
+    _install_fake_event_module(monkeypatch, defer=True, control=True, admission=True)
+    monkeypatch.setattr(bridge, "PHONE_ADMISSION_WAIT_S", 0.03, raising=False)
+    directory.chats[(USER, "alpha")] = CHAT
+
+    async def deliver(event):
+        # Task scheduling is not a durable admission. The later ticket is authoritative.
+        event._gateway_accepted = True
+        ticket = types.SimpleNamespace(reported=None)
+        event.admission_ticket = ticket
+        if outcome is not None:
+            asyncio.get_running_loop().call_later(
+                0.01, setattr, ticket, "reported", types.SimpleNamespace(value=outcome)
+            )
+
+    br._adapter.handle_message = deliver
+    actual = await br.deliver_phone_message(
+        user_id=USER, profile="alpha", text="hello", message_id=CMID
+    )
+    assert actual is expected
+
+
+_MISSING = object()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("admission", [False, True], ids=["no_ticket_build", "ticket_build"])
+@pytest.mark.parametrize("flag", [False, _MISSING, None, 0, 1, "yes", "True", [True]])
+async def test_phone_delivery_unaccepted_flag_is_unknown_never_refusal(
+    br, directory, monkeypatch, admission, flag
+) -> None:
+    """A False/missing/non-boolean `_gateway_accepted` also describes a busy event that Hermes
+    retained (queue debounce never sets it). It is unknown, never a definitive refusal."""
+    _install_fake_event_module(monkeypatch, defer=admission, control=True, admission=admission)
+    directory.chats[(USER, "alpha")] = CHAT
+
+    async def deliver(event):
+        if flag is not _MISSING:
+            event._gateway_accepted = flag
+
+    br._adapter.handle_message = deliver
+    actual = await br.deliver_phone_message(
+        user_id=USER, profile="alpha", text="hello", message_id=CMID
+    )
+    assert actual is None
+
+
+@pytest.mark.asyncio
+async def test_phone_delivery_no_ticket_build_exact_true_flag_is_accepted(
+    br, directory, monkeypatch
+) -> None:
+    _install_fake_event_module(monkeypatch, defer=False, control=True)
+    directory.chats[(USER, "alpha")] = CHAT
+
+    async def deliver(event):
+        event._gateway_accepted = True
+
+    br._adapter.handle_message = deliver
+    actual = await br.deliver_phone_message(
+        user_id=USER, profile="alpha", text="hello", message_id=CMID
+    )
+    assert actual is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("flag", "outcome", "expected"),
+    [
+        (False, "admitted", True),  # a False scheduling flag is not a refusal when admitted
+        (False, "refused_busy", False),
+        (False, "refused_other", None),
+        (False, None, None),  # no report in time
+        (True, "refused_busy", False),  # the ticket, not the flag, decides
+        (True, "refused_other", None),
+        (True, None, None),
+        (_MISSING, "admitted", True),
+        (_MISSING, "refused_lease_timeout", False),
+    ],
+)
+async def test_phone_delivery_ticket_outcome_overrides_scheduling_flag(
+    br, directory, monkeypatch, flag, outcome, expected
+) -> None:
+    _install_fake_event_module(monkeypatch, defer=True, control=True, admission=True)
+    monkeypatch.setattr(bridge, "PHONE_ADMISSION_WAIT_S", 0.03, raising=False)
+    directory.chats[(USER, "alpha")] = CHAT
+
+    async def deliver(event):
+        if flag is not _MISSING:
+            event._gateway_accepted = flag
+        event.admission_ticket = types.SimpleNamespace(
+            reported=None if outcome is None else types.SimpleNamespace(value=outcome)
+        )
+
+    br._adapter.handle_message = deliver
+    actual = await br.deliver_phone_message(
+        user_id=USER, profile="alpha", text="hello", message_id=CMID
+    )
+    assert actual is expected
+
+
+def _install_phone_helper_modules(world, monkeypatch) -> dict[str, types.ModuleType]:
+    approval = types.ModuleType("tools.approval")
+    approval_context = types.ModuleType("tools.approval_context")
+    clarify = types.ModuleType("tools.clarify_gateway")
+    approval.list_gateway_approvals = lambda session_key: []
+    approval.resolve_gateway_approval = lambda *a, **k: 1
+    approval_context._get_approval_timeout = lambda: {"alpha": 73, "beta": 241}[
+        world.runner.scope
+    ]
+    clarify.get_clarify_timeout = lambda: {"alpha": 51, "beta": 0}[world.runner.scope]
+    clarify.resolve_gateway_clarify = lambda clarify_id, response: True
+    clarify.mark_awaiting_text = lambda clarify_id: True
+    for name, module in (
+        ("tools.approval", approval),
+        ("tools.approval_context", approval_context),
+        ("tools.clarify_gateway", clarify),
+    ):
+        monkeypatch.setitem(sys.modules, name, module)
+    return {"approval": approval, "approval_context": approval_context, "clarify": clarify}
+
+
+def test_prompt_timeout_hints_use_target_profile_a_b_a(br, world, monkeypatch) -> None:
+    _install_phone_helper_modules(world, monkeypatch)
+    assert br.bind_phone_chat_helpers() is True
+    for profile, expected in (("alpha", (73, 51)), ("beta", (241, 0)), ("alpha", (73, 51))):
+        got = (br.phone_approval_timeout_s(profile), br.phone_clarify_timeout_s(profile))
+        assert got == expected
+        # Bot Chat's display hint is not a Phone helper: same value, no binding involved.
+        assert br.approval_timeout_s(profile) == expected[0]
+        assert world.runner.scope is None
+
+
+@pytest.mark.skipif(
+    not BUILD_SOURCES, reason="no Hermes build: set HMP_HERMES_SRC or HMP_HERMES_BUILDS_DIR"
+)
+@pytest.mark.parametrize("src", BUILD_SOURCES, ids=lambda p: p.parent.name)
+def test_real_hermes_approval_qualification(src: Path) -> None:
+    """B3: real guards/resolvers, with pending waiters and control-enabled comparisons."""
+    python = src / ".venv" / "bin" / "python"
+    if not python.is_file():
+        pytest.skip("this build has no venv")
+    for tool_args in (
+        [
+            str(TOOL),
+            "--dependencies-attr",
+            "DIRECT_SEND_DEPENDENCIES",
+            "--target",
+            str(SERVER_DIR / "hmp_plugin" / "direct_send_supported_builds.json"),
+            "--check",
+        ],
+        [str(REPO_ROOT / "tools" / "compat" / "approval_probes.py")],
+    ):
+        proc = subprocess.run(
+            [str(python), *tool_args, "--hermes-src", str(src)],
+            capture_output=True,
+            text=True,
+            check=False,
+            cwd=REPO_ROOT,
+        )
+        assert proc.returncode == 0, proc.stderr
+
+
+# --------------------------------------------------------------------------------------------------
+# Spec 034: Phone-chat helper binding (AP-10, R10) and use-time failures (AP-7a, R15)
+# --------------------------------------------------------------------------------------------------
+
+_PHONE_CALLS = (
+    ("list_gateway_approvals", "tools.approval", lambda b: b.list_gateway_approvals("k")),
+    (
+        "resolve_gateway_approval",
+        "tools.approval",
+        lambda b: b.resolve_gateway_approval("k", "once", "req"),
+    ),
+    (
+        "resolve_gateway_clarify",
+        "tools.clarify_gateway",
+        lambda b: b.resolve_gateway_clarify("c", "x"),
+    ),
+    ("mark_awaiting_text", "tools.clarify_gateway", lambda b: b.mark_clarify_awaiting_text("c")),
+    (
+        "get_clarify_timeout",
+        "tools.clarify_gateway",
+        lambda b: b.phone_clarify_timeout_s("alpha"),
+    ),
+    (
+        "_get_approval_timeout",
+        "tools.approval_context",
+        lambda b: b.phone_approval_timeout_s("alpha"),
+    ),
+)
+
+
+def test_unbound_phone_helpers_are_refused_not_silently_used(br, world, monkeypatch) -> None:
+    from hmp_plugin.prompts import HelperUnavailableError
+
+    modules = _install_phone_helper_modules(world, monkeypatch)
+    calls: list[str] = []
+    modules["approval"].list_gateway_approvals = lambda k: calls.append(k) or []
+    with pytest.raises(HelperUnavailableError):
+        br.list_gateway_approvals("k")
+    assert calls == []  # nothing reached Hermes before the helpers were bound
+
+
+def test_binding_fails_closed_when_a_helper_module_is_missing(br, monkeypatch) -> None:
+    monkeypatch.setitem(sys.modules, "tools.approval", None)  # an import raises ImportError
+    assert br.bind_phone_chat_helpers() is False
+    from hmp_plugin.prompts import HelperUnavailableError
+
+    with pytest.raises(HelperUnavailableError):
+        br.list_gateway_approvals("k")
+
+
+@pytest.mark.parametrize(("name", "module", "call"), _PHONE_CALLS, ids=[c[0] for c in _PHONE_CALLS])
+def test_a_rebound_helper_is_detected_before_it_is_called_and_closes_the_generation(
+    br, world, monkeypatch, name, module, call
+) -> None:
+    from hmp_plugin.prompts import HelperChangedError
+
+    modules = _install_phone_helper_modules(world, monkeypatch)
+    closed: list[int] = []
+    assert br.bind_phone_chat_helpers(lambda: closed.append(1)) is True
+    reached: list[str] = []
+    target = {
+        "tools.approval": modules["approval"],
+        "tools.approval_context": modules["approval_context"],
+        "tools.clarify_gateway": modules["clarify"],
+    }[module]
+    setattr(target, name, lambda *a, **k: reached.append(name) or 1)  # a different object
+    with pytest.raises(HelperChangedError):
+        call(br)
+    assert reached == []  # the rebound helper was never called
+    assert closed == [1]
+
+
+def test_reassigning_the_same_object_is_not_a_change(br, world, monkeypatch) -> None:
+    modules = _install_phone_helper_modules(world, monkeypatch)
+    closed: list[int] = []
+    assert br.bind_phone_chat_helpers(lambda: closed.append(1)) is True
+    modules["approval"].list_gateway_approvals = modules["approval"].list_gateway_approvals
+    assert br.list_gateway_approvals("k") == []
+    assert closed == []
+
+
+def test_a_behaviorally_equal_rebinding_still_counts_as_changed(br, world, monkeypatch) -> None:
+    """The fence is object identity on the helpers HMP calls: not authenticity, not bytecode."""
+    from hmp_plugin.prompts import HelperChangedError
+
+    modules = _install_phone_helper_modules(world, monkeypatch)
+    assert br.bind_phone_chat_helpers() is True
+    original = modules["approval"].list_gateway_approvals
+    modules["approval"].list_gateway_approvals = lambda k: original(k)
+    with pytest.raises(HelperChangedError):
+        br.list_gateway_approvals("k")
+
+
+@pytest.mark.parametrize("error", [ImportError("x"), AttributeError("x"), TypeError("x")])
+def test_r15_use_time_failures_become_a_fixed_unavailable_without_hermes_text(
+    br, world, monkeypatch, error
+) -> None:
+    from hmp_plugin.prompts import HelperUnavailableError
+
+    modules = _install_phone_helper_modules(world, monkeypatch)
+
+    def boom(*_a, **_k):
+        raise type(error)("SECRET command text from Hermes")
+
+    modules["approval"].resolve_gateway_approval = boom
+    assert br.bind_phone_chat_helpers() is True
+    with pytest.raises(HelperUnavailableError) as caught:
+        br.resolve_gateway_approval("k", "once", "req")
+    assert "SECRET" not in str(caught.value) and caught.value.__cause__ is None
+    assert caught.value.__suppress_context__ is True
+
+
+def test_r15_other_exceptions_are_not_disguised_as_unavailable_or_success(
+    br, world, monkeypatch
+) -> None:
+    modules = _install_phone_helper_modules(world, monkeypatch)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("not a capability failure")
+
+    modules["approval"].resolve_gateway_approval = boom
+    assert br.bind_phone_chat_helpers() is True
+    with pytest.raises(RuntimeError):
+        br.resolve_gateway_approval("k", "once", "req")
+
+
+def test_a_helper_that_disappears_after_binding_is_unavailable(br, world, monkeypatch) -> None:
+    from hmp_plugin.prompts import HelperUnavailableError
+
+    modules = _install_phone_helper_modules(world, monkeypatch)
+    assert br.bind_phone_chat_helpers() is True
+    del modules["clarify"].mark_awaiting_text  # `from ... import` now raises ImportError
+    with pytest.raises(HelperUnavailableError):
+        br.mark_clarify_awaiting_text("c")
+
+
+def test_resolve_is_always_exact_id_and_never_all(br, world, monkeypatch) -> None:
+    modules = _install_phone_helper_modules(world, monkeypatch)
+    seen: list[tuple[tuple, dict]] = []
+    modules["approval"].resolve_gateway_approval = lambda *a, **k: seen.append((a, k)) or 1
+    assert br.bind_phone_chat_helpers() is True
+    assert br.resolve_gateway_approval("key", "deny", "req-1") == 1
+    assert seen == [(("key", "deny"), {"resolve_all": False, "request_id": "req-1"})]
+
+
+@pytest.mark.asyncio
+async def test_n13_an_event_without_allow_gateway_control_is_never_delivered(
+    br, directory, monkeypatch
+) -> None:
+    from hmp_plugin.prompts import HelperUnavailableError
+
+    _install_fake_event_module(monkeypatch, defer=True, control=False, admission=True)
+    directory.chats[(USER, "alpha")] = CHAT
+    delivered: list[object] = []
+
+    async def deliver(event):
+        delivered.append(event)
+
+    br._adapter.handle_message = deliver
+    with pytest.raises(HelperUnavailableError):
+        await br.deliver_phone_message(
+            user_id=USER, profile="alpha", text="/approve all", message_id=CMID
+        )
+    assert delivered == []  # nothing reached Hermes: text can never become gateway control
+
+
+def test_the_bot_chat_timeout_hint_is_not_a_bound_phone_helper(br, world, monkeypatch) -> None:
+    _install_phone_helper_modules(world, monkeypatch)
+    assert br.approval_timeout_s("alpha") == 73  # works without any binding
+    monkeypatch.setitem(sys.modules, "tools.approval_context", None)
+    with pytest.raises(ImportError):  # the caller (`direct_send`) takes its documented default
+        br.approval_timeout_s("alpha")
+
+
+def test_phone_chat_imports_belong_to_their_own_boundary_not_the_read_or_send_lists() -> None:
+    """The bridge imports the Phone helpers function-locally. The committed read and send file
+    lists must not have to grow for them (the sample manifests stay byte for byte), so the tool
+    classifies them to `PHONE_CHAT_DEPENDENCIES`, which has no manifest at all."""
+    tool = _load_bridge_files_tool()
+    assert "PHONE_CHAT_DEPENDENCIES" in tool._ALL_DEPENDENCY_ATTRS
+    source = tool.BRIDGE_PATH.read_text(encoding="utf-8")
+    phone_only = {"tools.approval", "tools.approval_context", "tools.clarify_gateway"}
+    read = frozenset(s.module for s in compat.READ_DEPENDENCIES)
+    assert not phone_only & read  # nothing in the read table covers them
+    excluded = frozenset({s.module for s in compat.PHONE_CHAT_DEPENDENCIES} - read)
+    included, _feature = tool.split_ast_imports(source, typed_modules=read)
+    assert phone_only <= set(included)  # the bridge really does import them
+    kept, _feature = tool.split_ast_imports(source, exclude_modules=excluded, typed_modules=read)
+    assert not phone_only & set(kept)  # and the read check no longer demands their files

@@ -1,9 +1,12 @@
 # Hermes Mobile Protocol (HMP) v1 — Contract
 
+
+**Current contract review status (2026-10-02):** The clock mechanism, optional pin grammar and N3–N6 were accepted by the prior focused review. The independent D1/D2/D3 sentence review accepted the capacity/retention qualifications, per-`(app, env)` APNs connections and seal-expiry wording. Root resolved its remaining editorial status finding M1 by dating the pre-review statements below. This is contract-text acceptance only. Source, causal tests/vectors, interoperability, provider/device/deployment/release and owner choices O1–O6 remain pending. No task checkbox or security mechanism changed.
+
 | | |
 |---|---|
 | Status | **APPROVED implementation baseline (OD-F1, 2026-09-25).** The owner ruled on `R0_FREEZE_REVIEW.md` (`R0_OWNER_DECISIONS.md` § "Freeze decisions (2026-09-25)"), subject to the bounded amendments listed there. This does **not** approve a nonconformant implementation, and it does not waive any transport or security requirement. It authorizes implementation work only in the scope OD-L2 ruled on: Feature F1 "Connect and browse", as amended (`FIRST_FEATURE_PLAN.md`). It does not by itself authorize upstream submission or any push (`R0_FREEZE_REVIEW.md` §11). |
-| Contract revision | `1.0` (approved 2026-09-25). History: `1.0-rc1` (commit `8657ae5`) was found incomplete by the independent freeze-package review (FZ-R-1..19); `1.0-rc2` (2026-09-24) was the ADVANCED contract-author correction pass that the owner then approved as revision `1.0`. |
+| Contract revision | `1.0` (approved 2026-09-25). History: `1.0-rc1` (commit `8657ae5`) was found incomplete by the independent freeze-package review (FZ-R-1..19); `1.0-rc2` (2026-09-24) was the ADVANCED contract-author correction pass that the owner then approved as revision `1.0`. Additive amendments, still served as `/ready` `contract` `"1.0"` (V-3's freeze string; 1.x clients ignore routes they do not call, V-4): **1.1** session browsing (§6a), **1.2** direct send (§7a), **1.3** approvals and Phone chat (§7b, OD-F16). |
 | Scope | The wire contract between the Hermes Bot Mobile client and the HMP plugin inside one Hermes gateway process. Hermes internals are out of scope, except where a clause states a dependency on a Hermes capability. |
 | Implementation and evidence status | **Stated only in [`HMP_V1_CONFORMANCE.md`](HMP_V1_CONFORMANCE.md).** This document defines required behaviour. Approval of this contract text does not state that behaviour is implemented or proven; that is the conformance matrix's sole role. |
 
@@ -32,6 +35,15 @@ Normative keywords follow RFC 2119 and RFC 8174.
   - HMP MUST NOT hold authoritative conversation, approval or run state.
   - HMP MAY keep **transport observations**: the in-flight `partial`, `turn.observed_state`, the approval-choice cache and the event ring. Each is labelled on the wire as an observation, never as Hermes truth. (Reworded per FZ-R-18.)
   - HMP's durable state is limited to device and identity records, token hashes, idempotency records (no message text), pairing-offer hashes, and the roster baseline.
+  - **PA-1 exception (spec 028 D4, normative/interface work only).** HMP MAY hold the bounded
+    device-upload transport custody defined in [HMP_PHONE_ATTACHMENTS_V1.md](HMP_PHONE_ATTACHMENTS_V1.md):
+    private expiring blobs, finite issuer/exact-target/reference metadata, combined idempotency
+    hashes/claims without message text, and non-evicting bounded generated-export/CMID redaction
+    metadata. These are not authoritative history/run/approval records. Projection and byte reads
+    require fresh canonical native own-CMID user rows. No arbitrary host-file access, queue,
+    retry, second execution owner or new registration is permitted. This exception requires
+    independent exact-interface/source acceptance and separate adapter/validator/native/release
+    gates; no operational capability follows from this text.
 - **PR-2. Closed plugin surface.**
   - HMP registers exactly two things: its platform adapter and its operator CLI.
   - Every Hermes internal is reached through one bridge module. Each such dependency is listed in §12 as a `HERMES_API_GAP`.
@@ -205,6 +217,7 @@ Normative keywords follow RFC 2119 and RFC 8174.
 
   - `message` never echoes caller input.
   - The only allowed extras inside `error` are `why` (string), `authz` (an `AuthzState`), `head_message_id` (integer or null) and `definitive` (boolean).
+  - v1.3 AP-4/AP-5 additionally allow top-level `applied` on prompt results.
   - One top-level sibling is allowed: a `503 guarantees_unavailable` body also carries `"guarantees":{…}` (GU-5).
 - **ERR-2. Error table.** "Client action class" is what a client does. For a submit, "definitive" means Hermes will never execute this attempt.
 
@@ -240,12 +253,14 @@ Normative keywords follow RFC 2119 and RFC 8174.
 | `no_bot_chat` (v1.2, DS-4(2)) | 409 | direct send: no canonical Bot Chat exists yet for this bot | yes | Ask the operator to open this bot once on Hermes Desktop first. |
 | `session_busy` (v1.2, DS-4(3)) | 409 | direct send: the lease-registry guard found another live writer, or the liveness read itself failed | **no** (Hermes never saw this attempt) | Restore the draft; plain retry once the busy state clears. |
 | `stale_head` (v1.2, DS-4(4)) | 409 | direct send: the client's `expected_head` does not match the Bot Chat's current head | yes | Refresh (re-read via SES-2), then retry with the fresh head. Never a silent retry with the old value. |
-| `write_gate_closed` (v1.2, DS-2(b)) | 503 | direct send while `"open_guarded"` is unavailable (dogfood flag off, `api_server` unreachable/misconfigured, or key invalid) | yes (HMP did not hand off) | Keep the draft. Composer is read-only for direct send on this instance. |
-| `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"` | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
+| `write_gate_closed` (v1.2, DS-2(b)) | 503 | Bot Chat direct send lacks its owner switch, a Hermes API it needs (GU-2d), loopback configuration, or target profile key; on a §7b route also the `approvals` or `phone_chat` member being unavailable | yes (HMP did not hand off) | Keep the draft. Composer is read-only for this bot until its gate reopens. |
+| `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"`; on a §7b route also a native approval answer that is not a recognised settlement (AP-5), or a Hermes helper that failed at use time (AP-7a) | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
+| `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, a required Hermes API unavailable (GU-2d), missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
+| `model_unavailable` (v1.5, MD-1) | 503 | mobile default model: flag off, a required Hermes API unavailable (GU-2d), missing scoped picker endpoint, or Hermes read/write failure | — | Reopen the model screen and check the current selection before another write. |
 
 - **ERR-2a. Read-compatibility refusal** (GU-2c; additive `other {why}` values, no contract revision; controller clarification, 2026-09-25).
-  - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes build's identity is not on the read-compatible builds list or cannot be determined.
-  - `503 other {why:"hermes_read_dependency_missing"}` when a listed build lacks a Hermes internal the read bridge needs.
+  - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes declares a version below the minimum supported version for reads (GU-2c), or its install cannot be found. An unknown, unlisted, newer or unreleased version is never refused for that reason.
+  - `503 other {why:"hermes_read_dependency_missing"}` when a Hermes internal the read bridge actually needs is missing, mis-shaped or resolves outside the Hermes tree and standard library.
   - HMP makes no bridge call and hands nothing to Hermes. Definitive for submit: yes (nothing handed off).
   - Client action: show "Unsupported Hermes build" for this instance; keep saved content visible and labelled; never retry against another instance.
 
@@ -261,6 +276,25 @@ Normative keywords follow RFC 2119 and RFC 8174.
   - `persist_failed`, `unreported_exit`, `unknown`, and any tag not in this list (including `no_start` and `admission_control_unsupported`) are **non-definitive**. The server MUST answer those with `202 {state:"submitted"}`, never with an `other` error (E-PDR-5).
   - A server-side failure while handing the message to Hermes is also non-definitive [diverges: the spike returns `503 other {why:"unknown"}` for an exception in `handle_message`].
 
+- **ERR-2b. Push `why` values** (v1.x draft, §7f; the explicit closed-set addition).
+  - The `why` values this contract names form a closed set. The existing values are unchanged:
+    `peer_not_allowed` (TR-4, with `403 forbidden`), `max_streams_per_device` (TR-6, with `429
+    rate_limited`), `unverifiable` (ERR-3, PR6-1, with `503 other`), `internal_error` (ERR-2, with
+    `500 other`), `history_rewritten` (RO-8, optional on `409 conversation_changed`), and
+    `hermes_build_unsupported` and `hermes_read_dependency_missing` (ERR-2a, with `503 other`).
+  - Four values are added: `push_disabled`, `relay_unconfigured`, `approvals_unavailable` and
+    `push_capacity`. Each is allowed **only** on `503 write_gate_closed` from a push route (§7f).
+    No other code carries them. `GET /push/registration` also reports the first three in the `why`
+    field of its `200` body when `available` is false. `DELETE /push/registration` can carry only
+    `push_capacity`; it is never refused with `push_disabled`, `relay_unconfigured` or
+    `approvals_unavailable` (§7f PN-REG-3). When more than one availability value applies, the §7f
+    PN-AV precedence chooses.
+  - This adds **no new error code and no new error extra**: the ERR-1 list of allowed extras is
+    unchanged, `409 stale` carries no extra (there is no `generation` extra), and the `write_gate_closed`
+    row of ERR-2 is unchanged. Push routes reuse that code and its fixed message text. The app
+    ignores message text and acts only on `code` and `why`. A client that does not know a `why`
+    value treats it as that code's default (V-4).
+
 ## 5. Pairing and device credentials (ADR-0003; OD-1)
 
 ### P0 readiness (unauthenticated)
@@ -270,7 +304,8 @@ Normative keywords follow RFC 2119 and RFC 8174.
   ```
   200 {"versions":[1], "contract":"1.0", "iid":"<b32>",
        "guarantees":{"no_defer":bool, "atomic_anchor":bool, "approval_request_id":bool, "confirmed_settle":bool},
-       "write_gate":{"state":"open"|"closed", "reason":null|"guarantees_unavailable"}}
+       "write_gate":{"state":"open"|"open_guarded"|"closed",
+                     "reason":null|"guarantees_unavailable"|"write_gate_closed"}}
   ```
 
   [diverges: the spike returns `{versions, iid, capabilities, guarantees}`. `contract` and `write_gate` are missing. The extra `capabilities` field is diagnostic, and clients ignore it (V-4).]
@@ -523,6 +558,17 @@ Normative keywords follow RFC 2119 and RFC 8174.
 
   [diverges: `guarantees`/`write_gate` absent, `served_at` a float]
   - Content of bots the user is not authorized for is never exposed.
+  - **Profile send availability (additive, V-3).** Each authorized bot MAY carry
+    `"send_gate":{"state":"open"|"open_guarded"|"closed","reason":null|"write_gate_closed"}`.
+    It describes the Bot Chat send route for that bot's own profile. A closed value is returned
+    when the host switch, a Hermes API send needs (GU-2d), loopback configuration, or that profile's key is
+    unavailable; neither the key nor its source is exposed. Bots without authorization omit the
+    field and do not trigger a key lookup. The send route rechecks these conditions on every POST.
+    A client that understands this field uses it for the selected bot's composer. If absent, it
+    falls back to the roster's `write_gate` for older HMP builds, while retaining a rejected
+    message as a reviewable draft. For old clients, roster `write_gate` is conservative: it is
+    closed if any authorized served bot cannot send. `/ready` remains an instance-level
+    diagnostic and does not assert that every named profile has a usable key.
 - **RO-2. Roster as state** (E-PDR-6).
   - The client re-reads the roster on every reconnect and on `roster.changed`.
   - `roster.changed` is an optimization, never the source of truth.
@@ -547,6 +593,11 @@ Normative keywords follow RFC 2119 and RFC 8174.
     - On a `tool` row, `tool_name` and `tool_call_id` are those columns, omitted when null. `text` is the tool output cut to 4000 characters. The full output is never sent above that cap. `truncated` is present and `true` only when that cut happened; absent means the output was not cut. `role` stays `"tool"`.
   - `turn` and `partial` are HMP **observations** (PR-1).
   - `open_requests` are scoped to this user's session.
+  - **v1.3 (§7b).** While the direct-send flag is on, this snapshot's `open_requests` lists the
+    caller's **Phone chat** prompts only (Bot Chat prompts are only on `GET …/prompts`). Each
+    object keeps the RO-3 fields (`kind`, `request_id` or `clarify_id`, `command`/`description` or
+    `question`, `choices`, `multi_select`). `awaiting_text`, `expires_at` and `surface` are extra
+    fields a client that does not know them ignores (V-4).
 - **RO-4. Tail lower bound.** `tail` is read **before** any other state, so it is a lower bound. A client that resumes from it cannot miss an event (E-PRV-12).
 - **RO-5. `partial_lost`** is true only when HMP's in-flight buffer was lost across an HMP epoch change during a running turn. It is never true merely because no chunk has arrived yet (E-PDR-12(a)).
 - **RO-6. History.** `GET …/conversations/default/messages?after=<id>&limit=<n>` returns either:
@@ -660,6 +711,17 @@ authorized`, SES-3) is unchanged.
     64 KiB display cut and "Message shortened on mobile" note. `role` is passed through
     unfiltered. A `tool` row renders as the collapsible result in S7. Every other role besides
     `user` and `assistant`, including `session_meta` and `system`, stays a neutral note.
+
+- **SES-2a. `GET /hmp/v1/bots/{p}/sessions/{ref}/messages/from-start?limit=`.** This distinct
+  read-only route returns the earliest available active rows in the existing RO-6 paged shape:
+  `200 {"messages":[…], "head_message_id":<int|null>}` or the same `reset` as SES-2. It calls
+  SES-2's `session_history` with cursor zero, then the client continues with SES-2's
+  `after=<last-id>` pages. It uses the same bearer, per-bot gate, opaque ref resolution,
+  per-device read limiter, history limit default/max, and session-browsing kill switch as SES-2.
+  Only `limit` is accepted; unknown or repeated query fields are `400 bad_request`. An older HMP
+  release has no route and returns 404, so a client cannot mistake SES-2's `after=0` latest
+  snapshot for complete history. No search term is sent to HMP or Hermes. Rows removed by Hermes
+  compaction are outside the available active history; clients must not claim to recover them.
 
 - **SES-3. Authz, rate limits, size caps.**
   - **Authz.** Identical per-bot gate to every existing `/bots/{p}/…` route (ERR-3), re-run on
@@ -843,15 +905,15 @@ which no supported build advertises today (§8).
   `400 bad_request`: the guard (DS-4) requires it once this route is registered, so an old client
   that never sends it cannot reach the guarded path at all (V-4's safe default — it simply never
   advertises success here).
-- **DS-2. Gate order.** (a) The per-bot gate (ERR-3). (b) The write gate (§8): if the *original*
-  GU-4 `"open"` state holds, this route is available under that full guarantee, unchanged from
-  SUB-1..SUB-10 (§7), and DS-4's HMP-engineered guard is not needed — no supported build advertises
-  `"open"` today, so this is a future path, not the one any current build takes. Otherwise, the
-  gate is `"open_guarded"` only if **all** of: the host flag `gateway.platforms.hmp.extra.
-  direct_send` is `true` (default `false`, off; OD-F14/OD-F15 — this is the flag OD-F15's second
-  live-config approval turns on for the owner's own devices only); `api_server` is reachable,
-  enabled and loopback-bound for the target profile (DS-6); and the target profile's
-  `API_SERVER_KEY` resolves to a usable secret (DS-6). Any other case is `"closed"`:
+- **DS-2. Gate order.** (a) The per-bot gate (ERR-3). (b) The Bot Chat route requires **all** of:
+  the host flag `gateway.platforms.hmp.extra.direct_send` is `true` (default `false`, off;
+  OD-F14/OD-F15); this Hermes provides the APIs send needs (GU-2d); `api_server` resolves to a
+  loopback-only target for the profile (DS-6); and that profile's `API_SERVER_KEY` resolves to a
+  usable secret (DS-6). A genuine GU-4 `"open"` state retains its full-guarantee label only
+  after these route prerequisites pass. Otherwise the route is `"open_guarded"` and applies
+  DS-4's HMP guard. A full Hermes guarantee never bypasses the owner switch or profile key.
+  This advertised gate does not probe the port: a later connection failure is
+  `api_server_unavailable`, with the message kept unconfirmed. Any missing prerequisite is `"closed"`:
   `POST .../chat/messages` returns `503 {"error":{"code":"write_gate_closed", ...}, "guarantees":
   {…}}` without handing anything to Hermes, mirroring GU-4's existing `guarantees_unavailable`
   shape under a new, route-specific code (added to ERR-2, never replacing it). (c) Only once (a)
@@ -904,10 +966,14 @@ which no supported build advertises today (§8).
     cron job targeting this session) can still land unseen. This is bounded, not eliminated;
     DS-7's post-hoc check exists because of it, and closing it fully needs Hermes's own atomic
     admission precondition (§8's `atomic_anchor`), not yet available on any supported build.
-- **DS-5. Approvals/clarify raised mid-turn — OD-F14, "Show it, answer elsewhere".** A send that
-  causes Hermes to raise an approval or clarify request stays read-only on the phone, exactly as
-  F1's existing `approval.unanswerable`/clarify-read-only rendering already shows it (`EV-7`,
-  `INT-4`). No new answering surface is added by this amendment.
+- **DS-5. Approvals/clarify raised mid-turn.** OD-F14's "Show it, answer elsewhere" still applies
+  when `gateway.platforms.hmp.extra.direct_send` is off, and when §7b's `desktop_held` marker is
+  set (Hermes Desktop holds the Bot Chat: the phone shows **Waiting for approval on your Hermes
+  Desktop** and renders no Bot Chat card). When the flag is on and this gateway process runs the
+  turn, approvals are answerable on the phone (§7b). Clarify on that local Bot Chat turn is not
+  answerable: `api_server` sets no clarify callback, so no card is emitted. `execute_code` on that
+  same turn does not card either (`api_server` is an unattended platform). OD-F16 (v1.3, §7b)
+  narrows this clause; it does not add a new error code.
 - **DS-6. The loopback call.** HMP resolves, server-side only, per the target profile: the
   `api_server` bind (`127.0.0.1`/`::1` only — any other resolved value, or a value HMP cannot
   positively determine, fails the gate closed at DS-2(b), never attempted) and the `API_SERVER_KEY`
@@ -927,6 +993,10 @@ which no supported build advertises today (§8).
   process — HMP's own response is `202 {"state":"queued"}`, settling later, never a second agent.
   Otherwise the call runs the turn directly and, if it completes within `ADMISSION_WAIT_S`
   (reused from §13), the reply is returned synchronously.
+  **v1.3 (§7b) replaces this URL.** A send that already passes DS-2 and DS-4 calls
+  `POST …/chat/stream` (same prefix, same bearer, same loopback rules) and never falls back to
+  sync `POST …/chat`. The phone still receives the DS-7 vocabulary at `ADMISSION_WAIT_S`. HMP
+  keeps reading the SSE socket until it ends.
 - **DS-7. Responses.**
 
   | Outcome | Response | Definitive? |
@@ -994,8 +1064,816 @@ which no supported build advertises today (§8).
   (unlike SES-1/SES-2's "not registered" pattern) — with the flag off, `POST .../chat/messages`
   answers `503 write_gate_closed` rather than `404`, matching how the original SUB-1 route already
   behaves under a closed GU-4 gate. This is the flag OD-F15's second live-config approval turns on,
-  for the owner's own paired devices only (enforced by the existing pairing trust boundary, no new
-  per-device ACL needed), never a general release default.
+  for owner dogfood, never a general release default. F3 prompt access and Phone chat additionally
+  require the explicit per-device allowlist in §7b; pairing alone is not owner authorization.
+
+## 7b. Approvals and Phone chat (v1.3, amendment F3; OD-F16)
+
+Additive under V-3. An earlier 1.x client never calls these routes and never reads the new fields
+(V-4). Design: `specs/003-approvals/DESIGN.md`. No new error code. `applied` is an additive field
+on the answer and on the stale/conflict/invalid-choice bodies below. `stale`, `not_found`,
+`invalid_choice`, `idempotency_conflict` and `write_gate_closed` are the existing ERR-2 codes.
+
+The owner-only flag `gateway.platforms.hmp.extra.direct_send` (DS-10) gates every route in this
+section. Flag off, or the member a route needs being unavailable (see "Availability" below): each
+route returns `503 {"error":{"code":"write_gate_closed",…}}` and does not open a loopback stream,
+call `handle_message`, or call `resolve_gateway_approval` / `resolve_gateway_clarify` /
+`mark_awaiting_text`. Pairing is still required. The flag does not authorize a device by itself.
+
+Auth on every route: bearer, explicit owner-device membership, the F3 rate limit, then the
+per-bot gate (`require_bot_authorized`, ERR-3), then the write gate and the availability
+gate below. The rate limit is two separate per-device buckets keyed by `device_id`
+only: AP-3 reads are limited to 60 per minute per device, and AP-4 answers and AP-6 Phone sends
+share one actions bucket of 60 per minute per device. Each bucket aggregates across every profile
+and request ID the device uses. Reads do not consume the actions bucket. `{p}` is the served profile, checked against the stored row. An owner device is an active
+paired device whose exact ID appears in `gateway.platforms.hmp.extra.owner_device_ids` (list of
+strings, default empty; malformed config grants nobody). A non-owner receives `404 not_found`,
+even when bot-authorized or sharing the owner's `user_id`. The host loads changes through its
+normal config reload/restart; HMP reads the live adapter config each request. The separate
+per-device jobs/model controls decision (§7c, §7d) never makes a device an approval owner: an
+explicit grant without an `owner_device_ids` entry still receives `404 not_found` on every
+AP-3/AP-4/AP-6 route and omits `open_requests`, and an explicit host denial closes an
+allowlisted device. An unreadable decision denies. Owner devices of
+the same user share the existing per-request serialization and idempotency. Default-conversation
+snapshots omit `open_requests` for non-owners and while the direct-send flag is off.
+The explicit `direct_send.enabled` flag is mandatory even when the base gate is OPEN.
+
+**Availability (additional gate; owner policy 2026-10-01, spec 034).** Two eligibility members,
+computed once when the listener opens beside the others (GU-2d), gate this section.
+
+| Member | Needed by | Requires |
+|---|---|---|
+| `approvals` | the Bot Chat stream binding, AP-3 and AP-4 for `bot_chat` rows | read and send, and the send floor |
+| `phone_chat` | AP-6, AP-4 for `phone_chat` rows, snapshot `open_requests`, the Phone producer hooks | read and send, the send floor, and the in-process helpers below |
+
+Both floors are Hermes `0.21.5` / `2026.9.24`, equal to send. A version that declares itself below
+the floor is refused for both without importing a helper; an unknown, placeholder, unlisted, newer
+or development version is attempted. `approvals` adds no Hermes dependency of its own: Bot Chat
+answers are made only through Hermes's native run-approval route over loopback, so its own key,
+room-grant and run-ownership checks apply, and a missing Phone helper never closes it. `phone_chat`
+is available only when the helpers HMP calls in process actually exist, with the same containment
+and wrapper-chain rules as every other probe (GU-2d): `tools.approval.resolve_gateway_approval`
+with named `request_id` and `resolve_all` parameters (a `**kwargs` catch-all never counts) and
+`list_gateway_approvals`; `tools.clarify_gateway.resolve_gateway_clarify`, `mark_awaiting_text` and
+`get_clarify_timeout`; `tools.approval_context._get_approval_timeout`; the base adapter hooks
+`_send_exec_approval_prompt` and `send_clarify`; and the dataclass field
+`MessageEvent.allow_gateway_control`. `retire_clarify_card` is an optional hook the gateway finds
+on the adapter's own class; it is not on the base class and is not probed. A member is closed only
+when its own required API is genuinely missing, or because send or read is. Every member defaults
+to closed when no availability information exists.
+
+No exact build, Git SHA, source fingerprint, manifest, process latch or tested-sample receipt admits
+or refuses either member, and no runtime path reads one. Tested samples remain evidence only
+(GU-2a). The Bot Chat session-stream approval notifier (`APIServerAdapter._register_session_stream_approval`
+on the inspected development builds) is reported as a neutral diagnostic fact by
+`hermes hmp compat --verbose` and in approval issue drafts. It never gates, never raises a warning
+by itself and never establishes a release minimum: where the notifier is absent Hermes emits no
+`approval.request`, no card is invented, and Hermes keeps its own fail-closed behavior.
+
+Residual: a later Hermes that stops honoring `allow_gateway_control:false` cannot be detected
+statically. The pending preflight and prompt-only answer route (AP-6) remain the protection, and
+the dependency check never claims to prove behavior. Ordinary guarded sends (§7a) do not depend on
+either member.
+
+- **AP-1. Bot Chat stream (amends DS-6 for approval-owner sends only).** Before it takes the
+  profile lock, HMP decides the transport from live state: the stream is used only when the
+  sending device is an effective approval owner for this bot (the `owner_device_ids` entry and no
+  host denial, AP-7) and `approvals` is available. Every other send, including every non-owner
+  send and every send while `approvals` is closed, uses DS-6's synchronous
+  `POST …/chat` exactly as in §7a, with unchanged outcomes. The loopback body stays
+  `{"message":"<text>"}`. On the stream path the route is
+  `{path_prefix}/api/sessions/{live_tip}/chat/stream`. A non-200, or a body that is not that route's
+  SSE stream, fails the send as `503 api_server_unavailable`. HMP never opens `POST …/chat`
+  instead and never retries after a stream failure. The consumer is a task
+  owned by the send, not by the phone HTTP request. At `ADMISSION_WAIT_S` the phone gets the DS-7
+  vocabulary: `200 accepted` when `run.completed` already carried an assistant message and DS-7a
+  passes; `202 queued` on `run.queued` or a mailbox `done` that never registered a local approval;
+  `202 submitted` while the stream is still open. The cmid stays pending until a terminal SSE
+  event. The socket dying before that finalizes the row `unknown` (DS-8) and interrupts the Hermes
+  turn. DS-3 replay does not open a second stream. `approval.request` is stored as soon as it
+  arrives, including before the phone's `202`. The stored command is the redacted SSE value. HMP
+  does not un-redact it. A mailbox stream (Desktop holds the Bot Chat: no `approval.request`) sets
+  a process-memory marker `{surface:"bot_chat", desktop_held:true}` for the life of that consume
+  and clears it when the consume ends. The marker is not proof that Desktop is blocked on a card.
+- **AP-2. Prompt rows are process memory.** Key `(iid, user_id, profile, request_id)`. A restart
+  drops them immediately (Hermes's own queues are process memory too). After a row settles or
+  expires it is kept at most `IDEMPOTENCY_RETENTION_S` (§13) inside one process. The row stores
+  the Hermes `run_id` (Bot Chat) or the session key HMP built for this user (Phone chat). The
+  client never sends `session_key`, `run_id`, `chat_id` or `profile` in the answer body. Each
+  listener open creates a new prompt generation. A stream or hook bound to an older generation can
+  never insert rows into, list from or answer in a newer one, and rows of a generation that was
+  closed by AP-10 are never listed or answerable. A body
+  field `all` or `resolve_all` is `400 bad_request` and is not forwarded. `resolve_all` is never
+  passed. An answer is bound to the stored `request_id` and the authorized `user_id`. An id stored
+  for a different user is `404 not_found`, the same as an unknown id. No Hermes call is made.
+- **AP-3. Read.** `GET /hmp/v1/bots/{p}/prompts` → `200 {"prompts":[Prompt,…], "desktop_held":bool}`.
+  `Prompt` fields: `kind` `"approval"`|`"clarify"`; `surface` `"bot_chat"`|`"phone_chat"` (clarify
+  is `phone_chat` only); `request_id` (Hermes `request_id`, or `clarify_id` under the same JSON
+  name); `choices`; for an approval, `command` and `description`; for a clarify, `question`,
+  `multi_select`, `awaiting_text`; `expires_at` (unix seconds, or null when Hermes's clarify
+  timeout is unlimited). `desktop_held` true means `prompts` contains no `bot_chat` approval (a
+  Phone-chat card may still be listed). `expires_at` is `observed_at` plus the timeout read from
+  Hermes (`approvals.timeout`, default 300s; clarify `clarify.timeout`, else `agent.clarify_timeout`,
+  else 3600), through `bridge.py` inside that target profile's runtime scope. It is a display hint,
+  not Hermes's timer. Approval values <= 0 mean immediate expiry; clarify <= 0 means unlimited.
+  Hermes returning nothing pending, clarify retirement, a vanished approval waiter, or the end
+  of the bound stream expires the row immediately. A 30-second grace after the display hint
+  is the local cleanup backstop: beyond it list omits the row and answer returns `409 stale`,
+  `applied:false` without forwarding. Purge removes rows and locks after retention, pinning
+  active/queued answerers so a lock cannot be replaced underneath them. Unknown IDs allocate
+  neither rows nor locks.
+- **AP-4. Answer.** `POST /hmp/v1/bots/{p}/prompts/{request_id}`. The path id is the only id. A
+  `kind` field in the body is ignored; the stored row decides. `choice` together with `text`, or
+  `other` together with either, is `400 bad_request`.
+
+  | Stored kind | Body | Hermes call |
+  |---|---|---|
+  | approval | `{"choice":"once"\|"session"\|"always"\|"deny"}` | Bot Chat: `POST {path_prefix}/v1/runs/{stored_run_id}/approval` with `{"choice","request_id"}` only. Phone chat: `resolve_gateway_approval(stored_session_key, choice, request_id=)`. |
+  | clarify | `{"choice":"<label>"}` or, when `multi_select`, `{"choices":["<label>",…]}` | `resolve_gateway_clarify`. The label is the offered choice with a trailing `(Recommended)` stripped. Multi-select passes `json.dumps(labels)`. |
+  | clarify Other | `{"other":true}` | `mark_awaiting_text`. `200 {"status":"awaiting_text","applied":false}`. |
+  | clarify text | `{"text":"<string>"}` | `resolve_gateway_clarify` only when the row is awaiting text or has no choices. Otherwise `409 invalid_choice`, and the Hermes entry stays pending. |
+
+  A `choice` not in the stored `choices` is `409 {"error":{"code":"invalid_choice",…},"applied":false}`
+  and makes no Hermes call. Clarify labels are compared after stripping a trailing `(Recommended)`
+  and casefolding. A submitted clarify choice (each member of `choices`) that matches more than one
+  offered label after that normalization is refused the same way, never resolved by picking the
+  first; exact unambiguous replies are unchanged and no automatic retry follows (AP-5). Success is `200 {"status":"resolved","applied":true}`. `applied:true`
+  means Hermes accepted the resolution (`resolve_*` returned non-zero, or the runs endpoint
+  returned `resolved` > 0). It does not mean the command finished. The UI clears the card only
+  after a later poll omits it (INT-2).
+
+- **AP-5. Idempotency and stale answers.** The row stores `answer_hash` once Hermes has accepted
+  an answer.
+
+  | Situation | Result |
+  |---|---|
+  | First answer, Hermes accepts | `200`, `applied:true` |
+  | Retry, same body, already accepted | the stored `200`. Hermes is not called again |
+  | Retry, different body, already accepted | `409 idempotency_conflict`, `applied:false`. The first choice stands |
+  | Phone chat: `resolve_gateway_approval` returns 0, or `resolve_gateway_clarify` returns false | `409 stale`, `applied:false`. The row is marked expired. This call did not apply the choice |
+  | Bot Chat native answer: `200` whose bounded JSON body has a non-bool integer `resolved` > 0 | `200`, `applied:true` (the only native result that proves application) |
+  | Bot Chat native answer: `409` with parsed JSON error code `approval_not_pending` or `approval_not_active`, or `404` with parsed JSON error code `run_not_found` | `409 stale`, `applied:false`. The row is marked expired |
+  | Bot Chat native answer: any other result: an unknown `409` code, a non-JSON, malformed or oversized body on `404`, `401`, `403`, `3xx`, `5xx`, a malformed `200` (missing, non-integer, boolean or non-positive `resolved`), a timeout or a connection failure | `503 api_server_unavailable`, no `applied` field. The row stays open. Not retried. The response text is never echoed or logged |
+  | Two in-flight answers for one id | one resolver, in arrival order, under a per-id lock. The second sees the stored outcome |
+  | Unknown id, or an id stored for another `user_id` | `404 not_found`. No Hermes call |
+  | Flag off, or the row's member unavailable | `503 write_gate_closed` |
+
+  If Hermes accepted a choice and HMP died before recording it, the retry calls Hermes, gets
+  nothing pending, and returns `409 stale` / `applied:false`. The client copy is "This prompt
+  already ended." It does not offer the other buttons as a fresh decision.
+- **AP-6. Phone chat send.** `POST /hmp/v1/bots/{p}/phone/messages` with
+  `{"client_message_id":"<UUIDv7>","text":"<string>","sent_at":<int>?}`. No `expected_head`.
+  Idempotency key `(iid, user_id, profile, cmid)`, hash of `text`, reserved before
+  `handle_message`. The same text replays the stored response and does not hand off again. A
+  different text is `409 idempotency_conflict`. `handle_message` is called with
+  `allow_gateway_control:false`. On Hermes builds that expose a reject-policy admission ticket,
+  HMP returns `202 {"state":"submitted"}` only after Hermes reports `admitted`; an explicit
+  known refusal outcome is a refusal. `refused_other` can include persistence failures, and its
+  detail is unavailable on the ticket; HMP treats it as unknown. If the ticket is absent, has
+  an unclassified outcome, or has no outcome within five seconds, HMP stores and returns
+  `200 {"state":"unknown"}`. Replaying that cmid returns
+  the stored unknown result without a second delivery. Older stock builds have no admission
+  ticket; HMP uses their synchronous acceptance flag. The route does not wait for the model.
+  **Definitive refusal.** Only a delivery result that is exactly `False` returns
+  `503 {"error":{"code":"api_server_unavailable",…},"applied":false}` with stored status
+  `rejected`; `applied:false` means Hermes did not admit the message. The bridge returns `False`
+  only when `handle_message` left the event unaccepted or the ticket reports one of the known
+  refusals (`refused_busy`, `refused_draining`, `refused_precondition_head`,
+  `refused_precondition_expired`, `refused_lease_timeout`, `refused_unauthorized`), none of
+  which admit a user turn. Background handling may already have been scheduled. `refused_other` (persist failure, unreported exit) is `None`, not
+  `False`. Exact `True` stays `202`. `None`, any non-boolean result, a delivery exception, a
+  missing session key or a non-list approval probe are uncertain: no `applied` field (`200
+  unknown`, or `503` without `applied` for the pre-delivery and exception cases), never
+  `applied:false`. The same cmid replays the stored body without redelivery. This is HMP's own
+  wire contract, not a `HERMES_API_GAP`; it adds no error code and does not enable approvals.
+  While `list_gateway_approvals` for this
+  phone session is non-empty, the route does not call `handle_message` and returns
+  `409 {"error":{"code":"stale",…},"applied":false}` — the composer is not a way to say yes.
+  While a clarify prompt is pending, composer sends also return `409 stale`, `applied:false`.
+  Both kinds of prompt are answered only through AP-4; chat text never resolves a wait. The inert authorize trigger stays `allow_gateway_control:false`, and its
+  outbound reply is still dropped. Phone chat does not claim DS-4's single-writer guard.
+- **AP-7. Who may answer.** The bearer resolves to `user_id`. The answer route loads the row by
+  `request_id` and that `user_id`. Bot Chat answers use the `run_id` Hermes registered for the
+  stream HMP opened, sent only to loopback. Phone chat answers use `build_session_key` of the
+  source HMP built for this `user_id` and the `default` chat. A client-supplied session key is
+  ignored. Logging (SEC-4) is `log_event` only: outcome codes (`stored`, `resolved`,
+  `stale`, `invalid_choice`, `conflict`,
+  `desktop_held`, `awaiting_text`, `unavailable`, and for phone send `submitted`, `unknown`, `replay`, `conflict`, `refused`;
+  and the fixed `approval_binding outcome=changed` and `approval_helper outcome=unavailable`)
+  and 8-character prefixes of `user_id`, `request_id`, `run_id`. Never the command, description,
+  question, chosen answer, clarify label, message text, SSE body, or `API_SERVER_KEY`.
+  All successful answer logs use exactly `outcome=resolved`; no choice suffix is permitted.
+  When the adapter cannot uniquely match a command but holds valid pending request IDs for
+  this session, it may expose deny-only recovery cards with an empty command and explicit
+  unbound-approval copy. They still require an owner action through AP-4, and cannot allow
+  execution. No usable ID or queue read failure means fail closed until Hermes times out;
+  the fallback never enables slash or plaintext control.
+
+  Transport bounds: approval POST total/read deadlines are 15/10 seconds; SSE total/read
+  deadlines are 24 hours/90 seconds. Both disable redirects and environment proxies and use
+  only pinned loopback literals. SSE requires `text/event-stream`, validates supplied run IDs
+  against `run.started`, accepts LF/CRLF, caps frames at 64 KiB and buffers at 128 KiB. Approval
+  responses are capped at 64 KiB. Exceeding a bound closes the transport without retry.
+  Phone observations have a global 256-row cap, 60-second TTL and 8 KiB text cap; durable
+  role/text matches discard them. They are never merged into cursor-addressed snapshot/history
+  message arrays, which contain only durable Hermes rows.
+
+- **AP-8. Discovery.** F3 does not register the EV-1 SSE route. The client polls `GET …/prompts`.
+  v1.3 names the live-tail frames so a later revision does not invent a second vocabulary:
+  `approval.requested` (includes `surface`), `approval.settled`, `approval.unanswerable` (still the
+  GU-6 read-only case when HMP cannot bind a `request_id`), `clarify.requested`, `clarify.retired`,
+  and `notice` `{"kind":"desktop_held","text":"Waiting for approval on your Hermes Desktop"}` (an
+  empty `text` clears it). Until the tail exists those names are the poll's diff, not bytes on a
+  socket. `approval_request_id` in the capability map does not gate these routes. A false flag
+  still means the old read-only copy for any approval HMP cannot bind. An unbound prompt is never
+  given buttons.
+- **AP-9. INT-4 for Phone chat.** Clarify answering on Phone chat ships here. The ownership check
+  is HMP's `(user_id, request_id)` row, not `tools.clarify_gateway`'s private index. An id the
+  phone did not receive from a prompt HMP stored for that user is `404`, so a guessed `clarify_id`
+  never reaches Hermes. Path 1 (Bot Chat stream) still has no clarify. Reads do not import the
+  clarify module; the clarify symbols are `phone_chat` probe dependencies only.
+
+- **AP-7a. Use-time capability failure.** A Hermes helper that raises `ImportError`,
+  `AttributeError` or `TypeError` when HMP calls it is an actual capability failure for that
+  operation, however the install looked at listener open. The route answers `503
+  api_server_unavailable` with no `applied` field and logs only the fixed
+  `approval_helper outcome=unavailable`. It never fabricates a success and never claims the
+  Hermes request expired. Unavailable is not proof a waiter is gone: the row stays open.
+- **AP-10. Phone-chat binding fence (object identity).** After the `phone_chat` probe passes,
+  HMP keeps strong references to the Hermes callables it actually calls for Phone chat. At each
+  use it compares them, by object identity, with the attribute then bound in the Hermes module.
+  A difference closes the local Phone-chat generation: HMP expires its own Phone rows, answers
+  nothing from them, closes `phone_chat` until the next listener open, and logs only
+  `approval_binding outcome=changed`. This is an identity check on the helpers HMP calls. It is
+  not authenticity, a fingerprint or loaded-bytecode proof, and it reads no disk or manifest.
+  Closing it invalidates HMP's local observations only; it does not establish that Hermes's
+  pending request expired, so it reports no native expiry or "not pending". Bot Chat `approvals`
+  eligibility is independent of it, and a stream bound to the closed generation cannot reinsert
+  rows into a new one.
+
+## 7c. Mobile cron management (v1.4, draft)
+
+This additive route family is disabled unless `gateway.platforms.hmp.extra.cron.enabled`
+is explicitly true, at least one `owner_device_ids` entry matches this authenticated device,
+and the running Hermes provides the scheduler APIs the route needs (GU-2d). A device also
+needs the existing per-bot authorization for `{p}`. A failed gate returns `404 not_found`
+for non-owner devices or `503 cron_unavailable` for a disabled or unavailable endpoint, before
+any job data or loopback API key is used.
+
+| Method | Path under `/hmp/v1` | Body | Result |
+|---|---|---|---|
+| GET | `/bots/{p}/jobs` | — | `{"jobs":[job,...]}` |
+| POST | `/bots/{p}/jobs` | `{"name":string,"schedule":string,"prompt":string,"deliver"?:"local"\|"bot-chat","continuity"?:boolean,"repeat"?:1..9999}` | `{"job":job}`; created paused |
+| PATCH | `/bots/{p}/jobs/{job_id}` | one or more of `name`, `schedule`, `prompt`, `deliver`, `continuity`, `repeat` | `{"job":job}`; `repeat:0` clears a finite run limit |
+| DELETE | `/bots/{p}/jobs/{job_id}` | — | `{"deleted":true}` |
+| POST | `/bots/{p}/jobs/{job_id}/pause` or `/resume` | — | `{"job":job}` |
+
+`job` contains only `id`, `name`, `prompt`, `schedule`, `enabled`, `state`,
+`next_run_at`, `last_run_at`, `last_status`, `deliver`, `continuity`, and `repeat`;
+optional status/time fields and `repeat` may be null. Delivery is projected only as
+`local`, `bot-chat`, or `other`, never an external channel ID or URL. `continuity`
+maps to Hermes's `context_from: ["self"]` reference, preserving any other context
+references when edited. `repeat` is the total run limit, not the remaining count.
+IDs are twelve lowercase hex characters. At most 100 jobs and one MiB of upstream JSON
+are returned. HMP never forwards scripts, workdirs, delivery targets, raw errors, or
+other Hermes job internals. Create/edit fields are length bounded; unknown fields are
+rejected. Reads, pause/resume, and delete use one profile-scoped, literal-loopback API server
+endpoint with the profile's own server key, disabled proxy inheritance, redirects, and
+automatic retries. Create and edit use Hermes's profile-scoped cron writer so continuity
+is saved atomically with the job; both retain the same owner/device/bot gate and the same required-API availability check.
+The phone may select only local run history or its own bot's Bot Chat. It cannot name an
+arbitrary delivery destination. HMP still creates jobs paused.
+Phone clients must treat a transport failure after a write as an unknown outcome and
+refresh before attempting another write. The host flag defaults off; release requires
+fixture qualification and independent security review.
+
+## 7d. Bot default model (v1.5, draft)
+
+This additive route family is disabled unless `gateway.platforms.hmp.extra.model_management.enabled`
+is explicitly true, this authenticated device is in `owner_device_ids`, the selected bot
+passes the existing per-bot access check, and the running Hermes provides the model reader and
+writer APIs the route needs (GU-2d). Non-owner devices receive `404 not_found`; a disabled or
+unavailable feature receives `503 model_unavailable`. These checks happen before a config read, model
+catalog request, or write.
+
+| Method | Path under `/hmp/v1` | Body | Result |
+|---|---|---|---|
+| GET | `/bots/{p}/model/default` | — | `{"provider":string,"model":string}` |
+| GET | `/bots/{p}/model/options` | — | `{"providers":[{"provider":string,"name":string,"models":[string,...]},...]}` |
+| PUT | `/bots/{p}/model/default` | `{"provider":string,"model":string}` | Stored provider/model, which Hermes may normalize |
+
+The current model read uses only Hermes's routed profile home and returns no other config.
+The options read uses the fixed profile-scoped loopback `/api/model/options` route and the
+profile's own API key. HMP never accepts a URL, key, base path, raw config patch, or provider
+configuration from the phone. Only authenticated providers with nonempty models are projected;
+all other catalog fields are discarded. HMP caps the response at eight MiB, 256 provider rows,
+10,000 model IDs, and fixed string lengths. It disables proxy inheritance and redirects.
+
+The PUT calls Hermes's existing validated profile-model writer rather than writing YAML from
+HMP. It accepts only provider and model, both bounded. A validation refusal is `400
+bad_request`; other write failures are `503 model_unavailable`. A model selection may affect
+billing. The phone must confirm the named bot and model before PUT. A lost response is an
+unknown result: refresh the current model and never automatically retry. The persisted
+default applies to new sessions; this route does not switch a running Desktop-owned turn.
+The host flag defaults off. Availability on a given Hermes follows GU-2d, not a build list.
+
+## 7e. Explicit Phone attachments (revision 1, spec 028 D4; normative-only)
+
+[HMP_PHONE_ATTACHMENTS_V1.md](HMP_PHONE_ATTACHMENTS_V1.md) PA-1..PA-7 is the normative attachment
+amendment: explicit Phone-only composition, attachment-first present or exact-absent native target,
+non-bearer per-issuer custody, narrow bounded raw upload, separate combined-message route/hash,
+same strict Phone pending slot, idempotency lookup before expiry/new claim, and fresh native
+own-CMID row readback. Existing text AP-6, Bot Chat, approvals and generated-output authority are
+unchanged. No route is implemented or enabled by this amendment.
+
+Full native no-defer settlement is mandatory, including startup restore, adapter and runner busy,
+sentinel/draining/steer/interrupt/compression, orphan FIFO, strict target/lease and persistence exits.
+Stock native `8afaab37` source lacks that settlement/absence-compare-create API; adapter refusal or
+task-scheduling flags cannot substitute. Later/unknown versions attempt their actual required APIs,
+not a SHA allowlist. Missing settlement closes attachments only. No FIFO/busy-snapshot fallback.
+
+Exact Dart/Python declarations, strict codec and finite hash vectors under `specs/028-phone-attachments/contracts/`
+await independent interface review. Encrypted-file format, portable closed decoder and actual
+native/OS/release evidence remain separate gates; complete Send/upload/readback stays closed.
+
+## 7f. Approval push registration, issuance and hint resolution (v1.x, draft; spec 014)
+
+Additive under V-3: a client on an earlier `1.x` build never calls these routes, and an HMP that
+lacks them answers `404` (V-4). The minor revision number is assigned when the feature is
+implemented; this text does not change the revision in the header. Section 7e is reserved by the
+media amendment (spec 011) and is not part of this section. Design and evidence:
+`specs/014-approval-push-registration/` (`spec.md`, `plan.md`, `analysis.md`, `ROOT_DECISIONS.md`).
+The relay half of the feature is a separate contract:
+[`HMP_PUSH_RELAY_V1.md`](HMP_PUSH_RELAY_V1.md) (PN-REL, PN-SEAL).
+
+**Status.** The design was frozen by root on 2026-10-02. This section is contract text only: it is
+not implemented and states nothing about runtime or scanner behavior. An independent scoped review of
+an earlier candidate of this text accepted it with conditions. This text adds the root review
+clarifications of 2026-10-02 (F1 to F7, below). A later independent review of that clarified text accepted its
+other clauses and required two source gates, the relay clock source and
+the optional pin grammar. This text now writes them (the root clock and pin delta of 2026-10-02: R-F1a, R-PIN and N3
+to N6, below). Before its focused review, that delta was new and **unreviewed**; the gates are written, not accepted, and an independent focused
+sentence review is pending. The clock-count repair of 2026-10-02 followed a focused review of that delta: the review accepted the mechanism, the pins and N3 to N6, and required text repairs for the 4,800-nonce and 240 s qualification under clock steps (its finding D1) and for one APNs connection granularity per allowed `(app, env)` pair (D2), with editorial wording (D3). At that checkpoint, the repaired capacity and connection sentences awaited a focused check of those sentences only. That check has now accepted D1/D2/D3 as contract text; implementation and verification remain pending. Owner and account choices O1 to O6, provider keys and capabilities, HPKE key
+custody, DNS and the global relay budget are **pending**; this section authorizes none of them.
+
+**Root interoperability amendment, 2026-10-02 (authoritative).** Root architecture direction for
+contract text only (decisions B1 to B6 and P1 to P3; `specs/014-approval-push-registration/ROOT_DECISIONS.md`
+and [`HMP_PUSH_RELAY_V1.md`](HMP_PUSH_RELAY_V1.md) §13.1). By B1 to B6 it addresses the former `GAP-PN-1` item and the six
+former relay-contract items whose labels GAP-1 to GAP-6 no longer exist in the relay contract. Those removed
+labels are distinct from this contract's own live `GAP-1` and `GAP-2` rules (§12), which the amendment
+does not touch and about which it makes no claim. Independent review of the clarified text is still
+required, and this text is neither an implementation nor interoperability evidence. In this section it shows up as: `DELETE` does not
+depend on push availability (PN-REG-3); the `sealed` value is `b64u(enc ‖ ct)` of 82 to 1,105 decoded
+bytes (PN-REG-2); the `kid` and `aud` grammars (PN-AV); raw-byte `R`, `K`, `C` in the relay
+signature and the exact `scope` and `C` rules (PN-ISS-1, PN-KEY); and the constants of PN-CONST.
+Where this section and the frozen `spec.md` differ, that is a defect to report to root, not a
+choice for an implementer. The dispatcher (PN-DSP), revocation cleanup (PN-REV), persistence
+(PN-PER), logging (PN-LOG) and operator surface (PN-OPS) bind the implementation but have no wire
+shape; they stay in `spec.md` and are not restated here.
+
+**Root review clarifications, 2026-10-02 (authoritative; F1 to F7).** Contract-text clarifications after an
+independent scoped review of an earlier candidate. They preserve B1 to B6, P1 to P3 and every authority
+and security requirement of this section, and authorize no source, key, relay, deployment, provider
+action or owner choice. In this section: F2 sets the `why` precedence, the all-or-nothing kid
+configuration (including a nonempty kid list and a well-formed configured `push.relay_spki_pins`), kid liveness only while push is available, and the `PUT` check order (PN-AV, PN-REG-1,
+PN-REG-2, PN-BND); F3 qualifies the gap labels above; F7 corrects status wording. The relay-side
+items F1 (atomic skew re-check), F4 (strict DER signature), F5 (APNs environment pairs) and F6 (rolling
+hourly windows) are in [`HMP_PUSH_RELAY_V1.md`](HMP_PUSH_RELAY_V1.md) §13.4. HMP's own per-device
+dispatch rate window (PN-CONST, D6) is unchanged. No vector exists for any of them.
+
+**Root clock and pin delta, 2026-10-02 (authoritative; pre-review status recorded below).** A later independent review
+accepted the other clauses above and required two source gates; this delta writes them and none is
+accepted until a focused independent sentence review. R-F1a: the relay's acceptance instant is
+non-decreasing and its rolling windows use monotonic time (`HMP_PUSH_RELAY_V1.md` CLK-1, §13.5); on
+the HMP side it changes no route, code or retry rule, because a relay `401` or `422` is already a
+fixed, non-retried delivery outcome (RES-C, RES-E). R-PIN: the one optional host setting
+`push.relay_spki_pins` and its grammar, defined in PN-AV below and `HMP_PUSH_RELAY_V1.md` CF-1a. N3
+narrows the relay's APNs separation to connections; credential and signing-key provisioning stays
+pending owner choice O3. N4 syncs the settings list and the all-off purge reasons (PN-AV, PN-BND). N5
+counts an inert active row against D24, not D25 (PN-BND). N6 marks earlier "six gaps resolved"
+and skew-replay wording superseded history; the live `GAP-1` and `GAP-2` of §12 stay open. No vector exists.
+
+An approval alert is a **hint, never authority**. The alert carries no command, bot, profile,
+session, URL, path, credential or answer. The resolver returns a profile locator only. An answer
+still needs the app's fresh read of the approval list and a human choice (INT-1, INT-2).
+
+- **PN-AV. Availability (minimum-version policy).**
+  - Push adds no Hermes API dependency, floor, manifest, fingerprint or process latch and no new
+    §12 internal. It is available for an approval row's surface exactly when that surface's
+    approval member is available (`approvals` for `bot_chat`, `phone_chat` for `phone_chat`; spec
+    034 R1), the direct-send flag is effective, the host push flag is on and a relay is configured.
+    Later and unknown Hermes versions attempt the actual APIs (GU-2c, GU-2d).
+  - Host settings, read live per request and per dispatch, never from the wire: `push.enabled`
+    (default `false`), `push.relay_url` (no default), `push.relay_kids` (a closed list of relay key
+    IDs the phone may seal to), `push.relay_audience` and the optional `push.relay_spki_pins`. A
+    missing, malformed or non-HTTPS required value means push is off. A `kid` is ASCII and fully matches
+    `[A-Za-z0-9][A-Za-z0-9._-]{0,63}`; the audience is ASCII and fully matches
+    `[A-Za-z0-9][A-Za-z0-9._-]{0,127}`. Comparison is case-sensitive and exact, with no URL
+    semantics, whitespace, Unicode normalization or trimming. A `relay_kids` entry or audience that
+    does not match is malformed, so push is off. The same two grammars apply to `relay_kid` in
+    `PUT`, to `relay_kids` in `GET`, and at the relay (`HMP_PUSH_RELAY_V1.md` PR-5). They define no
+    real key, audience, endpoint or account.
+  - **Optional relay pins (R-PIN).** `push.relay_spki_pins` is read like the other settings, live and
+    never from the wire. **Omitted** (key absent) means no optional pin. **Configured** means an exact,
+    nonempty list of 1 to 8 distinct entries, each the canonical unpadded base64url of a SHA-256 digest
+    of a DER `SubjectPublicKeyInfo`: 43 ASCII characters that decode to 32 bytes and re-encode to the
+    identical text. An explicit `None`, an empty list, a non-list, a duplicate or any other entry is
+    malformed and means `relay_unconfigured`. Omission is distinct from `None` and from an empty list.
+    The setting holds only public digests, has no environment-variable or other fallback, and never
+    replaces the standard TLS trust-store chain and host-name validation, which are always required.
+    A pin constrains only the relay's **leaf** certificate (`HMP_PUSH_RELAY_V1.md` REQ-2). A mismatch
+    occurs before any HTTP request byte is written, is retried only as RES-C allows for a pre-write TLS
+    failure and has no trust fallback.
+  - **Why precedence (F2).** Availability is evaluated once per call and the first condition that
+    holds names the `why`: (1) `push.enabled` is not exactly `true`: `push_disabled`; (2) a missing,
+    malformed or non-HTTPS relay configuration (the relay URL, the audience, a nonempty kid list,
+    and a configured `push.relay_spki_pins` that is not a well-formed list):
+    `relay_unconfigured`; (3) a closed approval prerequisite (both members closed) or the direct-send
+    flag off: `approvals_unavailable`. A well-formed relay configuration exists whether or not push is
+    currently available.
+  - **Kid configuration is all or nothing (F2).** An invalid or missing kid or audience configuration
+    is `relay_unconfigured`; it is never read as an empty list of live keys. One malformed
+    `push.relay_kids` entry makes the whole push configuration malformed. An explicitly empty kid
+    list is `relay_unconfigured`, not an available relay with no live keys. A configured
+    `push.relay_spki_pins` that is malformed (explicit `None`, an empty list, a non-list, a duplicate or
+    a bad entry) also means `relay_unconfigured`; it is never discarded or replaced by a trust
+    fallback. An omitted optional pin setting is allowed. The *live* kids are the
+    entries of a well-formed list. `GET` omits `relay_kids` unless `available` is true. **Kid
+    liveness is applied only while push is available** (PN-AV for at least one member): `GET` and the
+    purge apply removed-kid expiry only then, and dispatch already requires availability. While push
+    is off for any reason, an otherwise valid active row is kept inert, never destructively expired
+    for kid liveness. Absolute expiry (`expires_at`), revocation, family and hash checks, and the
+    retained-row purge operate unchanged.
+  - A relay failure is a delivery outcome, not a Hermes compatibility finding. It never closes
+    approvals and never produces a `--issue-draft` (GU-2d).
+- **PN-GO. Routes and gate order.** All routes are under `/hmp/v1`, use TR-5 bearer auth with
+  `HMP-Instance`, I-JSON bodies and the ERR-1 error envelope. They are device-scoped, not per bot,
+  and none of them uses `POST /bots/{p}/authorize`, the owner-controls `GRANT` path, any access
+  card or any privilege-grant path.
+
+  | Method | Path | Body | Success |
+  |---|---|---|---|
+  | GET | `/push/registration` | none | `200` (PN-REG-1) |
+  | PUT | `/push/registration` | PN-REG-2 | `200 {route, generation, expires_at, state}` |
+  | DELETE | `/push/registration` | `{"v":1,"expected_generation":int}` | `200 {"generation":int}` |
+  | POST | `/push/hints/resolve` | `{"v":1,"hint":K}` | `200` (PN-RES-2) |
+
+  Order on every route: bearer (TR-5; an `HMP-Instance` mismatch is `401 wrong_instance` before any
+  token lookup) → **effective approval owner**, else `404 not_found` (the non-disclosure pattern of
+  the approval list; a host jobs/model controls denial also closes it) → per-device bucket (`429
+  rate_limited`) → body shape and size (`400 bad_request`, `413 too_large`) → route logic. The
+  resolver adds its own order (PN-RES-1), and `DELETE` adds no availability gate to it (PN-REG-3).
+  *Effective approval owner* is an exact `owner_device_ids`
+  entry and no explicit host controls denial; a jobs/model controls grant alone never qualifies.
+- **PN-ST. Status table.** No new error code and no new error extra. `retry_state_lost` and `other`
+  are existing codes. The envelope carries only the allowed extras (`why`, `authz`,
+  `head_message_id`, `definitive`); `409 stale` carries none, so the app reads the current
+  generation with `GET`. Messages are the fixed text of each code and are generic for push.
+
+  | Route | Status and code | When |
+  |---|---|---|
+  | all | `401` per TR-5, PR5-6 | authentication; `401 revoked` also when a revoke committed after authentication (PN-REG-2) |
+  | all | `404 not_found` | not an effective approval owner (before any store read beyond auth) |
+  | all | `429 rate_limited` | per-device bucket; nothing changes |
+  | all | `400 bad_request`, `413 too_large` | shape, I-JSON, size (the PUT bound is stricter than `MAX_BODY_BYTES`) |
+  | `GET` | `200` | PN-REG-1 |
+  | `PUT` | `200` | new or identical-replay registration |
+  | `PUT` | `400 bad_request` | shape, I-JSON, a `relay_kid` that is not a lexically valid kid (even while push is off), `addr_kind`/`env`/`platform` rules, `seal_expires_at` out of range, or `sealed` not canonical b64u or outside 82 to 1,105 decoded bytes; and, only while push is available, a well-formed `relay_kid` that is not live |
+  | `PUT` | `409 stale` | CAS failed, replay with a different bearer family, or a row past `expires_at` |
+  | `PUT` | `409 idempotency_conflict` | same `request_id`, different body |
+  | `PUT` | `503 write_gate_closed {why}` | `why` is one of the four push values of ERR-2b (the three availability values by the PN-AV precedence), checked after the body checks and before kid membership |
+  | `PUT` | `503 retry_state_lost` | replay whose re-derived handle does not match the stored hash, or an unreadable `k_grace` |
+  | `PUT` | `503 other` | `route_hash` collision; `G` at the bound; first issue with an unreadable `k_grace` |
+  | `DELETE` | `200` | removed; the only confirmation. Independent of push availability (PN-REG-3) |
+  | `DELETE` | `401 revoked` | the transactional `ACTIVE` device or live-family re-check failed (PN-REG-3) |
+  | `DELETE` | `409 stale` | CAS failed |
+  | `DELETE` | `503 write_gate_closed {"why":"push_capacity"}` | the only `why` a `DELETE` can carry: no generation row and the generation-row cap reached; nothing written |
+  | `DELETE` | `503 other` | store write failure (not confirmed; the delete fence still closes eligibility) |
+  | `POST` | `200 located`, `200 not_pending` | PN-RES-2 |
+  | `POST` | `404 not_found` | every other case, including every hidden, unknown, foreign, expired or rotated hint |
+  | `POST` | `503 write_gate_closed` | the approval gate for the row's surface (spec 034 `_require_approvals_gate`); the frozen design assigns this route no push `why` |
+
+  **Former `GAP-PN-1` is resolved (decision B5).** `DELETE` is not refused when push is unavailable
+  (PN-REG-3). Any `DELETE` answer other than `200` is still "not confirmed" (§11 of the spec;
+  PN-APP-3).
+
+- **PN-REG-1. `GET /push/registration`.**
+
+  ```
+  200 {"available": bool, "why"?: <code>, "relay_kids"?: [<kid>], "generation": <int>,
+       "registration": null | {"state": "active"|"provider_gone"|"expired",
+                               "platform": "apns"|"fcm", "expires_at": <int>}}
+  ```
+
+  - `GET` writes nothing and creates no row. It reports `generation` 0 for a device with no
+    generation row. The route handle is never echoed. It stays readable while push is unavailable
+    (`available: false` with its `why`); it is never refused for that reason.
+  - `why` is one of `push_disabled`, `relay_unconfigured`, `approvals_unavailable` and appears only
+    when `available` is false (a field of this `200` body; the same codes are the `why` values of
+    `503 write_gate_closed`, ERR-2b). `approvals_unavailable` covers every closed approval
+    prerequisite: both members closed, or the direct-send flag off. When several hold, the `why` is
+    chosen by the PN-AV precedence. `relay_kids` is omitted unless `available` is true; it lets the
+    phone choose its seal key; the `iid` binding is the pinned `iid` the phone already holds.
+  - **Which row.** The device's active row, when one exists and is not in the delete fence
+    (PN-BND), is reported `active` if usable and `expired` (re-register needed) if not. Unusable
+    means past `expires_at`, its `relay_kid` no longer in the live list (tested only while `available`
+    is true; while push is off for any reason a row is not reported `expired` for kid liveness), its
+    `family_id` not the bearer's family, or its stored route hash not re-derivable (PN-ISS-4,
+    PN-ISS-5, which includes an unreadable `k_grace`). A row in the delete fence is reported as `registration: null`. With
+    no active row, the device's latest row is reported (state `provider_gone` or `expired`) only if
+    it left `active` by relay feedback or by the purge's expiry (PN-BND) and no write has advanced
+    `G` since, that is, the row's `generation + 1` equals the current `G`. Every other case,
+    including a `retired` row, is `null`.
+  - A `200` is the app's signal that push is present on this host; a `404` on `GET` from an older
+    HMP means absent. The app shows the notification-permission opt-in only after some paired
+    instance reports `available: true`.
+- **PN-REG-2. `PUT /push/registration`.** Body at most 4,096 bytes (`413 too_large` above it):
+
+  ```
+  {"v": 1, "request_id": <b64u>, "expected_generation": <int>, "platform": "apns"|"fcm",
+   "addr_kind": "apns_token"|"fcm_token"|"fcm_fid", "env"?: "production"|"sandbox",
+   "relay_kid": <kid>, "sealed": <b64u>, "seal_expires_at": <int>}
+  ```
+
+  - `request_id`: 16 to 32 random bytes, canonical b64u, chosen once per app registration intent and
+    reused, with the identical body bytes, on every retry of that intent (PN-APP-2).
+  - `sealed`: canonical b64u of `enc ‖ ct` (a 65-byte uncompressed SEC1 P-256 point followed by the
+    AES-128-GCM output including its 16-byte tag), with a **decoded length of 82 to 1,105 bytes
+    inclusive** (65 + 16 + a 1 to 1,024 byte plaintext, inside the frozen 2,048-byte ceiling);
+    anything else is `400 bad_request`. HMP checks only canonical b64u and these bounds. It cannot
+    open the value and never tries, so a malformed point, tag or plaintext is found only by the relay
+    (`422 sealed_invalid`, feedback `expired`). Its construction is
+    [`HMP_PUSH_RELAY_V1.md`](HMP_PUSH_RELAY_V1.md) §6.
+  - `relay_kid` must match the `kid` grammar (PN-AV), else `400 bad_request`, whether or not push is
+    available. Membership in the live `push.relay_kids` list is checked later, in the order below.
+  - `addr_kind` must match `platform` (`apns_token` for `apns`; `fcm_token` or `fcm_fid` for
+    `fcm`). `env` is required for `apns` and forbidden for `fcm`. Else `400 bad_request`. These
+    declared values are signed into every relay request and the relay rejects any mismatch with the
+    sealed plaintext, so the host's checks and the seal agree.
+  - `seal_expires_at` must lie in `(now + 3,600 s, now + 1,209,600 s]` (1 hour to 14 days), else
+    `400 bad_request`. The row's `expires_at` is defined as exactly `seal_expires_at`.
+  - **Check order after the body checks (F2).** The body grammar and size checks above (shape, I-JSON,
+    size, the lexical kid grammar, `addr_kind`/`env`/`platform`, `seal_expires_at`, `sealed`) run
+    independent of availability. Then, in this order: (1) push available (PN-AV for at least one
+    member), else `503 write_gate_closed {why}` with the PN-REG-1 code; (2) `relay_kid` in the live
+    `push.relay_kids` list, else `400 bad_request`; (3) transactional liveness, replay and CAS below. So a
+    lexically malformed kid is `400` even while push is off, and a well-formed kid that is not live (for
+    example removed) is `503` while push is off and `400` while it is available.
+  - **Idempotent replay first**, after the checks above. A replay made after push became unavailable
+    gets `503 write_gate_closed {why}`, and one whose `relay_kid` was removed since, while push is
+    available, gets `400 bad_request`; neither reaches the replay check. The app treats both like `409
+    stale`: `GET`, then a new intent. Otherwise, if the device's current active row has the same
+    `request_hash`:
+    - a different body hash is `409 idempotency_conflict`;
+    - a row `family_id` different from the bearer's family, or a row past `expires_at`, is
+      `409 stale`;
+    - otherwise HMP re-derives `R` from the row's stored inputs (PN-ISS-1). If `SHA-256(R)` equals
+      the stored `route_hash`, it returns `200` with that `R` and generation, whatever
+      `expected_generation` says. If it differs, or `k_grace` cannot be read (PN-ISS-5), it returns
+      `503 retry_state_lost`; the row and `G` stay unchanged. The app treats this like `409 stale`:
+      `GET`, then a new intent.
+  - **No history is not a replay.** A `request_id` that matches no active row goes to CAS. Every
+    successful `PUT` advanced `G` past its own `expected_generation`, and `G` never decreases for a
+    non-REVOKED device. So, **absent a consistent restore of the store and the binding**, a replay
+    of an already-applied request fails CAS with `409 stale`, even after its retired row was purged
+    or evicted, and HMP never answers it with fresh handle bytes. After a consistent restore that
+    rolled `G` back, a byte-identical retry of a `PUT` whose acknowledgement was lost can pass CAS
+    and returns a fresh `R′`, never the lost `R`. That is harmless: the app never committed the
+    lost handle and commits `R′` (RES-20).
+  - **Transactional liveness.** Before either replay or CAS, the write transaction re-reads the
+    device as `ACTIVE` and its bearer family as live. A revoke committed after authentication
+    answers `401 revoked`, with no registration or generation write.
+  - **CAS.** Otherwise succeed only if `expected_generation == G` (0 for a device with no
+    generation row), else `409 stale` with no extra. Then the capacity checks, with nothing
+    changed on refusal: if the device has no active row and the instance already holds 64 active
+    rows, or the device has no generation row and 256 non-REVOKED devices already hold one, return
+    `503 write_gate_closed {"why": "push_capacity"}`. Replacing the device's own active row never
+    counts against capacity. On success, in one store transaction: retire the device's current row
+    (if any), advance `G` by exactly one, create the generation row if absent, draw the 32-byte
+    row salt from the OS CSPRNG, insert the new active row, enforce the retained-row caps
+    (PN-BND), and return `200 {"route": R, "generation": G, "expires_at": int, "state": "active"}`.
+    A transaction that changes a device's registration state advances that device's `G` once,
+    however many rows it touches. `G` stays below 2^53 (I-JSON): if `G + 1` would reach 2^53 the
+    write is refused `503 other` with nothing changed.
+  - **Collision.** A UNIQUE violation on `route_hash` (whatever its cause, including an identical
+    salt draw) aborts the whole transaction: no row is inserted, the previous row stays active, `G`
+    does not advance, and the answer is `503 other`. A retry of the same intent draws a fresh salt.
+  - The device's live token family, `iid` and `H` are recorded on the row.
+- **PN-REG-3. `DELETE /push/registration`.** CAS as above. It retires the current row (if any),
+  advances `G` by one and returns `200 {"generation": G}`. Only a `200` confirms removal; every
+  other outcome is "not confirmed". Deleting with no row is still a CAS and still advances `G`, so
+  a late older `PUT` cannot land.
+  - **Independent of delivery availability (decision B5).** `DELETE` does **not** require
+    `push.enabled`, a configured relay, a live `relay_kid`, an available approval member or an
+    effective direct-send flag, and none of those closed states changes its answer. A disabled
+    delivery lane must not stop the removal of an existing registration. It makes no call to Hermes,
+    the relay or a provider.
+  - **What it still requires.** Bearer and `HMP-Instance` (TR-5), effective approval owner
+    (`404 not_found` otherwise), the per-device bucket, body shape and size, and CAS. In the write
+    transaction, before CAS, it re-reads the device as `ACTIVE` and its bearer family as live (`401
+    revoked` otherwise, with no write). Terminal revocation and the capacity rules below are
+    unchanged. It never resurrects a row, never bypasses authentication, and never claims removal
+    before a `200`. It does not read `k_grace`, because it only retires an existing row.
+  - **Capacity.** `DELETE` of an existing registration is never refused for capacity and never
+    inserts into a capped table: retiring is an in-place update and the device already has its
+    generation row. Only a `DELETE` from a device with no generation row would create one, so it is
+    subject to the generation-row cap: while 256 non-REVOKED devices already hold one it is refused
+    `503 write_gate_closed {"why": "push_capacity"}` with no write. Under the invariant "an active
+    registration implies a generation row", nothing is registered for that device. The answer is
+    still not a `200`, so it confirms nothing, and the app keeps its pending delete intent.
+  - **Documented race (no invariant waiver).** A `PUT` delayed in flight can land after capacity
+    frees, after such a no-generation `DELETE` was refused. The app's pending delete intent then
+    retries as an ordinary CAS `DELETE` against the now-existing generation row and removes it.
+  - **Store write failure.** If the store write itself fails (for example the disk is full),
+    eligibility still closes: the listener adds the device's current `route_hash` to an in-memory
+    delete fence that dispatch and resolve check, and `GET` stops reporting the row as active. The
+    answer is `503 other` (not confirmed) and the app retries `GET`/`DELETE`. The fence entry is
+    removed once a store write retires that row. The fence does not survive a restart; between a
+    restart and a successful `DELETE`, a revocation or the seal's `not_after`, alerts may resume
+    and resolve as unable to check (RES-21).
+- **PN-REG-4. Limits.** At most one active registration per device per instance, at most 64 active
+  registrations per instance, and at most 256 generation rows of non-REVOKED devices. Per-device
+  buckets per minute: 6 registration writes, 30 status reads, 30 resolves. A refused write changes
+  nothing.
+- **PN-REG-5. No cross-instance effect.** Every row carries the serving `iid`. A route, handle or
+  sealed address registered on one instance has no meaning on another. HMP never forwards to,
+  falls back to or names another instance (PR-3).
+- **PN-ISS-1. Route handle.** `R = b64u(HMAC-SHA256(k_grace, transcript("HMP1-PUSH-ROUTE", iid, H,
+  device_id, family_id, G, salt)))`, which is 43 characters. Field types follow TR-13: `iid`,
+  `device_id` and `family_id` are UTF-8 strings, `H` and `G` are u64, `salt` is raw 32 bytes. `H` is the store
+  revocation epoch (`meta.store_revocation_epoch`). The store keeps `SHA-256(R)` (over the raw
+  decoded bytes, TR-12) and the inputs including the salt; it never keeps `R`. `R` can be
+  re-derived only with the store **and** the `k_grace` file, the same custody as the refresh retry
+  grace (PR5-5). The dispatcher re-derives `R` for the payload and a replay re-derives it for the
+  response; both compare the result with the stored hash first. `request_id` is used only for
+  idempotency (`request_hash`), not as a handle input.
+- **PN-ISS-2. Nonreuse is a computational argument, not a proof.** Under the assumption that
+  `k_grace` is secret and uniformly random, HMAC-SHA256 is treated as a PRF. Distinct transcripts
+  then give outputs that collide only with negligible probability; distinct inputs alone do not
+  make outputs mathematically distinct. The transcripts differ across devices (`device_id` is
+  fresh per pairing), credential generations (`family_id`), host generations (`H`), registration
+  generations (`G`, persisted and only increasing) and rows (a fresh 32-byte CSPRNG salt). The salt
+  keeps handles fresh where the other inputs can repeat:
+  - `k_grace` can be re-created without an identity change. A new `k_grace` is a new PRF key; old
+    handles then stop validating (PN-ISS-4) rather than becoming reusable.
+  - A consistent backup restore of both the store and the binding directory rolls `G` back without
+    the identity classification noticing. The salt keeps the next handle fresh. The replay CAS
+    guarantees of PN-REG-2 are stated absent such a restore (RES-20).
+
+  A UNIQUE index on `route_hash` over stored rows (active and retained) rejects an actual collision
+  deterministically, but only while the row is stored. Beyond retention or cap eviction, nonreuse
+  rests on the salts, `G` and the PRF assumption, and is stated that way, not as a test result.
+- **PN-ISS-3. Hint ref.** `K` is 32 bytes from the OS CSPRNG, b64u (43 characters), minted per
+  (approval row, registration) dispatch. It is held only in process memory with its binding
+  `(SHA-256(R), G, prompt generation, row key)`. A collision with a live entry is redrawn. `K`
+  lives while its row is open in its prompt generation, then for 60 s after the row settles, and
+  never longer than 60 minutes. It dies on listener close or restart, like the rows it names.
+- **PN-ISS-4. Validation is exact.** A registration is usable only when every bound field equals
+  the current value: row `active`; row `device_id` equals the bearer's device; row `family_id`
+  equals the bearer's family (resolver) or is a live family of that device within
+  `REFRESH_ABSOLUTE_TTL_S` (dispatch); row `iid` and `H` equal the serving ones; row generation
+  equals the device's current `G`; not expired; `relay_kid` still in the live list (dispatch); the
+  row's `route_hash` is not in the delete fence; and the re-derived `SHA-256(R)` equals the stored
+  `route_hash`. A hint is accepted only when its binding names that exact row hash and generation
+  and the current, unclosed prompt generation. Existence alone never suffices.
+- **PN-ISS-5. `k_grace` access for push.** Push never calls the existing accessor that re-creates
+  and rewrites the file. It uses a new read-only accessor that reads the file, checks its length,
+  and never creates, rewrites, deletes or changes the mode of it. Every read runs off the event
+  loop, once per request or per batch, never per row and never inside a store transaction. A
+  missing, unreadable, wrong-length or transiently failing read means "not re-derivable" for that
+  call only: `GET` reports `expired`, dispatch skips the row, a replay answers `503
+  retry_state_lost`, a first-issue `PUT` answers `503 other`, and the call writes nothing because
+  of the read failure. A transient read error therefore never creates, rewrites or deletes the
+  secret, and by itself never changes a row's state. The purge's expiry of a hash mismatch changes
+  state only after a successful read whose derived hash differs; independent authoritative expiry
+  (past `expires_at`; a removed kid, only while push is available, PN-AV) and revocation still change
+  row state with the secret unreadable.
+- **PN-KEY. Key separation.** `HMP1-PUSH-ROUTE` and `HMP1-PUSH-COLLAPSE` are HMAC-only tags and
+  `HMP1-PUSH-RELAY` is signature-only. None of the three is a row of the V-1 tables and none joins
+  the transcript or hash-domain tag lists of V-1 (like `HMP1-GRACE`). None may be a prefix of any
+  other tag in use, nor the reverse; a prefix-freeness test runs over the full tag set. The relay
+  signature reuses the instance key under decision `⟨D2⟩(a)` and the conditions in
+  [`HMP_PUSH_RELAY_V1.md`](HMP_PUSH_RELAY_V1.md) §4. The collapse identifier is
+  `C = first 32 characters of b64u(HMAC-SHA256(k_grace, transcript("HMP1-PUSH-COLLAPSE",
+  SHA-256(R), scope)))` with `SHA-256(R)` over the raw decoded `R` and `scope` the exact canonical profile locator as
+  UTF-8, with no normalization. The first 32 characters of that b64u string decode to exactly 24
+  bytes, and `C` is opaque, reveals no profile, and is a stable pseudonym per (registration, bot)
+  for the registration's lifetime (RES-23). The relay signature transcript carries `R` and `K` as
+  raw 32 bytes and `C` as raw 24 bytes, never as base64url text
+  ([`HMP_PUSH_RELAY_V1.md`](HMP_PUSH_RELAY_V1.md) §4).
+- **PN-RES-1. `POST /push/hints/resolve`.** Body `{"v": 1, "hint": K}` with `K` a 22 to 64
+  character canonical b64u string, else `400 bad_request`. There is no `route` field: this matches
+  the accepted app resolver port, which never carries the route handle. Order: bearer → effective
+  approval owner (`404`) → bucket (`429`) → body shape (`400`) → push flag on (`404`) → the
+  **bearer device's** single current active registration, validated exactly (PN-ISS-4 with the
+  bearer's family; `404`) → exact hint whose binding names that registration's route hash and `G`
+  (`404`) → bot grant for the hint's profile (`404`, masking ERR-3 detail) → the approval gate for
+  the row's surface (`503 write_gate_closed`) → visibility (the approval lane's current-visibility
+  seam; a hidden row is `404`, whatever its status) → row state.
+- **PN-RES-2. Results.** `200 {"state": "located", "profile": p}` only when the row is open in the
+  current prompt generation and visible now. `200 {"state": "not_pending"}` only when the row is
+  not hidden now and was settled by an authoritative cause (spec 014 §10, I-2: an applied answer;
+  native `409 approval_not_pending`/`approval_not_active` or `404 run_not_found`; Phone listing
+  omission). Run completion is excluded (`⟨D4⟩`). Every other case is `404 not_found`: unknown,
+  foreign, revoked, rotated, expired, a closed or rebound generation, a hidden row (Desktop held,
+  member closed), a locally expired row, a purged or evicted row or hint, and an unknown settle
+  cause.
+  - **Current visibility (no sticky bit).** Hiddenness is evaluated at resolve time and is not
+    remembered. A row that was hidden earlier, was settled authoritatively by Hermes meanwhile and
+    is visible now may answer `not_pending`, which is a true statement about Hermes (RES-18).
+  - **Local expiry.** A row past `expires_at + EXPIRY_GRACE_S` is locally expired exactly as the
+    approval list treats it: no longer open, so `404`.
+  - **Phone rows.** The approval list reconciles Phone rows through `list_gateway_approvals`; the
+    resolver does not. `located` for a Phone row that Hermes has since withdrawn is the accepted
+    residual of RES-18.
+- **PN-RES-3.** The response never carries a request ID, command, description, choices, run or
+  session identifiers, expiry, instance name or any authority. The located profile is a navigation
+  hint for the app's own fresh read.
+- **PN-RES-4.** The resolver mutates nothing. A hint can be resolved again while it lives.
+- **PN-BND. Resource bounds.** Every table and map has a cardinality and an overflow rule. Active
+  registrations are not bounded by the dispatch queue (HMP does not cap paired devices), so push
+  sets its own caps.
+
+  | Object | Scope | Cardinality bound | Overflow rule |
+  |---|---|---|---|
+  | Active registration rows | store, per instance | at most 1 per device and at most 64 | A `PUT` from a device without an active row is refused `503 write_gate_closed {"why":"push_capacity"}`, nothing changed. Replacement, `DELETE` of an existing registration and every retirement are never refused. A row that can never deliver again (past `expires_at`, kid no longer live, hash no longer re-derivable) is expired by the purge and stops counting: capacity frees no later than 14 days plus the next purge interval (up to 1 hour while the listener runs) for expiry, and within one purge interval for kid removal (only while push is available, PN-AV; while it is off for any reason, including an empty kid list or malformed pins, a kid-removed row stays active and inert, and keeps counting against this active cap (D24, not the retained cap D25), until push is available again or `expires_at`) or a hash mismatch after a successful `k_grace` read. A stopped listener purges nothing; the purge runs again at the next listener open. A row of a device that lost owner status stays active and inert until its `expires_at`, because owner status is live and reversible |
+  | Retained rows (`retired`, `provider_gone`, `expired`) | store, per instance | at most 8 per device and 1,024 in total, each for at most 30 days from its state change | Enforced only inside a `PUT` transaction and the push purge step, by deleting the oldest retained rows first (per device, then globally). Retirement in `DELETE`, feedback, purge expiry or post-commit cleanup does not enforce caps, so the table may transiently exceed 1,024 by at most 64 rows until the next `PUT` or purge |
+  | Device generation rows (`G`) | store | at most 256 rows whose device is not REVOKED | A first `PUT`, or a `DELETE`, from a device without a generation row while 256 such rows exist is refused `503 write_gate_closed {"why":"push_capacity"}`, nothing changed and no write. The purge deletes the generation and registration rows of REVOKED devices, so they do not count. A generation row of a non-REVOKED device is never deleted or decreased. An active registration implies its device's generation row. After 256 distinct non-REVOKED devices have written, a new device remains capacity-blocked until the operator revokes some; registration expiry alone does not release a generation slot (RES-25) |
+  | Dispatch queue | memory, per listener | 64 events | Drop the new event, `queue_full` |
+  | Recipients per row | memory | 4 | Most recently registered first; the rest skipped, `recipients_capped` |
+  | In-flight relay requests | memory, per listener | 2 | The worker waits for a free slot; the dequeue TTL check still applies |
+  | Hint map | memory, per listener | 256 entries | Evict, in order: entries whose row settled or whose generation closed; then the oldest by mint time. An evicted hint resolves `404` |
+  | Coalescing slots | memory, per listener | 256 | Evict the least recently used idle slot (no pending trailing event). If every slot holds a pending event, drop the new event, `coalesce_full`. Evicting an idle slot forgets its last send time, which loosens the 10 s minimum interval for that slot once; the per-device hourly cap still bounds the rate (RES-22) |
+  | Hourly per-device counters | memory, per listener | keyed by `device_id`; at most 256 (only a device with a generation row has one) | A counter survives a re-registration while the device is `ACTIVE` and has an active registration. It is removed when its hour window ends with no active registration, or when the device stops being `ACTIVE`. Never evict a live counter. If the table is full anyway, refuse the send, `rate_table_full` (fail closed, not a reset). A restart discards the table |
+  | Delete fence (route hashes whose `DELETE` write failed) | memory, per listener | at most 64 (one per active row; removed when the row leaves `active`) | Cannot exceed the active cap. If it would, every dispatch is refused, `fence_full` (fail closed) |
+  | Per-device request buckets | memory, shared `RateLimiter` | `LIMITER_TABLE_MAX` (4,096, LRU) | The existing limiter's behavior: eviction or restart can only loosen a limit briefly. Keys are authenticated device IDs, not attacker-chosen |
+
+  Rows of REVOKED devices wait at most one purge interval before deletion. Their number is bounded
+  by the operator-gated pairing and revocation rate over that interval, not by the cap of 256.
+
+  **REVOKED is terminal.** The purge deletes the generation row and every registration row of a
+  REVOKED device inside a `BEGIN IMMEDIATE` transaction that re-reads `devices.state` (never a
+  cached value). That is safe only while no code path returns a REVOKED device to another state.
+  The implementation adds an explicit guard in the store's device-state setter that refuses to
+  change a REVOKED device, and a test that fails if it can. The REVOKED purge is not enabled
+  without that guard and test. Device IDs are fresh per pairing and never reused.
+
+  **Purge.** A bounded push purge step runs at listener open and then hourly on the listener's
+  loop: it reads `k_grace` once, off the loop; deletes retained rows past retention or over the
+  caps, oldest first, and wipes the secret columns of any non-active row; deletes the generation
+  and registration rows of each REVOKED device; retires active rows whose device is no longer
+  `ACTIVE` or whose family is revoked (advancing `G`); and **expires** (`state := expired`,
+  advancing that device's `G` once, wiping the secret columns) every active row that is past
+  `expires_at`, whose `relay_kid` is no longer live, or whose route hash no longer re-derives after
+  a **successful** `k_grace` read. The removed-kid case applies only while push is available
+  (PN-AV, F2): while push is off for any reason (`push_disabled`, `relay_unconfigured` including an empty kid list or malformed pins, or `approvals_unavailable`) the purge never expires a row for kid liveness and
+  keeps otherwise valid active rows inert, and every other step runs unchanged. Only the
+  hash-mismatch case needs a successful read: an
+  unreadable `k_grace` never expires a row merely because it is unreadable and never blocks the
+  other steps. A purge failure is logged with a fixed code and changes no revoke, token, pairing,
+  route or Hermes outcome.
+
+  **Lost idempotency history.** Once a retained row is purged or evicted: a replay of its `PUT`
+  gets `409 stale` (CAS); its `R` and any surviving hint resolve `404` (unable to check); late
+  relay feedback for it is a no-op. Nonreuse past that point is the computational argument of
+  PN-ISS-2. Absent a consistent restore of the store and binding, HMP never answers a replay with
+  fresh handle bytes; after such a restore it can, harmlessly (RES-19, RES-20).
+- **PN-CONST. Constants of this section.** The frozen values of `ROOT_DECISIONS.md`, collected for
+  reference. They are **not rows of the §13 table**: that table is checked mechanically against
+  the implementation's constants, and these constants join it, together with that check, only when
+  the feature is implemented. Owner deployment budgets stay pending.
+
+  | Name | Value | Decision |
+  |---|---|---|
+  | Seal lifetime, minimum / maximum | 3,600 s (1 h) / 1,209,600 s (14 d) | D9 |
+  | Re-seal refresh threshold | under 345,600 s (4 d) remaining | D9 |
+  | Retained-row lifetime | at most 2,592,000 s (30 d) from the state change | D9 |
+  | `PUT` body / seal plaintext | 4,096 / 1 to 1,024 bytes | D10 |
+  | Sealed value (decoded): accepted range / frozen ceiling | 82 to 1,105 bytes inclusive (`enc` 65 + tag 16 + plaintext) / 2,048 bytes | D10, B3 |
+  | `kid` / audience grammar | `[A-Za-z0-9][A-Za-z0-9._-]{0,63}` / `{0,127}`, ASCII, case-sensitive, exact | B4 |
+  | FCM `channel_id` and the one global FCM `collapse_key` | the fixed literal `hmp_approval_v1` | B4 |
+  | Relay `ts` / `ttl_s` | nonnegative integer below 2^53 / integer 60 to 900 inclusive | B6 |
+  | Per-device buckets per minute: writes / status reads / resolves | 6 / 30 / 30 | D11 |
+  | Dispatch queue / relay concurrency per listener | 64 / 2 | D12 |
+  | Recipients per approval row | 4 | D13 |
+  | Hint map entries / hint margin after settle / hint hard maximum | 256 / 60 s / 3,600 s | D14 |
+  | Coalescing minimum interval per slot / hourly sends per device | 10 s / 30 | D6 |
+  | Provider TTL floor / cap / default | 60 / 900 / 330 s | D7 |
+  | Active registrations per instance | 64 | D24 |
+  | Retained rows per device / total | 8 / 1,024 | D25 |
+  | Coalescing slots per listener | 256 | D26 |
+  | Generation rows of non-REVOKED devices | 256 | D28 |
+  | Collapse identifier `C` length | 32 characters | D5 |
+  | Handles `R`, `K` | 43 characters (32 decoded bytes) | D1/D5 |
+  | Collapse identifier `C` decoded | 24 bytes | D5, B1 |
+
+  Relay-side and relay-client constants (retries, timeouts, breaker, limits, replay cache) are in
+  [`HMP_PUSH_RELAY_V1.md`](HMP_PUSH_RELAY_V1.md) §12.
+- **PN-XREF. Cross-references.** Relay request, signature, verification order, seal, HPKE suite,
+  responses and templates: [`HMP_PUSH_RELAY_V1.md`](HMP_PUSH_RELAY_V1.md). Dispatch, revocation
+  cleanup, persistence, logging, operator surface, platform truthfulness and app obligations:
+  `specs/014-approval-push-registration/spec.md` (PN-DSP, PN-REV, PN-PER, PN-LOG, PN-OPS, PN-PLAT,
+  PN-APP) and its §10 and §11. Residuals: §14 RES-13 to RES-27.
 
 ## 8. Guarantees, capability contract and write gate (FZ-R-8, FZ-R-9)
 
@@ -1023,20 +1901,26 @@ which no supported build advertises today (§8).
     - Only a genuine integer counts as a version. A boolean, a string or a float is treated as absent (DR-12).
     - `>= floor` relies on the Hermes map's rule that a higher version is a strict superset of every lower version's behaviour (DR-5). HMP SHOULD log any version higher than the ones it knows.
     - HMP does not use a Hermes build identity to derive guarantees. Build identity is used only for GU-2c read compatibility.
-- **GU-2a. Supported builds (release gating).**
-  - A Hermes build is **supported** only if it is listed in the HMP release test matrix. That matrix pins exact reviewed Hermes builds by commit SHA (`R0_FREEZE_REVIEW.md` §6).
-  - The HMP release is tested against every listed build, and those tests include the capability-derived flags.
-  - A build outside the matrix whose capability map meets the floors will still open the write gate at runtime. It is nevertheless **unsupported**, and the documentation says so.
+- **GU-2a. Tested samples (evidence only; owner policy 2026-10-01).**
+  - The HMP release test matrix pins exact reviewed Hermes builds by commit SHA (`R0_FREEZE_REVIEW.md` §6). Those receipts describe the samples that were tested, including the capability-derived flags.
+  - A tested-sample match is evidence only. It never admits or refuses a build, and no gate reads it.
+  - A build outside the matrix is attempted like any other (GU-2c, GU-2d). Its tested/untested status appears only as evidence in tooling.
 - **GU-2b. Residual: false capability claims.**
   - A modified Hermes could advertise capabilities it does not implement.
   - Such code runs as the same OS user as Hermes, so this sits inside the E-SI-15 trust boundary (SEC-1). It is covered by the same owner acknowledgement.
   - HMP does not try to detect it.
-- **GU-2c. Read-compatible builds** (`R0_OWNER_DECISIONS.md`, bounded amendment 1).
-  - Read compatibility is a separate question from write qualification (GU-2a). "Works on any Hermes build" is replaced by an exact list of tested **read-compatible** Hermes builds, pinned by commit SHA, maintained separately from the write-supported release matrix.
-  - HMP's read routes (roster, snapshot, history, and the live tail and stop where reachable) are exercised against each build on that list before the build is added.
-  - A Hermes build outside the read-compatible list is not silently assumed to work. It yields an understandable compatibility state to the client — never a guessed call into an unlisted build's private API surface.
-  - The list starts empty. F1 (`FIRST_FEATURE_PLAN.md`) populates its first entries.
-  - Build identity is the exact Hermes git commit SHA when the install has git metadata; otherwise a deterministic SHA-256 fingerprint over the exact source files the read bridge depends on. The list records both identity kinds. An unidentifiable build is unsupported (controller clarification, 2026-09-25).
+- **GU-2c. Minimum supported Hermes version** (owner policy 2026-10-01, replacing the exact-build list of `R0_OWNER_DECISIONS.md` bounded amendment 1).
+  - Read compatibility is decided by a minimum version, not a list of builds. The floors are per feature: `read` and session browsing 0.21.4 (2026.9.21); `send`, `jobs` and `model` 0.21.5 (2026.9.24). Each floor is one verified release, expressed in both version schemes.
+  - HMP reads the Hermes version with file reads only: a valid `baseVersion` in `install-stamp.json` (read as UTF-8, optional BOM), else a literal `__version__` in `hermes_cli/__init__.py`, else the literal `__release_date__`. The stamp is authoritative, as in Hermes's own version lookup; HMP does not take the larger of the stamp and the literal. The `0.0.0` placeholder and any non-plain version count as absent. HMP never imports, executes or evaluates Hermes code to learn the version, and never converts between the two schemes.
+  - Only a version that declares itself below a floor is refused (`hermes_build_unsupported`), and then no Hermes internal is imported. An unknown, unlisted, newer or unreleased version is attempted, subject to GU-2d and every security check. An unidentifiable or unlisted build is not, by that fact alone, unsupported.
+  - Exact commit SHAs and source fingerprints are recorded as test evidence only.
+- **GU-2d. Required-API availability and failure reporting** (owner policy 2026-10-01).
+  - A feature is available when its version floor is met and each Hermes internal it reaches is present, has the required parameter names (a `**kwargs` catch-all never satisfies a name such as `paused`), and resolves, with every wrapper layer, inside the Hermes tree or the standard library (not `site-packages`, `dist-packages` or the Hermes home's `plugins` directory). Probes import and inspect; they never call.
+  - A missing core read dependency closes read, and with it every other feature, which uses the same authorization and profile primitives. Otherwise one feature's missing dependency closes only that feature. Session browsing's own absence closes only the session routes (404).
+  - Availability is computed once when the listener opens. Permissions, explicit host settings, instance identity, profile routing, scoped credentials, payload bounds and idempotency are unchanged and are checked as before. A genuinely absent implementation is never advertised as usable.
+  - A compatibility warning follows a real feature failure only, never a merely unlisted version. A failed probe states the fixed reason and does not claim the version is bad; a "not one of HMP's tested samples" note appears only after a failure and only when no tested sample matches. `hermes hmp compat --issue-draft` prints a user-reviewed GitHub issue draft limited to the Hermes version and its source, the commit SHA when present, the HMP version, the OS family and Python `major.minor`, and the failed feature, reason and HMP's own dependency labels. Nothing is submitted, no network, `gh` or browser is used, and no profile, device, chat, path, host, key, config, content, log or exception text can appear. `--feature` with `--failure-code` records a failure the operator saw (for an upstream failure no static probe can see); it is labelled as operator-reported, grants nothing, and accepts only fixed error codes that match the feature. Permission and routing codes are explained as such and never drafted.
+  - **Members (spec 034).** The eligibility set is `read`, `session_browsing`, `send`, `jobs`, `model`, `approvals` and `phone_chat`. `approvals` (Bot Chat approvals) and `phone_chat` (Phone chat sends and approval or clarify answers, §7b) both require read and send and the send floor (0.21.5 / 2026.9.24). `approvals` has no dependency table of its own; `phone_chat` has the table in §7b. A consequence of read or send being unavailable is reported as `requires_read` or `requires_send`, not as a failure of the member, and drafts nothing. `--issue-draft --feature approvals|phone_chat` accepts `write_gate_closed` and `api_server_unavailable` as operator-reported codes; a draft for these members may include the neutral session-stream hook fact (§7b).
+  - No wire code or field is added.
 - **GU-3. Symbol detection never advertises a guarantee.**
   - Detecting `defer_policy`, `AdmissionPrecondition` and similar symbols MAY be used only as a cross-check.
   - If a symbol is absent while the capability map claims the capability, the flag is `false` and HMP logs the inconsistency.
@@ -1051,6 +1935,14 @@ which no supported build advertises today (§8).
     - the `/stop` control event (INT-5). Stopping must always be possible.
     - the inert authorization trigger that `POST …/authorize` sends (PR6-1). Pairing authorization must work on any build, including stock Hermes. The trigger hands no user message to Hermes, and Hermes's code reply is never relayed. Gating it would break pairing bootstrap on non-guaranteed builds.
   - No other route may hand anything to Hermes while the gate is closed.
+  - **GU-4b. Phone chat (v1.3, §7b, OD-F16).** A named, narrower exception than opening SUB-1:
+    `POST /hmp/v1/bots/{p}/phone/messages` may hand **that request's user text** to Hermes while
+    GU-4's `"open"` state is false, and only when the same gate as DS-2(b) is open (the
+    `direct_send` flag is true, send is available, and `phone_chat` is available, §7b). Flag off,
+    or either unavailable: the route returns `503 write_gate_closed` and does not call
+    `handle_message`.
+    The route does not report `guarantee_level:"guarded"` and does not take `expected_head`. The
+    inert authorize trigger remains the only hand-off while the user is not yet authorized.
   - **Accepted residual (RV-7).** The authorize trigger has a narrow race. HMP sends the fixed inert text only after reading `PENDING_OPERATOR`. If the operator's grant lands between that read and the hand-off, Hermes processes the fixed text as an ordinary turn, and on a build without P2 it could be queued. This is accepted: the text is constant, carries no user content and requests no action.
   - **GU-4a. `"open_guarded"` (v1.2, amendment F2; DS-2(b)).** A third `write_gate.state`, scoped
     exclusively to `POST /hmp/v1/bots/{p}/chat/messages` (§7a). It substitutes an HMP-engineered
@@ -1061,14 +1953,22 @@ which no supported build advertises today (§8).
     succeeded merely because the state string is unfamiliar. `"open_guarded"` never applies to the
     original `SUB-1` route (§7) — that route's gate stays exactly GU-4's original two-flag
     derivation, unaffected by this amendment.
+    For the Bot Chat route, the host `direct_send` switch and the target profile's keyed
+    loopback endpoint remain mandatory even when GU-4's full guarantees are present (DS-2).
 - **GU-5. Where guarantees are carried.**
   - `guarantees` and `write_gate` are carried by `/ready` and `GET /bots` [diverges: `/ready` lacks `write_gate`; `GET /bots` carries neither].
   - `guarantees` is also carried at the top level of a `503 guarantees_unavailable` body.
   - Successful submit responses (`200`, `202`) do not carry `guarantees`. A write only succeeds when the write guarantees held, so the field would be redundant there. (This narrows rc2's first draft, following the SPIKE-FIX-5 conformance finding for row 6.1b.)
   - The client uses the latest value it has read.
+  - A client with RO-1's optional per-bot `send_gate` uses it for the selected Bot Chat instead
+    of the instance-wide fallback. Both are status hints; DS-2 is rechecked on POST.
 - **GU-6. Reduced-guarantee UI.**
-  - When `write_gate` is `closed`, the UI MUST show that this Hermes instance cannot accept messages from mobile safely, and the composer is read-only.
-  - When `approval_request_id` is `false`, approvals are read-only ("answer on another Hermes surface").
+  - When the selected bot's send gate is `closed`, the UI MUST show that this bot cannot accept
+    messages from mobile now, and its composer is read-only. An older client uses the conservative
+    instance-wide `write_gate` fallback.
+  - When `approval_request_id` is `false`, approvals HMP cannot bind to a stored `request_id` are
+    read-only ("answer on another Hermes surface"). v1.3 (§7b) answers a prompt only when HMP
+    itself holds that id. The capability flag does not gate the §7b routes.
   - When `confirmed_settle` is `false`, the UI never shows "stopped" (INT-6).
   - The copy is `UX_CONTRACT_GAP` UX-6.
 
@@ -1162,9 +2062,12 @@ which no supported build advertises today (§8).
   | stale | `409 stale` |
   | foreign or unknown id | `404 not_found` |
 
-- **INT-4. Clarify is feature-gated.** It is not exercised at runtime (E-GAP-12/20). The ownership check depends on a private Hermes index, and Hermes's resolver is not session-scoped: that is E-GAP-20, upstream P12.
-  - Clarify answering ships only after a runtime proof and a decision on P12 (`R0_FREEZE_REVIEW.md` §11.3).
-  - Until then, clarify requests are rendered read-only.
+- **INT-4. Clarify is feature-gated, except Phone chat (v1.3, AP-9).** The historical gate stands
+  for every surface except the optional Phone chat: the ownership check must not read
+  `tools.clarify_gateway`'s private index, and `resolve_gateway_clarify` is not session-scoped
+  (E-GAP-20). Phone chat answers only an id HMP stored for that `user_id` (AP-2, AP-9). That is
+  the ownership check this clause asked for, done outside the private index. Bot Chat (the session
+  stream) still has no clarify card. A clarify HMP cannot bind stays read-only.
 - **INT-5. Stop.** `POST …/stop` **always** forwards Hermes's real `/stop`, whatever HMP's observed turn state, and returns `202 {"state":"forwarded"}`. The reply to an idle stop is framed as `notice` (EV-4b).
   - Stop is allowed while the write gate is closed.
   - **`stop.requested` is published only when all three hold:**
@@ -1193,6 +2096,27 @@ which no supported build advertises today (§8).
 
 ## 12. Hermes internals used (stability gaps; FZ-R-15)
 
+**Spec 028 D4 planned dependencies, not implemented imports.** Phone attachment event construction
+needs the actual `MessageEvent` media fields, false gateway-control/internal flags, server-built
+native source/key, strict present/absent admission precondition and definitive reject-policy
+settlement. Native own-row/CMID/session/lineage reads use the existing read bridge. Private owned
+media-cache/profile/backend placement belongs solely in the bridge and is unqualified until its
+descriptor/lifetime fixtures. `PHONE_ATTACHMENT_ATOMIC_ADMISSION_GAP` names absent full no-defer
+settlement and exact-absent compare/create on inspected `8afaab37`; it is not a claim about every
+release. No runner monkey-patch, generic native file reader, new hook/tool registration or decoder
+dependency is admitted here. The normative dependency/authority boundary is PA-1..PA-7; the exact
+Python DTO/validator-port declarations are documentation awaiting independent interface acceptance.
+
+**Optional PN-OPS diagnostics (spec 014 T026).** The read-only `push status` command uses
+`gateway.config_loader.merge_platform_sections`, `hermes_cli.config._expand_env_vars`,
+`._deep_merge`, `._normalize_root_model_keys`, `hermes_cli.managed_scope.get_managed_dir`, and
+`utils.fast_safe_load` through the bridge. These pure primitives resolve host push settings after
+native CLI bootstrap; they are not a global read/send dependency or an exact-build admission
+list. Missing primitives or malformed input produce only `config_unavailable` for diagnostics.
+HMP requests a supported read-only settings projection from Hermes so these optional private
+configuration dependencies can be removed. The command never calls config recovery, plugin
+discovery/hooks, or loader environment bridging. See [push diagnostics](../../../docs/PUSH_STATUS.md).
+
 The bridge module uses these undocumented Hermes internals. Each is a `HERMES_API_GAP` to be replaced by a supported API. Enumerated from `hermes_bridge.py` @ `5fd3d5c`.
 
 | Internal | Used for | Gap |
@@ -1204,32 +2128,42 @@ The bridge module uses these undocumented Hermes internals. Each is a `HERMES_AP
 | `runner._authorization_home_for_source(source)` | evidence only | E-GAP-22 |
 | `gateway.run._profile_runtime_scope`, and its async twin | reads in profile scope | E-GAP-14 |
 | `hermes_state_registry.acquire(<home>/state.db)` → `SessionDB` reads (`get_compression_chain`, message reads, `platform_message_id` lookup, resume-tip resolution) | head, history, snapshot, lookup | E-GAP-6/7 |
-| `SessionDB.list_sessions_rich`, `SessionDB.get_session` (v1.1, amendment A1) | SES-1 session list, SES-2 `session_ref` resolution | E-GAP-6/7 |
+| `SessionDB.list_sessions_rich`, `SessionDB.get_session` (v1.1, amendment A1) | SES-1 session list, SES-2 `session_ref` resolution; `get_session` is also a send dependency (compression-lineage walk when resolving a Bot Chat), so its absence closes both session browsing and send | E-GAP-6/7 |
 | `hermes_cli.active_sessions.active_session_registry_snapshot` (v1.2, amendment F2) | DS-4(3) liveness/lease-registry guard | E-GAP-6/7 family; public and exported, used by three independent Hermes surfaces (`cli.py`, `tui_gateway`, `gateway/run_busy.py`) for the same kind of liveness check, but outside the documented plugin contract |
 | `tools.bot_live_delivery.find_canonical_owner` (v1.2, amendment F2) | DS-4(2) Bot Chat resolution (same primitive SES-1/OD-F11 already relies on) | E-GAP-6/7 family |
 | `adapter._session_store.lookup_by_session_key` | the session resolved at submit | E-GAP-6 |
 | `gateway.session.build_session_key` | session correlation | E-GAP-6 |
-| `tools.approval.list_gateway_approvals` / `resolve_gateway_approval(request_id=)` | approvals | E-GAP-9 |
-| `tools.clarify_gateway._session_index`, `._entries`, `resolve_gateway_clarify` | clarify ownership, pending state, answer | E-GAP-9/20 |
+| `tools.approval.list_gateway_approvals` / `resolve_gateway_approval(request_id=)` | approvals. v1.3 (AP-4, AP-6) calls both with the stored session key and `request_id=`; `resolve_all` is never passed. Probed by the `phone_chat` member only (§7b); not a read or send dependency | E-GAP-9 |
+| `tools.approval_context._get_approval_timeout` (v1.3) | approval `expires_at` display hint (AP-3). `tools/approval_context.py`. `phone_chat` probe member | E-GAP-9 |
+| `tools.clarify_gateway.resolve_gateway_clarify` / `mark_awaiting_text` / `get_clarify_timeout` (v1.3) | Phone-chat clarify answer, Other, and `expires_at` (AP-4, AP-9). `tools/clarify_gateway.py`. `phone_chat` probe members. HMP does not read `_session_index` or `_entries` | E-GAP-9/20 |
+| `tools.clarify_gateway._session_index`, `._entries` | named here as the private index HMP does **not** read (INT-4, AP-9). Not a bridge dependency | E-GAP-9/20 |
 | `gateway.platforms._shared.get_scoped_secret`, `platform_gate_env` (private module) | env allowlist detection | E-GAP-31 |
 | `gateway.config.load_gateway_config`, `Platform` | platform `extra` settings | E-GAP-14 |
 | `gateway.platforms.event.MessageEvent`, `AdmissionPrecondition` | submit event construction | P2/P3 API |
 | `hermes_constants.get_default_hermes_root()` | instance-key anchor | documented (PLUGIN) |
 
-**Plugin API used outside the bridge** (controller ruling, 2026-09-25). `adapter.py` imports exactly `gateway.platforms.base.BasePlatformAdapter`, `SendResult` and `gateway.config.Platform`, and `identity.py` imports exactly `hermes_constants.get_default_hermes_root` (the instance-key anchor, needed on every build because `/ready` must serve the `iid`). These are the documented platform-plugin API, not read internals, and they are the only Hermes imports allowed outside the bridge; they (and their transitive imports) load on every build, including unsupported ones. `Platform` is also a bridge dependency (above). `compat.py` locates the Hermes source root without importing it; only for a build already on the GU-2c list does it run a dependency probe (import and signature inspection, no calls). An unlisted build never has a Hermes internal imported by HMP.
+**Plugin API used outside the bridge** (controller ruling, 2026-09-25). `adapter.py` imports exactly `gateway.platforms.base.BasePlatformAdapter`, `SendResult` and `gateway.config.Platform`, and `identity.py` imports exactly `hermes_constants.get_default_hermes_root` (the instance-key anchor, needed on every build because `/ready` must serve the `iid`). These are the documented platform-plugin API, not read internals, and they are the only Hermes imports allowed outside the bridge; they (and their transitive imports) load on every build, including unsupported ones. `Platform` is also a bridge dependency (above). `compat.py` locates the Hermes source root without importing it and reads the version from files; only for a build at or above the read floor (or of unknown version) does it run a dependency probe (import and signature inspection, no calls). A build below the minimum version never has a Hermes internal imported by HMP.
 
 **GAP-1.** HMP MUST refuse writes unless the capability contract establishes both write guarantees (GU-2, GU-4). When a bridge dependency HMP needs for **reads** is missing, HMP MUST refuse every route except `/ready` with ERR-2a and make no bridge call (editorial alignment with ERR-2a, 2026-09-25).
 
-**GAP-2 (v1.2, amendment F2, §7a).** `api_server`'s `POST /api/sessions/{id}/chat` route and `GET
-/v1/capabilities`'s `session_chat` flag are a **product HTTP contract**, not a Python internal HMP
-imports — HMP never imports `gateway/platforms/api_server.py`. This is a structurally different
-kind of dependency from every row in the table above: reached over loopback, with a credential
+**GAP-2 (v1.2, amendment F2, §7a; v1.3 adds the stream and the approval POST; spec 034).**
+`api_server`'s `POST /api/sessions/{id}/chat` route and `GET /v1/capabilities`'s `session_chat` flag
+are a **product HTTP contract**, not a Python internal HMP imports — HMP never imports
+`gateway/platforms/api_server.py`. v1.3 uses the same class of dependency for
+`POST /api/sessions/{id}/chat/stream` (approval-owner sends only, AP-1) and
+`POST /v1/runs/{run_id}/approval` (`run_approval_response`). There is no fallback from the stream
+route to the sync route after a failure (AP-1). This is a structurally different kind of
+dependency from every row in the table above: reached over loopback, with a credential
 (`API_SERVER_KEY`) HMP does not own the lifecycle of, versioned by `api_server`'s own product
 compatibility story rather than by anything `bridge_files` fingerprints. It is not added to
-`bridge_files` for that reason (`tools/compat/bridge_files.py`); it is qualified instead by the
-route probe and behavioral confirmation in `direct_send_supported_builds.json`
-(`server/hmp_plugin/direct_send_supported_builds.json`, starts empty, same discipline as
-`write_supported_builds.json` under OD-F3).
+`bridge_files` for that reason (`tools/compat/bridge_files.py`); availability comes from the send
+dependency probe (GU-2d) and the `approvals` member (§7b), and a failure of an HTTP route itself,
+which no static probe can see, answers `api_server_unavailable` and can be reported with
+`hermes hmp compat --issue-draft`. `direct_send_supported_builds.json`
+(`server/hmp_plugin/direct_send_supported_builds.json`) records the tested samples as evidence only.
+`GET /v1/capabilities` advertises `approval_events` statically on inspected builds, including
+releases whose session stream has no approval notifier, so it is not an availability signal
+(`HERMES_API_GAP`, not an HMP task).
 
 ## 13. Constants (tunable only by contract revision)
 
@@ -1274,7 +2208,27 @@ route probe and behavioral confirmation in `direct_send_supported_builds.json`
 - **RES-10.** Row ids are not stable across in-place compaction. Until P13 exists, rewrite detection is heuristic (RO-8).
 - **RES-11.** The authorize-trigger race (GU-4, RV-7).
 - **RES-12.** Until P14 exists, HMP cannot reliably tell a Hermes command reply it did not originate from an agent turn (EV-4b).
+- **RES-13.** Approval ownership and the legacy controls allowlist share one config list (spec 034, D8). A device in `owner_device_ids` with no recorded host controls decision also receives jobs and model controls (§7c, §7d). An explicit host denial still removes approval ownership. The coupling is recorded, not removed; the runbook asks the operator to record an explicit controls decision before listing a device, and `setup check` prints a read-only notice. No decision or allowlist entry is changed automatically.
+- **RES-14.** A later Hermes that stops honoring `allow_gateway_control:false`, or that rebinds an approval helper without HMP noticing the rebinding before use, is not statically detectable (§7b, AP-10). The identity fence is not attestation.
 - **RES-5.** Revocation does not stop a running turn (E-GAP-29; PR7-7).
 - **RES-6.** Roster names are visible to every enrolled device (SEC-2).
 - **RES-7.** `head_message_id` may include non-conversational rows until P6 exists (RO-7).
 - **RES-8.** Continuity is limited to HMP-originated sessions until P7 exists (§11).
+
+**Approval push residuals** (v1.x draft, §7f and [`HMP_PUSH_RELAY_V1.md`](HMP_PUSH_RELAY_V1.md); analysis IDs are those of `specs/014-approval-push-registration/analysis.md`). Accepted explicitly; none is closed by design. Public relay enrollment (R1) stays inactive until the owner accepts RES-13 to RES-16 and RES-23.
+
+- **RES-13. Leaked-token spam** (A1). Anyone who obtains a phone's raw provider address can seal it under their own `iid` through an open relay and cause generic "Approval needed" alerts on that phone. The alert carries no authority. The spam is bounded by the per-`(destination, iid)` and per-destination relay caps, and open enrollment is inactive; the owner relay (R2) runs an `iid` allowlist.
+- **RES-14. Sybil suppression of real alerts** (A14). The per-`(destination, iid)` cap stops one `iid` from suppressing another host's alerts to the same phone, but under open enrollment `iid`s cost nothing, so at least `⌈destination ceiling / pair cap⌉` sybil `iid`s (2 at the frozen 60 and 30) holding a leaked address still exhaust the destination ceiling and suppress a real host's alerts to that phone. The destination ceiling is kept as the spam bound at the price of this suppression.
+- **RES-15. Public global and verify exhaustion** (A17). In public (R1) mode unauthenticated traffic from many source addresses can exhaust the global verify budget, and sybil `iid`s sealing random addresses can exhaust the global hourly budget, because those requests pass the seal checks (the relay checks `app`, `env` and bindings, not whether an address is real). Either exhaustion denies all R1 alerts. Garbage addresses may also affect the relay's standing with a provider (`EVIDENCE_GAP`, not checked). R2 is not immune: the global verify budget is consumed before the signature and allowlist checks.
+- **RES-16. Unrevocable seal until `not_after`** (A13). A host that holds a valid seal can use it until its `not_after` (at most 14 days). A phone that unpairs while its host is unreachable cannot withdraw it, and the OS keeps displaying that host's alerts until then. The alert carries no authority; a tap shows "unlinked". Android full alert opt-out can rotate the FCM registration; iOS has no equivalent guarantee.
+- **RES-17. Best-effort delivery.** APNs is best effort: it may reorder, stores one notification per bundle ID and may coalesce for an offline device. FCM and the OS may defer or drop. Outcomes after an iOS app-switcher force-quit, an Android recents swipe or force stop, and before first unlock are not established and are measured only. User settings prevail (permission, Time Sensitive, Focus, channel importance, battery). A provider may deliver after the TTL, which is a hint and not Hermes's deadline. Alerts are never a complete inbox; prompts of other bots may have no alert of their own.
+- **RES-18. Located but settled elsewhere** (A20; with spec 034's recorded gap that no settlement or expiry event exists). A `located` prompt may already be settled elsewhere and is discovered at answer (`409`). The resolver does not reconcile Phone rows, so `located` can name a Phone row that Hermes has withdrawn, including a withdrawn Phone row; the app's fresh read shows the truth. Visibility is evaluated now, so a row that was hidden earlier, settled authoritatively by Hermes and visible now may answer `not_pending`, which is a true statement.
+- **RES-19. Lost idempotency history.** Once a retained row is purged or evicted, a replay of its `PUT` gets `409 stale`, its handle and any surviving hint resolve `404`, and late relay feedback is a no-op. Nonreuse past that point rests on the computational argument of PN-ISS-2.
+- **RES-20. Replay after a consistent restore** (A19). After a consistent restore of the store and the binding that rolls `G` back, a byte-identical retry of a `PUT` whose acknowledgement was lost can pass CAS and return a fresh handle `R′`, never the lost `R`. The app never committed the lost handle and commits `R′`. The replay CAS guarantees of PN-REG-2 hold absent such a restore.
+- **RES-21. `DELETE` write failure and the delayed `PUT`** (A12, and the race of A21). A `DELETE` whose store write fails answers `503 other` (not confirmed); the in-memory delete fence closes eligibility but does not survive a restart, so alerts may resume until a retry succeeds, a revocation happens or the seal's `not_after` passes. A `PUT` delayed in flight can land after capacity frees, after a no-generation `DELETE` was refused `push_capacity`; the app's pending delete intent then removes it. Background display cannot be suppressed by app code, so removal is never claimed before a `200`.
+- **RES-22. Idle-slot eviction** (A22). Evicting an idle coalescing slot forgets its last send time and loosens the 10 s minimum interval once; counters are memory only and a restart resets them. The per-device hourly cap and the relay's per-`(destination, iid)` cap still bound the rate. Self-only effect.
+- **RES-23. Relay linkability** (A6). The relay learns which `iid`s a provider address is registered with, and `C` is a stable per-(registration, bot) pseudonym visible to the relay, Apple and Google for the registration's lifetime. Disclosure belongs to the privacy declarations (owner choice O6, pending).
+- **RES-24. Coverage** (A5). Push dispatches only for approval rows that the approval lane (spec 034) inserts: Bot Chat streams HMP started and HMP Phone chat. Approvals raised on Desktop, CLI, cron or other platforms are not covered. Cross-channel coverage is an open `EVIDENCE_GAP` (task T005), not an established Hermes API gap.
+- **RES-25. Generation-row capacity** (A21). After 256 distinct non-REVOKED devices have written a registration, a new device remains capacity-blocked until the operator revokes some; registration expiry alone does not release a generation slot.
+- **RES-26. Relay restart replay window** (P1). The relay's replay cache is memory only on a single replica, and no durable cache is added. After a relay restart, or a restore of the relay's process memory, a captured, signature-valid request that is still inside its skew window can be replayed until `ts + 120 s`, at most 240 s after it was made in relay-clock time. The relay's `last_now` (R-F1a, CLK-1) is memory only and is reset with the cache, so this residual stays. The relay's 240 s retention and at most 4,800 live nonces hold only under normal clock progress; clock stalls or backward steps can prolong retention and reach the 16,384 cap, which refuses `503` with no eviction (relay CLK-1). Within one relay lifetime a backward wall-clock step cannot reopen a purged nonce; a forward step can refuse valid requests until the clock catches up or the operator restarts the relay. The effect is a repeated generic alert, bounded by that window and by the hourly limits, and it carries no authority. Hourly counters also restart.
+- **RES-27. Provider refusals do not retire a registration** (B6). After a provider attempt, every result other than acceptance or a definitive gone answer reaches HMP as `502 provider_unavailable`, including APNs `BadDeviceToken` and the topic, payload and permission refusals. HMP never retries it and never retires the registration on it, so a registration whose address the provider permanently refuses keeps costing one failed attempt per alert (bounded by the hourly rate) until the seal expires or the app re-registers. `401` (including an unknown `kid`) and `400` also change nothing. A refusal cannot be told apart from an ambiguous failure, and the response never carries provider text.
