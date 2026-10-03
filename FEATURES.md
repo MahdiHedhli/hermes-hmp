@@ -508,6 +508,23 @@ Exceptional holding can remain indefinite. Actual resource collectors, trusted
 receipt provenance and immutable runtime/mount lifetime remain open. Native
 startup and crypto admission remain NONE.
 
+A separate root-admitted trusted startup attempt was refused before fork. The
+collector exited 125 with no bound child or child log files. A fresh stdlib
+context check identified the inherited macOS file-descriptor hard limit above
+the supervisor's supported ceiling; all 247 source/history inputs remained
+unchanged. This is a launcher-context refusal, not a failed controlled-child
+startup. The failed attempt is retained.
+
+The replacement trusted launcher lowers only its own file-descriptor limit to
+32/32 before the existing preexec-free process launch. The collector and child
+inherit that limit; the configured child limits, including `NOFILE` 32, remain
+unchanged. Its ordinary child actually forked and was reaped, but exited 125
+during limit setup: `FORKED, SETUP_ERROR`, no payload or child log bytes, no
+signals or identity loss. The collector correctly failed, and all 270 pinned
+inputs remained unchanged. The exact failing resource/error is unattributed;
+a bounded diagnostic is next. No startup-stall or TERM/KILL case was attempted,
+and neither failed ordinary attempt is a startup/resource/crypto pass.
+
 ### Shared Desktop ownership repair contract
 
 Independent review accepted the revised contract only; backend/mobile integration
