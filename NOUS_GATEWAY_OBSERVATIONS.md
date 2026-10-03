@@ -1351,3 +1351,32 @@ refusals; all 358 source/history pins matched after execution. The original
 contract only: the actual macOS fixed-AS setup failure is unchanged, later
 startup controls and 151 crypto case definitions remain unexecuted, and no
 native resource, relay, provider or notification-delivery readiness is claimed.
+
+## Attachment codec verification progress (2026-10-03 UTC)
+
+The independently reviewed pure attachment candidate now has actual focused results on the
+exact cleanup revision:
+
+- **Python: 56 attachment cases passed**, including structural bounds before generic JSON
+  decoding, exact UTF-8/hash vectors, duplicate-key and fixed-error controls.
+- **Python: 115 existing contract/module regression checks passed**, covering table fidelity
+  and the declared module inventory/import surface.
+- **Dart: 71 attachment cases passed**, including combined/legacy pending-record fidelity,
+  phase/classifier controls, immutable values and all 64 reference suffixes.
+
+The first Dart run recorded **69 passes and one failure**: a noncanonical reference suffix
+exposed an input-bearing Base64 exception instead of the fixed domain error. That failure is
+preserved. A separately reviewed two-file repair rejects noncanonical suffixes before decoding
+and maps decoder failures to the fixed error. The subsequent 71-case run passed; this resolves
+that defect in the unreleased candidate without claiming a deployed attachment capability.
+
+These are focused pure-codec results, not full CI, native admission, file-content validation or
+physical-device proof. The subsequent cleanup preserved behavior and assertions under independent
+review, then passed all 56 + 115 Python and 71 Dart checks again. Root Ruff checks on four Python
+paths and strict Dart analysis on all eight new source/test/port paths are clean. No rules were
+waived; the original failure and earlier diagnostics remain preserved as historical evidence.
+
+The mobile **+** picker, encrypted asset storage, shared message-ID/CAS adapter, validated
+upload/send routes, native admission and authorized own-row readback still require implementation
+and separate verification. Local host `MEDIA:` output remains blocked by its provenance/read
+authority gap. No upload route, device/provider qualification or release availability is implied.
