@@ -2,8 +2,8 @@
 
 The observer is driven through the real producers: `PromptStore.put`, `_apply_sse_frame` and
 `consume_sse` for Bot Chat, and `AdapterHooks.on_exec_approval` for Phone chat. Concurrency tests
-order their steps with events and joins, never with sleeps. No observer is registered in
-production code.
+order their steps with events and joins, never with sleeps. Spec 014's listener dispatcher
+is the only production consumer of the observer interface.
 """
 
 from __future__ import annotations
@@ -47,9 +47,7 @@ PROPAGATED = {
     "keyboard_interrupt": KeyboardInterrupt,
     "system_exit": SystemExit,
     "generator_exit": GeneratorExit,
-    "base_group_of_cancelled": lambda: BaseExceptionGroup(
-        "g", [asyncio.CancelledError()]
-    ),
+    "base_group_of_cancelled": lambda: BaseExceptionGroup("g", [asyncio.CancelledError()]),
     "base_group_mixed": _raise_group,
     "direct_base_exception": _Direct,
 }
@@ -58,10 +56,19 @@ PROPAGATED = {
 def _approval(surface: str = "bot_chat", request_id: str = REQ, **extra: Any) -> PromptRow:
     bot = surface == "bot_chat"
     fields: dict[str, Any] = {
-        "iid": IID, "user_id": USER, "profile": PROFILE, "request_id": request_id,
-        "kind": "approval", "surface": surface, "choices": CHOICES, "command": "ls",
-        "description": "d", "run_id": RUN if bot else None,
-        "session_key": None if bot else SESSION, "expires_at": 1_100, "observed_at": 1_000,
+        "iid": IID,
+        "user_id": USER,
+        "profile": PROFILE,
+        "request_id": request_id,
+        "kind": "approval",
+        "surface": surface,
+        "choices": CHOICES,
+        "command": "ls",
+        "description": "d",
+        "run_id": RUN if bot else None,
+        "session_key": None if bot else SESSION,
+        "expires_at": 1_100,
+        "observed_at": 1_000,
     }
     fields.update(extra)
     return PromptRow(**fields)
@@ -69,9 +76,17 @@ def _approval(surface: str = "bot_chat", request_id: str = REQ, **extra: Any) ->
 
 def _clarify(**extra: Any) -> PromptRow:
     fields: dict[str, Any] = {
-        "iid": IID, "user_id": USER, "profile": PROFILE, "request_id": REQ, "kind": "clarify",
-        "surface": "phone_chat", "choices": (), "question": "Ship?", "session_key": SESSION,
-        "expires_at": 1_100, "observed_at": 1_000,
+        "iid": IID,
+        "user_id": USER,
+        "profile": PROFILE,
+        "request_id": REQ,
+        "kind": "clarify",
+        "surface": "phone_chat",
+        "choices": (),
+        "question": "Ship?",
+        "session_key": SESSION,
+        "expires_at": 1_100,
+        "observed_at": 1_000,
     }
     fields.update(extra)
     return PromptRow(**fields)
@@ -132,8 +147,16 @@ def _bot_frames() -> list[bytes]:
     return [
         _frame("run.started", {"run_id": RUN}),
         _frame("message.started", {}),
-        _frame("approval.request", {"run_id": RUN, "request_id": REQ, "command": "x",
-                                    "description": "d", "choices": ["once", "deny"]}),
+        _frame(
+            "approval.request",
+            {
+                "run_id": RUN,
+                "request_id": REQ,
+                "command": "x",
+                "description": "d",
+                "choices": ["once", "deny"],
+            },
+        ),
         _frame("assistant.completed", {"content": "ok", "session_id": "s1"}),
         _frame("run.completed", {"run_id": RUN}),
         _frame("done", {}),
@@ -149,7 +172,10 @@ def _observer_logs(caplog: pytest.LogCaptureFixture) -> list[str]:
 
 def test_event_is_frozen_and_carries_only_the_four_fields() -> None:
     assert [f.name for f in dataclasses.fields(ApprovalInserted)] == [
-        "key", "surface", "generation", "expires_at",
+        "key",
+        "surface",
+        "generation",
+        "expires_at",
     ]
     event = ApprovalInserted(("a", "b", "c", "d"), "bot_chat", 1, None)
     with pytest.raises(dataclasses.FrozenInstanceError):
@@ -254,10 +280,13 @@ async def test_the_real_phone_hook_notifies_once_per_inserted_row() -> None:
 @pytest.mark.asyncio
 async def test_a_recovery_hook_with_two_matches_notifies_for_each_inserted_row() -> None:
     store, recorder = _observed()
-    hooks = _hooks(store, [
-        {"command": "echo hi", "request_id": REQ},
-        {"command": "echo hi", "request_id": REQ + "b"},
-    ])
+    hooks = _hooks(
+        store,
+        [
+            {"command": "echo hi", "request_id": REQ},
+            {"command": "echo hi", "request_id": REQ + "b"},
+        ],
+    )
     assert await hooks.on_exec_approval(_Prompt()) is True
     assert sorted(e.key[3] for e in recorder.events) == [REQ, REQ + "b"]
     # A repeat finds both already open and inserts nothing.
@@ -646,10 +675,13 @@ async def test_a_recovery_hook_still_stores_every_row_when_the_observer_raises()
         raise RuntimeError("boom")
 
     store.set_insertion_observer(observer)
-    hooks = _hooks(store, [
-        {"command": "echo hi", "request_id": REQ},
-        {"command": "echo hi", "request_id": REQ + "b"},
-    ])
+    hooks = _hooks(
+        store,
+        [
+            {"command": "echo hi", "request_id": REQ},
+            {"command": "echo hi", "request_id": REQ + "b"},
+        ],
+    )
     assert await hooks.on_exec_approval(_Prompt()) is True
     assert len(store._rows) == 2
 
@@ -706,13 +738,20 @@ async def test_every_other_base_exception_propagates_through_the_real_producers(
 # --- scope ----------------------------------------------------------------------------------
 
 
-def test_no_production_module_registers_an_observer() -> None:
+def test_only_listener_dispatcher_registers_and_detaches_the_observer() -> None:
     root = Path(prompts.__file__).parent
     hits = []
     for path in sorted(root.rglob("*.py")):
         for line in path.read_text().splitlines():
             if "set_insertion_observer" in line or "._observer" in line:
                 hits.append((path.name, line.strip()))
-    assert {name for name, _line in hits} == {"prompts.py"}
-    assert [line for _name, line in hits if "set_insertion_observer(" in line
-            and not line.startswith("def ")] == []
+    assert {name for name, _line in hits} == {"prompts.py", "push_dispatch.py"}
+    assert [
+        (name, line)
+        for name, line in hits
+        if "set_insertion_observer(" in line and not line.startswith("def ")
+    ] == [
+        ("push_dispatch.py", "self.store.set_insertion_observer(self.observe)"),
+        ("push_dispatch.py", "self.store.set_insertion_observer(None)"),
+    ]
+    assert all(name == "prompts.py" for name, line in hits if "._observer" in line)

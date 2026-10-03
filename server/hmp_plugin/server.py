@@ -95,6 +95,7 @@ from .logging_policy import (
     log_handler_exception,
 )
 from .pairing import handle_pair_complete, handle_pair_request
+from .push_dispatch import PushDispatcher, RelayPort
 from .reads import require_bot_authorized
 
 # `request_ctx` is the leaf module `ServerContext`/`CTX_KEY`/`context()`/the body and bearer
@@ -647,8 +648,10 @@ async def _cron_endpoint(request: web.Request, *, write: bool) -> Any:
     if not ctx.is_owner_device(who.device_id):
         raise HmpError(ErrorCode.NOT_FOUND)
     ctx.limiter.check(
-        "cron_write" if write else "cron_read", who.device_id,
-        20 if write else 60, ctx.now(),
+        "cron_write" if write else "cron_read",
+        who.device_id,
+        20 if write else 60,
+        ctx.now(),
     )
     profile = request.match_info["p"]
     await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
@@ -671,7 +674,8 @@ async def handle_cron_create(request: web.Request) -> web.Response:
     try:
         raw = await asyncio.to_thread(
             _require(context(request).bridge).create_mobile_cron,
-            request.match_info["p"], body,
+            request.match_info["p"],
+            body,
         )
     except ValueError as exc:
         raise HmpError(ErrorCode.BAD_REQUEST) from exc
@@ -687,7 +691,9 @@ async def handle_cron_edit(request: web.Request) -> web.Response:
     try:
         raw = await asyncio.to_thread(
             _require(context(request).bridge).edit_mobile_cron,
-            request.match_info["p"], job_id, body,
+            request.match_info["p"],
+            job_id,
+            body,
         )
     except ValueError as exc:
         raise HmpError(ErrorCode.BAD_REQUEST) from exc
@@ -725,8 +731,10 @@ async def _model_profile(request: web.Request, *, write: bool) -> str:
     if not ctx.is_owner_device(who.device_id):
         raise HmpError(ErrorCode.NOT_FOUND)
     ctx.limiter.check(
-        "model_write" if write else "model_read", who.device_id,
-        10 if write else 30, ctx.now(),
+        "model_write" if write else "model_read",
+        who.device_id,
+        10 if write else 30,
+        ctx.now(),
     )
     profile = request.match_info["p"]
     await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
@@ -913,9 +921,7 @@ class _LivePromptResolver:
         return "ok" if ok else "stale"
 
 
-async def _require_approvals_gate(
-    ctx: ServerContext, profile: str, *, member: str | None
-) -> Any:
+async def _require_approvals_gate(ctx: ServerContext, profile: str, *, member: str | None) -> Any:
     """The DS-2(b) gate for §7b routes. Raises `write_gate_closed` before any endpoint
     resolution, listing, resolver or delivery when the flag, send, the needed member or the
     endpoint says closed. `member` is the surface the route serves: `bot_chat` (approvals),
@@ -951,9 +957,7 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
     profile = request.match_info["p"]
     if not ctx.is_approval_owner_device(who.device_id):
         raise HmpError(ErrorCode.NOT_FOUND)
-    ctx.limiter.check(
-        "prompt_reads", who.device_id, RATE_PROMPT_READ_PER_MIN_PER_DEVICE, ctx.now()
-    )
+    ctx.limiter.check("prompt_reads", who.device_id, RATE_PROMPT_READ_PER_MIN_PER_DEVICE, ctx.now())
     await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
     await _require_approvals_gate(ctx, profile, member=None)
     store = ctx.prompt_store
@@ -1018,17 +1022,13 @@ async def handle_prompt_answer(request: web.Request) -> web.Response:
     store = ctx.prompt_store
     # The surface of the stored row decides which member the answer needs. An unknown id has no
     # surface: it needs at least one member and then answers 404 without allocating anything.
-    stored = (
-        store.get((ctx.iid, who.user_id, profile, request_id)) if store is not None else None
-    )
+    stored = store.get((ctx.iid, who.user_id, profile, request_id)) if store is not None else None
     endpoint = await _require_approvals_gate(
         ctx, profile, member=stored.surface if stored is not None else None
     )
     body = await read_json_body(request)
     if store is None:
-        missing = prompts.HttpResult(
-            404, {"error": {"code": "not_found", "message": "not found"}}
-        )
+        missing = prompts.HttpResult(404, {"error": {"code": "not_found", "message": "not found"}})
         return _prompt_result(missing)
     result = await prompts.answer_prompt(
         store,
@@ -1140,8 +1140,9 @@ def build_app(ctx: ServerContext) -> web.Application:
     handlers: dict[str, Handler] = {
         "/ready": handle_ready,
         "/push/registration": push_registration.handle_push_get,
-        "/push/hints/resolve": partial(push_resolve.handle_push_resolve,
-                                       require_gate=_require_approvals_gate),
+        "/push/hints/resolve": partial(
+            push_resolve.handle_push_resolve, require_gate=_require_approvals_gate
+        ),
         "/pair/request": handle_pair_request,
         "/pair/complete": handle_pair_complete,
         "/auth/token": handle_token,
@@ -1344,11 +1345,16 @@ class HmpServer:
         *,
         watchdog_interval: float = WATCHDOG_INTERVAL_S,
         on_closed: Callable[[], None] | None = None,
+        push_relay_factory: Callable[[], RelayPort] | None = None,
     ) -> None:
         self.ctx = ctx
         self.settings = settings
         self._interval = watchdog_interval
         self._on_closed = on_closed
+        # T025 supplies the transport. No default URL/provider or live network
+        # path is invented here; source tests inject the same listener port.
+        self._push_relay_factory = push_relay_factory
+        self._push_dispatcher: PushDispatcher | None = None
         self._runner: web.AppRunner | None = None
         self._watch: asyncio.Task[None] | None = None
         self._push_watch: asyncio.Task[None] | None = None
@@ -1387,7 +1393,30 @@ class HmpServer:
             self.bound = (str(host), int(port))
         self._watch = asyncio.get_running_loop().create_task(self._watchdog())
         self._push_watch = asyncio.get_running_loop().create_task(self._push_purge_loop())
+        await self._start_push_dispatcher()
         log_event("listener_start", outcome="ok")
+
+    async def _start_push_dispatcher(self) -> None:
+        if self._push_relay_factory is None:
+            return
+        dispatcher = None
+        relay = None
+        try:
+            relay = self._push_relay_factory()
+            dispatcher = PushDispatcher(self.ctx, relay, require_gate=_require_approvals_gate)
+            dispatcher.start()
+            self._push_dispatcher = dispatcher
+        except Exception:
+            if dispatcher is not None:
+                with contextlib.suppress(Exception):
+                    await dispatcher.close()
+            elif relay is not None:
+                # Constructor failure must not leak a just-created client.
+                with contextlib.suppress(Exception):
+                    async with asyncio.timeout(1):
+                        await relay.close()
+            with contextlib.suppress(Exception):
+                log_event("push_dispatch", outcome="creation_failed")
 
     async def _purge_push_once(self) -> None:
         """PN-BND listener-open/hourly maintenance; no network or repairing key accessor.
@@ -1460,6 +1489,9 @@ class HmpServer:
     async def stop(self, *, notify: bool = True) -> None:
         """Close the listener. `notify=False` for an orderly shutdown by the owner."""
         self.ctx.push_hints.clear()
+        dispatcher, self._push_dispatcher = self._push_dispatcher, None
+        if dispatcher is not None:
+            await dispatcher.close()
         await self._cancel_pending_sends()
         if not notify:
             self._on_closed = None

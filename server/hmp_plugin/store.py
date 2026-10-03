@@ -705,6 +705,74 @@ class Store:
                 raise
         return generation, epoch, row
 
+    def push_dispatch_candidates(self, user_id: str) -> list[sqlite3.Row]:
+        """Bounded recipient candidates, newest registration first; no authorization claim."""
+        # This rowid table allocates implicit insertion-order rowids. Retirement
+        # and purge never reorder surviving rows; a new implicit MAX+1 remains
+        # newest even if deleted highest rowids are reused. Wall timestamps can
+        # tie or step backwards and must not decide which recipients make the cap.
+        with self._write_lock:
+            return (
+                self._require_conn()
+                .execute(
+                    "SELECT p.device_id, p.route_hash, p.generation FROM push_registrations p "
+                    "JOIN devices d ON d.device_id = p.device_id WHERE p.state = 'active' "
+                    "AND d.user_id = ? ORDER BY p.rowid DESC LIMIT ?",
+                    (user_id, _PUSH_ACTIVE_CAP),
+                )
+                .fetchall()
+            )
+
+    def push_dispatch_device_snapshot(self, device_id: str) -> sqlite3.Row | None:
+        """Single read snapshot of exact active registration, family, device, G and H."""
+        with self._write_lock:
+            return (
+                self._require_conn()
+                .execute(
+                    "SELECT p.*, d.user_id, d.state AS device_state, f.revoked_at, "
+                    "f.device_id AS family_device, f.created_at AS family_created_at, "
+                    "g.generation AS current_g, m.store_revocation_epoch AS current_h "
+                    "FROM push_registrations p JOIN devices d ON d.device_id = p.device_id "
+                    "JOIN token_families f ON f.family_id = p.family_id "
+                    "JOIN push_device_generations g ON g.device_id = p.device_id "
+                    "JOIN meta m ON m.id = 1 WHERE p.device_id = ? AND p.state = 'active'",
+                    (device_id,),
+                )
+                .fetchone()
+            )
+
+    def push_counter_state(self, device_id: str) -> tuple[str | None, bool]:
+        with self._write_lock:
+            row = (
+                self._require_conn()
+                .execute(
+                    "SELECT d.state, EXISTS(SELECT 1 FROM push_registrations p "
+                    "WHERE p.device_id = d.device_id AND p.state = 'active') AS active "
+                    "FROM devices d WHERE d.device_id = ?",
+                    (device_id,),
+                )
+                .fetchone()
+            )
+            return (row["state"], bool(row["active"])) if row is not None else (None, False)
+
+    def push_feedback(
+        self, device_id: str, route_hash: bytes, generation: int, *, state: str, now: int
+    ) -> bool:
+        """PN-DSP-9 exact current-active CAS. Late feedback cannot retire a replacement."""
+        if state not in ("provider_gone", "expired"):
+            raise ValueError("invalid push feedback state")
+        with self.transaction() as conn:
+            row = self.active_push_in(conn, device_id)
+            if (
+                row is None
+                or bytes(row["route_hash"]) != route_hash
+                or row["generation"] != generation
+                or self.push_generation_in(conn, device_id) != generation
+            ):
+                return False
+            self._leave_active_push_in(conn, row, state=state, now=now)
+        return True
+
     def replace_push_in(
         self,
         conn: sqlite3.Connection,

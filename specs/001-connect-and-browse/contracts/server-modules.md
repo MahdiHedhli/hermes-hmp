@@ -74,6 +74,7 @@ server/
     push_registration.py          # PN-REG authenticated GET/PUT/DELETE; no provider/relay calls
     push_hints.py                 # bounded listener-memory hint bindings; read-only resolver lookup
     push_resolve.py               # PN-RES navigation only, no answers, history or relay I/O
+    push_dispatch.py              # PN-DSP bounded insertion worker, relay port injected
     auth.py                       # bearer + HMP-Instance middleware (TR-5, PR5-6)
     reads.py                      # roster (RO-1/RO-2), snapshot (RO-3/RO-4/RO-5), history + resets (RO-6/RO-8), baselines;
                                   #   also list_sessions/session_snapshot/session_history (amendment A1, SES-1/SES-2)
