@@ -163,6 +163,16 @@ refactor.
 
 ## 4. Data model (schema 3, additive)
 
+### T029 fixture implementation checkpoint
+
+The focused fixture branch first adds a test-only, loopback HTTPS receiver with a disposable
+synthetic CA. It captures a bounded number of requests and checks the signature using an
+independent transcript encoder. The production `RelayClient` retains chain, hostname and leaf
+pin verification. The receiver does not open a seal, contact a provider or represent T030.
+Its component tests establish only the receiver/client seam. T029 stays incomplete until a real
+isolated native approval drives that seam, with positively observed queued work before each
+revocation, Desktop-hold and restart interleave. No test hook or receiver is installed in a live home.
+
 ```sql
 CREATE TABLE IF NOT EXISTS push_device_generations (
     device_id TEXT PRIMARY KEY REFERENCES devices(device_id),
