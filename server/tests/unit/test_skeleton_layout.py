@@ -28,6 +28,7 @@ CONTRACT_MODULES = {
     "push_registration.py",
     "push_hints.py",
     "push_resolve.py",
+    "push_dispatch.py",
     "auth.py",
     "reads.py",
     "authorize.py",
