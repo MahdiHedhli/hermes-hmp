@@ -19,6 +19,22 @@ exceptions, each an exact (module, name) allow-list entry in the surface check:
 
 The spike is reference only. Code is rewritten and reviewed, never copied wholesale.
 
+**Spec 028 D4 planned closed slice (normative/interface only).** A future `phone_attachments.py`
+may orchestrate bounded issuer/exact-target custody, a closed injected validator port and
+idempotency claims under `HMP_PHONE_ATTACHMENTS_V1.md`. DTOs/protocols belong in `contract.py`,
+durable schema/transactions only in `store.py`, narrow raw routes only in `server.py`, and every
+native import/file-cache/session/row dependency only in `bridge.py`. No module, route or production
+decoder exists merely because this plan names it; the closed module set/scanner is not widened
+in this documentation slice. Native no-defer settlement/absence binding, encrypted adapter and
+portable validator admission remain separate gates. No extra registration, host path/URL request,
+network destination, arbitrary import, second owner or automatic retry.
+
+**D4 pure-source candidate (independent source review pending).** The exact `phone_attachments.py`
+module now contains only syntactic JSON/hash/wire codecs. Attachment DTOs and the injected validator
+Protocol are pure `contract.py` data. This adds one exact skeleton entry, no scanner waiver/import
+exception. No custody, schema, route, production media/content decoder, auth/native/file/cache
+or operational capability.
+
 **Proposed outbound-network exception (spec 014 T011; source-only, not implemented).** The three
 exceptions above are import allow-list entries. Spec 014 proposes one different kind of closed
 exception, on network use rather than imports: a single module, `push_relay.py`, may be the one

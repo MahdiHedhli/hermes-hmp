@@ -14,6 +14,9 @@ which must never be imported on an unsupported build (server-modules.md "Startup
 
 from __future__ import annotations
 
+import base64
+import json
+import re
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -1035,3 +1038,388 @@ class DirectSendOutcome:
     head_message_id: int | None = None
     reply: Mapping[str, object] | None = None
     interleave_detected: bool = False
+
+
+# Spec 028 D4: pure syntactic values only. No custody/native/lifecycle authority or I/O.
+_PA_UUID = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+_PA_SHA = re.compile(r"[0-9a-f]{64}")
+_PA_REF = re.compile(r"[A-Za-z0-9_-]{43}")
+_PA_IID = re.compile(r"[a-z2-7]{51}[aq]")
+
+
+def _pa_check(condition: bool) -> None:
+    if not condition:
+        raise ValueError("invalid phone attachment")
+
+
+def _pa_int(value: object, low: int = 0, high: int = (1 << 53) - 1) -> None:
+    _pa_check(type(value) is int and low <= value <= high)
+
+
+def _pa_text(value: object, maximum: int) -> None:
+    _pa_check(type(value) is str and len(value) <= maximum)
+    _pa_check(not any(0xD800 <= ord(c) <= 0xDFFF for c in value))
+    _pa_check(len(value.encode("utf-8")) <= maximum)
+
+
+def _pa_opaque(value: object) -> None:
+    # Existing routed identity strings; syntactic data, never an auth decision.
+    _pa_check(type(value) is str and bool(value))
+    _pa_check(not any(0xD800 <= ord(c) <= 0xDFFF for c in value))
+
+
+def _pa_profile(value: object) -> None:
+    _pa_text(value, 1024)
+    # Match the existing Phone client's UTF-16-unit bound, not a native global maximum.
+    _pa_check(bool(value) and len(value.encode("utf-16-le")) // 2 <= 256)
+    _pa_check(not any(ord(c) < 32 or ord(c) == 127 for c in value))
+
+
+def _pa_uuid(value: object) -> None:
+    _pa_check(type(value) is str and len(value) == 36 and _PA_UUID.fullmatch(value) is not None)
+
+
+def _pa_sha(value: object) -> None:
+    _pa_check(type(value) is str and len(value) == 64 and _PA_SHA.fullmatch(value) is not None)
+
+
+def _pa_ref(value: object) -> None:
+    _pa_check(type(value) is str and len(value) == 43 and _PA_REF.fullmatch(value) is not None)
+    raw = base64.urlsafe_b64decode(value + "=")
+    _pa_check(len(raw) == 32 and base64.urlsafe_b64encode(raw).decode().rstrip("=") == value)
+
+
+def _pa_label(value: object) -> None:
+    _pa_text(value, 128)
+    _pa_check(bool(value) and value.strip("."))
+    _pa_check(not any(ord(c) < 32 or 127 <= ord(c) <= 159 or c in "/\\" for c in value))
+
+
+def _pa_tuple(value: object, cls: type, *, minimum: int = 1) -> None:
+    _pa_check(type(value) is tuple and minimum <= len(value) <= 4)
+    _pa_check(all(type(v) is cls for v in value))
+
+
+class _PhoneAttachmentRedacted:
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return type(self).__name__
+
+    def __str__(self) -> str:
+        return type(self).__name__
+
+
+class PhoneAttachmentMime(StrEnum):
+    JPEG = "image/jpeg"
+    PNG = "image/png"
+    PDF = "application/pdf"
+    PLAIN_TEXT = "text/plain"
+    MARKDOWN = "text/markdown"
+    CSV = "text/csv"
+
+
+class PhoneAttachmentTargetState(StrEnum):
+    PRESENT = "present"
+    ABSENT = "absent"
+
+
+class PhoneAttachmentUnavailableReason(StrEnum):
+    ADMISSION_UNAVAILABLE = "admission_unavailable"
+    TARGET_UNAVAILABLE = "target_unavailable"
+    VALIDATOR_UNAVAILABLE = "validator_unavailable"
+    FEATURE_UNAVAILABLE = "feature_unavailable"
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentLogicalItem(_PhoneAttachmentRedacted):
+    client_attachment_id: str
+    sha256: str
+    mime: PhoneAttachmentMime
+    length: int
+    label: str
+
+    def __post_init__(self) -> None:
+        _pa_uuid(self.client_attachment_id)
+        _pa_sha(self.sha256)
+        _pa_check(type(self.mime) is PhoneAttachmentMime)
+        _pa_int(self.length, 1, 8 * 1024 * 1024)
+        _pa_label(self.label)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentPayload(_PhoneAttachmentRedacted):
+    target_binding: str
+    text: str
+    items: tuple[PhoneAttachmentLogicalItem, ...]
+
+    def __post_init__(self) -> None:
+        _pa_ref(self.target_binding)
+        _pa_text(self.text, 4096)
+        _pa_tuple(self.items, PhoneAttachmentLogicalItem)
+        _pa_check(len({v.client_attachment_id for v in self.items}) == len(self.items))
+        _pa_check(sum(v.length for v in self.items) <= 16 * 1024 * 1024)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentUploadReference(_PhoneAttachmentRedacted):
+    item: PhoneAttachmentLogicalItem
+    target_binding: str
+    custody_reference: str
+    expires_at_ms: int
+
+    def __post_init__(self) -> None:
+        _pa_check(type(self.item) is PhoneAttachmentLogicalItem)
+        _pa_ref(self.target_binding)
+        _pa_ref(self.custody_reference)
+        _pa_int(self.expires_at_ms, 1)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentWireReference(_PhoneAttachmentRedacted):
+    item: PhoneAttachmentLogicalItem
+    custody_reference: str
+
+    def __post_init__(self) -> None:
+        _pa_check(type(self.item) is PhoneAttachmentLogicalItem)
+        _pa_ref(self.custody_reference)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentMessageRequest(_PhoneAttachmentRedacted):
+    client_message_id: str
+    payload: PhoneAttachmentPayload
+    references: tuple[PhoneAttachmentWireReference, ...]
+
+    def __post_init__(self) -> None:
+        _pa_uuid(self.client_message_id)
+        _pa_check(type(self.payload) is PhoneAttachmentPayload)
+        _pa_tuple(self.references, PhoneAttachmentWireReference)
+        _pa_check(tuple(r.item for r in self.references) == self.payload.items)
+        _pa_check(len(json.dumps(
+            _pa_message_wire(self), ensure_ascii=False, separators=(",", ":")
+        ).encode("utf-8")) <= 8192)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentTargetBinding(_PhoneAttachmentRedacted):
+    binding: str
+    state: PhoneAttachmentTargetState
+    expires_at_ms: int
+
+    def __post_init__(self) -> None:
+        _pa_ref(self.binding)
+        _pa_check(type(self.state) is PhoneAttachmentTargetState)
+        _pa_int(self.expires_at_ms, 1)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentLimits(_PhoneAttachmentRedacted):
+    item_count: int
+    item_bytes: int
+    message_bytes: int
+    output_edge: int
+    source_pixels: int
+    source_edge: int
+    source_image_bytes: int
+    selection_source_bytes: int
+    normalized_mimes: tuple[PhoneAttachmentMime, ...]
+
+    def __post_init__(self) -> None:
+        for value, cap in (
+            (self.item_count, 4), (self.item_bytes, 8 * 1024 * 1024),
+            (self.message_bytes, 16 * 1024 * 1024), (self.output_edge, 2048),
+            (self.source_pixels, 120_000_000), (self.source_edge, 32768),
+            (self.source_image_bytes, 16 * 1024 * 1024),
+            (self.selection_source_bytes, 32 * 1024 * 1024),
+        ):
+            _pa_int(value, 1, cap)
+        _pa_check(type(self.normalized_mimes) is tuple and 1 <= len(self.normalized_mimes) <= 6)
+        _pa_check(all(type(v) is PhoneAttachmentMime for v in self.normalized_mimes))
+        _pa_check(len(set(self.normalized_mimes)) == len(self.normalized_mimes))
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentsUnavailable(_PhoneAttachmentRedacted):
+    reason: PhoneAttachmentUnavailableReason
+
+    def __post_init__(self) -> None:
+        _pa_check(type(self.reason) is PhoneAttachmentUnavailableReason)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentsAvailable(_PhoneAttachmentRedacted):
+    target: PhoneAttachmentTargetBinding
+    limits: PhoneAttachmentLimits
+
+    def __post_init__(self) -> None:
+        _pa_check(type(self.target) is PhoneAttachmentTargetBinding)
+        _pa_check(type(self.limits) is PhoneAttachmentLimits)
+
+
+PhoneAttachmentCapability = PhoneAttachmentsUnavailable | PhoneAttachmentsAvailable
+
+
+class PhoneAttachmentSendState(StrEnum):
+    RESERVED = "reserved"
+    SUBMITTED = "submitted"
+    UNKNOWN = "unknown"
+    REJECTED = "rejected"
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentReservation(_PhoneAttachmentRedacted):
+    iid: str
+    user_id: str
+    issuing_device_id: str
+    profile: str
+    client_message_id: str
+    target_binding: str
+    payload_sha256: str
+    ordered_asset_ids: tuple[str, ...]
+    caption_sha256: str
+    caption_utf8_length: int
+    state: PhoneAttachmentSendState
+    created_at_ms: int
+
+    def __post_init__(self) -> None:
+        _pa_check(type(self.iid) is str and len(self.iid) == 52 and _PA_IID.fullmatch(self.iid))
+        _pa_opaque(self.user_id)
+        _pa_opaque(self.issuing_device_id)
+        _pa_profile(self.profile)
+        _pa_uuid(self.client_message_id)
+        _pa_ref(self.target_binding)
+        _pa_sha(self.payload_sha256)
+        _pa_check(type(self.ordered_asset_ids) is tuple and 1 <= len(self.ordered_asset_ids) <= 4)
+        for asset_id in self.ordered_asset_ids:
+            _pa_uuid(asset_id)
+        _pa_check(len(set(self.ordered_asset_ids)) == len(self.ordered_asset_ids))
+        _pa_sha(self.caption_sha256)
+        _pa_int(self.caption_utf8_length, 0, 4096)
+        _pa_check(type(self.state) is PhoneAttachmentSendState)
+        _pa_int(self.created_at_ms)
+
+
+class PhoneAttachmentBytesState(StrEnum):
+    AVAILABLE = "available"
+    EXPIRED = "expired"
+
+
+class PhoneAttachmentCaptionState(StrEnum):
+    VERIFIED = "verified"
+    UNAVAILABLE = "unavailable"
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentProjectedItem(_PhoneAttachmentRedacted):
+    item: PhoneAttachmentLogicalItem
+    bytes_state: PhoneAttachmentBytesState
+    custody_reference: str | None
+
+    def __post_init__(self) -> None:
+        _pa_check(type(self.item) is PhoneAttachmentLogicalItem)
+        _pa_check(type(self.bytes_state) is PhoneAttachmentBytesState)
+        if self.bytes_state is PhoneAttachmentBytesState.AVAILABLE:
+            _pa_ref(self.custody_reference)
+        else:
+            _pa_check(self.custody_reference is None)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentReceipt(_PhoneAttachmentRedacted):
+    transport_payload_sha256: str
+    caption_state: PhoneAttachmentCaptionState
+    items: tuple[PhoneAttachmentProjectedItem, ...]
+
+    def __post_init__(self) -> None:
+        _pa_sha(self.transport_payload_sha256)
+        _pa_check(type(self.caption_state) is PhoneAttachmentCaptionState)
+        _pa_tuple(self.items, PhoneAttachmentProjectedItem)
+        _pa_check(len({v.item.client_attachment_id for v in self.items}) == len(self.items))
+        _pa_check(sum(v.item.length for v in self.items) <= 16 * 1024 * 1024)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentRowPresent(_PhoneAttachmentRedacted):
+    row_id: int
+    client_message_id: str
+    receipt: PhoneAttachmentReceipt
+
+    def __post_init__(self) -> None:
+        _pa_int(self.row_id, 1)
+        _pa_uuid(self.client_message_id)
+        _pa_check(type(self.receipt) is PhoneAttachmentReceipt)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentReconciliationUnknown(_PhoneAttachmentRedacted):
+    pass
+
+
+PhoneAttachmentReconciliation = PhoneAttachmentRowPresent | PhoneAttachmentReconciliationUnknown
+
+
+class PhoneAttachmentValidationFailure(StrEnum):
+    MALFORMED = "malformed"
+    TOO_LARGE = "too_large"
+    UNSUPPORTED_TYPE = "unsupported_type"
+    METADATA_PRESENT = "metadata_present"
+    MULTIPLE_FRAMES = "multiple_frames"
+    CANCELLED = "cancelled"
+    UNAVAILABLE = "unavailable"
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class OwnedPhoneAttachmentInput(_PhoneAttachmentRedacted):
+    fd: int
+    expected: PhoneAttachmentLogicalItem
+
+    def __post_init__(self) -> None:
+        _pa_int(self.fd, 0, (1 << 31) - 1)
+        _pa_check(type(self.expected) is PhoneAttachmentLogicalItem)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentValidated(_PhoneAttachmentRedacted):
+    item: PhoneAttachmentLogicalItem
+
+    def __post_init__(self) -> None:
+        _pa_check(type(self.item) is PhoneAttachmentLogicalItem)
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class PhoneAttachmentValidationRejected(_PhoneAttachmentRedacted):
+    reason: PhoneAttachmentValidationFailure
+
+    def __post_init__(self) -> None:
+        _pa_check(type(self.reason) is PhoneAttachmentValidationFailure)
+
+
+PhoneAttachmentValidationResult = PhoneAttachmentValidated | PhoneAttachmentValidationRejected
+
+
+class PhoneAttachmentValidator(Protocol):
+    async def validate(
+        self, source: OwnedPhoneAttachmentInput, /
+    ) -> PhoneAttachmentValidationResult: ...
+
+
+def _pa_message_wire(request: PhoneAttachmentMessageRequest) -> dict[str, object]:
+    """One pure wire projection, reused by the request bound and the public codec."""
+    return {
+        "revision": 1,
+        "client_message_id": request.client_message_id,
+        "text": request.payload.text,
+        "target_binding": request.payload.target_binding,
+        "attachments": [
+            {
+                "client_attachment_id": ref.item.client_attachment_id,
+                "sha256": ref.item.sha256,
+                "mime": ref.item.mime.value,
+                "length": ref.item.length,
+                "label": ref.item.label,
+                "custody_reference": ref.custody_reference,
+            }
+            for ref in request.references
+        ],
+    }

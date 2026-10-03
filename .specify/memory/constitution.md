@@ -4,6 +4,16 @@
 
 HMP is a gateway platform adapter. It may not bypass Hermes authorization, session ownership, or approval decisions. Builds below HMP's minimum supported Hermes version are refused. Newer or unknown versions are attempted, and a feature closes only when its own required Hermes API or a security check fails.
 
+Spec 028 D4 permits one additional bounded transport-custody category, governed by
+`docs/architecture/contracts/HMP_PHONE_ATTACHMENTS_V1.md`: issuing-device/exact-Phone-target upload
+blobs; finite target/reference metadata; combined idempotency hashes/claims without message text;
+and finite non-evicting generated-export/CMID redaction metadata joined to fresh canonical Hermes
+rows. This is not history, approval, run, queue, retry or execution authority. Custody bytes expire;
+revocation ends reads but cannot retract delivered native data. No caller path or identifier grants
+access. Exact interface/source review and separate storage/validator/native/release gates precede
+implementation or operational exposure. This normative exception grants no new hook/tool/network
+destination, native patch, scanner waiver or second owner.
+
 ## II. Device trust is explicit
 
 Each device is paired to one instance, uses its own key, and receives only explicitly approved profile access. Pairing and authorization require host-side confirmation. Replay, expiry, and revocation are contract requirements.

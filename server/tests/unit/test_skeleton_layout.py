@@ -37,6 +37,7 @@ CONTRACT_MODULES = {
     "gate.py",
     "direct_send.py",
     "prompts.py",
+    "phone_attachments.py",
     "mobile_cron.py",
     "mobile_model.py",
     "server.py",

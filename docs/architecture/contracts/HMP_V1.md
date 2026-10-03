@@ -35,6 +35,15 @@ Normative keywords follow RFC 2119 and RFC 8174.
   - HMP MUST NOT hold authoritative conversation, approval or run state.
   - HMP MAY keep **transport observations**: the in-flight `partial`, `turn.observed_state`, the approval-choice cache and the event ring. Each is labelled on the wire as an observation, never as Hermes truth. (Reworded per FZ-R-18.)
   - HMP's durable state is limited to device and identity records, token hashes, idempotency records (no message text), pairing-offer hashes, and the roster baseline.
+  - **PA-1 exception (spec 028 D4, normative/interface work only).** HMP MAY hold the bounded
+    device-upload transport custody defined in [HMP_PHONE_ATTACHMENTS_V1.md](HMP_PHONE_ATTACHMENTS_V1.md):
+    private expiring blobs, finite issuer/exact-target/reference metadata, combined idempotency
+    hashes/claims without message text, and non-evicting bounded generated-export/CMID redaction
+    metadata. These are not authoritative history/run/approval records. Projection and byte reads
+    require fresh canonical native own-CMID user rows. No arbitrary host-file access, queue,
+    retry, second execution owner or new registration is permitted. This exception requires
+    independent exact-interface/source acceptance and separate adapter/validator/native/release
+    gates; no operational capability follows from this text.
 - **PR-2. Closed plugin surface.**
   - HMP registers exactly two things: its platform adapter and its operator CLI.
   - Every Hermes internal is reached through one bridge module. Each such dependency is listed in §12 as a `HERMES_API_GAP`.
@@ -1368,6 +1377,25 @@ unknown result: refresh the current model and never automatically retry. The per
 default applies to new sessions; this route does not switch a running Desktop-owned turn.
 The host flag defaults off. Availability on a given Hermes follows GU-2d, not a build list.
 
+## 7e. Explicit Phone attachments (revision 1, spec 028 D4; normative-only)
+
+[HMP_PHONE_ATTACHMENTS_V1.md](HMP_PHONE_ATTACHMENTS_V1.md) PA-1..PA-7 is the normative attachment
+amendment: explicit Phone-only composition, attachment-first present or exact-absent native target,
+non-bearer per-issuer custody, narrow bounded raw upload, separate combined-message route/hash,
+same strict Phone pending slot, idempotency lookup before expiry/new claim, and fresh native
+own-CMID row readback. Existing text AP-6, Bot Chat, approvals and generated-output authority are
+unchanged. No route is implemented or enabled by this amendment.
+
+Full native no-defer settlement is mandatory, including startup restore, adapter and runner busy,
+sentinel/draining/steer/interrupt/compression, orphan FIFO, strict target/lease and persistence exits.
+Stock native `8afaab37` source lacks that settlement/absence-compare-create API; adapter refusal or
+task-scheduling flags cannot substitute. Later/unknown versions attempt their actual required APIs,
+not a SHA allowlist. Missing settlement closes attachments only. No FIFO/busy-snapshot fallback.
+
+Exact Dart/Python declarations, strict codec and finite hash vectors under `specs/028-phone-attachments/contracts/`
+await independent interface review. Encrypted-file format, portable closed decoder and actual
+native/OS/release evidence remain separate gates; complete Send/upload/readback stays closed.
+
 ## 7f. Approval push registration, issuance and hint resolution (v1.x, draft; spec 014)
 
 Additive under V-3: a client on an earlier `1.x` build never calls these routes, and an HMP that
@@ -2067,6 +2095,17 @@ still needs the app's fresh read of the approval list and a human choice (INT-1,
 - **CON-4. This is a gap, not a narrowing of OD-3.** OD-3 still requires continuity wherever Hermes permits it. The effect on delivery scope is recorded in `R0_FREEZE_REVIEW.md` §8 for owner acceptance.
 
 ## 12. Hermes internals used (stability gaps; FZ-R-15)
+
+**Spec 028 D4 planned dependencies, not implemented imports.** Phone attachment event construction
+needs the actual `MessageEvent` media fields, false gateway-control/internal flags, server-built
+native source/key, strict present/absent admission precondition and definitive reject-policy
+settlement. Native own-row/CMID/session/lineage reads use the existing read bridge. Private owned
+media-cache/profile/backend placement belongs solely in the bridge and is unqualified until its
+descriptor/lifetime fixtures. `PHONE_ATTACHMENT_ATOMIC_ADMISSION_GAP` names absent full no-defer
+settlement and exact-absent compare/create on inspected `8afaab37`; it is not a claim about every
+release. No runner monkey-patch, generic native file reader, new hook/tool registration or decoder
+dependency is admitted here. The normative dependency/authority boundary is PA-1..PA-7; the exact
+Python DTO/validator-port declarations are documentation awaiting independent interface acceptance.
 
 **Optional PN-OPS diagnostics (spec 014 T026).** The read-only `push status` command uses
 `gateway.config_loader.merge_platform_sections`, `hermes_cli.config._expand_env_vars`,
