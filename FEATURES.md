@@ -64,7 +64,7 @@ physical/native/global memory/release gates remain unchanged. See [current mobil
 | Available | Bot roster and Bot Chat reads | Profile list, snapshots, history, and access state through the root Hermes gateway. |
 | Preview | Bot Chat sends | Explicit owner gate, per-bot authorization, freshness checks and retry-safe handling. Current development follows the minimum-version policy and attempts the required APIs on later or unknown builds; an untested fingerprint alone does not disable the feature. Actual API failures remain explicit. |
 | Draft; not enabled live | Approvals and choices | Minimum-version candidate `150bd0f` is independently source-reviewed; two prepared native samples passed 13 cases each. Corrected exact-source package is prepared. Live activation and physical card/answer acceptance remain open; earlier setup failures are historical evidence below. |
-| Source reviewed; three native fixture cases passed; remote delivery pending | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` and injected-port dispatcher `e6e20a6` are independently source-reviewed, with exact hosted CI passing. HTTPS client/factory `fcd10e0` is independently source-reviewed, with exact hosted CI passing. Remote relay/seal interoperability, relay/app integration, provisioning and physical delivery remain open. Verified-TLS component `9e21614` and native fixture `871ebb0` are independently accepted within their scopes: three selected approval/revoke/restart cases passed on one development sample. T029 still needs a genuine Desktop-held interleave; remote relay/provider/app/device gates remain. No notification is delivered by these source slices. |
+| Source reviewed; Desktop native case failed; remote delivery pending | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` and registration routes/writers `71385bb` plus hint resolver/map `ef11d01` and injected-port dispatcher `e6e20a6` are independently source-reviewed, with exact hosted CI passing. HTTPS client/factory `fcd10e0` is independently source-reviewed, with exact hosted CI passing. Remote relay/seal interoperability, relay/app integration, provisioning and physical delivery remain open. Verified-TLS component `9e21614` and native fixture `871ebb0` are independently accepted within their scopes: three selected approval/revoke/restart cases passed on one development sample. The new genuine Desktop interleave failed shared visibility/capture and close-registry checks; T029 and remote relay/provider/app/device gates remain open. No notification is delivered by these source slices. |
 | Owner dogfood; source follow-up reviewed | Linked chat images | Owner confirmed public-CDN rendering. Accepted public-image settlement repair `16c2095` and Phone media wiring `11cbf29` passed hosted CI; integrated Play source `8671061` also passed hosted CI. Native allocation, host-local HTTP serving and device/release evidence remain open. No new installed image capability is claimed. |
 | Planning | Phone photo/file attachments | Root reproduced native adapter primitives in isolated discovery tests on an archive, not a Git attestation (73 checks, 30 focused tests, 315 fixture and CI-tool tests together; no full CI gate claimed); the complete upload, busy-handler, admission and read-back flow remains unqualified. Canonical Desktop-owned multimodal admission and reusable authorized media history remain upstream contract gaps. |
 
@@ -372,6 +372,9 @@ configuration changed.
 
 ## Desktop ownership source trace (2026-10-03 UTC)
 
+Historical source-only checkpoint; the actual experiment below supersedes its
+runtime-pending status.
+
 Independent source and fixture-plan review on Hermes
 `8afaab3703e336d72a72c812dd2dd249f04f166a` and HMP
 `3e676ec10266ef958ca631b6f8384c6aa297745e` distinguishes two native leases:
@@ -392,3 +395,59 @@ original approval for cleanup. Implementation and fresh confinement/runtime
 review remain required. The prior three-case native receipt is unchanged;
 **T029 remains open**. No production module, deployed build or availability gate
 changed, and this sample is not an exact-version allowlist.
+
+
+## Desktop pending approval experiment (2026-10-03 UTC)
+
+A fresh isolated four-case native run on Hermes
+`8afaab3703e336d72a72c812dd2dd249f04f166a`, with HMP base
+`3e676ec10266ef958ca631b6f8384c6aa297745e` and the independently accepted
+Desktop fixture v4, ended **3 passed, 1 failed, 0 skipped**. The full 292-file
+candidate was frozen before preparation; production modules were unchanged.
+The original three-case receipt remains intact.
+
+- The real Desktop `prompt.submit` returned streaming, persisted the exact new
+  user row in shared Bot Chat history, and held the exact native registry claim
+  through the completed dispatch observation.
+- The original pending API approval remained visible in AP3 while that owner
+  was active. Verified fake-relay captures increased from the warm-up baseline
+  of one to two. The pending sentinel and later exact-ID denial support that
+  this was the original nonterminal request, not an expired request.
+- After the fixture closed Desktop, its raw registry claim remained; this was
+  the first failing assertion. The same original approval was still visible
+  and exact-ID denial applied, but this does not prove a hide-and-reappear
+  transition. WebSocket close followed by process termination is not evidence
+  of graceful native session/registry release. That lifecycle question remains
+  separate from the observed live-owner visibility and capture failure.
+
+Current-receipt preflight proved same-sandbox child signal delivery and denied
+signaling of a disposable external test sentinel, which survived. Native imports
+passed without owner/old source modules. The run reported no leftover child
+processes and no prepared/shared/protected byte changes. Failed fixture state
+and private causal artifacts are retained; broad process-information isolation
+and independent dependency wheel-byte provenance are not claimed.
+
+Independent database inspection later created SQLite WAL/SHM sidecars inside
+the retained private fixture despite `mode=ro` and `query_only`. The primary
+database, registry and original test artifacts stayed unchanged; the private
+sidecars are preserved and the review footprint is explicitly corrected. Future
+inspection uses immutable database access or an isolated copy. This was not a
+live host/database action.
+
+**T029 remains failing.** The next repair must cover shared approval visibility,
+answer and push consumers, with independent review and a new bounded runtime
+receipt. There is no concurrent model-execution claim, upstream missing-primitive
+claim, live installation, device, provider or release qualification. The fake
+relay verifies signatures and captures requests; it does not open HPKE seals or
+contact APNs/FCM. The live visibility/capture failure is distinct from the
+unqualified close/release transition.
+
+### HPKE/JCS vector preparation
+
+The separate test-only vector plan passed independent plan review. It uses the
+frozen D1 suite and exact 16-byte `HMP push seal v1` info, an independent Node
+generator and Python opener/checker, and the official RFC corpus. Source and
+exact dependency preparation have started on an isolated branch. Dependency
+execution, generated-vector acceptance, production app libraries, relay keys,
+providers and interoperability remain unqualified. Owner provisioning choices
+are not prerequisites for this test-only work.

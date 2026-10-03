@@ -1071,6 +1071,9 @@ configuration changed.
 
 ## Desktop ownership source trace (2026-10-03 UTC)
 
+Historical source-only checkpoint; the actual experiment below supersedes its
+runtime-pending status.
+
 Independent source and fixture-plan review on Hermes
 `8afaab3703e336d72a72c812dd2dd249f04f166a` and HMP
 `3e676ec10266ef958ca631b6f8384c6aa297745e` distinguishes two native leases:
@@ -1091,3 +1094,59 @@ original approval for cleanup. Implementation and fresh confinement/runtime
 review remain required. The prior three-case native receipt is unchanged;
 **T029 remains open**. No production module, deployed build or availability gate
 changed, and this sample is not an exact-version allowlist.
+
+
+## Desktop pending approval experiment (2026-10-03 UTC)
+
+A fresh isolated four-case native run on Hermes
+`8afaab3703e336d72a72c812dd2dd249f04f166a`, with HMP base
+`3e676ec10266ef958ca631b6f8384c6aa297745e` and the independently accepted
+Desktop fixture v4, ended **3 passed, 1 failed, 0 skipped**. The full 292-file
+candidate was frozen before preparation; production modules were unchanged.
+The original three-case receipt remains intact.
+
+- The real Desktop `prompt.submit` returned streaming, persisted the exact new
+  user row in shared Bot Chat history, and held the exact native registry claim
+  through the completed dispatch observation.
+- The original pending API approval remained visible in AP3 while that owner
+  was active. Verified fake-relay captures increased from the warm-up baseline
+  of one to two. The pending sentinel and later exact-ID denial support that
+  this was the original nonterminal request, not an expired request.
+- After the fixture closed Desktop, its raw registry claim remained; this was
+  the first failing assertion. The same original approval was still visible
+  and exact-ID denial applied, but this does not prove a hide-and-reappear
+  transition. WebSocket close followed by process termination is not evidence
+  of graceful native session/registry release. That lifecycle question remains
+  separate from the observed live-owner visibility and capture failure.
+
+Current-receipt preflight proved same-sandbox child signal delivery and denied
+signaling of a disposable external test sentinel, which survived. Native imports
+passed without owner/old source modules. The run reported no leftover child
+processes and no prepared/shared/protected byte changes. Failed fixture state
+and private causal artifacts are retained; broad process-information isolation
+and independent dependency wheel-byte provenance are not claimed.
+
+Independent database inspection later created SQLite WAL/SHM sidecars inside
+the retained private fixture despite `mode=ro` and `query_only`. The primary
+database, registry and original test artifacts stayed unchanged; the private
+sidecars are preserved and the review footprint is explicitly corrected. Future
+inspection uses immutable database access or an isolated copy. This was not a
+live host/database action.
+
+**T029 remains failing.** The next repair must cover shared approval visibility,
+answer and push consumers, with independent review and a new bounded runtime
+receipt. There is no concurrent model-execution claim, upstream missing-primitive
+claim, live installation, device, provider or release qualification. The fake
+relay verifies signatures and captures requests; it does not open HPKE seals or
+contact APNs/FCM. The live visibility/capture failure is distinct from the
+unqualified close/release transition.
+
+### HPKE/JCS vector preparation
+
+The separate test-only vector plan passed independent plan review. It uses the
+frozen D1 suite and exact 16-byte `HMP push seal v1` info, an independent Node
+generator and Python opener/checker, and the official RFC corpus. Source and
+exact dependency preparation have started on an isolated branch. Dependency
+execution, generated-vector acceptance, production app libraries, relay keys,
+providers and interoperability remain unqualified. Owner provisioning choices
+are not prerequisites for this test-only work.
