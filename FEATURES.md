@@ -444,10 +444,66 @@ unqualified close/release transition.
 
 ### HPKE/JCS vector preparation
 
-The separate test-only vector plan passed independent plan review. It uses the
-frozen D1 suite and exact 16-byte `HMP push seal v1` info, an independent Node
-generator and Python opener/checker, and the official RFC corpus. Source and
-exact dependency preparation have started on an isolated branch. Dependency
-execution, generated-vector acceptance, production app libraries, relay keys,
-providers and interoperability remain unqualified. Owner provisioning choices
+The test-only source in [draft PR #92](https://github.com/MahdiHedhli/hermes-hmp/pull/92)
+contains 151 finite case definitions and six pure-test methods. The earlier repaired
+protocol source and lint-only delta passed their separate independent reviews.
+The current eight-file metadata-minimization delta also passed a separate
+source/data review; none of these verdicts admits vector execution.
+It uses the frozen D1 suite, exact 16-byte `HMP push seal v1` info, an independent
+Node generator/Python opener, and the original official RFC corpus. Package
+archives and member digests are pinned as data. CI exposed lint and public
+publisher-contact hygiene failures; the repair minimizes the five registry
+records to selected provenance fields while preserving original-response hashes
+and the existing privacy scanner. Package/archive/license bytes are unchanged.
+
+**All 151 definitions and six pure methods remain unexecuted.** No generated
+known-answer corpus, installed/imported crypto package, production consumer,
+relay/provider delivery or native app interoperability is qualified. Independent
+containment review requires a startup watchdog, specific allocation-failure
+observations with small positive controls, and exact accepted-canary/profile
+receipt bindings. Runtime startup, hard resource enforcement, immutable input
+and mount lifetime, loader closure and other denial/reaping controls still need
+verification. Execution admission remains closed. Owner provisioning choices
 are not prerequisites for this test-only work.
+
+### Shared Desktop ownership repair contract
+
+Independent review accepted the revised contract only; backend/mobile integration
+and a new bounded native receipt remain pending. Explicit `owned`, `unowned` and
+`unknown` state stays distinct from a legacy absent field. Unknown Bot ownership
+hides answerable Bot cards while preserving reserved/releasable and other pending
+state. Phone approvals keep their existing independent path. AP4 must preserve
+settled replay/conflict/expiry handling before checking open Bot ownership, and
+must not apply an answer under owned/unknown state. A point-in-time ownership
+check does not eliminate the check/use race.
+
+The native snapshot API exists, so a missing upstream primitive is not established.
+Its default lenient mode can prune unknown-liveness entries; strict mode aborts
+on unknown and can prune proven-dead entries. HMP currently omits strict mode.
+The snapshot lacks hard parsing, entry-count, lock, probe and deadline bounds;
+two worker threads and a caller timeout alone do not resolve this. Bounded
+observation, native cleanup/read-route semantics and worker termination require
+separate review before integration. HMP must not parse or mutate the native
+registry as a second authority. The failing T029 receipt above is unchanged.
+
+### Retained access and availability repairs
+
+[Draft PR #93](https://github.com/MahdiHedhli/hermes-hmp/pull/93), at
+`7b8138e4e62bd7cff975909f1a1cc09b6cee73c5`, applies the existing stripped
+16-character API-key floor to the default profile's scoped fallback. Ten new
+regression cases cover invalid types, empty/whitespace, below-boundary and valid
+boundary values while retaining inline precedence and named-profile isolation.
+Independent source review accepted the repair. Both exact-head hosted CI runs
+passed; [PR run 37110174546](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/37110174546)
+reports 2,625 passed and 17 skipped, with lint, closed-surface and privacy gates
+passing. Native startup already checks key strength; this was a false-availability
+prerequisite, not a demonstrated authentication bypass. No live deployment or
+credential change is claimed.
+
+Two source-confirmed findings remain open: device-list metadata lacks the CLI's
+Hermes-session guard, and 128 legal long-name profile/health records can exceed
+the shared 16 KiB listener-record cap. The planned repair preserves full bounded
+128-profile inventory/health in a separate listener-file envelope, with final
+field bounds and independent implementation review still pending. The network
+ready-read cap remains unchanged. Neither finding establishes a live exposure
+or owner incident.
