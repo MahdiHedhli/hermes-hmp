@@ -87,6 +87,7 @@ def test_fifo_is_rejected_without_waiting_for_a_writer(tmp_path):
     )
     result = subprocess.run(
         [sys.executable, "-B", "-c", code], capture_output=True, text=True,
+        cwd=os.path.dirname(os.path.abspath(observer.__file__)),
         timeout=3, check=False,
     )
     assert result.returncode != 0
