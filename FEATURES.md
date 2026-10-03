@@ -64,12 +64,37 @@ physical/native/global memory/release gates remain unchanged. See [current mobil
 | Available | Bot roster and Bot Chat reads | Profile list, snapshots, history, and access state through the root Hermes gateway. |
 | Preview | Bot Chat sends | Explicit owner gate, per-bot authorization, freshness checks and retry-safe handling. Current development follows the minimum-version policy and attempts the required APIs on later or unknown builds; an untested fingerprint alone does not disable the feature. Actual API failures remain explicit. |
 | Draft; not enabled live | Approvals and choices | Minimum-version candidate `150bd0f` is independently source-reviewed; two prepared native samples passed 13 cases each. Corrected exact-source package is prepared. Live activation and physical card/answer acceptance remain open; earlier setup failures are historical evidence below. |
-| Source primitives reviewed; not wired | Priority approval notifications | Pure issuer `9611b5d` and bounded storage `d41f5e7` are independently source-reviewed. Live settings/listener scheduling, registration routes/writers, resolver, dispatch, relay/app integration, provisioning and physical delivery remain open. No notification is delivered by this source slice. |
+| Source configuration/maintenance reviewed; delivery unwired | Priority approval notifications | Issuer `9611b5d`, storage `d41f5e7` and live configuration/listener `22e92b1` are independently source-reviewed. Registration routes/writers, resolver, dispatch, relay/app integration, provisioning and physical delivery remain open. No notification is delivered by this source slice. |
 | Owner dogfood; source follow-up reviewed | Linked chat images | Owner confirmed public-CDN rendering. Accepted public-image settlement repair `16c2095` and Phone media wiring `11cbf29` passed hosted CI; integrated Play source `8671061` also passed hosted CI. Native allocation, host-local HTTP serving and device/release evidence remain open. No new installed image capability is claimed. |
 | Planning | Phone photo/file attachments | Root reproduced native adapter primitives in isolated discovery tests on an archive, not a Git attestation (73 checks, 30 focused tests, 315 fixture and CI-tool tests together; no full CI gate claimed); the complete upload, busy-handler, admission and read-back flow remains unqualified. Canonical Desktop-owned multimodal admission and reusable authorized media history remain upstream contract gaps. |
 
 See the [roadmap](ROADMAP.md), [wire contract](docs/architecture/contracts/HMP_V1.md), and [upstream requests for Nous Research](NOUS_GATEWAY_OBSERVATIONS.md).
 
+
+## Approval push configuration and listener checkpoint (2026-10-02)
+
+HMP [draft #84](https://github.com/MahdiHedhli/hermes-hmp/pull/84), source
+`22e92b168ede7b8398a970fd58b5722ea27cc673`, composes reviewed approval inputs
+with issuer/storage and adds strict live host-only push availability. Invalid keys,
+audience, relay URL or configured pins close the lane; omitted pins remain distinct
+from malformed pins. Existing approval authority and minimum-version behavior stay
+intact. Maintenance runs before listener open and hourly, reads the non-repairing key
+once off-loop, and yields only between committed bounded transactions. Stop cancels
+and awaits maintenance. Missing keys skip only hash expiry; other cleanup continues.
+
+Independent v1 review found empty URL query/fragment delimiters could misroute a
+future appended endpoint. The repaired v2 rejects the literal delimiters; six scratch
+mutant failures demonstrate regression coverage. Root and reviewer each passed the
+same 149 focused cases. Root's complete locked suite passed 2,210 cases, with 16
+existing/native-dependent skips and one existing warning; configured Ruff passed.
+All 26 frozen hashes matched after tests. Counts overlap. Hosted CI remains a
+separate exact-commit check.
+
+Registration routes/writers, resolver, observer/dispatch, relay/app integration,
+provider provisioning and physical delivery remain unfinished. T020/T021/T022 stay
+open at feature scope, including the documented G-ceiling disposition. This checkpoint
+proves source and isolated listener/SQLite/key behavior only; it enables no delivery,
+live host activation, new phone build or release.
 
 ## Approval push storage source checkpoint (2026-10-02)
 
@@ -91,10 +116,10 @@ warning. These counts overlap and prove only the tested source slice.
 The integer-ceiling contract disposition remains open: at G = 2^53 - 1 an increment
 fails closed with 503 and leaves the row/G unchanged, while unconditional capacity
 reclamation and G-advance wording are in tension at that boundary. No overflow,
-wrap, reset or invariant waiver was introduced. Listener-open/hourly scheduling,
-complete live availability configuration, registration routes/writers, resolver,
-dispatch, relay/app interoperability, owner provisioning and device/release evidence
-remain unfinished. T020/T021/T022 are not marked complete. No new phone build, host
+wrap, reset or invariant waiver was introduced. At this storage checkpoint, listener
+scheduling and live configuration were unfinished; the newer checkpoint above reviews
+those source changes. Registration routes/writers, resolver, dispatch, relay/app
+interoperability, owner provisioning and device/release evidence remain unfinished. T020/T021/T022 are not marked complete. No new phone build, host
 activation or operational push delivery follows from this checkpoint.
 
 ## Approval push issuer source checkpoint (2026-10-02)

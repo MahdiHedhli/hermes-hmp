@@ -143,6 +143,31 @@ evidence/design work; observer events are not answer authority. Cron applies una
 automatic policy, and clarify is separate. No generic upstream API gap is established
 by this census. Provider setup and physical delivery remain pending.
 
+## Approval push configuration and listener checkpoint (2026-10-02)
+
+HMP [draft #84](https://github.com/MahdiHedhli/hermes-hmp/pull/84), source
+`22e92b168ede7b8398a970fd58b5722ea27cc673`, composes reviewed approval inputs
+with issuer/storage and adds strict live host-only push availability. Invalid keys,
+audience, relay URL or configured pins close the lane; omitted pins remain distinct
+from malformed pins. Existing approval authority and minimum-version behavior stay
+intact. Maintenance runs before listener open and hourly, reads the non-repairing key
+once off-loop, and yields only between committed bounded transactions. Stop cancels
+and awaits maintenance. Missing keys skip only hash expiry; other cleanup continues.
+
+Independent v1 review found empty URL query/fragment delimiters could misroute a
+future appended endpoint. The repaired v2 rejects the literal delimiters; six scratch
+mutant failures demonstrate regression coverage. Root and reviewer each passed the
+same 149 focused cases. Root's complete locked suite passed 2,210 cases, with 16
+existing/native-dependent skips and one existing warning; configured Ruff passed.
+All 26 frozen hashes matched after tests. Counts overlap. Hosted CI remains a
+separate exact-commit check.
+
+Registration routes/writers, resolver, observer/dispatch, relay/app integration,
+provider provisioning and physical delivery remain unfinished. T020/T021/T022 stay
+open at feature scope, including the documented G-ceiling disposition. This checkpoint
+proves source and isolated listener/SQLite/key behavior only; it enables no delivery,
+live host activation, new phone build or release.
+
 ## Approval push storage source checkpoint (2026-10-02)
 
 HMP [draft #83](https://github.com/MahdiHedhli/hermes-hmp/pull/83), source
@@ -163,10 +188,10 @@ warning. These counts overlap and prove only the tested source slice.
 The integer-ceiling contract disposition remains open: at G = 2^53 - 1 an increment
 fails closed with 503 and leaves the row/G unchanged, while unconditional capacity
 reclamation and G-advance wording are in tension at that boundary. No overflow,
-wrap, reset or invariant waiver was introduced. Listener-open/hourly scheduling,
-complete live availability configuration, registration routes/writers, resolver,
-dispatch, relay/app interoperability, owner provisioning and device/release evidence
-remain unfinished. T020/T021/T022 are not marked complete. No new phone build, host
+wrap, reset or invariant waiver was introduced. At this storage checkpoint, listener
+scheduling and live configuration were unfinished; the newer checkpoint above reviews
+those source changes. Registration routes/writers, resolver, dispatch, relay/app
+interoperability, owner provisioning and device/release evidence remain unfinished. T020/T021/T022 are not marked complete. No new phone build, host
 activation or operational push delivery follows from this checkpoint.
 
 ## Installer and local-media integration checkpoint (2026-10-02)
