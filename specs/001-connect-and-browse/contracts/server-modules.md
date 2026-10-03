@@ -258,6 +258,29 @@ the roster uses. This is best-effort and additive: a build with no bridge (unsup
 bridge call that fails, writes no `profiles` field at all, and an older gateway's record never had
 one either; `pair offer` treats both the same, falling back to the placeholder text.
 
+**Full bounded inventory (SD1).** The local listener file read/write/removal bound
+is 65,536 bytes; the pinned `/ready` network read remains 16,384 bytes. Format-1
+records up to 16,384 bytes retain valid legacy parsing. Larger records require
+exactly the nine writer fields, no duplicate members, canonical IID, bounded
+printable ASCII host/nonce (128 characters), exact port/pid/snapshot integer
+ranges, at most 128 unique legal profile IDs, printable ASCII names up to 64
+characters and complete unique three-code health coverage. All 128 maximum-length
+adapter-derived ASCII names fit without truncation; 128 is this record's supported
+domain, not a native global profile ceiling. The default-JSON conservative bound
+is 41,291 bytes, not a claimed attained maximum.
+
+The writer projects only exact built-in list/tuple rows and built-in scalar
+values, with finite input ceilings and bounded incremental default JSON encoding.
+Strict records may use the larger file budget; other small historical inputs
+receive only 16,384 bytes. Oversized loose/Unicode/custom legacy shapes never
+gain a larger budget. No label truncation or partial diagnostics fallback.
+Unsafe/stale/foreign records and malformed larger records fail closed; atomic
+failures leave the old file intact. Removal retains its existing regular-file,
+pid and device/inode checks; reader uid/mode and pinned liveness checks remain.
+Old readers can reject newly large records. A failed out-of-domain refresh may
+leave an older snapshot fresh for up to 45 seconds; health checks do not prove
+equality to the live roster. No native compatibility, route or authority change.
+
 **S1 residual: known plugin-scanner findings.** Approving a pending request from this separate
 `hermes hmp` process cannot go through a Hermes internal (S1) — it goes through Hermes's own
 public `hermes` CLI, run as a subprocess. Hermes's own plugin installer security scan already
