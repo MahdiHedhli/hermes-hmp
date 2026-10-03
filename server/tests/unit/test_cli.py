@@ -333,6 +333,44 @@ def test_read_only_commands_need_no_tty(env: hmp_kit.Env) -> None:
         assert c.run(*argv) == cli.EXIT_OK, argv
 
 
+@pytest.mark.parametrize(
+    "name", ["HERMES_SESSION_ID", "HERMES_SESSION_SOURCE", "HERMES_SESSION_FUTURE"]
+)
+@pytest.mark.parametrize("value", ["", "synthetic-session", " "])
+@pytest.mark.parametrize("tty", [False, True])
+def test_device_list_session_refusal_precedes_store_open(
+    c: Cli, monkeypatch: pytest.MonkeyPatch, name: str, value: str, tty: bool
+) -> None:
+    pairing_id, sas = _pending(c.env)
+    assert c.confirm(pairing_id, "--sas", sas, "--label", "f1-fixture-label-1") == 0
+    before = _store_dump(c.env)
+    c.environ[name] = value
+    c.stdout._tty = tty
+
+    def forbidden_open(*_args: Any, **_kwargs: Any) -> None:
+        pytest.fail("session-scoped device list opened the store")
+
+    monkeypatch.setattr(cli, "_open", forbidden_open)
+    assert c.run("devices", "list") == cli.EXIT_REFUSED
+    assert c.out == ""
+    assert c.err == "hermes hmp: refused: run this from an operator shell, not a Hermes session\n"
+    assert _store_dump(c.env) == before
+
+
+@pytest.mark.parametrize("tty", [False, True])
+def test_populated_device_list_remains_available_to_operator(c: Cli, tty: bool) -> None:
+    pairing_id, sas = _pending(c.env)
+    assert c.confirm(pairing_id, "--sas", sas, "--label", "f1-fixture-label-1") == 0
+    device = _device_id(pairing_id)
+    user = c.env.store.get_device(device)["user_id"]
+    before = _store_dump(c.env)
+    c.stdout._tty = tty
+    assert c.run("devices", "list") == cli.EXIT_OK
+    assert all(value in c.out for value in (device, user, '"f1-fixture-label-1"', "ACTIVE"))
+    assert c.err == ""
+    assert _store_dump(c.env) == before
+
+
 def test_named_profile_is_refused(c: Cli, tmp_path: Path) -> None:
     """ID-2: a process whose Hermes home is a named profile gets no identity."""
     named = str(tmp_path / "hermes" / "profiles" / "work")
