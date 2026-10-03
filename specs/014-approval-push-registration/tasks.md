@@ -201,6 +201,9 @@ evidence. The clock-count repair of 2026-10-02 followed a focused review of that
   Hermes build. Approval → signed request; revoke between enqueue and send produces no request;
   Desktop held between enqueue and send produces no request; restart drops the queue and hints.
   Sample evidence, not a gate on future builds.
+  Focused branch checkpoint: implement the bounded verified-TLS fake receiver and production-client
+  seam first. Component tests do not complete this task. Native-origin and positively synchronized
+  interleaves, independent review and sampled runtime receipts remain required.
 
 ## Phase 3: relay (separate repository; after T012)
 
