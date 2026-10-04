@@ -21,6 +21,7 @@ CONTRACT_MODULES = {
     "hermes_version.py",
     "issue_draft.py",
     "bridge.py",
+    "approval_test_producer.py",
     "pairing.py",
     "tokens.py",
     "push_issuer.py",
