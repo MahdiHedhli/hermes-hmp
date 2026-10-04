@@ -1646,3 +1646,25 @@ acknowledgements, with negative tests and separate physical/release acceptance.
 Current jobs/default-model controls remain separate from approval-answer
 ownership and approval-mode/gateway administration. AM1 mode planning and AT1
 synthetic approval testing remain separate. AR1 is not implemented or deployed.
+
+
+## Asset cipher repair and approval-test verification (2026-10-04 UTC)
+
+A bounded diagnostic localized the two earlier Kotlin failures. Independently
+reviewed repairs changed the complete-record matcher for the pinned NIST fixture
+and declared the private fake-backend checked exception contract. A fresh
+focused host-JVM run compiled and executed the same 22 named methods: all passed,
+with zero failures, skips or assumptions. The previous failed runs remain
+historical evidence. The unchanged Swift candidate retains its earlier 24
+passing unhosted macOS tests; it was not rerun for these Android-only changes.
+
+These are selected synthetic host tests. Production owner/catalog and encrypted
+file custody, Android hardware keystore and iOS device key behavior, picker,
+upload, attachment Send and full D4/release qualification remain open.
+
+AT1's repaired in-process synthetic approval producer has independent source
+acceptance and 31 passing isolated fake tests. The operator command is still
+not implemented or runnable: local-operator authentication and paired-phone
+projection/answer contracts require separate integration. No native approval
+card, tool execution, permission grant or phone delivery was exercised by those
+fake tests. AM1 and AR1 remain official planning features.
