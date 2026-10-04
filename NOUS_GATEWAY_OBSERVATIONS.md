@@ -1751,3 +1751,15 @@ proposed `hermes hmp approval-test begin` syntax is not runnable. Fake tests do
 not demonstrate a real native approval card, paired-phone delivery, grant, tool
 execution or deployment. AM1 approval-mode control and BI1 Desktop identity
 remain official planning features with separate implementation gates.
+
+
+### AT1 source-check follow-up (2026-10-04 04:50 UTC)
+
+The five-line inventory/documentation repair is published at HMP
+`736662caafb26ecb58c7906530e4ebd561c26d04`. Its two existing targeted inventory
+and import checks passed; exact-head hosted CI run `37178015906` then passed
+lint, 2,673 unit/tool cases (17 skips, four warnings), closed plugin surface,
+log hygiene and privacy checks. This supersedes the preceding pending-inventory
+checkpoint. Caller bridge contract v4 received independent contract-only
+acceptance; source integration and phone/native/card/release verification remain
+open. No operator command is runnable and no host setting was changed.
