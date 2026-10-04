@@ -969,3 +969,27 @@ not implemented or runnable: local-operator authentication and paired-phone
 projection/answer contracts require separate integration. No native approval
 card, tool execution, permission grant or phone delivery was exercised by those
 fake tests. AM1 and AR1 remain official planning features.
+
+
+## Planned Desktop bot identity on Mobile (2026-10-04 UTC)
+
+BI1 is an owner-authorized official planning feature with nine unchecked tasks
+in the Mobile roadmap. It covers host-backed display names, recognizable
+shape/color/eye characters and static custom images across roster, chat header
+and bot details. The inspected Desktop has presentation metadata and separate
+avatar assets; the inspected HMP roster and Mobile model lack that projection.
+Desktop-local customization may be unsynced, so fallback provenance stays explicit.
+
+The plan binds presentation to authenticated instance/canonical profile and
+current credential generation, without changing routing or privileges. It allows
+only a small negotiated presentation DTO, never private prompts, SOUL/personality,
+chat or general settings. Older hosts retain a usable safe fallback.
+
+The inspected native get_asset helper reads the whole file before responding.
+Future exposure requires a fixed-avatar authenticated primitive bounded before
+host reads, plus transport/decode limits; an after-read cap is insufficient.
+Arbitrary paths, URLs, redirects and active content are excluded. Separate image
+and metadata revisions, cache invalidation, stale-read fencing, revoke/unpair,
+accessibility and reduced motion are part of the acceptance plan. Implementation,
+wire-contract approval, physical parity and release qualification remain pending.
+AM1, AT1 and AR1 remain separate.
