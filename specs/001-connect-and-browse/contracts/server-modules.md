@@ -68,6 +68,10 @@ server/
     approval_test_host_codec.py    # AT1 pure host DATA/schema/framing prerequisite; bounded selectors
                                   #   and generation equality, not peer/device authentication. No I/O,
                                   #   producer call, route, factory, CLI or phone authority.
+    approval_test_host_transport.py # AT1 private same-OS-user Unix transport prerequisite;
+                                  #   bounded frames/connection leases and owned socket lifecycle.
+                                  #   not wired to current listener, CLI, producer or phone routes;
+                                  #   target-device/session authority remains a separate reviewed port.
     direct_send.py                # amendment F2: DS-2..DS-8 orchestration (gate order, guard, idempotency,
                                   #   the api_server loopback call, post-hoc verification). Never imports a Hermes
                                   #   internal itself -- reads bridge.py for Hermes state, and speaks api_server's
