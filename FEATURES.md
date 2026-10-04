@@ -900,3 +900,30 @@ or runnable. Native `hermes approvals test` is verdict-only and does not prompt.
 Local operator IPC, current grants and target-device projection, exact native
 lifecycle integration, and phone qualification remain pending; no tool, model,
 message send or persistent permission rule may be produced by the test.
+
+
+## Asset cipher runtime and approval-test source checkpoint (2026-10-04 UTC)
+
+The current isolated asset-cipher candidate compiled on the host-JVM and
+unhosted macOS XCTest routes. Actual named results match the complete selected
+classes: all 24 Swift tests passed; Kotlin executed 22 tests with 20 passes and
+two failures, with zero skips or assumptions. The failing Kotlin tests are
+`officialNistSevenPrimitiveKnownAnswersOnly` and
+`corruptionHasNoReceiptAndDoesNotRetryOpen`. Their exception locations remain
+unknown in the captured name-only reporter; a bounded diagnostic is being
+prepared. This checkpoint supersedes earlier statements that no selected native
+tests had executed, within this isolated host scope.
+
+The candidate remains incomplete. The two Kotlin failures require diagnosis and
+repair; Android keystore, iOS device key storage, production asset custody,
+current-owner integration, picker/upload and full media-send qualification
+remain open. These host results provide selected synthetic coverage only.
+
+AT1's in-process synthetic approval producer has a frozen source candidate and
+eleven unexecuted fake-test definitions. Independent review requires explicit
+loop-applied completion fences before terminal reconciliation, distinct local
+pre-invocation cancellation provenance, and the remaining causal
+lifecycle/schema/identity/privacy controls. Source repair is active. The
+operator command, authenticated target binding, bridge factory and phone-card
+projection still require implementation and verification. AM1 approval-mode
+control remains an official planning feature.
