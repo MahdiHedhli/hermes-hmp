@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import concurrent.futures
+import contextlib
 import contextvars
 import inspect
 import re
@@ -17,11 +18,11 @@ import secrets
 import sys
 import threading
 import unicodedata
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import ModuleType
-from typing import Any, Callable
-
+from typing import Any
 
 _HANDLE_RE = re.compile(r"[0-9a-f]{64}\Z")
 _REQUEST_RE = re.compile(r"[0-9a-f]{32}\Z")
@@ -125,21 +126,22 @@ class NativeApprovalBindings:
         self.approval_module = approval_module
         self.interrupt_module = interrupt_module
         self.waiter = self._bind(
-            waiter_module, "_await_gateway_decision",
+            waiter_module,
+            "_await_gateway_decision",
             ("session_key", "notify_cb", "approval_data", "surface"),
             surface_keyword_only=True,
         )
         self.resolver = self._bind(
-            approval_module, "resolve_gateway_approval",
+            approval_module,
+            "resolve_gateway_approval",
             ("session_key", "choice", "resolve_all", "reason", "request_id"),
         )
         self.withdrawer = self._bind(
-            approval_module, "withdraw_gateway_approval",
+            approval_module,
+            "withdraw_gateway_approval",
             ("session_key", "request_id", "cause"),
         )
-        self.lister = self._bind(
-            approval_module, "list_gateway_approvals", ("session_key",)
-        )
+        self.lister = self._bind(approval_module, "list_gateway_approvals", ("session_key",))
         self.interrupted = self._bind(interrupt_module, "is_interrupted", ())
 
     @staticmethod
@@ -170,8 +172,10 @@ class NativeApprovalBindings:
         params = tuple(signature.parameters.values())
         if tuple(p.name for p in params) != bound.parameter_names:
             return False
-        if any(p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
-               for p in params):
+        if any(
+            p.kind in (inspect.Parameter.VAR_POSITIONAL, inspect.Parameter.VAR_KEYWORD)
+            for p in params
+        ):
             return False
         if bound.surface_keyword_only:
             return (
@@ -183,8 +187,7 @@ class NativeApprovalBindings:
         if bound.name == "resolve_gateway_approval":
             expected_defaults = (("resolve_all", False), ("reason", None), ("request_id", None))
         if any(
-            signature.parameters[name].default != default
-            for name, default in expected_defaults
+            signature.parameters[name].default != default for name, default in expected_defaults
         ):
             return False
         return all(p.kind is inspect.Parameter.POSITIONAL_OR_KEYWORD for p in params)
@@ -252,7 +255,7 @@ class _Completed:
 
 @dataclass(slots=True)
 class _ProcessSlot:
-    """Shared across service instances in this interpreter; replacement cannot drop a live worker."""
+    """Share a process slot; service replacement cannot drop a live worker."""
 
     operation: _Operation | None = None
     completed: _Completed | None = None
@@ -282,7 +285,11 @@ class ApprovalTestProducer:
         remove a row by a broad session/profile selector.
         """
         self._loop = loop
-        if type(native) is not NativeApprovalBindings or not callable(publish) or not callable(remove):
+        if (
+            type(native) is not NativeApprovalBindings
+            or not callable(publish)
+            or not callable(remove)
+        ):
             raise ValueError("approval test helper unavailable")
         self._native = native
         self._publish = publish
@@ -294,15 +301,22 @@ class ApprovalTestProducer:
     def _valid_binding(target: object) -> bool:
         if type(target) is not TargetBinding:
             return False
-        for value in (target.instance_id, target.user_id, target.profile,
-                      target.session_id, target.device_id):
+        for value in (
+            target.instance_id,
+            target.user_id,
+            target.profile,
+            target.session_id,
+            target.device_id,
+        ):
             if type(value) is not str or not value:
                 return False
             try:
                 raw = value.encode("utf-8", errors="strict")
             except UnicodeError:
                 return False
-            if len(raw) > _MAX_BINDING_BYTES or any(unicodedata.category(ch) == "Cc" for ch in value):
+            if len(raw) > _MAX_BINDING_BYTES or any(
+                unicodedata.category(ch) == "Cc" for ch in value
+            ):
                 return False
         return True
 
@@ -334,17 +348,22 @@ class ApprovalTestProducer:
         request_id = secrets.token_hex(16)
         marker = secrets.token_hex(32)
         route_key = _ROUTE_PREFIX + secrets.token_hex(32)
-        if (not _HANDLE_RE.fullmatch(handle) or not _REQUEST_RE.fullmatch(request_id)
-                or not _MARKER_RE.fullmatch(marker) or not _ROUTE_RE.fullmatch(route_key)
-                or route_key == target.session_id):
+        if (
+            not _HANDLE_RE.fullmatch(handle)
+            or not _REQUEST_RE.fullmatch(request_id)
+            or not _MARKER_RE.fullmatch(marker)
+            or not _ROUTE_RE.fullmatch(route_key)
+            or route_key == target.session_id
+        ):
             return TestOutcome(TestStatus.UNAVAILABLE)
         with self._slot.guard:
             if self._slot.operation is not None:
                 return TestOutcome(TestStatus.UNAVAILABLE)
             self._slot.generation += 1
             generation = self._slot.generation
-            op = _Operation(self._loop, generation, handle, route_key, request_id,
-                            marker, target, deadline)
+            op = _Operation(
+                self._loop, generation, handle, route_key, request_id, marker, target, deadline
+            )
             self._slot.operation = op
         try:
             op.deadline_handle = self._loop.call_at(deadline, self._deadline_fired, op)
@@ -422,8 +441,12 @@ class ApprovalTestProducer:
             return self._public_outcome(op)
         return self._completed_outcome(handle, authenticated_device_id)
 
+    # The timeout bounds this observer only; the operation has its fixed admission deadline.
     async def wait_outcome(
-        self, handle: str, authenticated_device_id: str, timeout: float | None = None
+        self,
+        handle: str,
+        authenticated_device_id: str,
+        timeout: float | None = None,  # noqa: ASYNC109
     ) -> TestOutcome:
         if not self._on_loop():
             return TestOutcome(TestStatus.UNAVAILABLE)
@@ -436,7 +459,7 @@ class ApprovalTestProducer:
         op.status_waiters.append(future)
         try:
             return await asyncio.wait_for(future, timeout=timeout)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return self._public_outcome(op)
         finally:
             if future in op.status_waiters:
@@ -461,19 +484,28 @@ class ApprovalTestProducer:
 
     def _matching(self, handle: object, device_id: object) -> _Operation | None:
         op = self._slot.operation
-        if (op is None or op.loop is not self._loop
-                or type(handle) is not str or not _HANDLE_RE.fullmatch(handle)
-                or not _same_text(handle, op.handle)
-                or type(device_id) is not str or not _same_text(device_id, op.target.device_id)):
+        if (
+            op is None
+            or op.loop is not self._loop
+            or type(handle) is not str
+            or not _HANDLE_RE.fullmatch(handle)
+            or not _same_text(handle, op.handle)
+            or type(device_id) is not str
+            or not _same_text(device_id, op.target.device_id)
+        ):
             return None
         return op
 
     def _completed_outcome(self, handle: object, device_id: object) -> TestOutcome:
         with self._slot.guard:
             completed = self._slot.completed
-        if (completed is not None and type(handle) is str and type(device_id) is str
-                and _same_text(handle, completed.handle)
-                and _same_text(device_id, completed.device_id)):
+        if (
+            completed is not None
+            and type(handle) is str
+            and type(device_id) is str
+            and _same_text(handle, completed.handle)
+            and _same_text(device_id, completed.device_id)
+        ):
             return completed.outcome
         return TestOutcome(TestStatus.UNAVAILABLE)
 
@@ -486,9 +518,13 @@ class ApprovalTestProducer:
         if op.outcome is not None:
             return TestOutcome(TestStatus.CLEANUP_PENDING)
         if op.intent in ("cancel", "shutdown"):
-            return TestOutcome(TestStatus.PENDING if not op.worker_joined else TestStatus.CLEANUP_PENDING)
+            return TestOutcome(
+                TestStatus.PENDING if not op.worker_joined else TestStatus.CLEANUP_PENDING
+            )
         if op.intent == "expiry" or op.intent == "native_timeout":
-            return TestOutcome(TestStatus.PENDING if not op.worker_joined else TestStatus.CLEANUP_PENDING)
+            return TestOutcome(
+                TestStatus.PENDING if not op.worker_joined else TestStatus.CLEANUP_PENDING
+            )
         return TestOutcome(TestStatus.PENDING)
 
     def _deadline_fired(self, op: _Operation) -> None:
@@ -512,11 +548,9 @@ class ApprovalTestProducer:
             result = contextvars.Context().run(self._invoke_waiter, op)
         except BaseException:
             error = True
-        try:
+        # A closed loop keeps the slot charged; it never proves completed cleanup.
+        with contextlib.suppress(RuntimeError):
             self._loop.call_soon_threadsafe(self._worker_returned, op, result, error)
-        except RuntimeError:
-            # The loop is gone. Keep the process slot charged; never pretend cleanup completed.
-            pass
 
     def _invoke_waiter(self, op: _Operation) -> object:
         if not self._native.current():
@@ -567,8 +601,12 @@ class ApprovalTestProducer:
 
     def _prepare_invocation(self, op: _Operation) -> bool:
         try:
-            if (self._slot.operation is not op or op.intent is not None
-                    or self._clock() >= op.deadline or not self._native.current()):
+            if (
+                self._slot.operation is not op
+                or op.intent is not None
+                or self._clock() >= op.deadline
+                or not self._native.current()
+            ):
                 return False
         except BaseException:
             return False
@@ -591,10 +629,8 @@ class ApprovalTestProducer:
                 raise TimeoutError
             future.result(timeout=remaining)
         except BaseException:
-            try:
+            with contextlib.suppress(RuntimeError):
                 self._loop.call_soon_threadsafe(self._callback_wait_failed, op)
-            except RuntimeError:
-                pass
             raise RuntimeError(_NOTIFY_FAILED) from None
 
     def _accept_callback(
@@ -602,8 +638,13 @@ class ApprovalTestProducer:
     ) -> None:
         if future.done():
             return
-        if (self._slot.operation is not op or op.callback_seen or op.intent is not None
-                or self._clock() >= op.deadline or not self._callback_shape(op, data)):
+        if (
+            self._slot.operation is not op
+            or op.callback_seen
+            or op.intent is not None
+            or self._clock() >= op.deadline
+            or not self._callback_shape(op, data)
+        ):
             future.set_exception(RuntimeError(_NOTIFY_FAILED))
             return
         op.callback_seen = True
@@ -635,8 +676,7 @@ class ApprovalTestProducer:
             self._remove_row(op)
             future.set_exception(RuntimeError(_NOTIFY_FAILED))
             return
-        if (self._slot.operation is not op or op.intent is not None
-                or self._clock() >= op.deadline):
+        if self._slot.operation is not op or op.intent is not None or self._clock() >= op.deadline:
             self._remove_row(op)
             future.set_exception(RuntimeError(_NOTIFY_FAILED))
             return
@@ -646,16 +686,25 @@ class ApprovalTestProducer:
     @staticmethod
     def _callback_shape(op: _Operation, data: object) -> bool:
         if type(data) is not dict or set(data) != {
-            "request_id", "synthetic_marker", "command", "description", "pattern_key", "pattern_keys"
+            "request_id",
+            "synthetic_marker",
+            "command",
+            "description",
+            "pattern_key",
+            "pattern_keys",
         }:
             return False
         return (
-            type(data.get("request_id")) is str and data.get("request_id") == op.request_id
+            type(data.get("request_id")) is str
+            and data.get("request_id") == op.request_id
             and type(data.get("synthetic_marker")) is str
             and data.get("synthetic_marker") == op.marker
-            and type(data.get("command")) is str and data.get("command") == _COMMAND
-            and type(data.get("description")) is str and data.get("description") == _DESCRIPTION
-            and type(data.get("pattern_key")) is str and data.get("pattern_key") == ""
+            and type(data.get("command")) is str
+            and data.get("command") == _COMMAND
+            and type(data.get("description")) is str
+            and data.get("description") == _DESCRIPTION
+            and type(data.get("pattern_key")) is str
+            and data.get("pattern_key") == ""
             and type(data.get("pattern_keys")) is list
             and data.get("pattern_keys") == []
         )
@@ -683,10 +732,8 @@ class ApprovalTestProducer:
                     error = True
             except BaseException:
                 error = True
-            try:
+            with contextlib.suppress(RuntimeError):
                 self._loop.call_soon_threadsafe(self._control_returned, op, action, result, error)
-            except RuntimeError:
-                pass
 
         thread = threading.Thread(
             target=lambda: contextvars.Context().run(run),
@@ -707,9 +754,7 @@ class ApprovalTestProducer:
             self._remove_row(op)
             self._schedule_join(op)
 
-    def _control_returned(
-        self, op: _Operation, action: str, result: object, error: bool
-    ) -> None:
+    def _control_returned(self, op: _Operation, action: str, result: object, error: bool) -> None:
         if self._slot.operation is not op:
             return
         op.control_result_applied = True
@@ -751,8 +796,10 @@ class ApprovalTestProducer:
             resolved = result.get("resolved")
             choice = result.get("choice")
             reason = result.get("reason")
-            if (type(resolved) is not bool or (reason is not None and
-                    (type(reason) is not str or len(reason.encode("utf-8", "replace")) > 256))):
+            if type(resolved) is not bool or (
+                reason is not None
+                and (type(reason) is not str or len(reason.encode("utf-8", "replace")) > 256)
+            ):
                 return False
             if resolved:
                 return type(choice) is str and choice in ("once", "deny")
@@ -761,14 +808,22 @@ class ApprovalTestProducer:
             return (
                 result.get("resolved") is True
                 and result.get("choice") is None
-                and (result.get("reason") is None or
-                     (type(result.get("reason")) is str and
-                      len(result.get("reason").encode("utf-8", "replace")) <= 256))
+                and (
+                    result.get("reason") is None
+                    or (
+                        type(result.get("reason")) is str
+                        and len(result.get("reason").encode("utf-8", "replace")) <= 256
+                    )
+                )
                 and type(result.get("cancelled")) is str
                 and len(result.get("cancelled").encode("utf-8", "replace")) <= 128
             )
         if keys == {"resolved", "choice", "notify_failed"}:
-            return result.get("resolved") is False and result.get("choice") is None and result.get("notify_failed") is True
+            return (
+                result.get("resolved") is False
+                and result.get("choice") is None
+                and result.get("notify_failed") is True
+            )
         return False
 
     def _schedule_join(self, op: _Operation) -> None:
@@ -796,8 +851,13 @@ class ApprovalTestProducer:
         # A thread can enqueue its loop callback and exit before this poll runs. Joining the OS
         # thread is not proof that the loop has applied its result. Keep the slot charged until
         # both operation-bound result messages have been consumed.
-        if (op.worker is None or not op.worker_joined or not op.worker_result_applied
-                or not op.control_joined or not op.control_result_applied):
+        if (
+            op.worker is None
+            or not op.worker_joined
+            or not op.worker_result_applied
+            or not op.control_joined
+            or not op.control_result_applied
+        ):
             self._loop.call_later(0.01, self._join_progress, op)
             return
         self._finalize_worker(op)
@@ -841,10 +901,8 @@ class ApprovalTestProducer:
                 proved = op.request_id not in ids
             except BaseException:
                 proved = False
-            try:
+            with contextlib.suppress(RuntimeError):
                 self._loop.call_soon_threadsafe(self._finish_cleanup, op, proved)
-            except RuntimeError:
-                pass
 
         thread = threading.Thread(
             target=lambda: contextvars.Context().run(cleanup),
@@ -898,8 +956,11 @@ class ApprovalTestProducer:
                 "shutdown": "gateway_shutdown",
                 "expiry": "operator_deadline",
             }.get(op.intent)
-            if (expected_cause is not None and op.withdrawal_return is True
-                    and result.get("cancelled") == expected_cause):
+            if (
+                expected_cause is not None
+                and op.withdrawal_return is True
+                and result.get("cancelled") == expected_cause
+            ):
                 if op.intent == "expiry":
                     return TestStatus.EXPIRED
                 return TestStatus.CANCELLED

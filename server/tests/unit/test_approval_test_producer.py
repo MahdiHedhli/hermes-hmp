@@ -84,7 +84,11 @@ class _FakeNative:
         )
 
     def waiter(
-        self, session_key: str, notify_cb: Any, approval_data: dict[str, object], *,
+        self,
+        session_key: str,
+        notify_cb: Any,
+        approval_data: dict[str, object],
+        *,
         surface: str = "gateway",
     ) -> dict[str, object]:
         if self.context_probe is not None:
@@ -95,7 +99,11 @@ class _FakeNative:
             self.waiter_exited.set()
 
     def _waiter_impl(
-        self, session_key: str, notify_cb: Any, approval_data: dict[str, object], *,
+        self,
+        session_key: str,
+        notify_cb: Any,
+        approval_data: dict[str, object],
+        *,
         surface: str,
     ) -> dict[str, object]:
         assert surface == "gateway"
@@ -136,8 +144,12 @@ class _FakeNative:
         return entry.result or {"resolved": False, "choice": None, "reason": None}
 
     def resolve(
-        self, session_key: str, choice: str, resolve_all: bool = False,
-        reason: str | None = None, request_id: str | None = None,
+        self,
+        session_key: str,
+        choice: str,
+        resolve_all: bool = False,
+        reason: str | None = None,
+        request_id: str | None = None,
     ) -> int:
         del reason
         self.resolver_calls.append((session_key, choice, request_id or ""))
@@ -146,7 +158,9 @@ class _FakeNative:
             self.resolve_gate.wait(3.0)
         with self.lock:
             queue = self.queues.get(session_key, [])
-            entry = next((item for item in queue if item.data.get("request_id") == request_id), None)
+            entry = next(
+                (item for item in queue if item.data.get("request_id") == request_id), None
+            )
             if entry is None:
                 return 0
             queue.remove(entry)
@@ -169,14 +183,19 @@ class _FakeNative:
             return False
         with self.lock:
             queue = self.queues.get(session_key, [])
-            entry = next((item for item in queue if item.data.get("request_id") == request_id), None)
+            entry = next(
+                (item for item in queue if item.data.get("request_id") == request_id), None
+            )
             if entry is None:
                 return False
             queue.remove(entry)
             if not queue:
                 self.queues.pop(session_key, None)
             entry.result = {
-                "resolved": True, "choice": None, "reason": None, "cancelled": cause,
+                "resolved": True,
+                "choice": None,
+                "reason": None,
+                "cancelled": cause,
             }
             entry.event.set()
             return True
@@ -233,8 +252,11 @@ async def _wait_until(predicate: Any) -> None:
 
 def _service(native: _FakeNative, rows: _MemoryRows, slot: _ProcessSlot) -> ApprovalTestProducer:
     return ApprovalTestProducer(
-        loop=asyncio.get_running_loop(), native=native.bindings,
-        publish=rows.publish, remove=rows.remove, slot=slot,
+        loop=asyncio.get_running_loop(),
+        native=native.bindings,
+        publish=rows.publish,
+        remove=rows.remove,
+        slot=slot,
     )
 
 
@@ -281,9 +303,16 @@ def test_once_acknowledgement_is_exact_and_releases_only_after_cleanup(
         assert entry.data["request_id"] == notice.request_id
         assert entry.data["synthetic_marker"]
         assert set(entry.data) == {
-            "request_id", "synthetic_marker", "command", "description", "pattern_key", "pattern_keys",
+            "request_id",
+            "synthetic_marker",
+            "command",
+            "description",
+            "pattern_key",
+            "pattern_keys",
         }
-        assert await service.answer_test(handle, TARGET.device_id, "once") == TestOutcome(TestStatus.PENDING)
+        assert await service.answer_test(handle, TARGET.device_id, "once") == TestOutcome(
+            TestStatus.PENDING
+        )
         outcome = await service.wait_outcome(handle, TARGET.device_id, timeout=2.0)
         assert outcome == TestOutcome(TestStatus.ONCE_ACKNOWLEDGED)
         assert await service.outcome(handle, TARGET.device_id) == outcome
@@ -389,7 +418,9 @@ def test_starting_cancel_holds_slot_until_delayed_callback_and_join(
         handle = await service.begin_test(TARGET, 2_000)
         assert isinstance(handle, str)
         await _wait_until(native.has_entries)
-        assert await service.cancel_test(handle, TARGET.device_id) == TestOutcome(TestStatus.PENDING)
+        assert await service.cancel_test(handle, TARGET.device_id) == TestOutcome(
+            TestStatus.PENDING
+        )
         assert slot.operation is not None
         native.callback_gate.set()
         final = await service.wait_outcome(handle, TARGET.device_id, timeout=2.0)
@@ -436,9 +467,13 @@ def test_answer_cancel_race_uses_one_local_control_and_requires_joined_evidence(
         handle = await service.begin_test(TARGET, 2_000)
         assert isinstance(handle, str)
         await _wait_until(lambda: bool(rows.rows))
-        assert await service.answer_test(handle, "wrong-device", "once") == TestOutcome(TestStatus.UNAVAILABLE)
+        assert await service.answer_test(handle, "wrong-device", "once") == TestOutcome(
+            TestStatus.UNAVAILABLE
+        )
         await service.answer_test(handle, TARGET.device_id, "once")
-        assert await service.cancel_test(handle, TARGET.device_id) == TestOutcome(TestStatus.PENDING)
+        assert await service.cancel_test(handle, TARGET.device_id) == TestOutcome(
+            TestStatus.PENDING
+        )
         final = await service.wait_outcome(handle, TARGET.device_id, timeout=2.0)
         assert final == TestOutcome(TestStatus.ONCE_ACKNOWLEDGED)
         assert len(native.resolver_calls) == 1 and native.withdraw_calls == []
@@ -492,7 +527,8 @@ def test_malformed_post_join_listing_keeps_capacity_fail_closed(
 
 @pytest.mark.parametrize("held_name", ["_worker_returned", "_control_returned"])
 def test_join_waits_for_both_loop_applied_completion_fences(
-    monkeypatch: pytest.MonkeyPatch, held_name: str,
+    monkeypatch: pytest.MonkeyPatch,
+    held_name: str,
 ) -> None:
     native = _FakeNative(monkeypatch)
     rows, slot = _MemoryRows(), _ProcessSlot()
@@ -517,7 +553,9 @@ def test_join_waits_for_both_loop_applied_completion_fences(
         handle = await service.begin_test(TARGET, 2_000)
         assert isinstance(handle, str)
         await _wait_until(lambda: bool(rows.rows))
-        assert await service.answer_test(handle, TARGET.device_id, "once") == TestOutcome(TestStatus.PENDING)
+        assert await service.answer_test(handle, TARGET.device_id, "once") == TestOutcome(
+            TestStatus.PENDING
+        )
         await _wait_until(held.is_set)
         op = slot.operation
         assert op is not None
@@ -559,7 +597,9 @@ def test_answer_vs_cancel_barrier_keeps_one_control_and_frozen_winner(
         await _wait_until(native.resolve_entered.is_set)
         op = slot.operation
         assert op is not None and op.control_inflight and not op.control_result_applied
-        assert await service.cancel_test(handle, TARGET.device_id) == TestOutcome(TestStatus.PENDING)
+        assert await service.cancel_test(handle, TARGET.device_id) == TestOutcome(
+            TestStatus.PENDING
+        )
         assert len(native.resolver_calls) == 1 and native.withdraw_calls == []
         native.resolve_gate.set()
         assert await service.wait_outcome(handle, TARGET.device_id, timeout=2.0) == TestOutcome(
@@ -597,7 +637,8 @@ def test_native_result_cannot_forge_wrapper_pre_invocation_sentinel(
 
 @pytest.mark.parametrize("intent", ["cancel", "expiry"])
 def test_true_pre_call_terminal_intent_uses_private_sentinel_without_waiter_call(
-    monkeypatch: pytest.MonkeyPatch, intent: str,
+    monkeypatch: pytest.MonkeyPatch,
+    intent: str,
 ) -> None:
     native = _FakeNative(monkeypatch)
     native.list_gate_at_call = 1  # invocation-side private-key inspection, before prepare/invoke
@@ -613,14 +654,18 @@ def test_true_pre_call_terminal_intent_uses_private_sentinel_without_waiter_call
         op = slot.operation
         assert op is not None and not op.invoke_started and not op.native_touched
         if intent == "cancel":
-            assert await service.cancel_test(handle, TARGET.device_id) == TestOutcome(TestStatus.PENDING)
+            assert await service.cancel_test(handle, TARGET.device_id) == TestOutcome(
+                TestStatus.PENDING
+            )
             expected = TestStatus.CANCELLED
         else:
             clock[0] = op.deadline
             service._deadline_fired(op)
             expected = TestStatus.EXPIRED
         native.list_gate.set()
-        assert await service.wait_outcome(handle, TARGET.device_id, timeout=2.0) == TestOutcome(expected)
+        assert await service.wait_outcome(handle, TARGET.device_id, timeout=2.0) == TestOutcome(
+            expected
+        )
         assert op.worker_result is not None
         assert native.waiter_exited.is_set() is False
         assert native.withdraw_calls == [] and native.resolver_calls == []
@@ -712,7 +757,8 @@ def test_cleanup_observer_hold_keeps_capacity_until_absence_proof(
 
 @pytest.mark.parametrize("resolver_result", [True, 2])
 def test_bool_or_multiple_resolver_count_never_acknowledges(
-    monkeypatch: pytest.MonkeyPatch, resolver_result: object,
+    monkeypatch: pytest.MonkeyPatch,
+    resolver_result: object,
 ) -> None:
     native = _FakeNative(monkeypatch)
     native.resolve_count = resolver_result
@@ -735,7 +781,8 @@ def test_bool_or_multiple_resolver_count_never_acknowledges(
 
 @pytest.mark.parametrize("withdraw_mode", ["false", "wrong_type", "raises"])
 def test_uncertain_cancel_has_no_live_retry_and_joined_cleanup_only(
-    monkeypatch: pytest.MonkeyPatch, withdraw_mode: str,
+    monkeypatch: pytest.MonkeyPatch,
+    withdraw_mode: str,
 ) -> None:
     native = _FakeNative(monkeypatch)
     if withdraw_mode == "false":
@@ -764,13 +811,17 @@ def test_uncertain_cancel_has_no_live_retry_and_joined_cleanup_only(
     _run(scenario())
 
 
-@pytest.mark.parametrize("bad_result", [
-    {"resolved": True, "choice": "deny", "reason": None, "cancelled": "operator_cancel"},
-    {"resolved": 1, "choice": "once", "reason": None},
-    {"resolved": True, "choice": "once", "reason": None, "extra": False},
-])
+@pytest.mark.parametrize(
+    "bad_result",
+    [
+        {"resolved": True, "choice": "deny", "reason": None, "cancelled": "operator_cancel"},
+        {"resolved": 1, "choice": "once", "reason": None},
+        {"resolved": True, "choice": "once", "reason": None, "extra": False},
+    ],
+)
 def test_cancellation_bearing_or_malformed_native_result_is_unavailable(
-    monkeypatch: pytest.MonkeyPatch, bad_result: dict[str, object],
+    monkeypatch: pytest.MonkeyPatch,
+    bad_result: dict[str, object],
 ) -> None:
     native = _FakeNative(monkeypatch)
     native.bad_result = bad_result
@@ -824,7 +875,8 @@ def test_duplicate_callback_and_context_substitution_preserve_foreign_state(
 
 @pytest.mark.parametrize("substitution", ["callable", "module"])
 def test_native_binding_substitution_refuses_control_without_touching_other_queue(
-    monkeypatch: pytest.MonkeyPatch, substitution: str,
+    monkeypatch: pytest.MonkeyPatch,
+    substitution: str,
 ) -> None:
     native = _FakeNative(monkeypatch)
     rows, slot = _MemoryRows(), _ProcessSlot()
