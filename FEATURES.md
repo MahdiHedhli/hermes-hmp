@@ -725,6 +725,9 @@ remain open. No usable Android beta install link or release acceptance is claime
 
 ## Android provider and staged-build review (2026-10-03)
 
+Historical initial review; the later supported-draft/publication checkpoint below
+supersedes its prepared-only and unsent-support statements.
+
 The provider inventory and exact-build reviewer matrix are complete with independent
 factual acceptance; final Data safety answers and release certification remain open.
 Fresh Console reads distinguish Free code 1 (`150dd06`) available to internal
@@ -749,6 +752,36 @@ basis, category/retention mapping and the older inactive upload's relevance rema
 explicit gaps. **PLAY-VOICE-1** remains open. No new report Send/retry, host or
 receiver deployment, permission/provider connection, Play upload or submission
 occurred during this review.
+
+## Supported Android provider drafts and published privacy — 2026-10-03 UTC
+
+This supersedes the earlier prepared-only scanner/privacy and unsent-support
+status. Independent provider review accepted source/policy-supported mappings;
+Console draft-save confirmations were observed. Messages are required collected
+content; other user-generated content/actions and voice remain optional. ML Kit
+Diagnostics and Device IDs are conservatively collected/shared, required and
+non-ephemeral, with analytics and security purposes; collected identifiers also
+serve app functionality. Code 2's optional report route includes conservative
+Cloudflare IP-derived approximate-location handling. No GPS/QR-frame upload,
+advertising ID, Firebase Analytics or shipped phone photo/video upload is claimed.
+
+The [privacy policy](https://hermes-bot.app/privacy.html) now includes the reviewed
+ML Kit and Cloudflare network-metadata disclosures. Site
+[PR #10](https://github.com/MahdiHedhli/Hermes-Bot-Site/pull/10) retains the October 2
+effective date and adds an October 3 revision date; exact live bytes were verified.
+The single authorized Google Play Support BYO-host clarification was sent and
+confirmed. No reply or policy exception is established by the ticket.
+
+This is a saved draft, not a final Data safety declaration or full-feature reviewer
+certification. Actual OEM speech processing/retention, provider metadata retention
+and native transport remain qualified; the report-record 30-day TTL is not global.
+The saved no-restrictions access answer remains inaccurate. Last inspected code 1
+is internal available/closed unsubmitted; older code 2026092917 has a Draft track
+with zero releases and unpinned source, while code 2 remains local/unuploaded.
+Truthful reviewer access, exact-source automated security review, independent
+signed-artifact acceptance and required physical/native gates remain open. No
+support resend, report Send, device/provider/permission change, host exposure,
+Play upload/submission or feature deployment occurred in this documentation update.
 
 ## Published Phone pending-slot adapter (2026-10-03 UTC)
 
