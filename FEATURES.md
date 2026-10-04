@@ -927,3 +927,23 @@ lifecycle/schema/identity/privacy controls. Source repair is active. The
 operator command, authenticated target binding, bridge factory and phone-card
 projection still require implementation and verification. AM1 approval-mode
 control remains an official planning feature.
+
+
+## Planned device permission readiness (2026-10-04)
+
+**AR1 is an official planning feature**, with nine unchecked tasks in the
+[mobile permission-readiness plan](https://github.com/MahdiHedhli/HermesBotMobile/blob/056a48120460542dcd097479d687ac3850b004bb/docs/planning/MOBILE_PERMISSION_READINESS_2026-10-04.md).
+Pairing and subsequent refresh should distinguish authenticated per-device
+capability, current entitlement, and host/API availability. Missing rights
+should have safe, actionable explanations within already authorized scope;
+unauthorized resource existence must remain private. A jobs404 alone cannot
+distinguish a controls refusal from a native endpoint404.
+
+Request access creates a request. Fix access requires an explicit authorized
+administrator decision, current device/profile checks, and authoritative
+stored/effective readback. There must be no silent grants or broader defaults.
+The plan covers revocation, stale state, concurrency, denied requests and lost
+acknowledgements, with negative tests and separate physical/release acceptance.
+Current jobs/default-model controls remain separate from approval-answer
+ownership and approval-mode/gateway administration. AM1 mode planning and AT1
+synthetic approval testing remain separate. AR1 is not implemented or deployed.
