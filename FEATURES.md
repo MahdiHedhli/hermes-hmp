@@ -1111,3 +1111,28 @@ acceptance. It is not part of the 8671061 installed candidate. AM1, AT1, BI1 and
 complete media composition retain their separate implementation and integration
 gates. No automatic grant, flag change, restart, model selection or job execution
 is introduced by this documentation checkpoint.
+
+
+### AR1 reviewed local source checkpoint (2026-10-04 UTC)
+
+The separate HMP read-only readiness slice is now locally committed at
+`982bc034a7e87346e6959ca5477a0b3bc5e33bab`. Independent review accepted the
+exact source checkpoint in the recorded synthetic environment. The focused
+readiness/actor checks passed. The full unit run had 2,433 passes, 16 skips and
+one offline packaging-cache setup failure; the unchanged packaging case passed
+in a separate offline follow-up using the existing cache. This is composite
+source evidence, not a new all-suite pass or supported-version matrix.
+
+The slice provides authenticated fixed capability and authorized bot-scoped
+readiness diagnostics. It keeps host flags, device controls, endpoint
+configuration and unprobed API reachability distinct. It adds no live probe,
+automatic grant, actual request send, administrator Fix, model selection or job
+execution. Mobile warnings/local guidance remain the separate PR77 source.
+The HMP checkpoint remains local; neither slice has been composed into the
+installed 8671061 candidate or deployed as part of it. Runtime, native version,
+physical phone, security and release gates remain open.
+
+The latest verified owner iOS candidate is **2026100401** on iPhone15, superseding
+the earlier 2026100204 installation checkpoint above. Android remains the exact
+signed beta code2 candidate; the attached physical Android is USB-debugging
+unauthorized and has not been installed or qualified.
