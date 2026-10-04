@@ -1835,3 +1835,46 @@ The latest verified owner iOS candidate is **2026100401** on iPhone15, supersedi
 the earlier 2026100204 installation checkpoint above. Android remains the exact
 signed beta code2 candidate; the attached physical Android is USB-debugging
 unauthorized and has not been installed or qualified.
+
+
+## Reviewed UI repairs and next test candidate (2026-10-04 UTC)
+
+A separate local test candidate has been built from the retained `8671061`
+baseline and reviewed finite corrections. Current functionality, declared
+dependencies, native permissions and connection routes are preserved. The
+original candidate and its artifacts remain available; new feature branches
+have not been silently mixed in.
+
+| Item | Current evidence and limits |
+| --- | --- |
+| Report delivery feedback | Reviewed app repair `ba148c4` passed 109 focused fake tests and changed-file analysis. Uncertain delivery remains explicit; ordinary chat gives local feedback for confirmed report acknowledgement. No extra report was submitted, and physical acceptance remains open. |
+| Model confirmation | Reviewed app repair `47cbd97` passed 22 focused app tests, five fake client tests and changed-file analysis. One confirmation remains reserved through settlement and retires when its owning view changes. No actual host model or permission was changed; native persistence and phone checks remain open. |
+| Android local beta 1.0.0 / code 3 | APK and AAB built through the unchanged guarded wrapper; scans and expected upload-signature checks passed. Earlier cache-related guard refusals were retained and regenerated outputs rechecked. A bundle reader warning remains under assessment. Neither artifact is installed, uploaded, submitted or physically qualified. |
+| iOS local dogfood 1.0.0 / 2026100402 | Guarded build and strict signature check passed. This is an owner development artifact, not a distribution export. It has not been installed; the last verified owner installation remains `2026100401`. UI, preserved saved content and native hardware checks remain pending. |
+
+Independent source-composition review accepted the exact finite changes. Binary
+review, physical Android/iOS journeys, hardware outcomes, exact-source security
+review, whole-package declarations and reviewer access remain separate release
+gates. Source/fake results cannot establish installed functionality. The last
+scoped USB Android inventory was unauthorized; no device installation or UI
+test followed from that inventory. Public-image handling and uncomposed
+host-local media remain distinct; the latest candidate does not enable complete
+media upload or host-local image rendering.
+
+### AT1 prerequisite documentation reconciled
+
+The no-op producer remains an unwired source prerequisite in draft
+[PR99](https://github.com/MahdiHedhli/hermes-hmp/pull/99). Its separate pure host
+request/frame DATA codec is now documented in draft
+[PR100](https://github.com/MahdiHedhli/hermes-hmp/pull/100), exact source
+`ffb2d9b2bb24d8f35488427a6c234024d3fba196`. The codec passed 135 focused
+synthetic/inventory checks; exact-head hosted CI `37179997382` succeeded with
+2,807 passes, 17 skips and four warnings. Counts overlap. These are not genuine
+operator authentication, native card, socket or paired-phone delivery checks.
+
+The proposed command is `hermes hmp approval-test begin`; it is not runnable.
+Caller contract v4 permits bounded source authoring, while CLI/IPC admission,
+current target-device/session authority, normal approval-lifecycle binding and
+phone projection remain unfinished. AR1, AM1, BI1 and full media integration
+retain their separate scope and qualification gates. No grant, provider, model,
+job, live host or release changed through this documentation update.
