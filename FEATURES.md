@@ -1064,3 +1064,50 @@ log hygiene and privacy checks. This supersedes the preceding pending-inventory
 checkpoint. Caller bridge contract v4 received independent contract-only
 acceptance; source integration and phone/native/card/release verification remain
 open. No operator command is runnable and no host setting was changed.
+
+
+## Cross-platform candidate and readiness checkpoint (2026-10-04 UTC)
+
+The cross-platform test candidate retains Mobile source
+`8671061b85c8019e31172ed497cbf27dc327c6dd` and its pinned HMP dependency.
+Production source is unchanged; newer feature branches have not been silently
+mixed into this candidate and existing features have not been removed.
+
+| Item | Observed result and remaining qualification |
+| --- | --- |
+| Android beta 1.0.0 / code 2 | Existing exact signed APK/AAB retained and independently rehashed. Prior emulator report consent/cancel and one synthetic acknowledgement remain bounded evidence; physical Android qualification is pending. This candidate has not been uploaded or submitted. |
+| iOS local dogfood 1.0.0 / 2026100401 | Guarded release-mode build and independent signed-artifact inspection passed. Installed on one owner physical phone; fresh app metadata confirms the build and public pairing registry bytes remained identical across upgrade. UI, sealed draft readability and hardware qualification remain pending. |
+| Native qualification harnesses | Separate iOS example and Android self-instrumented test package built and signing/isolation inspected. Neither has been installed or executed. Generic PASS, hardware-unavailable branches and API skips cannot establish positive physical hardware evidence. These artifacts do not replace shipping-app qualification. |
+| Release gates | Physical Android/iOS acceptance, exact-source release security review, truthful whole-package declarations and reviewer access remain open. The iOS owner artifact is development signed, not an App Store/TestFlight distribution export. No release submission occurred. |
+
+Public HTTPS image handling remains distinct from host-local output. The
+candidate has host-image seams without production composition; an emitted
+MEDIA path is not authority to read an arbitrary host file. Existing model
+confirmation concurrency and report failure/ordinary-chat acknowledgement UX
+are retained as finite qualification/repair findings, rather than falsely
+reported as observed device failures or fixed by removing functionality. No
+additional report submission was made.
+
+### Host model readiness follow-up
+
+This supersedes the preceding pending-enablement checkpoint for one owner
+deployment. At 05:02 UTC, an explicitly approved single Boolean
+`platforms.hmp.extra.model_management.enabled=true` and supported graceful
+gateway restart completed. Sanitized before/after evidence verified unchanged
+other settings, model/provider selections, device grants and profile membership.
+Three profiles reported send/jobs/model readiness; one pre-existing unavailable
+profile remained unavailable. This is point-in-time host readiness, not proof of
+phone current/options rendering, an actual model change or later host state.
+
+### AR1 source progress remains separate
+
+Mobile readiness warnings and local remediation guidance are published in draft
+[PR77](https://github.com/MahdiHedhli/HermesBotMobile/pull/77), exact source
+`3c5e5b9edd84fb93d1351b3b97120449bb0ee369`. Recorded exact-head hosted CI runs
+`37185279303` and `37185274691` succeeded after the reviewed large-text repair.
+This source/fake verification does not establish a deployed HMP readiness
+endpoint, physical pairing/permissions, a mutating Fix action or release
+acceptance. It is not part of the 8671061 installed candidate. AM1, AT1, BI1 and
+complete media composition retain their separate implementation and integration
+gates. No automatic grant, flag change, restart, model selection or job execution
+is introduced by this documentation checkpoint.
