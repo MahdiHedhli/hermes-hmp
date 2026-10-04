@@ -880,3 +880,23 @@ that verifies StrongBox/TEE protection and refuses unverified/software outcomes.
 software fallback or new native operation is adopted by this encoder checkpoint; existing
 release residuals remain open.
 
+
+## Approval mode and operator test planning — October 4, 2026
+
+**AM1 is officially planned:** mobile read/change of native `manual`, `smart`, and
+`off` approval mode. Native mode is persistent and profile-wide; a future HMP
+capability and explicit gateway-admin write contract must expose that scope,
+confirm weakening, preserve hard-deny safeguards, and provide authoritative
+saved/effective readback. Approval-answer ownership or jobs/model control grants
+do not confer mode-write authority. This is backlog/specification work; no mode
+selector or live setting change is implemented.
+
+**AT1 remains separate:** an operator-invoked, explicitly device/profile/session
+scoped synthetic approval card for a harmless no-op. Its in-process producer
+contract has independent acceptance and bounded source authoring is active.
+The proposed `hermes hmp approvals test --device <paired-device-id> --profile
+<bot-profile> --session <existing-test-session-id>` command is not implemented
+or runnable. Native `hermes approvals test` is verdict-only and does not prompt.
+Local operator IPC, current grants and target-device projection, exact native
+lifecycle integration, and phone qualification remain pending; no tool, model,
+message send or persistent permission rule may be produced by the test.
