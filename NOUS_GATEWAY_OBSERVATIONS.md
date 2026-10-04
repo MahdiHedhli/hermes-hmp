@@ -1692,3 +1692,62 @@ and metadata revisions, cache invalidation, stale-read fencing, revoke/unpair,
 accessibility and reduced motion are part of the acceptance plan. Implementation,
 wire-contract approval, physical parity and release qualification remain pending.
 AM1, AT1 and AR1 remain separate.
+
+
+## Physical jobs access and current feature integration (2026-10-04 UTC)
+
+An owner supplied a populated Bot Jobs screenshot after an explicit per-device
+controls grant. This confirms the Jobs read view on that iOS phone. It does not
+confirm job creation, edits, deletion, scheduler execution or delivery, and no
+authenticated HTTP trace was captured. The third, controls-denied device was
+unchanged. A second physical phone remains unverified because its supported
+public pairing-metadata read reports the device locked; no identity was inferred
+from enrollment timing and no grant was made to an unidentified pairing.
+
+Default-model controls are already allowed on the verified phone, but the host
+model-management flag is absent and fresh per-profile health reports disabled.
+The inspected host runs native `ca705dbf` / `0.21.5` with exact installed HMP
+`4d6863e` bytes, meeting the model floor. Required model-reader/writer definitions
+are present in that native source; no provider catalogue or current model was
+read and no model was changed. This is a separate host setting, rather than a
+minimum-version allowlist refusal.
+
+The exact native CLI canonicalizes the nested gateway spelling to
+`platforms.hmp.extra.model_management.enabled`. The HMP gate reads the live
+adapter config object, not a fresh disk file; the inspected supported reload
+signal performs a graceful drain/relaunch. Proposed enablement therefore needs
+the one Boolean leaf and a supported graceful host restart, with explicit owner
+approval, unchanged phone grants and post-restart readback. It enables the host
+surface for controls-approved devices and their separately authorized bot
+profiles; it must not grant a denied device, alter an approval mode or select a
+model/provider. That change is pending and has not been performed. AR1 remains
+the official permission-readiness/remediation plan, not deployed automation.
+
+The inert native asset-cipher slice is published in Mobile draft
+[PR76](https://github.com/MahdiHedhli/HermesBotMobile/pull/76), exact head
+`b675b96b4593d4893c9ccb0557218fc097b44436`. Both recorded exact-head hosted CI
+runs succeeded. Selected synthetic prerequisites remain Kotlin 22 passes and
+the unchanged earlier Swift 24 passes; neither is physical key-store evidence.
+Production composition stays unavailable. The iOS protected-catalog codec and
+transaction contract is now a frozen proposal pending independent review.
+Android protected-head custody, genuine pairing/draft ownership, key/file
+handoffs, native clocks, descriptor custody, picker/upload/Send and complete
+media/device/release qualification remain open.
+
+AT1's unwired no-op approval producer is published in HMP draft
+[PR99](https://github.com/MahdiHedhli/hermes-hmp/pull/99). Finite lint repair
+`d33f4c34cd390c3f1ac2210e72194587598728e1` received independent review and a
+fresh isolated run of the same 31 fake cases passed with three collection
+warnings. Its hosted CI passed lint, then reported 2,671 passes, 17 skips and one
+failure: the producer filename was missing from the explicit module inventory.
+Later security-check steps were skipped, so this checkpoint does not claim
+that CI passed. A finite inventory/documentation correction is under review;
+the equality/import checks and all security scanners remain intact.
+
+The CLI/paired-phone bridge remains unimplemented. Its independent contract
+review requires precise direct-await ordering, a distinction between framing
+half-close and operator abandonment, and fixed phone refusal responses. The
+proposed `hermes hmp approval-test begin` syntax is not runnable. Fake tests do
+not demonstrate a real native approval card, paired-phone delivery, grant, tool
+execution or deployment. AM1 approval-mode control and BI1 Desktop identity
+remain official planning features with separate implementation gates.
