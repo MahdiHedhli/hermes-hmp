@@ -22,6 +22,7 @@ CONTRACT_MODULES = {
     "issue_draft.py",
     "bridge.py",
     "approval_test_producer.py",
+    "approval_test_host_codec.py",
     "pairing.py",
     "tokens.py",
     "push_issuer.py",
