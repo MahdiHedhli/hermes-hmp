@@ -2004,3 +2004,40 @@ The next feature order remains device-local bot sections/static icons, then host
 Physical organizer/icon behavior, native persistence/cold reload, accessibility/large text and release qualification remain open. The Android dev phone still needs USB-debugging authorization. The separate existing AAB consumer check remains blocked by a pre-validation VerifyError; these APK/iOS build successes do not resolve it. Provider/Data safety, reviewer-access and operational security release gates remain distinct.
 
 Host-image integration now has a reviewed minimum-version/lifetime contract: reuse the authenticated host descriptor/fetch source, wire Bot Chat only, share its bounded photo-operation budget, clear pixels on owner/access/lifecycle loss, and keep MEDIA text non-authoritative. The narrow visibility prerequisite is being reviewed/tested before wiring; bounded 404 recovery and Phone integration remain later slices. No host enablement, grant, provider, device-install or release claim follows.
+
+## Bot Chat host-image source checkpoint (October 4, 2026)
+
+Feature order remains device-local bot sections/static icons, followed by host-local
+images, with essential release checks in parallel. LB1 Android code 4 and iOS
+2026100403 are local build candidates; physical organization, sealed persistence,
+cold reload and accessibility checks remain pending. Neither candidate contains
+the later Bot Chat changes described here, and no new installation is claimed.
+
+Bot Chat integration is independently reviewed and locally committed at `22af540`.
+Only typed image_generate tool-result descriptors select the authenticated host
+loader. MEDIA paths stay unmodified text and cannot authorize arbitrary file reads.
+Public and host cards share a stable two-operation budget, including cancelled
+fetch/decode work that has not actually settled. Media loses validity on a different
+controller owner, instance, epoch, profile, missing or revoked bot access, blocking
+state, app pause or screen teardown. Resume does not fetch automatically. Loaded
+card images and viewer clones are cleared on scope loss; send/write eligibility
+does not supply read authority. The narrow sticky saved-text visibility repair is
+also locally reviewed; no whole-chat/privacy certification follows.
+
+The focused nine-file fake/synthetic suite passed 158 cases, including 14 new
+Bot Chat cases and the production loader epoch-fence test; strict analysis of the
+five changed files is clean. The first fixture-timing failure and later unused-import
+warning remain preserved, followed by reviewed test-only corrections. These are
+source checks, not native host serving, networking/codec, signed device or release
+qualification. Explicit bounded 404 descriptor recovery is the next separate slice.
+Phone/session surfaces retain their separate evidence; no new host install, flag,
+grant, provider, permission or upstream API was introduced.
+
+Essential release checks remain open. A separate
+non-invoking Android tooling diagnostic failed with VerifyError at its hash-helper
+definition, before its own input checks or any BundleTool class/method lookup;
+root pre/post source/artifact bindings were preserved. The exact failing class is
+unknown, and this does not attribute the error to the app bundle or resolve the
+earlier structural-consumer failure. Physical devices, operational security,
+provider/Data safety and truthful reviewer access remain release gates. No store
+upload/submission, Support resend or report Send occurred.
