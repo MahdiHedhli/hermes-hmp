@@ -1252,3 +1252,48 @@ validation still needs a verified resolved dependency closure; physical device,
 provider/Data safety, reviewer-access and security-release gates remain open.
 No upload, submission, provider/permission change, live host operation or report
 Send occurred in these source/release-read checkpoints.
+
+
+## LB1 source-integration checkpoint — October 4, 2026
+
+Device-local bot sections and static icons remain the current feature priority;
+host-local images follow. Essential release checks continue separately.
+
+The local implementation now includes custom section creation, rename, ordering
+and removal; one section per current roster bot; eight bundled static icons and
+reset to initials; grouped roster and scoped chat/session headers. Each phone and
+paired instance has its own layout. Removing a section moves its bots to Other
+bots without deleting chats, pairings or grants. Pending access rows keep their
+existing behavior. Local decoration is never authorization or routing authority.
+
+The dedicated sealed slot, opaque context capability, production forwarding and
+presentation controller are independently reviewed and locally committed. Writes
+use bounded canonical data, lifecycle/partition locks, exact compare-and-set and
+verified readback. A failed or uncertain save blocks further edits until explicit
+scoped Reload; stale dialogs and callbacks cannot write for a replacement owner
+or instance. Corruption is not silently treated as empty writable state. No new
+SDK, dependency, permission, host flag or upstream API is introduced by LB1.
+
+Recorded focused outcomes: 16 pure-model tests; 13 core capability tests; 52 new
+slot/existing native-adapter tests; 23 controller/logger tests; 10 new widget cases;
+and 115 existing Home/privacy/avatar/header regression cases. These scopes overlap
+and are not a unique-test total or one end-to-end run. Strict scoped analysis is
+clean. Earlier compiler/fixture failures remain historical failures followed by
+reviewed repairs and new passing receipts. Final exact source composition is
+accepted for guarded build preparation; signed artifacts and physical/native
+storage, cold reload, accessibility and large-text qualification remain separate.
+No deployment or release completion follows from the local source reviews.
+
+The next host-image census identified already reviewed HMP descriptor/fetch source,
+so that work will be reused rather than recreated. Remaining app Bot Chat loader/
+card lifecycle wiring and ref recovery need exact integration review. Minimum
+version eligibility remains distinct from API, authorization and operational
+security gates. Assistant MEDIA text is not authority to read arbitrary host files.
+
+The release lane observed the existing AGP loader's exact bundletool 1.18.3 resource
+origins. Its one structural-consumer attempt stopped on a VerifyError before
+validation invocation; no consumer pass is claimed. The prior streaming-signature
+reader warning remains open. Android dev USB authorization, physical iOS/Android
+qualification, exact-source release security checks, package/provider Data safety
+and truthful paired-host reviewer access remain open. No new store inventory,
+upload, submission, Support ticket, host change or report Send is claimed here.
