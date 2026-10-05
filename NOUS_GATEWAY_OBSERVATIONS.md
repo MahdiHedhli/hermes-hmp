@@ -2075,3 +2075,11 @@ unknown, and this does not attribute the error to the app bundle or resolve the
 earlier structural-consumer failure. Physical devices, operational security,
 provider/Data safety and truthful reviewer access remain release gates. No store
 upload/submission, Support resend or report Send occurred.
+
+## October 5, 2026: composed local organizer/host-image build evidence
+
+A reviewed local app composition (`ff99b6a`, HMP source pin `83a5943`) now produces signed Android Free beta 1.0.0+5 and iOS 1.0.0+2026100501 test candidates through the unchanged guarded release wrapper. Independent terminal review joined source/tool hashes, package/build/signature identity, all 57 iOS bundle files and preserved dependency identities. The previous iOS bundle was retained. Android APK SHA-256: `8348fbba3b96e3bd9cac67c30ef3c5d347f14a79785faa65841e7f9a36e039c7`; iOS manifest SHA-256: `1e482103292756bbf772eda2207a97471730e44f25bb935726900a2709d42746`.
+
+Bot Chat media loader/card wiring and bounded explicit 404 recovery are now included in this local source. Retry revalidates the original current tool row/session/access owner and fetches only a changed authenticated descriptor; unchanged descriptors stay unavailable. Assistant MEDIA text is never host-file authority. Phone/session integration remains a separate prerequisite. This evidence does not demonstrate installed phone behavior or a deployed host serving the new media route.
+
+The separate older code-3 AAB file-based structural check passed after the preserved tooling failure; streaming JAR manifest-order limits remain a separate observation. Physical/native media and organizer behavior, live operational auth-cache remediation, exact release security CI, active-package/provider declarations and truthful reviewer access remain open. This checkpoint is not store submission or release certification and introduces no upstream API, provider, permission, host flag, grant or live deployment.
