@@ -305,7 +305,12 @@ class Store:
         parent = self._path.parent
         with contextlib.suppress(FileExistsError):
             parent.mkdir(mode=DIR_MODE, parents=True)
-        conn = sqlite3.connect(str(self._path), isolation_level=None, check_same_thread=False)
+        # This connection is shared by auth/ownership readers in worker threads.
+        # CPython's statement cache can mix concurrent result rows (GH-118172).
+        # Never rely on that optimization for authority-binding reads.
+        conn = sqlite3.connect(
+            str(self._path), isolation_level=None, check_same_thread=False, cached_statements=0
+        )
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
