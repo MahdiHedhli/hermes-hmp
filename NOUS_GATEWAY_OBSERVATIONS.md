@@ -1878,3 +1878,42 @@ current target-device/session authority, normal approval-lifecycle binding and
 phone projection remain unfinished. AR1, AM1, BI1 and full media integration
 retain their separate scope and qualification gates. No grant, provider, model,
 job, live host or release changed through this documentation update.
+
+
+## Approval-test transport and installed-device checkpoint (October 4, 2026)
+
+AT1 now has a separately reviewed private local operator transport in
+[draft PR101](https://github.com/MahdiHedhli/hermes-hmp/pull/101), exact source
+`41daef17ab2e2fcd69f7d54c67469c8418cfd7e4`, stacked on codec PR100. Root passed
+227 focused transport, codec and module-inventory tests after independent
+source review. Counts overlap earlier codec results. The original 225-pass,
+two-failure run is preserved; the independently reviewed fixture-only repair
+restricts failed-write injection to the intended accepted response, without
+weakening assertions or changing the accepted production source.
+
+This covers isolated macOS Unix sockets and kernel peer UID, Linux credential
+mocks, bounded framing and fake-handler lifecycle. Exceptional response or
+notification errors retain the operation until its owned cleanup joins;
+unknown finalization retires the generation. It is not a Linux kernel run,
+a genuine different-UID adversarial test, native producer settlement or a
+phone-card check. No current CLI, adapter or server registers the endpoint,
+and no production handler exists. Current device/profile/session admission,
+normal lifecycle binding, typed phone projection/answer/cancel and physical
+qualification remain unfinished. The proposed `hermes hmp approval-test begin`
+command is still unavailable; AT1-T003 remains open.
+
+The finite cross-platform candidate's artifact identity review is accepted
+only for local dogfood. iOS build `2026100402` was subsequently installed on
+the owner iPhone 15 Pro Max through a data-preserving update. Fresh native app
+metadata confirms that build. The source-declared non-secret public pairing
+registry was byte-identical before and after, with two saved instances. There
+was no uninstall, launch, UI/hardware test, keychain or sealed-content read;
+this does not verify all saved chat content. The iPhone 12 Pro remains pending
+its last lock/access blocker. Android code 3 artifacts remain uninstalled and
+unqualified; the connected USB Android still reports unauthorized debugging.
+
+The AAB streaming-reader warning, exact-source security review, whole-package
+provider/declaration and reviewer-access gates, and physical Android/iOS
+journeys remain open. Public HTTPS image rendering has earlier owner evidence;
+host-local `MEDIA:` rendering and complete photo/file upload remain unfinished.
+No host grant, actual model, job, provider or release changed in this checkpoint.
