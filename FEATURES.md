@@ -1218,3 +1218,37 @@ provider/declaration and reviewer-access gates, and physical Android/iOS
 journeys remain open. Public HTTPS image rendering has earlier owner evidence;
 host-local `MEDIA:` rendering and complete photo/file upload remain unfinished.
 No host grant, actual model, job, provider or release changed in this checkpoint.
+
+
+## LB1 priority and pure-source checkpoint — October 4, 2026
+
+The owner selected device-local bot sections and bundled static icons next,
+then host-local chat images. Essential release checks continue in parallel.
+AT1 remains at its separate reviewed transport checkpoint; no runnable approval
+test command or complete phone card flow is inferred from it.
+
+LB1 planning is in `specs/044-local-bot-sections-icons`. Root locally committed
+`5e6458c`: a bounded immutable section/preference model, eight closed static
+icon IDs, typed edits, and a canonical depth-limited codec. Independent source
+and execution-evidence reviews accepted that pure slice for local commit. The
+exact focused run passed 16 tests; strict analysis found no issues. The prior
+failed analysis is preserved as a failed gate, followed by the reviewed correction.
+No dependency, SDK, native permission or host capability was changed.
+
+This is source progress, not a phone feature or release pass. The dedicated
+sealed storage/CAS/controller seam is still a proposal for independent review;
+section management, icon picker, roster/header/details integration, encrypted
+persistence and actual Android/iOS UI/accessibility checks remain outstanding.
+Custom sections are the stated working assumption, not an invented owner answer.
+Pending request-access rows and saved-content disclosure must stay intact.
+Host-local `MEDIA:` text remains unrendered until authenticated producer and
+bounded serving authority are composed; a path string alone grants no file read.
+
+The separate release lane freshly observed only Android version code 1 Active
+and 2026092917 Inactive in Play's complete two-bundle inventory; local code 2/code 3
+were absent. Publishing showed 13 changes not submitted. Saved Sign in details
+No does not certify the QR/paired-host flow is freely reviewable. Exact consumer
+validation still needs a verified resolved dependency closure; physical device,
+provider/Data safety, reviewer-access and security-release gates remain open.
+No upload, submission, provider/permission change, live host operation or report
+Send occurred in these source/release-read checkpoints.
