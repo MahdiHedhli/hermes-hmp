@@ -1,5 +1,39 @@
 # Gateway observations for Nous Research
 
+## Feature priority and host-image recovery checkpoint (October 5, 2026)
+
+The owner-selected order remains **device-local bot sections and static icons**,
+then **host-local chat images**, while essential release checks continue in
+parallel. LB1 has reviewed local source and Android code 4/iOS 2026100403 build
+candidates. Physical organization, sealed persistence, cold reload and accessibility
+checks remain pending; those artifacts predate the later host-image changes.
+
+The host-image applied-read prerequisite is locally committed at `ee519d1`.
+Its 161 core and 10 logger checks passed, with clean scoped strict analysis.
+The Bot Chat recovery adapter is locally committed at `e173f47` after 195
+focused synthetic/fake app checks and clean strict analysis of five changed files.
+Independent terminal review accepted the exact source and execution evidence. These checks do not establish native production descriptors, host serving,
+phone codec/loading, signed device functionality or release readiness.
+
+Recovery occurs only on explicit Retry after a completed not-found image load.
+It uses a separate, applied transcript read scoped to the current owner, instance,
+profile and canonical session; only a proven changed tool-result descriptor allows
+one binary refetch. An unchanged descriptor stays unavailable without a refetch.
+Other failures and legacy descriptors without a tool-call identity retain ordinary
+binary Retry. The two-operation budget includes cancelled work until it actually
+settles. Exact row/session/access loss clears card pixels and viewer clones.
+Assistant MEDIA paths remain text and never authorize arbitrary host file reads.
+
+In the parallel release lane, structural BundleTool validation passed for the
+separate, existing Android code 3 AAB (`7ef4bdb`, source `255280b`) and its bounded
+execution evidence was independently accepted. The earlier failed helper and
+consumer attempts remain preserved; their exact VerifyError cause is unresolved.
+This pass does not qualify the newer feature artifacts or close signature-reader,
+physical-device, operational-security, provider/Data safety or reviewer-access
+gates. No source history, host configuration/grant/provider change, new install,
+store upload/submission, Support resend or report Send is claimed here.
+
+
 ## Current policy and source checkpoint (2026-10-01)
 
 The HMP owner replaced exact-build runtime allowlists with a minimum supported Hermes
