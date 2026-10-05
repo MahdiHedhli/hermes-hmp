@@ -1996,3 +1996,11 @@ reader warning remains open. Android dev USB authorization, physical iOS/Android
 qualification, exact-source release security checks, package/provider Data safety
 and truthful paired-host reviewer access remain open. No new store inventory,
 upload, submission, Support ticket, host change or report Send is claimed here.
+
+## Local bot organizer: build checkpoint (October 4, 2026)
+
+The next feature order remains device-local bot sections/static icons, then host-local chat images; essential release checks stay parallel. LB1 now has two independently reviewed local test candidates: Android Free beta **1.0.0+4** APK and iOS **1.0.0+2026100403** Runner.app. Both sanctioned release-wrapper builds and artifact scans completed; signature checks passed. Tracked source and committed dependency locks stayed unchanged. Generated SwiftPM resolution metadata is preserved separately and not silently committed. These are local development candidates, not store uploads or installed/device-qualified features.
+
+Physical organizer/icon behavior, native persistence/cold reload, accessibility/large text and release qualification remain open. The Android dev phone still needs USB-debugging authorization. The separate existing AAB consumer check remains blocked by a pre-validation VerifyError; these APK/iOS build successes do not resolve it. Provider/Data safety, reviewer-access and operational security release gates remain distinct.
+
+Host-image integration now has a reviewed minimum-version/lifetime contract: reuse the authenticated host descriptor/fetch source, wire Bot Chat only, share its bounded photo-operation budget, clear pixels on owner/access/lifecycle loss, and keep MEDIA text non-authoritative. The narrow visibility prerequisite is being reviewed/tested before wiring; bounded 404 recovery and Phone integration remain later slices. No host enablement, grant, provider, device-install or release claim follows.
