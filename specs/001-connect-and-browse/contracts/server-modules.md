@@ -65,6 +65,9 @@ server/
                                   #   never imports Hermes. Not wired to a CLI, route, adapter or factory;
                                   #   no tool execution or grant changes. Source-reviewed lifecycle only;
                                   #   caller/card/phone and release qualification remain separate.
+                                  #   T002-R proposed receipts distinguish begin deadline, control intent,
+                                  #   and actual owner join. close_and_join retains partial-start cleanup debt;
+                                  #   exact-source acceptance and causal test execution remain pending.
     approval_test_host_codec.py    # AT1 pure host DATA/schema/framing prerequisite; bounded selectors
                                   #   and generation equality, not peer/device authentication. No I/O,
                                   #   producer call, route, factory, CLI or phone authority.

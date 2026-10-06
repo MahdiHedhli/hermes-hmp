@@ -12,7 +12,7 @@ import sys
 import threading
 import time
 import types
-from dataclasses import dataclass
+from dataclasses import FrozenInstanceError, dataclass
 from typing import Any
 
 import pytest
@@ -22,6 +22,9 @@ from hmp_plugin.approval_test_producer import (
     NativeApprovalBindings,
     TargetBinding,
     TestNotice,
+    TestBeginReceipt,
+    TestControlReceipt,
+    TestCleanupReceipt,
     TestOutcome,
     TestStatus,
     _ProcessSlot,
@@ -152,6 +155,7 @@ class _FakeNative:
         request_id: str | None = None,
     ) -> int:
         del reason
+        assert resolve_all is False and type(request_id) is str and request_id
         self.resolver_calls.append((session_key, choice, request_id or ""))
         if self.resolve_gate is not None:
             self.resolve_entered.set()
@@ -284,6 +288,303 @@ def test_malformed_input_refuses_before_slot_or_native_worker(
     _run(scenario())
 
 
+def test_begin_receipt_has_actual_deadline_before_callback_and_is_immutable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native = _FakeNative(monkeypatch)
+    native.callback_gate = threading.Event()
+    rows, slot = _MemoryRows(), _ProcessSlot()
+
+    async def scenario() -> None:
+        service = _service(native, rows, slot)
+        now = asyncio.get_running_loop().time()
+        service._clock = lambda: now
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        assert begun.timeout_ms == 2_000 and begun.deadline_monotonic == now + 2.0
+        await _wait_until(native.has_entries)
+        assert rows.rows == {}
+        assert await service.outcome(begun.handle, TARGET.device_id) == TestOutcome(TestStatus.PENDING)
+        with pytest.raises(FrozenInstanceError):
+            begun.timeout_ms = 1  # type: ignore[misc]
+        assert begun.handle not in repr(begun)
+        native.callback_gate.set()
+        await _wait_until(lambda: bool(rows.rows))
+        assert next(iter(rows.rows.values())).deadline_monotonic == begun.deadline_monotonic
+        receipt = await service.answer_test(begun.handle, TARGET.device_id, "deny")
+        assert receipt.admission == "accepted"
+        joined = await service.close_and_join()
+        assert joined == TestCleanupReceipt(True, TestOutcome(TestStatus.DENIED))
+        assert rows.rows == {} and native.queues == {} and slot.operation is None
+
+    _run(scenario())
+
+
+@pytest.mark.parametrize("winner", ["once", "deny", "cancel"])
+def test_control_receipts_keep_first_intent_and_never_admit_replay(
+    monkeypatch: pytest.MonkeyPatch, winner: str,
+) -> None:
+    native = _FakeNative(monkeypatch)
+    native.resolve_gate = threading.Event()
+    # Hold the worker after enqueue when cancelling; hold the resolver for answers.
+    if winner == "cancel":
+        native.callback_gate = threading.Event()
+    rows, slot = _MemoryRows(), _ProcessSlot()
+
+    async def scenario() -> None:
+        service = _service(native, rows, slot)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        if winner == "cancel":
+            await _wait_until(native.has_entries)
+            receipt = await service.cancel_test(begun.handle, TARGET.device_id)
+        else:
+            await _wait_until(lambda: bool(rows.rows))
+            receipt = await service.answer_test(begun.handle, TARGET.device_id, winner)  # type: ignore[arg-type]
+            await _wait_until(native.resolve_entered.is_set)
+        assert receipt.admission == "accepted" and receipt.outcome.status == TestStatus.PENDING
+        with pytest.raises(FrozenInstanceError):
+            receipt.admission = "unavailable"  # type: ignore[misc]
+        for choice in ("once", "deny"):
+            duplicate = await service.answer_test(begun.handle, TARGET.device_id, choice)  # type: ignore[arg-type]
+            assert duplicate.admission == "duplicate"
+        assert (await service.cancel_test(begun.handle, TARGET.device_id)).admission == "duplicate"
+        assert (await service.answer_test(begun.handle, "other-device", "once")).admission == "unavailable"
+        assert (await service.answer_test("0" * 64, TARGET.device_id, "once")).admission == "unavailable"
+        assert (await service.answer_test(begun.handle, TARGET.device_id, "always")).admission == "unavailable"  # type: ignore[arg-type]
+        if winner == "cancel":
+            assert native.resolver_calls == []
+            assert len(native.withdraw_calls) <= 1
+            assert native.callback_gate is not None
+            native.callback_gate.set()
+            expected = TestStatus.UNAVAILABLE  # callback was fenced before its publication
+        else:
+            assert [call[1] for call in native.resolver_calls] == [winner]
+            assert native.withdraw_calls == []
+            native.resolve_gate.set()
+            expected = TestStatus.ONCE_ACKNOWLEDGED if winner == "once" else TestStatus.DENIED
+        assert await service.close_and_join() == TestCleanupReceipt(True, TestOutcome(expected))
+        assert (await service.answer_test(begun.handle, TARGET.device_id, "once")).admission == "unavailable"
+        assert rows.rows == {} and native.queues == {} and slot.operation is None
+
+    _run(scenario())
+
+
+def test_receipts_refuse_missing_row_and_expired_controls_before_resolver(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native = _FakeNative(monkeypatch)
+    native.callback_gate = threading.Event()
+    rows, slot = _MemoryRows(), _ProcessSlot()
+
+    async def scenario() -> None:
+        service = _service(native, rows, slot)
+        clock = [asyncio.get_running_loop().time()]
+        service._clock = lambda: clock[0]
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        await _wait_until(native.has_entries)
+        refused = await service.answer_test(begun.handle, TARGET.device_id, "once")
+        assert refused == TestControlReceipt("unavailable", TestOutcome(TestStatus.PENDING))
+        assert native.resolver_calls == [] and native.withdraw_calls == []
+        native.callback_gate.set()
+        await _wait_until(lambda: bool(rows.rows))
+        clock[0] = begun.deadline_monotonic
+        assert (await service.answer_test(begun.handle, TARGET.device_id, "once")).admission == "unavailable"
+        assert (await service.cancel_test(begun.handle, TARGET.device_id)).admission == "unavailable"
+        assert native.resolver_calls == []
+        assert await service.close_and_join() == TestCleanupReceipt(True, TestOutcome(TestStatus.EXPIRED))
+        assert [call[2] for call in native.withdraw_calls] == ["operator_deadline"]
+        assert rows.rows == {} and native.queues == {} and slot.operation is None
+
+    _run(scenario())
+
+
+@pytest.mark.parametrize("phase", ["wait", "control", "cleanup"])
+def test_partial_thread_start_never_fabricates_join_or_releases_owned_capacity(
+    monkeypatch: pytest.MonkeyPatch, phase: str,
+) -> None:
+    native = _FakeNative(monkeypatch)
+    if phase == "wait":
+        native.list_gate_at_call = 1
+    elif phase == "control":
+        native.resolve_gate = threading.Event()
+    else:
+        native.list_gate_at_call = 2
+    rows, slot = _MemoryRows(), _ProcessSlot()
+    original_start, original_join = threading.Thread.start, threading.Thread.join
+    started: list[threading.Thread] = []
+    joined_threads: list[threading.Thread] = []
+    expected_name = "hmp-approval-test-" + phase
+
+    def partial_start(thread: threading.Thread) -> None:
+        original_start(thread)
+        if thread.name == expected_name:
+            started.append(thread)
+            raise RuntimeError("source fixture partial start")
+
+    def record_join(thread: threading.Thread, timeout: float | None = None) -> None:
+        original_join(thread, timeout=timeout)
+        joined_threads.append(thread)
+
+    monkeypatch.setattr(threading.Thread, "start", partial_start)
+    monkeypatch.setattr(threading.Thread, "join", record_join)
+
+    async def scenario() -> None:
+        service = _service(native, rows, slot)
+        replacement = _service(native, rows, slot)
+        begun = await service.begin_test(TARGET, 2_000)
+        if phase == "wait":
+            assert begun == TestOutcome(TestStatus.UNAVAILABLE)  # no handle was issued
+            await _wait_until(native.list_entered.is_set)
+        else:
+            assert type(begun) is TestBeginReceipt
+            await _wait_until(lambda: bool(rows.rows))
+            receipt = await service.answer_test(begun.handle, TARGET.device_id, "once")
+            assert receipt.admission == "accepted"
+            if phase == "control":
+                await _wait_until(native.resolve_entered.is_set)
+            else:
+                await _wait_until(native.list_entered.is_set)
+        observer = asyncio.create_task(service.close_and_join())
+        await asyncio.sleep(0)
+        assert len(started) == 1 and started[0].is_alive()
+        assert not observer.done() and started[0] not in joined_threads
+        assert await replacement.begin_test(TARGET, 1_000) == TestOutcome(TestStatus.UNAVAILABLE)
+        # A different producer on the very same loop cannot close or join the owned operation.
+        assert await replacement.close_and_join() == TestCleanupReceipt(True, TestOutcome(TestStatus.CANCELLED))
+        assert not observer.done() and started[0].is_alive()
+        if phase == "control":
+            assert native.resolve_gate is not None
+            native.resolve_gate.set()
+        else:
+            native.list_gate.set()
+        final = await asyncio.wait_for(observer, timeout=2.0)
+        assert type(final) is TestCleanupReceipt and final.joined is True
+        assert started[0] in joined_threads and not started[0].is_alive()
+        if phase == "wait":
+            assert final.outcome == TestOutcome(TestStatus.UNAVAILABLE)
+            assert native.waiter_exited.is_set() is False
+        else:
+            assert final.outcome == TestOutcome(TestStatus.ONCE_ACKNOWLEDGED)
+        assert slot.operation is None and rows.rows == {} and native.queues == {}
+
+    _run(scenario())
+
+
+@pytest.mark.parametrize("observer_end", ["cancel", "timeout"])
+def test_owner_observer_detaches_without_cancelling_actual_cleanup(
+    monkeypatch: pytest.MonkeyPatch, observer_end: str,
+) -> None:
+    native = _FakeNative(monkeypatch)
+    native.list_gate_at_call = 2
+    rows, slot = _MemoryRows(), _ProcessSlot()
+
+    async def scenario() -> None:
+        service = _service(native, rows, slot)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        await _wait_until(lambda: bool(rows.rows))
+        assert (await service.answer_test(begun.handle, TARGET.device_id, "deny")).admission == "accepted"
+        await _wait_until(native.list_entered.is_set)
+        observer = asyncio.create_task(service.close_and_join())
+        await asyncio.sleep(0)
+        assert not observer.done()
+        if observer_end == "cancel":
+            observer.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await observer
+        else:
+            with pytest.raises(TimeoutError):
+                await asyncio.wait_for(observer, timeout=0.02)
+        assert slot.operation is not None and native.list_entered.is_set()
+        replacement = _service(native, rows, slot)
+        assert await replacement.begin_test(TARGET, 1_000) == TestOutcome(TestStatus.UNAVAILABLE)
+        assert await service.outcome(begun.handle, TARGET.device_id) == TestOutcome(TestStatus.CLEANUP_PENDING)
+        native.list_gate.set()
+        # No cleanup is restarted: callbacks continue without an observer, then a later owner
+        # observes the actual completed proof and original deny outcome.
+        await _wait_until(lambda: slot.operation is None)
+        assert await service.close_and_join() == TestCleanupReceipt(True, TestOutcome(TestStatus.DENIED))
+        assert native.list_calls == 2 and native.withdraw_calls == []
+        assert rows.rows == {} and native.queues == {}
+
+    _run(scenario())
+
+
+@pytest.mark.parametrize("failure", ["absence", "removal", "binding"])
+def test_failed_cleanup_mints_no_receipt_and_keeps_capacity_after_observer_cancel(
+    monkeypatch: pytest.MonkeyPatch, failure: str,
+) -> None:
+    native = _FakeNative(monkeypatch)
+    rows, slot = _MemoryRows(), _ProcessSlot()
+    if failure == "absence":
+        native.malformed_list_call = 2
+    elif failure == "removal":
+        rows.remove = lambda notice: False  # type: ignore[method-assign]
+    else:
+        native.resolve_gate = threading.Event()
+
+    async def scenario() -> None:
+        service = _service(native, rows, slot)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        await _wait_until(lambda: bool(rows.rows))
+        await service.answer_test(begun.handle, TARGET.device_id, "once")
+        if failure == "binding":
+            await _wait_until(native.resolve_entered.is_set)
+            monkeypatch.setitem(sys.modules, "tools.approval", types.ModuleType("tools.approval"))
+            assert native.resolve_gate is not None
+            native.resolve_gate.set()
+        await _wait_until(lambda: slot.operation is not None and slot.operation.outcome is not None)
+        observer = asyncio.create_task(service.close_and_join())
+        await asyncio.sleep(0)
+        assert not observer.done()
+        assert await service.outcome(begun.handle, TARGET.device_id) == TestOutcome(TestStatus.CLEANUP_PENDING)
+        observer.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await observer
+        assert slot.operation is not None
+        replacement = _service(native, rows, slot)
+        assert await replacement.begin_test(TARGET, 1_000) == TestOutcome(TestStatus.UNAVAILABLE)
+        assert len(native.resolver_calls) == 1
+        if failure == "removal":
+            assert rows.rows
+
+    _run(scenario())
+
+
+def test_previous_owner_receipt_cannot_close_new_producers_operation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    native = _FakeNative(monkeypatch)
+    rows, slot = _MemoryRows(), _ProcessSlot()
+
+    async def scenario() -> None:
+        previous = _service(native, rows, slot)
+        begun = await previous.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        await _wait_until(lambda: bool(rows.rows))
+        await previous.answer_test(begun.handle, TARGET.device_id, "deny")
+        first = await previous.close_and_join()
+        assert first == TestCleanupReceipt(True, TestOutcome(TestStatus.DENIED))
+        replacement = _service(native, rows, slot)
+        next_begin = await replacement.begin_test(TARGET, 2_000)
+        assert type(next_begin) is TestBeginReceipt
+        await _wait_until(lambda: bool(rows.rows))
+        second_notice = next(iter(rows.rows.values()))
+        assert await previous.close_and_join() == first
+        assert await previous.close() == first.outcome
+        assert (await previous.answer_test(next_begin.handle, TARGET.device_id, "once")).admission == "unavailable"
+        assert second_notice.request_id in rows.rows and native.withdraw_calls == []
+        assert await previous.outcome(begun.handle, TARGET.device_id) == first.outcome
+        await replacement.answer_test(next_begin.handle, TARGET.device_id, "once")
+        assert await replacement.close_and_join() == TestCleanupReceipt(True, TestOutcome(TestStatus.ONCE_ACKNOWLEDGED))
+        assert slot.operation is None and rows.rows == {} and native.queues == {}
+
+    _run(scenario())
+
+
 def test_once_acknowledgement_is_exact_and_releases_only_after_cleanup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -292,8 +593,9 @@ def test_once_acknowledgement_is_exact_and_releases_only_after_cleanup(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         notice = next(iter(rows.rows.values()))
         assert notice.session_id == TARGET.session_id
@@ -310,8 +612,8 @@ def test_once_acknowledgement_is_exact_and_releases_only_after_cleanup(
             "pattern_key",
             "pattern_keys",
         }
-        assert await service.answer_test(handle, TARGET.device_id, "once") == TestOutcome(
-            TestStatus.PENDING
+        assert await service.answer_test(handle, TARGET.device_id, "once") == TestControlReceipt(
+            "accepted", TestOutcome(TestStatus.PENDING)
         )
         outcome = await service.wait_outcome(handle, TARGET.device_id, timeout=2.0)
         assert outcome == TestOutcome(TestStatus.ONCE_ACKNOWLEDGED)
@@ -333,12 +635,14 @@ def test_cancel_is_a_single_owned_withdrawal_and_keeps_slot_until_join(
     async def scenario() -> None:
         service = _service(native, rows, slot)
         replacement = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         assert await replacement.begin_test(TARGET, 1_000) == TestOutcome(TestStatus.UNAVAILABLE)
         result = await service.cancel_test(handle, TARGET.device_id)
-        assert result.status in (TestStatus.PENDING, TestStatus.CLEANUP_PENDING)
+        assert result.admission == "accepted"
+        assert result.outcome.status in (TestStatus.PENDING, TestStatus.CLEANUP_PENDING)
         final = await service.wait_outcome(handle, TARGET.device_id, timeout=2.0)
         assert final == TestOutcome(TestStatus.CANCELLED)
         assert len(native.withdraw_calls) == 1
@@ -357,8 +661,9 @@ def test_callback_mismatch_never_publishes_or_becomes_an_answer(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         final = await service.wait_outcome(handle, TARGET.device_id, timeout=2.0)
         assert final == TestOutcome(TestStatus.UNAVAILABLE)
         assert native.resolver_calls == []
@@ -376,8 +681,9 @@ def test_ambiguous_resolver_count_is_not_retried_or_acknowledged(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         await service.answer_test(handle, TARGET.device_id, "once")
         final = await service.wait_outcome(handle, TARGET.device_id, timeout=2.0)
@@ -397,8 +703,9 @@ def test_interrupted_worker_refuses_before_native_queue_or_row(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         final = await service.wait_outcome(handle, TARGET.device_id, timeout=2.0)
         assert final == TestOutcome(TestStatus.UNAVAILABLE)
         assert native.queues == {} and rows.rows == {} and slot.operation is None
@@ -415,11 +722,12 @@ def test_starting_cancel_holds_slot_until_delayed_callback_and_join(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(native.has_entries)
-        assert await service.cancel_test(handle, TARGET.device_id) == TestOutcome(
-            TestStatus.PENDING
+        assert await service.cancel_test(handle, TARGET.device_id) == TestControlReceipt(
+            "accepted", TestOutcome(TestStatus.PENDING)
         )
         assert slot.operation is not None
         native.callback_gate.set()
@@ -440,8 +748,9 @@ def test_only_joined_cleanup_may_withdraw_again_and_it_cannot_change_outcome(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         await service.cancel_test(handle, TARGET.device_id)
         await _wait_until(lambda: len(native.withdraw_calls) == 1)
@@ -464,15 +773,16 @@ def test_answer_cancel_race_uses_one_local_control_and_requires_joined_evidence(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
-        assert await service.answer_test(handle, "wrong-device", "once") == TestOutcome(
-            TestStatus.UNAVAILABLE
+        assert await service.answer_test(handle, "wrong-device", "once") == TestControlReceipt(
+            "unavailable", TestOutcome(TestStatus.UNAVAILABLE)
         )
         await service.answer_test(handle, TARGET.device_id, "once")
-        assert await service.cancel_test(handle, TARGET.device_id) == TestOutcome(
-            TestStatus.PENDING
+        assert await service.cancel_test(handle, TARGET.device_id) == TestControlReceipt(
+            "duplicate", TestOutcome(TestStatus.PENDING)
         )
         final = await service.wait_outcome(handle, TARGET.device_id, timeout=2.0)
         assert final == TestOutcome(TestStatus.ONCE_ACKNOWLEDGED)
@@ -491,8 +801,9 @@ def test_unexpected_native_choice_is_unavailable_even_after_one_resolver_return(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         await service.answer_test(handle, TARGET.device_id, "once")
         final = await service.wait_outcome(handle, TARGET.device_id, timeout=2.0)
@@ -512,8 +823,9 @@ def test_malformed_post_join_listing_keeps_capacity_fail_closed(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         await service.answer_test(handle, TARGET.device_id, "once")
         final = await service.wait_outcome(handle, TARGET.device_id, timeout=0.1)
@@ -550,11 +862,12 @@ def test_join_waits_for_both_loop_applied_completion_fences(
 
         monkeypatch.setattr(loop, "call_soon_threadsafe", gated)
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
-        assert await service.answer_test(handle, TARGET.device_id, "once") == TestOutcome(
-            TestStatus.PENDING
+        assert await service.answer_test(handle, TARGET.device_id, "once") == TestControlReceipt(
+            "accepted", TestOutcome(TestStatus.PENDING)
         )
         await _wait_until(held.is_set)
         op = slot.operation
@@ -590,15 +903,16 @@ def test_answer_vs_cancel_barrier_keeps_one_control_and_frozen_winner(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         await service.answer_test(handle, TARGET.device_id, "once")
         await _wait_until(native.resolve_entered.is_set)
         op = slot.operation
         assert op is not None and op.control_inflight and not op.control_result_applied
-        assert await service.cancel_test(handle, TARGET.device_id) == TestOutcome(
-            TestStatus.PENDING
+        assert await service.cancel_test(handle, TARGET.device_id) == TestControlReceipt(
+            "duplicate", TestOutcome(TestStatus.PENDING)
         )
         assert len(native.resolver_calls) == 1 and native.withdraw_calls == []
         native.resolve_gate.set()
@@ -619,8 +933,9 @@ def test_native_result_cannot_forge_wrapper_pre_invocation_sentinel(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         op = slot.operation
         assert op is not None
@@ -648,14 +963,15 @@ def test_true_pre_call_terminal_intent_uses_private_sentinel_without_waiter_call
         service = _service(native, rows, slot)
         clock = [asyncio.get_running_loop().time()]
         service._clock = lambda: clock[0]
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(native.list_entered.is_set)
         op = slot.operation
         assert op is not None and not op.invoke_started and not op.native_touched
         if intent == "cancel":
-            assert await service.cancel_test(handle, TARGET.device_id) == TestOutcome(
-                TestStatus.PENDING
+            assert await service.cancel_test(handle, TARGET.device_id) == TestControlReceipt(
+                "accepted", TestOutcome(TestStatus.PENDING)
             )
             expected = TestStatus.CANCELLED
         else:
@@ -692,8 +1008,9 @@ def test_deadline_during_synchronous_callback_publication_removes_exact_row(
             service._deadline_fired(op)
 
         rows.on_publish = expire_during_publish
-        handle = await service.begin_test(TARGET, 5_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 5_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         final = await service.wait_outcome(handle, TARGET.device_id, timeout=2.0)
         assert final == TestOutcome(TestStatus.UNAVAILABLE)
         assert rows.rows == {} and native.queues == {} and slot.operation is None
@@ -711,8 +1028,9 @@ def test_late_callback_after_close_does_not_publish_and_keeps_slot_until_join(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(native.has_entries)
         op = slot.operation
         assert op is not None and op.invoke_started
@@ -737,8 +1055,9 @@ def test_cleanup_observer_hold_keeps_capacity_until_absence_proof(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         await service.answer_test(handle, TARGET.device_id, "once")
         await _wait_until(native.list_entered.is_set)
@@ -766,8 +1085,9 @@ def test_bool_or_multiple_resolver_count_never_acknowledges(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         await service.answer_test(handle, TARGET.device_id, "once")
         assert await service.wait_outcome(handle, TARGET.device_id, timeout=2.0) == TestOutcome(
@@ -795,8 +1115,9 @@ def test_uncertain_cancel_has_no_live_retry_and_joined_cleanup_only(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         await service.cancel_test(handle, TARGET.device_id)
         await _wait_until(lambda: len(native.withdraw_calls) == 1)
@@ -829,8 +1150,9 @@ def test_cancellation_bearing_or_malformed_native_result_is_unavailable(
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         await service.answer_test(handle, TARGET.device_id, "once")
         assert await service.wait_outcome(handle, TARGET.device_id, timeout=2.0) == TestOutcome(
@@ -857,8 +1179,9 @@ def test_duplicate_callback_and_context_substitution_preserve_foreign_state(
         token = caller_context.set("caller-only")
         try:
             service = _service(native, rows, slot)
-            handle = await service.begin_test(TARGET, 2_000)
-            assert isinstance(handle, str)
+            begun = await service.begin_test(TARGET, 2_000)
+            assert type(begun) is TestBeginReceipt
+            handle = begun.handle
             assert await service.wait_outcome(handle, TARGET.device_id, timeout=2.0) == TestOutcome(
                 TestStatus.UNAVAILABLE
             )
@@ -885,8 +1208,9 @@ def test_native_binding_substitution_refuses_control_without_touching_other_queu
 
     async def scenario() -> None:
         service = _service(native, rows, slot)
-        handle = await service.begin_test(TARGET, 2_000)
-        assert isinstance(handle, str)
+        begun = await service.begin_test(TARGET, 2_000)
+        assert type(begun) is TestBeginReceipt
+        handle = begun.handle
         await _wait_until(lambda: bool(rows.rows))
         module = native.bindings.approval_module
         original = module.resolve_gateway_approval
@@ -895,10 +1219,14 @@ def test_native_binding_substitution_refuses_control_without_touching_other_queu
         else:
             monkeypatch.setitem(sys.modules, module.__name__, types.ModuleType(module.__name__))
         try:
-            assert await service.answer_test(handle, TARGET.device_id, "once") == TestOutcome(
-                TestStatus.PENDING
+            assert await service.answer_test(handle, TARGET.device_id, "once") == TestControlReceipt(
+                "unavailable", TestOutcome(TestStatus.PENDING)
+            )
+            assert await service.cancel_test(handle, TARGET.device_id) == TestControlReceipt(
+                "unavailable", TestOutcome(TestStatus.PENDING)
             )
             assert native.resolver_calls == []
+            assert native.withdraw_calls == []
         finally:
             if substitution == "callable":
                 module.resolve_gateway_approval = original
