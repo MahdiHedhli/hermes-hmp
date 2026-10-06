@@ -428,7 +428,9 @@ class ApprovalTestProducer:
             return TestControlReceipt("unavailable", self._public_outcome(op))
         if op.intent is not None:
             admission: Literal["duplicate", "unavailable"] = (
-                "duplicate" if op.intent in ("answer_once", "answer_deny", "cancel") else "unavailable"
+                "duplicate"
+                if op.intent in ("answer_once", "answer_deny", "cancel")
+                else "unavailable"
             )
             return TestControlReceipt(admission, self._public_outcome(op))
         if op.row is None or op.control_inflight:
@@ -453,7 +455,9 @@ class ApprovalTestProducer:
             return TestControlReceipt("unavailable", self._public_outcome(op))
         if op.intent is not None:
             admission: Literal["duplicate", "unavailable"] = (
-                "duplicate" if op.intent in ("answer_once", "answer_deny", "cancel") else "unavailable"
+                "duplicate"
+                if op.intent in ("answer_once", "answer_deny", "cancel")
+                else "unavailable"
             )
             return TestControlReceipt(admission, self._public_outcome(op))
         op.intent = "cancel"

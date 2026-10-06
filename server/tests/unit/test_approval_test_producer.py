@@ -21,10 +21,10 @@ from hmp_plugin.approval_test_producer import (
     ApprovalTestProducer,
     NativeApprovalBindings,
     TargetBinding,
-    TestNotice,
     TestBeginReceipt,
-    TestControlReceipt,
     TestCleanupReceipt,
+    TestControlReceipt,
+    TestNotice,
     TestOutcome,
     TestStatus,
     _ProcessSlot,
@@ -276,7 +276,10 @@ def test_malformed_input_refuses_before_slot_or_native_worker(
             result = await service.begin_test(TARGET, invalid)  # type: ignore[arg-type]
             assert result == TestOutcome(TestStatus.UNAVAILABLE)
             assert slot.operation is None
-        assert await service.begin_test(object(), 10) == TestOutcome(TestStatus.UNAVAILABLE)  # type: ignore[arg-type]
+        assert (
+            await service.begin_test(object(), 10)  # type: ignore[arg-type]
+            == TestOutcome(TestStatus.UNAVAILABLE)
+        )
         invalid_target = TargetBinding("x" * 257, "u", "p", "s", "d")
         assert await service.begin_test(invalid_target, 10) == TestOutcome(TestStatus.UNAVAILABLE)
         control_target = TargetBinding("i", "u", "p", "s\x85", "d")
@@ -304,7 +307,10 @@ def test_begin_receipt_has_actual_deadline_before_callback_and_is_immutable(
         assert begun.timeout_ms == 2_000 and begun.deadline_monotonic == now + 2.0
         await _wait_until(native.has_entries)
         assert rows.rows == {}
-        assert await service.outcome(begun.handle, TARGET.device_id) == TestOutcome(TestStatus.PENDING)
+        assert (
+            await service.outcome(begun.handle, TARGET.device_id)
+            == TestOutcome(TestStatus.PENDING)
+        )
         with pytest.raises(FrozenInstanceError):
             begun.timeout_ms = 1  # type: ignore[misc]
         assert begun.handle not in repr(begun)
@@ -349,9 +355,18 @@ def test_control_receipts_keep_first_intent_and_never_admit_replay(
             duplicate = await service.answer_test(begun.handle, TARGET.device_id, choice)  # type: ignore[arg-type]
             assert duplicate.admission == "duplicate"
         assert (await service.cancel_test(begun.handle, TARGET.device_id)).admission == "duplicate"
-        assert (await service.answer_test(begun.handle, "other-device", "once")).admission == "unavailable"
-        assert (await service.answer_test("0" * 64, TARGET.device_id, "once")).admission == "unavailable"
-        assert (await service.answer_test(begun.handle, TARGET.device_id, "always")).admission == "unavailable"  # type: ignore[arg-type]
+        assert (
+            (await service.answer_test(begun.handle, "other-device", "once")).admission
+            == "unavailable"
+        )
+        assert (
+            (await service.answer_test("0" * 64, TARGET.device_id, "once")).admission
+            == "unavailable"
+        )
+        assert (
+            (await service.answer_test(begun.handle, TARGET.device_id, "always")).admission  # type: ignore[arg-type]
+            == "unavailable"
+        )
         if winner == "cancel":
             assert native.resolver_calls == []
             assert len(native.withdraw_calls) <= 1
@@ -364,7 +379,10 @@ def test_control_receipts_keep_first_intent_and_never_admit_replay(
             native.resolve_gate.set()
             expected = TestStatus.ONCE_ACKNOWLEDGED if winner == "once" else TestStatus.DENIED
         assert await service.close_and_join() == TestCleanupReceipt(True, TestOutcome(expected))
-        assert (await service.answer_test(begun.handle, TARGET.device_id, "once")).admission == "unavailable"
+        assert (
+            (await service.answer_test(begun.handle, TARGET.device_id, "once")).admission
+            == "unavailable"
+        )
         assert rows.rows == {} and native.queues == {} and slot.operation is None
 
     _run(scenario())
@@ -390,10 +408,19 @@ def test_receipts_refuse_missing_row_and_expired_controls_before_resolver(
         native.callback_gate.set()
         await _wait_until(lambda: bool(rows.rows))
         clock[0] = begun.deadline_monotonic
-        assert (await service.answer_test(begun.handle, TARGET.device_id, "once")).admission == "unavailable"
-        assert (await service.cancel_test(begun.handle, TARGET.device_id)).admission == "unavailable"
+        assert (
+            (await service.answer_test(begun.handle, TARGET.device_id, "once")).admission
+            == "unavailable"
+        )
+        assert (
+            (await service.cancel_test(begun.handle, TARGET.device_id)).admission
+            == "unavailable"
+        )
         assert native.resolver_calls == []
-        assert await service.close_and_join() == TestCleanupReceipt(True, TestOutcome(TestStatus.EXPIRED))
+        assert (
+            await service.close_and_join()
+            == TestCleanupReceipt(True, TestOutcome(TestStatus.EXPIRED))
+        )
         assert [call[2] for call in native.withdraw_calls] == ["operator_deadline"]
         assert rows.rows == {} and native.queues == {} and slot.operation is None
 
@@ -452,7 +479,10 @@ def test_partial_thread_start_never_fabricates_join_or_releases_owned_capacity(
         assert not observer.done() and started[0] not in joined_threads
         assert await replacement.begin_test(TARGET, 1_000) == TestOutcome(TestStatus.UNAVAILABLE)
         # A different producer on the very same loop cannot close or join the owned operation.
-        assert await replacement.close_and_join() == TestCleanupReceipt(True, TestOutcome(TestStatus.CANCELLED))
+        assert (
+            await replacement.close_and_join()
+            == TestCleanupReceipt(True, TestOutcome(TestStatus.CANCELLED))
+        )
         assert not observer.done() and started[0].is_alive()
         if phase == "control":
             assert native.resolve_gate is not None
@@ -485,7 +515,10 @@ def test_owner_observer_detaches_without_cancelling_actual_cleanup(
         begun = await service.begin_test(TARGET, 2_000)
         assert type(begun) is TestBeginReceipt
         await _wait_until(lambda: bool(rows.rows))
-        assert (await service.answer_test(begun.handle, TARGET.device_id, "deny")).admission == "accepted"
+        assert (
+            (await service.answer_test(begun.handle, TARGET.device_id, "deny")).admission
+            == "accepted"
+        )
         await _wait_until(native.list_entered.is_set)
         observer = asyncio.create_task(service.close_and_join())
         await asyncio.sleep(0)
@@ -500,12 +533,18 @@ def test_owner_observer_detaches_without_cancelling_actual_cleanup(
         assert slot.operation is not None and native.list_entered.is_set()
         replacement = _service(native, rows, slot)
         assert await replacement.begin_test(TARGET, 1_000) == TestOutcome(TestStatus.UNAVAILABLE)
-        assert await service.outcome(begun.handle, TARGET.device_id) == TestOutcome(TestStatus.CLEANUP_PENDING)
+        assert (
+            await service.outcome(begun.handle, TARGET.device_id)
+            == TestOutcome(TestStatus.CLEANUP_PENDING)
+        )
         native.list_gate.set()
         # No cleanup is restarted: callbacks continue without an observer, then a later owner
         # observes the actual completed proof and original deny outcome.
         await _wait_until(lambda: slot.operation is None)
-        assert await service.close_and_join() == TestCleanupReceipt(True, TestOutcome(TestStatus.DENIED))
+        assert (
+            await service.close_and_join()
+            == TestCleanupReceipt(True, TestOutcome(TestStatus.DENIED))
+        )
         assert native.list_calls == 2 and native.withdraw_calls == []
         assert rows.rows == {} and native.queues == {}
 
@@ -540,7 +579,10 @@ def test_failed_cleanup_mints_no_receipt_and_keeps_capacity_after_observer_cance
         observer = asyncio.create_task(service.close_and_join())
         await asyncio.sleep(0)
         assert not observer.done()
-        assert await service.outcome(begun.handle, TARGET.device_id) == TestOutcome(TestStatus.CLEANUP_PENDING)
+        assert (
+            await service.outcome(begun.handle, TARGET.device_id)
+            == TestOutcome(TestStatus.CLEANUP_PENDING)
+        )
         observer.cancel()
         with pytest.raises(asyncio.CancelledError):
             await observer
@@ -575,11 +617,17 @@ def test_previous_owner_receipt_cannot_close_new_producers_operation(
         second_notice = next(iter(rows.rows.values()))
         assert await previous.close_and_join() == first
         assert await previous.close() == first.outcome
-        assert (await previous.answer_test(next_begin.handle, TARGET.device_id, "once")).admission == "unavailable"
+        assert (
+            (await previous.answer_test(next_begin.handle, TARGET.device_id, "once")).admission
+            == "unavailable"
+        )
         assert second_notice.request_id in rows.rows and native.withdraw_calls == []
         assert await previous.outcome(begun.handle, TARGET.device_id) == first.outcome
         await replacement.answer_test(next_begin.handle, TARGET.device_id, "once")
-        assert await replacement.close_and_join() == TestCleanupReceipt(True, TestOutcome(TestStatus.ONCE_ACKNOWLEDGED))
+        assert (
+            await replacement.close_and_join()
+            == TestCleanupReceipt(True, TestOutcome(TestStatus.ONCE_ACKNOWLEDGED))
+        )
         assert slot.operation is None and rows.rows == {} and native.queues == {}
 
     _run(scenario())
@@ -1219,7 +1267,9 @@ def test_native_binding_substitution_refuses_control_without_touching_other_queu
         else:
             monkeypatch.setitem(sys.modules, module.__name__, types.ModuleType(module.__name__))
         try:
-            assert await service.answer_test(handle, TARGET.device_id, "once") == TestControlReceipt(
+            assert (
+                await service.answer_test(handle, TARGET.device_id, "once")
+            ) == TestControlReceipt(
                 "unavailable", TestOutcome(TestStatus.PENDING)
             )
             assert await service.cancel_test(handle, TARGET.device_id) == TestControlReceipt(
