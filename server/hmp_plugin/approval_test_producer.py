@@ -22,7 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from types import ModuleType
-from typing import Any
+from typing import Any, Literal
 
 _HANDLE_RE = re.compile(r"[0-9a-f]{64}\Z")
 _REQUEST_RE = re.compile(r"[0-9a-f]{32}\Z")
@@ -65,6 +65,25 @@ class TestStatus(StrEnum):
 @dataclass(frozen=True, slots=True)
 class TestOutcome:
     status: TestStatus
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class TestBeginReceipt:
+    handle: str
+    deadline_monotonic: float
+    timeout_ms: int
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class TestControlReceipt:
+    admission: Literal["accepted", "duplicate", "unavailable"]
+    outcome: TestOutcome
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class TestCleanupReceipt:
+    joined: Literal[True]
+    outcome: TestOutcome
 
 
 @dataclass(frozen=True, slots=True)
@@ -244,6 +263,7 @@ class _Operation:
     outcome: TestStatus | None = None
     deadline_handle: asyncio.TimerHandle | None = None
     status_waiters: list[asyncio.Future[TestOutcome]] = field(default_factory=list)
+    cleanup_waiters: list[asyncio.Future[TestCleanupReceipt]] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -296,6 +316,8 @@ class ApprovalTestProducer:
         self._remove = remove
         self._slot = _PROCESS_SLOT if slot is None else slot
         self._clock = loop.time
+        # Owner identity survives a withheld begin handle, cleanup failure and slot reuse.
+        self._owned_operation: _Operation | None = None
 
     @staticmethod
     def _valid_binding(target: object) -> bool:
@@ -326,7 +348,9 @@ class ApprovalTestProducer:
         except RuntimeError:
             return False
 
-    async def begin_test(self, target: TargetBinding, timeout_ms: int) -> str | TestOutcome:
+    async def begin_test(
+        self, target: TargetBinding, timeout_ms: int
+    ) -> TestBeginReceipt | TestOutcome:
         if not self._on_loop() or not self._valid_binding(target):
             return TestOutcome(TestStatus.UNAVAILABLE)
         if type(timeout_ms) is not int or not _MIN_TIMEOUT_MS <= timeout_ms <= _MAX_TIMEOUT_MS:
@@ -365,73 +389,84 @@ class ApprovalTestProducer:
                 self._loop, generation, handle, route_key, request_id, marker, target, deadline
             )
             self._slot.operation = op
+            self._owned_operation = op
         try:
             op.deadline_handle = self._loop.call_at(deadline, self._deadline_fired, op)
-        except RuntimeError:
-            with self._slot.guard:
-                if self._slot.operation is op:
-                    self._slot.operation = None
-            return TestOutcome(TestStatus.UNAVAILABLE)
-        worker = threading.Thread(
-            target=self._worker_entry,
-            args=(op,),
-            name="hmp-approval-test-wait",
-            daemon=False,
-        )
-        op.worker = worker
-        try:
+            worker = threading.Thread(
+                target=self._worker_entry,
+                args=(op,),
+                name="hmp-approval-test-wait",
+                daemon=False,
+            )
+            op.worker = worker
             worker.start()
         except Exception:
-            if worker.is_alive():
-                op.intent = "failure"
-                self._schedule_join(op)
-            else:
+            op.intent = "failure"
+            worker = op.worker
+            if worker is None or (not worker.is_alive() and worker.ident is None):
+                # No OS worker started, so no result callback or join can arrive. Retain the
+                # reserved operation and run the same exact cleanup/release path nonetheless.
                 op.worker_error = True
                 op.worker_result_applied = True
-                with self._slot.guard:
-                    if self._slot.operation is op:
-                        self._slot.operation = None
-                if op.deadline_handle is not None:
-                    op.deadline_handle.cancel()
+                op.worker_joined = True
+            self._schedule_join(op)
             return TestOutcome(TestStatus.UNAVAILABLE)
-        return handle
+        return TestBeginReceipt(handle, op.deadline, timeout_ms)
 
     async def answer_test(
-        self, handle: str, authenticated_device_id: str, choice: str
-    ) -> TestOutcome:
+        self, handle: str, authenticated_device_id: str, choice: Literal["once", "deny"]
+    ) -> TestControlReceipt:
         if not self._on_loop():
-            return TestOutcome(TestStatus.UNAVAILABLE)
+            return TestControlReceipt("unavailable", TestOutcome(TestStatus.UNAVAILABLE))
         op = self._matching(handle, authenticated_device_id)
         if op is None or type(choice) is not str or choice not in ("once", "deny"):
-            return TestOutcome(TestStatus.UNAVAILABLE)
-        if op.intent is not None or op.row is None or self._clock() >= op.deadline:
-            if op.intent is None and self._clock() >= op.deadline:
-                self._deadline_fired(op)
-            return self._public_outcome(op)
-        if op.control_inflight or not self._native.current():
-            return self._public_outcome(op)
+            return TestControlReceipt("unavailable", TestOutcome(TestStatus.UNAVAILABLE))
+        if self._clock() >= op.deadline:
+            self._deadline_fired(op)
+            return TestControlReceipt("unavailable", self._public_outcome(op))
+        if not self._native.current():
+            return TestControlReceipt("unavailable", self._public_outcome(op))
+        if op.intent is not None:
+            admission: Literal["duplicate", "unavailable"] = (
+                "duplicate"
+                if op.intent in ("answer_once", "answer_deny", "cancel")
+                else "unavailable"
+            )
+            return TestControlReceipt(admission, self._public_outcome(op))
+        if op.row is None or op.control_inflight:
+            return TestControlReceipt("unavailable", self._public_outcome(op))
         op.intent = "answer_" + choice
         op.control_inflight = True
         op.control_joined = False
         op.answer_choice = choice
         self._start_control(op, "answer", choice)
-        return self._public_outcome(op)
+        return TestControlReceipt("accepted", self._public_outcome(op))
 
-    async def cancel_test(self, handle: str, authenticated_device_id: str) -> TestOutcome:
+    async def cancel_test(self, handle: str, authenticated_device_id: str) -> TestControlReceipt:
         if not self._on_loop():
-            return TestOutcome(TestStatus.UNAVAILABLE)
+            return TestControlReceipt("unavailable", TestOutcome(TestStatus.UNAVAILABLE))
         op = self._matching(handle, authenticated_device_id)
         if op is None:
-            return TestOutcome(TestStatus.UNAVAILABLE)
+            return TestControlReceipt("unavailable", TestOutcome(TestStatus.UNAVAILABLE))
+        if self._clock() >= op.deadline:
+            self._deadline_fired(op)
+            return TestControlReceipt("unavailable", self._public_outcome(op))
+        if not self._native.current():
+            return TestControlReceipt("unavailable", self._public_outcome(op))
         if op.intent is not None:
-            return self._public_outcome(op)
+            admission: Literal["duplicate", "unavailable"] = (
+                "duplicate"
+                if op.intent in ("answer_once", "answer_deny", "cancel")
+                else "unavailable"
+            )
+            return TestControlReceipt(admission, self._public_outcome(op))
         op.intent = "cancel"
         self._remove_row(op)
         if op.invoke_started and not op.control_inflight and self._native.current():
             op.control_inflight = True
             op.control_joined = False
             self._start_control(op, "withdraw", "operator_cancel")
-        return self._public_outcome(op)
+        return TestControlReceipt("accepted", self._public_outcome(op))
 
     async def outcome(self, handle: str, authenticated_device_id: str) -> TestOutcome:
         if not self._on_loop():
@@ -468,11 +503,13 @@ class ApprovalTestProducer:
     async def close(self) -> TestOutcome:
         if not self._on_loop():
             return TestOutcome(TestStatus.UNAVAILABLE)
-        op = self._slot.operation
-        if op is not None and op.loop is not self._loop:
-            return TestOutcome(TestStatus.UNAVAILABLE)
+        op = self._owned_operation
         if op is None:
             return TestOutcome(TestStatus.CANCELLED)
+        if op.cleanup_finished:
+            return self._public_outcome(op)
+        if self._slot.operation is not op:
+            return TestOutcome(TestStatus.UNAVAILABLE)
         if op.intent is None:
             op.intent = "shutdown"
             self._remove_row(op)
@@ -482,10 +519,34 @@ class ApprovalTestProducer:
                 self._start_control(op, "withdraw", "gateway_shutdown")
         return self._public_outcome(op)
 
+    async def close_and_join(self) -> TestCleanupReceipt:
+        """Owner teardown observer; no timeout or cancellation can discharge cleanup debt.
+
+        This closes the exact owned operation. Cleanup is driven by the producer's loop
+        callbacks, not this observer. Cancellation detaches only this waiter. A failed
+        native absence/removal proof leaves the observer pending and the process slot owned.
+        """
+        if not self._on_loop():
+            raise RuntimeError("approval test cleanup unavailable")
+        await self.close()  # close has no suspension through its owner-intent decision
+        op = self._owned_operation
+        if op is None:
+            return TestCleanupReceipt(True, TestOutcome(TestStatus.CANCELLED))
+        if op.cleanup_finished:
+            return TestCleanupReceipt(True, self._public_outcome(op))
+        future: asyncio.Future[TestCleanupReceipt] = self._loop.create_future()
+        op.cleanup_waiters.append(future)
+        try:
+            return await future
+        finally:
+            if future in op.cleanup_waiters:
+                op.cleanup_waiters.remove(future)
+
     def _matching(self, handle: object, device_id: object) -> _Operation | None:
         op = self._slot.operation
         if (
             op is None
+            or self._owned_operation is not op
             or op.loop is not self._loop
             or type(handle) is not str
             or not _HANDLE_RE.fullmatch(handle)
@@ -497,16 +558,16 @@ class ApprovalTestProducer:
         return op
 
     def _completed_outcome(self, handle: object, device_id: object) -> TestOutcome:
-        with self._slot.guard:
-            completed = self._slot.completed
+        op = self._owned_operation
         if (
-            completed is not None
+            op is not None
+            and op.cleanup_finished
             and type(handle) is str
             and type(device_id) is str
-            and _same_text(handle, completed.handle)
-            and _same_text(device_id, completed.device_id)
+            and _same_text(handle, op.handle)
+            and _same_text(device_id, op.target.device_id)
         ):
-            return completed.outcome
+            return self._public_outcome(op)
         return TestOutcome(TestStatus.UNAVAILABLE)
 
     @staticmethod
@@ -746,9 +807,10 @@ class ApprovalTestProducer:
         try:
             thread.start()
         except Exception:
-            op.control_joined = True
-            op.control_result_applied = True
-            op.control_inflight = False
+            if not thread.is_alive() and thread.ident is None:
+                op.control_joined = True
+                op.control_result_applied = True
+                op.control_inflight = False
             op.intent = "failure"
             op.outcome = TestStatus.UNAVAILABLE
             self._remove_row(op)
@@ -852,8 +914,7 @@ class ApprovalTestProducer:
         # thread is not proof that the loop has applied its result. Keep the slot charged until
         # both operation-bound result messages have been consumed.
         if (
-            op.worker is None
-            or not op.worker_joined
+            not op.worker_joined
             or not op.worker_result_applied
             or not op.control_joined
             or not op.control_result_applied
@@ -914,8 +975,11 @@ class ApprovalTestProducer:
         try:
             thread.start()
         except Exception:
-            op.control_joined = True
-            self._finish_cleanup(op, False)
+            if not thread.is_alive() and thread.ident is None:
+                op.control_joined = True
+                self._finish_cleanup(op, False)
+            # A partial start may still be running the exact cleanup call. Its actual
+            # completion callback performs join and proof; never fabricate them here.
 
     @staticmethod
     def _row_ids(rows: object) -> set[str] | None:
@@ -994,10 +1058,8 @@ class ApprovalTestProducer:
             op.outcome = op.outcome or TestStatus.UNAVAILABLE
             self._notify_waiters(op)
             return
-        op.cleanup_finished = True
         if op.deadline_handle is not None:
             op.deadline_handle.cancel()
-        self._notify_waiters(op)
         with self._slot.guard:
             if self._slot.operation is op:
                 self._slot.completed = _Completed(
@@ -1006,6 +1068,16 @@ class ApprovalTestProducer:
                     TestOutcome(op.outcome or TestStatus.UNAVAILABLE),
                 )
                 self._slot.operation = None
+            else:
+                return
+        # Mint completion only after actual joins, exact absence/removal and slot release.
+        op.cleanup_finished = True
+        self._notify_waiters(op)
+        receipt = TestCleanupReceipt(True, self._public_outcome(op))
+        for future in tuple(op.cleanup_waiters):
+            if not future.done():
+                future.set_result(receipt)
+        op.cleanup_waiters.clear()
 
     def _remove_row(self, op: _Operation) -> None:
         if op.row is not None and not op.row_removal_attempted:
