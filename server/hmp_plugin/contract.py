@@ -17,6 +17,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, Protocol
 
 # --------------------------------------------------------------------------------------------------
@@ -899,6 +900,8 @@ class ReadBridge(Protocol):
 
     def served_profiles(self) -> list[str]: ...
 
+    def approval_test_target(self, profile: str) -> ApprovalTestTarget | None: ...
+
     def authz_state(self, user_id: str, profile: str) -> AuthzState:
         """Fails closed to `AuthzState.UNVERIFIABLE`."""
         ...
@@ -989,6 +992,15 @@ class ReadBridge(Protocol):
     ) -> Mapping[str, object] | None:
         """Validated Hermes write; None means the provider/model pair was refused."""
         ...
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class ApprovalTestTarget:
+    """AT1 HMP metadata projection; native helper bookkeeping is not claimed pure-read."""
+
+    profile_home: Path
+    root_session_id: str
+    live_tip_session_id: str
 
 
 @dataclass(frozen=True)

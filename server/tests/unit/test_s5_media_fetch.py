@@ -109,6 +109,7 @@ class Fx:
         self.tasks: list[asyncio.Task[Any]] = []
         self.starts: list[tuple[Any, str, Any]] = []
         self.grant_threads: list[str] = []
+        self.owned_media_services: list[Any] = []
         self.app: web.Application | None = None
         self.server: TestServer | None = None
         self.loop: asyncio.AbstractEventLoop | None = None
@@ -182,6 +183,7 @@ class Fx:
         def start(lease: Any, call: Any, payload_type: Any) -> Any:
             status, future = real_start(lease, call, payload_type)
             self.starts.append((lease, status, future))
+            self._remember_media_service(lease._service)
             return status, future
 
         FETCH._Lease.start = start  # type: ignore[method-assign]
@@ -190,6 +192,32 @@ class Fx:
             FETCH._Lease.start = real_start  # type: ignore[method-assign]
 
         return restore
+
+    def _remember_media_service(self, service: Any) -> None:
+        if all(service is not owner for owner in self.owned_media_services):
+            self.owned_media_services.append(service)
+
+    def _close_media_admissions_and_release_gates(self) -> None:
+        """Fence every retained owner before the first fixture teardown gate release."""
+        for service in self.owned_media_services:
+            service.close()  # Fence admissions before releasing this rig's held work.
+        for gate in (self.p1_gate, self.p2_gate):
+            if gate is not None:
+                gate.set()
+
+    def _close_owned_media_workers(self) -> None:
+        """Close only this rig's retained pools, then prove their bounded actual joins."""
+        self._close_media_admissions_and_release_gates()
+        workers = {
+            worker
+            for service in self.owned_media_services
+            for worker in tuple(service._executor._threads)
+        }
+        deadline = time.monotonic() + 20.0  # Existing held fixture jobs are bounded at 15 seconds.
+        for worker in workers:
+            assert worker is not threading.current_thread()
+            worker.join(max(0.0, deadline - time.monotonic()))
+        assert not any(worker.is_alive() for worker in workers), "owned media worker did not join"
 
     @property
     def service(self) -> Any:
@@ -218,9 +246,13 @@ class Fx:
 
         async def main() -> Any:
             app = self.rig.env.app()
+            self._remember_media_service(app[FETCH.MEDIA_SERVICE_KEY])
             app.middlewares.append(probe)
             if tweak is not None:
                 tweak(app)
+            selected = app.get(FETCH.MEDIA_SERVICE_KEY)
+            if type(selected) is FETCH.MediaFetchService:
+                self._remember_media_service(selected)
             test_server = TestServer(app)
             await test_server.start_server(
                 access_log_class=AllowListedAccessLogger,
@@ -231,9 +263,7 @@ class Fx:
                 try:
                     return await scenario(client)
                 finally:
-                    for gate in (self.p1_gate, self.p2_gate):
-                        if gate is not None:
-                            gate.set()
+                    self._close_media_admissions_and_release_gates()
 
         del logger_names
         restore = self._observe_starts()
@@ -241,6 +271,7 @@ class Fx:
             return asyncio.run(main())
         finally:
             restore()
+            self._close_owned_media_workers()
 
     # -- requests ------------------------------------------------------------------------------
 
@@ -1163,7 +1194,9 @@ def _entry_evicted(fx: Fx) -> None:
 
 def _service_replaced(fx: Fx) -> None:
     assert fx.app is not None
-    fx.app._state[FETCH.MEDIA_SERVICE_KEY] = FETCH.MediaFetchService()
+    replacement = FETCH.MediaFetchService()
+    fx._remember_media_service(replacement)
+    fx.app._state[FETCH.MEDIA_SERVICE_KEY] = replacement
 
 
 def _service_closed(fx: Fx) -> None:
@@ -2449,3 +2482,81 @@ def test_the_route_is_always_registered_for_get_only() -> None:
 
 def test_the_media_registry_ref_grammar_matches_the_descriptor_grammar() -> None:
     assert REF_RE.match("A" * 43) and not REF_RE.match("A" * 42)
+
+
+def _observe_first_fixture_gate_release(fx: Fx) -> list[tuple[bool, bool]]:
+    """Observe the causal first release; a final is_set value alone cannot prove order."""
+    releases: list[tuple[bool, bool]] = []
+
+    class ObservedGate(threading.Event):
+        def set(self) -> None:
+            if not releases:
+                owners_closed = bool(fx.owned_media_services) and all(
+                    service.closed for service in fx.owned_media_services
+                )
+                both_unset = all(
+                    gate is not None and not gate.is_set() for gate in (fx.p1_gate, fx.p2_gate)
+                )
+                releases.append((owners_closed, both_unset))
+                assert owners_closed and both_unset
+            super().set()
+
+    fx.p1_gate, fx.p2_gate = ObservedGate(), ObservedGate()
+    return releases
+
+
+# The fixture owns the original pool even when an authority probe replaces the app slot.
+def test_fixture_joins_original_media_pool_after_service_slot_replacement(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fx = Fx(tmp_path, monkeypatch)
+    seen: dict[str, Any] = {}
+
+    async def scenario(client: TestClient) -> None:
+        await fx.rig.pair(client)
+        refs = await fx.mint(client)
+        seen["original"] = fx.service
+        fx.after_p2.append(lambda: _service_replaced(fx))
+        status, _headers, body = await fx.get(client, refs[6])
+        assert status == 404 and json.loads(body) == NOT_FOUND
+        assert fx.p2_in == 1 and not png_signature(body)
+        seen["replacement"] = fx.service
+        assert seen["original"] is not seen["replacement"]
+        assert not seen["original"].closed  # Slot replacement is not an owner close.
+        seen["workers"] = tuple(seen["original"]._executor._threads)
+        assert seen["workers"] and all(worker.is_alive() for worker in seen["workers"])
+        seen["releases"] = _observe_first_fixture_gate_release(fx)
+
+    fx.run(scenario)
+    assert seen["releases"] == [(True, True)]
+    assert seen["original"] in fx.owned_media_services
+    assert seen["original"].closed and seen["replacement"].closed
+    assert all(not worker.is_alive() for worker in seen["workers"])
+
+
+def test_fixture_releases_and_joins_held_media_worker_when_scenario_raises(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    fx = Fx(tmp_path, monkeypatch)
+    seen: dict[str, Any] = {}
+
+    async def scenario(client: TestClient) -> None:
+        await fx.rig.pair(client)
+        refs = await fx.mint(client)
+        seen["releases"] = _observe_first_fixture_gate_release(fx)
+        request = asyncio.create_task(fx.get(client, refs[6]))
+        await until(lambda: fx.p1_in == 1)
+        seen["service"] = fx.service
+        seen["future"] = fx.starts[0][2]
+        seen["workers"] = tuple(fx.service._executor._threads)
+        assert not seen["future"].done() and not seen["future"].cancelled()
+        assert seen["workers"] and not request.done()
+        raise RuntimeError("owned fixture scenario failed")
+
+    with pytest.raises(RuntimeError, match=r"^owned fixture scenario failed$"):
+        fx.run(scenario)
+    assert seen["releases"] == [(True, True)]
+    assert fx.p1_gate is not None and fx.p1_gate.is_set()
+    assert seen["service"].closed
+    assert seen["future"].done() and not seen["future"].cancelled()
+    assert all(not worker.is_alive() for worker in seen["workers"])

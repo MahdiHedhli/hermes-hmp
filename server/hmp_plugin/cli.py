@@ -126,6 +126,8 @@ MUTATING_COMMANDS: frozenset[tuple[str, str | None]] = frozenset(
         ("devices", "grant-controls"),
         ("devices", "deny-controls"),
         ("instance", "rotate-key"),
+        ("approval-test", "begin"),
+        ("approval-test", "cancel"),
     }
 )
 
@@ -678,9 +680,28 @@ def endpoint_for(host: str, port: int) -> str:
 # --------------------------------------------------------------------------------------------------
 
 
+def _approval_test_timeout(value: str) -> int:
+    try:
+        return int(value)
+    except ValueError:
+        # argparse's default int converter echoes the supplied token on failure.
+        raise argparse.ArgumentTypeError("invalid diagnostic timeout") from None
+
+
 def setup_parser(parser: argparse.ArgumentParser) -> None:
     """`setup_fn` for `register_cli_command`: builds `hermes hmp …`."""
     groups = parser.add_subparsers(dest=SUBCOMMAND_DEST)
+
+    approval_test = groups.add_parser(
+        "approval-test", help="Synthetic approval diagnostic; no action will run"
+    ).add_subparsers(dest="approval_test_command")
+    begin = approval_test.add_parser("begin", help="Hold one diagnostic until joined completion")
+    begin.add_argument("--device", required=True)
+    begin.add_argument("--profile", required=True, dest="target_profile")
+    begin.add_argument("--session", required=True)
+    begin.add_argument("--timeout-ms", type=_approval_test_timeout, default=30000)
+    for action in ("status", "cancel"):
+        approval_test.add_parser(action).add_argument("operation_id")
 
     pair = groups.add_parser("pair", help="Pairing offers and confirmations").add_subparsers(
         dest="pair_command"
@@ -834,7 +855,8 @@ class RefusedError(Exception):
 
 def _command(args: argparse.Namespace) -> tuple[str | None, str | None]:
     group = getattr(args, SUBCOMMAND_DEST, None)
-    action = getattr(args, f"{group}_command", None) if group else None
+    action_dest = "approval_test_command" if group == "approval-test" else f"{group}_command"
+    action = getattr(args, action_dest, None) if group else None
     return group, action
 
 
@@ -2143,6 +2165,70 @@ def _checked_setup(env: CliEnv) -> tuple[int, ListenerRecord | None]:
     return (EXIT_OK, record) if supported and count > 0 else (EXIT_REFUSED, None)
 
 
+def _approval_test_binding(env: CliEnv) -> Any:
+    """Load-only custody/epoch/identity, then typed private record; no health probe."""
+    from . import identity, server
+    from .approval_test_cli import ListenerBinding
+    from .approval_test_host_codec import HostGeneration
+
+    kw = env.identity_kwargs
+    custody = identity.resolve_custody(
+        env=kw.get("env", env.environ),
+        hermes_root=kw.get("hermes_root"),
+        binding_root=kw.get("binding_root"),
+    )
+    path = server.store_path(custody.anchor_dir)
+    if not path.is_file():
+        raise ValueError()
+    # Read-only SQLite can require a -shm sidecar when a WAL exists. Refuse a
+    # missing sidecar rather than ask SQLite to create it during this command.
+    if path.with_name(path.name + "-wal").exists() and not path.with_name(
+        path.name + "-shm"
+    ).exists():
+        raise ValueError()
+    loaded = identity.load_existing(_ReadOnlyEpoch(path), **_identity_kw(env))
+    record_path = listener_record_path(custody.anchor_dir)
+
+    def reread() -> HostGeneration:
+        record = read_listener_record(record_path, iid=loaded.iid, pid_alive=env.pid_alive)
+        return HostGeneration(record.iid, record.pid, record.nonce)
+
+    return ListenerBinding(record_path, reread(), reread)
+
+
+def _cmd_approval_test(env: CliEnv, args: argparse.Namespace, action: str | None) -> int:
+    """One separate async invocation; never a native producer or writable Store."""
+    import asyncio
+
+    from .approval_test_cli import run_command
+    from .approval_test_host_codec import HostBeginRequest, HostOperationRequest
+
+    try:
+        if action not in ("begin", "status", "cancel"):
+            env.stdout.write("Approval test unavailable.\n")
+            return EXIT_REFUSED
+        if ("approval-test", action) in MUTATING_COMMANDS:
+            _check_mutation_allowed(env)
+        binding = _approval_test_binding(env)
+        if action == "begin":
+            request = HostBeginRequest(
+                binding.generation, args.device, args.target_profile, args.session, args.timeout_ms
+            )
+        else:
+            request = HostOperationRequest(binding.generation, action, args.operation_id)
+        return asyncio.run(run_command(binding, request, env.stdout))
+    except RefusedError:
+        env.stdout.write("Approval test unavailable.\n")
+        return EXIT_REFUSED
+    except KeyboardInterrupt:
+        env.stdout.write("Operator interrupted; host cleanup is not confirmed by interruption.\n")
+        return EXIT_INTERRUPTED
+    except Exception:
+        # No parser/native/record paths or selectors can escape through errors.
+        env.stdout.write("Approval test completion unconfirmed; do not resubmit begin.\n")
+        return EXIT_ENVIRONMENT
+
+
 def _cmd_setup_check(env: CliEnv) -> int:
     status, _record = _checked_setup(env)
     return status
@@ -2195,6 +2281,8 @@ def dispatch(args: argparse.Namespace, env: Optional[CliEnv] = None) -> int:  # 
     env = env if env is not None else CliEnv()
     group, action = _command(args)
     try:
+        if group == "approval-test":
+            return _cmd_approval_test(env, args, action)
         if group == "compat":
             return _cmd_compat(env, args)
         if (group, action) == ("setup", "check"):
@@ -2206,7 +2294,8 @@ def dispatch(args: argparse.Namespace, env: Optional[CliEnv] = None) -> int:  # 
         handler = _STORE_COMMANDS.get((group or "", action or ""))
         if handler is None:
             env.stderr.write(
-                "usage: hermes hmp {pair,devices,instance,compat,setup,health,push} ...\n"
+                "usage: hermes hmp "
+                "{pair,devices,instance,compat,setup,health,push,approval-test} ...\n"
             )
             return EXIT_ENVIRONMENT
         if (group, action) in MUTATING_COMMANDS:

@@ -306,7 +306,10 @@ MUTATING = [
 
 
 def test_mutating_set_matches_the_contract() -> None:
-    assert {tuple(a[:2]) for a in MUTATING} == set(cli.MUTATING_COMMANDS)
+    assert {tuple(a[:2]) for a in MUTATING} | {
+        ("approval-test", "begin"),
+        ("approval-test", "cancel"),
+    } == set(cli.MUTATING_COMMANDS)
 
 
 @pytest.mark.parametrize("argv", MUTATING, ids=lambda a: "-".join(a[:2]))

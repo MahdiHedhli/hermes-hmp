@@ -80,6 +80,17 @@ server/
                                   #   bounded frames/connection leases and owned socket lifecycle.
                                   #   not wired to current listener, CLI, producer or phone routes;
                                   #   target-device/session authority remains a separate reviewed port.
+    approval_test_authority.py     # AT1 current device/family/owner/profile/session checks and bounded
+                                  #   owned off-loop metadata reads; real workers retain capacity until join.
+                                  #   Fake-component verified; listener/native/device qualification separate.
+    approval_test_routes.py        # AT1 strict authenticated standalone/profile-scoped projection/control;
+                                  #   ordinary AP3 never invokes or embeds synthetic observations.
+    approval_test_service.py       # AT1 ephemeral synthetic test mapping, projection/control and joined
+                                  #   cleanup ownership; no PromptStore insertion, real action or AT1 push.
+                                  #   Listener and HTTP registration remain pending.
+    approval_test_cli.py           # AT1 single-attempt operator observation and typed first-interrupt cancel;
+                                  #   accepted alone is not completion; no native producer or grant writes.
+                                  #   Parser/controller fake cases verified; real listener binding pending.
     direct_send.py                # amendment F2: DS-2..DS-8 orchestration (gate order, guard, idempotency,
                                   #   the api_server loopback call, post-hoc verification). Never imports a Hermes
                                   #   internal itself -- reads bridge.py for Hermes state, and speaks api_server's
@@ -398,3 +409,39 @@ cannot close from its own code.
   tighten, not a live gap. Suggested fix: flag any `Attribute` node on `self._adapter`, on
   `self._hermes` call results and on values returned from `REACHED_METHODS`-table calls, and
   compare `(receiver, method)` pairs against `compat.READ_DEPENDENCIES` instead of bare names.
+
+## AT1 listener and profile-scoped projection amendment (source proposal)
+
+The joined tree includes the accepted styled authority/service and separately accepted
+CLI component. The listener owns one attempted current-generation service and Unix
+endpoint after successful same-nonce record creation. Unknown cleanup retains that
+listener and dependencies. HmpServer.stop immediately fences AT1, retains a shielded
+teardown owner and joins endpoint/service/authority readers before adapter record/store/
+prompt destruction. Exact original adapter/root-plugin and closed module/native bindings
+participate in sticky replacement retirement; no runtime source fingerprint allowlist.
+
+The exact bearer-first AT1 route inventory is four routes under /hmp/v1:
+
+| Method | Path | Clause |
+|---|---|---|
+| GET | /approval-tests/current | standalone DATA projection |
+| GET | /bots/{p}/approval-tests/current | exact canonical profile-scoped projection |
+| POST | /approval-tests/{phone_test_id}/answer | typed new control intent |
+| POST | /approval-tests/{phone_test_id}/cancel | typed new cancel intent |
+
+The scoped handler passes only its canonical decoded path p to actual full
+phone_card(request, profile=p), retaining bounded owned metadata/gate reads and current
+device/family/owner/profile/feature/root/tip/home checks. Final synchronous currentness/
+bearer/service checks and fixed DTO encoding follow immediately, without another await.
+No body/query/caller field substitutes a profile. Strict GET/POST schemas,256-byte input,
+1024-byte no-store response and generic fixed result distinctions remain. Significant
+Content-Length digits determine numeric size; leading zeroes are not a body-size failure.
+
+Ordinary AP3 and AP4 retain their exact original bodies, calls, clocks, awaits, purge/view,
+Desktop ownership and resolver sequence. No combined observation, extension or cap is
+added to AP3; it does not call AT1. Independent same-screen mobile reads are governed by
+the separately accepted profile-scoped amendment. No PromptStore alias, public HTTP begin,
+push, native/provider action, source pin, grant or permission change is introduced.
+
+Definitions and expected source census require independent review and root execution.
+Native/helper/socket/current device and release qualifications remain separate.

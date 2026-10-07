@@ -1,8 +1,8 @@
 # AT1-T003 — Private local operator connection
 
-Status: source authoring under the accepted caller-v4 contract. No current CLI,
-adapter or server registers this endpoint, and no production handler exists.
-`hermes hmp approval-test begin` remains a proposed, unavailable command.
+Status: private listener/routes source proposal on clean union9535, with the separately
+accepted authority/service and CLI components as exact prerequisites. Definitions are
+not execution admission, current gateway deployment or native/device qualification.
 
 This implements a necessary caller connection rather than a phone permission
 shortcut. The endpoint authenticates the same local OS user through Linux
@@ -73,3 +73,50 @@ returns the peer's effective credentials at connection/listen time, and
 [Linux unix(7)](https://man7.org/linux/man-pages/man7/unix.7.html) specifies
 SO_PEERCRED and pathname socket limits. Filesystem mode is an additional guard;
 neither platform's socket mode is substituted for kernel identity.
+
+## Accepted profile-scoped listener integration (source proposal)
+
+This source follows the exact accepted profile-scoped amendment a66f38c3 with independent
+review7483e6e9. It supersedes the attempted combined AP3 ordering in historical listener
+V1/V2 and unaccepted V3 research. No combined authority/freshness guarantee is fabricated.
+
+Activation follows successful creation of this listener's private same-nonce record,
+using current iid and actual PID. One attempted optional activation is allowed; no new
+directory/mode, fallback transport, retry or replacement service escapes an occupied owner.
+The actual owning adapter and root-plugin identities are captured alongside existing
+closed modules/native bindings. Replacement followed by restoration cannot revive AT1.
+
+Shutdown fences immediately and shields its retained owner through actual endpoint,
+service, connection, native cleanup and authority-worker joins. The adapter's record,
+PromptStore and Store remain until proven join. Unknown cleanup retains dependencies.
+No observer cancellation is represented as settlement.
+
+GET /hmp/v1/bots/{p}/approval-tests/current calls actual full phone_card(request, profile=p)
+and serializes its fixed version1/null-or-card DTO after the final authority await, with
+synchronous identity/bearer/service checks and no later suspension. The existing standalone
+GET and independent answer/cancel routes remain. Standalone DATA cannot mint profile UI
+eligibility. There is no public HTTP begin or permission fallback. Exact path routing,
+foreign/stale opacity, strict query/body/header/UTF8/duplicate/unknown validation, exact
+once/deny integer1 control schemas,256-byte body and1024-byte no-store response are retained.
+Length text has the existing8192-byte header bound;0007 declares7 bytes, and declared or
+observed body above256 still has its own413 result.
+
+Ordinary AP3/AP4 are restored exactly to the current styled baseline source. Synthetic
+read/failure never delays or modifies their prompt/Desktop decisions, and no extension is
+emitted. The same common mobile screen uses independent scoped reads; its revised client
+binding and debt/older-host handling require separate source and actual test qualification.
+Legacy DATA decoder tolerance is not control authority.
+
+The fixed card exposes only test_id32hex, title Synthetic approval test, message No action
+will run., ordered once/deny choices. HTTP202 means typed control intent accepted only.
+No native settlement/cleanup, provider/model/tool/shell/message action, prompt insertion,
+push, grant/mode or native core change is inferred or introduced.
+
+Prior68 listener/control/authority/ordinary test causes are rebound to this amendment.
+Additional source definitions cover exact scoped routing and full service native rereads,
+changes during authority awaits, final identity failure/refusal, unknown older-host route
+compatibility, independent ordinary and synthetic progress, held open-Bot Desktop reads,
+and query/body attempts to replace a foreign path profile. Expected counts/names are not
+actual collection/pass. The exact ordinary AP3/AP4 body and original assertion files are
+pinned unchanged. Root alone reviews/applies/executes the complete joined source; no SDK,
+parser/import/linter/tests/live listener/native/provider/device execution was done by author.
