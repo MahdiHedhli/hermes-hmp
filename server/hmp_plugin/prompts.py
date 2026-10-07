@@ -12,13 +12,16 @@ new rows, so a stream or hook bound to an older generation can never surface a r
 from __future__ import annotations
 
 import asyncio
+import enum
 import hashlib
+import itertools
 import json
 import threading
 import time
 from collections.abc import AsyncIterator, Awaitable, Callable, Mapping
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import Protocol
 
 from .contract import IDEMPOTENCY_RETENTION_S
@@ -95,12 +98,119 @@ class PromptRow:
     stored_status: int | None = None
     stored_body: dict[str, object] | None = None
     settled_at: int | None = None
+    settle_cause: str | None = None  # process memory only; never on the wire or in a log
 
 
 @dataclass(frozen=True)
 class HttpResult:
     status: int
     body: dict[str, object]
+
+
+PromptKey = tuple[str, str, str, str]
+
+# Why an approval row stopped being open (spec 015 NI-2.2). Only Hermes's own answer counts as
+# authoritative: an applied answer, a native not-pending code, or a Hermes listing without the row.
+SETTLE_AUTHORITATIVE = frozenset({"answer_applied", "native_not_pending", "phone_listing_omitted"})
+SETTLE_NON_AUTHORITATIVE = frozenset({
+    "local_expiry",
+    "generation_closed",
+    "binding_fence",
+    "run_ended",
+    "phone_not_resolved",
+    "clarify_retired",
+})
+
+
+def is_authoritative(cause: object) -> bool:
+    """True only for a recorded authoritative cause. `None` and unknown values are False."""
+    return isinstance(cause, str) and cause in SETTLE_AUTHORITATIVE
+
+
+@dataclass(frozen=True)
+class ApprovalInserted:
+    """One inserted approval row. No command, description, choices, run ID or session key."""
+
+    key: PromptKey
+    surface: str  # "bot_chat" | "phone_chat"
+    generation: int
+    expires_at: int | None
+
+
+@dataclass(frozen=True)
+class MemberState:
+    bot_chat: bool
+    phone_chat: bool
+
+
+ALL_OPEN = MemberState(bot_chat=True, phone_chat=True)
+
+
+def _freeze_wire(wire: Mapping[str, object] | None) -> Mapping[str, object] | None:
+    """An owned, read-only copy of a `wire_prompt` body: a fresh dict whose `choices` (the only
+    container `wire_prompt` emits) is a tuple, behind a `MappingProxyType`."""
+    if wire is None:
+        return None
+    owned = dict(wire)
+    choices = owned.get("choices")
+    if isinstance(choices, (list, tuple)):
+        owned["choices"] = tuple(item for item in choices)
+    return MappingProxyType(owned)
+
+
+@dataclass(frozen=True)
+class RowView:
+    """A frozen snapshot of one row. `wire` is excluded from equality and hash; every other
+    field is immutable, so a view is hashable."""
+
+    key: PromptKey
+    kind: str
+    surface: str
+    generation: int
+    status: str
+    settle_cause: str | None
+    expires_at: int | None
+    held: bool
+    open_now: bool
+    hidden_now: bool
+    visible_now: bool
+    settled_at: int | None = None
+    session_key: str | None = None
+    wire: Mapping[str, object] | None = field(default=None, compare=False, hash=False)
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "wire", _freeze_wire(self.wire))
+
+
+@dataclass(frozen=True)
+class VisibleSet:
+    held: bool
+    rows: tuple[RowView, ...]
+
+    def __post_init__(self) -> None:
+        object.__setattr__(self, "rows", tuple(self.rows))
+
+
+# Generation tokens come from one process-wide counter advanced under its own lock, so stores
+# built on different threads never share a token and nothing relies on the GIL.
+_GENERATION_COUNTER = itertools.count(1)
+_GENERATION_LOCK = threading.Lock()
+
+
+def row_open_now(row: PromptRow, now: int) -> bool:
+    """Spec 015 NI-6.1: still open at `now`. Exactly `purge`'s local-expiry rule, without the
+    mutation: a stored `open` row past `expires_at + EXPIRY_GRACE_S` is not open now."""
+    if row.status != "open":
+        return False
+    return not (row.expires_at is not None and now > row.expires_at + EXPIRY_GRACE_S)
+
+
+def row_hidden_now(row: PromptRow, held: bool, members: MemberState) -> bool:
+    """Spec 015 NI-6.1: Desktop-held Bot Chat, or the row's surface member is closed. Values only,
+    whatever the row's status."""
+    if row.surface == "bot_chat":
+        return held or not members.bot_chat
+    return not members.phone_chat
 
 
 class PromptResolver(Protocol):
@@ -115,6 +225,44 @@ class PromptResolver(Protocol):
     async def mark_awaiting(self, row: PromptRow) -> str:
         """`ok`, `stale`, or `unavailable`."""
         ...
+
+
+class DesktopOwnership(enum.Enum):
+    """Closed HMP view of cross-surface Desktop ownership; no native record data crosses it."""
+
+    OWNED = "owned"
+    UNOWNED = "unowned"
+    UNKNOWN = "unknown"
+
+
+class DesktopOwnershipPort(Protocol):
+    """Narrow seam for an already-authorized AP-3/AP-4 ownership decision."""
+
+    @property
+    def can_observe(self) -> bool:
+        """Only the literal `True` permits observation-only profile/target resolution."""
+        ...
+
+    async def observe(
+        self, *, profile: str, canonical_lineage: tuple[str, ...]
+    ) -> DesktopOwnership:
+        """Return one closed state. Implementations must not expose source metadata."""
+        ...
+
+
+class UnavailableDesktopOwnershipPort:
+    """Safe production default until a separately accepted native provider exists."""
+
+    can_observe = False
+
+    async def observe(
+        self, *, profile: str, canonical_lineage: tuple[str, ...]
+    ) -> DesktopOwnership:
+        return DesktopOwnership.UNKNOWN
+
+
+class DesktopOwnershipCheck(Protocol):
+    async def __call__(self, row: PromptRow) -> DesktopOwnership: ...
 
 
 def _error(code: str, message: str, *, applied: bool | None = None) -> HttpResult:
@@ -146,6 +294,8 @@ class PromptStore:
 
     def __init__(self, *, clock: Callable[[], float] = time.time) -> None:
         self._clock = clock
+        with _GENERATION_LOCK:
+            self.generation: int = next(_GENERATION_COUNTER)
         self._guard = threading.Lock()
         self._rows: dict[tuple[str, str, str, str], PromptRow] = {}
         self._desktop: set[tuple[str, str, str]] = set()
@@ -159,13 +309,25 @@ class PromptStore:
         # fence (AP-10) closed the Phone-chat side of this generation. Both only ever go True.
         self.closed = False
         self.phone_closed = False
+        # One synchronous insertion observer per generation (spec 015 NI-1.1). Read and written
+        # only under `_guard`; called only after `_guard` is released.
+        self._observer: Callable[[ApprovalInserted], None] | None = None
+
+    def set_insertion_observer(self, observer: Callable[[ApprovalInserted], None] | None) -> None:
+        """Register (or clear with `None`) the one insertion observer. Safe from any thread; a
+        no-op once this generation is closed."""
+        with self._guard:
+            if self.closed:
+                return
+            self._observer = observer
 
     def close(self, now: int) -> None:
         """The listener that owned this generation stopped: expire everything, refuse new rows."""
         with self._guard:
             self.closed = True
+            self._observer = None
             for row in self._rows.values():
-                self.expire(row, now)
+                self.expire(row, now, cause="generation_closed")
             self._desktop.clear()
         _log("prompt_store", "closed")
 
@@ -179,7 +341,7 @@ class PromptStore:
             self.phone_closed = True
             for row in self._rows.values():
                 if row.surface == "phone_chat":
-                    self.expire(row, now)
+                    self.expire(row, now, cause="binding_fence")
             self._sessions.clear()
             self._observations.clear()
         log_event("approval_binding", outcome="changed")
@@ -206,23 +368,33 @@ class PromptStore:
                     del self._lock_users[key]
 
     @staticmethod
-    def expire(row: PromptRow, now: int) -> None:
+    def expire(row: PromptRow, now: int, *, cause: str) -> None:
         if row.status == "open":
             row.status = "expired"
             row.settled_at = now
+            row.settle_cause = cause
+
+    def settle_answer(self, row: PromptRow, *, status: str, cause: str, now: int) -> None:
+        """The answer path's only writer of `status`, `settled_at` and `settle_cause`. It overwrites
+        unconditionally, even a settlement another path made while the Hermes call was awaited
+        (spec 015 RD-7), and reads no clock: `now` is the caller's pre-await sample."""
+        with self._guard:
+            row.status = status
+            row.settled_at = now
+            row.settle_cause = cause
 
     def expire_run(self, run_id: str, now: int) -> None:
         with self._guard:
             for row in self._rows.values():
                 if row.run_id == run_id:
-                    self.expire(row, now)
+                    self.expire(row, now, cause="run_ended")
 
     def reconcile_approvals(self, session_key: str, pending: set[str], now: int) -> None:
         with self._guard:
             for row in self._rows.values():
                 if (row.session_key == session_key and row.kind == "approval"
                         and row.request_id not in pending):
-                    self.expire(row, now)
+                    self.expire(row, now, cause="phone_listing_omitted")
 
     def get(self, key: tuple[str, str, str, str]) -> PromptRow | None:
         with self._guard:
@@ -232,11 +404,10 @@ class PromptStore:
         with self._guard:
             for row in self._rows.values():
                 if row.expires_at is not None and now > row.expires_at + EXPIRY_GRACE_S:
-                    self.expire(row, now)
+                    self.expire(row, now, cause="local_expiry")
             stale = [
                 key for key, row in self._rows.items()
-                if row.settled_at is not None and now - row.settled_at >= IDEMPOTENCY_RETENTION_S
-                and not self._lock_users.get(key)
+                if self._retention_deleted_now(key, row, now)
             ]
             for key in stale:
                 del self._rows[key]
@@ -260,6 +431,7 @@ class PromptStore:
             if current is not None:
                 return
             self._rows[key] = row
+            observer = self._observer if row.kind == "approval" else None
         _log(
             "prompt_store",
             "stored",
@@ -267,6 +439,15 @@ class PromptStore:
             request_id=row.request_id,
             run_id=row.run_id or "",
         )
+        if observer is not None:
+            # Synchronous, on this thread, outside `_guard` (NI-1.3, NI-1.4). Only a callback
+            # failure is contained: the call has no `await`, so a `CancelledError` raised here is
+            # not the delivery of this task's own cancellation (RD-3). Every other
+            # `BaseException` propagates with the row already stored.
+            try:
+                observer(ApprovalInserted(key, row.surface, self.generation, row.expires_at))
+            except (Exception, asyncio.CancelledError):
+                _log("prompt_observer", "error")
 
     def record_stream_approval(
         self,
@@ -427,21 +608,103 @@ class PromptStore:
             if self._phone_tasks.get(key) is task:
                 del self._phone_tasks[key]
 
+    def _retention_deleted_now(
+        self, key: PromptKey, row: PromptRow, now: int
+    ) -> bool:
+        """Spec 015 NI-6.1 / RD-11: the retention-delete conditions of `purge`, on stored values.
+        The caller holds `_guard`. Nothing is deleted here."""
+        return (
+            row.settled_at is not None
+            and now - row.settled_at >= IDEMPOTENCY_RETENTION_S
+            and not self._lock_users.get(key)
+        )
+
+    def _visible_live_rows(
+        self, iid: str, user_id: str, profile: str, now: int, members: MemberState
+    ) -> tuple[bool, tuple[PromptRow, ...]]:
+        """The held marker and the live rows visible now, read in one `_guard` section with no
+        callable run under it (RD-9). Shared by `list_visible` and `list_prompts`."""
+        with self._guard:
+            held = (iid, user_id, profile) in self._desktop
+            rows = tuple(
+                row
+                for row in self._rows.values()
+                if (row.iid, row.user_id, row.profile) == (iid, user_id, profile)
+                and row_open_now(row, now)
+                and not row_hidden_now(row, held, members)
+            )
+        return held, rows
+
     def list_visible(
         self, iid: str, user_id: str, profile: str, *, now: int | None = None
     ) -> tuple[PromptRow, ...]:
-        self.purge(int(self._clock()) if now is None else now)
-        held = self.desktop_held(iid, user_id, profile)
+        """Live open rows for the RO-3 snapshot (a recorded residual: they are not snapshots).
+        Purges, then delegates to the shared predicate with every member open (RD-8)."""
+        at = int(self._clock()) if now is None else now
+        self.purge(at)
+        return self._visible_live_rows(iid, user_id, profile, at, ALL_OPEN)[1]
+
+    def _view(
+        self,
+        row: PromptRow,
+        held: bool,
+        members: MemberState,
+        now: int,
+        include_wire: bool,
+    ) -> RowView:
+        """One frozen snapshot. The caller holds `_guard`; this reads row values only."""
+        open_now = row_open_now(row, now)
+        hidden_now = row_hidden_now(row, held, members)
+        return RowView(
+            key=(row.iid, row.user_id, row.profile, row.request_id),
+            kind=row.kind,
+            surface=row.surface,
+            generation=self.generation,
+            status=row.status,
+            settle_cause=row.settle_cause,
+            expires_at=row.expires_at,
+            settled_at=row.settled_at,
+            held=held,
+            open_now=open_now,
+            hidden_now=hidden_now,
+            visible_now=open_now and not hidden_now,
+            session_key=row.session_key if include_wire else None,
+            wire=wire_prompt(row) if include_wire else None,
+        )
+
+    def view_row(self, key: PromptKey, *, now: int, members: MemberState) -> RowView | None:
+        """A frozen view of one row, or `None` when it is missing or the next `purge(now)` would
+        delete it (the pure retention mask, RD-11). Mutates nothing, calls nothing under `_guard`,
+        and never exposes a session key or wire body (RD-12)."""
         with self._guard:
-            rows = [
-                row
-                for row in self._rows.values()
-                if row.status == "open"
-                and (row.iid, row.user_id, row.profile) == (iid, user_id, profile)
-            ]
-        if held:
-            rows = [row for row in rows if row.surface != "bot_chat"]
-        return tuple(rows)
+            row = self._rows.get(key)
+            if row is None or self._retention_deleted_now(key, row, now):
+                return None
+            held = (key[0], key[1], key[2]) in self._desktop
+            return self._view(row, held, members, now, False)
+
+    def view_visible(
+        self,
+        iid: str,
+        user_id: str,
+        profile: str,
+        *,
+        now: int,
+        members: MemberState,
+        include_wire: bool = False,
+    ) -> VisibleSet:
+        """Every row of the triple in insertion order, open or not, minus retention-masked rows,
+        with the held marker, all read in one `_guard` section. Mutates nothing. `wire` and
+        `session_key` are populated only when `include_wire` is true (AP-3)."""
+        with self._guard:
+            held = (iid, user_id, profile) in self._desktop
+            views = tuple(
+                self._view(row, held, members, now, include_wire)
+                for key, row in self._rows.items()
+                if (row.iid, row.user_id, row.profile) == (iid, user_id, profile)
+                and not self._retention_deleted_now(key, row, now)
+            )
+        return VisibleSet(held=held, rows=views)
 
 
 def wire_prompt(row: PromptRow) -> dict[str, object]:
@@ -491,15 +754,21 @@ def phone_open_request(row: PromptRow) -> dict[str, object]:
 
 
 def list_prompts(
-    store: PromptStore, *, iid: str, user_id: str, profile: str, now: int
+    store: PromptStore,
+    *,
+    iid: str,
+    user_id: str,
+    profile: str,
+    now: int,
+    members: MemberState = ALL_OPEN,
 ) -> HttpResult:
     store.purge(now)
-    rows = store.list_visible(iid, user_id, profile, now=now)
+    held, rows = store._visible_live_rows(iid, user_id, profile, now, members)
     return HttpResult(
         200,
         {
             "prompts": [wire_prompt(row) for row in rows],
-            "desktop_held": store.desktop_held(iid, user_id, profile),
+            "desktop_held": held,
         },
     )
 
@@ -556,15 +825,20 @@ def _replay(row: PromptRow) -> HttpResult | None:
     return HttpResult(row.stored_status, dict(row.stored_body))
 
 
-def _remember(
-    row: PromptRow, result: HttpResult, digest: bytes | None, now: int, *, settle: bool
-) -> None:
+def _remember(row: PromptRow, result: HttpResult, digest: bytes | None) -> None:
+    """Replay fields only. `PromptStore.settle_answer` writes status, `settled_at` and cause."""
     row.stored_status = result.status
     row.stored_body = dict(result.body)
-    if settle:
-        row.settled_at = now
     if digest is not None:
         row.answer_hash = digest
+
+
+def _stale_cause(row: PromptRow) -> str:
+    """NI-2.3: a stale Bot Chat approval came from the native classifier (RD-5); every other stale
+    verdict is a Phone result that proves nothing about Hermes (RD-4, RD-6)."""
+    if row.kind == "approval" and row.surface == "bot_chat":
+        return "native_not_pending"
+    return "phone_not_resolved"
 
 
 async def answer_prompt(
@@ -577,6 +851,7 @@ async def answer_prompt(
     body: Mapping[str, object],
     resolver: PromptResolver,
     now: int,
+    ownership_check: DesktopOwnershipCheck | None = None,
 ) -> HttpResult:
     """AP-4 / AP-5. The stored row decides the kind. A client session key in `body` is ignored."""
     if len(request_id) > _REQUEST_ID_MAX or not request_id:
@@ -607,16 +882,29 @@ async def answer_prompt(
             )
         if row.status == "expired":
             return _error("stale", "request is no longer answerable", applied=False)
+        if row.surface == "bot_chat":
+            ownership = DesktopOwnership.UNKNOWN
+            if ownership_check is not None:
+                try:
+                    candidate = await ownership_check(row)
+                except Exception:
+                    candidate = DesktopOwnership.UNKNOWN
+                if type(candidate) is DesktopOwnership:
+                    ownership = candidate
+            if ownership is not DesktopOwnership.UNOWNED:
+                return _unavailable()
         result = await _apply(row, form, value, resolver, user_id)
         if result.status == 200 and result.body.get("status") == "resolved":
-            row.status = "resolved"
-            _remember(row, result, digest, now, settle=True)
+            store.settle_answer(row, status="resolved", cause="answer_applied", now=now)
+            _remember(row, result, digest)
         elif result.status == 409 and isinstance(result.body.get("error"), dict):
             error = result.body["error"]
             code = error.get("code") if isinstance(error, dict) else None
             if code == "stale":
-                row.status = "expired"
-                _remember(row, result, None, now, settle=True)
+                store.settle_answer(
+                    row, status="expired", cause=_stale_cause(row), now=now
+                )
+                _remember(row, result, None)
             _log(
                 "prompt_answer",
                 "conflict" if code == "idempotency_conflict" else str(code or "stale"),
@@ -885,8 +1173,7 @@ class AdapterHooks:
         with self.store._guard:
             for row in self.store._rows.values():
                 if row.request_id == clarify_id and row.kind == "clarify" and row.status == "open":
-                    row.status = "expired"
-                    row.settled_at = self.now()
+                    self.store.expire(row, self.now(), cause="clarify_retired")
                     _log(
                         "prompt_store",
                         "stale",

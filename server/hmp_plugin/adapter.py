@@ -76,6 +76,7 @@ from .authorize import Authorize
 from .cli import listener_record_path
 from .contract import PLATFORM_NAME, OtherWhy, WriteGateState
 from .logging_policy import log_event
+from .push_relay import RelayClient
 from .reads import Reads, _fallback_display_name
 from .store import Store
 
@@ -451,6 +452,11 @@ def open_components(adapter: Any) -> server.ServerContext:
         block = live_extra.get("direct_send") if isinstance(live_extra, Mapping) else None
         return isinstance(block, Mapping) and block.get("enabled") is True
 
+    def _read_push_settings() -> object:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        return live_extra.get("push") if isinstance(live_extra, Mapping) else None
+
     def _read_owner_device_ids() -> frozenset[str]:
         live_config = getattr(adapter, "config", None)
         live_extra = getattr(live_config, "extra", None)
@@ -483,6 +489,7 @@ def open_components(adapter: Any) -> server.ServerContext:
         compat=result,
         session_browsing_enabled=session_browsing is not False,
         direct_send_flag=_read_direct_send_enabled,
+        push_settings=_read_push_settings,
         owner_device_ids=_read_owner_device_ids,
         approvals_available=lambda: approvals_member,
         phone_chat_available=lambda: phone_member and phone_bound[0],
@@ -630,7 +637,12 @@ class HmpAdapter(BasePlatformAdapter):
         except identity.IdentityError:
             log_event("adapter_connect", outcome="identity_error")
             return False
-        srv = server.HmpServer(ctx, settings, on_closed=self._listener_closed)
+        srv = server.HmpServer(
+            ctx,
+            settings,
+            on_closed=self._listener_closed,
+            push_relay_factory=lambda: RelayClient(ctx.identity),
+        )
         try:
             await srv.start()
         except Exception as exc:
@@ -831,6 +843,7 @@ class HmpAdapter(BasePlatformAdapter):
     def _close_generation(ctx: server.ServerContext) -> None:
         """R9: the listener that owned this prompt generation stopped. Its rows expire and a
         stream still bound to it can never insert into a later generation."""
+        ctx.push_hints.clear()
         if ctx.prompt_store is not None:
             ctx.prompt_store.close(ctx.now())
 

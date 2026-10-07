@@ -48,6 +48,10 @@ from hmp_plugin.contract import (
 from hmp_plugin.reads import Reads
 
 from . import hmp_kit
+from .approved_push_bridge_witness import (
+    assert_approved_s5_block,
+    reverse_approved_push_diagnostics,
+)
 from .media_binding_world import World as PackageWorld
 from .media_binding_world import install_gateway_stubs
 from .test_local_media_batch_binding import USER
@@ -1595,17 +1599,21 @@ def test_the_reads_and_nine_helpers_are_byte_identical_to_the_base(name: str) ->
 
 
 def test_the_bridge_differs_from_the_base_only_by_the_s5_additions() -> None:
-    """S5 adds to `bridge.py` exactly: the `hashlib` and `media_payload` module imports and the
+    """First reverse only exact approved push diagnostics; S5 then adds exactly the
+    `hashlib` and `media_payload` module imports and the
     block of three new methods (`_media_fetch_bound`, `media_fetch_phase_one`,
     `media_fetch_phase_two`) before `lineage`. Removing precisely those pieces reproduces the base
     bytes, so every old method, the proof, `bind_media_batch` and the twins are byte-identical."""
-    text = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
+    text = reverse_approved_push_diagnostics(
+        (PACKAGE / "bridge.py").read_text(encoding="utf-8")
+    )
     assert text.count("import hashlib\n") == 1
     assert text.count("from . import media_payload\n") == 1
     start = text.index("    # S5: the two off-loop native phases")
     end = text.index("    def lineage(self, ref: ConversationRef) -> LineageInfo:")
     assert start < end
     block = text[start:end]
+    assert_approved_s5_block(block)
     assert [
         line.strip().split("(")[0]
         for line in block.splitlines()
@@ -1614,6 +1622,20 @@ def test_the_bridge_differs_from_the_base_only_by_the_s5_additions() -> None:
     base = text[:start] + text[end:]
     base = base.replace("import hashlib\n", "", 1).replace("from . import media_payload\n", "", 1)
     assert hashlib.sha256(base.encode()).hexdigest() == BASE_HASHES["bridge.py"]
+
+
+def test_composed_bridge_witness_rejects_a_media_guard_mutation() -> None:
+    text = reverse_approved_push_diagnostics((PACKAGE / "bridge.py").read_text(encoding="utf-8"))
+    start = text.index("    # S5: the two off-loop native phases")
+    end = text.index("    def lineage(self, ref: ConversationRef) -> LineageInfo:", start)
+    block = text[start:end]
+    assert_approved_s5_block(block)
+    guard = "        if type(registry_module) is not ModuleType or type(chain) is not tuple:\n"
+    assert block.count(guard) == 1
+    mutant = block.replace(guard, "        if False:\n", 1)
+    assert mutant != block
+    with pytest.raises(AssertionError):
+        assert_approved_s5_block(mutant)
 
 
 def test_the_sidecar_delta_is_exactly_the_protocol_annotation() -> None:

@@ -20,7 +20,7 @@ from typing import Any
 
 import pytest
 
-from hmp_plugin import cli, reads, wire
+from hmp_plugin import cli, prompts, reads, wire
 from hmp_plugin.contract import WriteGate, WriteGateState
 
 from .hmp_kit import Env
@@ -492,5 +492,28 @@ def test_identity_change_reports_fatal_and_stays_closed(
         )
         assert status == "connection_failure"
         await adapter.disconnect()
+
+    asyncio.run(main())
+
+
+def test_adapter_supplies_production_push_port_and_closes_it(
+    adapter_module: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = Env(tmp_path)
+    # Supported production open_components supplies the prompt store; the F1
+    # fixture above deliberately has no notification source.
+    env.ctx.prompt_store = prompts.PromptStore(clock=env.ctx.now)
+    monkeypatch.setattr(adapter_module, "open_components", lambda _adapter: env.ctx)
+    adapter = adapter_module.HmpAdapter(_Config({"bind": "127.0.0.1", "port": _free_port()}))
+
+    async def main():
+        assert await adapter.connect() is True
+        dispatcher = adapter._server._push_dispatcher
+        assert dispatcher is not None
+        relay = dispatcher.relay
+        assert isinstance(relay, adapter_module.RelayClient)
+        assert not relay._sessions  # default push-off performs no relay I/O
+        await adapter.disconnect()
+        assert relay.closed and not relay._sessions
 
     asyncio.run(main())

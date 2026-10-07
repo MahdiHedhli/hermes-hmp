@@ -55,6 +55,7 @@ import pytest
 
 from hmp_plugin import request_ctx as real_request_ctx
 
+from .approved_push_bridge_witness import reverse_approved_push_diagnostics
 from .media_binding_world import LEGACY_ANCHOR, MEDIA_STEMS, PACKAGE, World
 
 TEST_LATCH = "_m3_test_process_latch"  # used only by the mutant that re-adds a process latch
@@ -1319,7 +1320,43 @@ def _dynamic_media_lookups(source: str) -> list[str]:
 
 @pytest.mark.parametrize("name", ["adapter.py", "bridge.py", "reads.py"])
 def test_adapter_bridge_and_reads_use_no_dynamic_module_lookup(name: str) -> None:
-    assert _dynamic_media_lookups(READ_SRC[name]) == []
+    source = READ_SRC[name]
+    if name == "bridge.py":
+        source = reverse_approved_push_diagnostics(source)
+    assert _dynamic_media_lookups(source) == []
+
+
+@pytest.mark.parametrize(
+    "before, after",
+    [
+        ('if "hermes_cli.config" not in sys.modules:', 'if "foreign.config" not in sys.modules:'),
+        (
+            "def read_push_settings_for_diagnostics(home: Path) -> object:\n",
+            "def read_push_settings_for_diagnostics(home: Path) -> object:\n"
+            "    __import__('x')\n",
+        ),
+        ("import sys\n", "import sys as changed\n"),
+        ("import stat\n", "import stat as changed\n"),
+    ],
+)
+def test_exact_push_diagnostics_exception_rejects_each_mutated_byte_delta(
+    before: str, after: str
+) -> None:
+    original = READ_SRC["bridge.py"]
+    assert original.count(before) == 1
+    mutated = original.replace(before, after, 1)
+    assert mutated != original
+    with pytest.raises(AssertionError):
+        reverse_approved_push_diagnostics(mutated)
+
+
+def test_exact_push_exception_does_not_hide_a_media_function_lookup() -> None:
+    original = READ_SRC["bridge.py"]
+    line = "def _local_media_modules() -> tuple[ModuleType, ...]:\n"
+    assert original.count(line) == 1
+    mutated = original.replace(line, line + "    sys.modules.get('forbidden-media')\n", 1)
+    assert mutated != original
+    assert _dynamic_media_lookups(reverse_approved_push_diagnostics(mutated))
 
 
 @pytest.mark.parametrize(
