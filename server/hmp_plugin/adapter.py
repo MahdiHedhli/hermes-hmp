@@ -61,6 +61,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import secrets
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -569,6 +570,10 @@ def open_components(adapter: Any) -> server.ServerContext:
     return ctx
 
 
+_AT1_ADAPTER_MODULE = sys.modules[__name__]
+_AT1_PLUGIN_MODULE = sys.modules[__package__]
+
+
 class HmpAdapter(BasePlatformAdapter):
     def __init__(self, config: Any) -> None:
         super().__init__(config=config, platform=Platform(PLATFORM_NAME))
@@ -642,6 +647,7 @@ class HmpAdapter(BasePlatformAdapter):
             settings,
             on_closed=self._listener_closed,
             push_relay_factory=lambda: RelayClient(ctx.identity),
+            approval_test_owners=(_AT1_PLUGIN_MODULE, _AT1_ADAPTER_MODULE),
         )
         try:
             await srv.start()
@@ -691,6 +697,7 @@ class HmpAdapter(BasePlatformAdapter):
                 log_event("listener_record", outcome="write_failed")
             else:
                 self._known_profiles = tuple(profiles) if profiles is not None else None
+                await srv.start_approval_test(self._record, self._nonce)
             if ctx.bridge is not None:
                 # Live-bug fix: the multiplexer brings secondary profiles online strictly AFTER
                 # this `connect()` returns, so the record just written above can already be stale
@@ -831,12 +838,18 @@ class HmpAdapter(BasePlatformAdapter):
 
     async def disconnect(self) -> None:
         await self._cancel_profile_refresh()
-        srv, self._server = self._server, None
-        self._drop_record()
+        srv = self._server
         if srv is not None:
+            # Keep the current pointer/record/dependencies while actual teardown
+            # owns cleanup. Cancellation or unknown join must prevent replacement.
             await srv.stop(notify=False)
+            if self._server is srv:
+                self._server = None
+            self._drop_record()
             self._close_generation(srv.ctx)
             srv.ctx.store.close()
+        else:
+            self._drop_record()
         self._mark_disconnected()
 
     @staticmethod

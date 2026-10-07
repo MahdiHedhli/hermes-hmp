@@ -16,6 +16,7 @@ import ast
 import asyncio
 import dataclasses
 import enum
+import hashlib
 import json
 import os
 import subprocess
@@ -36,6 +37,10 @@ from hmp_plugin.bridge import (
 )
 from hmp_plugin.contract import AuthzState, ConversationRef, ResetReason
 
+from .approved_push_bridge_witness import (
+    APPROVED_PRE_AT1_BRIDGE_SHA256,
+    reverse_approved_at1_bridge,
+)
 from .fake_hermes import UNRESOLVED, FakeDirectory, World
 
 SERVER_DIR = Path(__file__).resolve().parents[2]
@@ -772,9 +777,9 @@ def test_getattr_reads_only_listed_data_attributes() -> None:
     assert names <= bridge.REACHED_DATA_ATTRIBUTES
 
 
-def _hermes_imports() -> set[tuple[str, str]]:
+def _hermes_imports(source: str = BRIDGE_SOURCE) -> set[tuple[str, str]]:
     out = set()
-    for node in ast.walk(ast.parse(BRIDGE_SOURCE)):
+    for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
             top = node.module.split(".")[0]
             if top in sys.stdlib_module_names or top == "__future__":
@@ -816,7 +821,13 @@ def test_every_reached_internal_is_probed() -> None:
         ("cron.lifecycle_guard", "check_gateway_lifecycle"),
         ("tools.cronjob_prompt_scan", "_scan_cron_prompt"),
     }
-    assert _hermes_imports() - optional <= probed
+    # AT1 is separately gated by its exact approved factory/native-current contract.
+    # Restore only that byte-pinned delta; keep the entire ordinary probe predicate.
+    ordinary = reverse_approved_at1_bridge(BRIDGE_SOURCE)
+    assert hashlib.sha256(ordinary.encode()).hexdigest() == APPROVED_PRE_AT1_BRIDGE_SHA256
+    assert _hermes_imports(BRIDGE_SOURCE) - _hermes_imports(ordinary) == {
+        ("tools", "approval"), ("tools", "approval_gateway_wait"), ("tools", "interrupt")}
+    assert _hermes_imports(ordinary) - optional <= probed
     probed_names = {q.rsplit(".", 1)[-1] for _m, q in probed if q}
     for methods in bridge.REACHED_METHODS.values():
         assert methods <= probed_names
@@ -1460,3 +1471,43 @@ def test_phone_chat_imports_belong_to_their_own_boundary_not_the_read_or_send_li
     assert phone_only <= set(included)  # the bridge really does import them
     kept, _feature = tool.split_ast_imports(source, exclude_modules=excluded, typed_modules=read)
     assert not phone_only & set(kept)  # and the read check no longer demands their files
+
+
+def test_exact_at1_factory_inverse_preserves_ordinary_probe_source():
+    ordinary = reverse_approved_at1_bridge(BRIDGE_SOURCE)
+    assert hashlib.sha256(ordinary.encode()).hexdigest() == APPROVED_PRE_AT1_BRIDGE_SHA256
+    assert _hermes_imports(BRIDGE_SOURCE) - _hermes_imports(ordinary) == {
+        ("tools", "approval"), ("tools", "approval_gateway_wait"), ("tools", "interrupt")}
+
+
+@pytest.mark.parametrize("damage", ["import", "body", "duplicate", "relocate"])
+def test_exact_factory_inverse_refuses_changed_native_gate_or_placement(damage):
+    from .approved_push_bridge_witness import APPROVED_AT1_BRIDGE_BLOCK
+
+    block = APPROVED_AT1_BRIDGE_BLOCK
+    assert BRIDGE_SOURCE.count(block) == 1
+    if damage == "import":
+        changed = block.replace("from tools import approval, approval_gateway_wait, interrupt",
+                                "from tools import approval, approval_gateway_wait, foreign", 1)
+        mutant = BRIDGE_SOURCE.replace(block, changed, 1)
+    elif damage == "body":
+        changed = block.replace("if not native.current():", "if False:", 1)
+        mutant = BRIDGE_SOURCE.replace(block, changed, 1)
+    elif damage == "duplicate":
+        mutant = BRIDGE_SOURCE.replace(block, block + block, 1)
+    else:
+        mutant = BRIDGE_SOURCE.replace(block, "", 1) + block
+    assert mutant != BRIDGE_SOURCE
+    with pytest.raises(AssertionError):
+        reverse_approved_at1_bridge(mutant)
+
+
+def test_exact_factory_inverse_cannot_hide_an_unprobed_ordinary_import():
+    mutant = BRIDGE_SOURCE + "\nfrom tools import unapproved_ordinary_helper\n"
+    ordinary = reverse_approved_at1_bridge(mutant)
+    reached = _hermes_imports(ordinary)
+    probed = ({(d.module, d.qualname) for d in compat.READ_DEPENDENCIES}
+              | {(d.module, d.qualname) for d in compat.DIRECT_SEND_DEPENDENCIES}
+              | {(d.module, d.qualname) for d in compat.PHONE_CHAT_DEPENDENCIES})
+    assert ("tools", "unapproved_ordinary_helper") in reached
+    assert ("tools", "unapproved_ordinary_helper") not in probed

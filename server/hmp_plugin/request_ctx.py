@@ -238,6 +238,10 @@ class ServerContext:
     push_hints: HintMap = field(default_factory=HintMap, repr=False)
     # v1.3 prompt rows (process memory). None until a supported listener builds one.
     prompt_store: Any = None
+    # AT1 listener generation. No service exists until successful record/IPC activation.
+    approval_test_service: Any = None
+    approval_test_generation: Any = None
+    approval_test_current: Callable[[], bool] = field(default=lambda: False)
     # NI-6: the closed Desktop ownership seam. The safe default never does native or
     # canonical-target observation work; a native provider remains separately gated.
     desktop_ownership: DesktopOwnershipPort = field(

@@ -644,6 +644,7 @@ def test_route_table_matches_declared_routes(tmp_path: Path) -> None:
             *server.A1_SESSION_ROUTES,
             *server.F2_DIRECT_SEND_ROUTES,
             *server.F3_APPROVAL_ROUTES,
+            *server.approval_test_routes.ROUTES,
             *server.MOBILE_CRON_ROUTES,
             *server.MOBILE_MODEL_ROUTES,
             *server.S5_MEDIA_ROUTES,
@@ -652,7 +653,7 @@ def test_route_table_matches_declared_routes(tmp_path: Path) -> None:
         )
     )
     assert routes == expected
-    assert len(expected) == 31
+    assert len(expected) == 35
     assert len(expected) == len(set(expected))
 
 
@@ -671,6 +672,7 @@ def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
             *server.F1_ROUTES,
             *server.F2_DIRECT_SEND_ROUTES,
             *server.F3_APPROVAL_ROUTES,
+            *server.approval_test_routes.ROUTES,
             *server.MOBILE_CRON_ROUTES,
             *server.MOBILE_MODEL_ROUTES,
             *server.S5_MEDIA_ROUTES,
@@ -679,7 +681,7 @@ def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
         )
     )
     assert routes == expected
-    assert len(expected) == 28
+    assert len(expected) == 32
     assert len(expected) == len(set(expected))
 
 
@@ -695,6 +697,7 @@ def test_e10_session_routes_are_not_registered_when_browsing_is_unavailable(
         (m, server.full_path(p))
         for m, p, _ in (
             *server.F1_ROUTES, *server.F2_DIRECT_SEND_ROUTES, *server.F3_APPROVAL_ROUTES,
+            *server.approval_test_routes.ROUTES,
             *server.MOBILE_CRON_ROUTES,
             *server.MOBILE_MODEL_ROUTES,
             *server.S5_MEDIA_ROUTES,

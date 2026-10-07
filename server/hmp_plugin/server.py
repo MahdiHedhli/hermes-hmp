@@ -44,7 +44,9 @@ import contextlib
 import ipaddress
 import json
 import logging
+import os
 import ssl
+import sys
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from functools import partial
@@ -55,6 +57,12 @@ from aiohttp import web
 from aiohttp.http_exceptions import LineTooLong
 
 from . import (
+    approval_test_authority,
+    approval_test_host_codec,
+    approval_test_host_transport,
+    approval_test_producer,
+    approval_test_routes,
+    approval_test_service,
     direct_send,
     media_emission,
     media_fetch,
@@ -132,6 +140,8 @@ from .request_ctx import (
 )
 from .revoke import handle_self_revoke
 from .tokens import handle_token
+
+_AT1_SERVER_MODULE = sys.modules[__name__]
 
 # The F1 route table (server-modules.md). Method, path under PATH_PREFIX, clause.
 F1_ROUTES: tuple[tuple[str, str, str], ...] = (
@@ -1273,6 +1283,10 @@ def build_app(ctx: ServerContext) -> web.Application:
         # switch below -- the gate is re-checked per request, inside the handler.
         "/bots/{p}/chat/messages": handle_chat_send,
         "/bots/{p}/chat/messages/by-client-id/{cmid}": handle_chat_lookup,
+        "/approval-tests/current": approval_test_routes.handle_current,
+        "/bots/{p}/approval-tests/current": approval_test_routes.handle_scoped_current,
+        "/approval-tests/{phone_test_id}/answer": approval_test_routes.handle_answer,
+        "/approval-tests/{phone_test_id}/cancel": approval_test_routes.handle_cancel,
         "/bots/{p}/prompts": handle_prompts_list,
         "/bots/{p}/prompts/{request_id}": handle_prompt_answer,
         "/bots/{p}/phone/messages": handle_phone_send,
@@ -1288,6 +1302,7 @@ def build_app(ctx: ServerContext) -> web.Application:
         list(F1_ROUTES)
         + list(F2_DIRECT_SEND_ROUTES)
         + list(F3_APPROVAL_ROUTES)
+        + list(approval_test_routes.ROUTES)
         + list(MOBILE_CRON_ROUTES)
         + list(MOBILE_MODEL_ROUTES)
         + list(S5_MEDIA_ROUTES)
@@ -1466,6 +1481,7 @@ class HmpServer:
         watchdog_interval: float = WATCHDOG_INTERVAL_S,
         on_closed: Callable[[], None] | None = None,
         push_relay_factory: Callable[[], RelayPort] | None = None,
+        approval_test_owners: tuple[Any, Any] | None = None,
     ) -> None:
         self.ctx = ctx
         self.settings = settings
@@ -1479,6 +1495,12 @@ class HmpServer:
         self._watch: asyncio.Task[None] | None = None
         self._push_watch: asyncio.Task[None] | None = None
         self._stopping: asyncio.Task[None] | None = None
+        self._stop_owner: asyncio.Task[None] | None = None
+        self._at1_owners = approval_test_owners
+        self._at1_attempted = False
+        self._at1_live = False
+        self._at1_service: Any = None
+        self._at1_endpoint: Any = None
         self.bound: tuple[str, int] | None = None
         self.closed = asyncio.Event()
         ctx.on_identity_changed = self._identity_changed
@@ -1515,6 +1537,75 @@ class HmpServer:
         self._push_watch = asyncio.get_running_loop().create_task(self._push_purge_loop())
         await self._start_push_dispatcher()
         log_event("listener_start", outcome="ok")
+
+    async def start_approval_test(self, record: Path, nonce: str) -> None:
+        """One optional service after the owner wrote this listener's same-nonce record.
+
+        The adapter owns record creation. This method never creates a directory,
+        changes a permission, retries a generation or falls back to HTTP/native IPC.
+        """
+        if self._at1_attempted or self._stop_owner is not None:
+            return
+        self._at1_attempted = True
+        if (self.bound is None or self.ctx.bridge is None or self._at1_owners is None
+                or not self.ctx.is_approvals_available() or not self.ctx.direct_send_effective()):
+            return
+        service = None
+        endpoint = None
+        try:
+            generation = approval_test_host_codec.HostGeneration(self.ctx.iid, os.getpid(), nonce)
+            modules = (_AT1_SERVER_MODULE, approval_test_authority, approval_test_service,
+                       approval_test_producer, approval_test_host_codec,
+                       approval_test_host_transport, approval_test_routes,
+                       sys.modules[ServerContext.__module__],
+                       sys.modules[type(self.ctx.bridge).__module__], *self._at1_owners)
+            factory, native_current = self.ctx.bridge.approval_test_producer_factory(
+                asyncio.get_running_loop()
+            )
+
+            def current() -> bool:
+                try:
+                    valid = (
+                        self._at1_live and self._stop_owner is None
+                        and self.ctx.approval_test_service is service
+                        and self.ctx.approval_test_generation is generation
+                        and generation.pid == os.getpid() and generation.iid == self.ctx.iid
+                        and self.ctx.identity.still_current() is True
+                        and all(sys.modules.get(module.__name__) is module for module in modules)
+                        and native_current() is True
+                    )
+                except Exception:
+                    valid = False
+                if not valid:
+                    # Replacement/lost native identity retires this service forever.
+                    self._at1_live = False
+                return valid
+
+            service = approval_test_service.ApprovalTestService(
+                self.ctx, generation, generation_current=current,
+                approvals_gate=_require_approvals_gate, producer_factory=factory,
+                native_current=native_current,
+            )
+            self._at1_service = service
+            self.ctx.approval_test_generation = generation
+            self.ctx.approval_test_service = service
+            self.ctx.approval_test_current = current
+            endpoint = approval_test_host_transport.HostIpcEndpoint(record, generation, service)
+            self._at1_endpoint = endpoint
+            self._at1_live = True
+            if not current():
+                raise ValueError("approval test unavailable")
+            endpoint.start()
+        except Exception:
+            self._at1_live = False
+            # Do not suppress unknown cleanup and then drop the store. The retained
+            # close owner keeps the entire listener dependency generation alive.
+            if endpoint is not None:
+                if await endpoint.close() is not True:
+                    raise RuntimeError("approval test cleanup unavailable") from None
+            elif service is not None:
+                await service.shutdown()
+            log_event("approval_test_start", outcome="unavailable")
 
     async def _start_push_dispatcher(self) -> None:
         if self._push_relay_factory is None:
@@ -1592,6 +1683,7 @@ class HmpServer:
                 return
 
     def _identity_changed(self) -> None:
+        self._at1_live = False
         if self._stopping is None:
             log_event("identity_changed", outcome="listener_closed")
             self._stopping = asyncio.get_running_loop().create_task(self.stop())
@@ -1607,14 +1699,28 @@ class HmpServer:
         await cancel(SHUTDOWN_TIMEOUT_S)
 
     async def stop(self, *, notify: bool = True) -> None:
-        """Close the listener. `notify=False` for an orderly shutdown by the owner."""
+        """Fence immediately; retain and shield the single actual teardown owner."""
+        self._at1_live = False
+        if not notify:
+            self._on_closed = None
+        if self._stop_owner is None:
+            self._stop_owner = asyncio.get_running_loop().create_task(self._stop_joined())
+        await asyncio.shield(self._stop_owner)
+
+    async def _stop_joined(self) -> None:
+        endpoint = self._at1_endpoint
+        service = self._at1_service
+        if endpoint is not None:
+            if await endpoint.close() is not True:
+                raise RuntimeError("approval test cleanup unavailable")
+        elif service is not None:
+            await service.shutdown()
+        # All AT1 leases/authority reads/native owners have joined at this point.
         self.ctx.push_hints.clear()
         dispatcher, self._push_dispatcher = self._push_dispatcher, None
         if dispatcher is not None:
             await dispatcher.close()
         await self._cancel_pending_sends()
-        if not notify:
-            self._on_closed = None
         push_watch, self._push_watch = self._push_watch, None
         if push_watch is not None and push_watch is not asyncio.current_task():
             push_watch.cancel()
