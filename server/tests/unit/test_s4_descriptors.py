@@ -995,6 +995,49 @@ def test_a_gate_change_between_read_and_mint_mints_nothing(
     assert rig.registry._audit() == 0
 
 
+@pytest.mark.parametrize("late", ["revoked", "unverifiable"])
+def test_postscan_grant_loss_refuses_descriptor_but_current_grant_mints(
+    late: str, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    rig = Rig(tmp_path, monkeypatch)
+    real = rig.real_bind
+    observed: list[tuple[bool, int]] = []
+    revoked = False
+
+    def revoke_once(sidecar: Any) -> Any:
+        nonlocal revoked
+        rig.bind_calls += 1
+        binding = real(sidecar)
+        observed.append((binding.ok, len(binding.accepted)))
+        if not revoked:
+            if late == "revoked":
+                rig.native.world.runner.approved[PROFILE].discard(USER)
+            else:
+                rig.native.world.runner.authz_raises = True
+            revoked = True
+        return binding
+
+    rig.native.bridge.bind_media_batch = revoke_once  # type: ignore[method-assign]
+
+    async def scenario(client: TestClient, rig: Rig) -> tuple[bytes, bytes]:
+        await rig.pair(client)
+        rig.flag = False
+        reference = await _baseline_bytes(client, rig, "ro3")
+        rig.flag = True
+        denied = await _baseline_bytes(client, rig, "ro3")
+        assert denied == reference and rig.registry._audit() == 0
+        rig.native.world.approve(USER, PROFILE)
+        rig.native.world.runner.authz_raises = False
+        current = await _baseline_bytes(client, rig, "ro3")
+        return denied, current
+
+    denied, current = rig.run(scenario)
+    assert denied != current
+    assert set(media_of(current)) == set(rig.native.tool_ids)
+    assert observed == [(True, 3), (True, 3)] and rig.bind_calls == 2
+    assert rig.registry._audit() == 3
+
+
 def test_a_fresh_listener_gets_its_own_registry_and_whole_package_eviction_keeps_the_old(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1561,8 +1604,8 @@ def _sha(name: str) -> str:
     return hashlib.sha256((PACKAGE / name).read_bytes()).hexdigest()
 
 
-# Captured from `git show b07890e:<file>`; the nine helper modules and the bridge and reads
-# implementations are byte-identical to the base, except the bounded sidecar annotation below.
+# Captured from `git show b07890e:<file>`. The two R1 guard helpers below have separately
+# reviewed additions; all remaining helpers and reads retain these historical bytes.
 BASE_HASHES = {
     "bridge.py": "7583ae6f7f4deb0de87bbdd85d1a62639a044321e566e60bd8af8f1ddc2f38e3",
     "reads.py": "58c265587566e1e9d6c0d17726fb3907eec91baa01682ebf9c095765f19a01f3",
@@ -1589,9 +1632,54 @@ BASE_HASHES = {
 }
 
 
-@pytest.mark.parametrize("name", sorted(set(BASE_HASHES) - {"bridge.py"}))
-def test_the_reads_and_nine_helpers_are_byte_identical_to_the_base(name: str) -> None:
+R1_GUARD_HASHES = {
+    "local_media_active_scan.py": "1a81b3bc37164fdade921174f10b87ea4a67a9c793d3738e670935596643421a",
+    "local_media_candidate.py": "f27337dfa5b3cfe315becd4fa30302147b4ef72a7d102c1c15e9c6a390c2768e",
+}
+R1_REVERSES = {
+    "local_media_active_scan.py": (
+        (
+            "    # Every Unicode code point needs at least one UTF-8 byte.  Native SessionDB has\n"
+            "    # already materialized the string, but an over-budget value need not be scanned\n"
+            "    # or copied again by this media scanner before refusal.\n"
+            "    if stop_after is not None and len(text) > stop_after:\n"
+            "        return stop_after + 1\n",
+            "",
+        ),
+    ),
+    "local_media_candidate.py": (
+        (
+            "    A repeated positive native row id makes the page ambiguous and yields no candidates.\n"
+            "    Only ids in `returned_tool_ids` are considered. At most\n",
+            "    Only ids in `returned_tool_ids` are considered, and a repeated id is parsed once. At most\n",
+        ),
+        (
+            "        # A native page with two rows claiming one id has no unique returned-row identity.\n"
+            "        # Refuse the whole optional media sidecar before parsing any result; the ordinary\n"
+            "        # text read retains its existing behavior.  This is bounded by MAX_ROWS above.\n"
+            "        raw_ids = [_row_id(row) for row in raw_rows]\n"
+            "        positive_ids = [row_id for row_id in raw_ids if row_id > 0]\n"
+            "        if len(positive_ids) != len(set(positive_ids)):\n"
+            "            return ()\n",
+            "",
+        ),
+    ),
+}
+
+
+@pytest.mark.parametrize("name", sorted(set(BASE_HASHES) - {"bridge.py"} - set(R1_GUARD_HASHES)))
+def test_the_reads_and_unchanged_helpers_are_byte_identical_to_the_base(name: str) -> None:
     assert _sha(name) == BASE_HASHES[name]
+
+
+@pytest.mark.parametrize("name", sorted(R1_GUARD_HASHES))
+def test_r1_guard_helpers_have_only_the_reviewed_additions(name: str) -> None:
+    text = (PACKAGE / name).read_text(encoding="utf-8")
+    assert hashlib.sha256(text.encode()).hexdigest() == R1_GUARD_HASHES[name]
+    for addition, historical in R1_REVERSES[name]:
+        assert text.count(addition) == 1
+        text = text.replace(addition, historical, 1)
+    assert hashlib.sha256(text.encode()).hexdigest() == BASE_HASHES[name]
 
 
 def test_the_bridge_differs_from_the_base_only_by_the_s5_additions() -> None:

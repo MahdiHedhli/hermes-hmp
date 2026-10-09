@@ -7,9 +7,10 @@ call, and exactly the old response bytes.
 
 An open listener runs the exact `Reads` media twin and, when the sidecar holds candidates, the
 bridge's one `bind_media_batch`, both in the SAME `asyncio.to_thread` job (copied ContextVars, the
-default executor). A failure of the twin keeps its original semantics. Any optional failure after
-that (a foreign sidecar or binding, a refused batch, a gate change) keeps the successful public
-text exactly and mints nothing; nothing here reruns a read.
+default executor). An accepted binding gets a fresh per-bot grant check on that worker after the
+native scan. A failure of the twin keeps its original semantics. Any optional failure after that
+(a foreign sidecar or binding, a refused batch, grant revocation, a gate change) keeps the
+successful public text exactly and mints nothing; nothing here reruns a read.
 
 Minting is a synchronous section on the loop with no await: owner, exact-true flag, availability
 snapshot and registry identity are rechecked and then each accepted row is minted newest first,
@@ -42,6 +43,7 @@ from .contract import (
     WireMediaDescriptor,
 )
 from .request_ctx import MediaBound, ServerContext
+from .reads import require_bot_authorized
 
 MEDIA_TOOL_NAME: Final = "image_generate"
 MAX_DESCRIPTORS: Final = MEDIA_DESCRIPTORS_PER_RESPONSE
@@ -85,7 +87,17 @@ async def read(
     def job() -> tuple[Any, Any]:
         got = twin(reads, *args)  # a text-read failure propagates with its own semantics
         try:
-            return got, _bind(bound, bridge, got, who.user_id, profile)
+            binding = _bind(bound, bridge, got, who.user_id, profile)
+            # The read's original per-bot gate preceded the native scan. A grant can change
+            # during that scan: recheck only an accepted batch, on this same worker, before the
+            # loop can mint a descriptor. The fetch path separately rechecks before any bytes.
+            if (
+                type(binding) is bound.chain[6].MediaBatchBinding
+                and binding.ok
+                and binding.accepted
+            ):
+                require_bot_authorized(bridge, who.user_id, profile)
+            return got, binding
         except Exception:  # optional: the text result stands, nothing is minted
             return got, None
 
