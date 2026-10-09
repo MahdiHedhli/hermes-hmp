@@ -116,7 +116,8 @@ def collect_candidates(
     """Candidates among the newest `image_generate` rows of one returned page, newest first.
 
     Rows are ordered here by positive row id, newest first, because the page order is not trusted.
-    Only ids in `returned_tool_ids` are considered, and a repeated id is parsed once. At most
+    A repeated positive native row id makes the page ambiguous and yields no candidates.
+    Only ids in `returned_tool_ids` are considered. At most
     `MAX_CANDIDATES_PER_RESPONSE` rows are attempted; a rejected attempt is not replaced by an
     older row. An invalid argument shape or home yields `()`.
     """
@@ -126,6 +127,13 @@ def collect_candidates(
         if type(returned_tool_ids) is not frozenset or len(returned_tool_ids) > MAX_ROWS:
             return ()
         if not all(_positive_id(i) for i in returned_tool_ids) or not _valid_home(home):
+            return ()
+        # A native page with two rows claiming one id has no unique returned-row identity.
+        # Refuse the whole optional media sidecar before parsing any result; the ordinary
+        # text read retains its existing behavior.  This is bounded by MAX_ROWS above.
+        raw_ids = [_row_id(row) for row in raw_rows]
+        positive_ids = [row_id for row_id in raw_ids if row_id > 0]
+        if len(positive_ids) != len(set(positive_ids)):
             return ()
         ordered = sorted(raw_rows, key=_row_id, reverse=True)
         seen: set[int] = set()

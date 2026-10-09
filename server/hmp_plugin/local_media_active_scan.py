@@ -111,6 +111,11 @@ def utf8_weight(text: str, stop_after: int | None = None) -> int:
     surrogate (Python strings never hold a *paired* one) raises a malformed refusal. With
     `stop_after` the measurement may stop early once the total exceeds it (the result is then only
     a lower bound greater than `stop_after`)."""
+    # Every Unicode code point needs at least one UTF-8 byte.  Native SessionDB has
+    # already materialized the string, but an over-budget value need not be scanned
+    # or copied again by this media scanner before refusal.
+    if stop_after is not None and len(text) > stop_after:
+        return stop_after + 1
     if text.isascii():
         return len(text)
     total = 0

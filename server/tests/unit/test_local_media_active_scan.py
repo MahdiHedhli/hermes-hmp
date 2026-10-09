@@ -161,6 +161,18 @@ def test_utf8_weight_is_chunked_counts_bytes_and_rejects_lone_surrogates() -> No
     assert info.value.reason == scan.MALFORMED
 
 
+def test_over_budget_native_string_refuses_before_ascii_scan() -> None:
+    class NoAsciiScan(str):
+        def isascii(self) -> bool:
+            raise AssertionError("over-budget native value was scanned")
+
+    value = NoAsciiScan("x" * (scan.MAX_RESULT_BYTES + 1))
+    assert scan.utf8_weight(value, scan.MAX_RESULT_BYTES) > scan.MAX_RESULT_BYTES
+    db = FakeDB(base_rows())
+    db.rows[1]["content"] = str(value)
+    assert run(db).reason == scan.RESULT_TOO_LARGE
+
+
 def test_walker_depth_budget_and_types() -> None:
     def nest(depth: int) -> Any:
         value: Any = "x"

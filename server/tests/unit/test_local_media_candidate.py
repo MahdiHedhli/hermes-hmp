@@ -188,9 +188,9 @@ def check_other_tools(mod: Any) -> None:
 def check_dedupe(mod: Any) -> None:
     with counting() as c:
         out = mod.collect_candidates([trow(5), trow(5), trow(4)], HOME, frozenset({4, 5}))
-    assert ids(out) == [5, 4] and c.parses == 2
+    assert out == () and c.parses == 0
     first_wins = mod.collect_candidates([trow(5, GOOD), trow(5, BAD)], HOME, frozenset({5}))
-    assert ids(first_wins) == [5]
+    assert first_wins == ()
 
 
 def check_digest(mod: Any) -> None:
@@ -322,7 +322,12 @@ MUTANTS: dict[str, tuple[str, str, str, int]] = {
         "",
         1,
     ),
-    "dedupe removed": ("dedupe", " or row_id in seen", "", 1),
+    "duplicate preflight removed": (
+        "dedupe",
+        "if len(positive_ids) != len(set(positive_ids)):\n            return ()",
+        "if len(positive_ids) != len(set(positive_ids)):\n            pass",
+        1,
+    ),
     "digest of other bytes": (
         "digest",
         "_scan._tool_digest(row_id, IMAGE_TOOL, call_id, content)",
@@ -752,14 +757,20 @@ def test_one_hundred_twenty_eight_attempts_is_the_ceiling_with_malformed_mixed_i
     assert ids(out) == sorted(ids(out), reverse=True)
 
 
-def test_duplicate_ids_are_parsed_once() -> None:
+def test_duplicate_ids_refuse_whole_sidecar_before_parsing() -> None:
     other = result(PREFIX + "other.png")
     with counting() as c:
         out = cand.collect_candidates(
             [trow(5), trow(5, other), trow(5), trow(4)], HOME, frozenset({4, 5})
         )
-    assert ids(out) == [5, 4] and c.parses == 2
-    assert out[0].raw_digest == scan._tool_digest(5, "image_generate", "call_5", GOOD)
+    assert out == () and c.parses == 0
+    # The unique-row control still parses both returned rows and binds the
+    # digest to the actual tool result, so the refusal is attributable to the
+    # duplicate-row preflight rather than an inert extraction path.
+    with counting() as unique_count:
+        unique = cand.collect_candidates([trow(5), trow(4)], HOME, frozenset({4, 5}))
+    assert ids(unique) == [5, 4] and unique_count.parses == 2
+    assert unique[0].raw_digest == scan._tool_digest(5, "image_generate", "call_5", GOOD)
 
 
 def test_unsorted_and_descending_pages_give_the_same_result() -> None:

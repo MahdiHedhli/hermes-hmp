@@ -828,6 +828,22 @@ def test_collector_refuses_without_changing_rows(tmp_path: Path) -> None:
     assert list(out.rows) == br.latest(REF, 20) and len(out.rows) == 6
 
 
+def test_duplicate_native_row_id_refuses_optional_media_without_text_reread(
+    tmp_path: Path,
+) -> None:
+    world, directory = make_world(tmp_path)
+    db = world.dbs["alpha"]
+    row_id = tool(world, image_result(world.runner.homes["alpha"]))
+    db.rows.append(dict(db.rows[-1]))  # one returned page claims the same native id twice
+    rec, br = Recorder(world), new_bridge(real_bridge, world, directory)
+    out = br.latest_with_media(REF, 10)
+    assert isinstance(out, BridgeMediaRows) and out.candidates == ()
+    assert [row.id for row in out.rows] == [row_id, row_id]
+    assert [event[0] for event in rec.events if isinstance(event, tuple)].count(
+        "get_messages"
+    ) == 1
+
+
 def test_collector_exception_leaves_rows_and_no_error(tmp_path: Path, monkeypatch: Any) -> None:
     from hmp_plugin import local_media_candidate as cand
 
