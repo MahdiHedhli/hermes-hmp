@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Status | **APPROVED implementation baseline (OD-F1, 2026-09-25).** The owner ruled on `R0_FREEZE_REVIEW.md` (`R0_OWNER_DECISIONS.md` § "Freeze decisions (2026-09-25)"), subject to the bounded amendments listed there. This does **not** approve a nonconformant implementation, and it does not waive any transport or security requirement. It authorizes implementation work only in the scope OD-L2 ruled on: Feature F1 "Connect and browse", as amended (`FIRST_FEATURE_PLAN.md`). It does not by itself authorize upstream submission or any push (`R0_FREEZE_REVIEW.md` §11). |
-| Contract revision | `1.0` (approved 2026-09-25). History: `1.0-rc1` (commit `8657ae5`) was found incomplete by the independent freeze-package review (FZ-R-1..19); `1.0-rc2` (2026-09-24) was the ADVANCED contract-author correction pass that the owner then approved as revision `1.0`. |
+| Contract revision | `1.0` (approved 2026-09-25). History: `1.0-rc1` (commit `8657ae5`) was found incomplete by the independent freeze-package review (FZ-R-1..19); `1.0-rc2` (2026-09-24) was the ADVANCED contract-author correction pass that the owner then approved as revision `1.0`. Additive amendments, still served as `/ready` `contract` `"1.0"` (V-3's freeze string; 1.x clients ignore routes they do not call, V-4): **1.1** session browsing (§6a), **1.2** direct send (§7a), **1.3** approvals and Phone chat (§7b, OD-F16); **1.6 (draft, not implemented)** host-local generated images (§7e). |
 | Scope | The wire contract between the Hermes Bot Mobile client and the HMP plugin inside one Hermes gateway process. Hermes internals are out of scope, except where a clause states a dependency on a Hermes capability. |
 | Implementation and evidence status | **Stated only in [`HMP_V1_CONFORMANCE.md`](HMP_V1_CONFORMANCE.md).** This document defines required behaviour. Approval of this contract text does not state that behaviour is implemented or proven; that is the conformance matrix's sole role. |
 
@@ -205,6 +205,7 @@ Normative keywords follow RFC 2119 and RFC 8174.
 
   - `message` never echoes caller input.
   - The only allowed extras inside `error` are `why` (string), `authz` (an `AuthzState`), `head_message_id` (integer or null) and `definitive` (boolean).
+  - v1.3 AP-4/AP-5 additionally allow top-level `applied` on prompt results.
   - One top-level sibling is allowed: a `503 guarantees_unavailable` body also carries `"guarantees":{…}` (GU-5).
 - **ERR-2. Error table.** "Client action class" is what a client does. For a submit, "definitive" means Hermes will never execute this attempt.
 
@@ -240,12 +241,15 @@ Normative keywords follow RFC 2119 and RFC 8174.
 | `no_bot_chat` (v1.2, DS-4(2)) | 409 | direct send: no canonical Bot Chat exists yet for this bot | yes | Ask the operator to open this bot once on Hermes Desktop first. |
 | `session_busy` (v1.2, DS-4(3)) | 409 | direct send: the lease-registry guard found another live writer, or the liveness read itself failed | **no** (Hermes never saw this attempt) | Restore the draft; plain retry once the busy state clears. |
 | `stale_head` (v1.2, DS-4(4)) | 409 | direct send: the client's `expected_head` does not match the Bot Chat's current head | yes | Refresh (re-read via SES-2), then retry with the fresh head. Never a silent retry with the old value. |
-| `write_gate_closed` (v1.2, DS-2(b)) | 503 | direct send while `"open_guarded"` is unavailable (dogfood flag off, `api_server` unreachable/misconfigured, or key invalid) | yes (HMP did not hand off) | Keep the draft. Composer is read-only for direct send on this instance. |
-| `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"` | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
+| `write_gate_closed` (v1.2, DS-2(b)) | 503 | Bot Chat direct send lacks its owner switch, a Hermes API it needs (GU-2d), loopback configuration, or target profile key; on a §7b route also the `approvals` or `phone_chat` member being unavailable | yes (HMP did not hand off) | Keep the draft. Composer is read-only for this bot until its gate reopens. |
+| `api_server_unavailable` (v1.2, DS-6) | 503 | direct send: the loopback call to `api_server` failed, timed out, or was refused (`401`) after the gate reported `"open_guarded"`; on a §7b route also a native approval answer that is not a recognised settlement (AP-5), or a Hermes helper that failed at use time (AP-7a) | **no** (ambiguous — reconcile via DS-8) | Treat as UNCONFIRMED (CL-2); reconcile (DS-8), never resend under the same cmid. |
+| `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, a required Hermes API unavailable (GU-2d), missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
+| `model_unavailable` (v1.5, MD-1) | 503 | mobile default model: flag off, a required Hermes API unavailable (GU-2d), missing scoped picker endpoint, or Hermes read/write failure | — | Reopen the model screen and check the current selection before another write. |
+| `media_unavailable` (v1.6 draft, LM-3) | 503 | host-local image fetch: the caller is an owner device but the host flag is off or the feature is unavailable (LM-1). Message: "image delivery is unavailable" | — | Show "Image unavailable". Do not retry automatically. |
 
 - **ERR-2a. Read-compatibility refusal** (GU-2c; additive `other {why}` values, no contract revision; controller clarification, 2026-09-25).
-  - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes build's identity is not on the read-compatible builds list or cannot be determined.
-  - `503 other {why:"hermes_read_dependency_missing"}` when a listed build lacks a Hermes internal the read bridge needs.
+  - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes declares a version below the minimum supported version for reads (GU-2c), or its install cannot be found. An unknown, unlisted, newer or unreleased version is never refused for that reason.
+  - `503 other {why:"hermes_read_dependency_missing"}` when a Hermes internal the read bridge actually needs is missing, mis-shaped or resolves outside the Hermes tree and standard library.
   - HMP makes no bridge call and hands nothing to Hermes. Definitive for submit: yes (nothing handed off).
   - Client action: show "Unsupported Hermes build" for this instance; keep saved content visible and labelled; never retry against another instance.
 
@@ -270,7 +274,8 @@ Normative keywords follow RFC 2119 and RFC 8174.
   ```
   200 {"versions":[1], "contract":"1.0", "iid":"<b32>",
        "guarantees":{"no_defer":bool, "atomic_anchor":bool, "approval_request_id":bool, "confirmed_settle":bool},
-       "write_gate":{"state":"open"|"closed", "reason":null|"guarantees_unavailable"}}
+       "write_gate":{"state":"open"|"open_guarded"|"closed",
+                     "reason":null|"guarantees_unavailable"|"write_gate_closed"}}
   ```
 
   [diverges: the spike returns `{versions, iid, capabilities, guarantees}`. `contract` and `write_gate` are missing. The extra `capabilities` field is diagnostic, and clients ignore it (V-4).]
@@ -523,6 +528,17 @@ Normative keywords follow RFC 2119 and RFC 8174.
 
   [diverges: `guarantees`/`write_gate` absent, `served_at` a float]
   - Content of bots the user is not authorized for is never exposed.
+  - **Profile send availability (additive, V-3).** Each authorized bot MAY carry
+    `"send_gate":{"state":"open"|"open_guarded"|"closed","reason":null|"write_gate_closed"}`.
+    It describes the Bot Chat send route for that bot's own profile. A closed value is returned
+    when the host switch, a Hermes API send needs (GU-2d), loopback configuration, or that profile's key is
+    unavailable; neither the key nor its source is exposed. Bots without authorization omit the
+    field and do not trigger a key lookup. The send route rechecks these conditions on every POST.
+    A client that understands this field uses it for the selected bot's composer. If absent, it
+    falls back to the roster's `write_gate` for older HMP builds, while retaining a rejected
+    message as a reviewable draft. For old clients, roster `write_gate` is conservative: it is
+    closed if any authorized served bot cannot send. `/ready` remains an instance-level
+    diagnostic and does not assert that every named profile has a usable key.
 - **RO-2. Roster as state** (E-PDR-6).
   - The client re-reads the roster on every reconnect and on `roster.changed`.
   - `roster.changed` is an optimization, never the source of truth.
@@ -545,8 +561,14 @@ Normative keywords follow RFC 2119 and RFC 8174.
     - Hermes `messages` columns (`~/.hermes/hermes-agent/hermes_state_common.py`, the `messages` table): `tool_calls` TEXT (JSON) on assistant rows, `tool_name` TEXT and `tool_call_id` TEXT on tool rows. `SessionDB.get_messages` (`hermes_state_messages.py`) returns those columns and decodes `tool_calls` from JSON text to a list before HMP sees the row. Only `bridge.py` reads them. HMP never logs the text, the arguments, or the tool name (SEC-4).
     - On an `assistant` row, `tool_calls` is an array of `{"id", "name", "arguments", "arguments_truncated"}`. `arguments` is the call's arguments rendered as compact JSON (no insignificant whitespace), cut to 500 characters. `arguments_truncated` is true when that cut happened. The field is omitted when the row has no tool calls. `id` is the Hermes tool-call id (empty string when the row had none) and matches a tool row's `tool_call_id`.
     - On a `tool` row, `tool_name` and `tool_call_id` are those columns, omitted when null. `text` is the tool output cut to 4000 characters. The full output is never sent above that cap. `truncated` is present and `true` only when that cut happened; absent means the output was not cut. `role` stays `"tool"`.
+    - **Optional `media` (v1.6 draft, §7e).** A `tool` row MAY carry `media`: `{"kind":"image","ref":"<43-char base64url>"}`, only when the §7e gate is open. When the gate is closed the field is absent and the response bytes are identical to those of a server without §7e.
   - `turn` and `partial` are HMP **observations** (PR-1).
   - `open_requests` are scoped to this user's session.
+  - **v1.3 (§7b).** While the direct-send flag is on, this snapshot's `open_requests` lists the
+    caller's **Phone chat** prompts only (Bot Chat prompts are only on `GET …/prompts`). Each
+    object keeps the RO-3 fields (`kind`, `request_id` or `clarify_id`, `command`/`description` or
+    `question`, `choices`, `multi_select`). `awaiting_text`, `expires_at` and `surface` are extra
+    fields a client that does not know them ignores (V-4).
 - **RO-4. Tail lower bound.** `tail` is read **before** any other state, so it is a lower bound. A client that resumes from it cannot miss an event (E-PRV-12).
 - **RO-5. `partial_lost`** is true only when HMP's in-flight buffer was lost across an HMP epoch change during a running turn. It is never true merely because no chunk has arrived yet (E-PDR-12(a)).
 - **RO-6. History.** `GET …/conversations/default/messages?after=<id>&limit=<n>` returns either:
@@ -660,6 +682,17 @@ authorized`, SES-3) is unchanged.
     64 KiB display cut and "Message shortened on mobile" note. `role` is passed through
     unfiltered. A `tool` row renders as the collapsible result in S7. Every other role besides
     `user` and `assistant`, including `session_meta` and `system`, stays a neutral note.
+
+- **SES-2a. `GET /hmp/v1/bots/{p}/sessions/{ref}/messages/from-start?limit=`.** This distinct
+  read-only route returns the earliest available active rows in the existing RO-6 paged shape:
+  `200 {"messages":[…], "head_message_id":<int|null>}` or the same `reset` as SES-2. It calls
+  SES-2's `session_history` with cursor zero, then the client continues with SES-2's
+  `after=<last-id>` pages. It uses the same bearer, per-bot gate, opaque ref resolution,
+  per-device read limiter, history limit default/max, and session-browsing kill switch as SES-2.
+  Only `limit` is accepted; unknown or repeated query fields are `400 bad_request`. An older HMP
+  release has no route and returns 404, so a client cannot mistake SES-2's `after=0` latest
+  snapshot for complete history. No search term is sent to HMP or Hermes. Rows removed by Hermes
+  compaction are outside the available active history; clients must not claim to recover them.
 
 - **SES-3. Authz, rate limits, size caps.**
   - **Authz.** Identical per-bot gate to every existing `/bots/{p}/…` route (ERR-3), re-run on
@@ -843,15 +876,15 @@ which no supported build advertises today (§8).
   `400 bad_request`: the guard (DS-4) requires it once this route is registered, so an old client
   that never sends it cannot reach the guarded path at all (V-4's safe default — it simply never
   advertises success here).
-- **DS-2. Gate order.** (a) The per-bot gate (ERR-3). (b) The write gate (§8): if the *original*
-  GU-4 `"open"` state holds, this route is available under that full guarantee, unchanged from
-  SUB-1..SUB-10 (§7), and DS-4's HMP-engineered guard is not needed — no supported build advertises
-  `"open"` today, so this is a future path, not the one any current build takes. Otherwise, the
-  gate is `"open_guarded"` only if **all** of: the host flag `gateway.platforms.hmp.extra.
-  direct_send` is `true` (default `false`, off; OD-F14/OD-F15 — this is the flag OD-F15's second
-  live-config approval turns on for the owner's own devices only); `api_server` is reachable,
-  enabled and loopback-bound for the target profile (DS-6); and the target profile's
-  `API_SERVER_KEY` resolves to a usable secret (DS-6). Any other case is `"closed"`:
+- **DS-2. Gate order.** (a) The per-bot gate (ERR-3). (b) The Bot Chat route requires **all** of:
+  the host flag `gateway.platforms.hmp.extra.direct_send` is `true` (default `false`, off;
+  OD-F14/OD-F15); this Hermes provides the APIs send needs (GU-2d); `api_server` resolves to a
+  loopback-only target for the profile (DS-6); and that profile's `API_SERVER_KEY` resolves to a
+  usable secret (DS-6). A genuine GU-4 `"open"` state retains its full-guarantee label only
+  after these route prerequisites pass. Otherwise the route is `"open_guarded"` and applies
+  DS-4's HMP guard. A full Hermes guarantee never bypasses the owner switch or profile key.
+  This advertised gate does not probe the port: a later connection failure is
+  `api_server_unavailable`, with the message kept unconfirmed. Any missing prerequisite is `"closed"`:
   `POST .../chat/messages` returns `503 {"error":{"code":"write_gate_closed", ...}, "guarantees":
   {…}}` without handing anything to Hermes, mirroring GU-4's existing `guarantees_unavailable`
   shape under a new, route-specific code (added to ERR-2, never replacing it). (c) Only once (a)
@@ -904,10 +937,14 @@ which no supported build advertises today (§8).
     cron job targeting this session) can still land unseen. This is bounded, not eliminated;
     DS-7's post-hoc check exists because of it, and closing it fully needs Hermes's own atomic
     admission precondition (§8's `atomic_anchor`), not yet available on any supported build.
-- **DS-5. Approvals/clarify raised mid-turn — OD-F14, "Show it, answer elsewhere".** A send that
-  causes Hermes to raise an approval or clarify request stays read-only on the phone, exactly as
-  F1's existing `approval.unanswerable`/clarify-read-only rendering already shows it (`EV-7`,
-  `INT-4`). No new answering surface is added by this amendment.
+- **DS-5. Approvals/clarify raised mid-turn.** OD-F14's "Show it, answer elsewhere" still applies
+  when `gateway.platforms.hmp.extra.direct_send` is off, and when §7b's `desktop_held` marker is
+  set (Hermes Desktop holds the Bot Chat: the phone shows **Waiting for approval on your Hermes
+  Desktop** and renders no Bot Chat card). When the flag is on and this gateway process runs the
+  turn, approvals are answerable on the phone (§7b). Clarify on that local Bot Chat turn is not
+  answerable: `api_server` sets no clarify callback, so no card is emitted. `execute_code` on that
+  same turn does not card either (`api_server` is an unattended platform). OD-F16 (v1.3, §7b)
+  narrows this clause; it does not add a new error code.
 - **DS-6. The loopback call.** HMP resolves, server-side only, per the target profile: the
   `api_server` bind (`127.0.0.1`/`::1` only — any other resolved value, or a value HMP cannot
   positively determine, fails the gate closed at DS-2(b), never attempted) and the `API_SERVER_KEY`
@@ -927,6 +964,10 @@ which no supported build advertises today (§8).
   process — HMP's own response is `202 {"state":"queued"}`, settling later, never a second agent.
   Otherwise the call runs the turn directly and, if it completes within `ADMISSION_WAIT_S`
   (reused from §13), the reply is returned synchronously.
+  **v1.3 (§7b) replaces this URL.** A send that already passes DS-2 and DS-4 calls
+  `POST …/chat/stream` (same prefix, same bearer, same loopback rules) and never falls back to
+  sync `POST …/chat`. The phone still receives the DS-7 vocabulary at `ADMISSION_WAIT_S`. HMP
+  keeps reading the SSE socket until it ends.
 - **DS-7. Responses.**
 
   | Outcome | Response | Definitive? |
@@ -994,8 +1035,549 @@ which no supported build advertises today (§8).
   (unlike SES-1/SES-2's "not registered" pattern) — with the flag off, `POST .../chat/messages`
   answers `503 write_gate_closed` rather than `404`, matching how the original SUB-1 route already
   behaves under a closed GU-4 gate. This is the flag OD-F15's second live-config approval turns on,
-  for the owner's own paired devices only (enforced by the existing pairing trust boundary, no new
-  per-device ACL needed), never a general release default.
+  for owner dogfood, never a general release default. F3 prompt access and Phone chat additionally
+  require the explicit per-device allowlist in §7b; pairing alone is not owner authorization.
+
+## 7b. Approvals and Phone chat (v1.3, amendment F3; OD-F16)
+
+Additive under V-3. An earlier 1.x client never calls these routes and never reads the new fields
+(V-4). Design: `specs/003-approvals/DESIGN.md`. No new error code. `applied` is an additive field
+on the answer and on the stale/conflict/invalid-choice bodies below. `stale`, `not_found`,
+`invalid_choice`, `idempotency_conflict` and `write_gate_closed` are the existing ERR-2 codes.
+
+The owner-only flag `gateway.platforms.hmp.extra.direct_send` (DS-10) gates every route in this
+section. Flag off, or the member a route needs being unavailable (see "Availability" below): each
+route returns `503 {"error":{"code":"write_gate_closed",…}}` and does not open a loopback stream,
+call `handle_message`, or call `resolve_gateway_approval` / `resolve_gateway_clarify` /
+`mark_awaiting_text`. Pairing is still required. The flag does not authorize a device by itself.
+
+Auth on every route: bearer, explicit owner-device membership, the F3 rate limit, then the
+per-bot gate (`require_bot_authorized`, ERR-3), then the write gate and the availability
+gate below. The rate limit is two separate per-device buckets keyed by `device_id`
+only: AP-3 reads are limited to 60 per minute per device, and AP-4 answers and AP-6 Phone sends
+share one actions bucket of 60 per minute per device. Each bucket aggregates across every profile
+and request ID the device uses. Reads do not consume the actions bucket. `{p}` is the served profile, checked against the stored row. An owner device is an active
+paired device whose exact ID appears in `gateway.platforms.hmp.extra.owner_device_ids` (list of
+strings, default empty; malformed config grants nobody). A non-owner receives `404 not_found`,
+even when bot-authorized or sharing the owner's `user_id`. The host loads changes through its
+normal config reload/restart; HMP reads the live adapter config each request. The separate
+per-device jobs/model controls decision (§7c, §7d) never makes a device an approval owner: an
+explicit grant without an `owner_device_ids` entry still receives `404 not_found` on every
+AP-3/AP-4/AP-6 route and omits `open_requests`, and an explicit host denial closes an
+allowlisted device. An unreadable decision denies. Owner devices of
+the same user share the existing per-request serialization and idempotency. Default-conversation
+snapshots omit `open_requests` for non-owners and while the direct-send flag is off.
+The explicit `direct_send.enabled` flag is mandatory even when the base gate is OPEN.
+
+**Availability (additional gate; owner policy 2026-10-01, spec 034).** Two eligibility members,
+computed once when the listener opens beside the others (GU-2d), gate this section.
+
+| Member | Needed by | Requires |
+|---|---|---|
+| `approvals` | the Bot Chat stream binding, AP-3 and AP-4 for `bot_chat` rows | read and send, and the send floor |
+| `phone_chat` | AP-6, AP-4 for `phone_chat` rows, snapshot `open_requests`, the Phone producer hooks | read and send, the send floor, and the in-process helpers below |
+
+Both floors are Hermes `0.21.5` / `2026.9.24`, equal to send. A version that declares itself below
+the floor is refused for both without importing a helper; an unknown, placeholder, unlisted, newer
+or development version is attempted. `approvals` adds no Hermes dependency of its own: Bot Chat
+answers are made only through Hermes's native run-approval route over loopback, so its own key,
+room-grant and run-ownership checks apply, and a missing Phone helper never closes it. `phone_chat`
+is available only when the helpers HMP calls in process actually exist, with the same containment
+and wrapper-chain rules as every other probe (GU-2d): `tools.approval.resolve_gateway_approval`
+with named `request_id` and `resolve_all` parameters (a `**kwargs` catch-all never counts) and
+`list_gateway_approvals`; `tools.clarify_gateway.resolve_gateway_clarify`, `mark_awaiting_text` and
+`get_clarify_timeout`; `tools.approval_context._get_approval_timeout`; the base adapter hooks
+`_send_exec_approval_prompt` and `send_clarify`; and the dataclass field
+`MessageEvent.allow_gateway_control`. `retire_clarify_card` is an optional hook the gateway finds
+on the adapter's own class; it is not on the base class and is not probed. A member is closed only
+when its own required API is genuinely missing, or because send or read is. Every member defaults
+to closed when no availability information exists.
+
+No exact build, Git SHA, source fingerprint, manifest, process latch or tested-sample receipt admits
+or refuses either member, and no runtime path reads one. Tested samples remain evidence only
+(GU-2a). The Bot Chat session-stream approval notifier (`APIServerAdapter._register_session_stream_approval`
+on the inspected development builds) is reported as a neutral diagnostic fact by
+`hermes hmp compat --verbose` and in approval issue drafts. It never gates, never raises a warning
+by itself and never establishes a release minimum: where the notifier is absent Hermes emits no
+`approval.request`, no card is invented, and Hermes keeps its own fail-closed behavior.
+
+Residual: a later Hermes that stops honoring `allow_gateway_control:false` cannot be detected
+statically. The pending preflight and prompt-only answer route (AP-6) remain the protection, and
+the dependency check never claims to prove behavior. Ordinary guarded sends (§7a) do not depend on
+either member.
+
+- **AP-1. Bot Chat stream (amends DS-6 for approval-owner sends only).** Before it takes the
+  profile lock, HMP decides the transport from live state: the stream is used only when the
+  sending device is an effective approval owner for this bot (the `owner_device_ids` entry and no
+  host denial, AP-7) and `approvals` is available. Every other send, including every non-owner
+  send and every send while `approvals` is closed, uses DS-6's synchronous
+  `POST …/chat` exactly as in §7a, with unchanged outcomes. The loopback body stays
+  `{"message":"<text>"}`. On the stream path the route is
+  `{path_prefix}/api/sessions/{live_tip}/chat/stream`. A non-200, or a body that is not that route's
+  SSE stream, fails the send as `503 api_server_unavailable`. HMP never opens `POST …/chat`
+  instead and never retries after a stream failure. The consumer is a task
+  owned by the send, not by the phone HTTP request. At `ADMISSION_WAIT_S` the phone gets the DS-7
+  vocabulary: `200 accepted` when `run.completed` already carried an assistant message and DS-7a
+  passes; `202 queued` on `run.queued` or a mailbox `done` that never registered a local approval;
+  `202 submitted` while the stream is still open. The cmid stays pending until a terminal SSE
+  event. The socket dying before that finalizes the row `unknown` (DS-8) and interrupts the Hermes
+  turn. DS-3 replay does not open a second stream. `approval.request` is stored as soon as it
+  arrives, including before the phone's `202`. The stored command is the redacted SSE value. HMP
+  does not un-redact it. A mailbox stream (Desktop holds the Bot Chat: no `approval.request`) sets
+  a process-memory marker `{surface:"bot_chat", desktop_held:true}` for the life of that consume
+  and clears it when the consume ends. The marker is not proof that Desktop is blocked on a card.
+- **AP-2. Prompt rows are process memory.** Key `(iid, user_id, profile, request_id)`. A restart
+  drops them immediately (Hermes's own queues are process memory too). After a row settles or
+  expires it is kept at most `IDEMPOTENCY_RETENTION_S` (§13) inside one process. The row stores
+  the Hermes `run_id` (Bot Chat) or the session key HMP built for this user (Phone chat). The
+  client never sends `session_key`, `run_id`, `chat_id` or `profile` in the answer body. Each
+  listener open creates a new prompt generation. A stream or hook bound to an older generation can
+  never insert rows into, list from or answer in a newer one, and rows of a generation that was
+  closed by AP-10 are never listed or answerable. A body
+  field `all` or `resolve_all` is `400 bad_request` and is not forwarded. `resolve_all` is never
+  passed. An answer is bound to the stored `request_id` and the authorized `user_id`. An id stored
+  for a different user is `404 not_found`, the same as an unknown id. No Hermes call is made.
+- **AP-3. Read.** `GET /hmp/v1/bots/{p}/prompts` → `200 {"prompts":[Prompt,…], "desktop_held":bool}`.
+  `Prompt` fields: `kind` `"approval"`|`"clarify"`; `surface` `"bot_chat"`|`"phone_chat"` (clarify
+  is `phone_chat` only); `request_id` (Hermes `request_id`, or `clarify_id` under the same JSON
+  name); `choices`; for an approval, `command` and `description`; for a clarify, `question`,
+  `multi_select`, `awaiting_text`; `expires_at` (unix seconds, or null when Hermes's clarify
+  timeout is unlimited). `desktop_held` true means `prompts` contains no `bot_chat` approval (a
+  Phone-chat card may still be listed). `expires_at` is `observed_at` plus the timeout read from
+  Hermes (`approvals.timeout`, default 300s; clarify `clarify.timeout`, else `agent.clarify_timeout`,
+  else 3600), through `bridge.py` inside that target profile's runtime scope. It is a display hint,
+  not Hermes's timer. Approval values <= 0 mean immediate expiry; clarify <= 0 means unlimited.
+  Hermes returning nothing pending, clarify retirement, a vanished approval waiter, or the end
+  of the bound stream expires the row immediately. A 30-second grace after the display hint
+  is the local cleanup backstop: beyond it list omits the row and answer returns `409 stale`,
+  `applied:false` without forwarding. Purge removes rows and locks after retention, pinning
+  active/queued answerers so a lock cannot be replaced underneath them. Unknown IDs allocate
+  neither rows nor locks.
+- **AP-4. Answer.** `POST /hmp/v1/bots/{p}/prompts/{request_id}`. The path id is the only id. A
+  `kind` field in the body is ignored; the stored row decides. `choice` together with `text`, or
+  `other` together with either, is `400 bad_request`.
+
+  | Stored kind | Body | Hermes call |
+  |---|---|---|
+  | approval | `{"choice":"once"\|"session"\|"always"\|"deny"}` | Bot Chat: `POST {path_prefix}/v1/runs/{stored_run_id}/approval` with `{"choice","request_id"}` only. Phone chat: `resolve_gateway_approval(stored_session_key, choice, request_id=)`. |
+  | clarify | `{"choice":"<label>"}` or, when `multi_select`, `{"choices":["<label>",…]}` | `resolve_gateway_clarify`. The label is the offered choice with a trailing `(Recommended)` stripped. Multi-select passes `json.dumps(labels)`. |
+  | clarify Other | `{"other":true}` | `mark_awaiting_text`. `200 {"status":"awaiting_text","applied":false}`. |
+  | clarify text | `{"text":"<string>"}` | `resolve_gateway_clarify` only when the row is awaiting text or has no choices. Otherwise `409 invalid_choice`, and the Hermes entry stays pending. |
+
+  A `choice` not in the stored `choices` is `409 {"error":{"code":"invalid_choice",…},"applied":false}`
+  and makes no Hermes call. Clarify labels are compared after stripping a trailing `(Recommended)`
+  and casefolding. A submitted clarify choice (each member of `choices`) that matches more than one
+  offered label after that normalization is refused the same way, never resolved by picking the
+  first; exact unambiguous replies are unchanged and no automatic retry follows (AP-5). Success is `200 {"status":"resolved","applied":true}`. `applied:true`
+  means Hermes accepted the resolution (`resolve_*` returned non-zero, or the runs endpoint
+  returned `resolved` > 0). It does not mean the command finished. The UI clears the card only
+  after a later poll omits it (INT-2).
+
+- **AP-5. Idempotency and stale answers.** The row stores `answer_hash` once Hermes has accepted
+  an answer.
+
+  | Situation | Result |
+  |---|---|
+  | First answer, Hermes accepts | `200`, `applied:true` |
+  | Retry, same body, already accepted | the stored `200`. Hermes is not called again |
+  | Retry, different body, already accepted | `409 idempotency_conflict`, `applied:false`. The first choice stands |
+  | Phone chat: `resolve_gateway_approval` returns 0, or `resolve_gateway_clarify` returns false | `409 stale`, `applied:false`. The row is marked expired. This call did not apply the choice |
+  | Bot Chat native answer: `200` whose bounded JSON body has a non-bool integer `resolved` > 0 | `200`, `applied:true` (the only native result that proves application) |
+  | Bot Chat native answer: `409` with parsed JSON error code `approval_not_pending` or `approval_not_active`, or `404` with parsed JSON error code `run_not_found` | `409 stale`, `applied:false`. The row is marked expired |
+  | Bot Chat native answer: any other result: an unknown `409` code, a non-JSON, malformed or oversized body on `404`, `401`, `403`, `3xx`, `5xx`, a malformed `200` (missing, non-integer, boolean or non-positive `resolved`), a timeout or a connection failure | `503 api_server_unavailable`, no `applied` field. The row stays open. Not retried. The response text is never echoed or logged |
+  | Two in-flight answers for one id | one resolver, in arrival order, under a per-id lock. The second sees the stored outcome |
+  | Unknown id, or an id stored for another `user_id` | `404 not_found`. No Hermes call |
+  | Flag off, or the row's member unavailable | `503 write_gate_closed` |
+
+  If Hermes accepted a choice and HMP died before recording it, the retry calls Hermes, gets
+  nothing pending, and returns `409 stale` / `applied:false`. The client copy is "This prompt
+  already ended." It does not offer the other buttons as a fresh decision.
+- **AP-6. Phone chat send.** `POST /hmp/v1/bots/{p}/phone/messages` with
+  `{"client_message_id":"<UUIDv7>","text":"<string>","sent_at":<int>?}`. No `expected_head`.
+  Idempotency key `(iid, user_id, profile, cmid)`, hash of `text`, reserved before
+  `handle_message`. The same text replays the stored response and does not hand off again. A
+  different text is `409 idempotency_conflict`. `handle_message` is called with
+  `allow_gateway_control:false`. On Hermes builds that expose a reject-policy admission ticket,
+  HMP returns `202 {"state":"submitted"}` only after Hermes reports `admitted`; an explicit
+  known refusal outcome is a refusal. `refused_other` can include persistence failures, and its
+  detail is unavailable on the ticket; HMP treats it as unknown. If the ticket is absent, has
+  an unclassified outcome, or has no outcome within five seconds, HMP stores and returns
+  `200 {"state":"unknown"}`. Replaying that cmid returns
+  the stored unknown result without a second delivery. Older stock builds have no admission
+  ticket; HMP uses their synchronous acceptance flag. The route does not wait for the model.
+  **Definitive refusal.** Only a delivery result that is exactly `False` returns
+  `503 {"error":{"code":"api_server_unavailable",…},"applied":false}` with stored status
+  `rejected`; `applied:false` means Hermes did not admit the message. The bridge returns `False`
+  only when `handle_message` left the event unaccepted or the ticket reports one of the known
+  refusals (`refused_busy`, `refused_draining`, `refused_precondition_head`,
+  `refused_precondition_expired`, `refused_lease_timeout`, `refused_unauthorized`), none of
+  which admit a user turn. Background handling may already have been scheduled. `refused_other` (persist failure, unreported exit) is `None`, not
+  `False`. Exact `True` stays `202`. `None`, any non-boolean result, a delivery exception, a
+  missing session key or a non-list approval probe are uncertain: no `applied` field (`200
+  unknown`, or `503` without `applied` for the pre-delivery and exception cases), never
+  `applied:false`. The same cmid replays the stored body without redelivery. This is HMP's own
+  wire contract, not a `HERMES_API_GAP`; it adds no error code and does not enable approvals.
+  While `list_gateway_approvals` for this
+  phone session is non-empty, the route does not call `handle_message` and returns
+  `409 {"error":{"code":"stale",…},"applied":false}` — the composer is not a way to say yes.
+  While a clarify prompt is pending, composer sends also return `409 stale`, `applied:false`.
+  Both kinds of prompt are answered only through AP-4; chat text never resolves a wait. The inert authorize trigger stays `allow_gateway_control:false`, and its
+  outbound reply is still dropped. Phone chat does not claim DS-4's single-writer guard.
+- **AP-7. Who may answer.** The bearer resolves to `user_id`. The answer route loads the row by
+  `request_id` and that `user_id`. Bot Chat answers use the `run_id` Hermes registered for the
+  stream HMP opened, sent only to loopback. Phone chat answers use `build_session_key` of the
+  source HMP built for this `user_id` and the `default` chat. A client-supplied session key is
+  ignored. Logging (SEC-4) is `log_event` only: outcome codes (`stored`, `resolved`,
+  `stale`, `invalid_choice`, `conflict`,
+  `desktop_held`, `awaiting_text`, `unavailable`, and for phone send `submitted`, `unknown`, `replay`, `conflict`, `refused`;
+  and the fixed `approval_binding outcome=changed` and `approval_helper outcome=unavailable`)
+  and 8-character prefixes of `user_id`, `request_id`, `run_id`. Never the command, description,
+  question, chosen answer, clarify label, message text, SSE body, or `API_SERVER_KEY`.
+  All successful answer logs use exactly `outcome=resolved`; no choice suffix is permitted.
+  When the adapter cannot uniquely match a command but holds valid pending request IDs for
+  this session, it may expose deny-only recovery cards with an empty command and explicit
+  unbound-approval copy. They still require an owner action through AP-4, and cannot allow
+  execution. No usable ID or queue read failure means fail closed until Hermes times out;
+  the fallback never enables slash or plaintext control.
+
+  Transport bounds: approval POST total/read deadlines are 15/10 seconds; SSE total/read
+  deadlines are 24 hours/90 seconds. Both disable redirects and environment proxies and use
+  only pinned loopback literals. SSE requires `text/event-stream`, validates supplied run IDs
+  against `run.started`, accepts LF/CRLF, caps frames at 64 KiB and buffers at 128 KiB. Approval
+  responses are capped at 64 KiB. Exceeding a bound closes the transport without retry.
+  Phone observations have a global 256-row cap, 60-second TTL and 8 KiB text cap; durable
+  role/text matches discard them. They are never merged into cursor-addressed snapshot/history
+  message arrays, which contain only durable Hermes rows.
+
+- **AP-8. Discovery.** F3 does not register the EV-1 SSE route. The client polls `GET …/prompts`.
+  v1.3 names the live-tail frames so a later revision does not invent a second vocabulary:
+  `approval.requested` (includes `surface`), `approval.settled`, `approval.unanswerable` (still the
+  GU-6 read-only case when HMP cannot bind a `request_id`), `clarify.requested`, `clarify.retired`,
+  and `notice` `{"kind":"desktop_held","text":"Waiting for approval on your Hermes Desktop"}` (an
+  empty `text` clears it). Until the tail exists those names are the poll's diff, not bytes on a
+  socket. `approval_request_id` in the capability map does not gate these routes. A false flag
+  still means the old read-only copy for any approval HMP cannot bind. An unbound prompt is never
+  given buttons.
+- **AP-9. INT-4 for Phone chat.** Clarify answering on Phone chat ships here. The ownership check
+  is HMP's `(user_id, request_id)` row, not `tools.clarify_gateway`'s private index. An id the
+  phone did not receive from a prompt HMP stored for that user is `404`, so a guessed `clarify_id`
+  never reaches Hermes. Path 1 (Bot Chat stream) still has no clarify. Reads do not import the
+  clarify module; the clarify symbols are `phone_chat` probe dependencies only.
+
+- **AP-7a. Use-time capability failure.** A Hermes helper that raises `ImportError`,
+  `AttributeError` or `TypeError` when HMP calls it is an actual capability failure for that
+  operation, however the install looked at listener open. The route answers `503
+  api_server_unavailable` with no `applied` field and logs only the fixed
+  `approval_helper outcome=unavailable`. It never fabricates a success and never claims the
+  Hermes request expired. Unavailable is not proof a waiter is gone: the row stays open.
+- **AP-10. Phone-chat binding fence (object identity).** After the `phone_chat` probe passes,
+  HMP keeps strong references to the Hermes callables it actually calls for Phone chat. At each
+  use it compares them, by object identity, with the attribute then bound in the Hermes module.
+  A difference closes the local Phone-chat generation: HMP expires its own Phone rows, answers
+  nothing from them, closes `phone_chat` until the next listener open, and logs only
+  `approval_binding outcome=changed`. This is an identity check on the helpers HMP calls. It is
+  not authenticity, a fingerprint or loaded-bytecode proof, and it reads no disk or manifest.
+  Closing it invalidates HMP's local observations only; it does not establish that Hermes's
+  pending request expired, so it reports no native expiry or "not pending". Bot Chat `approvals`
+  eligibility is independent of it, and a stream bound to the closed generation cannot reinsert
+  rows into a new one.
+
+## 7c. Mobile cron management (v1.4, draft)
+
+This additive route family is disabled unless `gateway.platforms.hmp.extra.cron.enabled`
+is explicitly true, at least one `owner_device_ids` entry matches this authenticated device,
+and the running Hermes provides the scheduler APIs the route needs (GU-2d). A device also
+needs the existing per-bot authorization for `{p}`. A failed gate returns `404 not_found`
+for non-owner devices or `503 cron_unavailable` for a disabled or unavailable endpoint, before
+any job data or loopback API key is used.
+
+| Method | Path under `/hmp/v1` | Body | Result |
+|---|---|---|---|
+| GET | `/bots/{p}/jobs` | — | `{"jobs":[job,...]}` |
+| POST | `/bots/{p}/jobs` | `{"name":string,"schedule":string,"prompt":string,"deliver"?:"local"\|"bot-chat","continuity"?:boolean,"repeat"?:1..9999}` | `{"job":job}`; created paused |
+| PATCH | `/bots/{p}/jobs/{job_id}` | one or more of `name`, `schedule`, `prompt`, `deliver`, `continuity`, `repeat` | `{"job":job}`; `repeat:0` clears a finite run limit |
+| DELETE | `/bots/{p}/jobs/{job_id}` | — | `{"deleted":true}` |
+| POST | `/bots/{p}/jobs/{job_id}/pause` or `/resume` | — | `{"job":job}` |
+
+`job` contains only `id`, `name`, `prompt`, `schedule`, `enabled`, `state`,
+`next_run_at`, `last_run_at`, `last_status`, `deliver`, `continuity`, and `repeat`;
+optional status/time fields and `repeat` may be null. Delivery is projected only as
+`local`, `bot-chat`, or `other`, never an external channel ID or URL. `continuity`
+maps to Hermes's `context_from: ["self"]` reference, preserving any other context
+references when edited. `repeat` is the total run limit, not the remaining count.
+IDs are twelve lowercase hex characters. At most 100 jobs and one MiB of upstream JSON
+are returned. HMP never forwards scripts, workdirs, delivery targets, raw errors, or
+other Hermes job internals. Create/edit fields are length bounded; unknown fields are
+rejected. Reads, pause/resume, and delete use one profile-scoped, literal-loopback API server
+endpoint with the profile's own server key, disabled proxy inheritance, redirects, and
+automatic retries. Create and edit use Hermes's profile-scoped cron writer so continuity
+is saved atomically with the job; both retain the same owner/device/bot gate and the same required-API availability check.
+The phone may select only local run history or its own bot's Bot Chat. It cannot name an
+arbitrary delivery destination. HMP still creates jobs paused.
+Phone clients must treat a transport failure after a write as an unknown outcome and
+refresh before attempting another write. The host flag defaults off; release requires
+fixture qualification and independent security review.
+
+## 7d. Bot default model (v1.5, draft)
+
+This additive route family is disabled unless `gateway.platforms.hmp.extra.model_management.enabled`
+is explicitly true, this authenticated device is in `owner_device_ids`, the selected bot
+passes the existing per-bot access check, and the running Hermes provides the model reader and
+writer APIs the route needs (GU-2d). Non-owner devices receive `404 not_found`; a disabled or
+unavailable feature receives `503 model_unavailable`. These checks happen before a config read, model
+catalog request, or write.
+
+| Method | Path under `/hmp/v1` | Body | Result |
+|---|---|---|---|
+| GET | `/bots/{p}/model/default` | — | `{"provider":string,"model":string}` |
+| GET | `/bots/{p}/model/options` | — | `{"providers":[{"provider":string,"name":string,"models":[string,...]},...]}` |
+| PUT | `/bots/{p}/model/default` | `{"provider":string,"model":string}` | Stored provider/model, which Hermes may normalize |
+
+The current model read uses only Hermes's routed profile home and returns no other config.
+The options read uses the fixed profile-scoped loopback `/api/model/options` route and the
+profile's own API key. HMP never accepts a URL, key, base path, raw config patch, or provider
+configuration from the phone. Only authenticated providers with nonempty models are projected;
+all other catalog fields are discarded. HMP caps the response at eight MiB, 256 provider rows,
+10,000 model IDs, and fixed string lengths. It disables proxy inheritance and redirects.
+
+The PUT calls Hermes's existing validated profile-model writer rather than writing YAML from
+HMP. It accepts only provider and model, both bounded. A validation refusal is `400
+bad_request`; other write failures are `503 model_unavailable`. A model selection may affect
+billing. The phone must confirm the named bot and model before PUT. A lost response is an
+unknown result: refresh the current model and never automatically retry. The persisted
+default applies to new sessions; this route does not switch a running Desktop-owned turn.
+The host flag defaults off. Availability on a given Hermes follows GU-2d, not a build list.
+
+## 7e. Host-local generated images (v1.6, draft; not implemented)
+
+Additive under V-3. **Status: draft serving contract; the feature is not implemented.** Reviewed inert
+components are recorded in the task evidence. M2 API eligibility and M3 listener-scoped binding are independently source-reviewed; no serving route, device acceptance or release exists. Descriptor emission on the four read routes (RO-3, RO-6, SES-2, SES-2a) is **independently source-reviewed S4 code** (see ROOT_DECISIONS); fetch and device acceptance remain open. Amended 2026-10-02 for the owner's minimum-version
+policy: there is **no build list, manifest, fingerprint or process latch**, and this section never claims
+that a build, serving platform or device is qualified. The runtime media binder verifies the listener's in-memory cache chain and closes only that listener on a cache identity change; the S4 candidate's four read routes consume it, the fetch route (S5) does not exist yet. Design record and open gates:
+[`specs/011-local-image-serving`](../../../specs/011-local-image-serving/spec.md). A client on an
+earlier `1.x` build ignores `media` and the route (V-4). The numeric constants below (20 s, 30 s,
+1800 s, 512 per device, 4096 total, 128, 2 per device, 4 per instance, 120 per minute) are **new
+choices for this feature**, not existing Hermes or HMP constants.
+
+Scope: an image the host's `image_generate` tool already wrote to that profile's image cache,
+shown on the tool row that produced it. Not upload, video, audio, file browsing, arbitrary host
+paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
+
+- **LM-1. Gate.** Default **off**. A device may use this feature only when all hold:
+  1. the device passes `is_approval_owner_device` (configured owner allowlist and no explicit
+     controls denial; unrelated owner privilege never implies this);
+  2. the live host flag `local_media.enabled` is exactly `true`;
+  3. the `local_media` eligibility member is available (LM-2, GU-2d): the version floor is met, the
+     required Hermes APIs are present, and the in-memory media binding holds. No build list, manifest,
+     fingerprint or Git SHA is consulted.
+
+  Otherwise no `media` field is emitted and read response bytes are **identical** to those of a
+  server without this section. The gate does not affect compat, roster, send or approvals and
+  adds no upper version bound on the install. Approval gates are never waived by it, and no grant
+  is made automatically. Each device is checked per request against the owner list and any host denial.
+- **LM-2. Availability.** Replaces the retired exact-build qualification (manifest, fingerprints, Git SHA,
+  process anchor, preload origin checks, GIL guard). The `local_media` member (GU-2d) is computed **once
+  when the listener opens**, beside the other members, and reads no build list, manifest, fingerprint or Git SHA:
+  - *Minimum floor (root decision D-M3):* the write floor `0.21.5` / `2026.9.24`, inherited from send, whose
+    probe table already contains these rows (EVIDENCE_GAP E-M1: existence at the read floor is unverified). A version that declares itself below the floor is
+    unavailable (`hermes_version_below_floor`) and no media module is imported. Unknown, `0.0.0`,
+    unlisted, newer and development versions are attempted.
+  - *Dependencies:* requires `read` available (otherwise `requires_read`). It does **not** require
+    `send` or `session_browsing`; a disabled direct-send switch never closes media. The probe table is
+    exactly the native callables the media path reaches beyond the read core:
+    `SessionDB.get_session`, `SessionDB.get_session_by_title`, `SessionDB.get_compression_lineage`,
+    probed by containment and signature shape (never called), with the GU-2d wrapper and tree rules.
+    There is no image-producer probe; a changed producer spelling is refused per candidate by the
+    lexical check of LM-5.
+  - *Binding:* at listener open, the media-chain cross-references are verified in memory and the
+    verified references are bound to that listener. An incoherent chain closes **this listener's**
+    media with a fixed outcome and never latches the process; a second coherent listener in the same
+    process can open. A cheap use-time identity fence compares the current cache objects with the bound
+    ones by identity and, on mismatch, closes only that listener's media (`503 media_unavailable`)
+    until the next open. This is not authenticity, a loaded-bytecode proof or attestation. Cache
+    publication includes the bridge module and its classes in a single locked tuple assignment, with
+    imports outside the publication lock. No component relies on GIL atomicity, and a legacy
+    process-anchor value is ignored and never written.
+  - The availability result is an in-memory boolean. Authorization, explicit settings, scoped
+    credentials, payload bounds, resource bounds and the C6b identity proofs are unchanged.
+
+  Status: the M2 eligibility member, offline issue drafting and M3 listener-scoped binding are independently source-reviewed; **media delivery remains unimplemented** (S4 descriptor emission is independently source-reviewed; the fetch route is not implemented). The fixed binding outcomes are `media_binding_incoherent` and `media_binding_changed`; no path or exception text accompanies them. A compat `available` line is probe eligibility only, not
+  serving availability. The retired design is recorded as historical in
+  [ROOT_DECISIONS](../../../specs/011-local-image-serving/ROOT_DECISIONS.md#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02).
+- **LM-3. Closed-gate responses.** A non-owner device gets `404 not_found` before the gate is
+  consulted. An owner device with the flag off or the feature unavailable gets `503 media_unavailable`, message "image
+  delivery is unavailable" (the only new ERR-2 code). User-visible text elsewhere is unchanged.
+- **LM-4. Descriptor.** `media` appears only on `role:"tool"` rows in RO-3, RO-6, SES-2 and SES-2a,
+  only when the gate is open:
+
+  ```
+  "media": {"kind":"image", "ref":"<43-char base64url of 32 random bytes>"}
+  ```
+
+  and nothing else: no MIME, size, dimensions, name, path, digest, expiry or native id. The `ref`
+  matches `^[A-Za-z0-9_-]{43}$`. A host never emits extra keys. Client rules: ignore unknown extra
+  keys on an otherwise valid descriptor; an unknown `kind` is ignored (row renders, no card); a
+  malformed `media` is dropped and the row remains. A descriptor never comes from an assistant row.
+- **LM-5. Mint preconditions (candidate only; no image/home file access or stat at mint).** The row is in
+  an eligible session of the right kind (LM-6); `tool_name == "image_generate"`; the raw tool-result
+  content, before the 4000-character display cut, is a `str` of at most 64 KiB UTF-8 that parses
+  to an object with `success` equal to `true`, no `error` key, and `image` a `str` of 1..4096
+  characters without NUL; and the lexical name derivation passes. One shared result function serves
+  mint and fetch. Name derivation is lexical only: `image` must start with the routed profile home
+  string plus `/cache/images/`, and the remainder must be a flat, bounded name. There is no
+  `resolve()`, no legacy `image_cache`, no legacy-preferring or mkdir helper. A symlinked or
+  differently spelled home refuses at fetch; mint checks spelling lexically and cannot prove
+  non-symlink without filesystem access. The existing database-file check remains permitted.
+  Descriptor minting also requires one request-scoped active-history linkage batch per
+  emitting response under the C6 freeze in `specs/011-local-image-serving/ROOT_DECISIONS.md`: strict
+  active-set/declaration/digest checks for each returned candidate, with no cross-request
+  authority cache. This performs no image/home file access or stat, and does not replace the
+  per-fetch scan. Immediately before mint, owner authorization, the live exact-true flag, availability
+  and registry state are checked synchronously, with no await before mint.
+
+- **LM-6. Session kind.** Fixed at mint, rechecked at fetch. `phone` iff the session equals the
+  caller's own Phone conversation session. `bot_chat` iff it is in the canonical Bot Chat
+  compression chain and its tip is the live tip. Any other session gets no descriptor.
+  The C6b freeze in `ROOT_DECISIONS.md` defines the shared mint/fetch proof: exact native
+  compression-lineage/parent-chain equality, canonical title holder, hidden lineage root,
+  current bound-session resolution and fresh unique-kind classification. The title can move
+  to a visible compression child; ordinary visible canonical titles do not qualify. Native
+  title writers are trusted metadata and can create indistinguishable retitled hidden lineages;
+  per-profile bearer gates and strict tool-result/fetch checks still apply.
+- **LM-7. Authority.** Authority comes **only** from a strict same-profile `image_generate` tool
+  result row. Assistant `MEDIA:` text and Markdown are never parsed for authority.
+- **LM-8. Non-wire sidecar.** The raw candidate is internal. It is carried to the server handler in
+  an explicit read-result sidecar (or an equivalent reviewed non-wire carrier). It never enters a
+  wire-serialized dataclass and is never promoted blindly into serialized message fields.
+- **LM-9. Handle.** The `ref` carries no path. It is process-local state: lock-protected, no
+  durable bytes, cleared on restart. Entry binds device, user, instance, profile, session kind,
+  bound session, tip, tool row id, raw-content digest, monotonic mint time and the first-served
+  sha256. TTL 1800 s, 512 per device, 4096 total, LRU; expired or evicted entries are deleted. Mint
+  is idempotent: an unexpired entry with the same binding returns the same ref and never extends
+  its TTL. At most 128 descriptors per response, newest first; older rows get none. Possessing a
+  ref authorizes nothing: every fetch re-authenticates and rescans. Existing capped tool text can
+  already contain the `image` string; that exposure is unchanged and rows are **not** claimed
+  pathless.
+- **LM-10. Route `GET /hmp/v1/bots/{profile}/media/{ref}`.** Always registered. HEAD and other
+  methods get the existing `404 not_found`. Order is normative and no image byte is sent before the
+  final synchronous check (LM-12):
+  1. bearer, existing `Authenticator`;
+  2. non-owner device `404 not_found`, **before** the gate;
+  3. any query, body or transfer-encoding: `400 bad_request`;
+  4. rate limit 120 per minute per device: `429 rate_limited`;
+  5. initial per-bot grant via the existing per-bot gate (ERR-3, unchanged), run off the loop on the
+     shared default executor;
+  6. flag off or media unavailable (LM-1): `503 media_unavailable`;
+  7. ref grammar and binding lookup: one `404 not_found` shape;
+  8. nonblocking permits (2 per device, 4 per instance): else `429 rate_limited`, no `why`. The
+     instance permit is the buffer permit of LM-13 and the device permit shares its lifetime.
+
+  Existing outer middleware (peer `403`, `413 too_large`, compat `503`) is unchanged and runs first.
+- **LM-11. Two off-loop phases.** Both run on one dedicated 4-worker executor, never on the event
+  loop, with the caller's profile `ContextVar`s copied into each phase.
+  - *Phase one:* fresh same-kind eligibility and tip match; native per-bot authorization; scan of
+    the exact tool row in the active set; name derivation; leaf file read; raster structure check
+    (fixes the MIME as PNG, JPEG or WebP); sha256; history recheck; returns the buffer. Every
+    phase-one refusal is `404 not_found`.
+  - *Phase two (post-worker final native check):* a second bounded off-loop call runs fresh native
+    per-bot authorization, current same-kind eligibility and tip. It takes a worker permit
+    **without queueing**; if none is free the request is `429 rate_limited` (no `why`), zero bytes,
+    no retry. A revocation or tip/eligibility change seen by it is `404 not_found`, zero bytes.
+  - One 20 s worker-wait deadline is **shared** by both phases, not doubled. A wait beyond it is
+    `404 not_found`.
+  - **No native check runs on the event loop.**
+- **LM-12. Final synchronous section.** After the phase-two future returns, on the loop, with no
+  `await` between these steps and response `prepare`: fresh bearer authentication (existing `401`
+  codes), approval-owner flag (`404`), live media flag, availability and registry existence/TTL (`404`),
+  with no per-request qualification await before this section, and the
+  first-served digest compare-and-set under the registry lock (set if absent; if different, delete
+  the entry and refuse `404`). A causal change between the phase-one recheck/return and the
+  phase-two check refuses. **Residual (unavoidable, stated):** a grant or tip change after the last
+  native check and before `prepare` is **not** promised to refuse, because no atomic native API
+  exists. This contract makes **no atomic snapshot guarantee**. Bearer, owner, flag, availability, TTL and CAS
+  changes on the loop still causally refuse.
+- **LM-13. Lifetimes under cancellation.** Each phase's worker permit counts actual concurrent
+  future completion, including cancellation, and is released only by that future's done callback.
+  The buffer permit survives both futures and is released only when both are done (or phase two
+  never started) **and** the handler's `finally` has passed. Cancelling the awaiting coroutine
+  releases neither early; a late worker keeps its permits until it really finishes.
+- **LM-14. Success response.** `200` with `Content-Type` exactly the structural MIME
+  (`image/png`, `image/jpeg` or `image/webp`), `Content-Length`, `Cache-Control: no-store, private`,
+  `X-Content-Type-Options: nosniff` and the existing `Server` header. No `Content-Disposition`,
+  filename, `ETag`, `Last-Modified` or `Accept-Ranges`; `Range` is ignored. Body at most 8 MiB.
+  The body is streamed in 64 KiB slices, each within the remaining **30 s total** write deadline
+  including EOF. After `prepare`, timeout, cancellation or error aborts the transport; the handler
+  returns only after EOF or abort.
+- **LM-15. Error table.** Every body is the ERR-1 shape with the existing messages.
+
+  | Stage | Condition | Status | `code` | Extras |
+  |---|---|---|---|---|
+  | Initial bearer | wrong or non-ASCII `HMP-Instance` | 401 | `wrong_instance` | none |
+  | | missing, bad, unknown or expired token, or device not `ACTIVE` | 401 | `unauthenticated` | none |
+  | | device or token family revoked | 401 | `revoked` | none |
+  | Non-owner | not an approval-owner device (before the gate) | 404 | `not_found` | none |
+  | Shape | query, body or transfer-encoding | 400 | `bad_request` | none |
+  | Rate | over 120 per minute per device | 429 | `rate_limited` | none |
+  | Initial per-bot grant (ERR-3) | `pending_operator`, `refused_allow_all` | 403 | `forbidden` | `authz` |
+  | | `not_routed`, `not_served` | 409 | `not_routed` | `authz` |
+  | | `unverifiable`, bridge error, unmapped state | 503 | `other` | `authz:"unverifiable"`, `why:"unverifiable"` |
+  | Gate | owner device, flag off or media unavailable | 503 | `media_unavailable` | none |
+  | Ref/binding | bad grammar, unknown, expired, evicted, foreign device/user/instance/profile/kind | 404 | `not_found` | none |
+  | Permits | device 2 or instance 4 exceeded | 429 | `rate_limited` | none |
+  | Phase one | candidate invalid, eligibility or tip changed, file missing or unsafe, raster rejected, digest mismatch, worker error, 20 s shared wait | 404 | `not_found` | none; no oracle between causes |
+  | Phase two | grant revoked or changed, eligibility or tip changed, phase-two error, shared 20 s wait | 404 | `not_found` | none; same body as phase one |
+  | | no worker permit free (no queue, no retry) | 429 | `rate_limited` | none |
+  | Final bearer | token expired, device revoked, wrong instance | 401 | `unauthenticated` / `revoked` / `wrong_instance` | none |
+  | Final synchronous | owner flag, media flag, availability, TTL, entry or CAS no longer holds | 404 | `not_found` | none |
+  | Unexpected | any other exception | 500 | `other` | `why:"internal_error"` |
+
+  The phase-two per-bot refusal is deliberately `404`, not the ERR-3 mapping; ERR-3 applies only at
+  the initial grant stage. After `prepare` there is no status to send, so failure aborts the
+  transport.
+- **LM-16. Logging.** Logs and access logs carry closed-enum reasons only: never a ref, path, name,
+  size, digest, body or exception text (SEC-4).
+- **LM-17. Client rules.** The phone parses `media` only on tool rows with the exact ref grammar. It
+  fetches through a separate binary load path to the active binding only: raw response, existing
+  single `401` refresh, no JSON success parser, no DNS, redirect, public CDN call, disk cache or
+  fallback. Success requires `200`, a `Content-Type` of PNG, JPEG or WebP, a byte sniff equal to
+  that type, and at most 8 MiB. Decode uses a bounded static-raster decoder. On `404` the client may
+  re-read once; if the same row id now carries a ref it may fetch once more, otherwise it shows
+  "Image unavailable" with a user retry. `404` is unavailable or expired, `429` busy, `503
+  media_unavailable` unavailable. The existing phone transport timeout is 15 s, so a slow fetch may
+  show unavailable before the host's 20 s and 30 s deadlines; this contract authorizes no transport
+  change.
+- **LM-18. Memory ceilings (provisional).** Verification ceilings for four concurrent 8 MiB fetches
+  are a traced allocation peak of 96 MiB and an incremental RSS of 128 MiB. They are provisional,
+  not a native-allocation bound; a failure changes the implementation, not the ceiling.
+- **LM-19. Release-candidate evidence and review (open).** Under the minimum-version policy none of
+  the following is a per-build runtime admission gate, and no build list or fingerprint receipt is consulted
+  by the runtime. Release evidence still identifies its exact tested candidate and native sample. Sampled evidence describes the builds and platform it ran on and does not prove behavior
+  on others. Before any shipping, enablement or platform claim:
+  - **E1 (lexical producer string):** the bounded exact-build fixture passes for its stated producer and
+    scratch layout, as recorded in [the task evidence](../../../specs/011-local-image-serving/tasks.md#e1-bounded-producer-evidence-2026-10-01).
+    It compares the raw producer string lexically with the captured routed home plus
+    `/cache/images/`, without path normalization. Other producer spellings are uncharacterized; a
+    mismatch refuses that candidate on every build.
+  - **Linux file-leaf run (`PLATFORM_GAP` for the rest):** the bounded non-root tmpfs file-leaf run passes,
+    as recorded in [the scoped evidence](../../research/local-media-linux-leaf-evidence-2026-10-01.md).
+    That covers only the leaf check on its stated platform. Native Linux serving and broader
+    platform coverage remain unqualified; no Linux support claim follows.
+  - **C6b and T12 (pending sample evidence):** exact-native complete binding cost with concurrent-writer
+    evidence, and memory on sampled builds against the provisional ceilings of LM-18, are measured once per
+    feature release candidate. A failure changes the implementation, not a ceiling or an allowlist. The
+    runtime protections are the in-code bounds that apply on every version (LM-5, LM-9, LM-11, LM-14).
+  - Independent security review of the exact candidate, owner-authorized install and flag, and physical-
+    device acceptance remain required. `SECURITY_REVIEW_REQUIRED` for the handle, route, availability
+    binding and its removal of the retired qualification gate.
+- **LM-20. Residuals carried.** No atomic snapshot (including ABA on unrelated rows); change after
+  the last native check and before `prepare` (LM-12); a coarse-timestamp torn buffer is left to the
+  phone codec; no image provider or producer is qualified or fingerprinted (each candidate is refused
+  or accepted by the lexical check and the strict tool-row rules); no loaded-bytecode attestation;
+  same-account host code, including plugin-directory writes, is not contained; native session and message
+  reads may materialize unbounded content, flush queued token counts and prune (HERMES_API_GAP, every
+  build); native title writers are trusted metadata; deadlines and memory ceilings are provisional.
+  Assistant `MEDIA:` text stays ordinary unmodified text; producers other than `image_generate` have no
+  authority (HERMES_API_GAP: no typed tool-artifact record).
 
 ## 8. Guarantees, capability contract and write gate (FZ-R-8, FZ-R-9)
 
@@ -1023,20 +1605,27 @@ which no supported build advertises today (§8).
     - Only a genuine integer counts as a version. A boolean, a string or a float is treated as absent (DR-12).
     - `>= floor` relies on the Hermes map's rule that a higher version is a strict superset of every lower version's behaviour (DR-5). HMP SHOULD log any version higher than the ones it knows.
     - HMP does not use a Hermes build identity to derive guarantees. Build identity is used only for GU-2c read compatibility.
-- **GU-2a. Supported builds (release gating).**
-  - A Hermes build is **supported** only if it is listed in the HMP release test matrix. That matrix pins exact reviewed Hermes builds by commit SHA (`R0_FREEZE_REVIEW.md` §6).
-  - The HMP release is tested against every listed build, and those tests include the capability-derived flags.
-  - A build outside the matrix whose capability map meets the floors will still open the write gate at runtime. It is nevertheless **unsupported**, and the documentation says so.
+- **GU-2a. Tested samples (evidence only; owner policy 2026-10-01).**
+  - The HMP release test matrix pins exact reviewed Hermes builds by commit SHA (`R0_FREEZE_REVIEW.md` §6). Those receipts describe the samples that were tested, including the capability-derived flags.
+  - A tested-sample match is evidence only. It never admits or refuses a build, and no gate reads it.
+  - A build outside the matrix is attempted like any other (GU-2c, GU-2d). Its tested/untested status appears only as evidence in tooling.
 - **GU-2b. Residual: false capability claims.**
   - A modified Hermes could advertise capabilities it does not implement.
   - Such code runs as the same OS user as Hermes, so this sits inside the E-SI-15 trust boundary (SEC-1). It is covered by the same owner acknowledgement.
   - HMP does not try to detect it.
-- **GU-2c. Read-compatible builds** (`R0_OWNER_DECISIONS.md`, bounded amendment 1).
-  - Read compatibility is a separate question from write qualification (GU-2a). "Works on any Hermes build" is replaced by an exact list of tested **read-compatible** Hermes builds, pinned by commit SHA, maintained separately from the write-supported release matrix.
-  - HMP's read routes (roster, snapshot, history, and the live tail and stop where reachable) are exercised against each build on that list before the build is added.
-  - A Hermes build outside the read-compatible list is not silently assumed to work. It yields an understandable compatibility state to the client — never a guessed call into an unlisted build's private API surface.
-  - The list starts empty. F1 (`FIRST_FEATURE_PLAN.md`) populates its first entries.
-  - Build identity is the exact Hermes git commit SHA when the install has git metadata; otherwise a deterministic SHA-256 fingerprint over the exact source files the read bridge depends on. The list records both identity kinds. An unidentifiable build is unsupported (controller clarification, 2026-09-25).
+- **GU-2c. Minimum supported Hermes version** (owner policy 2026-10-01, replacing the exact-build list of `R0_OWNER_DECISIONS.md` bounded amendment 1).
+  - Read compatibility is decided by a minimum version, not a list of builds. The floors are per feature: `read` and session browsing 0.21.4 (2026.9.21); `send`, `jobs` and `model` 0.21.5 (2026.9.24). Each floor is one verified release, expressed in both version schemes.
+  - HMP reads the Hermes version with file reads only: a valid `baseVersion` in `install-stamp.json` (read as UTF-8, optional BOM), else a literal `__version__` in `hermes_cli/__init__.py`, else the literal `__release_date__`. The stamp is authoritative, as in Hermes's own version lookup; HMP does not take the larger of the stamp and the literal. The `0.0.0` placeholder and any non-plain version count as absent. HMP never imports, executes or evaluates Hermes code to learn the version, and never converts between the two schemes.
+  - Only a version that declares itself below a floor is refused (`hermes_build_unsupported`), and then no Hermes internal is imported. An unknown, unlisted, newer or unreleased version is attempted, subject to GU-2d and every security check. An unidentifiable or unlisted build is not, by that fact alone, unsupported.
+  - Exact commit SHAs and source fingerprints are recorded as test evidence only.
+- **GU-2d. Required-API availability and failure reporting** (owner policy 2026-10-01).
+  - A feature is available when its version floor is met and each Hermes internal it reaches is present, has the required parameter names (a `**kwargs` catch-all never satisfies a name such as `paused`), and resolves, with every wrapper layer, inside the Hermes tree or the standard library (not `site-packages`, `dist-packages` or the Hermes home's `plugins` directory). Probes import and inspect; they never call.
+  - A missing core read dependency closes read, and with it every other feature, which uses the same authorization and profile primitives. Otherwise a failure of one feature's own probe table closes that feature; a genuinely absent shared API also closes each other feature whose own table requires it. Session browsing's own absence closes only the session routes (404).
+  - Availability is computed once when the listener opens. Permissions, explicit host settings, instance identity, profile routing, scoped credentials, payload bounds and idempotency are unchanged and are checked as before. A genuinely absent implementation is never advertised as usable.
+  - A compatibility warning follows a real feature failure only, never a merely unlisted version. A failed probe states the fixed reason and does not claim the version is bad; a "not one of HMP's tested samples" note appears only after a failure and only when no tested sample matches. `hermes hmp compat --issue-draft` prints a user-reviewed GitHub issue draft limited to the Hermes version and its source, the commit SHA when present, the HMP version, the OS family and Python `major.minor`, and the failed feature, reason and HMP's own dependency labels. Nothing is submitted, no network, `gh` or browser is used, and no profile, device, chat, path, host, key, config, content, log or exception text can appear. `--feature` with `--failure-code` records a failure the operator saw (for an upstream failure no static probe can see); it is labelled as operator-reported, grants nothing, and accepts only fixed error codes that match the feature. Permission and routing codes are explained as such and never drafted.
+  - **Members (spec 034).** The eligibility set is `read`, `session_browsing`, `send`, `jobs`, `model`, `approvals` and `phone_chat`. `approvals` (Bot Chat approvals) and `phone_chat` (Phone chat sends and approval or clarify answers, §7b) both require read and send and the send floor (0.21.5 / 2026.9.24). `approvals` has no dependency table of its own; `phone_chat` has the table in §7b. A consequence of read or send being unavailable is reported as `requires_read` or `requires_send`, not as a failure of the member, and drafts nothing. `--issue-draft --feature approvals|phone_chat` accepts `write_gate_closed` and `api_server_unavailable` as operator-reported codes; a draft for these members may include the neutral session-stream hook fact (§7b).
+  - **Media member (spec 011, M2 source-reviewed; delivery unimplemented).** `local_media` (§7e) is added to the eligibility set, amending spec 013's "no media member" constraint. It requires `read` available but not `send` or `session_browsing`; floor `0.21.5` / `2026.9.24` (inherited from send); probe rows `SessionDB.get_session`, `SessionDB.get_session_by_title` and `SessionDB.get_compression_lineage`, each requiring the existing signature discipline with two positional parameters (self plus the argument HMP passes). Read unavailable reports `requires_read`. A failure of the media table closes only media; a truly absent shared API can independently close siblings that also require it. Compat prints `available` or `unavailable (<fixed reason>)` for probe eligibility only; it does not read the host flag or print a `disabled` state. Listener binding is independently source-reviewed; descriptor emission, fetching and delivery acceptance remain unfinished gates. `--issue-draft --feature local_media` accepts only `media_unavailable` as an operator-declared owner-device, flag-on failure; this offline command cannot attest that declaration. `not_found`, `rate_limited`, `forbidden` and other permission or routing codes get their own reason and no draft. No path, ref, digest, profile or device id can appear.
+  - No wire code or field is added.
 - **GU-3. Symbol detection never advertises a guarantee.**
   - Detecting `defer_policy`, `AdmissionPrecondition` and similar symbols MAY be used only as a cross-check.
   - If a symbol is absent while the capability map claims the capability, the flag is `false` and HMP logs the inconsistency.
@@ -1051,6 +1640,14 @@ which no supported build advertises today (§8).
     - the `/stop` control event (INT-5). Stopping must always be possible.
     - the inert authorization trigger that `POST …/authorize` sends (PR6-1). Pairing authorization must work on any build, including stock Hermes. The trigger hands no user message to Hermes, and Hermes's code reply is never relayed. Gating it would break pairing bootstrap on non-guaranteed builds.
   - No other route may hand anything to Hermes while the gate is closed.
+  - **GU-4b. Phone chat (v1.3, §7b, OD-F16).** A named, narrower exception than opening SUB-1:
+    `POST /hmp/v1/bots/{p}/phone/messages` may hand **that request's user text** to Hermes while
+    GU-4's `"open"` state is false, and only when the same gate as DS-2(b) is open (the
+    `direct_send` flag is true, send is available, and `phone_chat` is available, §7b). Flag off,
+    or either unavailable: the route returns `503 write_gate_closed` and does not call
+    `handle_message`.
+    The route does not report `guarantee_level:"guarded"` and does not take `expected_head`. The
+    inert authorize trigger remains the only hand-off while the user is not yet authorized.
   - **Accepted residual (RV-7).** The authorize trigger has a narrow race. HMP sends the fixed inert text only after reading `PENDING_OPERATOR`. If the operator's grant lands between that read and the hand-off, Hermes processes the fixed text as an ordinary turn, and on a build without P2 it could be queued. This is accepted: the text is constant, carries no user content and requests no action.
   - **GU-4a. `"open_guarded"` (v1.2, amendment F2; DS-2(b)).** A third `write_gate.state`, scoped
     exclusively to `POST /hmp/v1/bots/{p}/chat/messages` (§7a). It substitutes an HMP-engineered
@@ -1061,14 +1658,22 @@ which no supported build advertises today (§8).
     succeeded merely because the state string is unfamiliar. `"open_guarded"` never applies to the
     original `SUB-1` route (§7) — that route's gate stays exactly GU-4's original two-flag
     derivation, unaffected by this amendment.
+    For the Bot Chat route, the host `direct_send` switch and the target profile's keyed
+    loopback endpoint remain mandatory even when GU-4's full guarantees are present (DS-2).
 - **GU-5. Where guarantees are carried.**
   - `guarantees` and `write_gate` are carried by `/ready` and `GET /bots` [diverges: `/ready` lacks `write_gate`; `GET /bots` carries neither].
   - `guarantees` is also carried at the top level of a `503 guarantees_unavailable` body.
   - Successful submit responses (`200`, `202`) do not carry `guarantees`. A write only succeeds when the write guarantees held, so the field would be redundant there. (This narrows rc2's first draft, following the SPIKE-FIX-5 conformance finding for row 6.1b.)
   - The client uses the latest value it has read.
+  - A client with RO-1's optional per-bot `send_gate` uses it for the selected Bot Chat instead
+    of the instance-wide fallback. Both are status hints; DS-2 is rechecked on POST.
 - **GU-6. Reduced-guarantee UI.**
-  - When `write_gate` is `closed`, the UI MUST show that this Hermes instance cannot accept messages from mobile safely, and the composer is read-only.
-  - When `approval_request_id` is `false`, approvals are read-only ("answer on another Hermes surface").
+  - When the selected bot's send gate is `closed`, the UI MUST show that this bot cannot accept
+    messages from mobile now, and its composer is read-only. An older client uses the conservative
+    instance-wide `write_gate` fallback.
+  - When `approval_request_id` is `false`, approvals HMP cannot bind to a stored `request_id` are
+    read-only ("answer on another Hermes surface"). v1.3 (§7b) answers a prompt only when HMP
+    itself holds that id. The capability flag does not gate the §7b routes.
   - When `confirmed_settle` is `false`, the UI never shows "stopped" (INT-6).
   - The copy is `UX_CONTRACT_GAP` UX-6.
 
@@ -1162,9 +1767,12 @@ which no supported build advertises today (§8).
   | stale | `409 stale` |
   | foreign or unknown id | `404 not_found` |
 
-- **INT-4. Clarify is feature-gated.** It is not exercised at runtime (E-GAP-12/20). The ownership check depends on a private Hermes index, and Hermes's resolver is not session-scoped: that is E-GAP-20, upstream P12.
-  - Clarify answering ships only after a runtime proof and a decision on P12 (`R0_FREEZE_REVIEW.md` §11.3).
-  - Until then, clarify requests are rendered read-only.
+- **INT-4. Clarify is feature-gated, except Phone chat (v1.3, AP-9).** The historical gate stands
+  for every surface except the optional Phone chat: the ownership check must not read
+  `tools.clarify_gateway`'s private index, and `resolve_gateway_clarify` is not session-scoped
+  (E-GAP-20). Phone chat answers only an id HMP stored for that `user_id` (AP-2, AP-9). That is
+  the ownership check this clause asked for, done outside the private index. Bot Chat (the session
+  stream) still has no clarify card. A clarify HMP cannot bind stays read-only.
 - **INT-5. Stop.** `POST …/stop` **always** forwards Hermes's real `/stop`, whatever HMP's observed turn state, and returns `202 {"state":"forwarded"}`. The reply to an idle stop is framed as `notice` (EV-4b).
   - Stop is allowed while the write gate is closed.
   - **`stop.requested` is published only when all three hold:**
@@ -1204,32 +1812,42 @@ The bridge module uses these undocumented Hermes internals. Each is a `HERMES_AP
 | `runner._authorization_home_for_source(source)` | evidence only | E-GAP-22 |
 | `gateway.run._profile_runtime_scope`, and its async twin | reads in profile scope | E-GAP-14 |
 | `hermes_state_registry.acquire(<home>/state.db)` → `SessionDB` reads (`get_compression_chain`, message reads, `platform_message_id` lookup, resume-tip resolution) | head, history, snapshot, lookup | E-GAP-6/7 |
-| `SessionDB.list_sessions_rich`, `SessionDB.get_session` (v1.1, amendment A1) | SES-1 session list, SES-2 `session_ref` resolution | E-GAP-6/7 |
+| `SessionDB.list_sessions_rich`, `SessionDB.get_session` (v1.1, amendment A1) | SES-1 session list, SES-2 `session_ref` resolution; `get_session` is also a send dependency (compression-lineage walk when resolving a Bot Chat), so its absence closes both session browsing and send | E-GAP-6/7 |
 | `hermes_cli.active_sessions.active_session_registry_snapshot` (v1.2, amendment F2) | DS-4(3) liveness/lease-registry guard | E-GAP-6/7 family; public and exported, used by three independent Hermes surfaces (`cli.py`, `tui_gateway`, `gateway/run_busy.py`) for the same kind of liveness check, but outside the documented plugin contract |
 | `tools.bot_live_delivery.find_canonical_owner` (v1.2, amendment F2) | DS-4(2) Bot Chat resolution (same primitive SES-1/OD-F11 already relies on) | E-GAP-6/7 family |
 | `adapter._session_store.lookup_by_session_key` | the session resolved at submit | E-GAP-6 |
 | `gateway.session.build_session_key` | session correlation | E-GAP-6 |
-| `tools.approval.list_gateway_approvals` / `resolve_gateway_approval(request_id=)` | approvals | E-GAP-9 |
-| `tools.clarify_gateway._session_index`, `._entries`, `resolve_gateway_clarify` | clarify ownership, pending state, answer | E-GAP-9/20 |
+| `tools.approval.list_gateway_approvals` / `resolve_gateway_approval(request_id=)` | approvals. v1.3 (AP-4, AP-6) calls both with the stored session key and `request_id=`; `resolve_all` is never passed. Probed by the `phone_chat` member only (§7b); not a read or send dependency | E-GAP-9 |
+| `tools.approval_context._get_approval_timeout` (v1.3) | approval `expires_at` display hint (AP-3). `tools/approval_context.py`. `phone_chat` probe member | E-GAP-9 |
+| `tools.clarify_gateway.resolve_gateway_clarify` / `mark_awaiting_text` / `get_clarify_timeout` (v1.3) | Phone-chat clarify answer, Other, and `expires_at` (AP-4, AP-9). `tools/clarify_gateway.py`. `phone_chat` probe members. HMP does not read `_session_index` or `_entries` | E-GAP-9/20 |
+| `tools.clarify_gateway._session_index`, `._entries` | named here as the private index HMP does **not** read (INT-4, AP-9). Not a bridge dependency | E-GAP-9/20 |
 | `gateway.platforms._shared.get_scoped_secret`, `platform_gate_env` (private module) | env allowlist detection | E-GAP-31 |
 | `gateway.config.load_gateway_config`, `Platform` | platform `extra` settings | E-GAP-14 |
 | `gateway.platforms.event.MessageEvent`, `AdmissionPrecondition` | submit event construction | P2/P3 API |
 | `hermes_constants.get_default_hermes_root()` | instance-key anchor | documented (PLUGIN) |
 
-**Plugin API used outside the bridge** (controller ruling, 2026-09-25). `adapter.py` imports exactly `gateway.platforms.base.BasePlatformAdapter`, `SendResult` and `gateway.config.Platform`, and `identity.py` imports exactly `hermes_constants.get_default_hermes_root` (the instance-key anchor, needed on every build because `/ready` must serve the `iid`). These are the documented platform-plugin API, not read internals, and they are the only Hermes imports allowed outside the bridge; they (and their transitive imports) load on every build, including unsupported ones. `Platform` is also a bridge dependency (above). `compat.py` locates the Hermes source root without importing it; only for a build already on the GU-2c list does it run a dependency probe (import and signature inspection, no calls). An unlisted build never has a Hermes internal imported by HMP.
+**Plugin API used outside the bridge** (controller ruling, 2026-09-25). `adapter.py` imports exactly `gateway.platforms.base.BasePlatformAdapter`, `SendResult` and `gateway.config.Platform`, and `identity.py` imports exactly `hermes_constants.get_default_hermes_root` (the instance-key anchor, needed on every build because `/ready` must serve the `iid`). These are the documented platform-plugin API, not read internals, and they are the only Hermes imports allowed outside the bridge; they (and their transitive imports) load on every build, including unsupported ones. `Platform` is also a bridge dependency (above). `compat.py` locates the Hermes source root without importing it and reads the version from files; only for a build at or above the read floor (or of unknown version) does it run a dependency probe (import and signature inspection, no calls). A build below the minimum version never has a Hermes internal imported by HMP.
 
 **GAP-1.** HMP MUST refuse writes unless the capability contract establishes both write guarantees (GU-2, GU-4). When a bridge dependency HMP needs for **reads** is missing, HMP MUST refuse every route except `/ready` with ERR-2a and make no bridge call (editorial alignment with ERR-2a, 2026-09-25).
 
-**GAP-2 (v1.2, amendment F2, §7a).** `api_server`'s `POST /api/sessions/{id}/chat` route and `GET
-/v1/capabilities`'s `session_chat` flag are a **product HTTP contract**, not a Python internal HMP
-imports — HMP never imports `gateway/platforms/api_server.py`. This is a structurally different
-kind of dependency from every row in the table above: reached over loopback, with a credential
+**GAP-2 (v1.2, amendment F2, §7a; v1.3 adds the stream and the approval POST; spec 034).**
+`api_server`'s `POST /api/sessions/{id}/chat` route and `GET /v1/capabilities`'s `session_chat` flag
+are a **product HTTP contract**, not a Python internal HMP imports — HMP never imports
+`gateway/platforms/api_server.py`. v1.3 uses the same class of dependency for
+`POST /api/sessions/{id}/chat/stream` (approval-owner sends only, AP-1) and
+`POST /v1/runs/{run_id}/approval` (`run_approval_response`). There is no fallback from the stream
+route to the sync route after a failure (AP-1). This is a structurally different kind of
+dependency from every row in the table above: reached over loopback, with a credential
 (`API_SERVER_KEY`) HMP does not own the lifecycle of, versioned by `api_server`'s own product
 compatibility story rather than by anything `bridge_files` fingerprints. It is not added to
-`bridge_files` for that reason (`tools/compat/bridge_files.py`); it is qualified instead by the
-route probe and behavioral confirmation in `direct_send_supported_builds.json`
-(`server/hmp_plugin/direct_send_supported_builds.json`, starts empty, same discipline as
-`write_supported_builds.json` under OD-F3).
+`bridge_files` for that reason (`tools/compat/bridge_files.py`); availability comes from the send
+dependency probe (GU-2d) and the `approvals` member (§7b), and a failure of an HTTP route itself,
+which no static probe can see, answers `api_server_unavailable` and can be reported with
+`hermes hmp compat --issue-draft`. `direct_send_supported_builds.json`
+(`server/hmp_plugin/direct_send_supported_builds.json`) records the tested samples as evidence only.
+`GET /v1/capabilities` advertises `approval_events` statically on inspected builds, including
+releases whose session stream has no approval notifier, so it is not an availability signal
+(`HERMES_API_GAP`, not an HMP task).
 
 ## 13. Constants (tunable only by contract revision)
 
@@ -1263,6 +1881,14 @@ route probe and behavioral confirmation in `direct_send_supported_builds.json`
 | `DEVICE_NAME_MAX_BYTES` | 64 | |
 | Snapshot `limit` | default 50, max 500 | |
 | History `limit` | default 100, max 1 000 | |
+| `MEDIA_REF_TTL_S` (v1.6 draft) | 1 800 | §7e LM-9; new feature choice |
+| `MEDIA_REFS_PER_DEVICE` / `MEDIA_REFS_TOTAL` (v1.6 draft) | 512 / 4 096 | LRU |
+| `MEDIA_DESCRIPTORS_PER_RESPONSE` (v1.6 draft) | 128 | newest first |
+| `MEDIA_FETCH_PER_MIN` (v1.6 draft) | 120 per device | |
+| `MEDIA_PERMITS_PER_DEVICE` / `_PER_INSTANCE` (v1.6 draft) | 2 / 4 | instance permit is the buffer permit |
+| `MEDIA_WORKERS` (v1.6 draft) | 4 | dedicated executor |
+| `MEDIA_WORKER_WAIT_S` / `MEDIA_WRITE_DEADLINE_S` (v1.6 draft) | 20 (shared by both phases) / 30 (including EOF) | |
+| `MEDIA_MAX_BYTES` (v1.6 draft) | 8 388 608 | |
 
 ## 14. Residuals this contract accepts explicitly
 
@@ -1274,7 +1900,10 @@ route probe and behavioral confirmation in `direct_send_supported_builds.json`
 - **RES-10.** Row ids are not stable across in-place compaction. Until P13 exists, rewrite detection is heuristic (RO-8).
 - **RES-11.** The authorize-trigger race (GU-4, RV-7).
 - **RES-12.** Until P14 exists, HMP cannot reliably tell a Hermes command reply it did not originate from an agent turn (EV-4b).
+- **RES-13.** Approval ownership and the legacy controls allowlist share one config list (spec 034, D8). A device in `owner_device_ids` with no recorded host controls decision also receives jobs and model controls (§7c, §7d). An explicit host denial still removes approval ownership. The coupling is recorded, not removed; the runbook asks the operator to record an explicit controls decision before listing a device, and `setup check` prints a read-only notice. No decision or allowlist entry is changed automatically.
+- **RES-14.** A later Hermes that stops honoring `allow_gateway_control:false`, or that rebinds an approval helper without HMP noticing the rebinding before use, is not statically detectable (§7b, AP-10). The identity fence is not attestation.
 - **RES-5.** Revocation does not stop a running turn (E-GAP-29; PR7-7).
 - **RES-6.** Roster names are visible to every enrolled device (SEC-2).
 - **RES-7.** `head_message_id` may include non-conversational rows until P6 exists (RO-7).
 - **RES-8.** Continuity is limited to HMP-originated sessions until P7 exists (§11).
+- **RES-13 (v1.6 draft).** §7e makes no atomic snapshot guarantee; a grant or tip change after the last native check and before response `prepare` is not promised to refuse (LM-12, LM-20).

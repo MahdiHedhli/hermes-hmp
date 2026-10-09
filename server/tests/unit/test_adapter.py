@@ -21,6 +21,7 @@ from typing import Any
 import pytest
 
 from hmp_plugin import cli, reads, wire
+from hmp_plugin.contract import WriteGate, WriteGateState
 
 from .hmp_kit import Env
 from .test_server import WRITE_PATHS, tls_exchange
@@ -271,6 +272,85 @@ def test_sync_refresh_skips_the_write_when_the_served_set_is_unchanged(
         adapter._sync_refresh(["default", "netmin", "liteforms-connector"])
         assert len(calls) == 1  # an actual change did write, exactly once
 
+        await adapter.disconnect()
+
+    asyncio.run(main())
+
+
+def test_health_snapshot_keeps_profile_failures_separate(adapter_module: types.ModuleType) -> None:
+    bridge = types.SimpleNamespace(
+        direct_send_endpoint=lambda profile: object() if profile == "alpha" else None
+    )
+    ctx = types.SimpleNamespace(
+        direct_send_enabled=lambda: True,
+        reported_send_gate=lambda profile: WriteGate(
+            state=WriteGateState.OPEN_GUARDED if profile == "alpha" else WriteGateState.CLOSED,
+            reason=None,
+        ),
+        cron_enabled=lambda: True,
+        is_cron_available=lambda: True,
+        model_enabled=lambda: False,
+        is_model_available=lambda: True,
+        is_send_available=lambda: True,
+        bridge=bridge,
+    )
+    assert adapter_module.HmpAdapter._health_snapshot(
+        ctx, [("alpha", "Alpha"), ("beta", "Beta")]
+    ) == (
+        ("alpha", "ready", "ready", "disabled"),
+        ("beta", "unavailable", "unavailable", "disabled"),
+    )
+
+
+def test_health_snapshot_reports_unavailable_send_as_unsupported_not_disabled(
+    adapter_module: types.ModuleType,
+) -> None:
+    """E13: the owner's flag and this Hermes's availability are separate. A flag that is on for a
+    Hermes without the send dependencies reads `unsupported`; a flag that is off reads
+    `disabled`."""
+
+    def ctx(*, flag: bool, available: bool) -> types.SimpleNamespace:
+        return types.SimpleNamespace(
+            direct_send_enabled=lambda: flag,
+            is_send_available=lambda: available,
+            reported_send_gate=lambda profile: WriteGate(
+                state=WriteGateState.OPEN_GUARDED, reason=None
+            ),
+            cron_enabled=lambda: False,
+            is_cron_available=lambda: False,
+            model_enabled=lambda: False,
+            is_model_available=lambda: False,
+            bridge=None,
+        )
+
+    snapshot = adapter_module.HmpAdapter._health_snapshot
+    assert snapshot(ctx(flag=True, available=False), [("a", "A")]) == (
+        ("a", "unsupported", "disabled", "disabled"),
+    )
+    assert snapshot(ctx(flag=False, available=False), [("a", "A")]) == (
+        ("a", "disabled", "disabled", "disabled"),
+    )
+    assert snapshot(ctx(flag=True, available=True), [("a", "A")]) == (
+        ("a", "ready", "disabled", "disabled"),
+    )
+
+
+def test_periodic_health_refresh_rewrites_unchanged_served_set(
+    adapter_module: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    env = Env(tmp_path)
+    env.bridge.served_profiles = lambda: ["default"]  # type: ignore[method-assign]
+    monkeypatch.setattr(adapter_module, "open_components", lambda _adapter: env.ctx)
+    monkeypatch.setattr(adapter_module.time, "time", lambda: 1000)
+    adapter = adapter_module.HmpAdapter(_Config({"bind": "127.0.0.1", "port": _free_port()}))
+
+    async def main() -> None:
+        assert await adapter.connect() is True
+        path = cli.listener_record_path(env.custody.anchor_dir)
+        assert cli.read_listener_record(path, iid=env.iid).health_checked_at == 1000
+        monkeypatch.setattr(adapter_module.time, "time", lambda: 1020)
+        adapter._sync_refresh(["default"], refresh_health=True)
+        assert cli.read_listener_record(path, iid=env.iid).health_checked_at == 1020
         await adapter.disconnect()
 
     asyncio.run(main())

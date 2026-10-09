@@ -634,7 +634,7 @@ def test_rate_limiter_is_lru_bounded() -> None:
 # --------------------------------------------------------------------------------------------------
 
 
-def test_route_table_is_exactly_f1(tmp_path: Path) -> None:
+def test_route_table_matches_declared_routes(tmp_path: Path) -> None:
     app = Env(tmp_path).app()
     routes = sorted((r.method, r.resource.canonical) for r in app.router.routes())
     expected = sorted(
@@ -643,10 +643,14 @@ def test_route_table_is_exactly_f1(tmp_path: Path) -> None:
             *server.F1_ROUTES,
             *server.A1_SESSION_ROUTES,
             *server.F2_DIRECT_SEND_ROUTES,
+            *server.F3_APPROVAL_ROUTES,
+            *server.MOBILE_CRON_ROUTES,
+            *server.MOBILE_MODEL_ROUTES,
+            *server.S5_MEDIA_ROUTES,
         )
     )
     assert routes == expected
-    assert len(expected) == 13
+    assert len(expected) == 27
 
 
 def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
@@ -659,10 +663,36 @@ def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
     app = Env(tmp_path, session_browsing=False).app()
     routes = sorted((r.method, r.resource.canonical) for r in app.router.routes())
     expected = sorted(
-        (m, server.full_path(p)) for m, p, _ in (*server.F1_ROUTES, *server.F2_DIRECT_SEND_ROUTES)
+        (m, server.full_path(p))
+        for m, p, _ in (
+            *server.F1_ROUTES,
+            *server.F2_DIRECT_SEND_ROUTES,
+            *server.F3_APPROVAL_ROUTES,
+            *server.MOBILE_CRON_ROUTES,
+            *server.MOBILE_MODEL_ROUTES,
+            *server.S5_MEDIA_ROUTES,
+        )
     )
     assert routes == expected
-    assert len(expected) == 11
+    assert len(expected) == 24
+
+
+def test_e10_session_routes_are_not_registered_when_browsing_is_unavailable(
+    tmp_path: Path,
+) -> None:
+    """The session routes depend on two SessionDB methods; if this Hermes lacks them only those
+    routes 404 (like the kill switch), and everything else stays registered."""
+    env = Env(tmp_path)
+    env.ctx.session_browsing_available = False
+    routes = sorted((r.method, r.resource.canonical) for r in env.app().router.routes())
+    expected = sorted(
+        (m, server.full_path(p))
+        for m, p, _ in (
+            *server.F1_ROUTES, *server.F2_DIRECT_SEND_ROUTES, *server.F3_APPROVAL_ROUTES,
+            *server.MOBILE_CRON_ROUTES, *server.MOBILE_MODEL_ROUTES, *server.S5_MEDIA_ROUTES,
+        )
+    )
+    assert routes == expected
 
 
 def test_write_paths_are_404_with_zero_bridge_calls(tmp_path: Path) -> None:
@@ -1167,6 +1197,37 @@ def test_chat_send_closed_when_flag_disabled(tmp_path: Path) -> None:
     run(env, scenario)
 
 
+def test_e8_chat_send_closed_when_this_hermes_cannot_send_but_reads_still_work(
+    tmp_path: Path,
+) -> None:
+    """The owner's flag is on, but the send dependencies are missing on this Hermes: the route
+    answers `write_gate_closed`, the instance gate reports closed, and reads keep working."""
+    env = Env(tmp_path)
+    _authorized_target(env)
+    env.ctx.direct_send_flag = lambda: True
+    env.ctx.send_available = lambda: False
+
+    async def scenario(client: TestClient) -> None:
+        dev = await pair(env, client)
+        status, body = await post(
+            client,
+            "/bots/b/chat/messages",
+            {"client_message_id": "c1", "expected_head": 5, "text": "hi"},
+            headers=env.headers(dev),
+        )
+        assert status == 503, body
+        assert code(body) == "write_gate_closed"
+        status, body = await get(client, "/ready")
+        assert status == 200 and body["write_gate"]["state"] == "closed"
+        status, _ = await get(client, "/bots", headers=env.headers(dev))
+        assert status == 200
+
+    run(env, scenario)
+    from hmp_plugin.contract import WriteGateState
+
+    assert env.ctx.reported_send_gate("b").state is WriteGateState.CLOSED
+
+
 def test_chat_send_accepts_end_to_end_when_flag_enabled(tmp_path: Path) -> None:
     env = Env(tmp_path)
     _authorized_target(env)
@@ -1425,9 +1486,8 @@ def test_chat_lookup_surfaces_interleave_detected(tmp_path: Path) -> None:
 
 
 def test_reported_write_gate_follows_the_owner_only_direct_send_flag(tmp_path: Path) -> None:
-    """The roster and `/ready` gate drives the client's composer: closed with the flag off,
-    `open_guarded` with it on (GU-4a, OD-F14). The base F1 gate itself is unchanged."""
-    from hmp_plugin.contract import WriteGateState
+    """The `/ready` diagnostic follows the flag; roster bot gates resolve profiles separately."""
+    from hmp_plugin.contract import Guarantees, WriteGateState
 
     env = Env(tmp_path)
     env.ctx.direct_send_flag = lambda: False
@@ -1441,3 +1501,38 @@ def test_reported_write_gate_follows_the_owner_only_direct_send_flag(tmp_path: P
 
     env.ctx.direct_send_flag = broken  # a broken flag reader fails closed
     assert env.ctx.reported_write_gate().state is WriteGateState.CLOSED
+
+    env.ctx.guarantee_cache = Guarantees(no_defer=True, atomic_anchor=True)
+    env.ctx.direct_send_flag = lambda: False
+    assert env.ctx.write_gate().state is WriteGateState.OPEN
+    assert env.ctx.reported_write_gate().state is WriteGateState.CLOSED
+
+
+def test_reported_send_gate_is_profile_scoped_and_switch_gated(tmp_path: Path) -> None:
+    from types import SimpleNamespace
+
+    from hmp_plugin.contract import DirectSendEndpoint, WriteGateState
+
+    env = Env(tmp_path)
+    seen: list[str] = []
+    endpoint = DirectSendEndpoint("127.0.0.1", 8642, "synthetic-key-for-tests", "")
+
+    def resolve(profile: str):
+        seen.append(profile)
+        return endpoint if profile == "alpha" else None
+
+    env.bridge.direct_send_endpoint = resolve
+    env.ctx.direct_send_deps = SimpleNamespace()
+    env.ctx.direct_send_flag = lambda: False
+    assert env.ctx.reported_send_gate("alpha").state is WriteGateState.CLOSED
+    assert seen == []
+
+    env.ctx.direct_send_flag = lambda: True
+    assert env.ctx.reported_send_gate("alpha").state is WriteGateState.OPEN_GUARDED
+    assert env.ctx.reported_send_gate("beta").state is WriteGateState.CLOSED
+    assert env.ctx.reported_send_gate("alpha").state is WriteGateState.OPEN_GUARDED
+    assert seen == ["alpha", "beta", "alpha"]
+
+    env.ctx.send_available = lambda: False
+    assert env.ctx.reported_send_gate("alpha").state is WriteGateState.CLOSED
+    assert seen == ["alpha", "beta", "alpha"]

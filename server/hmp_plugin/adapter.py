@@ -39,7 +39,21 @@ module level after the first supported call in this load, so a later reload's ev
 `HmpError` -- every bridge call `authorize.py`/`reads.py` makes is wrapped in a generic
 `except Exception`, and re-raised as THEIR OWN, now load-stable, `HmpError` -- so this residual
 gap in `bridge.py`'s own class identity does not reopen the error-shaping hazard the top-level
-`authorize`/`reads` imports close.)
+`authorize`/`reads` imports close.) The same cache also holds the actual `bridge` module object.
+
+Local media (specs/011-local-image-serving, M3). Availability is the `local_media` eligibility
+member (minimum version plus the three native probe rows) AND an in-memory media-chain coherence
+check, both decided once when the listener opens; `_media_bind` below never touches a file, a build
+list, a manifest, a fingerprint, a Git SHA or any process-wide state, and it binds the verified
+module objects to this one listener. The retired exact-build qualification (S6/S6a/S6b) is gone.
+S4 (source candidate): the four read routes consume `ServerContext.media_snapshot()` through
+`media_emission`. `_media_registry_bind` makes the listener's one registry and binds its actual
+module at open; the availability closure fences the exact bound tuple, that module and that
+instance by identity. The adapter's only media imports are `local_media_registry` (there) and
+`local_media_raster_structure` (in `_media_raster_bind`), each function-local.
+S5 (source candidate): `_media_raster_bind` and `_media_fetch_bind` also bind the actual raster
+module, the shared payload-carrier module and the route orchestrator module at open, so the fetch
+route runs the same objects mint did; the availability closure fences and clears them with the rest.
 """
 
 from __future__ import annotations
@@ -47,17 +61,20 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import secrets
-from collections.abc import Iterable, Mapping, Sequence
+import threading
+import time
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from pathlib import Path
+from types import FunctionType, ModuleType
 from typing import Any
 
 from gateway.config import Platform
 from gateway.platforms.base import BasePlatformAdapter, SendResult
 
-from . import cli, compat, direct_send, identity, server
+from . import cli, compat, direct_send, identity, prompts, reads, server
 from .authorize import Authorize
 from .cli import listener_record_path
-from .contract import PLATFORM_NAME, OtherWhy
+from .contract import PLATFORM_NAME, OtherWhy, WriteGateState
 from .logging_policy import log_event
 from .reads import Reads, _fallback_display_name
 from .store import Store
@@ -76,23 +93,313 @@ IDENTITY_CHANGED_MESSAGE = "HMP instance key changed; restart the gateway to ser
 PROFILE_REFRESH_INITIAL_DELAY_S = 5.0
 PROFILE_REFRESH_INTERVAL_S = 15.0
 
-_bridge_classes_cache: tuple[type[Any], type[Any]] | None = None
+# One published tuple: `(bridge module, HermesReadBridge, StoreDirectory)`, all read from the one
+# module object imported. Set once under the lock with a single assignment.
+_bridge_cache: tuple[ModuleType, type[Any], type[Any]] | None = None
+_bridge_lock = threading.Lock()
+
+
+def _bridge_published() -> tuple[ModuleType, type[Any], type[Any]]:
+    """`(bridge module, HermesReadBridge, StoreDirectory)`, imported from `bridge.py` at most once
+    per load of this package. S3 forbids importing `bridge` at module level, so this import cannot
+    move to the top of this file the way `authorize`/`reads` did above; caching it here instead
+    means only the FIRST supported `open_components()` call in this load ever wins the publication,
+    so a reload that happens between that call and a later one (another profile's load, on a
+    multiplexed gateway) cannot swap the class a running listener's `ctx.bridge` is built from.
+
+    The import runs outside the lock (an import lock may be held elsewhere). Only the one tuple
+    assignment is locked, so concurrent first calls all return the winner's tuple and the module
+    and its classes can never come from two different copies."""
+    global _bridge_cache
+    cached = _bridge_cache
+    if cached is None:
+        from . import bridge as bridge_module
+
+        fresh = (bridge_module, bridge_module.HermesReadBridge, bridge_module.StoreDirectory)
+        with _bridge_lock:
+            if _bridge_cache is None:
+                _bridge_cache = fresh
+            cached = _bridge_cache
+    return cached
 
 
 def _bridge_classes() -> tuple[type[Any], type[Any]]:
-    """`(HermesReadBridge, StoreDirectory)`, imported from `bridge.py` at most once per load of
-    this package. S3 forbids importing `bridge` at module level, so this import cannot move to
-    the top of this file the way `authorize`/`reads` did above; caching it here instead means
-    only the FIRST supported `open_components()` call in this load ever executes the `from
-    .bridge import ...` statement, so a reload that happens between that call and a later one
-    (another profile's load, on a multiplexed gateway) cannot swap the class a running listener's
-    `ctx.bridge` is built from out from under it."""
-    global _bridge_classes_cache
-    if _bridge_classes_cache is None:
-        from .bridge import HermesReadBridge, StoreDirectory
+    """`(HermesReadBridge, StoreDirectory)` from the one published tuple."""
+    _, bridge_cls, directory_cls = _bridge_published()
+    return bridge_cls, directory_cls
 
-        _bridge_classes_cache = (HermesReadBridge, StoreDirectory)
-    return _bridge_classes_cache
+
+def _log_unavailable_features(eligibility: compat.Eligibility | None) -> None:
+    """One event per feature this Hermes cannot serve for a reason other than its declared
+    version. Only fixed enum strings are ever logged."""
+    if eligibility is None:
+        return
+    for feature, status in eligibility.unavailable():
+        if status.reason is not compat.Unavailable.VERSION_BELOW_FLOOR:
+            log_event("hermes_feature_unavailable", outcome=feature.value)
+
+
+# --------------------------------------------------------------------------------------------------
+# Local-media availability binding (D-M4). Proofs are identity comparisons, never lookups.
+# --------------------------------------------------------------------------------------------------
+
+_MEDIA_UNWRAP_LIMIT = 8
+
+
+class _MediaSplitError(Exception):
+    """A required module is not the one this load's listener runs. Closes media; carries nothing."""
+
+
+def _media_require(ok: bool) -> None:
+    if not ok:
+        raise _MediaSplitError
+
+
+def _media_function(value: object) -> FunctionType | None:
+    """The exact plain function `value` is, following a `__wrapped__` chain of at most eight steps;
+    `None` for anything else (a partial, a builtin, a callable object)."""
+    for _ in range(_MEDIA_UNWRAP_LIMIT + 1):
+        if type(value) is not FunctionType:
+            return None
+        wrapped = value.__dict__.get("__wrapped__")
+        if wrapped is None:
+            return value
+        value = wrapped
+    raise _MediaSplitError
+
+
+def _media_prove_function(value: object, module: ModuleType) -> None:
+    """P-fn: the function's executing namespace IS `module`."""
+    function = _media_function(value)
+    _media_require(function is not None and function.__globals__ is vars(module))
+
+
+def _media_prove_chain(
+    bridge_module: ModuleType, reads_module: ModuleType
+) -> tuple[tuple[ModuleType, ...], tuple[ModuleType, ...]]:
+    """The media chain, from the caches the media sites themselves read. Returns the actual cache
+    objects `(bridge cache, reads cache)` after proving their cross-references. A call fills a
+    cache that is still empty (an import outside the publication lock); it reads no file of its
+    own and attests nothing about loaded bytes."""
+    chain = vars(bridge_module)["_local_media_modules"]()
+    reads_media = vars(reads_module)["_local_media_modules"]()
+    _media_require(type(chain) is tuple and len(chain) == 7)
+    _media_require(type(reads_media) is tuple and len(reads_media) == 1)
+    _media_require(all(type(member) is ModuleType for member in (*chain, *reads_media)))
+    sidecar, candidate, active_scan, result, file_safety, active_batch, binding = chain
+    _media_require(reads_media[0] is sidecar)
+    _media_require(vars(candidate)["_scan"] is active_scan)  # P-ref
+    _media_require(vars(result)["_scan"] is active_scan)
+    _media_require(vars(active_batch)["_scan"] is active_scan)
+    _media_require(vars(active_batch)["_candidate"] is candidate)
+    _media_require(vars(binding)["_batch"] is active_batch)
+    _media_require(vars(binding)["_sidecar"] is sidecar)
+    _media_prove_function(vars(candidate)["collect_candidates"], candidate)
+    _media_prove_function(vars(candidate)["classify_candidate"], file_safety)
+    _media_prove_function(vars(candidate)["parse_image_result"], result)
+    _media_prove_function(vars(active_batch)["scan_active_batch"], active_batch)
+    _media_prove_function(vars(binding)["classify"], binding)
+    _media_prove_function(vars(sidecar)["_text"], sidecar)
+    return chain, reads_media
+
+
+def _media_registry_bind() -> tuple[ModuleType, Any]:
+    """S4: this listener's one registry and the actual module it comes from, both made here, once,
+    at listener open, and never re-imported per request. The constructor and the public
+    mint/lookup/record_first_served functions must execute in that module's own namespace, and
+    the instance must be that module's exact class. It is independent of the seven-member bridge
+    chain. A mismatch raises `_MediaSplitError`, which `_media_bind` turns into this listener's
+    closed media. It imports no other media module and reads no file."""
+    from . import local_media_registry
+
+    module = local_media_registry
+    cls = vars(module)["LocalMediaRegistry"]
+    _media_require(type(cls) is type and cls.__module__ == module.__name__)
+    for name in ("__init__", "mint", "lookup", "record_first_served"):
+        _media_prove_function(vars(cls)[name], module)
+    registry = cls()
+    _media_require(type(registry) is cls)
+    return module, registry
+
+
+def _media_raster_bind() -> ModuleType:
+    """S5: the actual raster-structure module phase one runs, bound once at listener open. The
+    entry function and every helper it dispatches to must execute in that module's own namespace.
+    It reads no file and touches no image; the only media import here is function-local."""
+    from . import local_media_raster_structure
+
+    module = local_media_raster_structure
+    _media_require(type(module) is ModuleType)
+    space = vars(module)
+    # The entry, its three format checkers and every helper they reach, by name ...
+    for name in (
+        "check_raster_structure",
+        "_check_png",
+        "_check_png_ancillary",
+        "_check_jpeg",
+        "_jpeg_sof",
+        "_jpeg_dqt",
+        "_jpeg_dht",
+        "_jpeg_scan",
+        "_check_webp",
+        "_webp_vp8",
+        "_webp_vp8l",
+        "_webp_alph",
+        "_webp_vp8x",
+        "_webp_extended_chunk",
+        "_check_dims",
+        "_refuse",
+        "_bad",
+    ):
+        _media_prove_function(space[name], module)
+    # ... then every other function this module itself defines, so a helper added later (or one
+    # a name list missed) cannot run in a second namespace; imported functions are not its own.
+    for value in tuple(space.values()):
+        if type(value) is FunctionType and value.__module__ == module.__name__:
+            _media_prove_function(value, module)
+    # The closed refusal's constructor runs on every refusal path.
+    refusal = space["RasterRefused"]
+    _media_require(type(refusal) is type and refusal.__module__ == module.__name__)
+    _media_prove_function(vars(refusal)["__init__"], module)
+    return module
+
+
+def _media_fetch_bind(bridge_module: ModuleType) -> tuple[ModuleType, ModuleType]:
+    """S5: `(payload carrier module, route orchestrator module)`, proven to be the very objects the
+    bridge's phase functions and the route run: the bridge and the orchestrator hold ONE payload
+    module (no split carrier class), and the phase, carrier, service and handler functions execute
+    in their own modules' namespaces. Imports nothing and reads no file; `server.py` already holds
+    the orchestrator at module level, so this load's copy is the one it routes through."""
+    fetch = vars(server).get("media_fetch")
+    payload = vars(bridge_module).get("media_payload")
+    _media_require(type(fetch) is ModuleType and type(payload) is ModuleType)
+    _media_require(vars(fetch).get("media_payload") is payload)
+    carrier = vars(payload).get("MediaPayload")
+    _media_require(type(carrier) is type and carrier.__module__ == payload.__name__)
+    for name in ("data", "mime", "sha256", "size"):
+        member = vars(carrier)[name]
+        _media_require(type(member) is property)
+        _media_prove_function(member.fget, payload)
+    bridge_cls = vars(bridge_module)["HermesReadBridge"]
+    for name in ("media_fetch_phase_one", "media_fetch_phase_two", "_media_fetch_bound"):
+        _media_prove_function(vars(bridge_cls)[name], bridge_module)
+    service = vars(fetch).get("MediaFetchService")
+    lease = vars(fetch).get("_Lease")
+    # Every method/accessor of the new private classes runs in the same module as its class.
+    # Include refusal constructors and carrier lifetime/serialization guards, not just entry points.
+    for module, cls in (
+        (payload, carrier),
+        (payload, vars(payload)["MediaPayloadRefusal"]),
+        (fetch, service),
+        (fetch, lease),
+        (fetch, vars(fetch)["MediaServiceRefusal"]),
+    ):
+        _media_require(type(cls) is type and cls.__module__ == module.__name__)
+        for member in tuple(vars(cls).values()):
+            if type(member) in (classmethod, staticmethod):
+                _media_prove_function(member.__func__, module)
+            elif type(member) is FunctionType:
+                _media_prove_function(member, module)
+            elif type(member) is property:
+                for accessor in (member.fget, member.fset, member.fdel):
+                    if accessor is not None:
+                        _media_prove_function(accessor, module)
+    for name in ("__init__", "close", "lease", "stats"):
+        _media_prove_function(vars(service)[name], fetch)
+    for name in ("start", "take", "finish", "_publish", "_done", "_release_if_ready"):
+        _media_prove_function(vars(lease)[name], fetch)
+    closed = vars(service)["closed"]
+    _media_require(type(closed) is property)
+    _media_prove_function(closed.fget, fetch)
+    for name in (
+        "serve", "_final_section", "_stream", "_wait", "_service_ok", "_runner",
+        "_abort", "_shaped_badly", "_not_started", "_not_found", "close_service",
+    ):
+        _media_prove_function(vars(fetch).get(name), fetch)
+    for value in tuple(vars(fetch).values()):
+        if type(value) is FunctionType and value.__module__ == fetch.__name__:
+            _media_prove_function(value, fetch)
+    _media_prove_function(vars(server).get("handle_media_fetch"), server)
+    _media_prove_function(vars(server).get("build_app"), server)
+    return payload, fetch
+
+
+def _media_closed() -> bool:
+    return False
+
+
+def _media_bind(
+    ctx: Any, bridge_module: ModuleType, reads_module: ModuleType
+) -> Callable[[], bool]:
+    """Bind local-media availability to ONE listener. Call only when this listener's `local_media`
+    eligibility member is available. The media-chain cross-references are verified once; on success
+    the verified `(bridge cache, reads cache)` tuples are stored on `ctx.media_modules`, this
+    listener's own registry and its actual module on `ctx.media_registry` and
+    `ctx.media_registry_module`, and the returned callback is the listener's `media_available`. On
+    any failure (`Exception`) this listener's media stays closed and nothing process-wide changes,
+    so another listener in the same process opens independently. `BaseException` propagates to the
+    caller.
+
+    The callback is the cheap use-time fence: no await, import, file or lock. It compares the
+    caches the bridge and reads modules hold NOW with the bound tuples by identity, and on a
+    mismatch closes this listener's media until the next open. It is not authenticity, a
+    loaded-bytecode proof or an attestation, and it never looks at `sys.modules`: whole-package
+    eviction replaces module-table entries but leaves these references and caches alone."""
+    try:
+        # The bound modules are the ones this listener's own bridge and reads objects come from.
+        _media_require(type(ctx.bridge) is vars(bridge_module).get("HermesReadBridge"))
+        _media_require(type(ctx.reads) is vars(reads_module).get("Reads"))
+        chain, reads_media = _media_prove_chain(bridge_module, reads_module)
+        registry_module, registry = _media_registry_bind()
+        raster_module = _media_raster_bind()
+        payload_module, fetch_module = _media_fetch_bind(bridge_module)
+    except Exception:
+        log_event("local_media_binding", outcome="media_binding_incoherent")
+        return _media_closed
+    # The exact outer tuple is retained: the fence compares `ctx.media_modules` against it by
+    # identity, not only the two caches inside it.
+    bound = (chain, reads_media)
+    ctx.media_modules = bound
+    ctx.media_registry_module = registry_module
+    ctx.media_registry = registry
+    ctx.media_raster_module = raster_module
+    ctx.media_payload_module = payload_module
+    ctx.media_fetch_module = fetch_module
+    closed = [False]
+
+    def media_available() -> bool:
+        if closed[0]:
+            return False
+        try:
+            same = (
+                vars(bridge_module)["_local_media_cache"] is chain
+                and vars(reads_module)["_local_media_cache"] is reads_media
+                and ctx.media_modules is bound
+                and ctx.media_registry_module is registry_module
+                and ctx.media_registry is registry
+            )
+            # S5: the three further bound modules, a separate expression so the S4 fence above is
+            # byte-for-byte what was reviewed.
+            same = same and (
+                ctx.media_raster_module is raster_module
+                and ctx.media_payload_module is payload_module
+                and ctx.media_fetch_module is fetch_module
+            )
+        except Exception:  # fail closed; the exception text is never logged
+            same = False
+        if same:
+            return True
+        closed[0] = True
+        ctx.media_modules = None  # a closed listener hands no bound reference to a later caller
+        ctx.media_registry_module = None
+        ctx.media_registry = None
+        ctx.media_raster_module = None
+        ctx.media_payload_module = None
+        ctx.media_fetch_module = None
+        log_event("local_media_binding", outcome="media_binding_changed")
+        return False
+
+    return media_available
 
 
 def open_components(adapter: Any) -> server.ServerContext:
@@ -114,7 +421,20 @@ def open_components(adapter: Any) -> server.ServerContext:
     config = getattr(adapter, "config", None)
     extra = getattr(config, "extra", None)
     session_browsing = extra.get("session_browsing", True) if isinstance(extra, Mapping) else True
-    direct_send_qualified = result.supported and compat.direct_send_build_qualified(result.identity)
+    eligibility = result.eligibility
+    # Availability comes from the one eligibility evaluation done above (Hermes code cannot change
+    # without a gateway restart), never from a per-request lookup. A result that carries no
+    # eligibility (an injected test double) reports nothing beyond read as available.
+    def _available(feature: compat.Feature) -> bool:
+        return eligibility is not None and eligibility.available(feature)
+
+    send_available = result.supported and _available(compat.Feature.SEND)
+    # Spec 034: the `approvals` and `phone_chat` members, decided once here from the same
+    # eligibility evaluation (no per-request lookup). No build list, fingerprint or latch is read.
+    approvals_member = result.supported and _available(compat.Feature.APPROVALS)
+    phone_member = result.supported and _available(compat.Feature.PHONE_CHAT)
+    # Set only after the bridge captured the Phone-chat helpers (AP-10); closed until then.
+    phone_bound = [False]
 
     # Amendment F2 (direct send, OD-F14/OD-F15): `gateway.platforms.hmp.extra.direct_send.enabled`,
     # default False. A malformed (non-mapping) `direct_send` block fails closed to disabled, never
@@ -129,7 +449,33 @@ def open_components(adapter: Any) -> server.ServerContext:
         live_config = getattr(adapter, "config", None)
         live_extra = getattr(live_config, "extra", None)
         block = live_extra.get("direct_send") if isinstance(live_extra, Mapping) else None
-        return direct_send_qualified and isinstance(block, Mapping) and block.get("enabled") is True
+        return isinstance(block, Mapping) and block.get("enabled") is True
+
+    def _read_owner_device_ids() -> frozenset[str]:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        ids = live_extra.get("owner_device_ids") if isinstance(live_extra, Mapping) else None
+        if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
+            return frozenset()
+        return frozenset(ids)
+
+    def _read_cron_enabled() -> bool:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        block = live_extra.get("cron") if isinstance(live_extra, Mapping) else None
+        return isinstance(block, Mapping) and block.get("enabled") is True
+
+    def _read_local_media_enabled() -> bool:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        block = live_extra.get("local_media") if isinstance(live_extra, Mapping) else None
+        return isinstance(block, Mapping) and block.get("enabled") is True
+
+    def _read_model_enabled() -> bool:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        block = live_extra.get("model_management") if isinstance(live_extra, Mapping) else None
+        return isinstance(block, Mapping) and block.get("enabled") is True
 
     ctx = server.ServerContext(
         identity=ident,
@@ -137,9 +483,20 @@ def open_components(adapter: Any) -> server.ServerContext:
         compat=result,
         session_browsing_enabled=session_browsing is not False,
         direct_send_flag=_read_direct_send_enabled,
+        owner_device_ids=_read_owner_device_ids,
+        approvals_available=lambda: approvals_member,
+        phone_chat_available=lambda: phone_member and phone_bound[0],
+        cron_flag=_read_cron_enabled,
+        cron_available=lambda: result.supported and _available(compat.Feature.JOBS),
+        model_flag=_read_model_enabled,
+        model_available=lambda: result.supported and _available(compat.Feature.MODEL),
+        session_browsing_available=_available(compat.Feature.SESSION_BROWSING),
+        send_available=lambda: send_available,
+        media_flag=_read_local_media_enabled,
     )
+    _log_unavailable_features(eligibility)
     if result.supported:
-        bridge_cls, directory_cls = _bridge_classes()
+        bridge_module, bridge_cls, directory_cls = _bridge_published()
 
         ctx.bridge = bridge_cls(adapter, directory_cls(store))
         # Live-bug fix: `adapter._observe_served_profiles` is a bound method of the adapter this
@@ -147,14 +504,18 @@ def open_components(adapter: Any) -> server.ServerContext:
         # here even though `self._record`/`self._nonce` are not set until `connect()` finishes
         # further down -- neither `Reads.roster` nor `Authorize.authorize` can run before then.
         on_served_profiles = getattr(adapter, "_observe_served_profiles", None)
+        prompt_store = prompts.PromptStore(clock=ctx.now)
+        ctx.prompt_store = prompt_store
         ctx.reads = Reads(
             ctx.bridge,
             store,
             iid=ident.iid,
             guarantees=ctx.guarantees,
             write_gate=ctx.reported_write_gate,
+            send_gate=ctx.reported_send_gate,
             clock=ctx.now,
             on_served_profiles=on_served_profiles,
+            prompt_store=prompt_store,
         )
         ctx.authorize = Authorize(
             ctx.bridge, store, clock=ctx.now, on_served_profiles=on_served_profiles
@@ -162,11 +523,40 @@ def open_components(adapter: Any) -> server.ServerContext:
         # Amendment F2: constructed on every supported build, regardless of `direct_send_enabled`
         # -- the flag is re-checked per request (DS-2(b)), not at listener-start time, so a
         # host-side flag flip takes effect on the next request, not the next restart.
+        def _approval_timeout(profile: str) -> int:
+            bridge = ctx.bridge
+            if bridge is None:
+                return 300
+            return bridge.approval_timeout_s(profile)  # type: ignore[no-any-return]
+
         ctx.direct_send_deps = direct_send.DirectSendDeps(
             bridge=ctx.bridge,
             store=store,
             locks=direct_send.ProfileLocks(),
             now=ctx.now,
+            prompt_store=prompt_store,
+            approval_timeout=_approval_timeout,
+        )
+        if phone_member:
+            # AP-10: capture the Phone-chat helpers now, after the probe passed. A later rebinding
+            # closes this generation's Phone-chat side; Bot Chat `approvals` is independent.
+            phone_bound[0] = ctx.bridge.bind_phone_chat_helpers(  # type: ignore[attr-defined]
+                lambda: prompt_store.close_phone_chat(ctx.now())
+            )
+        # Local media (M3): only a listener whose `local_media` member is available is bound; the
+        # result identity may be `None`. Closed (the default) otherwise, with no media import.
+        if _available(compat.Feature.LOCAL_MEDIA):
+            try:
+                ctx.media_available = _media_bind(ctx, bridge_module, reads)
+            except BaseException:
+                store.close()
+                raise
+        adapter._hmp_hooks = prompts.AdapterHooks(  # type: ignore[attr-defined]
+            store=prompt_store,
+            bridge=ctx.bridge,
+            now=ctx.now,
+            iid=ident.iid,
+            phone_available=ctx.is_phone_chat_available,
         )
     log_event("adapter_open", outcome=result.status.value)
     return ctx
@@ -184,6 +574,47 @@ class HmpAdapter(BasePlatformAdapter):
         self._nonce: str | None = None
         self._known_profiles: tuple[tuple[str, str], ...] | None = None
         self._profile_refresh_task: asyncio.Task[None] | None = None
+        self._record_lock = threading.Lock()
+
+    @staticmethod
+    def _health_snapshot(
+        ctx: server.ServerContext, profiles: Sequence[tuple[str, str]]
+    ) -> tuple[tuple[str, str, str, str], ...]:
+        """Only fixed status codes leave the runtime; credentials and endpoints stay in memory."""
+        rows: list[tuple[str, str, str, str]] = []
+        for profile, _display in profiles:
+            try:
+                send = (
+                    "disabled" if not ctx.direct_send_enabled()
+                    else "unsupported" if not ctx.is_send_available()
+                    else "ready"
+                    if ctx.reported_send_gate(profile).state is not WriteGateState.CLOSED
+                    else "unavailable"
+                )
+                cron = (
+                    "disabled" if not ctx.cron_enabled()
+                    else "unsupported" if not ctx.is_cron_available()
+                    else "unavailable"
+                )
+                model = (
+                    "disabled" if not ctx.model_enabled()
+                    else "unsupported" if not ctx.is_model_available()
+                    else "unavailable"
+                )
+                if cron == "unavailable" or model == "unavailable":
+                    endpoint = ctx.bridge.direct_send_endpoint(profile) if ctx.bridge else None
+                    if endpoint is not None:
+                        if cron == "unavailable":
+                            cron = "ready"
+                        if model == "unavailable":
+                            model = "ready"
+            except Exception:
+                # A failed live lookup must never become a passing snapshot or leak exception text.
+                send = "unavailable" if ctx.direct_send_enabled() else "disabled"
+                cron = "unavailable" if ctx.cron_enabled() else "disabled"
+                model = "unavailable" if ctx.model_enabled() else "disabled"
+            rows.append((profile, send, cron, model))
+        return tuple(rows)
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
         """Run the compat gate, then start the TLS listener (server-modules.md "Startup order")."""
@@ -203,6 +634,7 @@ class HmpAdapter(BasePlatformAdapter):
         try:
             await srv.start()
         except Exception as exc:
+            self._close_generation(ctx)
             ctx.store.close()
             log_event("adapter_connect", outcome="listener_failed")
             raise ConnectionError("HMP listener did not start") from exc
@@ -232,6 +664,7 @@ class HmpAdapter(BasePlatformAdapter):
                     log_event("listener_record_profiles", outcome="failed")
                     profiles = None
             try:  # PR1-4: `hmp pair offer` derives `ep` from this record only
+                health = self._health_snapshot(ctx, profiles) if profiles is not None else None
                 cli.write_listener_record(
                     self._record,
                     host=srv.bound[0],
@@ -239,6 +672,8 @@ class HmpAdapter(BasePlatformAdapter):
                     iid=ctx.iid,
                     nonce=self._nonce,
                     profiles=profiles,
+                    health_checked_at=int(time.time()) if health is not None else None,
+                    health=health,
                 )
             except OSError:
                 log_event("listener_record", outcome="write_failed")
@@ -268,7 +703,7 @@ class HmpAdapter(BasePlatformAdapter):
         never itself change what this key sees as "the same served set"."""
         return tuple(sorted(name for name, _display in profiles or ()))
 
-    def _sync_refresh(self, served: Iterable[str]) -> None:
+    def _sync_refresh(self, served: Iterable[str], *, refresh_health: bool = False) -> None:
         """The one place that compares and, on a change, rewrites the record. Synchronous and
         blocking (file I/O) by design: `Reads.roster`/`Authorize.authorize` already call this from
         inside their own `asyncio.to_thread` worker thread (`server.py`), so no further
@@ -289,21 +724,36 @@ class HmpAdapter(BasePlatformAdapter):
         except Exception:
             log_event("listener_record_profiles", outcome="refresh_failed")
             return
-        if self._profile_names_key(profiles) == self._profile_names_key(self._known_profiles):
-            return  # unchanged: no rewrite (cheap comparison short-circuits the write)
+        if (
+            not refresh_health
+            and self._profile_names_key(profiles) == self._profile_names_key(self._known_profiles)
+        ):
+            return  # the periodic tick handles flag/key changes on an unchanged roster
         try:
-            cli.write_listener_record(
-                self._record,
-                host=bound[0],
-                port=bound[1],
-                iid=srv.ctx.iid,
-                nonce=self._nonce,
-                profiles=profiles,
-            )
+            health = self._health_snapshot(srv.ctx, profiles)
+            with self._record_lock:
+                if self._server is not srv or self._record is None:
+                    return  # disconnect won the race; never recreate a stale record
+                if (
+                    not refresh_health
+                    and self._profile_names_key(profiles)
+                    == self._profile_names_key(self._known_profiles)
+                ):
+                    return  # an unchanged opportunistic read need not rewrite
+                cli.write_listener_record(
+                    self._record,
+                    host=bound[0],
+                    port=bound[1],
+                    iid=srv.ctx.iid,
+                    nonce=self._nonce,
+                    profiles=profiles,
+                    health_checked_at=int(time.time()),
+                    health=health,
+                )
+                self._known_profiles = tuple(profiles)
         except OSError:
             log_event("listener_record_profiles", outcome="refresh_write_failed")
             return  # the previous record is untouched (write_listener_record's own atomicity)
-        self._known_profiles = tuple(profiles)
 
     def _observe_served_profiles(self, served: Iterable[str]) -> None:
         """`Reads.roster`/`Authorize.authorize`'s hook (wired in through `open_components`),
@@ -334,7 +784,7 @@ class HmpAdapter(BasePlatformAdapter):
             except Exception:
                 log_event("listener_record_profiles", outcome="refresh_failed")
             else:
-                await asyncio.to_thread(self._sync_refresh, served)
+                await asyncio.to_thread(self._sync_refresh, served, refresh_health=True)
             await asyncio.sleep(PROFILE_REFRESH_INTERVAL_S)
 
     async def _cancel_profile_refresh(self) -> None:
@@ -346,11 +796,12 @@ class HmpAdapter(BasePlatformAdapter):
             await task
 
     def _drop_record(self) -> None:
-        record, self._record = self._record, None
-        self._nonce = None
-        self._known_profiles = None
-        if record is not None:
-            cli.remove_listener_record(record)
+        with self._record_lock:
+            record, self._record = self._record, None
+            self._nonce = None
+            self._known_profiles = None
+            if record is not None:
+                cli.remove_listener_record(record)
 
     def _listener_closed(self) -> None:
         srv, self._server = self._server, None
@@ -360,6 +811,7 @@ class HmpAdapter(BasePlatformAdapter):
         if task is not None:
             task.cancel()  # fire-and-forget: this callback itself is synchronous (server.py)
         self._drop_record()
+        self._close_generation(srv.ctx)
         srv.ctx.store.close()
         # PR7-6 step 3: stay closed until the gateway restarts (a later `connect` would load the
         # new key and start a new listener; nothing here restarts it).
@@ -371,8 +823,28 @@ class HmpAdapter(BasePlatformAdapter):
         self._drop_record()
         if srv is not None:
             await srv.stop(notify=False)
+            self._close_generation(srv.ctx)
             srv.ctx.store.close()
         self._mark_disconnected()
+
+    @staticmethod
+    def _close_generation(ctx: server.ServerContext) -> None:
+        """R9: the listener that owned this prompt generation stopped. Its rows expire and a
+        stream still bound to it can never insert into a later generation."""
+        if ctx.prompt_store is not None:
+            ctx.prompt_store.close(ctx.now())
+
+    def _hooks(self) -> prompts.AdapterHooks | None:
+        hooks = getattr(self, "_hmp_hooks", None)
+        if isinstance(hooks, prompts.AdapterHooks):
+            return hooks
+        return None
+
+    def note_inert_reply(self, chat_id: str) -> None:
+        """The P6 trigger's outbound reply is still dropped (PR6-2)."""
+        hooks = self._hooks()
+        if hooks is not None:
+            hooks.note_inert(chat_id)
 
     async def send(
         self,
@@ -381,9 +853,54 @@ class HmpAdapter(BasePlatformAdapter):
         reply_to: str | None = None,
         metadata: dict[str, Any] | None = None,
     ) -> SendResult:
-        """Drop the content, unlogged. F1 delivers nothing to devices (PR6-2, SR-007)."""
-        del chat_id, content, reply_to, metadata
+        """Phone-chat replies create bounded observations. The inert-trigger reply does not.
+        Nothing here is logged (PR6-2, SEC-4)."""
+        hooks = self._hooks()
+        if hooks is None:
+            return SendResult(success=True)
+        await hooks.reconcile_chat(chat_id)
+        hooks.on_send(chat_id, content, reply_to, metadata)
         return SendResult(success=True)
+
+    async def _send_exec_approval_prompt(self, prompt: Any) -> SendResult:
+        """AP-6 / §3.3. An exact match becomes a card; ambiguous entries get deny-only recovery.
+        Unbound text cannot become an approval answer."""
+        hooks = self._hooks()
+        if hooks is None:
+            return SendResult(success=False)
+        stored = await hooks.on_exec_approval(prompt)
+        return SendResult(success=stored)
+
+    async def send_clarify(
+        self,
+        chat_id: str,
+        question: str,
+        choices: list[Any] | None,
+        clarify_id: str,
+        session_key: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> SendResult:
+        """Phone-chat clarify card. Does not call the base numbered-list implementation."""
+        del metadata
+        hooks = self._hooks()
+        if hooks is None:
+            return SendResult(success=False)
+        offered = [choice for choice in choices if isinstance(choice, str)] if choices else None
+        stored = await hooks.on_clarify(
+            chat_id=chat_id,
+            question=question,
+            choices=offered,
+            clarify_id=clarify_id,
+            session_key=session_key,
+        )
+        return SendResult(success=stored)
+
+    async def retire_clarify_card(self, clarify_id: str, notice: str | None = None) -> None:
+        """The wait ended with no answer. The next poll omits the card. `notice` is not logged."""
+        del notice
+        hooks = self._hooks()
+        if hooks is not None:
+            hooks.retire(clarify_id)
 
     async def get_chat_info(self, chat_id: str) -> dict[str, Any]:
         del chat_id

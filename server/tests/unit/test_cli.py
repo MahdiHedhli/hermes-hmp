@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import builtins
+import contextlib
 import io
 import json
 import os
@@ -148,9 +149,12 @@ class Cli:
         port: int = 18920,
         iid: str | None = None,
         profiles: list[tuple[str, str]] | None = None,
+        health_checked_at: int | None = None,
+        health: list[tuple[str, str, str, str]] | None = None,
     ) -> None:
         cli.write_listener_record(
-            self.record_path(), host=host, port=port, iid=iid or self.env.iid, profiles=profiles
+            self.record_path(), host=host, port=port, iid=iid or self.env.iid, profiles=profiles,
+            health_checked_at=health_checked_at, health=health,
         )
 
 
@@ -186,6 +190,106 @@ def _pending(
     return accepted.pairing_id, accepted.device_sas
 
 
+def test_setup_check_is_read_only_before_first_gateway_start(tmp_path: Path) -> None:
+    kw = hmp_kit.identity_kwargs(tmp_path)
+    out = io.StringIO()
+    cli_env = cli.CliEnv(
+        environ=kw["env"], stdout=out, stderr=io.StringIO(),
+        compat=lambda: SUPPORTED, identity_kwargs=kw,
+    )
+    parser = argparse.ArgumentParser(prog="hermes hmp")
+    cli.setup_parser(parser)
+
+    assert cli.dispatch(parser.parse_args(["setup", "check"]), cli_env) == cli.EXIT_REFUSED
+    assert "not initialized" in out.getvalue()
+    assert not kw["hermes_root"].exists()
+    assert not kw["binding_root"].exists()
+
+
+def test_setup_check_reports_pinned_listener_without_private_labels(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "private bot label")])
+    before_store = c.env.store_path.read_bytes()
+    before_binding = c.env.custody.binding_path.read_bytes()
+
+    assert c.run("setup", "check") == cli.EXIT_OK
+    assert "read compatibility: supported" in c.out
+    assert "expected TLS identity" in c.out
+    assert "Served bot count: 1" in c.out
+    assert "private bot label" not in c.out
+    assert "alpha" not in c.out
+    assert c.env.store_path.read_bytes() == before_store
+    assert c.env.custody.binding_path.read_bytes() == before_binding
+
+
+def test_setup_check_fails_closed_on_stale_or_wrong_listener(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "synthetic")])
+    c.alive.clear()
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "unavailable or unsafe" in c.out
+
+    c.alive.add(os.getpid())
+    c.listener_live = False
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "TLS identity or readiness check failed" in c.out
+
+
+def test_setup_check_requires_compatible_build_and_served_bot(c: Cli) -> None:
+    c.write_record(profiles=[])
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "Served bot count: 0" in c.out
+
+    c.write_record(profiles=[("alpha", "synthetic")])
+    c.compat = CompatResult(CompatStatus.UNSUPPORTED, OtherWhy.HERMES_BUILD_UNSUPPORTED)
+    assert c.run("setup", "check") == cli.EXIT_REFUSED
+    assert "read compatibility: unsupported" in c.out
+
+
+def test_health_check_fails_for_one_blocked_bot_without_disclosing_endpoint(c: Cli) -> None:
+    rows = [
+        ("alpha", "ready", "disabled", "disabled"),
+        ("beta", "unavailable", "disabled", "disabled"),
+    ]
+    c.write_record(
+        profiles=[("alpha", "Alpha"), ("beta", "Beta")],
+        health_checked_at=c.env.clock.now,
+        health=rows,
+    )
+    assert c.run("health", "check") == cli.EXIT_REFUSED
+    assert 'Bot "alpha": send=ready' in c.out
+    assert 'Bot "beta": send=unavailable' in c.out
+    assert c.record_path().stat().st_mode & 0o777 == 0o600
+    assert "API_SERVER_KEY" not in c.out
+    assert "127.0.0.1" not in c.out
+
+
+def test_health_check_accepts_disabled_channels_and_rejects_stale_snapshot(c: Cli) -> None:
+    rows = [("alpha", "disabled", "disabled", "disabled")]
+    c.write_record(
+        profiles=[("alpha", "Alpha")], health_checked_at=c.env.clock.now, health=rows
+    )
+    assert c.run("health", "check") == cli.EXIT_OK
+    c.write_record(
+        profiles=[("alpha", "Alpha")],
+        health_checked_at=c.env.clock.now - cli.HEALTH_MAX_AGE_S - 1,
+        health=rows,
+    )
+    assert c.run("health", "check") == cli.EXIT_REFUSED
+    assert "stale" in c.out
+
+
+def test_health_check_rejects_incomplete_record_and_old_gateway(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "Alpha")])
+    assert c.run("health", "check") == cli.EXIT_REFUSED
+    assert "unavailable or stale" in c.out
+    c.write_record(
+        profiles=[("alpha", "Alpha"), ("beta", "Beta")],
+        health_checked_at=c.env.clock.now,
+        health=[("alpha", "ready", "disabled", "disabled")],
+    )
+    assert c.run("health", "check") == cli.EXIT_REFUSED
+    assert "unavailable or unsafe" in c.out
+
+
 # --------------------------------------------------------------------------------------------------
 # Mutation refusals (PR1-2, PR3-2) and ID-2
 # --------------------------------------------------------------------------------------------------
@@ -195,6 +299,8 @@ MUTATING = [
     ("pair", "confirm", "pid", "--sas", "S", "--label", "f1-fixture-label-1"),
     ("pair", "deny", "pid"),
     ("devices", "revoke", "dev_x"),
+    ("devices", "grant-controls", "dev_x"),
+    ("devices", "deny-controls", "dev_x"),
     ("instance", "rotate-key"),
 ]
 
@@ -922,6 +1028,51 @@ def test_devices_list_and_revoke_last_device_hint(c: Cli) -> None:
     assert c.run("devices", "revoke", "dev_missing") == 1
 
 
+def test_host_can_change_owner_controls_for_one_active_device(c: Cli) -> None:
+    pairing_id, sas = _pending(c.env)
+    assert c.confirm(pairing_id, "--sas", sas, "--label", "f1-fixture-label-1") == 0
+    device = _device_id(pairing_id)
+    assert c.env.store.owner_controls_decision(device) is False  # EOF defaults to no grant
+    assert c.run("devices", "grant-controls", device) == 0
+    assert c.env.store.owner_controls_decision(device) is True
+    assert c.run("devices", "deny-controls", device) == 0
+    assert c.env.store.owner_controls_decision(device) is False
+    assert c.run("devices", "revoke", device) == 0
+    assert c.run("devices", "grant-controls", device) == 1
+    assert c.env.store.owner_controls_decision(device) is False
+
+
+def test_grant_controls_output_is_informational_and_only_on_success(c: Cli) -> None:
+    pairing_id, sas = _pending(c.env)
+    assert c.confirm(pairing_id, "--sas", sas, "--label", "f1-fixture-label-1") == 0
+    device = _device_id(pairing_id)
+    assert c.env.store.owner_controls_decision(device) is False
+    assert "Permission saved" not in c.out  # EOF denial at pairing prints no success
+    assert c.run("devices", "grant-controls", device) == 0
+    added = c.out
+    assert "Permission saved for this phone" in added
+    assert "does not activate the previews" in added
+    assert "feature flag" in added and "bot authorization" in added
+    assert "hermes hmp health check" in added and "docs/INSTALL.md" in added
+    assert "control granted" not in added
+    assert c.env.store.owner_controls_decision(device) is True
+    assert c.run("devices", "revoke", device) == 0
+    assert c.run("devices", "grant-controls", device) == 1
+    assert "Permission saved" not in c.out + c.err
+    assert c.env.store.owner_controls_decision(device) is True  # revoked device: row untouched
+
+
+def test_grant_controls_changes_only_the_selected_device(c: Cli) -> None:
+    first, sas1 = _pending(c.env, name="f1-fixture-device-1")
+    assert c.confirm(first, "--sas", sas1, "--label", "f1-fixture-label-1") == 0
+    second, sas2 = _pending(c.env, name="f1-fixture-device-2")
+    assert c.confirm(second, "--sas", sas2, "--label", "f1-fixture-label-2") == 0
+    a, b = _device_id(first), _device_id(second)
+    assert c.run("devices", "grant-controls", a) == 0
+    assert c.env.store.owner_controls_decision(a) is True
+    assert c.env.store.owner_controls_decision(b) is False
+
+
 def _device_id(pairing_id: str) -> str:
     from hmp_plugin.pairing import device_id_for_pairing
 
@@ -967,13 +1118,28 @@ def test_rotate_key_checks_currency_under_the_custody_lock(
 
 
 def test_compat_output(c: Cli) -> None:
+    from hmp_plugin.compat import Eligibility, Feature, FeatureStatus, Unavailable
+    from hmp_plugin.hermes_version import HermesVersion, Scheme, VersionSource
+
+    version = HermesVersion(Scheme.SEMVER, (0, 21, 5), VersionSource.LITERAL)
+    c.compat = CompatResult(
+        CompatStatus.SUPPORTED,
+        eligibility=Eligibility(version, None, {f: FeatureStatus(True) for f in Feature}),
+    )
     assert c.run("compat") == 0
-    assert "supported" in c.out and FP in c.out and "stock-base" in c.out and "passed" in c.out
-    assert "Guarded send qualification:" in c.out
-    c.compat = CompatResult(CompatStatus.UNSUPPORTED, OtherWhy.HERMES_BUILD_UNSUPPORTED)
+    assert "Hermes version: 0.21.5 (source: literal)" in c.out
+    assert "read: available" in c.out and "jobs: available" in c.out
+    gone = {f: FeatureStatus(False, Unavailable.VERSION_BELOW_FLOOR) for f in Feature}
+    c.compat = CompatResult(
+        CompatStatus.UNSUPPORTED,
+        OtherWhy.HERMES_BUILD_UNSUPPORTED,
+        eligibility=Eligibility(
+            HermesVersion(Scheme.SEMVER, (0, 21, 3), VersionSource.LITERAL), None, gone
+        ),
+    )
     assert c.run("compat") == 0
-    assert "hermes_build_unsupported" in c.out and "unidentifiable" in c.out
-    assert "not run" in c.out
+    assert "read: unavailable (hermes_version_below_floor)" in c.out
+    assert "Update Hermes." in c.out
 
 
 def test_no_subcommand_is_usage(c: Cli) -> None:
@@ -1097,3 +1263,65 @@ def test_identity_precheck_with_the_gateway_stopped(c: Cli, tmp_path: Path) -> N
     assert c.run("instance", "show") == cli.EXIT_ENVIRONMENT
     assert _disk(tmp_path) == before
     assert not store_path.with_name(store_path.name + "-wal").exists()
+
+
+# ---- spec 034 D8: the read-only controls-decision notice in `setup check` ----------------------
+
+
+def _active_device(env: hmp_kit.Env, device_id: str, user_id: str = "hmpu_" + "ab" * 16) -> None:
+    with contextlib.suppress(Exception):  # the user row may already exist
+        env.store.insert_user(user_id, "label", env.clock.now)
+    env.store.insert_device(
+        device_id, user_id, "f" * 64, b"x", "phone", env.clock.now, state="ACTIVE"
+    )
+
+
+def test_setup_check_notes_devices_without_a_controls_decision_and_changes_nothing(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "synthetic")])
+    _active_device(c.env, "hmpd_undecided_one")
+    _active_device(c.env, "hmpd_undecided_two")
+    _active_device(c.env, "hmpd_denied_one")
+    assert c.env.store.set_owner_controls("hmpd_denied_one", allowed=False, now=c.env.clock.now)
+    before = c.env.store_path.read_bytes()
+
+    assert c.run("setup", "check") == cli.EXIT_OK
+    assert "Approvals note: 2 active paired device(s) have no recorded controls decision." in c.out
+    assert "owner_device_ids" in c.out and "grant-controls" in c.out
+    assert "This check changed nothing." in c.out
+    for private in ("hmpd_undecided_one", "hmpd_undecided_two", "hmpd_denied_one", "label"):
+        assert private not in c.out  # names no device
+    assert c.env.store_path.read_bytes() == before  # read-only
+
+
+def test_setup_check_prints_no_note_when_every_active_device_has_a_decision(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "synthetic")])
+    _active_device(c.env, "hmpd_decided")
+    assert c.env.store.set_owner_controls("hmpd_decided", allowed=True, now=c.env.clock.now)
+    assert c.run("setup", "check") == cli.EXIT_OK
+    assert "Approvals note" not in c.out
+
+
+def test_setup_check_ignores_revoked_and_pending_devices_in_the_note(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "synthetic")])
+    c.env.store.insert_user("hmpu_" + "cd" * 16, "label", c.env.clock.now)
+    for device_id, state in (("hmpd_revoked", "REVOKED"), ("hmpd_pending", "PENDING")):
+        c.env.store.insert_device(
+            device_id, "hmpu_" + "cd" * 16, "f" * 64, b"x", "phone", c.env.clock.now, state=state
+        )
+    assert c.run("setup", "check") == cli.EXIT_OK
+    assert "Approvals note" not in c.out
+
+
+def test_setup_check_does_not_grant_deny_or_edit_the_allowlist(c: Cli) -> None:
+    c.write_record(profiles=[("alpha", "synthetic")])
+    _active_device(c.env, "hmpd_untouched")
+    assert c.run("setup", "check") == cli.EXIT_OK
+    assert c.env.store.owner_controls_decision("hmpd_untouched") is None  # still no decision
+
+
+def test_the_cli_has_no_routes_group_and_no_manifest_package_command() -> None:
+    parser = argparse.ArgumentParser(prog="hermes hmp")
+    cli.setup_parser(parser)
+    with pytest.raises(SystemExit):
+        parser.parse_args(["routes", "add", "beta"])
+    assert ("routes", "add") not in cli.MUTATING_COMMANDS

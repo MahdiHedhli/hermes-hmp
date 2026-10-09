@@ -93,6 +93,9 @@ RATE_PAIR_COMPLETE_PER_MIN_PER_IP = 60
 RATE_PAIR_COMPLETE_PER_MIN_PER_PAIRING_ID = 60
 RATE_TOKEN_PER_MIN_PER_IP = 20
 RATE_TOKEN_PER_MIN_PER_DEVICE_ID = 20
+# F3: polling cannot consume the answer/send budget (003-approvals/DESIGN.md).
+RATE_PROMPT_READ_PER_MIN_PER_DEVICE = 60
+RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE = 60
 LIMITER_TABLE_MAX = 4_096  # LRU bound
 OFFER_MAX_FAILURES = 5
 SAS_MAX_MISMATCHES = 3
@@ -101,6 +104,21 @@ SNAPSHOT_LIMIT_DEFAULT = 50
 SNAPSHOT_LIMIT_MAX = 500
 HISTORY_LIMIT_DEFAULT = 100
 HISTORY_LIMIT_MAX = 1_000
+
+# HMP_V1.md §13, v1.6 draft (§7e): new choices for host-local generated images. S4 consumes the
+# descriptor cap; the others are recorded for the fetch slice (S5) and must equal §13 exactly. The
+# registry module keeps its own copies of the first three so it stays stdlib-only.
+MEDIA_REF_TTL_S = 1_800
+MEDIA_REFS_PER_DEVICE = 512
+MEDIA_REFS_TOTAL = 4_096
+MEDIA_DESCRIPTORS_PER_RESPONSE = 128
+MEDIA_FETCH_PER_MIN = 120
+MEDIA_PERMITS_PER_DEVICE = 2
+MEDIA_PERMITS_PER_INSTANCE = 4
+MEDIA_WORKERS = 4
+MEDIA_WORKER_WAIT_S = 20
+MEDIA_WRITE_DEADLINE_S = 30
+MEDIA_MAX_BYTES = 8_388_608
 
 # Amendment A1 (session browsing, SES-1f). Not an HMP_V1.md §13 constant: A1 is additive (v1.1)
 # and these are route-local caps, not contract-wide ones. SES-2 reuses HISTORY_LIMIT_DEFAULT/MAX
@@ -170,6 +188,11 @@ class ErrorCode(StrEnum):
     STALE_HEAD = "stale_head"
     WRITE_GATE_CLOSED = "write_gate_closed"
     API_SERVER_UNAVAILABLE = "api_server_unavailable"
+    CRON_UNAVAILABLE = "cron_unavailable"
+    MODEL_UNAVAILABLE = "model_unavailable"
+    # v1.6 draft, LM-3 (HMP_V1.md §7e): the fetch route's owner-device closed-gate answer. The
+    # S4 descriptor routes never raise it; a closed gate there gives the exact old bytes.
+    MEDIA_UNAVAILABLE = "media_unavailable"
 
 
 class SubmitDefinitive(StrEnum):
@@ -238,6 +261,9 @@ ERROR_TABLE: Mapping[ErrorCode, ErrorSpec] = {
         _spec(ErrorCode.STALE_HEAD, (409,), _Y),
         _spec(ErrorCode.WRITE_GATE_CLOSED, (503,), _Y),
         _spec(ErrorCode.API_SERVER_UNAVAILABLE, (503,), _N),
+        _spec(ErrorCode.CRON_UNAVAILABLE, (503,), _NA),
+        _spec(ErrorCode.MODEL_UNAVAILABLE, (503,), _NA),
+        _spec(ErrorCode.MEDIA_UNAVAILABLE, (503,), _NA),
     )
 }
 
@@ -281,6 +307,9 @@ ERROR_MESSAGES: Mapping[ErrorCode, str] = {
     ErrorCode.STALE_HEAD: "conversation view is out of date",
     ErrorCode.WRITE_GATE_CLOSED: "direct send is not available on this instance",
     ErrorCode.API_SERVER_UNAVAILABLE: "direct send delivery is unavailable",
+    ErrorCode.CRON_UNAVAILABLE: "scheduled jobs are unavailable",
+    ErrorCode.MODEL_UNAVAILABLE: "model management is unavailable",
+    ErrorCode.MEDIA_UNAVAILABLE: "image delivery is unavailable",
 }
 
 
@@ -500,7 +529,7 @@ class Guarantees:
 @dataclass(frozen=True)
 class WriteGate:
     state: WriteGateState
-    reason: str | None  # None or WRITE_GATE_CLOSED_REASON
+    reason: str | None  # None, guarantee floor, or Bot Chat route closed
 
 
 @dataclass(frozen=True)
@@ -614,6 +643,8 @@ class RosterBot:
     profile: str
     display_name: str
     authz: AuthzState
+    # Additive RO-1 field. Absent for a bot this device cannot open, and on older HMP builds.
+    send_gate: WriteGate | None = field(default=None, metadata={"omit_if_none": True})
 
 
 @dataclass(frozen=True)
@@ -648,6 +679,16 @@ class WireToolCall:
 
 
 @dataclass(frozen=True)
+class WireMediaDescriptor:
+    """LM-4 `media` value: exactly `kind` and `ref`, nothing else. The `ref` is the registry's
+    43-character base64url handle. The native sidecar, the row id and the raw digest never appear
+    here; a descriptor is attached to a `role:"tool"` message only by `media_emission`."""
+
+    kind: str
+    ref: str
+
+
+@dataclass(frozen=True)
 class WireMessage:
     """RO-3 `messages[]` item.
 
@@ -667,6 +708,9 @@ class WireMessage:
     tool_name: str | None = field(default=None, metadata={"omit_if_none": True})
     tool_call_id: str | None = field(default=None, metadata={"omit_if_none": True})
     truncated: bool | None = field(default=None, metadata={"omit_if_none": True})
+    # v1.6 draft (§7e LM-4): omitted unless the gate opened and a descriptor was minted, so a
+    # closed gate keeps the previous bytes exactly.
+    media: WireMediaDescriptor | None = field(default=None, metadata={"omit_if_none": True})
 
 
 class TurnObservedState(StrEnum):
@@ -927,6 +971,16 @@ class ReadBridge(Protocol):
         """DS-2(b)/DS-6: the resolved `api_server` bind and per-profile `API_SERVER_KEY` for this
         profile, or `None` when either cannot be positively determined (fail closed) or the
         resolved bind is not loopback. Never logs or persists the key (SEC-4)."""
+        ...
+
+    def profile_default_model(self, profile: str) -> Mapping[str, object]:
+        """Read the routed profile's persisted provider/default model only."""
+        ...
+
+    def set_profile_default_model(
+        self, profile: str, provider: str, model: str
+    ) -> Mapping[str, object] | None:
+        """Validated Hermes write; None means the provider/model pair was refused."""
         ...
 
 

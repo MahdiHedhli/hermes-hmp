@@ -20,7 +20,7 @@ from pathlib import Path
 
 from .contract import LIMITER_TABLE_MAX
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # Matches identity.py's DIR_MODE: the store lives beside the instance anchor, under the same
 # 0700 `plugin-data/hmp/` directory (ID-2). On a fresh install nothing has created that directory
@@ -85,6 +85,15 @@ CREATE TABLE IF NOT EXISTS devices (
     label TEXT NOT NULL,
     state TEXT NOT NULL CHECK (state IN ('PENDING','ACTIVE','REVOKED')),
     created_at INTEGER NOT NULL
+);
+
+-- A host decision for privileged phone controls. Missing rows defer to the legacy config list;
+-- an explicit denial overrides that list. A new pairing receives a new device_id and never
+-- inherits a previous device's decision, even if it uses the same phone or HMP user.
+CREATE TABLE IF NOT EXISTS device_owner_controls (
+    device_id TEXT PRIMARY KEY REFERENCES devices(device_id),
+    allowed INTEGER NOT NULL CHECK (allowed IN (0, 1)),
+    decided_at INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS token_families (
@@ -192,6 +201,21 @@ CREATE TABLE IF NOT EXISTS direct_send_idempotency (
     PRIMARY KEY (iid, user_id, profile, cmid)
 );
 
+-- Amendment F3 (Phone chat, HMP_V1.md §7b AP-6): same shape as direct_send_idempotency, hash of
+-- `text` only (no expected_head). No message text is stored (SEC-4).
+CREATE TABLE IF NOT EXISTS phone_send_idempotency (
+    iid TEXT NOT NULL,
+    user_id TEXT NOT NULL,
+    profile TEXT NOT NULL,
+    cmid TEXT NOT NULL,
+    payload_hash BLOB NOT NULL,
+    status TEXT NOT NULL CHECK (status IN ('pending','submitted','rejected','unknown')),
+    result_json TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (iid, user_id, profile, cmid)
+);
+
 CREATE TABLE IF NOT EXISTS roster_state (
     user_id TEXT PRIMARY KEY,
     served_set_hash TEXT NOT NULL,
@@ -281,7 +305,12 @@ class Store:
         parent = self._path.parent
         with contextlib.suppress(FileExistsError):
             parent.mkdir(mode=DIR_MODE, parents=True)
-        conn = sqlite3.connect(str(self._path), isolation_level=None, check_same_thread=False)
+        # This connection is shared by auth/ownership readers in worker threads.
+        # CPython's statement cache can mix concurrent result rows (GH-118172).
+        # Never rely on that optimization for authority-binding reads.
+        conn = sqlite3.connect(
+            str(self._path), isolation_level=None, check_same_thread=False, cached_statements=0
+        )
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute("PRAGMA foreign_keys=ON")
@@ -292,6 +321,12 @@ class Store:
             "INSERT OR IGNORE INTO meta (id, instance_epoch, store_revocation_epoch, "
             "schema_version) VALUES (1, 0, 0, ?)",
             (SCHEMA_VERSION,),
+        )
+        # The new table above is additive. Record the upgrade after it exists, including for
+        # stores opened by older HMP builds with schema_version=1.
+        conn.execute(
+            "UPDATE meta SET schema_version = ? WHERE id = 1 AND schema_version < ?",
+            (SCHEMA_VERSION, SCHEMA_VERSION),
         )
         self._conn = conn
 
@@ -464,6 +499,31 @@ class Store:
             .execute("SELECT * FROM devices WHERE device_id = ?", (device_id,))
             .fetchone()
         )
+
+    def owner_controls_decision(self, device_id: str) -> bool | None:
+        """Return the host's explicit decision, or None for a legacy device without one."""
+        row = (
+            self._require_conn()
+            .execute("SELECT allowed FROM device_owner_controls WHERE device_id = ?", (device_id,))
+            .fetchone()
+        )
+        return bool(row["allowed"]) if row is not None else None
+
+    def set_owner_controls(self, device_id: str, *, allowed: bool, now: int) -> bool:
+        """Set a per-device host decision. Refuse missing or revoked devices."""
+        with self.transaction() as conn:
+            row = conn.execute(
+                "SELECT state FROM devices WHERE device_id = ?", (device_id,)
+            ).fetchone()
+            if row is None or row["state"] != "ACTIVE":
+                return False
+            conn.execute(
+                "INSERT INTO device_owner_controls (device_id, allowed, decided_at) "
+                "VALUES (?, ?, ?) ON CONFLICT(device_id) DO UPDATE SET "
+                "allowed = excluded.allowed, decided_at = excluded.decided_at",
+                (device_id, int(allowed), now),
+            )
+            return True
 
     def set_device_state(self, device_id: str, state: str) -> None:
         if state not in DEVICE_STATES:
@@ -800,6 +860,50 @@ class Store:
         `'pending'` until it concludes. Never auto-resent."""
         self._require_conn().execute(
             "UPDATE direct_send_idempotency SET status = ?, result_json = ?, updated_at = ? "
+            "WHERE iid = ? AND user_id = ? AND profile = ? AND cmid = ?",
+            (status, result_json, updated_at, iid, user_id, profile, cmid),
+        )
+
+    def reserve_phone_cmid(
+        self,
+        iid: str,
+        user_id: str,
+        profile: str,
+        cmid: str,
+        payload_hash: bytes,
+        now: int,
+    ) -> tuple[sqlite3.Row, bool]:
+        """AP-6: reserve before `handle_message`. `(row, inserted)` matches `reserve_cmid`."""
+        with self.transaction() as conn:
+            cur = conn.execute(
+                "INSERT INTO phone_send_idempotency "
+                "(iid, user_id, profile, cmid, payload_hash, status, result_json, "
+                "created_at, updated_at) VALUES (?, ?, ?, ?, ?, 'pending', NULL, ?, ?) "
+                "ON CONFLICT (iid, user_id, profile, cmid) DO NOTHING",
+                (iid, user_id, profile, cmid, payload_hash, now, now),
+            )
+            inserted = cur.rowcount == 1
+            row = conn.execute(
+                "SELECT * FROM phone_send_idempotency "
+                "WHERE iid = ? AND user_id = ? AND profile = ? AND cmid = ?",
+                (iid, user_id, profile, cmid),
+            ).fetchone()
+        assert row is not None
+        return row, inserted
+
+    def finalize_phone_cmid(
+        self,
+        iid: str,
+        user_id: str,
+        profile: str,
+        cmid: str,
+        *,
+        status: str,
+        result_json: str | None,
+        updated_at: int,
+    ) -> None:
+        self._require_conn().execute(
+            "UPDATE phone_send_idempotency SET status = ?, result_json = ?, updated_at = ? "
             "WHERE iid = ? AND user_id = ? AND profile = ? AND cmid = ?",
             (status, result_json, updated_at, iid, user_id, profile, cmid),
         )

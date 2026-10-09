@@ -45,6 +45,11 @@ server/
     bridge.py                     # the ONLY module importing Hermes internals: read subset + P6 trigger (§12);
                                   #   also list_sessions/resolve_session (amendment A1, SES-1/SES-2);
                                   #   also resolve_bot_chat/registry_snapshot/direct_send_target (amendment F2, DS-4/DS-6)
+                                  #   per-load set-once local-media module cache (`_local_media_modules`: sidecar,
+                                  #   candidate, scan, result, file safety, batch, binding); the media twins and the
+                                  #   C6b binding read it, never a request-time import. Old read methods unchanged.
+                                  #   Under the minimum-version amendment these caches are bound to the listener's
+                                  #   ServerContext and published as one locked tuple assignment (M3 source-reviewed)
     direct_send.py                # amendment F2: DS-2..DS-8 orchestration (gate order, guard, idempotency,
                                   #   the api_server loopback call, post-hoc verification). Never imports a Hermes
                                   #   internal itself -- reads bridge.py for Hermes state, and speaks api_server's
@@ -58,6 +63,19 @@ server/
                                   #   and the OD-F11 bot-view selector, _is_bot_view_session (title=="Bot Chat" and
                                   #   hidden; cross-checked against hermes-agent's canonical-chat.ts/bot_mode_probe.py/
                                   #   hermes_state.py, HMP_V1.md §6a SES-7 -- no new Hermes dependency)
+                                  #   a per-load set-once cache `(local_media_sidecar,)` read by the media sites (bound to
+                                  #   ServerContext under the minimum-version amendment; no longer "inside a gate's disk bracket")
+    media_emission.py             # S4 source-reviewed: descriptor emission for RO-3, RO-6, SES-2/SES-2a. Imports no
+                                  #   local_media_* module and registers no route; uses only the references the listener
+                                  #   bound at open (`ServerContext.media_snapshot`). Closed listener, non-owner or flag off
+                                  #   runs the old read untouched; open runs the media twin plus one bind_media_batch in one
+                                  #   worker job, then mints synchronously on the loop (no await) after a gate recheck
+    media_fetch.py                # S5 source candidate (unreviewed): `GET /bots/{p}/media/{ref}` orchestrator and the per-app
+                                  #   `MediaFetchService` (dedicated 4-worker executor, worker/buffer/device permits, lease
+                                  #   mailbox). Imports no local_media_* module; runs only the references the listener bound
+                                  #   at open. Phase one/two run on the bridge's `media_fetch_phase_*` off the loop
+    media_payload.py              # S5 source candidate (unreviewed): private frozen-bytes carrier (stdlib only, no wire form,
+                                  #   fixed repr). The bridge and the route hold this one module, proven at listener open
     authorize.py                  # P6 outcome table (PR6-*), via bridge
     revoke.py                     # P7-3 self-revoke; operator revoke helpers (PR7-1)
     gate.py                       # GU-2/GU-4 guarantee derivation + write gate (implemented, unused by F1 routes)
@@ -68,7 +86,13 @@ server/
                                   #   tokens.py and revoke.py so a plugin reload (sys.modules eviction of
                                   #   hermes_plugins.hmp*) cannot split a running app from the CTX_KEY/helpers
                                   #   it was built with (see the module's own docstring)
+                                  #   `media_flag` / `media_available` callable fields (default closed), exact-True
+                                  #   `media_enabled` / `is_media_available` accessors, and strong `media_modules`
+                                  #   references. No route consumes them yet; S4/S5 must capture and verify the bound tuple.
     adapter.py                    # HmpAdapter(BasePlatformAdapter): lifecycle only (start/stop listener)
+                                  #   M3 `_media_bind` verifies in-memory cache coherence at listener open and
+                                  #   a synchronous cache-identity fence closes this listener until reopen. Fixed
+                                  #   outcomes: media_binding_incoherent/media_binding_changed; no process latch.
     cli.py                        # `hermes hmp …` operator commands (PR1-*, PR3-*, PR7-1, PR7-2, compat);
                                   #   `pair offer` is one command end to end unless `--no-wait` (owner
                                   #   requirement, 2026-09-27): it waits, shows the expected code and asks
@@ -81,6 +105,42 @@ server/
     logging_policy.py             # allow-listed log fields (SEC-4, SR-007): plugin logger; aiohttp access log
                                   #   disabled or reduced to method, route template, status, duration; bridge
                                   #   exceptions logged by type only; P6 reply dropped unlogged (CS-22)
+    local_media_active_scan.py    # OPTIONAL, inert, unimplemented as a feature: reviewed local-image active-content scanner
+                                  #   (stdlib only, Python 3.11+). Imported by nothing at start-up and by no route;
+                                  #   only local_media_result.py may import it (local image contract amendment)
+    local_media_file_safety.py    # OPTIONAL, inert: reviewed file-safety checks for a future local image reader (stdlib only);
+                                  #   no caller, route, claim or manifest uses it yet
+    local_media_raster_structure.py  # OPTIONAL, inert: reviewed raster structure validator (stdlib only); no caller yet
+    local_media_result.py         # OPTIONAL, inert: bounded result parser wrapping local_media_active_scan; no caller yet.
+                                  #   Imports are function-local and pinned by a test: bridge.py's one cache-fill function
+                                  #   loads the chain (sidecar, candidate, scan, result, file safety, batch, binding), reads.py
+                                  #   loads the sidecar, adapter.py loads only local_media_registry and local_media_raster_structure (each in its own
+                                  #   function-local binder). media_emission, media_fetch, compat,
+                                  #   server and registration import none, and no request path imports one
+    local_media_registry.py       # OPTIONAL, inert: process-local image ref registry (LM-9; stdlib only, no hmp_plugin imports):
+                                  #   lock, TTL 1800 s, 512/4096 LRU, idempotent mint, first-served digest CAS. A registry
+                                  #   hit never authorizes a fetch. S4 source-reviewed: adapter.py's function-local
+                                  #   `_media_registry_bind` makes one instance per listener at open and binds its actual
+                                  #   module on ServerContext; media_emission mints on it through that bound reference only.
+                                  #   S5 source candidate: media_fetch looks refs up and records first-served digests through
+                                  #   that bound reference only. No module-level instance
+    local_media_sidecar.py        # OPTIONAL, inert: immutable non-wire read carriers; stdlib and contract only.
+                                  #   Candidate holds only row id/digest, never an image path. Generic serialization
+                                  #   refuses the carrier. Read by the reads.py media twins and bridge.py; media_emission
+                                  #   consumes it from the listener-bound module only. Grants no authority
+    local_media_candidate.py      # OPTIONAL, inert: lexical flat-name derivation and bounded candidate extraction from one
+                                  #   returned page (newest 128 image_generate attempts, 64 KiB bound before the one accepted
+                                  #   parser). Imports only the accepted result/file-safety/scanner/sidecar modules; no I/O,
+                                  #   no logging, no caller yet. Emits row id + scanner digest only, never a path or name
+    local_media_active_batch.py   # OPTIONAL, inert (C6a): request-scoped active-history batch over up to 128 row-id/digest
+                                  #   selectors with one bracketed scan; imports only the accepted scanner and candidate
+                                  #   modules (module scope) and stdlib; no I/O, no logging, no caller yet. Closed
+                                  #   verdicts only, never a path, name, digest, call id or content; grants no authority
+    # (There is no `local_media_gate.py` and no `local_media_supported_builds.json`: the exact-build gate and its
+    #   manifest are retired by the minimum-version conversion and were not carried onto the converted base. Their
+    #   accepted bytes remain in the media lineage as historical evidence only. The replacement is the `local_media`
+    #   eligibility member in `compat.py` plus an in-memory binding in `adapter.py` (slices M2/M3, independently source-reviewed; delivery unimplemented);
+    #   no runtime module reads a build list, manifest, fingerprint or Git SHA for media.)
     read_compat_builds.json       # GU-2c list (starts empty). Entries: {git_sha|null, fingerprint, source_sha?
                                   #   (provenance only), label, qualified_by, qualified_at}; matching per research
                                   #   R8 steps 4-6 (CS-19); plus "bridge_files", the mechanically computed superset
@@ -150,6 +210,7 @@ SHA. Unresolvable git metadata or a missing listed file is unidentifiable, hence
 | GET | `/hmp/v1/bots/{p}/conversations/default/messages?after=&limit=` | RO-6 | bearer + per-bot gate |
 | GET | `/hmp/v1/bots/{p}/sessions?cursor=&limit=` | SES-1 (amendment A1, v1.1) | bearer + per-bot gate; only when `gateway.platforms.hmp.extra.session_browsing` is not `false` |
 | GET | `/hmp/v1/bots/{p}/sessions/{ref}/messages?after=&limit=` | SES-2 (amendment A1, v1.1) | bearer + per-bot gate; same kill switch |
+| GET | `/hmp/v1/bots/{p}/sessions/{ref}/messages/from-start?limit=` | SES-2a (phone Bot Chat history paging) | bearer + per-bot gate; same kill switch and read limiter; an older HMP has no route |
 | POST | `/hmp/v1/bots/{p}/chat/messages` | DS-1..DS-7 (amendment F2, v1.2) | bearer + per-bot gate; **always registered** (unlike SES-1/SES-2's kill switch), answers `503 write_gate_closed` rather than `404` when `direct_send`'s flag is off or the guard/gate otherwise fails closed |
 | GET | `/hmp/v1/bots/{p}/chat/messages/by-client-id/{cmid}` | DS-8 (amendment F2, v1.2) | bearer + per-bot gate; always registered, read-only, never re-sends |
 

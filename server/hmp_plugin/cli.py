@@ -70,10 +70,18 @@ Refusals and rules:
     transaction (PR3-4). Denial goes through `pairing.deny_pairing`.
 - **`devices revoke` (PR7-1)** revokes the device and every token family atomically. For a user's
   last device it prints the Hermes `pairing revoke` commands, and never runs them.
+- **Privileged phone controls.** After pairing, a separate host prompt requires the full word
+  `GRANT` before that device can manage jobs or default models. EOF, interruption and every other
+  answer record a denial. `devices grant-controls` and `devices deny-controls` are TTY-gated host
+  commands for later changes. An explicit decision overrides the legacy config allowlist.
 - **`instance rotate-key` (PR7-2)** makes a new key, revokes every device, and expires every open
   offer and pending pairing.
-- **`compat`** prints the build identity, the list match and the probe outcome. There are no
-  secrets in any of them.
+- **`compat`** prints the Hermes version, the minimum supported versions and whether each feature
+  is available. `compat --issue-draft` prints a GitHub issue draft for the operator to review and
+  paste. It is pure and offline: nothing is submitted, no network, `gh` or browser is used, and only
+  allowlisted version and fixed-code fields appear. `--feature` with `--failure-code` states a
+  failure the operator saw, for an upstream failure the static probe cannot see. There are no
+  secrets in any of it.
 
 Grants that live in Hermes's own pairing stores cannot be read without a Hermes internal, and
 only `bridge.py` may import one (PR-2). So the "grants" the CLI prints are the bots this user asked
@@ -115,6 +123,8 @@ MUTATING_COMMANDS: frozenset[tuple[str, str | None]] = frozenset(
         ("pair", "confirm"),
         ("pair", "deny"),
         ("devices", "revoke"),
+        ("devices", "grant-controls"),
+        ("devices", "deny-controls"),
         ("instance", "rotate-key"),
     }
 )
@@ -160,7 +170,9 @@ _PROFILE_NAME_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 LISTENER_RECORD_FILENAME = "listener.json"
 LISTENER_RECORD_FORMAT = 1
 RECORD_MODE = 0o600
-MAX_RECORD_BYTES = 4_096  # generous bound for a small, fixed-shape JSON record
+MAX_RECORD_BYTES = 16_384  # bounded profile inventory and status-only health snapshot
+HEALTH_MAX_AGE_S = 45
+HEALTH_STATES = frozenset({"ready", "disabled", "unsupported", "unavailable"})
 
 
 class ListenerRecordError(RuntimeError):
@@ -179,6 +191,8 @@ class ListenerRecord:
     # on a record written by an older gateway that never had this field -- the caller then falls
     # back to the generic placeholder next-steps text, as before this field existed.
     profiles: tuple[tuple[str, str], ...] | None = None
+    health_checked_at: int | None = None
+    health: tuple[tuple[str, str, str, str], ...] | None = None
 
 
 def listener_record_path(anchor_dir: Path) -> Path:
@@ -194,6 +208,8 @@ def write_listener_record(
     iid: str,
     nonce: str | None = None,
     profiles: Sequence[tuple[str, str]] | None = None,
+    health_checked_at: int | None = None,
+    health: Sequence[tuple[str, str, str, str]] | None = None,
 ) -> None:
     """Atomically write the record: a new 0600 temp file in the same directory, fsync, rename.
 
@@ -218,8 +234,12 @@ def write_listener_record(
             "pid": os.getpid(),
             "nonce": nonce if nonce is not None else secrets.token_hex(16),
             "profiles": [[p, d] for p, d in profiles] if profiles is not None else None,
+            "health_checked_at": health_checked_at,
+            "health": [list(row) for row in health] if health is not None else None,
         }
     ).encode("utf-8")
+    if len(body) > MAX_RECORD_BYTES:
+        raise OSError("listener record exceeds size limit")
     tmp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(tmp, flags, RECORD_MODE)
@@ -537,6 +557,9 @@ def read_listener_record(
     if not pid_alive(pid):  # type: ignore[arg-type]
         raise ListenerRecordError("the listener record is stale")
     profiles = _parse_record_profiles(data.get("profiles"))
+    checked_at, health = _parse_record_health(
+        data.get("health_checked_at"), data.get("health"), profiles
+    )
     return ListenerRecord(
         host=str(host),
         port=int(port),
@@ -544,6 +567,8 @@ def read_listener_record(
         pid=int(pid),  # type: ignore[arg-type]
         nonce=nonce,
         profiles=profiles,
+        health_checked_at=checked_at,
+        health=health,
     )
 
 
@@ -565,6 +590,35 @@ def _parse_record_profiles(raw: object) -> tuple[tuple[str, str], ...] | None:
             raise ListenerRecordError("the listener record is malformed")
         out.append((entry[0], entry[1]))
     return tuple(out)
+
+
+def _parse_record_health(
+    checked_at: object, raw: object, profiles: tuple[tuple[str, str], ...] | None
+) -> tuple[int | None, tuple[tuple[str, str, str, str], ...] | None]:
+    """Old records have no snapshot. A present snapshot must cover exactly the served bots."""
+    if checked_at is None and raw is None:
+        return None, None
+    if type(checked_at) is not int or checked_at < 0 or not isinstance(raw, list):
+        raise ListenerRecordError("the listener health record is malformed")
+    if profiles is None or len(raw) != len(profiles) or len(raw) > 128:
+        raise ListenerRecordError("the listener health record is malformed")
+    names = {name for name, _ in profiles}
+    if len(names) != len(profiles) or any(not _valid_profile_name(name) for name in names):
+        raise ListenerRecordError("the listener health record is malformed")
+    rows: list[tuple[str, str, str, str]] = []
+    for row in raw:
+        if (
+            not isinstance(row, list)
+            or len(row) != 4
+            or not isinstance(row[0], str)
+            or row[0] not in names
+            or any(not isinstance(value, str) or value not in HEALTH_STATES for value in row[1:])
+        ):
+            raise ListenerRecordError("the listener health record is malformed")
+        rows.append((row[0], row[1], row[2], row[3]))
+    if {row[0] for row in rows} != names or len({row[0] for row in rows}) != len(rows):
+        raise ListenerRecordError("the listener health record is malformed")
+    return checked_at, tuple(rows)
 
 
 def _default_verify_listener_live(
@@ -665,6 +719,14 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     devices.add_parser("list", help="List devices")
     revoke = devices.add_parser("revoke", help="Revoke a device and its tokens (PR7-1)")
     revoke.add_argument("device_id")
+    grant_controls = devices.add_parser(
+        "grant-controls", help="Allow one paired phone to manage jobs and default models"
+    )
+    grant_controls.add_argument("device_id")
+    deny_controls = devices.add_parser(
+        "deny-controls", help="Remove jobs and default-model control from one phone"
+    )
+    deny_controls.add_argument("device_id")
 
     instance = groups.add_parser("instance", help="Instance identity").add_subparsers(
         dest="instance_command"
@@ -672,7 +734,38 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
     instance.add_parser("show", help="Show the instance fingerprint")
     instance.add_parser("rotate-key", help="Rotate the instance key; revokes every device (PR7-2)")
 
-    groups.add_parser("compat", help="Show build identity, list match and probe result (GU-2c)")
+    compat_cmd = groups.add_parser(
+        "compat", help="Show the Hermes version and which HMP features are available"
+    )
+    compat_cmd.add_argument(
+        "--issue-draft",
+        action="store_true",
+        help="Print a GitHub issue draft to review and paste (offline; nothing is sent)",
+    )
+    compat_cmd.add_argument(
+        "--feature",
+        default=None,
+        help="With --issue-draft and --failure-code: the feature that failed "
+        "(read, session_browsing, send, jobs, model, approvals, phone_chat, local_media)",
+    )
+    compat_cmd.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Also print informational diagnostics (the Bot Chat approval hook fact)",
+    )
+    compat_cmd.add_argument(
+        "--failure-code",
+        default=None,
+        help="With --issue-draft and --feature: the HMP error code the phone showed",
+    )
+    setup = groups.add_parser("setup", help="Check host readiness without changing configuration")
+    setup.add_subparsers(dest="setup_command").add_parser(
+        "check", help="Check the Hermes build, HMP identity, and pinned listener"
+    )
+    health = groups.add_parser("health", help="Check each served bot's enabled channels")
+    health.add_subparsers(dest="health_command").add_parser(
+        "check", help="Read the gateway's current bot-channel health snapshot"
+    )
 
 
 # --------------------------------------------------------------------------------------------------
@@ -758,6 +851,25 @@ class _Context:
 
     def now(self) -> int:
         return int(self.env.clock())
+
+
+def _undecided_active_devices(store_path: Path) -> int | None:
+    """Active paired devices with no recorded host controls decision, read through a read-only
+    connection. `None` when the store cannot be read. Names no device and writes nothing."""
+    path = store_path.resolve()
+    mode = "mode=ro" if path.with_name(path.name + "-wal").exists() else "mode=ro&immutable=1"
+    try:
+        conn = sqlite3.connect(path.as_uri() + f"?{mode}", uri=True)
+        try:
+            row = conn.execute(
+                "SELECT COUNT(*) FROM devices d LEFT JOIN device_owner_controls c "
+                "ON c.device_id = d.device_id WHERE d.state = 'ACTIVE' AND c.device_id IS NULL"
+            ).fetchone()
+        finally:
+            conn.close()
+    except sqlite3.Error:
+        return None
+    return int(row[0]) if row else None
 
 
 class _ReadOnlyEpoch:
@@ -1246,6 +1358,46 @@ def _grant_bot_access(ctx: _Context, *, user_id: str) -> None:
         out.write(f"  {_combined_approve_command(list(remaining), user_id)}\n")
 
 
+def _write_controls_saved(out: Any) -> None:
+    """Static, informational text after a saved grant. A permission is not an activation."""
+    out.write(
+        "Permission saved for this phone. It does not activate the previews: scheduled jobs "
+        "and default models each also need the host feature flag, a supported build, the "
+        "profile API and key, and bot authorization.\n"
+        "Check host prerequisites with: hermes hmp health check (see docs/INSTALL.md)\n"
+    )
+
+
+def _prompt_owner_controls(ctx: _Context, *, device_id: str, label: str) -> None:
+    """Ask the host for a separate, per-device privileged-control decision.
+
+    The only granting answer is the full word GRANT. Existing y/n answers intended for the
+    bot-access prompt therefore cannot accidentally elevate a newly paired phone.
+    """
+    out = ctx.out
+    out.write(
+        "\nAllow this phone to manage scheduled jobs and bot default models? "
+        "This is separate from Bot Chat access.\n"
+    )
+    out.write(f"Type GRANT for {json.dumps(label, ensure_ascii=True)}, or Enter to keep it off: ")
+    out.flush()
+    try:
+        answer = ctx.env.stdin.readline()
+    except KeyboardInterrupt:
+        answer = ""
+        out.write("\n")
+    allowed = answer.strip() == "GRANT"
+    if ctx.store.set_owner_controls(device_id, allowed=allowed, now=ctx.now()):
+        if allowed:
+            _write_controls_saved(out)
+        else:
+            out.write("Jobs and default-model control stays off for this phone.\n")
+    else:
+        out.write("The phone is no longer active; privileged control was not granted.\n")
+    if not allowed:
+        out.write(f"To grant it later: hermes hmp devices grant-controls {device_id}\n")
+
+
 def _wait_for_scan_and_confirm(
     ctx: _Context, *, oid: str, exp: int, label: str | None, user: str | None, grant: bool = True
 ) -> int:
@@ -1315,7 +1467,7 @@ def _wait_for_scan_and_confirm(
             yes_share=user is not None,  # the operator already chose this user at offer time
         )
         try:
-            _, user_id = _do_confirm(ctx, ns)
+            device_id, user_id = _do_confirm(ctx, ns)
         except KeyboardInterrupt:
             out.write("\nCancelled. The pairing is still pending.\n")
             out.write(_resume_hint(pairing_id, confirm_label))
@@ -1336,6 +1488,7 @@ def _wait_for_scan_and_confirm(
             _grant_bot_access(ctx, user_id=user_id)
         else:
             _print_next_steps(ctx)
+        _prompt_owner_controls(ctx, device_id=device_id, label=confirm_label)
         return EXIT_OK
 
 
@@ -1571,6 +1724,7 @@ def _do_confirm(ctx: _Context, args: argparse.Namespace) -> tuple[str, str]:
 def _cmd_confirm(ctx: _Context, args: argparse.Namespace) -> int:
     device_id, user_id = _do_confirm(ctx, args)
     ctx.out.write(f"Confirmed. Device {device_id}, user {user_id}.\n")
+    _prompt_owner_controls(ctx, device_id=device_id, label=args.label)
     return EXIT_OK
 
 
@@ -1620,6 +1774,24 @@ def _cmd_devices_revoke(ctx: _Context, args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _cmd_devices_controls(ctx: _Context, args: argparse.Namespace, *, allowed: bool) -> int:
+    if not ctx.store.set_owner_controls(args.device_id, allowed=allowed, now=ctx.now()):
+        raise RefusedError("refused: device does not exist or is not active")
+    if allowed:
+        _write_controls_saved(ctx.out)
+    else:
+        ctx.out.write("Jobs and default-model control removed.\n")
+    return EXIT_OK
+
+
+def _cmd_devices_grant_controls(ctx: _Context, args: argparse.Namespace) -> int:
+    return _cmd_devices_controls(ctx, args, allowed=True)
+
+
+def _cmd_devices_deny_controls(ctx: _Context, args: argparse.Namespace) -> int:
+    return _cmd_devices_controls(ctx, args, allowed=False)
+
+
 def _cmd_show(ctx: _Context, _args: argparse.Namespace) -> int:
     iid = _load_identity(ctx).iid
     ctx.out.write(f"Instance fingerprint: {_short(iid)}\n")
@@ -1653,40 +1825,252 @@ def _cmd_rotate(ctx: _Context, _args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-def _cmd_compat(env: CliEnv) -> int:
-    result = env.compat()
-    out = env.stdout
-    status = getattr(getattr(result, "status", None), "value", "unsupported")
-    out.write(f"Read compatibility: {status}\n")
-    why = getattr(getattr(result, "why", None), "value", None)
-    if why:
-        out.write(f"Reason: {why}\n")
-    ident = getattr(result, "identity", None)
-    if ident is not None:
-        out.write(f"Git SHA: {ident.git_sha or 'none (no git metadata)'}\n")
-        out.write(f"Read-bridge fingerprint: {ident.fingerprint}\n")
-    else:
-        out.write("Build identity: unidentifiable\n")
-    entry = getattr(result, "entry", None)
-    out.write(f"List match: {entry.label if entry is not None else 'none'}\n")
-    probe = (
-        "passed"
-        if getattr(result, "supported", False)
-        else ("failed" if why == "hermes_read_dependency_missing" else "not run")
-    )
-    out.write(f"Dependency probe: {probe}\n")
-    if getattr(result, "supported", False):
-        from . import compat
+def _version_floor_text() -> str:
+    from . import hermes_version
 
-        send_ready = compat.direct_send_build_qualified(ident)
-        out.write(f"Guarded send qualification: {'qualified' if send_ready else 'unqualified'}\n")
-    if status != "supported":
-        out.write(
-            "For an older Hermes install, update to v0.21.5 (v2026.9.24). "
-            "If already newer, update HMP after that release is qualified; "
-            "see github.com/MahdiHedhli/hermes-hmp/blob/main/docs/RELEASE_COMPAT_WATCH.md.\n"
+    read = hermes_version.FEATURE_FLOORS["read"]
+    write = hermes_version.FEATURE_FLOORS["send"]
+    return (
+        f"read {read.semver_text} ({read.calver_text}); "
+        f"send, jobs, model, approvals, phone chat and local media "
+        f"{write.semver_text} ({write.calver_text})"
+    )
+
+
+def _failure_lines(version: str, feature: Any, status: Any) -> list[str]:
+    """A failed compatibility check. A failed probe is a fact about this install's APIs, not proof
+    of a version problem: the sample note appears only when no tested sample matches, and only
+    after a failure."""
+    from . import issue_draft
+
+    detail = issue_draft.failure_detail(feature, status)
+    lines = [f"The {feature.value} compatibility check failed on Hermes {version} ({detail}).\n"]
+    if status.tested_label is None:
+        lines.append("This Hermes is not one of HMP's tested samples.\n")
+    return lines
+
+
+def _read_gap_lines(result: Any) -> list[str]:
+    """The three-way read wording shared by `compat` and `setup check`."""
+    from . import compat
+
+    eligibility = getattr(result, "eligibility", None)
+    status = eligibility.features.get(compat.Feature.READ) if eligibility is not None else None
+    if status is None or status.available:
+        return []
+    version = eligibility.version.text
+    if status.reason is compat.Unavailable.VERSION_BELOW_FLOOR:
+        floor = _version_floor_text()
+        return [
+            f"Hermes {version} is older than HMP's minimum ({floor}). Update Hermes.\n"
+        ]
+    if status.reason is compat.Unavailable.HERMES_NOT_FOUND:
+        return ["The Hermes install could not be found, so HMP cannot serve any feature.\n"]
+    return [
+        *_failure_lines(version, compat.Feature.READ, status),
+        "To prepare a report: hermes hmp compat --issue-draft\n",
+    ]
+
+
+def _cmd_compat(env: CliEnv, args: argparse.Namespace | None = None) -> int:
+    from . import compat, issue_draft
+
+    want_draft = bool(getattr(args, "issue_draft", False))
+    feature = getattr(args, "feature", None)
+    code = getattr(args, "failure_code", None)
+    if (feature is None) != (code is None):
+        raise RefusedError(
+            "refused: --feature and --failure-code must be used together", EXIT_ENVIRONMENT
         )
+    if feature is not None and not want_draft:
+        raise RefusedError(
+            "refused: --feature and --failure-code need --issue-draft", EXIT_ENVIRONMENT
+        )
+    context: issue_draft.OperatorReport | issue_draft.OwnReason | None = None
+    if feature is not None:
+        try:
+            context = issue_draft.check_report_request(feature, code)
+        except issue_draft.ReportRequestError as exc:
+            raise RefusedError(
+                f"refused: {exc}. Features: {', '.join(issue_draft.FEATURES)}. Use the code the "
+                "phone showed for that feature.",
+                EXIT_ENVIRONMENT,
+            ) from exc
+
+    result = env.compat()
+    eligibility = getattr(result, "eligibility", None)
+    out = env.stdout
+    if want_draft:
+        return _write_issue_draft(out, eligibility, context)
+
+    if eligibility is None:
+        out.write("Hermes version: unknown\n")
+        out.write(f"Minimum Hermes: {_version_floor_text()}\n")
+        out.write("Feature availability could not be determined.\n")
+        return EXIT_OK
+    version = eligibility.version
+    out.write(f"Hermes version: {version.text} (source: {version.source.value})\n")
+    out.write(f"Minimum Hermes: {_version_floor_text()}\n")
+    for feat, status in eligibility.features.items():
+        if status.available:
+            out.write(f"{feat.value}: available\n")
+            continue
+        out.write(f"{feat.value}: unavailable ({issue_draft.failure_detail(feat, status)})\n")
+    if getattr(args, "verbose", False):
+        hook = getattr(eligibility, "stream_approval_hook", None)
+        word = "present" if hook is True else "absent" if hook is False else "unknown"
+        out.write(
+            f"Session-stream approval hook: {word} (informational; it never gates a feature "
+            "and sets no minimum Hermes version)\n"
+        )
+
+    below = [
+        f.value
+        for f, st in eligibility.features.items()
+        if st.reason is compat.Unavailable.VERSION_BELOW_FLOOR
+    ]
+    if below:
+        out.write(
+            f"Hermes {version.text} is older than HMP's minimum "
+            f"({_version_floor_text()}) for {', '.join(below)}. Update Hermes.\n"
+        )
+    failures = issue_draft.static_failures(eligibility)
+    for feat, status in failures:
+        out.writelines(_failure_lines(version.text, feat, status))
+    if failures:
+        out.write("To prepare a report: hermes hmp compat --issue-draft\n")
+    elif eligibility.features[compat.Feature.READ].reason is compat.Unavailable.HERMES_NOT_FOUND:
+        out.write("The Hermes install could not be found, so HMP cannot serve any feature.\n")
     return EXIT_OK
+
+
+def _write_issue_draft(out: TextIO, eligibility: Any, context: Any) -> int:
+    from . import issue_draft
+
+    report = None
+    if isinstance(context, issue_draft.OwnReason):
+        out.write(issue_draft.own_reason_text(context) + "\n")
+    elif isinstance(context, issue_draft.OperatorReport):
+        report = context
+        feature_status = _feature_status(eligibility, report.feature)
+        if feature_status is not None and feature_status.reason is not None and (
+            feature_status.reason.value == "hermes_version_below_floor"
+        ):
+            out.write(
+                f"Note: this Hermes is older than HMP's minimum for {report.feature}; "
+                "updating Hermes is the expected fix.\n\n"
+            )
+    draft = issue_draft.build_draft(eligibility, report)
+    if draft is None:
+        if context is None:
+            out.write(issue_draft.NOTHING_TO_REPORT + "\n")
+        return EXIT_OK
+    out.write(draft.render())
+    return EXIT_OK
+
+
+def _feature_status(eligibility: Any, feature: str) -> Any:
+    if eligibility is None:
+        return None
+    for feat, status in eligibility.features.items():
+        if feat.value == feature:
+            return status
+    return None
+
+
+def _checked_setup(env: CliEnv) -> tuple[int, ListenerRecord | None]:
+    """Read-only host preflight. Never opens the writable store or runs Hermes CLI."""
+    from . import identity, server
+
+    out = env.stdout
+    result = env.compat()
+    supported = bool(getattr(result, "supported", False))
+    out.write(f"Hermes read compatibility: {'supported' if supported else 'unsupported'}\n")
+    if not supported:
+        out.writelines(_read_gap_lines(result))
+        out.write("Check `hermes hmp compat` for the details.\n")
+
+    kw = env.identity_kwargs
+    try:
+        custody = identity.resolve_custody(
+            env=kw.get("env", env.environ),
+            hermes_root=kw.get("hermes_root"),
+            binding_root=kw.get("binding_root"),
+        )
+    except identity.NamedProfileError:
+        out.write("HMP instance: unavailable under a named profile; use the default profile.\n")
+        return EXIT_REFUSED, None
+    except identity.IdentityError:
+        out.write("HMP instance: custody location is unsafe.\n")
+        return EXIT_REFUSED, None
+
+    store_path = server.store_path(custody.anchor_dir)
+    if not store_path.is_file():
+        out.write("HMP instance: not initialized. Start the gateway with HMP enabled once.\n")
+        return EXIT_REFUSED, None
+    try:
+        loaded = identity.load_existing(_ReadOnlyEpoch(store_path), **_identity_kw(env))
+    except (identity.IdentityError, sqlite3.Error, OSError):
+        out.write("HMP instance: not current; inspect the gateway before pairing.\n")
+        return EXIT_REFUSED, None
+    out.write("HMP instance: current.\n")
+
+    try:
+        record = read_listener_record(
+            listener_record_path(custody.anchor_dir),
+            iid=loaded.iid,
+            pid_alive=env.pid_alive,
+        )
+    except ListenerRecordError:
+        out.write("HMP listener: unavailable or unsafe. Start or inspect the gateway.\n")
+        return EXIT_REFUSED, None
+    try:
+        live = env.verify_listener_live(record, loaded.iid)
+    except Exception:
+        live = False
+    if not live:
+        out.write("HMP listener: TLS identity or readiness check failed.\n")
+        return EXIT_REFUSED, None
+    out.write("HMP listener: running with the expected TLS identity.\n")
+    count = len(record.profiles or ())
+    out.write(f"Served bot count: {count} (routing and access are not verified here).\n")
+    undecided = _undecided_active_devices(store_path)
+    if undecided:
+        out.write(
+            f"Approvals note: {undecided} active paired device(s) have no recorded controls "
+            "decision. A device listed in owner_device_ids with no decision also receives jobs "
+            "and model controls. Record an explicit decision with `hermes hmp devices "
+            "grant-controls` before listing an approval owner. Approval ownership requires "
+            "grant-controls (or no decision, legacy); deny-controls removes approval "
+            "ownership. This check changed nothing.\n"
+        )
+    out.write("Review docs/INSTALL.md and server/DEPLOYMENT.md before pairing.\n")
+    return (EXIT_OK, record) if supported and count > 0 else (EXIT_REFUSED, None)
+
+
+def _cmd_setup_check(env: CliEnv) -> int:
+    status, _record = _checked_setup(env)
+    return status
+
+
+def _cmd_health_check(env: CliEnv) -> int:
+    """Read-only operator diagnostic from the live, TLS-pinned gateway record."""
+    status, record = _checked_setup(env)
+    if status != EXIT_OK or record is None:
+        return EXIT_REFUSED
+    checked_at, rows = record.health_checked_at, record.health
+    age = int(env.clock()) - checked_at if checked_at is not None else None
+    if age is None or age < -5 or age > HEALTH_MAX_AGE_S or rows is None:
+        env.stdout.write("Bot channel health: unavailable or stale; inspect the gateway.\n")
+        return EXIT_REFUSED
+    healthy = True
+    for profile, send, cron, model in sorted(rows):
+        env.stdout.write(
+            f"Bot {json.dumps(profile)}: send={send}, jobs={cron}, model={model}.\n"
+        )
+        healthy &= all(state in ("ready", "disabled") for state in (send, cron, model))
+    env.stdout.write("Device access and later loopback execution are not verified.\n")
+    return EXIT_OK if healthy else EXIT_REFUSED
 
 
 _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], int]] = {
@@ -1696,6 +2080,8 @@ _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], 
     ("pair", "deny"): _cmd_deny,
     ("devices", "list"): _cmd_devices_list,
     ("devices", "revoke"): _cmd_devices_revoke,
+    ("devices", "grant-controls"): _cmd_devices_grant_controls,
+    ("devices", "deny-controls"): _cmd_devices_deny_controls,
     ("instance", "show"): _cmd_show,
     ("instance", "rotate-key"): _cmd_rotate,
 }
@@ -1715,10 +2101,14 @@ def dispatch(args: argparse.Namespace, env: Optional[CliEnv] = None) -> int:  # 
     group, action = _command(args)
     try:
         if group == "compat":
-            return _cmd_compat(env)
+            return _cmd_compat(env, args)
+        if (group, action) == ("setup", "check"):
+            return _cmd_setup_check(env)
+        if (group, action) == ("health", "check"):
+            return _cmd_health_check(env)
         handler = _STORE_COMMANDS.get((group or "", action or ""))
         if handler is None:
-            env.stderr.write("usage: hermes hmp {pair,devices,instance,compat} ...\n")
+            env.stderr.write("usage: hermes hmp {pair,devices,instance,compat,setup,health} ...\n")
             return EXIT_ENVIRONMENT
         if (group, action) in MUTATING_COMMANDS:
             _check_mutation_allowed(env)

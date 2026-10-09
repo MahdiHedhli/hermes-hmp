@@ -2,6 +2,15 @@
 
 **Research date:** September 28, 2026
 
+**HMP implementation checkpoint:** the phone already persists a UUIDv7
+`client_message_id` before a Bot Chat send, treats ambiguous outcomes as
+unconfirmed, and uses an authoritative snapshot when its current history
+window resets. Those safeguards do not constitute a `SessionAuthority`
+admission receipt, durable FIFO, or canonical event replay. Reuse the existing
+parts where their semantics match; do not label a legacy mailbox `queued`
+result as a unified-gateway admission. The [roadmap](ROADMAP.md) sets the
+resulting investment priorities and adoption gates.
+
 **Primary sources**
 - https://github.com/NousResearch/hermes-agent/pull/106742
 - https://gist.github.com/unsupportedpastels/765f9d551ce88ee01630c18367763e75
