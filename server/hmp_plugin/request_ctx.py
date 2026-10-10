@@ -212,6 +212,8 @@ class ServerContext:
     # default true. When false, `server.build_app` never registers SES-1/SES-2 at all -- the same
     # "not registered, 404" pattern F1 already uses for send/SSE/approvals/clarify/stop.
     session_browsing_enabled: bool = True
+    # Local startup-only registration. No HTTP request or remote capability can turn this on.
+    controls_requests_enabled: bool = False
     # Amendment F2 (direct send, HMP_V1.md §7a DS-2(b)/DS-10): the owner-dogfood host flag
     # `gateway.platforms.hmp.extra.direct_send.enabled`, default FALSE (OD-F14/OD-F15). Unlike
     # `session_browsing_enabled`, this does NOT control route registration -- `chat/messages` is

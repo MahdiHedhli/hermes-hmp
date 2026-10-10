@@ -194,6 +194,7 @@ class ErrorCode(StrEnum):
     # S4 descriptor routes never raise it; a closed gate there gives the exact old bytes.
     MEDIA_UNAVAILABLE = "media_unavailable"
     READINESS_UNAVAILABLE = "readiness_unavailable"
+    CONTROLS_REQUEST_UNAVAILABLE = "controls_request_unavailable"
 
 
 class SubmitDefinitive(StrEnum):
@@ -266,6 +267,7 @@ ERROR_TABLE: Mapping[ErrorCode, ErrorSpec] = {
         _spec(ErrorCode.MODEL_UNAVAILABLE, (503,), _NA),
         _spec(ErrorCode.MEDIA_UNAVAILABLE, (503,), _NA),
         _spec(ErrorCode.READINESS_UNAVAILABLE, (503,), _NA),
+        _spec(ErrorCode.CONTROLS_REQUEST_UNAVAILABLE, (503,), _NA),
     )
 }
 
@@ -313,6 +315,7 @@ ERROR_MESSAGES: Mapping[ErrorCode, str] = {
     ErrorCode.MODEL_UNAVAILABLE: "model management is unavailable",
     ErrorCode.MEDIA_UNAVAILABLE: "image delivery is unavailable",
     ErrorCode.READINESS_UNAVAILABLE: "readiness unavailable",
+    ErrorCode.CONTROLS_REQUEST_UNAVAILABLE: "controls request unavailable",
 }
 
 

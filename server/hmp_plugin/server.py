@@ -58,6 +58,7 @@ from aiohttp.http_exceptions import LineTooLong
 
 from . import (
     compat,
+    controls_request_routes,
     direct_send,
     media_emission,
     media_fetch,
@@ -174,6 +175,16 @@ F2_DIRECT_SEND_ROUTES: tuple[tuple[str, str, str], ...] = (
 # (`allow_head=False`): the gate, owner, flag and availability checks run per request inside the
 # handler, never by withholding the route.
 S5_MEDIA_ROUTES: tuple[tuple[str, str, str], ...] = (("GET", "/bots/{p}/media/{ref}", "LM-10"),)
+
+# Local-startup-only, authenticated self-request surface. Static paths precede the
+# request-id matcher. There is no remote host allow/deny route.
+CONTROLS_REQUEST_ROUTES: tuple[tuple[str, str, str], ...] = (
+    ("GET", "/devices/self/controls-requests/capabilities", "AR1-RQ"),
+    ("GET", "/devices/self/controls-requests/by-client-id/{client_id}", "AR1-RQ"),
+    ("POST", "/devices/self/controls-requests", "AR1-RQ"),
+    ("POST", "/devices/self/controls-requests/{request_id}/cancel", "AR1-RQ"),
+    ("GET", "/devices/self/controls-requests/{request_id}", "AR1-RQ"),
+)
 
 # Amendment F3 (approvals and Phone chat, HMP_V1.md §7b). Always registered. The direct-send
 # gate is re-checked per request; flag off is `503 write_gate_closed`, not `404`.
@@ -1511,6 +1522,15 @@ def build_app(ctx: ServerContext) -> web.Application:
         handlers["/bots/{p}/sessions/{ref}/messages"] = handle_session_messages
         handlers["/bots/{p}/sessions/{ref}/messages/from-start"] = handle_session_history_start
         routes += list(A1_SESSION_ROUTES)
+    if controls_request_routes.registration_ready(ctx):
+        handlers.update({
+            "/devices/self/controls-requests/capabilities": controls_request_routes.capabilities,
+            "/devices/self/controls-requests/by-client-id/{client_id}": controls_request_routes.by_client_id,
+            "/devices/self/controls-requests": controls_request_routes.create,
+            "/devices/self/controls-requests/{request_id}/cancel": controls_request_routes.cancel,
+            "/devices/self/controls-requests/{request_id}": controls_request_routes.by_request_id,
+        })
+        routes += list(CONTROLS_REQUEST_ROUTES)
     for method, path, _clause in routes:
         handler = handlers[path]
         if path == "/bots/{p}/jobs" and method == "POST":

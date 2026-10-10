@@ -367,6 +367,21 @@ class ControlsRequestStore:
     def __init__(self, store: Store) -> None:
         self._store = store
 
+    def current_controls_snapshot(
+        self, origin: RequestOrigin, *, current_iid: str,
+    ) -> tuple[int, int | None] | None:
+        """One owned, validated revision/value pair for a current origin.
+
+        Routes may compare it with a record snapshot before reporting an effective
+        Controls hint. It is never authorization for a feature or a host decision.
+        """
+        _origin(origin)
+        with self._store.transaction() as conn:
+            _ready(conn)
+            if current_iid != origin.iid or not _current_origin(conn, origin):
+                return None
+            return _revision(conn, origin.device_id)
+
     def create(
         self, origin: RequestOrigin, *, client_id: str, profile: str,
         feature: str, now: int, current_iid: str,
