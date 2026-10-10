@@ -110,7 +110,7 @@ import sys
 import time
 import unicodedata
 from collections.abc import Callable, Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional, TextIO
 
@@ -125,6 +125,7 @@ MUTATING_COMMANDS: frozenset[tuple[str, str | None]] = frozenset(
         ("devices", "revoke"),
         ("devices", "grant-controls"),
         ("devices", "deny-controls"),
+        ("devices", "controls-requests"),
         ("instance", "rotate-key"),
     }
 )
@@ -727,6 +728,13 @@ def setup_parser(parser: argparse.ArgumentParser) -> None:
         "deny-controls", help="Remove jobs and default-model control from one phone"
     )
     deny_controls.add_argument("device_id")
+    requests = devices.add_parser(
+        "controls-requests", help="Inspect and decide a phone's Controls request at this TTY"
+    ).add_subparsers(dest="controls_requests_command")
+    inbox = requests.add_parser("list", help="List one bounded page of host requests")
+    inbox.add_argument("--after")
+    for action in ("show", "allow", "deny"):
+        requests.add_parser(action).add_argument("request_id")
 
     instance = groups.add_parser("instance", help="Instance identity").add_subparsers(
         dest="instance_command"
@@ -1792,6 +1800,220 @@ def _cmd_devices_deny_controls(ctx: _Context, args: argparse.Namespace) -> int:
     return _cmd_devices_controls(ctx, args, allowed=False)
 
 
+def _host_request_line(record: Any) -> str:
+    """A bounded ASCII-only host snapshot, never a bearer token or a grant."""
+    fields = {
+        "request_id": record.request_id,
+        "device_id": record.origin.device_id,
+        "user_id": record.origin.user_id,
+        "family_id": record.origin.family_id,
+        "iid": record.origin.iid,
+        "instance_epoch": record.origin.instance_epoch,
+        "store_revocation_epoch": record.origin.store_revocation_epoch,
+        "bot_profile": record.bot_profile,
+        "feature": record.feature,
+        "state": record.state,
+        "expires_at": record.expires_at,
+        "controls_revision": record.current_controls_revision,
+        "controls_allowed": record.current_controls_allowed,
+        "origin_active": record.current_origin_active,
+    }
+    line = json.dumps(fields, sort_keys=True, ensure_ascii=True, separators=(",", ":"))
+    if len(line.encode("ascii")) > 2048:
+        raise RefusedError("refused: host request snapshot exceeded its bound")
+    return line
+
+
+def _host_request_current(ctx: _Context, request_id: str) -> tuple[Any, Any, str]:
+    from .controls_requests import ControlsRequestStore
+
+    if re.fullmatch(r"[0-9a-f]{32}", request_id) is None:
+        raise RefusedError("refused: invalid request id")
+    iid = _load_identity(ctx).iid
+    requests = ControlsRequestStore(ctx.store)
+    result = requests.host_record(request_id, now=ctx.now(), current_iid=iid)
+    if result.code != "ok" or result.record is None:
+        raise RefusedError("refused: request is missing or current state is unavailable")
+    return requests, result.record, iid
+
+
+def _host_request_confirmation(ctx: _Context, expected: str) -> bool:
+    """One exact, bounded TTY line. EOF, signal, or any variant refuses."""
+    ctx.out.write(f"Type {expected} to confirm: ")
+    ctx.out.flush()
+    try:
+        line = ctx.env.stdin.readline(256)
+    except KeyboardInterrupt:
+        return False
+    return line == expected + "\n"
+
+
+def _host_operator_context(ctx: _Context, request: Any, iid: str) -> dict[str, Any]:
+    """Bound one fresh local read to a TLS-pinned current listener and Store row."""
+    from .operator_read import SOCKET_NAME, OperatorUnavailableError, read_context
+
+    try:
+        record = read_listener_record(
+            listener_record_path(ctx.custody.anchor_dir), iid=iid,
+            pid_alive=ctx.env.pid_alive,
+        )
+        if not ctx.env.verify_listener_live(record, iid):
+            raise OperatorUnavailableError("operator listener unavailable")
+        response = read_context(
+            listener_record_path(ctx.custody.anchor_dir).parent / SOCKET_NAME,
+            iid=iid, nonce=record.nonce, request_id=request.request_id,
+        )
+        # Full equality with the Store's validated bounded record; JSON canonicalization
+        # distinguishes bool from int and rejects unknown/extra fields.
+        def canonical(value: Any) -> str:
+            return json.dumps(
+                value, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=True, allow_nan=False,
+            )
+        if canonical(response["record"]) != canonical(asdict(request)):
+            raise OperatorUnavailableError("operator request changed")
+        return response
+    except (ListenerRecordError, OperatorUnavailableError, OSError, ValueError, TypeError) as exc:
+        raise RefusedError("refused: current host decision context unavailable") from exc
+
+
+def _positive_operator_sources(response: dict[str, Any], request: Any) -> bool:
+    source = response["sources"]
+    return bool(
+        request.bot_profile in source["authorized_profiles"]
+        and all(source["host_settings"][key] == "enabled" for key in ("jobs", "model"))
+        and all(source["eligibility"][key] == ["available", None]
+                for key in ("jobs", "model"))
+        and all(value == "configured" for value in source["profile_api"].values())
+    )
+
+
+def _cmd_controls_requests(ctx: _Context, args: argparse.Namespace) -> int:
+    from .controls_requests import ControlsRequestStore
+
+    action = args.controls_requests_command
+    if action == "list":
+        if args.after is not None and re.fullmatch(r"[0-9a-f]{32}", args.after) is None:
+            raise RefusedError("refused: invalid request cursor")
+        iid = _load_identity(ctx).iid
+        page = ControlsRequestStore(ctx.store).host_list(
+            after=args.after, now=ctx.now(), current_iid=iid, limit=20,
+        )
+        if page.code != "ok" or len(page.records) > 20:
+            raise RefusedError("refused: host request inbox is unavailable")
+        lines = [_host_request_line(row) for row in page.records]
+        output = "\n".join(lines) + ("\n" if lines else "No requests.\n")
+        if page.next_after is not None:
+            output += f"Next --after {page.next_after}\n"
+        if len(output.encode("ascii")) > 16_384:
+            raise RefusedError("refused: host request inbox exceeded its bound")
+        ctx.out.write(output)
+        return EXIT_OK
+    if action not in {"show", "allow", "deny"}:
+        raise RefusedError("refused: choose list, show, allow, or deny", EXIT_ENVIRONMENT)
+    requests, first, iid = _host_request_current(ctx, args.request_id)
+    ctx.out.write(_host_request_line(first) + "\n")
+    ctx.out.write(
+        "Scope: device-wide jobs AND default-model Controls for all authorized bots now "
+        "or later. Bot and feature above are request provenance only. This does not add "
+        "owner_device_ids, but may restore approval ownership for an already allowlisted "
+        "phone. Bot membership, host flags, profile API/key and mode administration remain "
+        "separate. Current complete host prerequisites: unverified here.\n"
+    )
+    if action == "show":
+        return EXIT_OK
+    if first.state != "PENDING":
+        raise RefusedError("refused: request is no longer pending")
+    if action == "allow":
+        before = _host_operator_context(ctx, first, iid)
+        source = before["sources"]
+        ctx.out.write("Authorized bots now: " + ", ".join(source["authorized_profiles"]) + "\n")
+        ctx.out.write("Served bots now: " + ", ".join(source["served_profiles"]) + "\n")
+        ctx.out.write(
+            f"Host jobs={source['host_settings']['jobs']}; "
+            f"model={source['host_settings']['model']}; "
+            f"existing approval-owner allowlist={source['approval_owner_allowlisted']}.\n"
+        )
+        for profile, state in sorted(source["profile_api"].items()):
+            ctx.out.write(f"Bot {json.dumps(profile)} API/key={state}.\n")
+        ctx.out.write(
+            "The live Hermes/config checks cannot be fenced atomically with the Store commit. "
+            "This grants device-wide jobs and default-model Controls to all bots authorized "
+            "now or later; the initiating bot/feature only identify the request. Existing "
+            "owner-device allowlist membership can restore approval ownership.\n"
+        )
+        if not _positive_operator_sources(before, first):
+            raise RefusedError("refused: current host prerequisites are not ready")
+        token = (
+            f"ALLOW {first.request_id} DEVICE {first.origin.device_id} "
+            "CONTROLS_JOBS_MODELS_ALL_CURRENT_FUTURE_BOTS"
+        )
+        if not _host_request_confirmation(ctx, token):
+            raise RefusedError("refused: exact typed device-wide decision required")
+        after_record = requests.host_record(first.request_id, now=ctx.now(), current_iid=iid)
+        second = after_record.record
+        if (after_record.code != "ok" or second != first or second is None
+                or second.state != "PENDING"):
+            raise RefusedError("refused: request or Controls state changed while confirming")
+        after = _host_operator_context(ctx, second, iid)
+        if (after["generation"] != before["generation"]
+                or after["sources"] != before["sources"]
+                or not _positive_operator_sources(after, second)):
+            raise RefusedError("refused: host prerequisites changed while confirming")
+        result = requests.decide(
+            first.request_id, allow=True, now=ctx.now(), current_iid=iid,
+            precommit_external_verified=True,
+        )
+        if (result.code != "committed_needs_effective_readback"
+                or type(result.committed_revision) is not int):
+            raise RefusedError("refused: decision outcome unknown; inspect request and Controls")
+        readback = requests.host_decision_readback(
+            first.request_id, expected_revision=result.committed_revision,
+            now=ctx.now(), current_iid=iid,
+        )
+        if readback.code != "committed" or readback.record is None:
+            raise RefusedError(
+                "refused: decision unknown or superseded; inspect request and Controls"
+            )
+        effective = _host_operator_context(ctx, readback.record, iid)
+        if (effective["generation"] != after["generation"]
+                or effective["sources"] != after["sources"]
+                or effective["record"]["current_controls_allowed"] != 1
+                or effective["record"]["current_controls_revision"]
+                != result.committed_revision):
+            raise RefusedError(
+                "refused: decision unknown or superseded; inspect request and Controls"
+            )
+        ctx.out.write("Controls request granted for this device.\n")
+        return EXIT_OK
+    expected = (
+        f"DENY {first.request_id} DEVICE {first.origin.device_id} REQUEST_ONLY"
+    )
+    if not _host_request_confirmation(ctx, expected):
+        raise RefusedError("refused: exact typed request-only decision required")
+    second_result = requests.host_record(first.request_id, now=ctx.now(), current_iid=iid)
+    second = second_result.record
+    if (second_result.code != "ok" or second is None or second.state != "PENDING"
+            or second.origin != first.origin or second.current_controls_revision
+            != first.current_controls_revision or second.current_controls_allowed
+            != first.current_controls_allowed):
+        raise RefusedError("refused: request or Controls state changed while confirming")
+    result = requests.decide(
+        first.request_id, allow=False, now=ctx.now(), current_iid=iid,
+        precommit_external_verified=False,
+    )
+    if result.code != "denied":
+        raise RefusedError("refused: decision outcome unknown; inspect the request")
+    readback = requests.host_record(first.request_id, now=ctx.now(), current_iid=iid)
+    if (readback.code != "ok" or readback.record is None
+            or readback.record.state != "DENIED"
+            or readback.record.current_controls_revision != first.current_controls_revision
+            or readback.record.current_controls_allowed != first.current_controls_allowed):
+        raise RefusedError("refused: decision readback unknown; inspect the request")
+    ctx.out.write("Request denied. Existing Controls were not withdrawn.\n")
+    return EXIT_OK
+
+
 def _cmd_show(ctx: _Context, _args: argparse.Namespace) -> int:
     iid = _load_identity(ctx).iid
     ctx.out.write(f"Instance fingerprint: {_short(iid)}\n")
@@ -2082,6 +2304,7 @@ _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], 
     ("devices", "revoke"): _cmd_devices_revoke,
     ("devices", "grant-controls"): _cmd_devices_grant_controls,
     ("devices", "deny-controls"): _cmd_devices_deny_controls,
+    ("devices", "controls-requests"): _cmd_controls_requests,
     ("instance", "show"): _cmd_show,
     ("instance", "rotate-key"): _cmd_rotate,
 }
@@ -2089,7 +2312,8 @@ _STORE_COMMANDS: dict[tuple[str, str], Callable[[_Context, argparse.Namespace], 
 
 # Commands that use the instance identity: checked load-only before the store is opened.
 IDENTITY_COMMANDS: frozenset[tuple[str, str]] = frozenset(
-    {("pair", "offer"), ("instance", "show"), ("instance", "rotate-key")}
+    {("pair", "offer"), ("instance", "show"), ("instance", "rotate-key"),
+     ("devices", "controls-requests")}
 )
 
 

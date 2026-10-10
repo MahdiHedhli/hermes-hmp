@@ -194,6 +194,34 @@ class MediaBound:
         )
 
 
+class ReadWorkerBudget:
+    """One listener-owner budget retained across disconnect and reconnect generations."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.active = 0
+        self.operator = 0
+        self.poisoned = False
+
+    def reserve(self, *, operator: bool) -> bool:
+        with self.lock:
+            if self.poisoned or self.active >= 4 or (operator and self.operator >= 2):
+                return False
+            self.active += 1
+            if operator:
+                self.operator += 1
+            return True
+
+    def release(self, *, operator: bool) -> None:
+        with self.lock:
+            if self.active <= 0 or (operator and self.operator <= 0):
+                self.poisoned = True
+                return
+            self.active -= 1
+            if operator:
+                self.operator -= 1
+
+
 @dataclass
 class ServerContext:
     """Everything a route handler may use. Built once per listener start."""
@@ -247,8 +275,7 @@ class ServerContext:
     )
     readiness_settings: Callable[[], object] | None = field(default=None, repr=False)
     readiness_generation: str = field(default_factory=lambda: secrets.token_hex(16), repr=False)
-    readiness_workers: int = field(default=0, repr=False)
-    readiness_worker_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
+    read_worker_budget: ReadWorkerBudget = field(default_factory=ReadWorkerBudget, repr=False)
     cron_flag: Callable[[], bool] = field(default=lambda: False)
     cron_available: Callable[[], bool] = field(default=lambda: False)
     model_flag: Callable[[], bool] = field(default=lambda: False)
@@ -425,6 +452,16 @@ class ServerContext:
         except Exception as exc:  # fail closed: a broken reader never turns the flag on
             log_bridge_exception(exc)
             return False
+
+    @property
+    def readiness_workers(self) -> int:
+        with self.read_worker_budget.lock:
+            return self.read_worker_budget.active
+
+    @property
+    def operator_workers(self) -> int:
+        with self.read_worker_budget.lock:
+            return self.read_worker_budget.operator
 
     @property
     def iid(self) -> str:

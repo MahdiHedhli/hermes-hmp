@@ -524,6 +524,8 @@ def open_components(adapter: Any) -> server.ServerContext:
         compat=result,
         session_browsing_enabled=session_browsing is not False,
         controls_requests_enabled=controls_requests_enabled,
+        read_worker_budget=(getattr(adapter, "_read_worker_budget", None)
+                            or server.ReadWorkerBudget()),
         direct_send_flag=_read_direct_send_enabled,
         owner_device_ids=_read_owner_device_ids,
         readiness_owner_device_ids=_readiness_owner_device_ids,
@@ -619,6 +621,7 @@ class HmpAdapter(BasePlatformAdapter):
         self._known_profiles: tuple[tuple[str, str], ...] | None = None
         self._profile_refresh_task: asyncio.Task[None] | None = None
         self._record_lock = threading.Lock()
+        self._read_worker_budget = server.ReadWorkerBudget()
 
     @staticmethod
     def _health_snapshot(
@@ -692,6 +695,10 @@ class HmpAdapter(BasePlatformAdapter):
         # semantics exactly what they were before this field could change out from under a reader
         # mid-incarnation.
         self._nonce = secrets.token_hex(16)
+        try:
+            await srv.start_operator_read(anchor, self._nonce)
+        except Exception:
+            log_event("operator_read_start", outcome="unavailable")
         if srv.bound is not None:
             # OD-F8 (2026-09-27): the served profiles, so `pair offer`'s one-command flow can
             # list bots by name without importing Hermes (S1). Best-effort only -- the bridge is
@@ -855,8 +862,11 @@ class HmpAdapter(BasePlatformAdapter):
         if task is not None:
             task.cancel()  # fire-and-forget: this callback itself is synchronous (server.py)
         self._drop_record()
-        self._close_generation(srv.ctx)
-        srv.ctx.store.close()
+        if srv.operator_worker_debt:
+            asyncio.get_running_loop().create_task(self._close_after_operator_drain(srv))
+        else:
+            self._close_generation(srv.ctx)
+            srv.ctx.store.close()
         # PR7-6 step 3: stay closed until the gateway restarts (a later `connect` would load the
         # new key and start a new listener; nothing here restarts it).
         self._set_fatal_error(IDENTITY_CHANGED_CODE, IDENTITY_CHANGED_MESSAGE, retryable=False)
@@ -867,9 +877,17 @@ class HmpAdapter(BasePlatformAdapter):
         self._drop_record()
         if srv is not None:
             await srv.stop(notify=False)
-            self._close_generation(srv.ctx)
-            srv.ctx.store.close()
+            if srv.operator_worker_debt:
+                asyncio.get_running_loop().create_task(self._close_after_operator_drain(srv))
+            else:
+                self._close_generation(srv.ctx)
+                srv.ctx.store.close()
         self._mark_disconnected()
+
+    async def _close_after_operator_drain(self, srv: server.HmpServer) -> None:
+        await srv.wait_operator_drain()
+        self._close_generation(srv.ctx)
+        srv.ctx.store.close()
 
     @staticmethod
     def _close_generation(ctx: server.ServerContext) -> None:

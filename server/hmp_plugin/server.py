@@ -68,8 +68,8 @@ from . import (
     readiness,
     wire,
 )
-from .authorize import ensure_chat
 from .auth import Authenticator
+from .authorize import ensure_chat
 from .contract import (
     CONTRACT_REVISION,
     HISTORY_LIMIT_DEFAULT,
@@ -133,6 +133,9 @@ from .request_ctx import (
     parse_peer_ip,
     peer_key,  # noqa: F401
     read_json_body,
+)
+from .request_ctx import (
+    ReadWorkerBudget as ReadWorkerBudget,
 )
 from .revoke import handle_self_revoke
 from .tokens import handle_token
@@ -651,10 +654,8 @@ async def handle_readiness(request: web.Request) -> web.Response:
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
     authorization = request.headers.get("Authorization")
     instance = request.headers.get("HMP-Instance")
-    with ctx.readiness_worker_lock:
-        if ctx.readiness_workers >= _READINESS_WORKER_SLOTS:
-            raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
-        ctx.readiness_workers += 1
+    if not ctx.read_worker_budget.reserve(operator=False):
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
     deadline = time.monotonic() + _READINESS_DEADLINE_S
     try:
         work = asyncio.create_task(asyncio.to_thread(
@@ -669,15 +670,13 @@ async def handle_readiness(request: web.Request) -> web.Response:
             generation=generation,
         ))
     except Exception:
-        with ctx.readiness_worker_lock:
-            ctx.readiness_workers -= 1
+        ctx.read_worker_budget.release(operator=False)
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
 
     def release_worker(done: asyncio.Task[Any]) -> None:
         with contextlib.suppress(asyncio.CancelledError):
             done.exception()
-        with ctx.readiness_worker_lock:
-            ctx.readiness_workers = max(0, ctx.readiness_workers - 1)
+        ctx.read_worker_budget.release(operator=False)
 
     work.add_done_callback(release_worker)
     try:
@@ -1525,7 +1524,9 @@ def build_app(ctx: ServerContext) -> web.Application:
     if controls_request_routes.registration_ready(ctx):
         handlers.update({
             "/devices/self/controls-requests/capabilities": controls_request_routes.capabilities,
-            "/devices/self/controls-requests/by-client-id/{client_id}": controls_request_routes.by_client_id,
+            "/devices/self/controls-requests/by-client-id/{client_id}": (
+                controls_request_routes.by_client_id
+            ),
             "/devices/self/controls-requests": controls_request_routes.create,
             "/devices/self/controls-requests/{request_id}/cancel": controls_request_routes.cancel,
             "/devices/self/controls-requests/{request_id}": controls_request_routes.by_request_id,
@@ -1697,6 +1698,9 @@ class HmpServer:
         self._runner: web.AppRunner | None = None
         self._watch: asyncio.Task[None] | None = None
         self._stopping: asyncio.Task[None] | None = None
+        self._operator_read: Any = None
+        self._operator_read_drained: Any = None
+        self.operator_worker_debt = 0
         self.bound: tuple[str, int] | None = None
         self.closed = asyncio.Event()
         ctx.on_identity_changed = self._identity_changed
@@ -1731,6 +1735,15 @@ class HmpServer:
         self._watch = asyncio.get_running_loop().create_task(self._watchdog())
         log_event("listener_start", outcome="ok")
 
+    async def start_operator_read(self, anchor_dir: Path, nonce: str) -> None:
+        from .operator_read import OperatorReadService
+
+        if self._operator_read is not None or self._runner is None:
+            raise RuntimeError("operator read listener unavailable")
+        service = OperatorReadService(self.ctx, anchor_dir, nonce)
+        await service.start()
+        self._operator_read = service
+
     async def _watchdog(self) -> None:
         # PR7-6 polls on-disk custody by design; there is no event to wait on.
         while True:
@@ -1750,6 +1763,11 @@ class HmpServer:
             log_event("identity_changed", outcome="listener_closed")
             self._stopping = asyncio.get_running_loop().create_task(self.stop())
 
+    async def wait_operator_drain(self) -> None:
+        service = self._operator_read_drained
+        if service is not None:
+            await service.wait_drained()
+
     async def _cancel_pending_sends(self) -> None:
         """Review round 3: cancel in-flight direct sends and wait, bounded, so a stop does not
         leave their tasks (and the profile lock they hold) running after the listener is gone."""
@@ -1762,6 +1780,13 @@ class HmpServer:
 
     async def stop(self, *, notify: bool = True) -> None:
         """Close the listener. `notify=False` for an orderly shutdown by the owner."""
+        service, self._operator_read = self._operator_read, None
+        if service is not None:
+            debt = await service.stop()
+            self.operator_worker_debt = debt
+            self._operator_read_drained = service
+            if debt:
+                log_event("operator_read_stop", outcome="worker_debt")
         await self._cancel_pending_sends()
         if not notify:
             self._on_closed = None
