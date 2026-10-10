@@ -8,6 +8,7 @@ legacy Controls writers, and refuses schema drift before reading a request.
 
 from __future__ import annotations
 
+import json
 import re
 import secrets
 import sqlite3
@@ -59,6 +60,120 @@ class RequestStoreResult:
     committed_revision: int | None = None
 
 
+@dataclass(frozen=True)
+class RequestRecordView:
+    """Bounded, validated Store snapshot; callers still enforce bearer/TTY gates."""
+
+    request_id: str
+    client_id: str
+    origin: RequestOrigin
+    bot_profile: str
+    feature: str
+    state: str
+    created_at: int
+    expires_at: int
+    controls_revision_at_request: int
+    controls_present_at_request: bool
+    controls_allowed_at_request: int | None
+    decision_revision: int | None
+    current_controls_revision: int
+    current_controls_allowed: int | None
+    current_origin_active: bool
+    current_iid_matches: bool
+
+
+@dataclass(frozen=True)
+class RequestRecordResult:
+    code: str
+    record: RequestRecordView | None = None
+
+
+@dataclass(frozen=True)
+class RequestPage:
+    code: str
+    records: tuple[RequestRecordView, ...]
+    next_after: str | None
+
+
+def remote_record_fields(
+    record: RequestRecordView, *, effective_controls: str = "unknown",
+) -> dict[str, str | int | None]:
+    """Closed bounded history fields; effective state needs separate route proof.
+
+    This projection is not bearer authorization or Controls authority. A route may
+    provide a verified fresh effective value; otherwise it must leave unknown.
+    """
+    if not isinstance(record, RequestRecordView):
+        raise ValueError("invalid request record")
+    _request_id(record.request_id)
+    _client(record.client_id)
+    _origin(record.origin)
+    _body(record.client_id, record.bot_profile, record.feature)
+    if record.state not in (
+        "PENDING", "GRANTED", "DENIED", "CANCELLED", "EXPIRED", "CONFLICT", "REVOKED"
+    ):
+        raise ValueError("invalid request state")
+    if (type(record.created_at) is not int or type(record.expires_at) is not int
+            or not 0 <= record.created_at <= _MAX_I64 - 600
+            or record.expires_at != record.created_at + 600):
+        raise ValueError("invalid request timestamps")
+    if (type(record.controls_revision_at_request) is not int
+            or not 0 <= record.controls_revision_at_request <= _MAX_I64
+            or type(record.controls_present_at_request) is not bool):
+        raise ValueError("invalid captured Controls state")
+    captured_allowed = record.controls_allowed_at_request
+    if ((not record.controls_present_at_request and captured_allowed is not None)
+            or (record.controls_present_at_request and
+                (type(captured_allowed) is not int or captured_allowed not in (0, 1)))):
+        raise ValueError("invalid captured Controls value")
+    decision_revision = record.decision_revision
+    if ((record.state == "GRANTED") != (decision_revision is not None)
+            or (decision_revision is not None and
+                (type(decision_revision) is not int or not 0 <= decision_revision <= _MAX_I64))):
+        raise ValueError("invalid decision revision")
+    if (type(record.current_controls_revision) is not int
+            or not 0 <= record.current_controls_revision <= _MAX_I64
+            or (record.current_controls_allowed is not None and
+                (type(record.current_controls_allowed) is not int
+                 or record.current_controls_allowed not in (0, 1)))
+            or (record.current_controls_allowed is not None
+                and record.current_controls_revision == 0)
+            or type(record.current_origin_active) is not bool
+            or type(record.current_iid_matches) is not bool):
+        raise ValueError("invalid Controls revision")
+    if type(record.expires_at) is not int or not 0 <= record.expires_at <= (1 << 53) - 1:
+        raise RuntimeError("request timestamp is not a safe wire integer")
+    if type(effective_controls) is not str or effective_controls not in (
+        "granted", "missing", "unknown"
+    ):
+        raise ValueError("invalid effective Controls state")
+    if effective_controls != "unknown" and (
+        not record.current_origin_active or not record.current_iid_matches
+    ):
+        raise ValueError("cannot project stale Controls as known")
+    if effective_controls == "granted" and (
+        not record.current_origin_active or not record.current_iid_matches
+        or record.current_controls_allowed == 0
+    ):
+        raise ValueError("cannot project stale or explicitly denied Controls as granted")
+    fields: dict[str, str | int | None] = {
+        "protocol": 1,
+        "request_id": record.request_id,
+        "client_request_id": record.client_id,
+        "bot_profile": record.bot_profile,
+        "feature": record.feature,
+        "state": record.state,
+        "expires_at": record.expires_at,
+        "scope": "device_jobs_models_now_and_future_authorized_bots",
+        "effective_controls": effective_controls,
+        "controls_revision": str(record.current_controls_revision)
+        if effective_controls != "unknown" else None,
+    }
+    if len(json.dumps(fields, separators=(",", ":"), ensure_ascii=True).encode("ascii")) > 2048:
+        raise RuntimeError("request response exceeds bound")
+    return fields
+
+
 def _time(now: int) -> None:
     if type(now) is not int or not 0 <= now <= _MAX_I64 - 600:
         raise ValueError("invalid request clock")
@@ -85,6 +200,11 @@ def _client(client_id: str) -> None:
         raise ValueError("invalid client request id")
     if str(uuid.UUID(client_id)) != client_id:
         raise ValueError("noncanonical client request id")
+
+
+def _request_id(request_id: str) -> None:
+    if not isinstance(request_id, str) or _REQUEST_ID.fullmatch(request_id) is None:
+        raise ValueError("invalid request id")
 
 
 def _body(client_id: str, profile: str, feature: str) -> None:
@@ -151,6 +271,58 @@ def _current_origin(conn: sqlite3.Connection, origin: RequestOrigin) -> bool:
 def _result(row: sqlite3.Row, code: str = "ok") -> RequestStoreResult:
     return RequestStoreResult(
         code, row["request_id"], row["state"], row["expires_at"],
+    )
+
+
+def _record_view(
+    conn: sqlite3.Connection, row: sqlite3.Row, *, current_iid: str,
+) -> RequestRecordView:
+    """Validate every field before a row can reach a host or remote DTO projection."""
+    request_id = row["request_id"]
+    _request_id(request_id)
+    _client(row["client_id"])
+    origin = RequestOrigin(
+        row["device_id"], row["user_id"], row["family_id"], row["iid"],
+        row["instance_epoch"], row["store_revocation_epoch"],
+    )
+    _origin(origin)
+    _body(row["client_id"], row["bot_profile"], row["feature"])
+    created, expires = row["created_at"], row["expires_at"]
+    if (type(created) is not int or type(expires) is not int
+            or not 0 <= created <= _MAX_I64 - 600 or expires != created + 600):
+        raise RuntimeError("invalid request timestamp")
+    state = row["state"]
+    if state not in (
+        "PENDING", "GRANTED", "DENIED", "CANCELLED", "EXPIRED", "CONFLICT", "REVOKED"
+    ):
+        raise RuntimeError("invalid request state")
+    captured_revision = row["controls_revision"]
+    present = row["controls_present"]
+    captured_allowed = row["controls_allowed"]
+    decision_revision = row["decision_revision"]
+    if (type(captured_revision) is not int or not 0 <= captured_revision <= _MAX_I64
+            or type(present) is not int or present not in (0, 1)
+            or (present == 0 and captured_allowed is not None)
+            or (present == 1 and (type(captured_allowed) is not int
+                                  or captured_allowed not in (0, 1)))):
+        raise RuntimeError("invalid captured Controls state")
+    if decision_revision is not None and (
+        type(decision_revision) is not int or not 0 <= decision_revision <= _MAX_I64
+    ):
+        raise RuntimeError("invalid decision revision")
+    if (state == "GRANTED") != (decision_revision is not None):
+        raise RuntimeError("invalid decision revision state")
+    decided_at = row["decided_at"]
+    if ((state == "PENDING" and decided_at is not None)
+            or (state != "PENDING" and (type(decided_at) is not int
+                                         or not 0 <= decided_at <= _MAX_I64))):
+        raise RuntimeError("invalid decision time")
+    current_revision, current_allowed = _revision(conn, origin.device_id)
+    return RequestRecordView(
+        request_id, row["client_id"], origin, row["bot_profile"], row["feature"],
+        state, created, expires, captured_revision, bool(present), captured_allowed,
+        decision_revision, current_revision, current_allowed,
+        _current_origin(conn, origin), current_iid == origin.iid,
     )
 
 
@@ -225,8 +397,9 @@ class ControlsRequestStore:
             ).fetchall():
                 _settle(conn, pending, now=now, current_iid=current_iid)
             revision, allowed = _revision(conn, origin.device_id)
+            if conn.execute("SELECT COUNT(*) FROM controls_requests").fetchone()[0] >= 8192:
+                return RequestStoreResult("store_capacity")
             checks = (
-                ("SELECT COUNT(*) FROM controls_requests", (), 8192),
                 ("SELECT COUNT(*) FROM controls_requests WHERE state = 'PENDING'", (), 64),
                 ("SELECT COUNT(*) FROM controls_requests WHERE device_id = ? AND created_at > ?",
                  (origin.device_id, now - 86400), 4),
@@ -279,6 +452,48 @@ class ControlsRequestStore:
                 return RequestStoreResult("clock_unknown")
             return _result(row)
 
+    def status_by_request_id(
+        self, origin: RequestOrigin, *, request_id: str, now: int, current_iid: str,
+    ) -> RequestRecordResult:
+        """A same-origin lookup; never obtain a host record and filter it afterward."""
+        _origin(origin)
+        _request_id(request_id)
+        _time(now)
+        with self._store.transaction() as conn:
+            _ready(conn)
+            clock_ok = _clock(conn, now)
+            row = conn.execute(
+                "SELECT * FROM controls_requests WHERE " + _ORIGIN_WHERE +
+                " AND request_id = ?", (*origin.values(), request_id),
+            ).fetchone()
+            if row is None:
+                return RequestRecordResult("not_found")
+            row = _settle(conn, row, now=now, current_iid=current_iid, clock_ok=clock_ok)
+            if not clock_ok and row["state"] == "PENDING":
+                return RequestRecordResult("clock_unknown")
+            return RequestRecordResult("ok", _record_view(conn, row, current_iid=current_iid))
+
+    def status_record_by_client_id(
+        self, origin: RequestOrigin, *, client_id: str, now: int, current_iid: str,
+    ) -> RequestRecordResult:
+        """Lost-create-ACK recovery and bounded snapshot in one owned transaction."""
+        _origin(origin)
+        _client(client_id)
+        _time(now)
+        with self._store.transaction() as conn:
+            _ready(conn)
+            clock_ok = _clock(conn, now)
+            row = conn.execute(
+                "SELECT * FROM controls_requests WHERE " + _ORIGIN_WHERE +
+                " AND client_id = ?", (*origin.values(), client_id),
+            ).fetchone()
+            if row is None:
+                return RequestRecordResult("not_found")
+            row = _settle(conn, row, now=now, current_iid=current_iid, clock_ok=clock_ok)
+            if not clock_ok and row["state"] == "PENDING":
+                return RequestRecordResult("clock_unknown")
+            return RequestRecordResult("ok", _record_view(conn, row, current_iid=current_iid))
+
     def cancel(
         self, origin: RequestOrigin, *, client_id: str, now: int, current_iid: str
     ) -> RequestStoreResult:
@@ -304,6 +519,35 @@ class ControlsRequestStore:
                 "WHERE request_id = ? AND state = 'PENDING'", (now, row["request_id"])
             )
             return RequestStoreResult("cancelled", row["request_id"], "CANCELLED")
+
+    def cancel_by_request_id(
+        self, origin: RequestOrigin, *, request_id: str, now: int, current_iid: str,
+    ) -> RequestStoreResult:
+        _origin(origin)
+        _request_id(request_id)
+        _time(now)
+        with self._store.transaction() as conn:
+            _ready(conn)
+            clock_ok = _clock(conn, now)
+            row = conn.execute(
+                "SELECT * FROM controls_requests WHERE " + _ORIGIN_WHERE +
+                " AND request_id = ?", (*origin.values(), request_id),
+            ).fetchone()
+            if row is None:
+                return RequestStoreResult("not_found")
+            row = _settle(conn, row, now=now, current_iid=current_iid, clock_ok=clock_ok)
+            if row["state"] == "CANCELLED":
+                return _result(row)
+            if row["state"] != "PENDING":
+                return RequestStoreResult("already_decided")
+            changed = conn.execute(
+                "UPDATE controls_requests SET state = 'CANCELLED',decided_at = ? "
+                "WHERE request_id = ? AND state = 'PENDING'",
+                (now, request_id),
+            )
+            if changed.rowcount != 1:
+                raise RuntimeError("request cancellation raced")
+            return RequestStoreResult("cancelled", request_id, "CANCELLED")
 
     def decide(
         self, request_id: str, *, allow: bool, now: int, current_iid: str,
@@ -389,3 +633,74 @@ class ControlsRequestStore:
             if not clock_ok and row["state"] == "PENDING":
                 return RequestStoreResult("clock_unknown")
             return _result(row)
+
+    def host_record(
+        self, request_id: str, *, now: int, current_iid: str,
+    ) -> RequestRecordResult:
+        """Trusted host view; the TTY gate is still the caller's obligation."""
+        _request_id(request_id)
+        _time(now)
+        with self._store.transaction() as conn:
+            _ready(conn)
+            clock_ok = _clock(conn, now)
+            row = conn.execute(
+                "SELECT * FROM controls_requests WHERE request_id = ?", (request_id,)
+            ).fetchone()
+            if row is None:
+                return RequestRecordResult("not_found")
+            row = _settle(conn, row, now=now, current_iid=current_iid, clock_ok=clock_ok)
+            if not clock_ok and row["state"] == "PENDING":
+                return RequestRecordResult("clock_unknown")
+            return RequestRecordResult("ok", _record_view(conn, row, current_iid=current_iid))
+
+    def host_list(
+        self, *, after: str | None, now: int, current_iid: str, limit: int = 20,
+    ) -> RequestPage:
+        if after is not None:
+            _request_id(after)
+        if type(limit) is not int or not 1 <= limit <= 20:
+            raise ValueError("invalid host page size")
+        _time(now)
+        with self._store.transaction() as conn:
+            _ready(conn)
+            clock_ok = _clock(conn, now)
+            rows = conn.execute(
+                "SELECT * FROM controls_requests WHERE request_id > ? "
+                "ORDER BY request_id LIMIT ?", (after or "", limit + 1),
+            ).fetchall()
+            visible = []
+            for row in rows[:limit]:
+                settled = _settle(
+                    conn, row, now=now, current_iid=current_iid, clock_ok=clock_ok,
+                )
+                visible.append(_record_view(conn, settled, current_iid=current_iid))
+            next_after = visible[-1].request_id if len(rows) > limit else None
+            code = "clock_unknown" if not clock_ok and any(
+                record.state == "PENDING" for record in visible
+            ) else "ok"
+            return RequestPage(code, tuple(visible), next_after)
+
+    def host_decision_readback(
+        self, request_id: str, *, expected_revision: int, now: int,
+        current_iid: str,
+    ) -> RequestRecordResult:
+        _request_id(request_id)
+        if type(expected_revision) is not int or not 1 <= expected_revision <= _MAX_I64:
+            raise ValueError("invalid expected decision revision")
+        _time(now)
+        with self._store.transaction() as conn:
+            _ready(conn)
+            row = conn.execute(
+                "SELECT * FROM controls_requests WHERE request_id = ?", (request_id,)
+            ).fetchone()
+            if row is None:
+                return RequestRecordResult("not_found")
+            record = _record_view(conn, row, current_iid=current_iid)
+            if record.state != "GRANTED" or record.decision_revision != expected_revision:
+                return RequestRecordResult("unknown", record)
+            if record.current_controls_revision != expected_revision or (
+                record.current_controls_allowed != 1 or not record.current_iid_matches
+                or not record.current_origin_active
+            ):
+                return RequestRecordResult("superseded", record)
+            return RequestRecordResult("committed", record)

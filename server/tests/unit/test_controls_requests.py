@@ -571,3 +571,290 @@ def test_identity_revocation_and_capacity_are_fail_closed(tmp_path: Path) -> Non
     ).code == "already_decided"
     assert store.owner_controls_decision(origin.device_id) is None
     store.close()
+
+
+@pytest.mark.parametrize(('field', 'replacement'), [
+    ('device_id', 'dev_foreign'),
+    ('user_id', 'hmpu_foreign'),
+    ('family_id', 'fam_foreign'),
+    ('iid', 'b' * 52),
+    ('instance_epoch', 1),
+    ('store_revocation_epoch', 1),
+])
+def test_request_id_lookups_bind_every_origin_dimension(
+    tmp_path: Path, field: str, replacement: str,
+) -> None:
+    from dataclasses import replace
+
+    store = Store(tmp_path / 'origin.sqlite3')
+    store.migrate()
+    origin = _seed(store)
+    api = ControlsRequestStore(store)
+    first = _request(api, origin)
+    assert first.request_id is not None
+    foreign = replace(origin, **{field: replacement})
+    assert api.status_by_request_id(
+        foreign, request_id=first.request_id, now=1001, current_iid=IID,
+    ).code == 'not_found'
+    assert api.status_record_by_client_id(
+        foreign, client_id=CLIENT, now=1001, current_iid=IID,
+    ).code == 'not_found'
+    assert api.cancel_by_request_id(
+        foreign, request_id=first.request_id, now=1001, current_iid=IID,
+    ).code == 'not_found'
+    assert api.status_by_request_id(
+        origin, request_id=first.request_id, now=1001, current_iid=IID,
+    ).record.state == 'PENDING'
+    recovered = api.status_record_by_client_id(
+        origin, client_id=CLIENT, now=1001, current_iid=IID,
+    )
+    assert recovered.record.request_id == first.request_id
+    assert store.owner_controls_decision(origin.device_id) is None
+    store.close()
+
+
+def test_request_id_cancel_terminal_and_clock_readback(tmp_path: Path) -> None:
+    store = Store(tmp_path / 'cancel.sqlite3')
+    store.migrate()
+    origin = _seed(store)
+    api = ControlsRequestStore(store)
+    first = _request(api, origin)
+    assert first.request_id is not None
+    assert api.status_by_request_id(
+        origin, request_id=first.request_id, now=999, current_iid=IID,
+    ).code == 'clock_unknown'
+    assert api.status_record_by_client_id(
+        origin, client_id=CLIENT, now=999, current_iid=IID,
+    ).code == 'clock_unknown'
+    assert api.host_list(after=None, now=999, current_iid=IID).code == 'clock_unknown'
+    assert api.cancel_by_request_id(
+        origin, request_id=first.request_id, now=999, current_iid=IID,
+    ).state == 'CANCELLED'
+    assert api.cancel_by_request_id(
+        origin, request_id=first.request_id, now=1001, current_iid=IID,
+    ).state == 'CANCELLED'
+    assert api.status_by_request_id(
+        origin, request_id=first.request_id, now=1001, current_iid=IID,
+    ).record.state == 'CANCELLED'
+    assert store.owner_controls_decision(origin.device_id) is None
+    store.close()
+
+
+def test_typed_host_view_and_decision_readback_do_not_grant_from_history(
+    tmp_path: Path,
+) -> None:
+    store = Store(tmp_path / 'views.sqlite3')
+    store.migrate()
+    origin = _seed(store)
+    api = ControlsRequestStore(store)
+    first = _request(api, origin)
+    assert first.request_id is not None
+    before = api.host_record(first.request_id, now=1001, current_iid=IID)
+    assert before.record.origin == origin
+    assert before.record.current_controls_revision == 0
+    positive = api.decide(
+        first.request_id, allow=True, now=1002, current_iid=IID,
+        precommit_external_verified=True,
+    )
+    assert positive.code == 'committed_needs_effective_readback'
+    assert positive.committed_revision == 1
+    exact = api.host_decision_readback(
+        first.request_id, expected_revision=1, now=1003, current_iid=IID,
+    )
+    assert exact.code == 'committed' and exact.record.state == 'GRANTED'
+    assert store.set_owner_controls(origin.device_id, allowed=False, now=1004)
+    newer = api.host_decision_readback(
+        first.request_id, expected_revision=1, now=1005, current_iid=IID,
+    )
+    assert newer.code == 'superseded'
+    assert newer.record.state == 'GRANTED'
+    assert newer.record.current_controls_allowed == 0
+    assert api.status_by_request_id(
+        origin, request_id=first.request_id, now=1005, current_iid=IID,
+    ).record.state == 'GRANTED'
+    store.close()
+
+
+def test_deny_only_settles_request_and_keeps_older_controls(tmp_path: Path) -> None:
+    store = Store(tmp_path / 'deny.sqlite3')
+    store.migrate()
+    origin = _seed(store)
+    assert store.set_owner_controls(origin.device_id, allowed=True, now=999)
+    api = ControlsRequestStore(store)
+    first = _request(api, origin)
+    assert first.request_id is not None
+    revision_before = api.host_record(
+        first.request_id, now=1001, current_iid=IID,
+    ).record.current_controls_revision
+    denied = api.decide(
+        first.request_id, allow=False, now=1002, current_iid=IID,
+        precommit_external_verified=False,
+    )
+    assert denied.state == 'DENIED'
+    after = api.host_record(first.request_id, now=1003, current_iid=IID).record
+    assert after.state == 'DENIED'
+    assert after.current_controls_revision == revision_before
+    assert after.current_controls_allowed == 1
+    store.close()
+
+
+def test_permanent_capacity_is_typed_separately_from_quota(tmp_path: Path) -> None:
+    store = Store(tmp_path / 'capacity.sqlite3')
+    store.migrate()
+    origin = _seed(store)
+    api = ControlsRequestStore(store)
+    first = _request(api, origin)
+    assert first.code == 'created'
+    assert _request(
+        api, origin, client='00000000-0000-4000-8000-000000000002', now=1001,
+    ).code == 'quota'
+    db = store._require_conn()
+    for i in range(1, 8192):
+        db.execute(
+            'INSERT INTO controls_requests ('
+            'request_id,device_id,user_id,family_id,iid,instance_epoch,'
+            'store_revocation_epoch,client_id,bot_profile,feature,created_at,'
+            'expires_at,controls_revision,controls_present,controls_allowed,state,decided_at) '
+            "VALUES (?,?,?,?,?,?,?,?,?,? ,1000,1600,0,0,NULL,'DENIED',1000)",
+            (f'{i:032x}', *origin.values(),
+             f'{i:08x}-0000-4000-8000-{i:012x}', 'main', 'jobs'),
+        )
+    assert _request(
+        api, origin, client='00000000-0000-4000-8000-000000009999', now=1001,
+    ).code == 'store_capacity'
+    store.close()
+
+
+def test_host_page_is_bounded_and_cursor_is_exclusive(tmp_path: Path) -> None:
+    store = Store(tmp_path / 'pages.sqlite3')
+    store.migrate()
+    origin = _seed(store)
+    api = ControlsRequestStore(store)
+    db = store._require_conn()
+    for i in range(21):
+        db.execute(
+            'INSERT INTO controls_requests ('
+            'request_id,device_id,user_id,family_id,iid,instance_epoch,'
+            'store_revocation_epoch,client_id,bot_profile,feature,created_at,'
+            'expires_at,controls_revision,controls_present,controls_allowed,state,decided_at) '
+            "VALUES (?,?,?,?,?,?,?,?,?,? ,1000,1600,0,0,NULL,'DENIED',1000)",
+            (f'{i:032x}', *origin.values(),
+             f'{i:08x}-0000-4000-8000-{i:012x}', 'main', 'jobs'),
+        )
+    first = api.host_list(after=None, now=1001, current_iid=IID)
+    assert first.code == 'ok' and len(first.records) == 20
+    assert first.next_after == f'{19:032x}'
+    second = api.host_list(after=first.next_after, now=1001, current_iid=IID)
+    assert len(second.records) == 1 and second.next_after is None
+    assert second.records[0].request_id == f'{20:032x}'
+    with pytest.raises(ValueError):
+        api.host_list(after=None, now=1001, current_iid=IID, limit=21)
+    store.close()
+
+
+def test_remote_history_projection_is_closed_bounded_and_not_authority(
+    tmp_path: Path,
+) -> None:
+    from dataclasses import replace
+    from hmp_plugin.controls_requests import remote_record_fields
+
+    store = Store(tmp_path / 'dto.sqlite3')
+    store.migrate()
+    origin = _seed(store)
+    api = ControlsRequestStore(store)
+    first = _request(api, origin)
+    record = api.status_by_request_id(
+        origin, request_id=first.request_id, now=1001, current_iid=IID,
+    ).record
+    fields = remote_record_fields(record)
+    assert tuple(fields) == (
+        'protocol', 'request_id', 'client_request_id', 'bot_profile', 'feature',
+        'state', 'expires_at', 'scope', 'effective_controls', 'controls_revision',
+    )
+    assert fields['effective_controls'] == 'unknown'
+    assert fields['controls_revision'] is None
+    known_missing = remote_record_fields(record, effective_controls='missing')
+    assert known_missing['effective_controls'] == 'missing'
+    assert known_missing['controls_revision'] == '0'
+    assert not set(('device_id', 'user_id', 'family_id', 'iid')).intersection(fields)
+    with pytest.raises(ValueError):
+        remote_record_fields(record, effective_controls='allowed')
+    with pytest.raises(ValueError):
+        remote_record_fields(
+            replace(record, current_origin_active=False), effective_controls='missing',
+        )
+    forged = (
+        replace(record, origin=replace(origin, device_id='bad space')),
+        replace(record, created_at=True),
+        replace(record, expires_at=record.expires_at + 1),
+        replace(record, controls_revision_at_request=True),
+        replace(record, controls_present_at_request=1),
+        replace(record, current_controls_revision=True),
+        replace(record, current_controls_allowed=True),
+        replace(record, current_origin_active=1),
+        replace(record, current_iid_matches=1),
+        replace(record, decision_revision=True),
+    )
+    for invalid in forged:
+        with pytest.raises((ValueError, RuntimeError)):
+            remote_record_fields(invalid)
+    assert store.set_owner_controls(origin.device_id, allowed=False, now=1002)
+    denied = api.status_by_request_id(
+        origin, request_id=first.request_id, now=1003, current_iid=IID,
+    ).record
+    with pytest.raises(ValueError):
+        remote_record_fields(denied, effective_controls='granted')
+    store.close()
+
+
+def test_lost_create_ack_record_is_atomic_history_plus_current_controls(
+    tmp_path: Path,
+) -> None:
+    from hmp_plugin.controls_requests import remote_record_fields
+
+    store = Store(tmp_path / 'lost_ack.sqlite3')
+    store.migrate()
+    origin = _seed(store)
+    api = ControlsRequestStore(store)
+    first = _request(api, origin)
+    assert first.request_id is not None
+    assert api.decide(
+        first.request_id, allow=False, now=1001, current_iid=IID,
+        precommit_external_verified=False,
+    ).state == 'DENIED'
+    # A later direct host decision changes current Controls without rewriting history.
+    assert store.set_owner_controls(origin.device_id, allowed=True, now=1002)
+    recovered = api.status_record_by_client_id(
+        origin, client_id=CLIENT, now=1003, current_iid=IID,
+    )
+    assert recovered.code == 'ok'
+    assert recovered.record.request_id == first.request_id
+    assert recovered.record.state == 'DENIED'
+    assert recovered.record.current_controls_allowed == 1
+    assert recovered.record.current_controls_revision == 1
+    fields = remote_record_fields(recovered.record)
+    assert fields['state'] == 'DENIED'
+    assert fields['effective_controls'] == 'unknown'
+    assert fields['controls_revision'] is None
+    known_granted = remote_record_fields(recovered.record, effective_controls='granted')
+    assert known_granted['controls_revision'] == '1'
+    store.close()
+
+
+def test_client_id_recovery_settles_revoked_origin(tmp_path: Path) -> None:
+    store = Store(tmp_path / 'revoked_ack.sqlite3')
+    store.migrate()
+    origin = _seed(store)
+    api = ControlsRequestStore(store)
+    first = _request(api, origin)
+    assert first.state == 'PENDING'
+    store.revoke_all_for_identity_change(1001)
+    recovered = api.status_record_by_client_id(
+        origin, client_id=CLIENT, now=1002, current_iid=IID,
+    )
+    assert recovered.code == 'ok'
+    assert recovered.record.request_id == first.request_id
+    assert recovered.record.state == 'REVOKED'
+    assert not recovered.record.current_origin_active
+    assert store.owner_controls_decision(origin.device_id) is None
+    store.close()
