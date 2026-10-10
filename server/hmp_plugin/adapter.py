@@ -449,6 +449,13 @@ def open_components(adapter: Any) -> server.ServerContext:
     config = getattr(adapter, "config", None)
     extra = getattr(config, "extra", None)
     session_browsing = extra.get("session_browsing", True) if isinstance(extra, Mapping) else True
+    # Canonical local configuration: platforms.hmp.extra.controls_requests.enabled. The route
+    # family is registered only on this listener start when the value is the literal bool True.
+    # Changing the host config requires a listener restart; requests cannot toggle registration.
+    controls_block = extra.get("controls_requests") if isinstance(extra, Mapping) else None
+    controls_requests_enabled = (
+        isinstance(controls_block, Mapping) and controls_block.get("enabled") is True
+    )
     eligibility = result.eligibility
     # Availability comes from the one eligibility evaluation done above (Hermes code cannot change
     # without a gateway restart), never from a per-request lookup. A result that carries no
@@ -516,6 +523,7 @@ def open_components(adapter: Any) -> server.ServerContext:
         store=store,
         compat=result,
         session_browsing_enabled=session_browsing is not False,
+        controls_requests_enabled=controls_requests_enabled,
         direct_send_flag=_read_direct_send_enabled,
         owner_device_ids=_read_owner_device_ids,
         readiness_owner_device_ids=_readiness_owner_device_ids,

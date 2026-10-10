@@ -110,6 +110,66 @@ def test_bad_listener_config_does_not_connect(adapter_module: types.ModuleType) 
     assert "connected" not in adapter.states
 
 
+@pytest.mark.parametrize(
+    ("extra", "enabled"),
+    [
+        ({}, False),
+        ({"controls_requests": None}, False),
+        ({"controls_requests": True}, False),
+        ({"controls_requests": []}, False),
+        ({"controls_requests": {"enabled": False}}, False),
+        ({"controls_requests": {"enabled": 1}}, False),
+        ({"controls_requests": {"enabled": "true"}}, False),
+        ({"controls_requests": {"enabled": True}}, True),
+        (None, False),
+    ],
+)
+def test_controls_requests_local_startup_flag_is_exact_and_restart_bound(
+    adapter_module: types.ModuleType,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    extra: Any,
+    enabled: bool,
+) -> None:
+    """Exercise the production context constructor without a bridge or a live listener."""
+    from hmp_plugin.compat import CompatResult, CompatStatus
+
+    class FakeStore:
+        def __init__(self, _path: Path) -> None:
+            pass
+
+        def migrate(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    class Gate:
+        def evaluate(self) -> CompatResult:
+            return CompatResult(CompatStatus.UNSUPPORTED)
+
+    monkeypatch.setattr(adapter_module.compat, "default_gate", lambda: Gate())
+    monkeypatch.setattr(
+        adapter_module.identity,
+        "resolve_custody",
+        lambda: types.SimpleNamespace(anchor_dir=tmp_path),
+    )
+    monkeypatch.setattr(
+        adapter_module.identity,
+        "load_or_create",
+        lambda _store: types.SimpleNamespace(iid="synthetic-iid"),
+    )
+    monkeypatch.setattr(adapter_module, "Store", FakeStore)
+    adapter = adapter_module.HmpAdapter(_Config(extra))
+    first = adapter_module.open_components(adapter)
+    assert first.controls_requests_enabled is enabled
+    # Registration is a listener-start decision, not a mutable per-request flag.
+    adapter.config.extra = {"controls_requests": {"enabled": not enabled}}
+    assert first.controls_requests_enabled is enabled
+    restarted = adapter_module.open_components(adapter)
+    assert restarted.controls_requests_enabled is not enabled
+
+
 def test_lifecycle_and_zero_handoff_on_write_paths(
     adapter_module: types.ModuleType, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
