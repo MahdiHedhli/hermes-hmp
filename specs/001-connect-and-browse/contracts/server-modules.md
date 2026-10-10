@@ -81,6 +81,7 @@ server/
     gate.py                       # GU-2/GU-4 guarantee derivation + write gate (implemented, unused by F1 routes)
     server.py                     # aiohttp app, route table (F1 subset), middlewares: peer policy (TR-4),
                                   #   size limits, rate limits (TR-6), error shaping (ERR-1), compat refusal (ERR-2a)
+    readiness.py                  # v1.6 AR1: fixed closed readiness DTO mapping only; no authority or I/O
     request_ctx.py                # leaf module: ServerContext, CTX_KEY, context(), body/response helpers,
                                   #   peer_key, bearer -- imported at module level by server.py, pairing.py,
                                   #   tokens.py and revoke.py so a plugin reload (sys.modules eviction of
@@ -182,9 +183,10 @@ class Compat(Protocol):
    `importlib.util.find_spec("hermes_constants").origin`, which imports nothing. Identity comes from
    file reads only. An unidentifiable or unlisted build is UNSUPPORTED at once, with no Hermes
    import of any kind.
-2. If the result is not SUPPORTED, `bridge.py` is never imported. The route table keeps only
-   `/ready`. Every other path, pairing included, answers `503 other {why}` (ERR-2a). The CLI refuses
-   offers.
+2. If the result is not SUPPORTED, `bridge.py` is never imported. The route table keeps `/ready`
+   and the bearer-authenticated `/readiness/capabilities` route. The capability handler
+   authenticates before disclosure; every other path, pairing included, answers `503 other {why}`
+   (ERR-2a). The CLI refuses offers.
 3. If it is SUPPORTED, the dependency probe (import plus signature shape, no calls) must pass, and
    every reached internal's `inspect.getsourcefile` must be inside `bridge_files`; otherwise
    `hermes_read_dependency_missing` (CS-21). Then the bridge is constructed.
@@ -200,6 +202,7 @@ SHA. Unresolvable git metadata or a missing listed file is unidentifiable, hence
 | Method | Path | Clause | Auth |
 |---|---|---|---|
 | GET | `/hmp/v1/ready` | PR0-1 | none |
+| GET | `/hmp/v1/readiness/capabilities` | AR1 v1.6 | bearer + current instance; only additional compatibility exemption |
 | POST | `/hmp/v1/pair/request` | PR2-* | none (offer secret + signature) |
 | POST | `/hmp/v1/pair/complete` | PR4-* | none (signature) |
 | POST | `/hmp/v1/auth/token` | PR5-* | signature |
@@ -208,6 +211,7 @@ SHA. Unresolvable git metadata or a missing listed file is unidentifiable, hence
 | POST | `/hmp/v1/bots/{p}/authorize` | PR6-1 | bearer |
 | GET | `/hmp/v1/bots/{p}/conversations/default?limit=` | RO-3 | bearer + per-bot gate (ERR-3) |
 | GET | `/hmp/v1/bots/{p}/conversations/default/messages?after=&limit=` | RO-6 | bearer + per-bot gate |
+| GET | `/hmp/v1/bots/{p}/readiness` | AR1 v1.6 | bearer + per-bot authorization; ordinary compatibility gate |
 | GET | `/hmp/v1/bots/{p}/sessions?cursor=&limit=` | SES-1 (amendment A1, v1.1) | bearer + per-bot gate; only when `gateway.platforms.hmp.extra.session_browsing` is not `false` |
 | GET | `/hmp/v1/bots/{p}/sessions/{ref}/messages?after=&limit=` | SES-2 (amendment A1, v1.1) | bearer + per-bot gate; same kill switch |
 | GET | `/hmp/v1/bots/{p}/sessions/{ref}/messages/from-start?limit=` | SES-2a (phone Bot Chat history paging) | bearer + per-bot gate; same kill switch and read limiter; an older HMP has no route |

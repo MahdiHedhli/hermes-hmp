@@ -509,6 +509,20 @@ class Store:
         )
         return bool(row["allowed"]) if row is not None else None
 
+    def readiness_owner_controls_value(self, device_id: str) -> int | None:
+        """Strict readiness-only read; unlike the operational helper, never coerces bad data."""
+        row = (
+            self._require_conn()
+            .execute("SELECT allowed FROM device_owner_controls WHERE device_id = ?", (device_id,))
+            .fetchone()
+        )
+        if row is None:
+            return None
+        value = row["allowed"]
+        if type(value) is not int or value not in (0, 1):
+            raise ValueError("invalid controls decision")
+        return value
+
     def set_owner_controls(self, device_id: str, *, allowed: bool, now: int) -> bool:
         """Set a per-device host decision. Refuse missing or revoked devices."""
         with self.transaction() as conn:

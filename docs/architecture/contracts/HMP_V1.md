@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | Status | **APPROVED implementation baseline (OD-F1, 2026-09-25).** The owner ruled on `R0_FREEZE_REVIEW.md` (`R0_OWNER_DECISIONS.md` § "Freeze decisions (2026-09-25)"), subject to the bounded amendments listed there. This does **not** approve a nonconformant implementation, and it does not waive any transport or security requirement. It authorizes implementation work only in the scope OD-L2 ruled on: Feature F1 "Connect and browse", as amended (`FIRST_FEATURE_PLAN.md`). It does not by itself authorize upstream submission or any push (`R0_FREEZE_REVIEW.md` §11). |
-| Contract revision | `1.0` (approved 2026-09-25). History: `1.0-rc1` (commit `8657ae5`) was found incomplete by the independent freeze-package review (FZ-R-1..19); `1.0-rc2` (2026-09-24) was the ADVANCED contract-author correction pass that the owner then approved as revision `1.0`. Additive amendments, still served as `/ready` `contract` `"1.0"` (V-3's freeze string; 1.x clients ignore routes they do not call, V-4): **1.1** session browsing (§6a), **1.2** direct send (§7a), **1.3** approvals and Phone chat (§7b, OD-F16); **1.6 (draft, not implemented)** host-local generated images (§7e). |
+| Contract revision | `1.0` (approved 2026-09-25). History: `1.0-rc1` (commit `8657ae5`) was found incomplete by the independent freeze-package review (FZ-R-1..19); `1.0-rc2` (2026-09-24) was the ADVANCED contract-author correction pass that the owner then approved as revision `1.0`. Additive amendments, still served as `/ready` `contract` `"1.0"` (V-3's freeze string; 1.x clients ignore routes they do not call, V-4): **1.1** session browsing (§6a), **1.2** direct send (§7a), **1.3** approvals and Phone chat (§7b, OD-F16), **1.4** mobile cron (§7c), **1.5** model management (§7d), **1.6** additive umbrella for permission readiness (§7g) and host-local generated images (§7e). These clauses have separate qualification: AR1 readiness has composed source pending runtime verification; §7e media remains draft and separately gated. The shared label does not assert either route is deployed or authorize either gate. Readiness JSON `protocol: 1` and `/ready` `contract: "1.0"` are unchanged. |
 | Scope | The wire contract between the Hermes Bot Mobile client and the HMP plugin inside one Hermes gateway process. Hermes internals are out of scope, except where a clause states a dependency on a Hermes capability. |
 | Implementation and evidence status | **Stated only in [`HMP_V1_CONFORMANCE.md`](HMP_V1_CONFORMANCE.md).** This document defines required behaviour. Approval of this contract text does not state that behaviour is implemented or proven; that is the conformance matrix's sole role. |
 
@@ -246,9 +246,10 @@ Normative keywords follow RFC 2119 and RFC 8174.
 | `cron_unavailable` (v1.4, CR-1) | 503 | mobile cron: flag off, a required Hermes API unavailable (GU-2d), missing scoped loopback endpoint, or uncertain upstream result | — | Refresh jobs before acting again. Never automatically retry a create or edit. |
 | `model_unavailable` (v1.5, MD-1) | 503 | mobile default model: flag off, a required Hermes API unavailable (GU-2d), missing scoped picker endpoint, or Hermes read/write failure | — | Reopen the model screen and check the current selection before another write. |
 | `media_unavailable` (v1.6 draft, LM-3) | 503 | host-local image fetch: the caller is an owner device but the host flag is off or the feature is unavailable (LM-1). Message: "image delivery is unavailable" | — | Show "Image unavailable". Do not retry automatically. |
+| `readiness_unavailable` (v1.6, AR1) | 503 | readiness-only projection throws, times out, yields malformed internal data, or cannot establish current disclosure scope | — | Keep the result informational; normal feature route remains authoritative. |
 
 - **ERR-2a. Read-compatibility refusal** (GU-2c; additive `other {why}` values, no contract revision; controller clarification, 2026-09-25).
-  - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready`, pairing routes included, when the running Hermes declares a version below the minimum supported version for reads (GU-2c), or its install cannot be found. An unknown, unlisted, newer or unreleased version is never refused for that reason.
+  - `503 other {why:"hermes_build_unsupported"}` on every route except `/ready` and the authenticated readiness-capabilities route, pairing routes included, when the running Hermes declares a version below the minimum supported version for reads (GU-2c), or its install cannot be found. An unknown, unlisted, newer or unreleased version is never refused for that reason.
   - `503 other {why:"hermes_read_dependency_missing"}` when a Hermes internal the read bridge actually needs is missing, mis-shaped or resolves outside the Hermes tree and standard library.
   - HMP makes no bridge call and hands nothing to Hermes. Definitive for submit: yes (nothing handed off).
   - Client action: show "Unsupported Hermes build" for this instance; keep saved content visible and labelled; never retry against another instance.
@@ -1578,6 +1579,54 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   build); native title writers are trusted metadata; deadlines and memory ceilings are provisional.
   Assistant `MEDIA:` text stays ordinary unmodified text; producers other than `image_generate` have no
   authority (HERMES_API_GAP: no typed tool-artifact record).
+
+## 7g. Permission readiness diagnostics (v1.6, AR1)
+
+These routes are informational and read-only. They neither grant the jobs/model
+control nor qualify a later feature operation. `/ready` is unchanged.
+
+| Method | Path under `/hmp/v1` | Authentication | Compatibility behavior |
+|---|---|---|---|
+| GET | `/readiness/capabilities` | bearer plus exact current `HMP-Instance` | The only additional compatibility exemption; authenticate before returning fixed capability states. |
+| GET | `/bots/{p}/readiness` | bearer plus current per-bot authorization | The ordinary global read-compatibility gate remains in force. |
+
+Both requests require an empty body and no query parameters. Capabilities returns
+exactly `{"protocol":1,"features":{"jobs":{"capability":...},"model":{"capability":...}}}`.
+The closed capability values are `available`, `hermes_not_found`, `below_floor`,
+`dependency_missing`, `probe_failed`, `requires_read`, `requires_send`, and
+`unknown`. The route exposes no build label, dependency name, version, profile,
+or device identity.
+
+The per-bot response is the exact schema in
+`specs/035-permission-readiness-diagnostics/contracts/readiness-v1.md`; it is
+capped at 2 KiB, with strict JSON safe integer `checked_at` in
+`0..9007199254740991`, a random per-listener generation, and fixed closed axes.
+The route authorizes the bot before disclosing the caller's own shared controls
+decision. It reports jobs and model capabilities/settings independently, the
+same shared entitlement and profile API configuration on both feature rows,
+and `api_reachability: not_probed` always. It makes no API probe and reads no
+job, model, provider, or credential contents into the response.
+
+Readiness uses diagnostic-only strict projections where ordinary operational
+helpers collapse errors. An explicit controls row accepts only integer 0/1;
+absent row uses the existing legacy allowlist and its absent-list empty default.
+Missing flag blocks/keys retain the existing disabled default. Observable
+projection errors, malformed internal values, timeouts, or uncertain authority
+rechecks return exactly `{"error":{"code":"readiness_unavailable","message":"readiness unavailable"}}`
+with HTTP 503 and no partial data. Completed indeterminate data maps to
+`unknown`; definitive authorization loss remains generic not-found/auth refusal.
+Readings are point-in-time and cannot close the separate existing
+jobs/model authorization-after-await gap. Normal feature route gates are
+unchanged.
+
+There are at most four concurrent non-queued readiness workers, a two-second
+response deadline, and a 30-request/minute per-device bucket. A timed-out or
+cancelled caller does not free capacity until its underlying worker completes.
+The phone treats results as informational, refreshes on the same foreground
+instance/device scope before showing local guidance or an operation, and never
+uses the result to authorize or suppress a normal jobs/model operation. Request
+access is local guidance that sends nothing. Actions are selected independently
+for Jobs and Model; one feature's state never changes the other's action.
 
 ## 8. Guarantees, capability contract and write gate (FZ-R-8, FZ-R-9)
 

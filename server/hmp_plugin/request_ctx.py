@@ -36,7 +36,9 @@ from __future__ import annotations
 import dataclasses
 import enum
 import ipaddress
+import secrets
 import ssl
+import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
@@ -236,6 +238,15 @@ class ServerContext:
     # Mobile cron is a separate persistent-execution gate. Both settings are
     # read from live HMP config for every request, and default to deny.
     owner_device_ids: Callable[[], frozenset[str]] = field(default=lambda: frozenset())
+    # Readiness-only source readers preserve malformed source values instead of using the
+    # fail-closed operational closures above.
+    readiness_owner_device_ids: Callable[[], frozenset[str]] | None = field(
+        default=None, repr=False
+    )
+    readiness_settings: Callable[[], object] | None = field(default=None, repr=False)
+    readiness_generation: str = field(default_factory=lambda: secrets.token_hex(16), repr=False)
+    readiness_workers: int = field(default=0, repr=False)
+    readiness_worker_lock: threading.Lock = field(default_factory=threading.Lock, repr=False)
     cron_flag: Callable[[], bool] = field(default=lambda: False)
     cron_available: Callable[[], bool] = field(default=lambda: False)
     model_flag: Callable[[], bool] = field(default=lambda: False)

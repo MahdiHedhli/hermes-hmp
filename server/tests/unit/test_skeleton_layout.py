@@ -36,6 +36,7 @@ CONTRACT_MODULES = {
     "mobile_cron.py",
     "mobile_model.py",
     "server.py",
+    "readiness.py",
     "request_ctx.py",
     "adapter.py",
     "cli.py",

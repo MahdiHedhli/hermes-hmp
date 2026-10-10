@@ -218,6 +218,7 @@ REACHED_DATA_ATTRIBUTES: frozenset[str] = frozenset(
         "session_id",
         "profile_route_rejected",
         "config",
+        "platforms",
         "extra",
         "_gateway_accepted",
         "defer_policy",
@@ -413,6 +414,33 @@ class HermesApi:
 
         value = get_scoped_secret("API_SERVER_KEY", "")
         return value if isinstance(value, str) else ""
+
+    def readiness_api_server_extra(self) -> object:
+        """Return raw readiness config shape, unlike the error-collapsing endpoint helper."""
+        from gateway.config import Platform, load_gateway_config  # §12, E-GAP-14
+
+        config = load_gateway_config()
+        platforms = getattr(config, "platforms", None)
+        if not isinstance(platforms, Mapping):
+            raise BridgeError("profile config is malformed")
+        if Platform.API_SERVER not in platforms:
+            return None
+        platform_config = platforms[Platform.API_SERVER]
+        if platform_config is None:
+            raise BridgeError("profile platform config is malformed")
+        try:
+            extra = platform_config.extra
+        except AttributeError:
+            raise BridgeError("profile platform extra is malformed") from None
+        if not isinstance(extra, Mapping):
+            raise BridgeError("profile platform extra is malformed")
+        return extra
+
+    def readiness_scoped_api_server_key(self) -> object:
+        """Return the scoped secret value for validation; it is never returned or logged."""
+        from gateway.platforms._shared import get_scoped_secret  # §12, E-GAP-31
+
+        return get_scoped_secret("API_SERVER_KEY", "")
 
     def inert_trigger_event(self, *, source: Any, user_id: str, user_name: str) -> Any:
         """The P6 trigger `MessageEvent`. Optional fields are set only when this build has them:
@@ -1692,6 +1720,56 @@ class HermesReadBridge:
             return None  # no usable key: the gate stays closed (never a short key, never a 401)
         prefix = "" if is_default else f"/p/{quote(profile, safe='')}"
         return DirectSendEndpoint(host=host, port=port, api_key=key, path_prefix=prefix)
+
+    def readiness_profile_api_state(
+        self, profile: str, *, checkpoint: Callable[[], None]
+    ) -> str:
+        """Exception-preserving, no-network profile endpoint status for readiness only."""
+        home = self._profile_home(profile)
+        checkpoint()
+        served = self.served_profiles()
+        checkpoint()
+        is_default = bool(served) and profile == served[0]
+        with self._hermes.profile_runtime_scope(home):
+            raw_extra = self._hermes.readiness_api_server_extra()
+            checkpoint()
+            raw_scoped_key = self._hermes.readiness_scoped_api_server_key()
+        checkpoint()
+        if raw_extra is None:
+            return "missing"
+        if not isinstance(raw_extra, Mapping):
+            raise ValueError("profile endpoint config malformed")
+        host = raw_extra.get("host")
+        if host is not None and not isinstance(host, str):
+            raise ValueError("profile endpoint host malformed")
+        if host is None or host == "":
+            host = os.environ.get("API_SERVER_HOST", DEFAULT_API_SERVER_HOST)
+        if host == _LOCALHOST_ALIAS:
+            host = DEFAULT_API_SERVER_HOST
+        if host not in _LOOPBACK_LITERALS:
+            return "missing"
+        raw_port = raw_extra.get("port")
+        if raw_port is None:
+            raw_port = os.environ.get("API_SERVER_PORT", str(DEFAULT_API_SERVER_PORT))
+        if type(raw_port) is int:
+            port = raw_port
+        elif isinstance(raw_port, str) and re.fullmatch(r"[0-9]{1,5}", raw_port):
+            port = int(raw_port)
+        else:
+            raise ValueError("profile endpoint port malformed")
+        if not 1 <= port <= 65535:
+            return "missing"
+        if not isinstance(raw_scoped_key, str):
+            raise ValueError("profile endpoint key malformed")
+        key = raw_scoped_key
+        if is_default:
+            inline = raw_extra.get("key", None)
+            if inline is not None:
+                if not isinstance(inline, str):
+                    raise ValueError("profile endpoint key malformed")
+                if inline.strip():
+                    key = inline
+        return "configured" if _has_usable_secret(key) else "missing"
 
     # ------------------------------------------------------------------------------------------
     # Amendment F3 (HMP_V1.md §7b). Function-local imports, only called once the direct-send

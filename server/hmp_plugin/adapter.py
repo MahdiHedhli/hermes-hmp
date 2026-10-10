@@ -82,6 +82,34 @@ from .store import Store
 IDENTITY_CHANGED_CODE = "hmp_identity_changed"
 IDENTITY_CHANGED_MESSAGE = "HMP instance key changed; restart the gateway to serve the new key"
 
+
+def _readiness_owner_device_ids_from_adapter(adapter: Any) -> frozenset[str]:
+    """Strict, readiness-only projection of the loaded legacy adapter controls."""
+    live_config = getattr(adapter, "config", None)
+    if live_config is None:
+        raise ValueError("readiness config unavailable")
+    live_extra = getattr(live_config, "extra", None)
+    if not isinstance(live_extra, Mapping):
+        raise ValueError("readiness config malformed")
+    if "owner_device_ids" not in live_extra:
+        return frozenset()
+    ids = live_extra["owner_device_ids"]
+    if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
+        raise ValueError("readiness controls malformed")
+    return frozenset(ids)
+
+
+def _readiness_settings_from_adapter(adapter: Any) -> object:
+    """Return only the loaded adapter's settings mapping for the readiness projection."""
+    live_config = getattr(adapter, "config", None)
+    if live_config is None:
+        raise ValueError("readiness config unavailable")
+    live_extra = getattr(live_config, "extra", None)
+    if not isinstance(live_extra, Mapping):
+        raise ValueError("readiness config malformed")
+    return live_extra
+
+
 # Live-bug fix (multiplexed gateway, 2026-09-27): the multiplexer brings secondary profiles online
 # strictly after this adapter's own `connect()` (`gateway/run_profile_reconcile.py`'s
 # `served_profile_names()` is live bookkeeping, refreshed only as profiles are hot-added/removed),
@@ -459,6 +487,12 @@ def open_components(adapter: Any) -> server.ServerContext:
             return frozenset()
         return frozenset(ids)
 
+    def _readiness_owner_device_ids() -> frozenset[str]:
+        return _readiness_owner_device_ids_from_adapter(adapter)
+
+    def _readiness_settings() -> object:
+        return _readiness_settings_from_adapter(adapter)
+
     def _read_cron_enabled() -> bool:
         live_config = getattr(adapter, "config", None)
         live_extra = getattr(live_config, "extra", None)
@@ -484,6 +518,8 @@ def open_components(adapter: Any) -> server.ServerContext:
         session_browsing_enabled=session_browsing is not False,
         direct_send_flag=_read_direct_send_enabled,
         owner_device_ids=_read_owner_device_ids,
+        readiness_owner_device_ids=_readiness_owner_device_ids,
+        readiness_settings=_readiness_settings,
         approvals_available=lambda: approvals_member,
         phone_chat_available=lambda: phone_member and phone_bound[0],
         cron_flag=_read_cron_enabled,

@@ -27,8 +27,9 @@ Middleware order (outermost first):
    into the `AppRunner`, so aiohttp's own internal logging of these faults — which otherwise
    includes the peer address and that same raw text via `exc_info` — never reaches the log either;
    it always emits exactly `event=http_parse_error outcome=bad_request`.
-5. `compat` (ERR-2a): on an unsupported build every path except `/hmp/v1/ready` answers
-   `503 other {why}` and nothing else runs, so no bridge call is possible.
+5. `compat` (ERR-2a): on an unsupported build every path except `/hmp/v1/ready` and the
+   authenticated readiness capability path answers `503 other {why}`. The capability handler
+   returns only its fixed compatibility projection and does not call the bridge.
 
 Rate limits (TR-6) are applied inside the P2, P4 and P5 handlers, because the contract orders
 them against the body checks and keys two of them on body fields.
@@ -44,7 +45,9 @@ import contextlib
 import ipaddress
 import json
 import logging
+import re
 import ssl
+import time
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, replace
 from pathlib import Path
@@ -60,9 +63,11 @@ from . import (
     mobile_cron,
     mobile_model,
     prompts,
+    readiness,
     wire,
 )
 from .authorize import ensure_chat
+from .auth import Authenticator
 from .contract import (
     CONTRACT_REVISION,
     HISTORY_LIMIT_DEFAULT,
@@ -75,7 +80,7 @@ from .contract import (
     RATE_PROMPT_READ_PER_MIN_PER_DEVICE,
     RATE_READ_PER_MIN_PER_DEVICE_ID,
     RATE_SESSIONS_LIST_PER_MIN_PER_DEVICE_ID,
-    READ_COMPAT_EXEMPT_PATH,
+    READ_COMPAT_EXEMPT_PATHS,
     READ_COMPAT_REFUSALS,
     SESSION_LIST_LIMIT_DEFAULT,
     SESSION_LIST_LIMIT_MAX,
@@ -84,6 +89,7 @@ from .contract import (
     SNAPSHOT_LIMIT_MAX,
     SUPPORTED_VERSIONS,
     WATCHDOG_INTERVAL_S,
+    AuthzState,
     DirectSendOutcome,
     DirectSendRequest,
     ErrorCode,
@@ -132,6 +138,8 @@ from .tokens import handle_token
 # The F1 route table (server-modules.md). Method, path under PATH_PREFIX, clause.
 F1_ROUTES: tuple[tuple[str, str, str], ...] = (
     ("GET", "/ready", "PR0-1"),
+    ("GET", "/readiness/capabilities", "AR1"),
+    ("GET", "/bots/{p}/readiness", "AR1"),
     ("POST", "/pair/request", "PR2"),
     ("POST", "/pair/complete", "PR4"),
     ("POST", "/auth/token", "PR5"),
@@ -342,9 +350,9 @@ async def limits_middleware(request: web.Request, handler: Handler) -> web.Strea
 
 @web.middleware
 async def compat_middleware(request: web.Request, handler: Handler) -> web.StreamResponse:
-    """ERR-2a: on an unsupported build, only `/hmp/v1/ready` is served (FR-044a)."""
+    """ERR-2a: readiness capabilities is the one authenticated additive exception (AR1)."""
     ctx = context(request)
-    if not ctx.compat.supported and request.path != READ_COMPAT_EXEMPT_PATH:
+    if not ctx.compat.supported and request.path not in READ_COMPAT_EXEMPT_PATHS:
         why = ctx.compat.why or OtherWhy.HERMES_BUILD_UNSUPPORTED
         refusal = READ_COMPAT_REFUSALS.get(why)
         if refusal is None:  # never expected; fail closed on the build-unsupported refusal
@@ -374,6 +382,315 @@ async def handle_ready(request: web.Request) -> web.Response:
             "guarantees": ctx.guarantees(),
             "write_gate": ctx.reported_write_gate(),
         }
+    )
+
+
+_READINESS_PROFILE_RE = re.compile(r"[a-z0-9][a-z0-9_-]{0,63}")
+_READINESS_WORKER_SLOTS = 4
+_READINESS_DEADLINE_S = 2.0
+
+
+def _readiness_empty_get(request: web.Request) -> None:
+    if (
+        request.query
+        or (request.content_length is not None and request.content_length != 0)
+        or request.headers.get("Transfer-Encoding") is not None
+    ):
+        raise HmpError(ErrorCode.BAD_REQUEST)
+
+
+def _readiness_capabilities(ctx: ServerContext) -> dict[str, object]:
+    return {"protocol": 1, "features": readiness.capability_snapshot(ctx.compat)}
+
+
+def _readiness_bearer(request: web.Request) -> Any:
+    """Keep definitive bearer refusals; collapse failures to establish authority to fixed 503."""
+    try:
+        return bearer(request)
+    except HmpError as exc:
+        if exc.code in {
+            ErrorCode.UNAUTHENTICATED, ErrorCode.REVOKED, ErrorCode.WRONG_INSTANCE,
+        }:
+            raise
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    except Exception:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+
+
+async def handle_readiness_capabilities(request: web.Request) -> web.Response:
+    _readiness_empty_get(request)
+    _readiness_bearer(request)  # compatibility-exempt, never disclosed before authentication
+    try:
+        ctx = context(request)
+        body = wire.dump_json(_readiness_capabilities(ctx))
+    except Exception:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    if len(body) > readiness.MAX_RESPONSE_BYTES:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+    return web.Response(
+        body=body,
+        content_type="application/json",
+        headers={"Cache-Control": "no-store"},
+    )
+
+
+def _readiness_now(ctx: ServerContext) -> int:
+    try:
+        value = ctx.now()
+    except Exception:
+        raise readiness.ReadinessUnavailableError() from None
+    if type(value) is not int or not 0 <= value <= readiness.MAX_SAFE_INTEGER:
+        raise readiness.ReadinessUnavailableError()
+    return value
+
+
+def _readiness_feature_statuses(ctx: ServerContext) -> dict[str, tuple[str, str | None]]:
+    compat_result = ctx.compat
+    eligibility = getattr(compat_result, "eligibility", None)
+    statuses = getattr(eligibility, "features", None)
+    if not isinstance(eligibility, compat.Eligibility) or not isinstance(statuses, Mapping):
+        raise readiness.ReadinessUnavailableError()
+    return {
+        "jobs": readiness.capability_axis(statuses.get(compat.Feature.JOBS)),
+        "model": readiness.capability_axis(statuses.get(compat.Feature.MODEL)),
+    }
+
+
+def _readiness_authority_check(
+    ctx: ServerContext,
+    *,
+    authorization: str | None,
+    instance: str | None,
+    expected: Any,
+    profile: str,
+    generation: str,
+    deadline: float,
+) -> None:
+    if time.monotonic() >= deadline:
+        raise readiness.ReadinessUnavailableError()
+    current_generation = ctx.readiness_generation
+    if (
+        not isinstance(current_generation, str)
+        or readiness.GENERATION_RE.fullmatch(current_generation) is None
+        or current_generation != generation
+    ):
+        raise readiness.ReadinessUnavailableError()
+    try:
+        if ctx.identity.still_current() is not True:
+            raise readiness.ReadinessUnavailableError()
+        current = Authenticator(ctx.store, ctx.iid, ctx.now).authenticate(authorization, instance)
+    except HmpError:
+        raise
+    except readiness.ReadinessUnavailableError:
+        raise
+    except Exception:
+        raise readiness.ReadinessUnavailableError() from None
+    if current != expected:
+        raise HmpError(ErrorCode.NOT_FOUND)
+    bridge = ctx.bridge
+    if bridge is None:
+        raise readiness.ReadinessUnavailableError()
+    try:
+        state = bridge.authz_state(current.user_id, profile)
+    except Exception:
+        raise readiness.ReadinessUnavailableError() from None
+    if not isinstance(state, AuthzState):
+        raise readiness.ReadinessUnavailableError()
+    if state is AuthzState.UNVERIFIABLE:
+        raise readiness.ReadinessUnavailableError()
+    if state is not AuthzState.AUTHORIZED:
+        raise HmpError(ErrorCode.NOT_FOUND)
+
+
+def _readiness_controls(ctx: ServerContext, device_id: str) -> str:
+    decision = ctx.store.readiness_owner_controls_value(device_id)
+    if decision is not None:
+        return "granted" if decision == 1 else "missing"
+    reader = ctx.readiness_owner_device_ids
+    if reader is None:
+        raise readiness.ReadinessUnavailableError()
+    ids = reader()
+    if not isinstance(ids, frozenset) or any(not isinstance(item, str) for item in ids):
+        raise readiness.ReadinessUnavailableError()
+    return "granted" if device_id in ids else "missing"
+
+
+def _readiness_host_settings(ctx: ServerContext) -> dict[str, str]:
+    reader = ctx.readiness_settings
+    if reader is None:
+        raise readiness.ReadinessUnavailableError()
+    extra = reader()
+    if not isinstance(extra, Mapping):
+        raise readiness.ReadinessUnavailableError()
+    result: dict[str, str] = {}
+    for feature, key in (("jobs", "cron"), ("model", "model_management")):
+        if key not in extra:
+            result[feature] = "disabled"
+            continue
+        block = extra[key]
+        if not isinstance(block, Mapping):
+            raise readiness.ReadinessUnavailableError()
+        if "enabled" not in block:
+            result[feature] = "disabled"
+            continue
+        enabled = block["enabled"]
+        if type(enabled) is not bool:
+            raise readiness.ReadinessUnavailableError()
+        result[feature] = "enabled" if enabled else "disabled"
+    return result
+
+
+def _collect_readiness(
+    ctx: ServerContext,
+    *,
+    authorization: str | None,
+    instance: str | None,
+    expected: Any,
+    profile: str,
+    device_id: str,
+    deadline: float,
+    generation: str,
+) -> dict[str, object]:
+    if not isinstance(generation, str) or readiness.GENERATION_RE.fullmatch(generation) is None:
+        raise readiness.ReadinessUnavailableError()
+    _readiness_authority_check(
+        ctx, authorization=authorization, instance=instance, expected=expected,
+        profile=profile, generation=generation, deadline=deadline,
+    )
+    statuses = _readiness_feature_statuses(ctx)
+    entitlement = _readiness_controls(ctx, device_id)
+    _readiness_authority_check(
+        ctx, authorization=authorization, instance=instance, expected=expected,
+        profile=profile, generation=generation, deadline=deadline,
+    )
+    settings = _readiness_host_settings(ctx)
+    _readiness_authority_check(
+        ctx, authorization=authorization, instance=instance, expected=expected,
+        profile=profile, generation=generation, deadline=deadline,
+    )
+    bridge = ctx.bridge
+    if bridge is None:
+        raise readiness.ReadinessUnavailableError()
+    def checkpoint() -> None:
+        _readiness_authority_check(
+            ctx, authorization=authorization, instance=instance, expected=expected,
+            profile=profile, generation=generation, deadline=deadline,
+        )
+    try:
+        profile_api = bridge.readiness_profile_api_state(profile, checkpoint=checkpoint)
+    except HmpError:
+        raise
+    except Exception:
+        raise readiness.ReadinessUnavailableError() from None
+    if profile_api not in {"configured", "missing", "unknown"}:
+        raise readiness.ReadinessUnavailableError()
+    # Profile resolution can block while operator controls or live flags change. Re-read both
+    # sources after it and discard the snapshot if either changed; the earlier values must not be
+    # disclosed as current readiness after an await.
+    current_entitlement = _readiness_controls(ctx, device_id)
+    current_settings = _readiness_host_settings(ctx)
+    if current_entitlement != entitlement or current_settings != settings:
+        raise readiness.ReadinessUnavailableError()
+    _readiness_authority_check(
+        ctx, authorization=authorization, instance=instance, expected=expected,
+        profile=profile, generation=generation, deadline=deadline,
+    )
+    checked_at = _readiness_now(ctx)
+    features: dict[str, object] = {}
+    for feature in ("jobs", "model"):
+        capability, reason = statuses[feature]
+        readiness.validate_feature_axes(capability, entitlement, settings[feature], profile_api)
+        features[feature] = readiness.feature_status_fields(
+            capability=capability,
+            capability_reason=reason,
+            entitlement=entitlement,
+            host_setting=settings[feature],
+            profile_api=profile_api,
+        )
+    return {
+        "protocol": 1,
+        "checked_at": checked_at,
+        "generation": generation,
+        "features": features,
+    }
+
+
+async def handle_readiness(request: web.Request) -> web.Response:
+    _readiness_empty_get(request)
+    try:
+        ctx = context(request)
+    except Exception:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    who = _readiness_bearer(request)
+    profile = request.match_info.get("p", "")
+    if _READINESS_PROFILE_RE.fullmatch(profile) is None:
+        raise HmpError(ErrorCode.BAD_REQUEST)
+    try:
+        now = _readiness_now(ctx)
+        ctx.limiter.check("readiness", who.device_id, 30, now)
+        generation = ctx.readiness_generation
+    except HmpError as exc:
+        if exc.code is ErrorCode.RATE_LIMITED:
+            raise
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    except Exception:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    if not isinstance(generation, str) or readiness.GENERATION_RE.fullmatch(generation) is None:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+    authorization = request.headers.get("Authorization")
+    instance = request.headers.get("HMP-Instance")
+    with ctx.readiness_worker_lock:
+        if ctx.readiness_workers >= _READINESS_WORKER_SLOTS:
+            raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+        ctx.readiness_workers += 1
+    deadline = time.monotonic() + _READINESS_DEADLINE_S
+    try:
+        work = asyncio.create_task(asyncio.to_thread(
+            _collect_readiness,
+            ctx,
+            authorization=authorization,
+            instance=instance,
+            expected=who,
+            profile=profile,
+            device_id=who.device_id,
+            deadline=deadline,
+            generation=generation,
+        ))
+    except Exception:
+        with ctx.readiness_worker_lock:
+            ctx.readiness_workers -= 1
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+
+    def release_worker(done: asyncio.Task[Any]) -> None:
+        with contextlib.suppress(asyncio.CancelledError):
+            done.exception()
+        with ctx.readiness_worker_lock:
+            ctx.readiness_workers = max(0, ctx.readiness_workers - 1)
+
+    work.add_done_callback(release_worker)
+    try:
+        payload = await asyncio.wait_for(asyncio.shield(work), timeout=_READINESS_DEADLINE_S)
+    except TimeoutError:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    except readiness.ReadinessUnavailableError:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    except HmpError as exc:
+        if exc.code is ErrorCode.READINESS_UNAVAILABLE:
+            raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+        raise
+    except Exception as exc:
+        log_handler_exception(exc)
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    try:
+        body = wire.dump_json(payload)
+    except Exception:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
+    if len(body) > readiness.MAX_RESPONSE_BYTES:
+        raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+    return web.Response(
+        body=body,
+        content_type="application/json",
+        headers={"Cache-Control": "no-store"},
     )
 
 
@@ -1157,6 +1474,8 @@ def build_app(ctx: ServerContext) -> web.Application:
     app.on_response_prepare.append(_server_header)
     handlers: dict[str, Handler] = {
         "/ready": handle_ready,
+        "/readiness/capabilities": handle_readiness_capabilities,
+        "/bots/{p}/readiness": handle_readiness,
         "/pair/request": handle_pair_request,
         "/pair/complete": handle_pair_complete,
         "/auth/token": handle_token,

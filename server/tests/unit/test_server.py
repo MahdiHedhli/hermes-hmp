@@ -650,7 +650,7 @@ def test_route_table_matches_declared_routes(tmp_path: Path) -> None:
         )
     )
     assert routes == expected
-    assert len(expected) == 27
+    assert len(expected) == 29
 
 
 def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
@@ -674,7 +674,7 @@ def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
         )
     )
     assert routes == expected
-    assert len(expected) == 24
+    assert len(expected) == 26
 
 
 def test_e10_session_routes_are_not_registered_when_browsing_is_unavailable(

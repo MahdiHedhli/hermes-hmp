@@ -14,7 +14,7 @@ which must never be imported on an unsupported build (server-modules.md "Startup
 
 from __future__ import annotations
 
-from collections.abc import Mapping, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any, Protocol
@@ -193,6 +193,7 @@ class ErrorCode(StrEnum):
     # v1.6 draft, LM-3 (HMP_V1.md §7e): the fetch route's owner-device closed-gate answer. The
     # S4 descriptor routes never raise it; a closed gate there gives the exact old bytes.
     MEDIA_UNAVAILABLE = "media_unavailable"
+    READINESS_UNAVAILABLE = "readiness_unavailable"
 
 
 class SubmitDefinitive(StrEnum):
@@ -264,6 +265,7 @@ ERROR_TABLE: Mapping[ErrorCode, ErrorSpec] = {
         _spec(ErrorCode.CRON_UNAVAILABLE, (503,), _NA),
         _spec(ErrorCode.MODEL_UNAVAILABLE, (503,), _NA),
         _spec(ErrorCode.MEDIA_UNAVAILABLE, (503,), _NA),
+        _spec(ErrorCode.READINESS_UNAVAILABLE, (503,), _NA),
     )
 }
 
@@ -310,6 +312,7 @@ ERROR_MESSAGES: Mapping[ErrorCode, str] = {
     ErrorCode.CRON_UNAVAILABLE: "scheduled jobs are unavailable",
     ErrorCode.MODEL_UNAVAILABLE: "model management is unavailable",
     ErrorCode.MEDIA_UNAVAILABLE: "image delivery is unavailable",
+    ErrorCode.READINESS_UNAVAILABLE: "readiness unavailable",
 }
 
 
@@ -389,8 +392,10 @@ READ_COMPAT_REFUSALS: Mapping[OtherWhy, ReadCompatRefusal] = {
         503, ErrorCode.OTHER, OtherWhy.HERMES_READ_DEPENDENCY_MISSING, SubmitDefinitive.YES
     ),
 }
-# ERR-2a: the only route an unsupported build still serves normally.
+# ERR-2a: the only routes an unsupported build still serves normally.
 READ_COMPAT_EXEMPT_PATH = PATH_PREFIX + "/ready"
+READINESS_CAPABILITIES_PATH = PATH_PREFIX + "/readiness/capabilities"
+READ_COMPAT_EXEMPT_PATHS = frozenset({READ_COMPAT_EXEMPT_PATH, READINESS_CAPABILITIES_PATH})
 
 # ERR-4: the submit exit tags that make a `503 other` definitive. Kept for completeness; F1
 # registers no submit route (FR-053).
@@ -971,6 +976,12 @@ class ReadBridge(Protocol):
         """DS-2(b)/DS-6: the resolved `api_server` bind and per-profile `API_SERVER_KEY` for this
         profile, or `None` when either cannot be positively determined (fail closed) or the
         resolved bind is not loopback. Never logs or persists the key (SEC-4)."""
+        ...
+
+    def readiness_profile_api_state(
+        self, profile: str, *, checkpoint: Callable[[], None]
+    ) -> str:
+        """Strict configured/missing/unknown projection; raises on malformed reads."""
         ...
 
     def profile_default_model(self, profile: str) -> Mapping[str, object]:
