@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from hmp_plugin.contract import LIMITER_TABLE_MAX
-from hmp_plugin.store import PAIRING_PENDING_STATE, SCHEMA_VERSION, Store
+from hmp_plugin.store import PAIRING_PENDING_STATE, SCHEMA_VERSION, Store, _SCHEMA
 
 # Column-name signals that would mean raw secret/text material ended up in a table. Hash columns
 # (e.g. `secret_hash`, `hash`, `successor_hash`) are exactly how PR4-4/R16 say tokens and offer
@@ -136,19 +136,31 @@ def test_owner_controls_are_per_active_device_and_revocable(store: Store) -> Non
     assert store.owner_controls_decision("dev_a") is False
 
 
-def test_owner_controls_survive_reopen_and_upgrade_legacy_store(tmp_path: Path) -> None:
+@pytest.mark.parametrize("prior_version", [1, 2])
+def test_owner_controls_survive_reopen_and_upgrade_legacy_store(
+    tmp_path: Path, prior_version: int
+) -> None:
     path = tmp_path / "hmp.sqlite3"
-    first = Store(path)
-    first.migrate()
-    first.insert_user("hmpu_a", "label", 1000)
-    first.insert_device("dev_a", "hmpu_a", "f" * 64, b"x", "phone a", 1000, state="ACTIVE")
-    first.set_owner_controls("dev_a", allowed=True, now=1001)
-    first._require_conn().execute("UPDATE meta SET schema_version = 1 WHERE id = 1")
-    first.close()
+    # Build the actual pre-V3 table shape. Lowering the version field on a V3 store leaves
+    # request tables/triggers in place and is schema corruption, not a legacy migration.
+    old = sqlite3.connect(str(path), isolation_level=None)
+    old.executescript(_SCHEMA)
+    old.execute(
+        "INSERT INTO meta (id,instance_epoch,store_revocation_epoch,schema_version) "
+        "VALUES (1,0,0,?)", (prior_version,)
+    )
+    old.execute("INSERT INTO users VALUES ('hmpu_a','label',1000)")
+    old.execute(
+        "INSERT INTO devices VALUES ('dev_a','hmpu_a',?,?,'phone a','ACTIVE',1000)",
+        ("f" * 64, b"x"),
+    )
+    old.execute("INSERT INTO device_owner_controls VALUES ('dev_a',1,1001)")
+    old.close()
 
     second = Store(path)
     second.migrate()
     assert second.owner_controls_decision("dev_a") is True
+    assert second.request_schema_ready()
     row = second._require_conn().execute("SELECT schema_version FROM meta WHERE id = 1").fetchone()
     assert row["schema_version"] == SCHEMA_VERSION
     second.close()
