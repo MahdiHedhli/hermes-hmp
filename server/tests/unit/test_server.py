@@ -1111,11 +1111,15 @@ def test_built_wheel_contains_package_data(tmp_path: Path) -> None:
         SERVER_DIR / "hmp_plugin", src / "hmp_plugin", ignore=shutil.ignore_patterns("__pycache__")
     )
     out = tmp_path / "dist"
-    subprocess.run(
+    completed = subprocess.run(
         [uv, "build", "--offline", "--wheel", "--out-dir", str(out), str(src)],
-        check=True,
+        check=False,
         capture_output=True,
         timeout=300,
+    )
+    assert completed.returncode == 0, (
+        f"offline wheel build failed (exit {completed.returncode}); "
+        f"stdout={completed.stdout[:8192]!r}; stderr={completed.stderr[:8192]!r}"
     )
     (wheel,) = out.glob("*.whl")
     names = set(zipfile.ZipFile(wheel).namelist())
