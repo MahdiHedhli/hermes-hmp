@@ -36,7 +36,9 @@ from __future__ import annotations
 import dataclasses
 import enum
 import ipaddress
+import secrets
 import ssl
+import threading
 import time
 from collections import OrderedDict
 from collections.abc import Callable, Mapping
@@ -155,6 +157,71 @@ class ServingIdentity(Protocol):
     def server_ssl_context(self) -> ssl.SSLContext: ...
 
 
+@dataclass(frozen=True, slots=True, repr=False)
+class MediaBound:
+    """What `ServerContext.media_snapshot` returns: the listener's bound references, by identity.
+    `bound` is the exact `ctx.media_modules` tuple; `chain` is the bridge's seven-member cache and
+    `reads_media` the reads cache; `registry_module` and `registry` are the listener's own. S5
+    adds three more bound modules: `raster_module` (the actual raster-structure module whose
+    `check_raster_structure` phase one runs), `payload_module` (the one carrier module the bridge
+    and the route share) and `fetch_module` (the orchestrator whose namespace the route runs in).
+    No value here is a wire, native or request field."""
+
+    bound: tuple[Any, ...]
+    chain: tuple[Any, ...]
+    reads_media: tuple[Any, ...]
+    registry_module: Any
+    registry: Any
+    raster_module: Any = None
+    payload_module: Any = None
+    fetch_module: Any = None
+
+    def __repr__(self) -> str:
+        return "MediaBound()"
+
+    __str__ = __repr__
+
+    def same_as(self, other: MediaBound) -> bool:
+        return (
+            self.bound is other.bound
+            and self.chain is other.chain
+            and self.reads_media is other.reads_media
+            and self.registry_module is other.registry_module
+            and self.registry is other.registry
+            and self.raster_module is other.raster_module
+            and self.payload_module is other.payload_module
+            and self.fetch_module is other.fetch_module
+        )
+
+
+class ReadWorkerBudget:
+    """One listener-owner budget retained across disconnect and reconnect generations."""
+
+    def __init__(self) -> None:
+        self.lock = threading.Lock()
+        self.active = 0
+        self.operator = 0
+        self.poisoned = False
+
+    def reserve(self, *, operator: bool) -> bool:
+        with self.lock:
+            if self.poisoned or self.active >= 4 or (operator and self.operator >= 2):
+                return False
+            self.active += 1
+            if operator:
+                self.operator += 1
+            return True
+
+    def release(self, *, operator: bool) -> None:
+        with self.lock:
+            if self.active <= 0 or (operator and self.operator <= 0):
+                self.poisoned = True
+                return
+            self.active -= 1
+            if operator:
+                self.operator -= 1
+
+
 @dataclass
 class ServerContext:
     """Everything a route handler may use. Built once per listener start."""
@@ -173,6 +240,8 @@ class ServerContext:
     # default true. When false, `server.build_app` never registers SES-1/SES-2 at all -- the same
     # "not registered, 404" pattern F1 already uses for send/SSE/approvals/clarify/stop.
     session_browsing_enabled: bool = True
+    # Local startup-only registration. No HTTP request or remote capability can turn this on.
+    controls_requests_enabled: bool = False
     # Amendment F2 (direct send, HMP_V1.md §7a DS-2(b)/DS-10): the owner-dogfood host flag
     # `gateway.platforms.hmp.extra.direct_send.enabled`, default FALSE (OD-F14/OD-F15). Unlike
     # `session_browsing_enabled`, this does NOT control route registration -- `chat/messages` is
@@ -188,6 +257,194 @@ class ServerContext:
     direct_send_flag: Callable[[], bool] = field(default=lambda: False)
     # `direct_send.DirectSendDeps`, only on a supported build (mirrors `reads`/`authorize` above).
     direct_send_deps: Any = None
+    # v1.3 prompt rows (process memory). None until a supported listener builds one.
+    prompt_store: Any = None
+    # Approval availability (spec 034, owner policy 2026-10-01): the `approvals` and `phone_chat`
+    # eligibility members, computed once at listener open from the actual API checks. Both default
+    # CLOSED, so a context built without availability information never opens an approval route.
+    # No exact build, manifest, fingerprint or latch is consulted.
+    approvals_available: Callable[[], bool] = field(default=lambda: False)
+    phone_chat_available: Callable[[], bool] = field(default=lambda: False)
+    # Mobile cron is a separate persistent-execution gate. Both settings are
+    # read from live HMP config for every request, and default to deny.
+    owner_device_ids: Callable[[], frozenset[str]] = field(default=lambda: frozenset())
+    # Readiness-only source readers preserve malformed source values instead of using the
+    # fail-closed operational closures above.
+    readiness_owner_device_ids: Callable[[], frozenset[str]] | None = field(
+        default=None, repr=False
+    )
+    readiness_settings: Callable[[], object] | None = field(default=None, repr=False)
+    readiness_generation: str = field(default_factory=lambda: secrets.token_hex(16), repr=False)
+    read_worker_budget: ReadWorkerBudget = field(default_factory=ReadWorkerBudget, repr=False)
+    cron_flag: Callable[[], bool] = field(default=lambda: False)
+    cron_available: Callable[[], bool] = field(default=lambda: False)
+    model_flag: Callable[[], bool] = field(default=lambda: False)
+    model_available: Callable[[], bool] = field(default=lambda: False)
+    # Minimum-version eligibility (owner policy 2026-10-01): whether this Hermes install provides
+    # what send and session browsing need. Kept separate from the host flags above, which only say
+    # whether the owner turned a feature on.
+    send_available: Callable[[], bool] = field(default=lambda: True)
+    session_browsing_available: bool = True
+    # Local media (specs/011-local-image-serving). `media_flag` re-reads the live host config on
+    # every call and defaults closed. `media_available` is the listener-scoped availability binding
+    # (D-M4): it defaults to closed, `adapter.py` replaces it only on a listener whose `local_media`
+    # eligibility member is available and whose media chain verified coherent, and the callback
+    # itself runs the cheap in-memory use-time identity fence. `media_modules` holds the verified
+    # strong references the bound listener uses -- `(bridge cache tuple, reads cache tuple)`, the
+    # very objects `bridge.py` and `reads.py` cache -- so a caller uses the same objects
+    # without a fresh import. S4's four read routes and the S5 fetch route consume them through
+    # `media_snapshot()`, and a result is never cached here.
+    media_flag: Callable[[], bool] = field(default=lambda: False)
+    media_available: Callable[[], bool] = field(default=lambda: False)
+    media_modules: tuple[tuple[Any, ...], tuple[Any, ...]] | None = None
+    # S4: this listener's one registry (shared by mint here and the later S5 fetch) and the actual
+    # `local_media_registry` module it came from, bound once at listener open by `adapter.py`. They
+    # are NOT part of the `media_modules` shape. Both default `None`; the availability closure
+    # fences them by identity and clears them when it closes this listener's media.
+    media_registry_module: Any = None
+    media_registry: Any = None
+    # S5: three more per-listener bound references, set at open beside the registry and fenced and
+    # cleared by the same availability closure: the actual `local_media_raster_structure` module,
+    # the shared payload-carrier module and the route orchestrator module. All default `None`.
+    media_raster_module: Any = None
+    media_payload_module: Any = None
+    media_fetch_module: Any = None
+
+    def is_approvals_available(self) -> bool:
+        """Bot Chat approvals. Only an exact `True` opens it; anything else closes it."""
+        try:
+            if self.approvals_available() is not True:
+                return False
+            store = self.prompt_store
+            return store is None or not store.closed
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
+
+    def is_phone_chat_available(self) -> bool:
+        """Phone chat sends and answers. Closed when the eligibility member is closed, and for the
+        life of this listener once the binding fence closed its local generation (AP-10)."""
+        try:
+            if self.phone_chat_available() is not True:
+                return False
+            store = self.prompt_store
+            return store is None or not (store.closed or store.phone_closed)
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
+
+    def approval_surface_available(self, surface: str) -> bool:
+        """The member a row's or route's surface needs: `bot_chat` -> approvals, else phone chat."""
+        if surface == "bot_chat":
+            return self.is_approvals_available()
+        return self.is_phone_chat_available()
+
+    def media_enabled(self) -> bool:
+        try:
+            return self.media_flag() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def is_media_available(self) -> bool:
+        """Only an exact `True` opens it; an exception, a falsy or a non-bool closes. In-memory,
+        synchronous and free of any await or import, so a caller can consume it on the loop."""
+        try:
+            return self.media_available() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def media_snapshot(self) -> MediaBound | None:
+        """The exact references this listener bound, or `None`. Synchronous: it first runs the
+        availability closure (an exact-true, identity-fenced check), then reads the context's own
+        slots without an await, import, file or lock, so a caller can mint on the loop with nothing
+        between this call and the mint. It never builds, copies or looks up an object: every
+        member is the very object bound at listener open. Fails closed, logging only the type."""
+        try:
+            if self.media_available() is not True:
+                return None
+            bound = self.media_modules
+            module, registry = self.media_registry_module, self.media_registry
+            if type(bound) is not tuple or len(bound) != 2:
+                return None
+            chain, reads_media = bound
+            if type(chain) is not tuple or type(reads_media) is not tuple:
+                return None
+            if module is None or registry is None:
+                return None
+            raster = self.media_raster_module
+            payload, fetch = self.media_payload_module, self.media_fetch_module
+            if raster is None or payload is None or fetch is None:
+                return None
+            return MediaBound(bound, chain, reads_media, module, registry, raster, payload, fetch)
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return None
+
+    def is_owner_device(self, device_id: str) -> bool:
+        try:
+            decision = self.store.owner_controls_decision(device_id)
+            if decision is not None:
+                return decision
+            return device_id in self.owner_device_ids()
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def is_approval_owner_device(self, device_id: str) -> bool:
+        """Approval/clarify and Phone-send routes: the configured allowlist AND no host denial.
+
+        The per-device controls grant (`is_owner_device`) is a separate privilege for jobs and
+        model management. It never opens an approval route on its own: only an exact
+        `owner_device_ids` entry does, and an explicit host denial still closes it. Any failed
+        read denies."""
+        try:
+            if self.store.owner_controls_decision(device_id) is False:
+                return False
+            return device_id in self.owner_device_ids()
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def cron_enabled(self) -> bool:
+        try:
+            return self.cron_flag() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def is_cron_available(self) -> bool:
+        try:
+            return self.cron_available() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def model_enabled(self) -> bool:
+        try:
+            return self.model_flag() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def is_model_available(self) -> bool:
+        try:
+            return self.model_available() is True
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return False
+
+    def is_send_available(self) -> bool:
+        try:
+            return self.send_available() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            return False
+
+    def direct_send_effective(self) -> bool:
+        """The owner's flag AND this Hermes providing what send needs."""
+        return self.direct_send_enabled() and self.is_send_available()
 
     def direct_send_enabled(self) -> bool:
         try:
@@ -195,6 +452,16 @@ class ServerContext:
         except Exception as exc:  # fail closed: a broken reader never turns the flag on
             log_bridge_exception(exc)
             return False
+
+    @property
+    def readiness_workers(self) -> int:
+        with self.read_worker_budget.lock:
+            return self.read_worker_budget.active
+
+    @property
+    def operator_workers(self) -> int:
+        with self.read_worker_budget.lock:
+            return self.read_worker_budget.operator
 
     @property
     def iid(self) -> str:
@@ -226,15 +493,45 @@ class ServerContext:
         return gate.write_gate(self.guarantees())
 
     def reported_write_gate(self) -> WriteGate:
-        """The gate clients see on the roster and `/ready` (it drives the composer).
+        """An instance-level diagnostic for `/ready` and legacy roster fallback.
 
-        With the owner-only `direct_send` flag on and no full-guarantee gate, sends show as
-        `open_guarded` (GU-4a, OD-F14). The send route still re-checks the flag, the endpoint
-        and every guard per request."""
+        It does not know whether each named profile has its own key. `Reads.roster` folds
+        per-profile send gates into a conservative top-level value, and newer clients use each
+        authorized bot's own `send_gate`. The route rechecks everything per request."""
         base = self.write_gate()
-        if base.state is not WriteGateState.OPEN and self.direct_send_enabled():
+        if not self.direct_send_effective():
+            return (
+                gate.direct_send_gate(base_write_gate=base, flag_enabled=False, endpoint=None)
+                if base.state is WriteGateState.OPEN
+                else base
+            )
+        if base.state is not WriteGateState.OPEN:
             return WriteGate(state=WriteGateState.OPEN_GUARDED, reason=None)
         return base
+
+    def reported_send_gate(self, profile: str) -> WriteGate:
+        """Bot Chat send availability for one profile, using the route's actual prerequisites.
+
+        Never send the endpoint or key over the wire. A send that this Hermes cannot serve or a
+        failed secret lookup reports a closed gate and does not turn a global owner flag into
+        per-profile authority.
+        The send route rechecks all prerequisites at submission time.
+        """
+        base = self.write_gate()
+        if not self.direct_send_effective():
+            return gate.direct_send_gate(base_write_gate=base, flag_enabled=False, endpoint=None)
+        deps = self.direct_send_deps
+        bridge = self.bridge
+        if deps is None or bridge is None:
+            return gate.direct_send_gate(base_write_gate=base, flag_enabled=True, endpoint=None)
+        try:
+            endpoint = bridge.direct_send_endpoint(profile)
+        except Exception as exc:
+            log_bridge_exception(exc)
+            endpoint = None
+        return gate.direct_send_gate(
+            base_write_gate=base, flag_enabled=True, endpoint=endpoint
+        )
 
 
 CTX_KEY: web.AppKey[ServerContext] = web.AppKey("hmp_ctx", ServerContext)

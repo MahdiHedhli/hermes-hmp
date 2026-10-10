@@ -1,10 +1,10 @@
 """Real compat-gate readers (T023): the git-metadata SHA reader, the read-bridge fingerprint,
-`read_compat_builds.json` loading, and the dependency probe. `test_compat_gate.py` and
-`test_compat_matching.py` already cover `CompatGate`'s fixed evaluation order and the CS-19
-matching rule with injected readers/probes; this file covers what actually implements
-`BuildIdentityReader`, the JSON loader and the probe, including against the real T004-extracted
-Hermes builds (`tools/hermes_builds/extract.py`), which have no `.git` and so only ever exercise
-the fingerprint path (research R8, CS-21).
+`read_compat_builds.json` loading, and the dependency probe. `test_compat_gate.py` covers the
+eligibility function's fixed evaluation order, and `test_compat_matching.py` the CS-19 matching
+rule, which is now evidence only. This file covers what implements the tested-sample evidence
+readers, the JSON loader and the probe (Hermes-tree containment, CS-21), including against the
+real T004-extracted Hermes builds (`tools/hermes_builds/extract.py`), which have no `.git` and so
+only ever exercise the fingerprint path.
 """
 
 from __future__ import annotations
@@ -18,73 +18,17 @@ from pathlib import Path
 
 import pytest
 
-from hmp_plugin import compat as compat_mod
 from hmp_plugin.compat import (
-    BuildIdentity,
     DependencySpec,
     GitFingerprintReader,
     _resolve_gitdir,  # white-box test of the git-metadata parser
     compute_read_bridge_fingerprint,
-    direct_send_build_qualified,
     load_read_compat_list,
-    probe_read_dependencies,
+    probe_dependencies,
     resolve_git_head_sha,
 )
 
 BRIDGE_FILES = ("a.py", "sub/b.py")
-
-
-def test_direct_send_requires_its_own_exact_build_and_probe(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    source = tmp_path / "hermes"
-    source.mkdir()
-    (source / "send.py").write_text("def send(): pass\n", encoding="utf-8")
-    git_dir = source / ".git"
-    git_dir.mkdir()
-    sha = "a" * 40
-    (git_dir / "HEAD").write_text(sha + "\n", encoding="utf-8")
-    fingerprint = compute_read_bridge_fingerprint(source, ["send.py"])
-    assert fingerprint is not None
-    manifest = tmp_path / "direct-send.json"
-    manifest.write_text(json.dumps({
-        "format": 1,
-        "bridge_files": ["send.py"],
-        "builds": [{
-            "label": "fixture", "fingerprint": fingerprint, "git_sha": sha,
-            "qualified_by": "test", "qualified_at": "2026-09-29",
-        }],
-    }), encoding="utf-8")
-    calls: list[str] = []
-
-    def probe(*, hermes_root: Path, bridge_files: tuple[str, ...]) -> tuple[str, ...]:
-        calls.append(str(hermes_root))
-        assert bridge_files == ("send.py",)
-        return ()
-
-    monkeypatch.setattr(compat_mod, "probe_direct_send_dependencies", probe)
-    read_identity = BuildIdentity("f" * 64, sha)
-    assert direct_send_build_qualified(
-        read_identity, hermes_root=source, compat_path=manifest
-    )
-    assert len(calls) == 1
-    assert not direct_send_build_qualified(
-        BuildIdentity("f" * 64, "b" * 40), hermes_root=source, compat_path=manifest
-    )
-    assert len(calls) == 1  # no Hermes probe for another Git commit
-    (source / "send.py").write_text("def send(): return 1\n", encoding="utf-8")
-    assert not direct_send_build_qualified(
-        read_identity, hermes_root=source, compat_path=manifest
-    )
-    assert len(calls) == 1  # no probe for a changed write surface
-    (source / "send.py").write_text("def send(): pass\n", encoding="utf-8")
-    monkeypatch.setattr(
-        compat_mod, "probe_direct_send_dependencies", lambda **_: ("missing dependency",)
-    )
-    assert not direct_send_build_qualified(
-        read_identity, hermes_root=source, compat_path=manifest
-    )
-    assert not direct_send_build_qualified(None, hermes_root=source, compat_path=manifest)
 
 
 def _write_bridge_files(root: Path) -> None:
@@ -301,6 +245,60 @@ def test_reader_unresolvable_git_is_unidentifiable(tmp_path: Path) -> None:
     assert reader.read(tmp_path) is None
 
 
+def test_dangling_git_symlink_is_not_no_git(tmp_path: Path) -> None:
+    (tmp_path / ".git").symlink_to(tmp_path / "missing-target")
+    with pytest.raises(ValueError):
+        resolve_git_head_sha(tmp_path)
+
+
+def test_git_symlink_to_valid_dir_still_resolves(tmp_path: Path) -> None:
+    real = tmp_path / "real-git"
+    real.mkdir()
+    (real / "HEAD").write_text("b" * 40 + "\n")
+    root = tmp_path / "root"
+    root.mkdir()
+    (root / ".git").symlink_to(real)
+    assert resolve_git_head_sha(root) == "b" * 40
+
+
+@pytest.mark.parametrize("target_kind", ["file", "dir"])
+def test_reader_dangling_git_link_is_unidentifiable(tmp_path: Path, target_kind: str) -> None:
+    _write_bridge_files(tmp_path)
+    (tmp_path / ".git").symlink_to(tmp_path / f"nonexistent-{target_kind}")
+    assert GitFingerprintReader(BRIDGE_FILES).read(tmp_path) is None
+
+
+def test_reader_inaccessible_git_metadata_is_unidentifiable(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _write_bridge_files(tmp_path)
+    (tmp_path / ".git").mkdir()
+    (tmp_path / ".git" / "HEAD").write_text("c" * 40 + "\n")  # valid, so only the denial can fail
+    real_lstat = Path.lstat
+
+    def denied(self: Path, *args: object, **kwargs: object) -> os.stat_result:
+        if self.name == ".git":
+            raise PermissionError(13, "denied")
+        return real_lstat(self, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(Path, "lstat", denied)
+    with pytest.raises(PermissionError):
+        resolve_git_head_sha(tmp_path)
+    assert GitFingerprintReader(BRIDGE_FILES).read(tmp_path) is None
+
+
+def test_reader_malformed_git_pointer_is_unidentifiable(tmp_path: Path) -> None:
+    _write_bridge_files(tmp_path)
+    (tmp_path / ".git").write_text("not a pointer\n")
+    assert GitFingerprintReader(BRIDGE_FILES).read(tmp_path) is None
+
+
+def test_reader_valid_archive_without_git_is_unchanged(tmp_path: Path) -> None:
+    _write_bridge_files(tmp_path)
+    identity = GitFingerprintReader(BRIDGE_FILES).read(tmp_path)
+    assert identity is not None and identity.git_sha is None
+
+
 def test_reader_is_stable_across_calls(tmp_path: Path) -> None:
     _write_bridge_files(tmp_path)
     reader = GitFingerprintReader(BRIDGE_FILES)
@@ -393,13 +391,15 @@ def test_load_invalid_json_raises(tmp_path: Path) -> None:
 
 
 # --------------------------------------------------------------------------------------------
-# probe_read_dependencies: synthetic tree exercising the real dependency table's mechanics
-# (module import, qualname resolution, signature shape, bridge_files containment)
+# probe_dependencies: synthetic tree exercising the real dependency table's mechanics
+# (module import, qualname resolution, signature shape, Hermes-tree containment)
 # --------------------------------------------------------------------------------------------
 
 
 @pytest.fixture()
 def synthetic_module_tree(tmp_path: Path):
+    """A synthetic Hermes tree (`src`) and a second, foreign tree (`elsewhere`) that is on
+    `sys.path` but is not part of the Hermes tree."""
     root = tmp_path / "src"
     root.mkdir()
     (root / "good_mod.py").write_text(
@@ -410,14 +410,18 @@ def synthetic_module_tree(tmp_path: Path):
         "def free_function(a, b=1):\n"
         "    return a + b\n"
     )
-    (root / "outside_mod.py").write_text("VALUE = 1\n")
+    foreign = tmp_path / "elsewhere"
+    foreign.mkdir()
+    (foreign / "outside_mod.py").write_text("VALUE = 1\n")
     sys.path.insert(0, str(root))
+    sys.path.insert(0, str(foreign))
     for name in ("good_mod", "outside_mod"):
         sys.modules.pop(name, None)
     try:
         yield root
     finally:
         sys.path.remove(str(root))
+        sys.path.remove(str(foreign))
         for name in ("good_mod", "outside_mod"):
             sys.modules.pop(name, None)
 
@@ -428,45 +432,86 @@ def test_probe_all_present_and_contained(synthetic_module_tree: Path) -> None:
         DependencySpec("good_mod", "Widget.method"),
         DependencySpec("good_mod", "free_function"),
     )
-    missing = probe_read_dependencies(
-        hermes_root=synthetic_module_tree,
-        bridge_files=("good_mod.py",),
-        specs=specs,
-    )
-    assert missing == ()
+    assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == ()
 
 
 def test_probe_missing_module(synthetic_module_tree: Path) -> None:
     specs = (DependencySpec("does_not_exist_mod"),)
-    missing = probe_read_dependencies(
-        hermes_root=synthetic_module_tree, bridge_files=("good_mod.py",), specs=specs
+    assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == (
+        "does_not_exist_mod",
     )
-    assert missing == ("does_not_exist_mod",)
 
 
 def test_probe_missing_attribute(synthetic_module_tree: Path) -> None:
     specs = (DependencySpec("good_mod", "NoSuchClass"),)
-    missing = probe_read_dependencies(
-        hermes_root=synthetic_module_tree, bridge_files=("good_mod.py",), specs=specs
+    assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == (
+        "good_mod.NoSuchClass",
     )
-    assert missing == ("good_mod.NoSuchClass",)
 
 
 def test_probe_missing_nested_attribute(synthetic_module_tree: Path) -> None:
     specs = (DependencySpec("good_mod", "Widget.no_such_method"),)
-    missing = probe_read_dependencies(
-        hermes_root=synthetic_module_tree, bridge_files=("good_mod.py",), specs=specs
+    assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == (
+        "good_mod.Widget.no_such_method",
     )
-    assert missing == ("good_mod.Widget.no_such_method",)
 
 
-def test_probe_module_outside_bridge_files_is_missing(synthetic_module_tree: Path) -> None:
+def test_probe_module_outside_the_hermes_tree_is_missing(synthetic_module_tree: Path) -> None:
+    """E5: a module that imports fine but lives outside the Hermes tree is not a Hermes
+    dependency (a shadow module on `sys.path`)."""
     specs = (DependencySpec("outside_mod"),)
-    # outside_mod.py exists and imports fine, but it is not in the allowed bridge_files list.
-    missing = probe_read_dependencies(
-        hermes_root=synthetic_module_tree, bridge_files=("good_mod.py",), specs=specs
-    )
-    assert missing == ("outside_mod",)
+    assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == ("outside_mod",)
+
+
+def test_probe_without_a_hermes_root_reports_everything_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from hmp_plugin import compat as compat_mod
+
+    monkeypatch.setattr(compat_mod, "locate_hermes_root", lambda: None)
+    specs = (DependencySpec("good_mod", "Widget"), DependencySpec("other_mod"))
+    assert probe_dependencies(specs=specs) == ("good_mod.Widget", "other_mod")
+
+
+def test_probe_treats_site_packages_and_hermes_home_plugins_as_outside(
+    synthetic_module_tree: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """E5: inside the root by path, but under `site-packages` or `<HERMES_HOME>/plugins`."""
+    site = synthetic_module_tree / "venv" / "lib" / "site-packages"
+    site.mkdir(parents=True)
+    (site / "shadow_site.py").write_text("def f():\n    return 1\n")
+    plugins = synthetic_module_tree / "home" / "plugins" / "evil"
+    plugins.mkdir(parents=True)
+    (plugins / "shadow_plugin.py").write_text("def f():\n    return 1\n")
+    monkeypatch.setenv("HERMES_HOME", str(synthetic_module_tree / "home"))
+    sys.path[:0] = [str(site), str(plugins)]
+    try:
+        specs = (DependencySpec("shadow_site", "f"), DependencySpec("shadow_plugin", "f"))
+        assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == (
+            "shadow_site.f",
+            "shadow_plugin.f",
+        )
+    finally:
+        sys.path.remove(str(site))
+        sys.path.remove(str(plugins))
+        sys.modules.pop("shadow_site", None)
+        sys.modules.pop("shadow_plugin", None)
+
+
+def test_probe_a_moved_file_still_resolves_under_the_root(synthetic_module_tree: Path) -> None:
+    """E4: containment is the Hermes tree, not a list of file names, so a symbol that moved to
+    another file under the root keeps working."""
+    (synthetic_module_tree / "pkg").mkdir()
+    (synthetic_module_tree / "pkg" / "__init__.py").write_text("")
+    (synthetic_module_tree / "pkg" / "moved.py").write_text("def relocated():\n    return 1\n")
+    sys.modules.pop("pkg", None)
+    sys.modules.pop("pkg.moved", None)
+    try:
+        specs = (DependencySpec("pkg.moved", "relocated"),)
+        assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == ()
+    finally:
+        sys.modules.pop("pkg", None)
+        sys.modules.pop("pkg.moved", None)
 
 
 def test_probe_never_calls_anything(synthetic_module_tree: Path) -> None:
@@ -476,20 +521,16 @@ def test_probe_never_calls_anything(synthetic_module_tree: Path) -> None:
     sys.modules.pop("dangerous_mod", None)
     try:
         specs = (DependencySpec("dangerous_mod", "free_function"),)
-        missing = probe_read_dependencies(
-            hermes_root=synthetic_module_tree,
-            bridge_files=("dangerous_mod.py",),
-            specs=specs,
-        )
-        assert missing == ()  # imported and shape-checked, never invoked
+        # imported and shape-checked, never invoked
+        assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == ()
     finally:
         sys.modules.pop("dangerous_mod", None)
 
 
 def test_probe_unwraps_decorated_internals(synthetic_module_tree: Path) -> None:
     """A `@contextmanager` internal (like `gateway.run._profile_runtime_scope`) is defined in
-    its own module, not in `contextlib.py`: the probe unwraps it before the CS-21 check. Its
-    stdlib wrapper layer (`contextlib.py` itself) never needs to be listed."""
+    its own module, not in `contextlib.py`; its stdlib wrapper layer is allowed. A wrapper layer
+    defined OUTSIDE the Hermes tree is not (SR-3): the wrapper code is what actually runs."""
     (synthetic_module_tree / "scoped_mod.py").write_text(
         "import contextlib\n"
         "from outside_mod import passthrough\n"
@@ -504,7 +545,7 @@ def test_probe_unwraps_decorated_internals(synthetic_module_tree: Path) -> None:
         "\n"
         "from outside_mod import elsewhere\n"
     )
-    (synthetic_module_tree / "outside_mod.py").write_text(
+    (synthetic_module_tree.parent / "elsewhere" / "outside_mod.py").write_text(
         "import functools\n"
         "VALUE = 1\n"
         "def passthrough(fn):\n"
@@ -524,41 +565,23 @@ def test_probe_unwraps_decorated_internals(synthetic_module_tree: Path) -> None:
 
         assert _inspect.getsourcefile(scoped_mod.scope).endswith("contextlib.py")  # the trap
         specs = (DependencySpec("scoped_mod", "scope"),)
-        assert (
-            probe_read_dependencies(
-                hermes_root=synthetic_module_tree, bridge_files=("scoped_mod.py",), specs=specs
-            )
-            == ()
-        )
-        # SR-3: `wrapped`'s OUTER layer (`passthrough`'s `inner`) is defined in outside_mod.py,
-        # not scoped_mod.py -- the wrapper code is what actually runs. Checking only the
-        # innermost, unwrapped function (the old behavior) would let it pass with outside_mod.py
-        # left out of bridge_files entirely; every layer must be checked.
+        assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == ()
+        # `wrapped`'s OUTER layer (`passthrough`'s `inner`) is defined outside the Hermes tree.
         specs = (DependencySpec("scoped_mod", "wrapped"),)
-        assert probe_read_dependencies(
-            hermes_root=synthetic_module_tree, bridge_files=("scoped_mod.py",), specs=specs
-        ) == ("scoped_mod.wrapped",)
-        assert (
-            probe_read_dependencies(
-                hermes_root=synthetic_module_tree,
-                bridge_files=("scoped_mod.py", "outside_mod.py"),
-                specs=specs,
-            )
-            == ()
+        assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == (
+            "scoped_mod.wrapped",
         )
-        # Unwrapping never hides a real definition outside the list.
+        # Unwrapping never hides a real definition outside the tree.
         specs = (DependencySpec("scoped_mod", "elsewhere"),)
-        assert probe_read_dependencies(
-            hermes_root=synthetic_module_tree, bridge_files=("scoped_mod.py",), specs=specs
-        ) == ("scoped_mod.elsewhere",)
+        assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == (
+            "scoped_mod.elsewhere",
+        )
     finally:
         sys.modules.pop("scoped_mod", None)
 
 
 def test_probe_treats_a_wrapped_cycle_as_missing(synthetic_module_tree: Path) -> None:
-    """SR-3 problem 2: `inspect.unwrap` raises `ValueError` on a `__wrapped__` cycle, which the
-    old code caught and turned into `None`, then fell back to the (listed) module file -- passing
-    silently. The new check must fail closed instead."""
+    """SR-3: `inspect.unwrap` raises `ValueError` on a `__wrapped__` cycle. Fail closed."""
     (synthetic_module_tree / "cyclic_mod.py").write_text(
         "def a(x):\n"
         "    return x\n"
@@ -570,16 +593,16 @@ def test_probe_treats_a_wrapped_cycle_as_missing(synthetic_module_tree: Path) ->
     sys.modules.pop("cyclic_mod", None)
     try:
         specs = (DependencySpec("cyclic_mod", "a"),)
-        assert probe_read_dependencies(
-            hermes_root=synthetic_module_tree, bridge_files=("cyclic_mod.py",), specs=specs
-        ) == ("cyclic_mod.a",)
+        assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == (
+            "cyclic_mod.a",
+        )
     finally:
         sys.modules.pop("cyclic_mod", None)
 
 
 def test_probe_treats_an_undeterminable_source_as_missing(synthetic_module_tree: Path) -> None:
-    """SR-3 problem 2: an object `inspect.getsourcefile` cannot place (a `functools.partial`, a
-    callable instance, a C function) must never fall back to the module's own (listed) file."""
+    """SR-3: an object `inspect.getsourcefile` cannot place (a `functools.partial`, a callable
+    instance, a C function) must never fall back to the module's own file."""
     (synthetic_module_tree / "partial_mod.py").write_text(
         "import functools\n"
         "def base(x, y):\n"
@@ -589,27 +612,80 @@ def test_probe_treats_an_undeterminable_source_as_missing(synthetic_module_tree:
     sys.modules.pop("partial_mod", None)
     try:
         specs = (DependencySpec("partial_mod", "curried"),)
-        assert probe_read_dependencies(
-            hermes_root=synthetic_module_tree, bridge_files=("partial_mod.py",), specs=specs
-        ) == ("partial_mod.curried",)
+        assert probe_dependencies(hermes_root=synthetic_module_tree, specs=specs) == (
+            "partial_mod.curried",
+        )
     finally:
         sys.modules.pop("partial_mod", None)
 
 
-def test_probe_without_bridge_files_skips_containment(synthetic_module_tree: Path) -> None:
-    specs = (DependencySpec("outside_mod"),)
-    missing = probe_read_dependencies(hermes_root=synthetic_module_tree, specs=specs)
-    assert missing == ()
+def test_probe_named_parameter_is_not_satisfied_by_kwargs(synthetic_module_tree: Path) -> None:
+    """E6: a writer that only has `**kwargs` would silently swallow `paused`."""
+    (synthetic_module_tree / "writer_mod.py").write_text(
+        "def named(name, paused=False, *, repeat=None):\n    return 1\n"
+        "def swallowing(name, **kwargs):\n    return 1\n"
+        "def positional_only(name, paused=False, /):\n    return 1\n"
+        "def three(a, b, c, d=None):\n    return 1\n"
+        "def two(a, b):\n    return 1\n"
+    )
+    sys.modules.pop("writer_mod", None)
+    try:
+        params = frozenset({"name", "paused", "repeat"})
+        assert probe_dependencies(
+            hermes_root=synthetic_module_tree,
+            specs=(DependencySpec("writer_mod", "named", params=params),),
+        ) == ()
+        assert probe_dependencies(
+            hermes_root=synthetic_module_tree,
+            specs=(
+                DependencySpec("writer_mod", "swallowing", params=frozenset({"paused"})),
+                DependencySpec("writer_mod", "positional_only", params=frozenset({"paused"})),
+                DependencySpec("writer_mod", "two", min_positional=3),
+            ),
+        ) == ("writer_mod.swallowing", "writer_mod.positional_only", "writer_mod.two")
+        assert probe_dependencies(
+            hermes_root=synthetic_module_tree,
+            specs=(DependencySpec("writer_mod", "three", min_positional=3),),
+        ) == ()
+    finally:
+        sys.modules.pop("writer_mod", None)
 
 
-def test_probe_default_specs_is_read_dependencies_table() -> None:
+def test_dependency_tables_split_session_browsing_and_name_paused() -> None:
+    from hmp_plugin.compat import (
+        CRON_DEPENDENCIES,
+        DIRECT_SEND_DEPENDENCIES,
+        MODEL_DEPENDENCIES,
+        READ_CORE_DEPENDENCIES,
+        READ_DEPENDENCIES,
+        SESSION_BROWSING_DEPENDENCIES,
+    )
+
+    browsing = {(d.module, d.qualname) for d in SESSION_BROWSING_DEPENDENCIES}
+    assert browsing == {
+        ("hermes_state", "SessionDB.list_sessions_rich"),
+        ("hermes_state", "SessionDB.get_session"),
+    }
+    assert not browsing & {(d.module, d.qualname) for d in READ_CORE_DEPENDENCIES}
+    assert ("hermes_state", "SessionDB.get_session") in {
+        (d.module, d.qualname) for d in DIRECT_SEND_DEPENDENCIES
+    }
+    assert READ_DEPENDENCIES == READ_CORE_DEPENDENCIES + SESSION_BROWSING_DEPENDENCIES
+    writer = next(d for d in CRON_DEPENDENCIES if d.qualname == "create_job")
+    assert "paused" in writer.params
+    assert any(d.qualname == "_write_profile_model" and d.min_positional == 3
+               for d in MODEL_DEPENDENCIES)
+    assert not any(d.module == "fastapi" for d in MODEL_DEPENDENCIES)
+
+
+def test_probe_default_specs_is_the_core_read_table() -> None:
     import inspect as _inspect
 
-    from hmp_plugin.compat import READ_DEPENDENCIES
+    from hmp_plugin.compat import READ_CORE_DEPENDENCIES
 
-    default = _inspect.signature(probe_read_dependencies).parameters["specs"].default
-    assert default is READ_DEPENDENCIES
-    assert len(READ_DEPENDENCIES) > 0
+    default = _inspect.signature(probe_dependencies).parameters["specs"].default
+    assert default is READ_CORE_DEPENDENCIES
+    assert len(READ_CORE_DEPENDENCIES) > 0
 
 
 # --------------------------------------------------------------------------------------------
@@ -698,15 +774,15 @@ def test_real_build_every_bridge_file_present() -> None:
 @pytest.mark.skipif(
     not (_STOCK_SRC.is_dir() and _EXPERIMENTAL_SRC.is_dir()), reason=_extracted_builds_reason
 )
-def test_gate_end_to_end_against_real_builds_fingerprint_only_path() -> None:
+def test_evidence_matching_against_real_builds_fingerprint_only_path() -> None:
     """CS-19's "no .git -> fingerprint-only entry" case, driven by the real fingerprint of a real
-    extracted build rather than a synthetic identity."""
-    from hmp_plugin.compat import BuildEntry, CompatGate, ReadCompatList
+    extracted build. The match is evidence (`tested`), never an admission."""
+    from hmp_plugin.compat import BuildEntry, match_build
 
     bridge_files = _committed_bridge_files()
+    reader = GitFingerprintReader(bridge_files)
     stock_fp = compute_read_bridge_fingerprint(_STOCK_SRC, bridge_files)
     assert stock_fp is not None
-
     entry = BuildEntry(
         fingerprint=stock_fp,
         git_sha=None,
@@ -714,33 +790,11 @@ def test_gate_end_to_end_against_real_builds_fingerprint_only_path() -> None:
         qualified_by="test_compat",
         qualified_at="2026-01-01",
     )
-    compat_list = ReadCompatList(format=1, bridge_files=bridge_files, builds=(entry,))
-    reader = GitFingerprintReader(bridge_files)
-
-    def real_root() -> Path:
-        return _STOCK_SRC
-
-    supported = CompatGate(reader, compat_list, probe=lambda: (), root_locator=real_root)
-    result = supported.evaluate()
-    assert result.supported, result
-
-    # The experimental build's fingerprint is different, so it is unlisted -> unsupported, and
-    # the probe (which would import Hermes) must never even run.
-    calls = {"n": 0}
-
-    def counting_probe() -> tuple[str, ...]:
-        calls["n"] += 1
-        return ()
-
-    def experimental_root() -> Path:
-        return _EXPERIMENTAL_SRC
-
-    unsupported = CompatGate(
-        reader, compat_list, probe=counting_probe, root_locator=experimental_root
-    )
-    result = unsupported.evaluate()
-    assert not result.supported
-    assert calls["n"] == 0
+    stock_identity = reader.read(_STOCK_SRC)
+    experimental_identity = reader.read(_EXPERIMENTAL_SRC)
+    assert stock_identity is not None and experimental_identity is not None
+    assert match_build(stock_identity, (entry,)) is entry
+    assert match_build(experimental_identity, (entry,)) is None
 
 
 @pytest.mark.skipif(

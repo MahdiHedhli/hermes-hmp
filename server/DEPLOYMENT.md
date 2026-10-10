@@ -7,6 +7,26 @@ profile at all. It is unrelated to `HOST_HARDENING.md`, which covers exposure of
 host surfaces (`api_server`, the dashboard, `/api/status`); this note covers what HMP itself needs
 from the gateway config to route correctly.
 
+## Check the Hermes gateway topology first
+
+The explicit configuration below was tested on the older fixture builds
+`04fa849e70` and `7e8c8f07a1`. Do not apply its `multiplex_profiles: true` line
+blindly to a different Hermes release. In Hermes `8afaab3703` (2026-09-26),
+an **unset** root value lets the gateway run a migration preflight and stay
+standalone when another profile gateway or a credential conflict blocks
+multiplexing. An explicit `true` takes the direct configuration path instead.
+It can also make `/p/<profile>/` reachable on the default API listener and
+changes profile secret scoping. These are host-wide effects, not HMP settings.
+
+Before changing the root flag on a multi-profile host, review the output of
+`hermes gateway migrate --multiplex --dry-run`, the listener exposure, and each
+profile's credentials. Resolve any migration blockers through Hermes's own
+workflow. HMP may report `not_served` until the topology is safe; do not force
+the flag to make the mobile app connect. The routing checklist below describes
+the configuration that the older tested HMP fixtures need once the host is
+ready to serve those profiles. Check it against the Hermes build in use before
+automating it.
+
 ## The requirement
 
 For every profile HMP is to serve reads for, the Hermes gateway config needs **both**:
@@ -25,9 +45,11 @@ For every profile HMP is to serve reads for, the Hermes gateway config needs **b
          guild_id: "<profile>"
    ```
 
-Neither is an HMP default. A fresh Hermes install has no `profile_routes` at all, and
-`multiplex_profiles` is unset (single-profile). Without both, HMP is installed and paired
-correctly but every read for that bot fails closed (see "What happens if this is missing" below).
+Neither setting is supplied by HMP. A fresh Hermes install has no HMP
+`profile_routes`; an unset multiplex setting may resolve to standalone or
+multiplexed mode after Hermes's own preflight, depending on the build and host.
+Without a served and routed profile, HMP reads fail closed (see "What happens
+if this is missing" below).
 
 ## Why this is real Hermes behavior, not a fixture artefact
 
@@ -95,7 +117,9 @@ HMP already fails closed with an explicit, documented state rather than a silent
 
 ## Operator checklist
 
-- [ ] Root `config.yaml`: `gateway.multiplex_profiles: true`.
+- [ ] Confirm Hermes's effective gateway topology. On a multi-profile host,
+      review `hermes gateway migrate --multiplex --dry-run` before explicitly
+      setting `gateway.multiplex_profiles: true` in the root `config.yaml`.
 - [ ] Root `config.yaml`: one `gateway.profile_routes` entry per profile HMP should serve —
       `platform: hmp`, `profile: <name>`, `guild_id: <name>` (leave `bot_profile` unset: HMP is a
       root-level adapter, so routes apply against the default profile's bot, which is correct).
@@ -105,3 +129,37 @@ HMP already fails closed with an explicit, documented state rather than a silent
 
 If a bot's roster entry shows `"not_routed"` or `"not_served"` after pairing, re-check this
 checklist before assuming a plugin or pairing problem.
+
+## Approvals and Phone chat (owner dogfood, spec 034)
+
+Approvals follow the same minimum-version policy as every other HMP feature: HMP attempts them on
+Hermes `0.21.5` or later and closes them only when a Hermes API they need is actually missing.
+There is no build list, receipt or restart latch to satisfy. The feature is still not released or
+independently reviewed, and nothing here changes a grant, a config file or a device.
+
+1. **Check availability.** `hermes hmp compat` lists `approvals` and `phone_chat`. `approvals`
+   needs read and send. `phone_chat` also needs the Hermes helpers HMP calls in process. Add
+   `--verbose` to see whether this Hermes has the Bot Chat session-stream approval hook. That is a
+   neutral fact: without it Bot Chat sends still work and Hermes keeps its own fail-closed
+   behavior, and no card is shown. Availability is computed when the listener opens, so after a
+   Hermes upgrade restart the gateway in the usual drained way and check again.
+2. **Record the controls decision first.** An approval owner is a device listed in
+   `gateway.platforms.hmp.extra.owner_device_ids` that the host has not explicitly denied. That
+   list is the same legacy allowlist the jobs and default-model controls fall back to, so a listed
+   device with **no recorded controls decision also receives jobs and model controls**. Before
+   adding a device ID, record an explicit decision for it on the host with
+   `hermes hmp devices grant-controls <id>`. Approval ownership requires `grant-controls` (or no
+   decision, legacy); `deny-controls` removes approval ownership, so a denied device gets 404 on
+   every approval route. This coupling is recorded, not removed (HMP v1 RES-13).
+   `hermes hmp setup check` prints a read-only notice when active paired devices have no recorded
+   decision. It cannot read the config allowlist, names no device and changes nothing.
+3. **Then list the device.** Add its ID to `owner_device_ids` through your normal Hermes config
+   workflow. HMP reads the live config on each request. Keep `direct_send.enabled` as it is; the
+   routes need it. Removing the ID closes the device's next request.
+4. **What changes for the phone.** Only a listed, undenied device's guarded Bot Chat send opens
+   the session stream and may answer Hermes's own approval card through Hermes's native route.
+   Every other device's send is unchanged and synchronous. Phone chat is a separate hand-off with
+   its own prompt-only answer route.
+
+To roll back, remove the device ID from `owner_device_ids`. Nothing on disk besides that list needs
+undoing.
