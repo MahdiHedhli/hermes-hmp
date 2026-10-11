@@ -1,11 +1,12 @@
 """Fixture-only resource ownership with inert filesystem/scheduler objects."""
 
 import contextlib
-import importlib.util
 import stat
+import sys
 import unittest
+from dataclasses import FrozenInstanceError, fields
 from pathlib import Path
-from types import SimpleNamespace
+from types import FunctionType, ModuleType, SimpleNamespace
 
 from . import test_fixture_work as work_models
 
@@ -14,9 +15,13 @@ CAUSALS = []
 
 def _load_cli_subject():
     path = Path(__file__).resolve().parents[2] / "hmp_plugin/cli.py"
-    spec = importlib.util.spec_from_file_location("hmp_plugin._fixture_cli_test_subject", path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
+    # Dataclasses inspect cls.__module__ on Python 3.11. Use this actual collected
+    # test module's existing identity, with isolated declaration globals; never
+    # install a synthetic module in sys.modules or mutate the production CLI.
+    module = ModuleType(__name__)
+    namespace = vars(module)
+    namespace.update(__file__=str(path), __package__="hmp_plugin")
+    FunctionType(compile(path.read_bytes(), str(path), "exec"), namespace)()
     return module
 
 
@@ -157,6 +162,23 @@ class ServingResourceTests(unittest.TestCase):
 
     def tearDown(self):
         self.harness.tearDown()
+
+    def test_cli_loader_preserves_dataclass_and_existing_module_identity(self):
+        registered = sys.modules[__name__]
+        old_synthetic = sys.modules.get("hmp_plugin._fixture_cli_test_subject")
+        module = _load_cli_subject()
+        self.assertIs(sys.modules[__name__], registered)
+        self.assertIs(sys.modules.get("hmp_plugin._fixture_cli_test_subject"), old_synthetic)
+        self.assertIsNot(module, registered)
+        self.assertEqual(module.ListenerRecord.__module__, __name__)
+        self.assertEqual(tuple(item.name for item in fields(module.ListenerRecord)), (
+            "host", "port", "iid", "pid", "nonce", "profiles", "health_checked_at", "health",
+        ))
+        record = module.ListenerRecord("localhost", 8210, "iid", 1, "nonce")
+        self.assertIsNone(record.profiles)
+        with self.assertRaises(FrozenInstanceError):
+            record.host = "changed"
+        CAUSALS.append("full actual CLI loader preserves frozen dataclass without module injection")
 
     def world(self):
         work, loop, _worker, _task = self.harness.scenario()

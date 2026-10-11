@@ -185,6 +185,7 @@ class ModelAlias:
         self.first_failure = None
         self.lifecycle = None
         self.binding = None
+        self.state = "ISSUED"
 
     def poison(self, error):
         if self.first_failure is None:
@@ -195,6 +196,7 @@ class ModelAlias:
         if self.begin_error is not None:
             raise self.begin_error
         self.lifecycle = lifecycle
+        self.state = "SETUP"
 
     def setup_checkpoint(self, lifecycle):
         self.check_calls += 1
@@ -261,6 +263,14 @@ class LifecycleTests(unittest.TestCase):
             to_thread=loop.to_thread, CancelledError=ModelCancellation,
         ))
         self.patch.setattr(self.module, "open_components", components)
+
+        def setup_only_policy(actual):
+            # This model exercises retained setup, not resource/serving activation.
+            # Its second checkpoint deliberately keeps serving closed.
+            if actual.ctx is not None:
+                raise RuntimeError("FIXTURE_SERVING_WORK_UNBOUND")
+
+        self.patch.setattr(self.module, "_require_fixture_resource_policy", setup_only_policy)
         self.patch.setattr(self.module, "server", SimpleNamespace(
             listener_settings=lambda _extra: object(),
         ))
@@ -269,6 +279,11 @@ class LifecycleTests(unittest.TestCase):
 
     def record(self, name):
         CAUSALS.append(name)
+
+    def test_real_resource_policy_stays_closed_before_model_substitution(self):
+        with self.assertRaises(self.module._WorkRefusedError):
+            self.module._require_fixture_resource_policy(object())
+        self.record("real-resource-policy-unbound")
 
     def test_default_preflight_no_launch(self):
         loop, owner, alias, _ctx, calls, _faults = self.scenario()
@@ -701,11 +716,24 @@ class AliasTests(unittest.TestCase):
 
     def test_serving_and_handoff_stay_closed(self):
         h = self.helper
+        # A complete source-model join must still reach the real unbound issuer.
+        # object.__new__ is model construction, not a real issuance path.
         owner = object.__new__(h.ListenerAliasOwner)
-        with self.assertRaisesRegex(h.ScopeRefusedError, "FIXTURE_SERVING_WORK_UNBOUND"):
-            owner.handoff(object())
-        owner.server = object()
-        owner.state = "HANDOFF_PENDING"
-        with self.assertRaisesRegex(h.ScopeRefusedError, "FIXTURE_SERVING_WORK_UNBOUND"):
-            owner.observe_handoff(owner.server)
+        ctx, adapter = object(), SimpleNamespace()
+        lifecycle = SimpleNamespace(adapter=adapter, ctx=ctx, stopping=False)
+        scope = SimpleNamespace(lifecycle=lifecycle)
+        server = SimpleNamespace(ctx=ctx, _fixture_scope=scope,
+                                 _fixture_used=False, _starting=False)
+        scope.server = adapter._server = server
+        lifecycle.resources = scope
+        owner.lifecycle, owner.adapter = lifecycle, adapter
+        owner.first_failure, owner.slot, owner.server = None, None, None
+        owner.state, owner.issuance = "SETUP", object()
+        with self.assertRaisesRegex(h.ScopeRefusedError, "LISTENER_ROOT_ISSUER_UNBOUND"):
+            owner.handoff(server)
+        self.assertIsNone(owner.server)
+        self.assertFalse(server._fixture_used)
+        self.assertIsNotNone(owner.first_failure)
+        with self.assertRaisesRegex(h.ScopeRefusedError, "ALIAS_HANDOFF"):
+            owner.observe_handoff(server)
         CAUSALS.append("real-serving-handoff-unbound")
