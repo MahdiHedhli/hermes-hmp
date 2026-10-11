@@ -1192,6 +1192,9 @@ def _mutant_module(old: str, new: str, tag: str) -> types.ModuleType:
     module = types.ModuleType(f"hmp_plugin.media_emission_{tag}")
     module.__package__ = "hmp_plugin"
     module.__file__ = str(PACKAGE / "media_emission.py")
+    if tag == "job_copies_context":
+        # The mutant alone replaces the source-owned worker with this executor call.
+        module.__dict__["asyncio"] = asyncio
     exec(compile(source.replace(old, new), module.__file__, "exec"), module.__dict__)  # noqa: S102
     return module
 
