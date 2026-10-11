@@ -378,6 +378,7 @@ def test_the_disconnect_path_closes_the_generation(
     class Srv:
         def __init__(self) -> None:
             self.ctx = ctx
+            self.operator_worker_debt: int = 0
 
         async def stop(self, *, notify: bool) -> None:
             stopped.append(notify)

@@ -1693,12 +1693,110 @@ def test_r1_guard_helpers_have_only_the_reviewed_additions(name: str) -> None:
     assert hashlib.sha256(text.encode()).hexdigest() == BASE_HASHES[name]
 
 
+# AR1 readiness composition 2de3183 adds exactly 78 lines to reviewed S5 c9a47b7.
+# Current bytes also match accepted SpecKit V4's bridge pin; invert this exact slice first.
+AR1_READINESS_BRIDGE_SHA = "d6a1203de2c8d2659584c1d9d53eb84a4d835249d35ad1c07bfe59b943d9a780"
+AR1_PRE_READINESS_BRIDGE_SHA = "f59db72f9fd82ddd90ba5cee608d7de8950df70725bd0a0a08d4f3d35f4ee9ba"
+AR1_READINESS_ADDITIONS = (
+    (
+        "        \"platforms\",\n"
+    ),
+    (
+        "\n    def readiness_api_server_extra(self) -> "
+        "object:\n        \"\"\"Return raw readiness confi"
+        "g shape, unlike the error-collapsing endpoint"
+        " helper.\"\"\"\n        from gateway.config impor"
+        "t Platform, load_gateway_config  # \u00a712, E-GAP"
+        "-14\n\n        config = load_gateway_config()\n "
+        "       platforms = getattr(config, \"platforms"
+        "\", None)\n        if not isinstance(platforms,"
+        " Mapping):\n            raise BridgeError(\"pro"
+        "file config is malformed\")\n        if Platfor"
+        "m.API_SERVER not in platforms:\n            re"
+        "turn None\n        platform_config = platforms"
+        "[Platform.API_SERVER]\n        if platform_con"
+        "fig is None:\n            raise BridgeError(\"p"
+        "rofile platform config is malformed\")\n       "
+        " try:\n            extra = platform_config.ext"
+        "ra\n        except AttributeError:\n           "
+        " raise BridgeError(\"profile platform extra is"
+        " malformed\") from None\n        if not isinsta"
+        "nce(extra, Mapping):\n            raise Bridge"
+        "Error(\"profile platform extra is malformed\")\n"
+        "        return extra\n\n    def readiness_scope"
+        "d_api_server_key(self) -> object:\n        \"\"\""
+        "Return the scoped secret value for validation"
+        "; it is never returned or logged.\"\"\"\n        "
+        "from gateway.platforms._shared import get_sco"
+        "ped_secret  # \u00a712, E-GAP-31\n\n        return g"
+        "et_scoped_secret(\"API_SERVER_KEY\", \"\")\n"
+    ),
+    (
+        "    def readiness_profile_api_state(\n        "
+        "self, profile: str, *, checkpoint: Callable[["
+        "], None]\n    ) -> str:\n        \"\"\"Exception-p"
+        "reserving, no-network profile endpoint status"
+        " for readiness only.\"\"\"\n        home = self._"
+        "profile_home(profile)\n        checkpoint()\n  "
+        "      served = self.served_profiles()\n       "
+        " checkpoint()\n        is_default = bool(serve"
+        "d) and profile == served[0]\n        with self"
+        "._hermes.profile_runtime_scope(home):\n       "
+        "     raw_extra = self._hermes.readiness_api_s"
+        "erver_extra()\n            checkpoint()\n      "
+        "      raw_scoped_key = self._hermes.readiness"
+        "_scoped_api_server_key()\n        checkpoint()"
+        "\n        if raw_extra is None:\n            re"
+        "turn \"missing\"\n        if not isinstance(raw_"
+        "extra, Mapping):\n            raise ValueError"
+        "(\"profile endpoint config malformed\")\n       "
+        " host = raw_extra.get(\"host\")\n        if host"
+        " is not None and not isinstance(host, str):\n "
+        "           raise ValueError(\"profile endpoint"
+        " host malformed\")\n        if host is None or "
+        "host == \"\":\n            host = os.environ.get"
+        "(\"API_SERVER_HOST\", DEFAULT_API_SERVER_HOST)\n"
+        "        if host == _LOCALHOST_ALIAS:\n        "
+        "    host = DEFAULT_API_SERVER_HOST\n        if"
+        " host not in _LOOPBACK_LITERALS:\n            "
+        "return \"missing\"\n        raw_port = raw_extra"
+        ".get(\"port\")\n        if raw_port is None:\n   "
+        "         raw_port = os.environ.get(\"API_SERVE"
+        "R_PORT\", str(DEFAULT_API_SERVER_PORT))\n      "
+        "  if type(raw_port) is int:\n            port "
+        "= raw_port\n        elif isinstance(raw_port, "
+        "str) and re.fullmatch(r\"[0-9]{1,5}\", raw_port"
+        "):\n            port = int(raw_port)\n        e"
+        "lse:\n            raise ValueError(\"profile en"
+        "dpoint port malformed\")\n        if not 1 <= p"
+        "ort <= 65535:\n            return \"missing\"\n  "
+        "      if not isinstance(raw_scoped_key, str):"
+        "\n            raise ValueError(\"profile endpoi"
+        "nt key malformed\")\n        key = raw_scoped_k"
+        "ey\n        if is_default:\n            inline "
+        "= raw_extra.get(\"key\", None)\n            if i"
+        "nline is not None:\n                if not isi"
+        "nstance(inline, str):\n                    rai"
+        "se ValueError(\"profile endpoint key malformed"
+        "\")\n                if inline.strip():\n       "
+        "             key = inline\n        return \"con"
+        "figured\" if _has_usable_secret(key) else \"mis"
+        "sing\"\n\n"
+    ),
+)
+
+
 def test_the_bridge_differs_from_the_base_only_by_the_s5_additions() -> None:
-    """S5 adds to `bridge.py` exactly: the `hashlib` and `media_payload` module imports and the
-    block of three new methods (`_media_fetch_bound`, `media_fetch_phase_one`,
-    `media_fetch_phase_two`) before `lineage`. Removing precisely those pieces reproduces the base
-    bytes, so every old method, the proof, `bind_media_batch` and the twins are byte-identical."""
+    """Invert exact reviewed readiness additions, then the existing S5 imports/methods.
+
+    Both intermediate and original baseline hashes remain gates. No unrelated edit is accepted.
+    """
     text = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
+    assert hashlib.sha256(text.encode()).hexdigest() == AR1_READINESS_BRIDGE_SHA
+    for addition in AR1_READINESS_ADDITIONS:
+        assert text.count(addition) == 1
+        text = text.replace(addition, "", 1)
+    assert hashlib.sha256(text.encode()).hexdigest() == AR1_PRE_READINESS_BRIDGE_SHA
     assert text.count("import hashlib\n") == 1
     assert text.count("from . import media_payload\n") == 1
     start = text.index("    # S5: the two off-loop native phases")

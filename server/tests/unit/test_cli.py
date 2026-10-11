@@ -301,6 +301,7 @@ MUTATING = [
     ("devices", "revoke", "dev_x"),
     ("devices", "grant-controls", "dev_x"),
     ("devices", "deny-controls", "dev_x"),
+    ("devices", "controls-requests", "allow", "a" * 32),
     ("instance", "rotate-key"),
 ]
 

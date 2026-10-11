@@ -37,6 +37,11 @@ CONTRACT_MODULES = {
     "mobile_model.py",
     "server.py",
     "readiness.py",
+    # AR1 reviewed request Store, authenticated self routes, and read-only host TTY bridge.
+    # Closed names also extend the Hermes-free import and optional-media boundary tests.
+    "controls_requests.py",
+    "controls_request_routes.py",
+    "operator_read.py",
     "request_ctx.py",
     "adapter.py",
     "cli.py",

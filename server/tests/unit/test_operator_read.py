@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import errno
 import io
 import json
 import os
@@ -630,8 +631,14 @@ def test_owned_unix_wrong_peer_and_oversize_request_never_call_bridge(
         with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
             client.settimeout(0.5)
             client.connect(str(service.path))
-            client.sendall(raw)
-            return client.recv(1024)
+            try:
+                client.sendall(raw)
+                return client.recv(1024)
+            except ConnectionResetError as exc:
+                # A rejected stream may reset when the peer closes with unread bytes.
+                # Only this negative probe accepts that empty transport refusal.
+                assert exc.errno == errno.ECONNRESET
+                return b""
     async def scenario() -> None:
         await service.start()
         real_peer = operator_read._peer_uid
@@ -642,6 +649,7 @@ def test_owned_unix_wrong_peer_and_oversize_request_never_call_bridge(
                 "request_id": RID, "iid": IID, "nonce": NONCE, "challenge": "0" * 32,
             }).encode() + b"\n"
             assert await asyncio.to_thread(probe, request) == b""
+            assert calls == []
             monkeypatch.setattr(operator_read, "_peer_uid", real_peer)
             assert await asyncio.to_thread(probe, b"x" * 600 + b"\n") == b""
             assert calls == []
@@ -649,6 +657,7 @@ def test_owned_unix_wrong_peer_and_oversize_request_never_call_bridge(
             monkeypatch.setattr(operator_read, "_peer_uid", real_peer)
             assert await service.stop() == 0
         assert not service.path.exists()
+        assert (ctx.read_worker_budget.active, ctx.read_worker_budget.operator) == (0, 0)
     asyncio.run(scenario())
 
 
