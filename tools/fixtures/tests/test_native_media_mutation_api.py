@@ -2,6 +2,7 @@
 
 import importlib.util
 import json
+import runpy
 import sys
 import unittest
 from contextlib import nullcontext
@@ -32,16 +33,29 @@ def load_worker():
 
 worker = load_worker()
 w = vars(worker)
+models = SimpleNamespace(
+    **runpy.run_path(str(ROOT / "tests/process_window_models.py"), run_name="_inert_window_models")
+)
 Runtime = w["NativeRuntime"]
 RefusalError = w["RefusalError"]
 BEFORE = "a" * 64
 
 
 def run_action(coroutine):
-    with patch.object(worker, "read_pin", lambda _pin, _ledger: b"pinned"):
+    runtime = coroutine.cr_frame.f_locals["self"]
+    command = coroutine.cr_frame.f_locals["command"]
+    scope = runtime._inert_scope
+    with scope, patch.object(worker, "read_pin", lambda _pin, _ledger: b"pinned"):
+        try:
+            ticket = scope.begin(runtime, command)
+        except BaseException:
+            # This test-owned coroutine was never advanced or transferred.
+            coroutine.close()
+            raise
         try:
             coroutine.send(None)
         except StopIteration as result:
+            runtime.window.complete(ticket, result.value)
             return result.value
         raise AssertionError("unexpected suspension")
 
@@ -132,6 +146,10 @@ class TestNativeMutationReceipts(unittest.TestCase):
             "profile": "media-alpha",
             "args": {} if op == "REVOKE" else {"chatId": "chat", "oldSessionId": "old"},
         }
+        command = models.command(command, role)
+        scope = models.InertScope()
+        with scope:
+            scope.attach(runtime, [command], role)
         return runtime, command, pairing, store
 
     def assert_receipt(self, case, result):
@@ -178,7 +196,7 @@ class TestNativeMutationReceipts(unittest.TestCase):
     def test_missing_before_seal_refuses_before_mutation(self):
         for op in ("REVOKE", "ROTATE"):
             runtime, command, pairing, store = self.make(op)
-            with self.assertRaisesRegex(RefusalError, "mutation_before_unsealed"):
+            with self.assertRaisesRegex(RefusalError, "native_action_refused"):
                 run_action(runtime.action(command))
             self.assertFalse(any(call[0] == "revoke" for call in pairing.calls))
             self.assertFalse(any(call[0] == "force_new" for call in store.calls))
@@ -186,18 +204,19 @@ class TestNativeMutationReceipts(unittest.TestCase):
     def test_changed_actor_device_or_auth_refuses_receipt(self):
         runtime, command, pairing, _store = self.make("REVOKE")
         runtime.ctx.store.get_device = lambda _id: {"state": "REVOKED", "user_id": "user-secret"}
-        with self.assertRaisesRegex(RefusalError, "native_actor_device_current"):
+        with self.assertRaisesRegex(RefusalError, "native_action_refused"):
             run_action(runtime.action(command, before_capture_sha=BEFORE))
         self.assertTrue(pairing.approved)
+        self.assertEqual(pairing.calls, [])  # New readback gate refuses even earlier.
         runtime, command, pairing, _store = self.make("REVOKE")
         pairing.approved = False
-        with self.assertRaisesRegex(RefusalError, "grant_before_revoke"):
+        with self.assertRaisesRegex(RefusalError, "native_action_refused"):
             run_action(runtime.action(command, before_capture_sha=BEFORE))
 
     def test_revoke_must_change_native_approval_and_auth_readback(self):
         runtime, command, pairing, _store = self.make("REVOKE")
         pairing.revoke = lambda _platform, _user: True
-        with self.assertRaisesRegex(RefusalError, "live_native_auth_after_revoke"):
+        with self.assertRaisesRegex(RefusalError, "native_action_refused"):
             run_action(runtime.action(command, before_capture_sha=BEFORE))
 
     def test_rotation_must_change_persisted_session_id(self):
@@ -208,7 +227,7 @@ class TestNativeMutationReceipts(unittest.TestCase):
             return store.current
 
         store.get_or_create_session = unchanged
-        with self.assertRaisesRegex(RefusalError, "rotation_not_changed"):
+        with self.assertRaisesRegex(RefusalError, "native_action_refused"):
             run_action(runtime.action(command, before_capture_sha=BEFORE))
 
     def test_rotation_replaced_actor_after_native_await_refuses(self):
@@ -228,7 +247,7 @@ class TestNativeMutationReceipts(unittest.TestCase):
             return result
 
         store.get_or_create_session = replace_actor
-        with self.assertRaisesRegex(RefusalError, "native_actor_replaced"):
+        with self.assertRaisesRegex(RefusalError, "native_action_refused"):
             run_action(runtime.action(command, before_capture_sha=BEFORE))
 
     def test_native_evidence_cannot_substitute_label_or_digest(self):

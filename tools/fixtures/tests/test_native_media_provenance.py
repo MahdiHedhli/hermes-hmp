@@ -4,6 +4,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import runpy
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -30,6 +31,9 @@ provider = load("local_media_provider_response", "local_media_provider_response.
 seed_module = load("local_media_seed", "local_media_seed.py")
 worker = load("_hmp_media_provenance_worker", "native_media_worker.py")
 Runtime, RefusalError = (worker.NativeRuntime, worker.RefusalError)
+models = SimpleNamespace(
+    **runpy.run_path(str(ROOT / "tests/process_window_models.py"), run_name="_inert_window_models")
+)
 validator = seed_module._producer_receipt
 raw = json.dumps({"success": True, "provider": "openai", "image": "/fixture/media.png"})
 receipt = {
@@ -54,17 +58,27 @@ async def to_thread(fn, *args, **kwargs):
 
 
 def finish(coroutine):
-    try:
-        coroutine.send(None)
-    except StopIteration as result:
-        return result.value
-    raise AssertionError("unexpected suspension")
+    runtime = coroutine.cr_frame.f_locals["self"]
+    command = coroutine.cr_frame.f_locals["command"]
+    with runtime._inert_scope as scope:
+        try:
+            ticket = scope.begin(runtime, command)
+        except BaseException:
+            # This test-owned coroutine was never advanced or transferred.
+            coroutine.close()
+            raise
+        try:
+            coroutine.send(None)
+        except StopIteration as result:
+            runtime.window.complete(ticket, result.value)
+            return result.value
+        raise AssertionError("unexpected suspension")
 
 
 def exercise():
     checks = []
 
-    def fresh():
+    def fresh(commands):
         runtime = Runtime.__new__(Runtime)
         writes, seeded = ([], [])
 
@@ -104,6 +118,9 @@ def exercise():
             resolve_custody=lambda **kwargs: SimpleNamespace(anchor_dir=Path("/fixture"))
         )
         runtime.Store, runtime.store_path = (Store, lambda path: path)
+        scope = models.InertScope()
+        with scope:
+            scope.attach(runtime, commands)
         return (runtime, writes, seeded)
 
     produce = {"op": "PRODUCE", "profile": "media-alpha", "args": {"invocation": "P01"}}
@@ -112,7 +129,9 @@ def exercise():
         "profile": "media-alpha",
         "args": {"invocation": "P01", "chatId": "synthetic", "botSessionId": "synthetic-session"},
     }
-    r, writes, seeded = fresh()
+    produce = models.command(produce, sequence=1)
+    seed = models.command(seed, sequence=2)
+    r, writes, seeded = fresh([produce, seed])
     out = finish(r.action(copy.deepcopy(produce)))
     assert r.producer_receipts["P01"] == receipt and r.producer_receipts["P01"] is not receipt
     out["profile"] = "media-beta"
@@ -123,7 +142,7 @@ def exercise():
     assert seeded[0]["producer_receipt"] is not r.producer_receipts["P01"]
     checks.append("mandatory_receipt_forwarded")
     for fault in ("missing", "profile", "raw"):
-        r, writes, seeded = fresh()
+        r, writes, seeded = fresh([seed] if fault == "missing" else [produce, seed])
         if fault != "missing":
             finish(r.action(copy.deepcopy(produce)))
         command = copy.deepcopy(seed)
@@ -134,16 +153,15 @@ def exercise():
         try:
             finish(r.action(command))
         except Exception as error:
-            expected_type = RefusalError if fault == "missing" else provider.FixtureRefusalError
-            assert type(error) is expected_type
-            assert (
-                str(error)
-                == {
-                    "missing": "producer_receipt_missing",
-                    "profile": "producer_binding",
-                    "raw": "producer_body",
-                }[fault]
-            )
+            assert type(error) in (RefusalError, models.windows.WindowRefusedError)
+            assert str(error) in ("native_action_refused", "WINDOW_UNAVAILABLE")
+            assert r.window._journal.first_failure is not None
+            if fault == "missing":
+                assert not r.window._journal.producers
+            elif fault == "profile":
+                assert command["profile"] != r.window._journal.producers["P01"].profile
+            else:
+                assert r.raw["P01"] != r.window._journal.producers["P01"].raw
         else:
             raise AssertionError(fault)
         assert writes == [] and seeded == []

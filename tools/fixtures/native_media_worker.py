@@ -22,6 +22,8 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 
+from native_media_process_windows import ProcessWindowLease, WindowLedger
+
 PHASES = (
     "BIND",
     "GRAPH_IMPORT",
@@ -192,35 +194,54 @@ class Ledger:
         self.held -= 1
 
 
+def _open_pinned_handle(ledger, *args, **kwargs):
+    debt = ledger.open()
+    handle = os.open(*args, **kwargs)
+    if type(ledger) is WindowLedger:
+        ledger.acquired(debt, handle)
+    return handle, debt
+
+
+def _close_pinned_handle(ledger, handle, debt):
+    if type(ledger) is WindowLedger:
+        require(debt.returned_handle == handle, "pinned_handle_changed")
+        ledger.close_owned(debt)
+    else:
+        # Historical pure helper ledger; never accepted by the new Dispatcher.
+        os.close(handle)
+        ledger.close_known()
+
+
 def read_pin(pin, ledger):
     """Exact descriptor leaf, stable ns identity, no alias/follow/blocking leaf fallback."""
     require(type(pin) is dict and set(pin) == {"path", "bytes", "SHA256", "identity"}, "pin_shape")
     path = Path(pin["path"])
     require(path.is_absolute() and ".." not in path.parts, "pin_path")
     require(type(pin["bytes"]) is int and 0 < pin["bytes"] <= 8388608, "pin_size")
-    parent = None
-    leaf = None
+    parent = parent_debt = None
+    leaf = leaf_debt = None
     try:
-        ledger.open()
-        parent = os.open("/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+        parent, parent_debt = _open_pinned_handle(
+            ledger, "/", os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+        )
         for name in path.parts[1:-1]:
-            ledger.open()
-            child = os.open(name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
-            previous = parent
-            parent = None
+            child, child_debt = _open_pinned_handle(
+                ledger, name, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent
+            )
+            previous, previous_debt = parent, parent_debt
+            parent = parent_debt = None
             try:
-                os.close(previous)
-                ledger.close_known()
+                _close_pinned_handle(ledger, previous, previous_debt)
             except BaseException as parent_error:
                 try:
-                    os.close(child)
-                    ledger.close_known()
+                    _close_pinned_handle(ledger, child, child_debt)
                 except BaseException as child_error:
                     raise child_error from parent_error
                 raise
-            parent = child
-        ledger.open()
-        leaf = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
+            parent, parent_debt = child, child_debt
+        leaf, leaf_debt = _open_pinned_handle(
+            ledger, path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent
+        )
         before = os.fstat(leaf)
         require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1, "pin_leaf")
         require(
@@ -250,12 +271,10 @@ def read_pin(pin, ledger):
     finally:
         try:
             if leaf is not None:
-                os.close(leaf)
-                ledger.close_known()
+                _close_pinned_handle(ledger, leaf, leaf_debt)
         finally:
             if parent is not None:
-                os.close(parent)
-                ledger.close_known()
+                _close_pinned_handle(ledger, parent, parent_debt)
 
 
 def unique_object(pairs):
@@ -320,7 +339,10 @@ def decode_command(body):
 class LatePermitGate:
     """Closed worker-side late GET permits; parent cross-worker proof remains separate."""
 
-    def __init__(self, body, spec):
+    def __init__(self, body, spec, *, window=None):
+        require(type(window) is ProcessWindowLease, "process_window_unbound")
+        self.window = window
+        window.ledger.tick()
         try:
             plan = json.loads(body, object_pairs_hook=unique_object)
         except (ValueError, UnicodeError) as error:
@@ -429,15 +451,8 @@ class LatePermitGate:
                 and row["port"] == spec["port"],
                 "late_listener_binding",
             )
-            bind = [
-                command
-                for command in spec["commandPlan"]
-                if command["op"] == "BIND_ACTOR" and command["actor"] == row["actor"]
-            ]
-            require(
-                len(bind) == 1 and bind[0]["args"]["p4CaptureSHA256"] == row["actorP4SHA256"],
-                "late_actor_lease_binding",
-            )
+            actor_lease = self.window.actor(row["actor"])
+            require(actor_lease.current().p4 == row["actorP4SHA256"], "late_actor_lease_binding")
             self.rows[row["permit"]] = row
         require(found == expected, "late_entry_inventory")
         self.used = set()
@@ -495,14 +510,7 @@ class LatePermitGate:
             self.spec["gates"]["parentAdmission"]["SHA256"] == parent_admission,
             "late_current_parent_admission",
         )
-        bind = [
-            item
-            for item in self.spec["commandPlan"]
-            if item["op"] == "BIND_ACTOR" and item["actor"] == actor
-        ]
-        require(
-            len(bind) == 1 and bind[0]["args"]["p4CaptureSHA256"] == p4, "late_current_actor_lease"
-        )
+        require(self.window.actor(actor).current().p4 == p4, "late_current_actor_lease")
         require(
             case in {"NM07", "NM08"}
             and profile == "media-alpha"
@@ -941,7 +949,26 @@ class PipeIO:
 
 
 class Dispatcher:
-    def __init__(self, spec, ledger):
+    def __init__(self, spec, ledger, *, window=None):
+        require(
+            type(window) is ProcessWindowLease
+            and type(ledger) is WindowLedger
+            and window.ledger is ledger,
+            "process_window_unbound",
+        )
+        self.window = window
+        try:
+            window.claim(self)
+            self._initialize(spec, ledger)
+        except BaseException as error:
+            window.poison(error)
+            if not isinstance(error, Exception):
+                raise
+        else:
+            return
+        raise RefusalError("dispatcher_initialization_refused") from None
+
+    def _initialize(self, spec, ledger):
         require(
             type(spec) is dict and spec.get("format") == "native-media-worker-input-v1",
             "input_format",
@@ -960,11 +987,16 @@ class Dispatcher:
                 "plan_schema",
             )
             require(
-                command["sequence"] == sequence and command["role"] == spec["role"],
+                command["sequence"] >= sequence and command["role"] == spec["role"],
                 "plan_sequence_role",
             )
             require(PHASES.index(command["phase"]) >= previous_phase, "plan_phase_regression")
             previous_phase = PHASES.index(command["phase"])
+        require(
+            tuple(self._command_bytes(command) for command in self.plan)
+            == tuple(self.window._plan[p] for p in self.window.description.positions),
+            "window_plan_binding",
+        )
         self.index = 0
         self.failed = False
         self.cancelled = False
@@ -974,8 +1006,9 @@ class Dispatcher:
         self.late = None
         self.in_dispatch = False
 
-    def fail(self):
+    def fail(self, reason=None):
         self.failed = True
+        self.window.poison(reason if reason is not None else RefusalError("worker_failed"))
 
     def bind_runtime(self):
         require(self.runtime is None, "runtime_already_bound")
@@ -1018,13 +1051,14 @@ class Dispatcher:
             ),
             "ambient_module",
         )
-        self.late = LatePermitGate(gate_bodies["latePermitPlan"], self.spec)
+        self.late = LatePermitGate(gate_bodies["latePermitPlan"], self.spec, window=self.window)
         sys.path[:] = self.spec["bootstrapPaths"]
-        self.runtime = NativeRuntime(self.spec, self.ledger)
+        self.runtime = NativeRuntime(self.spec, self.ledger, window=self.window)
 
     async def dispatch(self, command):
         started = False
         command_at_start = None
+        ticket = None
         try:
             require(not self.in_dispatch, "dispatch_reentry")
             self.in_dispatch = True
@@ -1040,14 +1074,16 @@ class Dispatcher:
             # caller/plan input, and the copy passed to the awaited runtime.
             accepted = decode_command(command_at_start)
             runtime_command = decode_command(command_at_start)
-            require(command["sequence"] == self.index + 1, "sequence")
+            ticket = self.window.consume(self, accepted)
             require(not self.failed and not self.cancelled, "worker_sticky_failure")
             require(
                 self.index < len(self.plan) and accepted == self.plan[self.index], "plan_binding"
             )
             require(command["role"] == self.spec["role"], "worker_role")
             phase = PHASES.index(accepted["phase"])
+            self.window.advance_phase(phase)
             require(phase >= self.last_phase, "phase_regression")
+            self.window.checkpoint(self, ticket)
             self.ledger.charge("commands", 1)
             self.last_phase = phase
             self.index += 1
@@ -1058,8 +1094,14 @@ class Dispatcher:
                     True  # Native imports can have side effects; never label them writer-free.
                 )
                 self.bind_runtime()
+            self.window.checkpoint(self, ticket)
             dispatch_gate = self.late
+            require(
+                type(dispatch_gate) is LatePermitGate and dispatch_gate.window is self.window,
+                "late_window_changed",
+            )
             late_row = dispatch_gate.pre(accepted)
+            self.window.checkpoint(self, ticket)
             # Source/port/ABI/config evidence pins authorize only these future actions. They
             # do not certify their actual result or any provider/native/custody qualification.
             started = True
@@ -1071,12 +1113,14 @@ class Dispatcher:
             before_capture = (
                 late_row[3][1] if (late_row is not None and late_row[0] == "mutation") else None
             )
+            self.window.checkpoint(self, ticket)
             action = (
                 self.runtime.action(runtime_command, before_capture_sha=before_capture)
                 if before_capture is not None
                 else self.runtime.action(runtime_command)
             )
             observation = await asyncio.wait_for(action, timeout=phase_end - time.monotonic())
+            self.window.checkpoint(self, ticket)
             self.ledger.tick()
             require(time.monotonic() < phase_end, "phase_deadline")
             require(not self.failed and not self.cancelled, "late_result_after_cancel")
@@ -1092,7 +1136,9 @@ class Dispatcher:
                 "post_await_command_drift",
             )
             dispatch_gate.post(accepted, late_row, observation)
+            self.window.checkpoint(self, ticket)
             bounded_value(observation)
+            self.window.complete(ticket, observation)
             self.last_observation = observation
             return {
                 "sequence": accepted["sequence"],
@@ -1107,11 +1153,12 @@ class Dispatcher:
             }
         except BaseException as error:
             self.failed = True
+            self.window.poison(error)
             if isinstance(error, (KeyboardInterrupt, asyncio.CancelledError)):
                 self.cancelled = True
-            code = str(error) if isinstance(error, RefusalError) else type(error).__name__
+            code = "worker_cancelled" if self.cancelled else "worker_refused"
             require(len(code) <= 128, "error_code_cap")
-            reported = decode_command(command_at_start) if command_at_start is not None else command
+            reported = decode_command(command_at_start) if command_at_start is not None else {}
             return {
                 "sequence": reported.get("sequence"),
                 "phase": reported.get("phase"),
@@ -1137,7 +1184,11 @@ class Dispatcher:
 class NativeRuntime:
     """Actual native/HMP APIs only; unavailable routes stop, never fabricated callbacks."""
 
-    def __init__(self, spec, ledger):
+    def __init__(self, spec, ledger, *, window=None):
+        require(
+            type(window) is ProcessWindowLease and window.ledger is ledger, "process_window_unbound"
+        )
+        self.attach_continuation(window)
         from gateway.config import Platform, load_gateway_config
 
         # isort: split
@@ -1192,6 +1243,23 @@ class NativeRuntime:
         self.home = Path(spec["home"])
         self.runtime_dir = Path(spec["runtimeDir"])
         self.seed.check_environment(self.home, self.runtime_dir)
+
+    def attach_continuation(self, window):
+        require(
+            type(window) is ProcessWindowLease and not hasattr(self, "window"),
+            "process_window_unbound",
+        )
+        self.window = window
+        window.attach_runtime(self)
+
+    def restore_actor(self, lease):
+        record = self.window.restore_actor(self, lease)
+        actor = self.media.Actor(
+            record.name, self.spec["port"], record.iid, record.device, record.user, record.bearer
+        )
+        self.window.runtime_checkpoint(self)
+        require(record.name not in self.actors, "actor_continuation_replay")
+        self.actors[record.name] = actor
 
     def actor(self, command):
         name = command["actor"]
@@ -1301,6 +1369,18 @@ class NativeRuntime:
         return hashlib.sha256(body).hexdigest()
 
     async def action(self, command, *, before_capture_sha=None):
+        try:
+            self.window.before_action(self, command)
+            observation = await self._action(command, before_capture_sha=before_capture_sha)
+            self.window.after_action(self, command, observation)
+            return observation
+        except BaseException as error:
+            self.window.poison(error)
+            if not isinstance(error, Exception):
+                raise
+        raise RefusalError("native_action_refused") from None
+
+    async def _action(self, command, *, before_capture_sha=None):
         op, args = command["op"], command["args"]
         if op not in {"REVOKE", "ROTATE"}:
             require(before_capture_sha is None, "unexpected_before_capture")
@@ -1334,7 +1414,7 @@ class NativeRuntime:
             # Even an unknown/JSON result therefore prevents lifecycle cleanup here.
             require(not self.minted and not self.final_read_started, "post_mint_stop")
             await self.runner.stop()
-            self.runner = self.adapter = self.ctx = None
+            # Retain exact objects/debt until separately qualified process retirement.
             return {"event": "public_library_stop_observation"}
         if op == "BIND_ACTOR":
             self.live()
@@ -1648,23 +1728,30 @@ class NativeRuntime:
         raise RefusalError("unimplemented_operation")
 
 
-async def serve(spec, io, ledger):
+async def serve(spec, io, ledger, *, window=None):
     """Only inherited FD observations. No named evidence or audit inside this worker."""
-    dispatcher = Dispatcher(spec, ledger)
+    dispatcher = Dispatcher(spec, ledger, window=window)
     while not dispatcher.failed:
         try:
             command = io.read_command()
-        except BaseException:
-            dispatcher.fail()
+        except BaseException as error:
+            dispatcher.fail(error)
             raise
         if command is None:
-            require(dispatcher.index == len(dispatcher.plan), "premature_control_eof")
+            if (
+                dispatcher.index != len(dispatcher.plan)
+                or dispatcher.window.active is not None
+                or dispatcher.window.cursor != len(dispatcher.window.description.positions)
+            ):
+                error = RefusalError("premature_control_eof")
+                dispatcher.fail(error)
+                raise error
             return
         receipt = await dispatcher.dispatch(command)
         try:
             io.write_receipt(receipt)
-        except BaseException:
-            dispatcher.fail()
+        except BaseException as error:
+            dispatcher.fail(error)
             raise
         if receipt["failureSticky"]:
             return
