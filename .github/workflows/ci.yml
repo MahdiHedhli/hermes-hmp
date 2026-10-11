@@ -24,3 +24,31 @@ jobs:
         run: python3 tools/ci/scan_logs.py
       - name: Privacy gate
         run: python3 tools/ci/scan_private.py
+
+  bi1-supported-python:
+    name: BI1 Unicode 17 / Python ${{ matrix.python }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      max-parallel: 3
+      matrix:
+        python: ['3.12', '3.13', '3.14']
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
+        with:
+          python-version: ${{ matrix.python }}
+      - name: Confirm selected CPython minor
+        run: >-
+          uv run --frozen --python "${{ matrix.python }}" --project server --extra dev
+          python -c 'import platform, sys; assert platform.python_implementation() == "CPython"; assert ".".join(map(str, sys.version_info[:2])) == sys.argv[1]; print(sys.version)'
+          "${{ matrix.python }}"
+      - name: Unicode 17 corpus and exact presentation case coverage
+        run: >-
+          /usr/bin/time -v uv run --frozen --python "${{ matrix.python }}" --project server --extra dev
+          python tools/ci/check_bi1_supported_python.py
