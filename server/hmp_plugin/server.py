@@ -46,6 +46,7 @@ import ipaddress
 import json
 import logging
 import re
+import socket
 import ssl
 import time
 from collections.abc import Awaitable, Callable, Mapping
@@ -1680,6 +1681,75 @@ class _HmpAppRunner(web.AppRunner):  # type: ignore[misc]
         return server
 
 
+def _check_fixture_listener(listener: socket.socket, settings: ListenerSettings) -> None:
+    """Validate a trusted fixture handoff without creating or rebinding a socket.
+
+    Refusal leaves ownership with the caller. These local checks do not prove the
+    caller's retained-FD custody, process attribution, or TLS identity.
+    """
+    if not isinstance(listener, socket.socket):
+        raise ListenerConfigError("fixture listener must be a socket")
+    if listener.family != socket.AF_INET or listener.type != socket.SOCK_STREAM:
+        raise ListenerConfigError("fixture listener must be an IPv4 stream")
+    if listener.fileno() < 0 or listener.getblocking():
+        raise ListenerConfigError("fixture listener must be open and nonblocking")
+    if listener.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN) != 1:
+        raise ListenerConfigError("fixture listener must already be listening")
+    if (
+        settings.bind != "127.0.0.1"
+        or type(settings.port) is not int
+        or not 1 <= settings.port <= 65535
+        or listener.getsockname() != ("127.0.0.1", settings.port)
+    ):
+        raise ListenerConfigError("fixture listener endpoint mismatch")
+
+
+class _FixtureSockSite(web.SockSite):  # type: ignore[misc]
+    """RP01: retain a server before its first serving await.
+
+    Depends on the reviewed aiohttp SockSite/BaseSite and asyncio sock branch.
+    No CLI, configuration, environment, HTTP, or production factory enables it.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._fixture_close_started = False
+        self._fixture_closed = False
+
+    async def start(self) -> None:
+        await web.BaseSite.start(self)
+        protocol_server = self._runner.server
+        if protocol_server is None:
+            raise RuntimeError("fixture runner not ready")
+        # With the pinned provided-sock branch and start_serving=False there is
+        # no suspension between ownership transfer and the returned Server.
+        self._server = await asyncio.get_running_loop().create_server(
+            protocol_server,
+            sock=self._sock,
+            ssl=self._ssl_context,
+            backlog=self._backlog,
+            start_serving=False,
+        )
+        await self._server.start_serving()
+
+    def close_owned(self) -> None:
+        if self._fixture_close_started:
+            if not self._fixture_closed:
+                raise RuntimeError("fixture listener closure unknown")
+            return
+        self._fixture_close_started = True
+        if self._server is None:
+            self._sock.close()
+        else:
+            self._server.close()
+        self._fixture_closed = True
+        self._server = None
+
+    async def stop(self) -> None:
+        self.close_owned()
+        await web.BaseSite.stop(self)
+
+
 class HmpServer:
     """One TLS listener around one loaded identity (PR7-6: it never outlives its key)."""
 
@@ -1695,6 +1765,9 @@ class HmpServer:
         self.settings = settings
         self._interval = watchdog_interval
         self._on_closed = on_closed
+        self._fixture_used = False
+        self._starting = False
+        self._startup_uncertain = False
         self._runner: web.AppRunner | None = None
         self._watch: asyncio.Task[None] | None = None
         self._stopping: asyncio.Task[None] | None = None
@@ -1706,34 +1779,119 @@ class HmpServer:
         ctx.on_identity_changed = self._identity_changed
 
     async def start(self) -> None:
+        """Start the production TCPSite with exclusive startup ownership.
+
+        A failure before site.start may retry only after completed cleanup.
+        Once listener start was invoked, or cleanup failed, this owner remains
+        unusable: cancellation may have crossed an unobserved socket handoff.
+        """
+        if (
+            self._starting
+            or self._startup_uncertain
+            or self._fixture_used
+            or self._runner is not None
+            or self.closed.is_set()
+        ):
+            raise RuntimeError("listener owner is not available for startup")
         if not address_allowed(self.settings.bind):
             raise ListenerConfigError("bind must be a loopback or tailnet IP address (TR-4)")
-        ssl_ctx = server_ssl_context(self.ctx.identity, self._identity_changed)
-        app = build_app(self.ctx)
-        runner = _HmpAppRunner(
-            app,
-            access_log_class=AllowListedAccessLogger,
-            access_log=logging.getLogger(ACCESS_LOGGER_NAME),
-            logger=_ParserSafeLogger(),
-            shutdown_timeout=SHUTDOWN_TIMEOUT_S,
-            handle_signals=False,
-        )
-        await runner.setup()
-        site = web.TCPSite(
-            runner, self.settings.bind, self.settings.port, ssl_context=ssl_ctx, reuse_address=True
-        )
+        self._starting = True
+        runner = None
+        site_invoked = False
         try:
+            ssl_ctx = server_ssl_context(self.ctx.identity, self._identity_changed)
+            app = build_app(self.ctx)
+            runner = _HmpAppRunner(
+                app,
+                access_log_class=AllowListedAccessLogger,
+                access_log=logging.getLogger(ACCESS_LOGGER_NAME),
+                logger=_ParserSafeLogger(),
+                shutdown_timeout=SHUTDOWN_TIMEOUT_S,
+                handle_signals=False,
+            )
+            await runner.setup()
+            site = web.TCPSite(
+                runner, self.settings.bind, self.settings.port,
+                ssl_context=ssl_ctx, reuse_address=True,
+            )
+            site_invoked = True
             await site.start()
+            sockets = getattr(site._server, "sockets", None) or ()
+            bound = None
+            if sockets:
+                host, port = sockets[0].getsockname()[:2]
+                bound = (str(host), int(port))
+            log_event("listener_start", outcome="ok")
+            self._watch = asyncio.get_running_loop().create_task(self._watchdog())
+            self.bound = bound
+            self._runner = runner
         except BaseException:
-            await runner.cleanup()
+            self._startup_uncertain = site_invoked
+            try:
+                if runner is not None:
+                    await runner.cleanup()
+            except BaseException:
+                self._startup_uncertain = True
+                raise
             raise
-        self._runner = runner
-        sockets = getattr(site._server, "sockets", None) or ()
-        if sockets:
-            host, port = sockets[0].getsockname()[:2]
-            self.bound = (str(host), int(port))
-        self._watch = asyncio.get_running_loop().create_task(self._watchdog())
-        log_event("listener_start", outcome="ok")
+        finally:
+            self._starting = False
+
+    async def _start_fixture_listener(self, listener: socket.socket) -> None:
+        """Trusted in-process fixture only; valid handoff consumes this exact socket.
+
+        Validation/reentry refusal does not consume it. After validation the
+        caller must never close, duplicate, rebind, or reuse it. Startup failure
+        closes known ownership synchronously before async runner cleanup. Any
+        failed/ambiguous close or cancelled cleanup remains an unqualified
+        failure; this API supplies no custody or runtime qualification receipt.
+        """
+        if (
+            self._starting
+            or self._startup_uncertain
+            or self._fixture_used
+            or self._runner is not None
+            or self.closed.is_set()
+        ):
+            raise RuntimeError("fixture server is not fresh")
+        _check_fixture_listener(listener, self.settings)
+        self._fixture_used = True
+        self._starting = True
+        runner = None
+        site = None
+        try:
+            ssl_ctx = server_ssl_context(self.ctx.identity, self._identity_changed)
+            app = build_app(self.ctx)
+            runner = _HmpAppRunner(
+                app,
+                access_log_class=AllowListedAccessLogger,
+                access_log=logging.getLogger(ACCESS_LOGGER_NAME),
+                logger=_ParserSafeLogger(),
+                shutdown_timeout=SHUTDOWN_TIMEOUT_S,
+                handle_signals=False,
+            )
+            await runner.setup()
+            site = _FixtureSockSite(runner, listener, ssl_context=ssl_ctx)
+            await site.start()
+            sockets = getattr(site._server, "sockets", None) or ()
+            if len(sockets) != 1 or sockets[0].getsockname() != listener.getsockname():
+                raise RuntimeError("fixture server socket readback mismatch")
+            log_event("listener_start", outcome="ok")
+            self._watch = asyncio.get_running_loop().create_task(self._watchdog())
+            self.bound = ("127.0.0.1", self.settings.port)
+            self._runner = runner
+        except BaseException:
+            try:
+                if site is None:
+                    listener.close()
+                else:
+                    site.close_owned()
+            finally:
+                if runner is not None:
+                    await runner.cleanup()
+            raise
+        finally:
+            self._starting = False
 
     async def start_operator_read(self, anchor_dir: Path, nonce: str) -> None:
         from .operator_read import OperatorReadService
@@ -1780,6 +1938,8 @@ class HmpServer:
 
     async def stop(self, *, notify: bool = True) -> None:
         """Close the listener. `notify=False` for an orderly shutdown by the owner."""
+        if self._starting:
+            raise RuntimeError("cancel and drain listener startup before stop")
         service, self._operator_read = self._operator_read, None
         if service is not None:
             debt = await service.stop()
