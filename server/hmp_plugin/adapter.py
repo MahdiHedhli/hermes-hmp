@@ -430,6 +430,19 @@ def _media_bind(
     return media_available
 
 
+class _ComponentSetupCleanupError(RuntimeError):
+    """Setup failed and its one store-close attempt failed; both causes and custody survive."""
+
+    def __init__(
+        self, store: Store, setup_failure: BaseException, cleanup_failure: BaseException
+    ) -> None:
+        super().__init__("HMP component setup failed with unresolved store cleanup")
+        self.store = store
+        self.setup_failure = setup_failure
+        self.cleanup_failure = cleanup_failure
+        self.store_close_unknown = True
+
+
 def open_components(adapter: Any) -> server.ServerContext:
     """Compat gate, store, identity and (on a supported build only) the bridge. Blocking."""
     try:
@@ -440,172 +453,190 @@ def open_components(adapter: Any) -> server.ServerContext:
         )
     custody = identity.resolve_custody()
     store = Store(server.store_path(custody.anchor_dir))
-    store.migrate()
     try:
+        store.migrate()
         ident = identity.load_or_create(store)
-    except BaseException:
-        store.close()
-        raise
-    config = getattr(adapter, "config", None)
-    extra = getattr(config, "extra", None)
-    session_browsing = extra.get("session_browsing", True) if isinstance(extra, Mapping) else True
-    # Canonical local configuration: platforms.hmp.extra.controls_requests.enabled. The route
-    # family is registered only on this listener start when the value is the literal bool True.
-    # Changing the host config requires a listener restart; requests cannot toggle registration.
-    controls_block = extra.get("controls_requests") if isinstance(extra, Mapping) else None
-    controls_requests_enabled = (
-        isinstance(controls_block, Mapping) and controls_block.get("enabled") is True
-    )
-    eligibility = result.eligibility
-    # Availability comes from the one eligibility evaluation done above (Hermes code cannot change
-    # without a gateway restart), never from a per-request lookup. A result that carries no
-    # eligibility (an injected test double) reports nothing beyond read as available.
-    def _available(feature: compat.Feature) -> bool:
-        return eligibility is not None and eligibility.available(feature)
-
-    send_available = result.supported and _available(compat.Feature.SEND)
-    # Spec 034: the `approvals` and `phone_chat` members, decided once here from the same
-    # eligibility evaluation (no per-request lookup). No build list, fingerprint or latch is read.
-    approvals_member = result.supported and _available(compat.Feature.APPROVALS)
-    phone_member = result.supported and _available(compat.Feature.PHONE_CHAT)
-    # Set only after the bridge captured the Phone-chat helpers (AP-10); closed until then.
-    phone_bound = [False]
-
-    # Amendment F2 (direct send, OD-F14/OD-F15): `gateway.platforms.hmp.extra.direct_send.enabled`,
-    # default False. A malformed (non-mapping) `direct_send` block fails closed to disabled, never
-    # to enabled -- mirrors `session_browsing`'s own "anything but an explicit False is on" only
-    # in the safe direction (this flag's own safe default is OFF, not ON).
-    #
-    # Review round 2, should-fix: a closure over `adapter`, not a one-time bool, so every request
-    # re-reads the LIVE `adapter.config.extra` (`server.py`'s `handle_chat_send` calls this once
-    # per request via `ServerContext.direct_send_enabled()`) -- a host-side flag flip is visible
-    # on the next request, not the next gateway restart. Cheap: an in-memory dict lookup, no I/O.
-    def _read_direct_send_enabled() -> bool:
-        live_config = getattr(adapter, "config", None)
-        live_extra = getattr(live_config, "extra", None)
-        block = live_extra.get("direct_send") if isinstance(live_extra, Mapping) else None
-        return isinstance(block, Mapping) and block.get("enabled") is True
-
-    def _read_owner_device_ids() -> frozenset[str]:
-        live_config = getattr(adapter, "config", None)
-        live_extra = getattr(live_config, "extra", None)
-        ids = live_extra.get("owner_device_ids") if isinstance(live_extra, Mapping) else None
-        if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
-            return frozenset()
-        return frozenset(ids)
-
-    def _readiness_owner_device_ids() -> frozenset[str]:
-        return _readiness_owner_device_ids_from_adapter(adapter)
-
-    def _readiness_settings() -> object:
-        return _readiness_settings_from_adapter(adapter)
-
-    def _read_cron_enabled() -> bool:
-        live_config = getattr(adapter, "config", None)
-        live_extra = getattr(live_config, "extra", None)
-        block = live_extra.get("cron") if isinstance(live_extra, Mapping) else None
-        return isinstance(block, Mapping) and block.get("enabled") is True
-
-    def _read_local_media_enabled() -> bool:
-        live_config = getattr(adapter, "config", None)
-        live_extra = getattr(live_config, "extra", None)
-        block = live_extra.get("local_media") if isinstance(live_extra, Mapping) else None
-        return isinstance(block, Mapping) and block.get("enabled") is True
-
-    def _read_model_enabled() -> bool:
-        live_config = getattr(adapter, "config", None)
-        live_extra = getattr(live_config, "extra", None)
-        block = live_extra.get("model_management") if isinstance(live_extra, Mapping) else None
-        return isinstance(block, Mapping) and block.get("enabled") is True
-
-    ctx = server.ServerContext(
-        identity=ident,
-        store=store,
-        compat=result,
-        session_browsing_enabled=session_browsing is not False,
-        controls_requests_enabled=controls_requests_enabled,
-        read_worker_budget=(getattr(adapter, "_read_worker_budget", None)
-                            or server.ReadWorkerBudget()),
-        direct_send_flag=_read_direct_send_enabled,
-        owner_device_ids=_read_owner_device_ids,
-        readiness_owner_device_ids=_readiness_owner_device_ids,
-        readiness_settings=_readiness_settings,
-        approvals_available=lambda: approvals_member,
-        phone_chat_available=lambda: phone_member and phone_bound[0],
-        cron_flag=_read_cron_enabled,
-        cron_available=lambda: result.supported and _available(compat.Feature.JOBS),
-        model_flag=_read_model_enabled,
-        model_available=lambda: result.supported and _available(compat.Feature.MODEL),
-        session_browsing_available=_available(compat.Feature.SESSION_BROWSING),
-        send_available=lambda: send_available,
-        media_flag=_read_local_media_enabled,
-    )
-    _log_unavailable_features(eligibility)
-    if result.supported:
-        bridge_module, bridge_cls, directory_cls = _bridge_published()
-
-        ctx.bridge = bridge_cls(adapter, directory_cls(store))
-        # Live-bug fix: `adapter._observe_served_profiles` is a bound method of the adapter this
-        # context belongs to (this function's own `adapter` argument), so it is safe to close over
-        # here even though `self._record`/`self._nonce` are not set until `connect()` finishes
-        # further down -- neither `Reads.roster` nor `Authorize.authorize` can run before then.
-        on_served_profiles = getattr(adapter, "_observe_served_profiles", None)
-        prompt_store = prompts.PromptStore(clock=ctx.now)
-        ctx.prompt_store = prompt_store
-        ctx.reads = Reads(
-            ctx.bridge,
-            store,
-            iid=ident.iid,
-            guarantees=ctx.guarantees,
-            write_gate=ctx.reported_write_gate,
-            send_gate=ctx.reported_send_gate,
-            clock=ctx.now,
-            on_served_profiles=on_served_profiles,
-            prompt_store=prompt_store,
+        config = getattr(adapter, "config", None)
+        extra = getattr(config, "extra", None)
+        session_browsing = (
+            extra.get("session_browsing", True) if isinstance(extra, Mapping) else True
         )
-        ctx.authorize = Authorize(
-            ctx.bridge, store, clock=ctx.now, on_served_profiles=on_served_profiles
+        # Canonical local configuration: platforms.hmp.extra.controls_requests.enabled. The route
+        # family is registered only on this listener start when the value is the literal bool True.
+        # Changing the host config requires a listener restart; requests cannot toggle registration.
+        controls_block = extra.get("controls_requests") if isinstance(extra, Mapping) else None
+        controls_requests_enabled = (
+            isinstance(controls_block, Mapping) and controls_block.get("enabled") is True
         )
-        # Amendment F2: constructed on every supported build, regardless of `direct_send_enabled`
-        # -- the flag is re-checked per request (DS-2(b)), not at listener-start time, so a
-        # host-side flag flip takes effect on the next request, not the next restart.
-        def _approval_timeout(profile: str) -> int:
-            bridge = ctx.bridge
-            if bridge is None:
-                return 300
-            return bridge.approval_timeout_s(profile)  # type: ignore[no-any-return]
+        eligibility = result.eligibility
 
-        ctx.direct_send_deps = direct_send.DirectSendDeps(
-            bridge=ctx.bridge,
+        # Availability comes from the one eligibility evaluation done above (Hermes code cannot
+        # change
+        # without a gateway restart), never from a per-request lookup. A result that carries no
+        # eligibility (an injected test double) reports nothing beyond read as available.
+        def _available(feature: compat.Feature) -> bool:
+            return eligibility is not None and eligibility.available(feature)
+
+        send_available = result.supported and _available(compat.Feature.SEND)
+        # Spec 034: the `approvals` and `phone_chat` members, decided once here from the same
+        # eligibility evaluation (no per-request lookup). No build list, fingerprint or latch is
+        # read.
+        approvals_member = result.supported and _available(compat.Feature.APPROVALS)
+        phone_member = result.supported and _available(compat.Feature.PHONE_CHAT)
+        # Set only after the bridge captured the Phone-chat helpers (AP-10); closed until then.
+        phone_bound = [False]
+
+        # Amendment F2 (direct send, OD-F14/OD-F15):
+        # `gateway.platforms.hmp.extra.direct_send.enabled`,
+        # default False. A malformed (non-mapping) `direct_send` block fails closed to disabled,
+        # never
+        # to enabled -- mirrors `session_browsing`'s own "anything but an explicit False is on" only
+        # in the safe direction (this flag's own safe default is OFF, not ON).
+        #
+        # Review round 2, should-fix: a closure over `adapter`, not a one-time bool, so every
+        # request
+        # re-reads the LIVE `adapter.config.extra` (`server.py`'s `handle_chat_send` calls this once
+        # per request via `ServerContext.direct_send_enabled()`) -- a host-side flag flip is visible
+        # on the next request, not the next gateway restart. Cheap: an in-memory dict lookup, no
+        # I/O.
+        def _read_direct_send_enabled() -> bool:
+            live_config = getattr(adapter, "config", None)
+            live_extra = getattr(live_config, "extra", None)
+            block = live_extra.get("direct_send") if isinstance(live_extra, Mapping) else None
+            return isinstance(block, Mapping) and block.get("enabled") is True
+
+        def _read_owner_device_ids() -> frozenset[str]:
+            live_config = getattr(adapter, "config", None)
+            live_extra = getattr(live_config, "extra", None)
+            ids = live_extra.get("owner_device_ids") if isinstance(live_extra, Mapping) else None
+            if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
+                return frozenset()
+            return frozenset(ids)
+
+        def _readiness_owner_device_ids() -> frozenset[str]:
+            return _readiness_owner_device_ids_from_adapter(adapter)
+
+        def _readiness_settings() -> object:
+            return _readiness_settings_from_adapter(adapter)
+
+        def _read_cron_enabled() -> bool:
+            live_config = getattr(adapter, "config", None)
+            live_extra = getattr(live_config, "extra", None)
+            block = live_extra.get("cron") if isinstance(live_extra, Mapping) else None
+            return isinstance(block, Mapping) and block.get("enabled") is True
+
+        def _read_local_media_enabled() -> bool:
+            live_config = getattr(adapter, "config", None)
+            live_extra = getattr(live_config, "extra", None)
+            block = live_extra.get("local_media") if isinstance(live_extra, Mapping) else None
+            return isinstance(block, Mapping) and block.get("enabled") is True
+
+        def _read_model_enabled() -> bool:
+            live_config = getattr(adapter, "config", None)
+            live_extra = getattr(live_config, "extra", None)
+            block = live_extra.get("model_management") if isinstance(live_extra, Mapping) else None
+            return isinstance(block, Mapping) and block.get("enabled") is True
+
+        ctx = server.ServerContext(
+            identity=ident,
             store=store,
-            locks=direct_send.ProfileLocks(),
-            now=ctx.now,
-            prompt_store=prompt_store,
-            approval_timeout=_approval_timeout,
+            compat=result,
+            session_browsing_enabled=session_browsing is not False,
+            controls_requests_enabled=controls_requests_enabled,
+            read_worker_budget=(
+                getattr(adapter, "_read_worker_budget", None) or server.ReadWorkerBudget()
+            ),
+            direct_send_flag=_read_direct_send_enabled,
+            owner_device_ids=_read_owner_device_ids,
+            readiness_owner_device_ids=_readiness_owner_device_ids,
+            readiness_settings=_readiness_settings,
+            approvals_available=lambda: approvals_member,
+            phone_chat_available=lambda: phone_member and phone_bound[0],
+            cron_flag=_read_cron_enabled,
+            cron_available=lambda: result.supported and _available(compat.Feature.JOBS),
+            model_flag=_read_model_enabled,
+            model_available=lambda: result.supported and _available(compat.Feature.MODEL),
+            session_browsing_available=_available(compat.Feature.SESSION_BROWSING),
+            send_available=lambda: send_available,
+            media_flag=_read_local_media_enabled,
         )
-        if phone_member:
-            # AP-10: capture the Phone-chat helpers now, after the probe passed. A later rebinding
-            # closes this generation's Phone-chat side; Bot Chat `approvals` is independent.
-            phone_bound[0] = ctx.bridge.bind_phone_chat_helpers(  # type: ignore[attr-defined]
-                lambda: prompt_store.close_phone_chat(ctx.now())
+        _log_unavailable_features(eligibility)
+        if result.supported:
+            bridge_module, bridge_cls, directory_cls = _bridge_published()
+
+            ctx.bridge = bridge_cls(adapter, directory_cls(store))
+            # Live-bug fix: `adapter._observe_served_profiles` is a bound method of the adapter this
+            # context belongs to (this function's own `adapter` argument), so it is safe to close
+            # over
+            # here even though `self._record`/`self._nonce` are not set until `connect()` finishes
+            # further down -- neither `Reads.roster` nor `Authorize.authorize` can run before then.
+            on_served_profiles = getattr(adapter, "_observe_served_profiles", None)
+            prompt_store = prompts.PromptStore(clock=ctx.now)
+            ctx.prompt_store = prompt_store
+            ctx.reads = Reads(
+                ctx.bridge,
+                store,
+                iid=ident.iid,
+                guarantees=ctx.guarantees,
+                write_gate=ctx.reported_write_gate,
+                send_gate=ctx.reported_send_gate,
+                clock=ctx.now,
+                on_served_profiles=on_served_profiles,
+                prompt_store=prompt_store,
             )
-        # Local media (M3): only a listener whose `local_media` member is available is bound; the
-        # result identity may be `None`. Closed (the default) otherwise, with no media import.
-        if _available(compat.Feature.LOCAL_MEDIA):
-            try:
+            ctx.authorize = Authorize(
+                ctx.bridge, store, clock=ctx.now, on_served_profiles=on_served_profiles
+            )
+
+            # Amendment F2: constructed on every supported build, regardless of
+            # `direct_send_enabled`
+            # -- the flag is re-checked per request (DS-2(b)), not at listener-start time, so a
+            # host-side flag flip takes effect on the next request, not the next restart.
+            def _approval_timeout(profile: str) -> int:
+                bridge = ctx.bridge
+                if bridge is None:
+                    return 300
+                return bridge.approval_timeout_s(profile)  # type: ignore[no-any-return]
+
+            ctx.direct_send_deps = direct_send.DirectSendDeps(
+                bridge=ctx.bridge,
+                store=store,
+                locks=direct_send.ProfileLocks(),
+                now=ctx.now,
+                prompt_store=prompt_store,
+                approval_timeout=_approval_timeout,
+            )
+            if phone_member:
+                # AP-10: capture the Phone-chat helpers now, after the probe passed. A later
+                # rebinding
+                # closes this generation's Phone-chat side; Bot Chat `approvals` is independent.
+                phone_bound[0] = ctx.bridge.bind_phone_chat_helpers(  # type: ignore[attr-defined]
+                    lambda: prompt_store.close_phone_chat(ctx.now())
+                )
+            # Local media (M3): only a listener whose `local_media` member is available is bound;
+            # the
+            # result identity may be `None`. Closed (the default) otherwise, with no media import.
+            if _available(compat.Feature.LOCAL_MEDIA):
                 ctx.media_available = _media_bind(ctx, bridge_module, reads)
-            except BaseException:
-                store.close()
-                raise
-        adapter._hmp_hooks = prompts.AdapterHooks(  # type: ignore[attr-defined]
-            store=prompt_store,
-            bridge=ctx.bridge,
-            now=ctx.now,
-            iid=ident.iid,
-            phone_available=ctx.is_phone_chat_available,
-        )
-    log_event("adapter_open", outcome=result.status.value)
-    return ctx
+            adapter._hmp_hooks = prompts.AdapterHooks(  # type: ignore[attr-defined]
+                store=prompt_store,
+                bridge=ctx.bridge,
+                now=ctx.now,
+                iid=ident.iid,
+                phone_available=ctx.is_phone_chat_available,
+            )
+        log_event("adapter_open", outcome=result.status.value)
+        return ctx
+    except BaseException as setup_failure:
+        # Construction returned a known handle: this function owns it until context return.
+        # Attempt close once; a throwing close leaves custody unresolved, never successful.
+        try:
+            store.close()
+        except BaseException as cleanup_failure:
+            raise _ComponentSetupCleanupError(
+                store, setup_failure, cleanup_failure
+            ) from setup_failure
+        raise
 
 
 class HmpAdapter(BasePlatformAdapter):
