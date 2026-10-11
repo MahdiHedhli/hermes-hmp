@@ -708,6 +708,314 @@ def _fixture_binding_parts(
     return owner, binding, tuple(context[name] for name in _FIXTURE_CONTEXT_FIELDS)
 
 
+class _FixtureLaunch:
+    """Retained before task factory entry; absence of a task is not absence of work."""
+
+    def __init__(self, kind: str) -> None:
+        self.kind = kind
+        self.operation: object | None = None
+        self.gate: Any = None
+        self.coroutine: Any = None
+        self.task: Any = None
+        self.returned_handle: Any = None
+        self.started = False
+        self.released = False
+        self.effect_started = False
+        self.collected = False
+        self.result: Any = None
+        self.failure: BaseException | None = None
+        self.unknown = False
+
+
+class _FixtureLifecycle:
+    """Own setup and cleanup; real issuer and serving remain closed in this slice."""
+
+    def __init__(self, adapter: Any, alias: Any) -> None:
+        self.adapter = adapter
+        self.alias = alias
+        self.binding = alias.binding
+        self.context = tuple(vars(self.binding).get(name) for name in _FIXTURE_CONTEXT_FIELDS)
+        self.operation: object | None = None
+        self.connect_token: object | None = None
+        self.cleanup_reserved = False
+        self.setup: _FixtureLaunch | None = None
+        self.cleanup: _FixtureLaunch | None = None
+        self.ctx: Any = None
+        self.settings: Any = None
+        self.first_failure: BaseException | None = None
+        self.cleanup_failures: list[BaseException] = []
+        self.started = False
+        self.alias_claimed = False
+        self.stopping = False
+        self.launching = False
+        self.prompt_close_attempted = False
+        self.store_close_attempted = False
+        self.context_closed = False
+        self.unknown_context = False
+
+    def _fail(self, error: BaseException) -> None:
+        if self.first_failure is None:
+            self.first_failure = error
+        self.stopping = True
+        self.alias.poison(error)
+
+    def _ordinary_live(self, token: object | None) -> None:
+        current = vars(self.binding)
+        if (token is None or self.operation is not token or self.connect_token is not token
+                or not self.started or self.stopping or self.first_failure is not None
+                or self.alias.first_failure is not None or self.alias.binding is not self.binding
+                or self.adapter.config is not current.get("config")
+                or any(current.get(name) is not saved for name, saved in zip(
+                    _FIXTURE_CONTEXT_FIELDS, self.context, strict=True
+                ))):
+            error = RuntimeError("FIXTURE_LIFECYCLE_TERMINAL")
+            self._fail(error)
+            raise error
+
+    def _retain_alias_claim(self) -> None:
+        # A normal callback return is not evidence that custody transferred.
+        # Retain only the source-owned alias's exact lifecycle claim, including
+        # a claim made before the callback subsequently failed.
+        if self.alias.lifecycle is self:
+            self.alias_claimed = True
+
+    def begin_connect(self, adapter: Any) -> None:
+        if self.started or adapter is not self.adapter or self.stopping:
+            error = RuntimeError("FIXTURE_LIFECYCLE_CONSUMED")
+            self._fail(error)
+            raise error
+        self.started = True
+        token = self.connect_token = self.operation = object()
+        try:
+            self._ordinary_live(token)
+            self.alias.begin_setup(self)
+            self._retain_alias_claim()
+            self._ordinary_live(token)
+            if not self.alias_claimed:
+                raise RuntimeError("FIXTURE_ALIAS_CLAIM_MISSING")
+            extra = getattr(adapter.config, "extra", None)
+            self._ordinary_live(token)
+            self.settings = server.listener_settings(extra)
+            self._ordinary_live(token)
+        except BaseException as error:
+            self._retain_alias_claim()
+            self._fail(error)
+            raise
+
+    async def _body(self, launch: _FixtureLaunch) -> Any:
+        launch.started = True
+        # Even an eager factory stops here. Only our retained launch routine
+        # releases the gate after receiving the exact task and doing postchecks.
+        await launch.gate
+        if not launch.released or (launch.kind == "setup" and self.stopping):
+            raise RuntimeError("FIXTURE_LAUNCH_REFUSED")
+        if launch.kind == "setup":
+            self._ordinary_live(launch.operation)
+        elif not self.cleanup_reserved or self.cleanup is not launch:
+            raise RuntimeError("FIXTURE_CLEANUP_NOT_OWNED")
+        launch.effect_started = True
+        if launch.kind == "setup":
+            return await asyncio.to_thread(open_components, self.adapter)
+        if launch.kind == "cleanup":
+            return await self._cleanup_owned()
+        raise RuntimeError("FIXTURE_LAUNCH_KIND")
+
+    def _launch(self, kind: str) -> _FixtureLaunch:
+        token = self.connect_token
+        if kind == "setup":
+            self._ordinary_live(token)
+        elif kind == "cleanup" and not self.cleanup_reserved:
+            raise RuntimeError("FIXTURE_CLEANUP_NOT_OWNED")
+        if self.launching or kind not in ("setup", "cleanup"):
+            error = RuntimeError("FIXTURE_LAUNCH_REENTRY")
+            self._fail(error)
+            raise error
+        if (self.setup if kind == "setup" else self.cleanup) is not None:
+            error = RuntimeError("FIXTURE_LAUNCH_CONSUMED")
+            self._fail(error)
+            raise error
+        launch = _FixtureLaunch(kind)
+        launch.operation = token
+        if kind == "setup":
+            self.setup = launch
+        else:
+            self.cleanup = launch
+        self.launching = True
+        transferred = False
+        try:
+            loop = asyncio.get_running_loop()
+            if kind == "setup":
+                self._ordinary_live(token)
+            make_gate = loop.create_future
+            if kind == "setup":
+                self._ordinary_live(token)
+            launch.gate = make_gate()
+            if kind == "setup":
+                self._ordinary_live(token)
+            launch.coroutine = self._body(launch)
+            make_task = loop.create_task
+            if kind == "setup":
+                self._ordinary_live(token)
+            # From this point a throwing factory may already own the coroutine.
+            transferred = True
+            returned = make_task(launch.coroutine)
+            launch.returned_handle = returned
+            if not isinstance(returned, asyncio.Task):
+                raise RuntimeError("FIXTURE_TASK_HANDLE_UNKNOWN")
+            launch.task = returned
+            if kind == "setup":
+                self._ordinary_live(token)
+                self.alias.setup_checkpoint(self)
+                self._ordinary_live(token)
+            launch.released = True
+            launch.gate.set_result(None)
+            return launch
+        except BaseException as error:
+            launch.failure = error
+            # Never close a coroutine after it was passed to the factory,
+            # including when no task handle returned and it appears unstarted.
+            launch.unknown = transferred and launch.task is None
+            if not transferred and launch.coroutine is not None:
+                launch.coroutine.close()
+            self._fail(error)
+            raise
+        finally:
+            self.launching = False
+
+    async def _collect(self, launch: _FixtureLaunch) -> Any:
+        if launch.collected:
+            if launch.failure is not None:
+                raise launch.failure
+            return launch.result
+        if launch.task is None or launch.unknown:
+            raise RuntimeError("FIXTURE_LAUNCH_UNKNOWN")
+        try:
+            result = await asyncio.shield(launch.task)
+        except asyncio.CancelledError:
+            # Shielded wait cancellation does not establish that the task ended.
+            raise
+        except BaseException as error:
+            launch.failure = error
+            launch.collected = True
+            raise
+        launch.result = result
+        launch.collected = True
+        return result
+
+    async def connect(self) -> bool:
+        try:
+            self.begin_connect(self.adapter)
+            token = self.connect_token
+            self._ordinary_live(token)
+            launch = self._launch("setup")
+            self.ctx = await self._collect(launch)
+            self._ordinary_live(token)
+            self.alias.setup_checkpoint(self)
+            self._ordinary_live(token)
+            # This slice owns setup results but cannot start a server, publish
+            # metadata, or return success. Exact serving work remains unbound.
+            raise RuntimeError("FIXTURE_SERVING_WORK_UNBOUND")
+        except BaseException as error:
+            self._fail(error)
+            self.request_stop(error)
+            if isinstance(error, asyncio.CancelledError):
+                raise
+            if not isinstance(error, Exception):
+                raise
+        raise RuntimeError("FIXTURE_LIFECYCLE_UNAVAILABLE") from None
+
+    def request_stop(self, reason: BaseException) -> None:
+        self._fail(reason)
+        self._retain_alias_claim()
+        if (self.cleanup is not None or self.launching
+                or (self.setup is None and not self.alias_claimed)):
+            return
+        self.cleanup_reserved = True
+        try:
+            self._launch("cleanup")
+        except BaseException as error:
+            self.cleanup_failures.append(error)
+
+    async def _cleanup_owned(self) -> None:
+        setup = self.setup
+        if setup is not None:
+            if setup.task is None or setup.unknown:
+                self.unknown_context = True
+                raise RuntimeError("FIXTURE_SETUP_UNKNOWN")
+            if not setup.released:
+                # This exact retained task can only be waiting at our gate;
+                # cancellation here cannot discard a submitted setup worker.
+                setup.task.cancel()
+                try:
+                    await asyncio.shield(setup.task)
+                except asyncio.CancelledError:
+                    if not setup.task.done():
+                        raise
+                setup.collected = True
+            else:
+                try:
+                    self.ctx = await self._collect(setup)
+                except BaseException as error:
+                    self.cleanup_failures.append(error)
+                    # Includes builder resource/connection debt. A canceled task
+                    # may have left its to_thread worker running without result.
+                    self.unknown_context = True
+                    raise
+        ctx = self.ctx
+        if ctx is not None:
+            if not self.prompt_close_attempted:
+                self.prompt_close_attempted = True
+                try:
+                    self.adapter._close_generation(ctx)
+                except BaseException as error:
+                    self.cleanup_failures.append(error)
+            if not self.store_close_attempted:
+                self.store_close_attempted = True
+                try:
+                    ctx.store.close()
+                except BaseException as error:
+                    self.cleanup_failures.append(error)
+                    self.unknown_context = True
+            self.context_closed = not self.cleanup_failures and not self.unknown_context
+        try:
+            self.alias.retire_unconsumed()
+        except BaseException as error:
+            self.cleanup_failures.append(error)
+        if self.cleanup_failures or self.unknown_context:
+            raise RuntimeError("FIXTURE_CLEANUP_UNCERTAIN")
+
+    async def wait_stopped(self) -> None:
+        if self.cleanup is None:
+            raise RuntimeError("FIXTURE_STOP_UNAVAILABLE")
+        try:
+            await self._collect(self.cleanup)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            raise RuntimeError("FIXTURE_CLEANUP_UNCERTAIN") from None
+        # Local cleanup completion never supplies a native/process drain permit.
+
+
+def _fixture_listener_alias(owner: Any, binding: Any) -> Any:
+    import sys
+
+    module = sys.modules.get("native_media_listener_factory")
+    if type(module) is not ModuleType or module is not binding.source_module:
+        raise RuntimeError("FIXTURE_HELPER_MODULE_UNAVAILABLE")
+    cls = vars(module).get("ListenerAliasOwner")
+    alias = binding.listener_owner
+    if type(cls) is not type or type(alias) is not cls:
+        raise RuntimeError("FIXTURE_LISTENER_OWNERSHIP_UNBOUND")
+    constructor = vars(cls).get("__init__")
+    if (type(constructor) is not FunctionType or constructor.__globals__ is not vars(module)
+            or constructor.__code__.co_filename != binding.source_origin):
+        raise RuntimeError("FIXTURE_ALIAS_SOURCE_CHANGED")
+    if (alias.binding is not binding or alias.slot is not owner.slot
+            or alias.adapter is not owner.bound_adapter):
+        raise RuntimeError("FIXTURE_ALIAS_CONTEXT_CHANGED")
+    return alias
+
+
 class HmpAdapter(BasePlatformAdapter):
     def __init__(self, config: Any) -> None:
         super().__init__(config=config, platform=Platform(PLATFORM_NAME))
@@ -722,6 +1030,7 @@ class HmpAdapter(BasePlatformAdapter):
         self._profile_refresh_task: asyncio.Task[None] | None = None
         self._record_lock = threading.Lock()
         self._read_worker_budget = server.ReadWorkerBudget()
+        self._fixture_lifecycle: _FixtureLifecycle | None = None
         self._fixture_binding_attempted = False
         self._fixture_binding_failed = False
         self._fixture_listener_binding: (
@@ -817,9 +1126,18 @@ class HmpAdapter(BasePlatformAdapter):
             session_store = vars(runner).get("session_store")
             if session_store is None or getattr(self, "_session_store", None) is not session_store:
                 raise RuntimeError("FIXTURE_SESSION_WIRING_CHANGED")
-            # Binding is in-memory identity only. No alias-owner backend exists in this slice.
-            # Refuse before settings, components, threads, or either listener start path.
-            raise RuntimeError("FIXTURE_LISTENER_OWNERSHIP_UNBOUND")
+            alias = _fixture_listener_alias(_owner, binding)
+            if is_reconnect or self._fixture_lifecycle is not None:
+                self._fixture_binding_failed = True
+                failure = RuntimeError("FIXTURE_LIFECYCLE_CONSUMED")
+                if self._fixture_lifecycle is not None:
+                    self._fixture_lifecycle.request_stop(failure)
+                else:
+                    alias.poison(failure)
+                raise failure
+            lifecycle = _FixtureLifecycle(self, alias)
+            self._fixture_lifecycle = lifecycle
+            return await lifecycle.connect()
         if self._server is not None:
             return True
         try:
@@ -1010,6 +1328,9 @@ class HmpAdapter(BasePlatformAdapter):
                 cli.remove_listener_record(record)
 
     def _listener_closed(self) -> None:
+        if self._fixture_lifecycle is not None:
+            self._fixture_lifecycle.request_stop(RuntimeError("FIXTURE_LISTENER_CLOSED"))
+            return
         srv, self._server = self._server, None
         if srv is None:
             return
@@ -1027,6 +1348,10 @@ class HmpAdapter(BasePlatformAdapter):
         self._set_fatal_error(IDENTITY_CHANGED_CODE, IDENTITY_CHANGED_MESSAGE, retryable=False)
 
     async def disconnect(self) -> None:
+        if self._fixture_lifecycle is not None:
+            self._fixture_lifecycle.request_stop(RuntimeError("FIXTURE_DISCONNECT"))
+            await self._fixture_lifecycle.wait_stopped()
+            return
         await self._cancel_profile_refresh()
         srv, self._server = self._server, None
         self._drop_record()

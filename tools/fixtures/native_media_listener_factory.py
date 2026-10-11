@@ -1,6 +1,7 @@
 """Source-only scoped HMP factory delegation; default authority/binder refuse.
 
-This helper imports no native module and opens/adopts/closes no descriptor.
+This helper imports no native module. Real alias issuance remains unbound;
+owned alias-close code does not itself authorize descriptor acquisition.
 An injected protocol-shaped object is not proof of root authority. A separately
 reviewed root checkpoint must bind the immutable startup context and verify
 actual zero lifecycle debt for restore stages. The adapter/socket backend is
@@ -298,6 +299,8 @@ class FixtureScopeOwner:
             )
             require(adapter.config is self.binding.config, "ADAPTER_CONFIG_CHANGED")
             require(self.bound_adapter is None, "ADAPTER_ALREADY_BOUND")
+            if type(self.binding.listener_owner) is ListenerAliasOwner:
+                self.binding.listener_owner.claim_adapter(slot, adapter)
             self.bound_adapter = adapter
         except BaseException as error:
             self.poison(error)
@@ -460,3 +463,111 @@ class ScopedFactoryDelegate:
             self._registry_state(self.original_state, "restore")
             owner.checkpoint("restore")
             owner.state = "RESTORED"
+
+
+def _require_root_listener_issuance(issuance):
+    """Closed source boundary. No caller object or callback can bind the real issuer."""
+    raise ScopeRefusedError("LISTENER_ROOT_ISSUER_UNBOUND")
+
+
+class _ListenerAliasIssuance:
+    """Reserved exact type; a future reviewed root ledger must create its entries."""
+
+    def __init__(self):
+        raise ScopeRefusedError("LISTENER_ROOT_ISSUER_UNBOUND")
+
+
+class ListenerAliasOwner:
+    """One private issued alias; constructor and all effect preflights remain unbound.
+
+    An exact class is not an authority certificate. The source boundary above
+    must be replaced only by a separately reviewed root implementation, never
+    by a runtime configuration, callable argument, or fixture activation flag.
+    """
+
+    def __init__(self, issuance):
+        require(type(issuance) is _ListenerAliasIssuance, "ALIAS_ISSUANCE_TYPE")
+        _require_root_listener_issuance(issuance)
+        self.issuance = issuance
+        self.binding = issuance.binding
+        self.listener = issuance.listener
+        self.slot = None
+        self.adapter = None
+        self.lifecycle = None
+        self.server = None
+        self.state = "ISSUED"
+        self.first_failure = None
+        self.close_failure = None
+        self.close_attempted = False
+
+    def poison(self, error):
+        if self.first_failure is None:
+            self.first_failure = error
+        if self.slot is not None:
+            self.slot.owner.poison(error)
+
+    def claim_adapter(self, slot, adapter):
+        # Called only by the existing direct source-owned accept hook. No
+        # foreign/root checkpoint inside that callback; this is identity only.
+        try:
+            require(self.first_failure is None and self.state == "ISSUED", "ALIAS_CONSUMED")
+            require(type(slot) is _StartupSlot, "ALIAS_SLOT")
+            binding = slot.binding
+            require(
+                binding is self.binding and binding.listener_owner is self
+                and type(adapter) is binding.adapter_type and adapter.config is binding.config
+                and slot.owner.slot is slot and slot.owner.binding is binding
+                and slot.claimed and slot.owner.adapter_debt is adapter
+                and slot.owner.in_callback and slot.owner.binding_hook_active
+                and slot.owner.operation is not None and slot.owner.state == "FACTORY_CLAIMED",
+                "ALIAS_ADAPTER_JOIN",
+            )
+            self.slot, self.adapter = slot, adapter
+            self.state = "ADAPTER_BOUND"
+        except BaseException as error:
+            self.poison(error)
+            raise
+
+    def begin_setup(self, lifecycle):
+        try:
+            require(self.first_failure is None and self.state == "ADAPTER_BOUND", "ALIAS_CONSUMED")
+            _require_root_listener_issuance(self.issuance)
+            require(lifecycle.adapter is self.adapter and self.lifecycle is None, "ALIAS_LIFECYCLE")
+            self.lifecycle = lifecycle
+            self.state = "SETUP"
+        except BaseException as error:
+            self.poison(error)
+            raise
+
+    def setup_checkpoint(self, lifecycle):
+        require(self.first_failure is None, "ALIAS_TERMINAL")
+        require(self.lifecycle is lifecycle and self.state == "SETUP", "ALIAS_LIFECYCLE")
+        _require_root_listener_issuance(self.issuance)
+
+    def handoff(self, server):
+        # Serving cannot be admitted until the exact worker/resource inventory,
+        # operator endpoint policy and real root issuer are independently bound.
+        raise ScopeRefusedError("FIXTURE_SERVING_WORK_UNBOUND")
+
+    def observe_handoff(self, server):
+        require(server is self.server and self.state == "HANDOFF_PENDING", "ALIAS_HANDOFF")
+        # No path in this first source slice enters HANDOFF_PENDING. The next
+        # reviewed slice must join this transition to RP01's exact used latch.
+        raise ScopeRefusedError("FIXTURE_SERVING_WORK_UNBOUND")
+
+    def retire_unconsumed(self):
+        if self.close_attempted:
+            require(self.state == "CLOSED", "ALIAS_CLOSE_UNKNOWN")
+            return
+        require(self.state in ("ISSUED", "ADAPTER_BOUND", "SETUP"), "ALIAS_NOT_LOCAL")
+        _require_root_listener_issuance(self.issuance)
+        self.close_attempted = True
+        self.state = "CLOSE_ATTEMPTED"
+        try:
+            self.listener.close()
+        except BaseException as error:
+            self.close_failure = error
+            self.poison(error)
+            self.state = "CLOSE_UNKNOWN"
+            raise
+        self.state = "CLOSED"

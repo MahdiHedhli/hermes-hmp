@@ -1295,6 +1295,13 @@ FIXTURE_BINDING_PARTS_AST_SHA256 = (
 )
 
 
+# Accepted lifecycle V2 source 0fdc364c, peer closure 4d376506.
+# Only this whole source-defined alias lookup receives its own exact pin.
+FIXTURE_LISTENER_ALIAS_AST_SHA256 = (
+    "37d47d7163aeac5b7b936dbf333d4d9c6213b0b76a572e75a0f2b756ee99adca"
+)
+
+
 def _fixture_ast_shape(node: object) -> object:
     """Stable shape across supported AST versions; empty type_params has no behavior."""
     if isinstance(node, ast.AST):
@@ -1309,33 +1316,46 @@ def _fixture_ast_shape(node: object) -> object:
 
 
 def _fixture_lookup_exceptions(tree: ast.Module) -> tuple[set[int], list[str]]:
-    """Permit only the three exact subtrees in the accepted readonly private lookup."""
-    matches = [
-        node for node in tree.body
-        if isinstance(node, ast.FunctionDef) and node.name == "_fixture_binding_parts"
-    ]
-    if not matches:
-        return set(), []
-    if len(matches) != 1:
-        return set(), ["duplicate_fixture_binding_parts"]
-    function = matches[0]
-    digest = hashlib.sha256(repr(_fixture_ast_shape(function)).encode()).hexdigest()
-    if digest != FIXTURE_BINDING_PARTS_AST_SHA256:
-        return set(), ["changed_fixture_binding_parts"]
+    """Permit only exact import/get subtrees in the two wholly pinned private functions."""
     allowed: set[int] = set()
-    for source in (
-        "import sys",
-        "from importlib.machinery import ModuleSpec",
-        "module = sys.modules.get('native_media_listener_factory')",
+    for name, pin, sources in (
+        (
+            "_fixture_binding_parts", FIXTURE_BINDING_PARTS_AST_SHA256,
+            (
+                "import sys",
+                "from importlib.machinery import ModuleSpec",
+                "module = sys.modules.get('native_media_listener_factory')",
+            ),
+        ),
+        (
+            "_fixture_listener_alias", FIXTURE_LISTENER_ALIAS_AST_SHA256,
+            (
+                "import sys",
+                "module = sys.modules.get('native_media_listener_factory')",
+            ),
+        ),
     ):
-        expected = ast.dump(ast.parse(source).body[0], include_attributes=False)
-        statements = [
-            node for node in function.body
-            if ast.dump(node, include_attributes=False) == expected
+        matches = [
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == name
         ]
-        if len(statements) != 1:
-            return set(), ["invalid_fixture_lookup_subtree"]
-        allowed.update(id(node) for node in ast.walk(statements[0]))
+        if not matches:
+            continue
+        if len(matches) != 1:
+            return set(), [f"duplicate{name}"]
+        function = matches[0]
+        digest = hashlib.sha256(repr(_fixture_ast_shape(function)).encode()).hexdigest()
+        if digest != pin:
+            return set(), [f"changed{name}"]
+        for source in sources:
+            expected = ast.dump(ast.parse(source).body[0], include_attributes=False)
+            statements = [
+                node for node in function.body
+                if ast.dump(node, include_attributes=False) == expected
+            ]
+            if len(statements) != 1:
+                return set(), ["invalid_fixture_lookup_subtree"]
+            allowed.update(id(node) for node in ast.walk(statements[0]))
     return allowed, []
 
 
@@ -1376,46 +1396,47 @@ def test_adapter_bridge_and_reads_use_no_dynamic_module_lookup(name: str) -> Non
     assert _dynamic_media_lookups(READ_SRC[name], allow_fixture_binding=name == "adapter.py") == []
 
 
+@pytest.mark.parametrize("function_name", ["_fixture_binding_parts", "_fixture_listener_alias"])
 @pytest.mark.parametrize(
-    "before,after",
+    "mutation",
     [
-        ("sys.modules.get(\"native_media_listener_factory\")", "sys.modules.get(\"arbitrary\")"),
-        ("sys.modules.get(\"native_media_listener_factory\")", "sys.modules.get(adapter.config)"),
-        ("    import sys\n", "    import sys as other\n"),
-        ("from importlib.machinery import ModuleSpec", "from importlib.util import find_spec"),
-        (
-            "    return owner, binding, tuple(",
-            "    sys.modules['x'] = module\n    return owner, binding, tuple(",
-        ),
-        (
-            "    return owner, binding, tuple(",
-            "    del sys.modules['x']\n    return owner, binding, tuple(",
-        ),
-        (
-            "    return owner, binding, tuple(",
-            "    sys.modules.update({'x': module})\n    return owner, binding, tuple(",
-        ),
-        (
-            "    return owner, binding, tuple(",
-            "    spec.loader.exec_module(module)\n    return owner, binding, tuple(",
-        ),
-        (
-            "    return owner, binding, tuple(",
-            "    spec.loader.load_module('x')\n    return owner, binding, tuple(",
-        ),
-        (
-            "    return owner, binding, tuple(",
-            "    __import__('x')\n    return owner, binding, tuple(",
-        ),
+        "arbitrary_key", "input_key", "sys_alias", "unsafe_import", "write",
+        "delete", "update", "exec_module", "load_module", "dynamic_import",
     ],
 )
 def test_private_fixture_lookup_rejects_key_import_write_and_loader_mutations(
-    before: str, after: str,
+    function_name: str, mutation: str,
 ) -> None:
     source = READ_SRC["adapter.py"]
     assert _dynamic_media_lookups(source, allow_fixture_binding=True) == []
-    mutant = source.replace(before, after)
-    assert mutant != source
+    function = next(
+        node for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    original = ast.get_source_segment(source, function)
+    assert original is not None
+    lookup = 'sys.modules.get("native_media_listener_factory")'
+    if mutation == "arbitrary_key":
+        replacement = original.replace(lookup, 'sys.modules.get("arbitrary")')
+    elif mutation == "input_key":
+        replacement = original.replace(lookup, "sys.modules.get(binding.config)")
+    elif mutation == "sys_alias":
+        replacement = original.replace("    import sys\n", "    import sys as other\n")
+    else:
+        injection = {
+            "unsafe_import": "from importlib.util import find_spec",
+            "write": "sys.modules['x'] = module",
+            "delete": "del sys.modules['x']",
+            "update": "sys.modules.update({'x': module})",
+            "exec_module": "spec.loader.exec_module(module)",
+            "load_module": "spec.loader.load_module('x')",
+            "dynamic_import": "__import__('x')",
+        }[mutation]
+        replacement = original.replace(
+            "    import sys\n", "    import sys\n    " + injection + "\n"
+        )
+    assert replacement != original
+    mutant = source.replace(original, replacement, 1)
     assert _dynamic_media_lookups(mutant, allow_fixture_binding=True)
 
 
@@ -1438,13 +1459,36 @@ def test_fixture_exception_does_not_apply_outside_the_private_function(injection
     assert _dynamic_media_lookups(source + "\n" + injection, allow_fixture_binding=True)
 
 
-def test_private_fixture_lookup_duplicate_function_is_not_an_escape() -> None:
+@pytest.mark.parametrize("function_name", ["_fixture_binding_parts", "_fixture_listener_alias"])
+def test_private_fixture_lookup_duplicate_function_is_not_an_escape(function_name: str) -> None:
     source = READ_SRC["adapter.py"]
     function = next(
         node for node in ast.parse(source).body
-        if isinstance(node, ast.FunctionDef) and node.name == "_fixture_binding_parts"
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
     )
     mutant = source + "\n" + ast.unparse(function) + "\n"
+    assert _dynamic_media_lookups(mutant, allow_fixture_binding=True)
+
+
+@pytest.mark.parametrize("function_name", ["_fixture_binding_parts", "_fixture_listener_alias"])
+@pytest.mark.parametrize("placement", ["renamed", "nested", "class_method"])
+def test_private_fixture_lookup_moved_function_is_not_an_escape(
+    function_name: str, placement: str,
+) -> None:
+    source = READ_SRC["adapter.py"]
+    function = next(
+        node for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    original = ast.get_source_segment(source, function)
+    assert original is not None
+    if placement == "renamed":
+        replacement = original.replace("def " + function_name, "def production_lookup", 1)
+    else:
+        prefix = "def production():" if placement == "nested" else "class Production:"
+        replacement = prefix + "\n" + "\n".join("    " + line for line in original.splitlines())
+    mutant = source.replace(original, replacement, 1)
+    assert mutant != source
     assert _dynamic_media_lookups(mutant, allow_fixture_binding=True)
 
 
