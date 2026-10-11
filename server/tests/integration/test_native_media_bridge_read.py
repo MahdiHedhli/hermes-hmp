@@ -60,7 +60,11 @@ def check():
     store.migrate()
     try:
         store.insert_user("synthetic-user", "Synthetic", 0)
-        runner = SimpleNamespace(_routed_profile_home=lambda profile: home)
+        import gateway.run
+        assert Path(gateway.run.__file__).resolve().is_relative_to(source_path)
+        from gateway.run import GatewayRunner
+        assert GatewayRunner._routed_profile_home("default") == home
+        runner = SimpleNamespace(_routed_profile_home=GatewayRunner._routed_profile_home)
         bridge = HermesReadBridge(SimpleNamespace(gateway_runner=runner), StoreDirectory(store))
         result = bridge.latest_with_media(
             ConversationRef("synthetic-user", "default", "synthetic-media"), 10,
