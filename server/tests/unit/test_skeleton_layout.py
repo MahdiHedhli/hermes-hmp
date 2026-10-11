@@ -37,6 +37,15 @@ CONTRACT_MODULES = {
     "mobile_model.py",
     "server.py",
     "readiness.py",
+    # BI1 pure closed presentation projection and fixed Unicode 17 tables; no Hermes import.
+    "presentation.py",
+    "presentation_files.py",
+    "presentation_yaml.py",
+    "presentation_jobs.py",
+    "presentation_authority.py",
+    "presentation_raster.py",
+    "unicode17.py",
+    "unicode17_data.py",
     # AR1 reviewed request Store, authenticated self routes, and read-only host TTY bridge.
     # Closed names also extend the Hermes-free import and optional-media boundary tests.
     "controls_requests.py",
