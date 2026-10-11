@@ -418,6 +418,22 @@ def _owned_write(method):
     return wrapped
 
 
+class _MigrationCleanupError(RuntimeError):
+    """A new migration connection failed its one cleanup attempt; retain causes and custody."""
+
+    def __init__(
+        self,
+        connection: sqlite3.Connection,
+        setup_failure: BaseException,
+        cleanup_failure: BaseException,
+    ) -> None:
+        super().__init__("HMP store migration failed with unresolved connection cleanup")
+        self.connection = connection
+        self.setup_failure = setup_failure
+        self.cleanup_failure = cleanup_failure
+        self.connection_close_unknown = True
+
+
 class Store:
     def __init__(self, path: Path) -> None:
         self._path = path
@@ -452,13 +468,13 @@ class Store:
             # cursors and could swap the shared connection under a caller.
             created = self._conn is None
             conn = self._conn
-            if conn is None:
-                conn = sqlite3.connect(
-                    str(self._path), isolation_level=None, check_same_thread=False,
-                    cached_statements=0,
-                )
-                conn.row_factory = sqlite3.Row
             try:
+                if conn is None:
+                    conn = sqlite3.connect(
+                        str(self._path), isolation_level=None, check_same_thread=False,
+                        cached_statements=0,
+                    )
+                    conn.row_factory = sqlite3.Row
                 # This first read must precede every PRAGMA that could change the database.
                 # A future schema is unavailable to *all* Store authority, not merely the
                 # request path; the failure branch below poisons this Store object.
@@ -492,13 +508,19 @@ class Store:
                     "UPDATE meta SET schema_version = 2 WHERE id = 1 AND schema_version < 2"
                 )
                 _migrate_request_schema(conn)
-            except BaseException:
+            except BaseException as setup_failure:
                 # A failed migration is never retried on this Store object. In particular,
                 # a failure on the already-shared connection may leave its SQL state unknown.
                 self._poisoned = True
-                if created:
-                    with contextlib.suppress(Exception):
+                if created and conn is not None:
+                    # This new connection has not been published to self._conn. Close once;
+                    # a throwing close retains the exact handle as unresolved custody.
+                    try:
                         conn.close()
+                    except BaseException as cleanup_failure:
+                        raise _MigrationCleanupError(
+                            conn, setup_failure, cleanup_failure
+                        ) from setup_failure
                 raise
             if created:
                 self._conn = conn
