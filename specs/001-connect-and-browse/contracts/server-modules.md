@@ -35,7 +35,8 @@ server/
                                   #   k_grace custody: 32 B, own file, mode 0600, outside every Hermes home,
                                   #   regenerated on rotate-key and on clone/backup/host-change detection (R16, CS-13);
                                   #   custody layout and the server-internal HMP1-HOST input: research R17
-    store.py                      # SQLite schema + migrations (data-model.md); the only module that writes the store;
+    store.py                      # Owns SQLite schema/migrations (data-model.md), connection and transaction serialization;
+                                  #   no independent connections or writers outside this Store-owned boundary;
                                   #   also session_refs, other_session_baselines (amendment A1, SES-1a/SES-2);
                                   #   also direct_send_idempotency (amendment F2, DS-3)
     compat.py                     # build identity (git SHA / fingerprint), read_compat_builds.json, dependency probe (GU-2c, ERR-2a);
@@ -82,6 +83,13 @@ server/
     server.py                     # aiohttp app, route table (F1 subset), middlewares: peer policy (TR-4),
                                   #   size limits, rate limits (TR-6), error shaping (ERR-1), compat refusal (ERR-2a)
     readiness.py                  # v1.6 AR1: fixed closed readiness DTO mapping only; no authority or I/O
+    controls_requests.py          # AR1 ControlsRequestStore: bounded exact-origin request/CAS SQL only
+                                  #   through Store.transaction(); no independent connection or writer;
+                                  #   request history is not current Controls authority; no remote decision
+    controls_request_routes.py    # AR1: locally opted-in authenticated self create/status/lookup/cancel;
+                                  #   no remote admin/grant endpoint, 503 closed unavailable vs 429 request quota
+    operator_read.py              # AR1: bounded same-UID private Unix decision-context read; no grant writes;
+                                  #   listener-owned worker debt must drain before generation/store close
     request_ctx.py                # leaf module: ServerContext, CTX_KEY, context(), body/response helpers,
                                   #   peer_key, bearer -- imported at module level by server.py, pairing.py,
                                   #   tokens.py and revoke.py so a plugin reload (sys.modules eviction of
@@ -103,6 +111,9 @@ server/
                                   #   their pending `hmp` requests through Hermes's own public CLI as a
                                   #   subprocess (OD-F8), before printing the next steps; reuses
                                   #   `pair list`/`confirm`/`deny`'s own internals throughout
+                                  #   AR1 `devices controls-requests list/show/allow/deny` requires a real TTY
+                                  #   and no Hermes session; allow/deny use fresh exact confirmation and CAS.
+                                  #   Request deny leaves existing Controls unchanged; direct deny-controls is separate.
     logging_policy.py             # allow-listed log fields (SEC-4, SR-007): plugin logger; aiohttp access log
                                   #   disabled or reduced to method, route template, status, duration; bridge
                                   #   exceptions logged by type only; P6 reply dropped unlogged (CS-22)
