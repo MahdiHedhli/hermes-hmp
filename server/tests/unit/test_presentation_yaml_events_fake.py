@@ -183,6 +183,19 @@ class PresentationYamlEventTests(unittest.TestCase):
         self.refused(document(nested), "STRUCTURE_LIMIT")
         self.refused(document([]), "DEADLINE", clock=lambda: 4.0)
 
+    def test_invalid_clock_domain_refuses_before_event_advance(self):
+        for value in (-1.0, float("-inf"), float("inf"), float("nan"), 1, True):
+            with self.subTest(value=value):
+                advanced = []
+
+                def source(advanced=advanced):
+                    advanced.append(True)
+                    yield event("stream_start")
+
+                self.refused(source(), "DEADLINE", clock=lambda value=value: value)
+                self.assertEqual(advanced, [])
+        self.assertIsNone(self.reduce(document([]), clock=lambda: 0.0).display_name)
+
     def test_bounded_iterator_failure_and_extra_stream(self):
         def bad_iterator():
             yield event("stream_start")

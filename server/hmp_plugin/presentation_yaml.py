@@ -7,6 +7,7 @@ reviewed streaming YAML 1.1 event adapter and run this within its shared deadlin
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -170,7 +171,7 @@ def reduce_presentation_events(
             now = clock()
         except BaseException as exc:
             raise PresentationYamlError("CLOCK") from exc
-        if type(now) is not float or not now < deadline:
+        if type(now) is not float or not math.isfinite(now) or now < 0 or not now < deadline:
             raise PresentationYamlError("DEADLINE")
 
     try:
