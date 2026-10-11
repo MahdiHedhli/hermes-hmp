@@ -181,11 +181,8 @@ M_UNLOCKED_OVERWRITE = {
 M_DROP_BASEEXC = {
     "adapter.py": [
         (
-            "            except BaseException:\n"
-            "                store.close()\n                raise\n"
-            "        adapter._hmp_hooks",
-            "            except Exception:\n                store.close()\n                raise\n"
-            "        adapter._hmp_hooks",
+            "    except BaseException as setup_failure:\n",
+            "    except Exception as setup_failure:\n",
         )
     ]
 }
@@ -215,10 +212,10 @@ M_READS_FILL_RAISES = {
 M_FLAG_TRUTHY = {
     "adapter.py": [
         (
-            '        return isinstance(block, Mapping) and block.get("enabled") is True\n\n'
-            "    def _read_model_enabled",
-            '        return isinstance(block, Mapping) and bool(block.get("enabled"))\n\n'
-            "    def _read_model_enabled",
+            '            return isinstance(block, Mapping) and block.get("enabled") is True\n\n'
+            "        def _read_model_enabled",
+            '            return isinstance(block, Mapping) and bool(block.get("enabled"))\n\n'
+            "        def _read_model_enabled",
         )
     ]
 }
