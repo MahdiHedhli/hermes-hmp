@@ -1,0 +1,694 @@
+"""Tagged CPython parser over inert decrypted bytes; no socket or TLS."""
+import hashlib
+import importlib.util
+from pathlib import Path
+import sys
+import unittest
+from rp03_bounded import AdapterSocket, BoundedFile, CLEAN_EOF, Refused, strict_response_type
+HERE = Path(__file__).resolve().parent
+HTTP_SOURCE = HERE / 'cpython3146_http_client.py'
+assert hashlib.sha256(HTTP_SOURCE.read_bytes()).hexdigest() == '3fb2bf964bf8553a404bffdc47d2483832fb402128021bab650c452fc5b41bbb'
+spec = importlib.util.spec_from_file_location('pinned_cpython3146_http', HTTP_SOURCE)
+assert spec is not None and spec.loader is not None
+http = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = http
+spec.loader.exec_module(http)
+Strict = strict_response_type(http)
+
+class ReplayHooks:
+    """Inert replay of legacy test hooks, NEVER a production authority binding.
+
+    These hooks exercise old exception/reentry tests only. Separate StateAuthority
+    tests supply the coherent contract. This helper cannot qualify real authority.
+    """
+    def __init__(self, owner_hook, time_hook):
+        self.owner_hook, self.time_hook = owner_hook, time_hook
+    def checkpoint(self, deadline):
+        self.owner_hook()
+        return self.time_hook()
+
+
+class Port:
+
+    def __init__(self, parts):
+        self.parts = list(parts)
+        self.requests = []
+        self.closes = 0
+
+    def recv(self, size, timeout):
+        assert type(size) is int and 1 <= size <= 4096
+        assert 0 < timeout <= 15
+        self.requests.append(size)
+        if not self.parts:
+            raise AssertionError('unexpected receive')
+        head = self.parts[0]
+        if head is CLEAN_EOF:
+            self.parts.pop(0)
+            return CLEAN_EOF
+        assert type(head) is bytes
+        if not head:
+            self.parts.pop(0)
+            return b''
+        result = head[:size]
+        if len(head) == len(result):
+            self.parts.pop(0)
+        else:
+            self.parts[0] = head[len(result):]
+        return result
+
+    def close(self):
+        self.closes += 1
+
+class Ledger:
+
+    def __init__(self, capacity=1 << 20, calls=65536):
+        self.capacity = capacity
+        self.max_calls = calls
+        self.charged = self.calls = 0
+
+    def reserve_read(self, count):
+        assert type(count) is int and 1 <= count <= 4096
+        if self.charged + count > self.capacity or self.calls >= self.max_calls:
+            raise Refused('SHARED_CREDIT')
+        self.charged += count
+        self.calls += 1
+
+def make(wire, *, body_limit=65536, capacity=1 << 20):
+    parts = [wire] if isinstance(wire, bytes) else wire
+    port = Port(parts)
+    ledger = Ledger(capacity)
+    file = BoundedFile(port, ledger, authority=ReplayHooks(lambda: None, lambda: 1.0), deadline=30.0, body_limit=body_limit)
+    response = Strict(AdapterSocket(file), body_limit=body_limit)
+    return (response, port, ledger, file)
+
+class Checks(unittest.TestCase):
+
+    def test_partial_eof_completes_without_extra_credit_or_receive(self):
+        head = b'HTTP/1.0 200 OK\r\n\r\n'
+        for output in ('read', 'readinto'):
+            response, port, ledger, file = make([head + b'A', CLEAN_EOF, b'B', CLEAN_EOF], capacity=len(head) + 3)
+            response.begin()
+            if output == 'read':
+                self.assertEqual(response.read(2), b'A')
+            else:
+                buffer = bytearray(b'zz')
+                self.assertEqual(response.readinto(buffer), 1)
+                self.assertEqual(buffer, b'Az')
+            self.assertEqual(response.completion, 'transport-eof')
+            self.assertTrue(file.clean_eof)
+            self.assertEqual(file.body, 1)
+            self.assertEqual(ledger.charged, len(head) + 3)
+            self.assertEqual(port.requests[-2:], [2, 1])
+            self.assertEqual(port.closes, 1)
+            before = (ledger.charged, ledger.calls, len(port.requests))
+            self.assertEqual(response.read(1), b'')
+            self.assertEqual(response.readinto(bytearray(1)), 0)
+            self.assertEqual(before, (ledger.charged, ledger.calls, len(port.requests)))
+            self.assertEqual(port.parts, [b'B', CLEAN_EOF])
+            response.close()
+            self.assertEqual(port.closes, 1)
+
+    def test_reader_known_eof_reused_without_receive_or_credit(self):
+        port, ledger = (Port([b'A', CLEAN_EOF, b'B']), Ledger(capacity=3))
+        file = BoundedFile(port, ledger, authority=ReplayHooks(lambda: None, lambda: 1.0), deadline=30, body_limit=4)
+        file.set_mode('body')
+        self.assertEqual(file.read(2), b'A')
+        self.assertEqual(file.read(1), b'')
+        target = bytearray(b'z')
+        self.assertEqual(file.readinto(target), 0)
+        self.assertEqual(target, b'z')
+        self.assertEqual(port.requests, [2, 1])
+        self.assertEqual(ledger.charged, 3)
+        self.assertEqual(port.parts, [b'B'])
+        file.close()
+
+    def test_partial_eof_fixed_and_chunked_remain_terminal(self):
+        for framing in (b'Content-Length: 2', b'Transfer-Encoding: chunked'):
+            for output in ('read', 'readinto'):
+                tail = b'A' if framing.startswith(b'Content-Length') else b'2\r\nA'
+                response, port, ledger, file = make([b'HTTP/1.1 200 OK\r\n' + framing + b'\r\n\r\n' + tail, CLEAN_EOF, b'B'])
+                response.begin()
+                target = bytearray(b'zz')
+                with self.assertRaises((Refused, http.IncompleteRead)):
+                    if output == 'read':
+                        response.read(2)
+                    else:
+                        response.readinto(target)
+                self.assertEqual(target, b'zz')
+                self.assertIsNone(response.completion)
+                self.assertIsNotNone(file.first_failure)
+                before = (ledger.charged, len(port.requests))
+                with self.assertRaises(Refused):
+                    response.read(1)
+                self.assertEqual(before, (ledger.charged, len(port.requests)))
+                self.assertEqual(port.parts, [b'B'])
+                file.close()
+                self.assertEqual(port.closes, 1)
+
+    def test_public_file_close_from_each_read_callback_poison_before_more_io(self):
+        for site in ('owner', 'clock', 'reserve', 'recv'):
+            holder = {}
+
+            class ClosingLedger(Ledger):
+
+                def reserve_read(self, count):
+                    if site == 'reserve':
+                        with self_test.assertRaisesRegex(Refused, 'REENTRANT_FLIGHT'):
+                            holder['file'].close()
+                    return super().reserve_read(count)
+
+            class ClosingPort(Port):
+
+                def recv(self, size, timeout):
+                    self.requests.append(size)
+                    if site == 'recv':
+                        with self_test.assertRaisesRegex(Refused, 'REENTRANT_FLIGHT'):
+                            holder['file'].close()
+                    return b'A'
+            self_test = self
+
+            def owner():
+                if site == 'owner':
+                    with self.assertRaisesRegex(Refused, 'REENTRANT_FLIGHT'):
+                        holder['file'].close()
+
+            def clock():
+                if site == 'clock':
+                    with self.assertRaisesRegex(Refused, 'REENTRANT_FLIGHT'):
+                        holder['file'].close()
+                return 1.0
+            port, ledger = (ClosingPort([]), ClosingLedger())
+            file = BoundedFile(port, ledger, authority=ReplayHooks(owner, clock), deadline=30.0, body_limit=4)
+            holder['file'] = file
+            response = Strict(AdapterSocket(file), body_limit=4)
+            with self.assertRaisesRegex(Refused, 'FLIGHT_TERMINAL'):
+                response.begin()
+            self.assertEqual(port.closes, 0)
+            self.assertEqual(port.requests, [1] if site == 'recv' else [])
+            self.assertEqual(ledger.charged, 1 if site in ('reserve', 'recv') else 0)
+            self.assert_terminal(response, port, ledger, file)
+            file.close()
+            file.close()
+            self.assertEqual(port.closes, 1)
+
+    def test_parser_close_callback_cannot_reenter_public_response(self):
+        for method in ('read', 'readinto', 'begin', 'readline', 'close', 'private_completion', 'private_close'):
+            for raises in (False, True):
+
+                class ReenteringClose(Port):
+
+                    def close(self):
+                        self.closes += 1
+                        operation = {'read': lambda: response.read(0), 'readinto': lambda: response.readinto(bytearray()), 'begin': response.begin, 'readline': lambda: response.readline(0), 'close': response.close, 'private_completion': response._mark_completion, 'private_close': response._close_conn}[method]
+                        with self_test.assertRaisesRegex(Refused, 'REENTRANT_RESPONSE'):
+                            operation()
+                        if raises:
+                            raise RuntimeError('ambiguous close')
+                self_test = self
+                port = ReenteringClose([b'HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA'])
+                ledger = Ledger()
+                file = BoundedFile(port, ledger, authority=ReplayHooks(lambda: None, lambda: 1.0), deadline=30.0, body_limit=4)
+                response = Strict(AdapterSocket(file), body_limit=4)
+                response.begin()
+                with self.assertRaises((Refused, RuntimeError)):
+                    response.read(1)
+                self.assertIsNone(response.completion)
+                self.assertEqual(port.closes, 1)
+                self.assertEqual(file.close_unknown, raises)
+                self.assert_terminal(response, port, ledger, file)
+                if raises:
+                    with self.assertRaisesRegex(Refused, 'CLOSE_UNKNOWN'):
+                        file.close()
+                else:
+                    file.close()
+                self.assertEqual(port.closes, 1)
+
+    def test_external_response_close_owns_single_parser_close(self):
+        response, port, ledger, file = make(b'HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA')
+        response.begin()
+        response.close()
+        response.close()
+        self.assertEqual(port.closes, 1)
+        self.assertTrue(file.closed)
+        self.assertIsNone(response.completion)
+
+    def test_response_close_before_begin_retires_bound_port_once(self):
+        response, port, ledger, file = make(b'')
+        response.close()
+        response.close()
+        self.assertEqual(port.closes, 1)
+        self.assertTrue(file.closed)
+        self.assertEqual((ledger.charged, port.requests), (0, []))
+
+    def test_external_response_close_callback_cannot_reenter_read_zero(self):
+
+        class ReenteringClose(Port):
+
+            def close(self):
+                self.closes += 1
+                with self_test.assertRaisesRegex(Refused, 'REENTRANT_RESPONSE'):
+                    response.read(0)
+        self_test = self
+        port = ReenteringClose([b'HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA'])
+        ledger = Ledger()
+        file = BoundedFile(port, ledger, authority=ReplayHooks(lambda: None, lambda: 1.0), deadline=30.0, body_limit=4)
+        response = Strict(AdapterSocket(file), body_limit=4)
+        response.begin()
+        with self.assertRaisesRegex(Refused, 'FLIGHT_TERMINAL'):
+            response.close()
+        self.assertEqual(port.closes, 1)
+        self.assert_terminal(response, port, ledger, file)
+
+    def test_readinto_and_eof_close_callbacks_do_not_publish_completion(self):
+        for framing in ('length', 'eof'):
+
+            class ReenteringClose(Port):
+
+                def close(self):
+                    self.closes += 1
+                    with self_test.assertRaisesRegex(Refused, 'REENTRANT_RESPONSE'):
+                        response.read(0)
+            self_test = self
+            if framing == 'length':
+                parts = [b'HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA']
+            else:
+                parts = [b'HTTP/1.0 200 OK\r\n\r\nA', CLEAN_EOF]
+            port, ledger = (ReenteringClose(parts), Ledger())
+            file = BoundedFile(port, ledger, authority=ReplayHooks(lambda: None, lambda: 1.0), deadline=30.0, body_limit=4)
+            response = Strict(AdapterSocket(file), body_limit=4)
+            response.begin()
+            if framing == 'eof':
+                self.assertEqual(response.readinto(bytearray(1)), 1)
+            with self.assertRaisesRegex(Refused, 'FLIGHT_TERMINAL'):
+                response.readinto(bytearray(1))
+            self.assertIsNone(response.completion)
+            self.assertEqual(port.closes, 1)
+            self.assert_terminal(response, port, ledger, file)
+
+    def test_close_callback_caught_reader_close_has_no_second_attempt(self):
+
+        class ReenteringClose(Port):
+
+            def close(self):
+                self.closes += 1
+                with self_test.assertRaisesRegex(Refused, 'REENTRANT_FLIGHT'):
+                    file.close()
+        self_test = self
+        port, ledger = (ReenteringClose([]), Ledger())
+        file = BoundedFile(port, ledger, authority=ReplayHooks(lambda: None, lambda: 1.0), deadline=30.0, body_limit=4)
+        response = Strict(AdapterSocket(file), body_limit=4)
+        with self.assertRaisesRegex(Refused, 'FLIGHT_TERMINAL'):
+            file.close()
+        self.assertEqual(port.closes, 1)
+        self.assert_terminal(response, port, ledger, file)
+        file.close()
+        self.assertEqual(port.closes, 1)
+
+    def test_caught_reentry_in_every_injected_callback_stops_outer_flight(self):
+        for site in ('owner', 'clock', 'reserve', 'recv'):
+
+            class CallbackLedger(Ledger):
+
+                def reserve_read(self, count):
+                    if site == 'reserve':
+                        with self_test.assertRaisesRegex(Refused, 'REENTRANT_FLIGHT'):
+                            file.read(0)
+                    return super().reserve_read(count)
+
+            class CallbackPort(Port):
+
+                def recv(self, size, timeout):
+                    self.requests.append(size)
+                    if site == 'recv':
+                        with self_test.assertRaisesRegex(Refused, 'REENTRANT_FLIGHT'):
+                            file.read(0)
+                    return b'A'
+            self_test = self
+
+            def owner():
+                if site == 'owner':
+                    with self.assertRaisesRegex(Refused, 'REENTRANT_FLIGHT'):
+                        file.read(0)
+
+            def clock():
+                if site == 'clock':
+                    with self.assertRaisesRegex(Refused, 'REENTRANT_FLIGHT'):
+                        file.read(0)
+                return 1.0
+            port, ledger = (CallbackPort([]), CallbackLedger())
+            file = BoundedFile(port, ledger, authority=ReplayHooks(owner, clock), deadline=30.0, body_limit=4)
+            response = Strict(AdapterSocket(file), body_limit=4)
+            with self.assertRaisesRegex(Refused, 'FLIGHT_TERMINAL'):
+                file.readline(65537)
+            self.assertEqual(port.requests, [1] if site == 'recv' else [])
+            self.assertEqual(ledger.charged, 1 if site in ('reserve', 'recv') else 0)
+            self.assert_terminal(response, port, ledger, file)
+
+    def test_direct_readinto_uses_same_owned_operation(self):
+        port = Port([b'DATA'])
+        ledger = Ledger()
+        file = BoundedFile(port, ledger, authority=ReplayHooks(lambda: None, lambda: 1.0), deadline=30.0, body_limit=4)
+        file.set_mode('body')
+        output = bytearray(4)
+        self.assertEqual(file.readinto(output), 4)
+        self.assertEqual(output, b'DATA')
+        self.assertIsNone(file.first_failure)
+        self.assertEqual(port.requests, [4])
+
+    def test_callback_operation_replacement_refuses_before_charge_or_io(self):
+        port, ledger = (Port([b'A']), Ledger())
+
+        def owner():
+            file.operation = object()
+        file = BoundedFile(port, ledger, authority=ReplayHooks(owner, lambda: 1.0), deadline=30.0, body_limit=4)
+        response = Strict(AdapterSocket(file), body_limit=4)
+        with self.assertRaisesRegex(Refused, 'OPERATION_REPLACED'):
+            file.readline(65537)
+        self.assertEqual((ledger.charged, port.requests), (0, []))
+        self.assert_terminal(response, port, ledger, file)
+
+    def assert_terminal(self, response, port, ledger, file):
+        previous = (len(port.requests), ledger.charged, ledger.calls)
+        for attempt in (lambda: file.read(1), lambda: file.readinto(bytearray(1)), lambda: file.readline(65537), lambda: file.set_mode('body'), lambda: response.read(0), lambda: response.readinto(bytearray(1))):
+            with self.assertRaisesRegex(Refused, 'FLIGHT_TERMINAL'):
+                attempt()
+        self.assertEqual((len(port.requests), ledger.charged, ledger.calls), previous)
+        self.assertIsNone(response.completion)
+
+    def test_post_receive_owner_and_deadline_are_sticky(self):
+        for violation in ('owner', 'clock'):
+            state = {'valid': True, 'now': 1.0}
+
+            class ChangingPort(Port):
+
+                def recv(self, size, timeout):
+                    value = super().recv(size, timeout)
+                    state['valid'] = False
+                    state['now'] = 30.0
+                    return value
+            port = ChangingPort([b'A', b'B'])
+            ledger = Ledger()
+
+            def owner():
+                if violation == 'owner' and (not state['valid']):
+                    raise Refused('OWNER_STALE')
+
+            def clock():
+                return state['now'] if violation == 'clock' else 1.0
+            file = BoundedFile(port, ledger, authority=ReplayHooks(owner, clock), deadline=30.0, body_limit=4)
+            response = Strict(AdapterSocket(file), body_limit=4)
+            with self.assertRaises(Refused):
+                file.readline(65537)
+            state.update(valid=True, now=1.0)
+            self.assertEqual(file.failure_kind, 'UNCERTAIN_IO')
+            self.assert_terminal(response, port, ledger, file)
+            file.close()
+            self.assertEqual(port.closes, 1)
+
+    def test_bad_port_result_and_recv_throw_never_retry(self):
+        for result in (b'', b'AB', 1, RuntimeError('recv')):
+
+            class BadPort(Port):
+
+                def recv(self, size, timeout):
+                    self.requests.append(size)
+                    if isinstance(result, BaseException):
+                        raise result
+                    return result
+            port, ledger = (BadPort([]), Ledger())
+            file = BoundedFile(port, ledger, authority=ReplayHooks(lambda: None, lambda: 1.0), deadline=30.0, body_limit=4)
+            response = Strict(AdapterSocket(file), body_limit=4)
+            with self.assertRaises((Refused, RuntimeError)):
+                file.readline(65537)
+            self.assertEqual(file.failure_kind, 'UNCERTAIN_IO')
+            self.assert_terminal(response, port, ledger, file)
+
+    def test_callback_custom_base_exception_keeps_uncertain_debt(self):
+
+        class Cancel(BaseException):
+            pass
+
+        class CancelPort(Port):
+
+            def recv(self, size, timeout):
+                self.requests.append(size)
+                raise Cancel()
+        port, ledger = (CancelPort([]), Ledger())
+        file = BoundedFile(port, ledger, authority=ReplayHooks(lambda: None, lambda: 1.0), deadline=30.0, body_limit=4)
+        response = Strict(AdapterSocket(file), body_limit=4)
+        with self.assertRaises(Cancel):
+            file.readline(65537)
+        self.assertEqual(file.failure_kind, 'UNCERTAIN_IO')
+        self.assert_terminal(response, port, ledger, file)
+
+    def test_caught_reentry_inside_recv_cannot_accept_outer_return(self):
+
+        class ReenteringPort(Port):
+
+            def recv(self, size, timeout):
+                self.requests.append(size)
+                with self_reader.assertRaisesRegex(Refused, 'REENTRANT_FLIGHT|FLIGHT_TERMINAL'):
+                    file.read(1)
+                return b'A'
+        self_reader = self
+        port, ledger = (ReenteringPort([]), Ledger())
+        file = BoundedFile(port, ledger, authority=ReplayHooks(lambda: None, lambda: 1.0), deadline=30.0, body_limit=4)
+        response = Strict(AdapterSocket(file), body_limit=4)
+        with self.assertRaisesRegex(Refused, 'FLIGHT_TERMINAL'):
+            file.readline(65537)
+        self.assertTrue(file.read_unknown)
+        self.assert_terminal(response, port, ledger, file)
+
+    def test_caught_malformed_chunk_cannot_be_completed_later(self):
+        wire = b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nDATAxx0\r\n\r\n'
+        response, port, ledger, file = make([wire, b'0\r\n\r\n'])
+        response.begin()
+        self.assertEqual(response.read(4), b'DATA')
+        with self.assertRaisesRegex(Refused, 'CHUNK_CRLF'):
+            response.read(4)
+        self.assert_terminal(response, port, ledger, file)
+
+    def test_short_fixed_length_eof_then_fake_later_bytes_cannot_complete(self):
+        head = b'HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n'
+        for first in (b'DA', b''):
+            response, port, ledger, file = make([head + first, CLEAN_EOF, b'TA'])
+            response.begin()
+            with self.assertRaisesRegex(Refused, 'INCOMPLETE_LENGTH'):
+                response.read(4)
+            self.assertEqual(file.failure_kind, 'KNOWN_SEMANTIC')
+            self.assert_terminal(response, port, ledger, file)
+
+    def test_short_readinto_does_not_expose_partial_body(self):
+        head = b'HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\n'
+        response, port, ledger, file = make([head + b'DA', CLEAN_EOF])
+        response.begin()
+        output = bytearray(b'zzzz')
+        with self.assertRaisesRegex(Refused, 'INCOMPLETE_LENGTH'):
+            response.readinto(output)
+        self.assertEqual(output, b'zzzz')
+        self.assert_terminal(response, port, ledger, file)
+
+    def test_semantic_framing_and_credit_refusals_are_terminal(self):
+        bad = b'HTTP/1.1 200 OK\r\nContent-Length: 4\r\nContent-Length: 4\r\n\r\nDATA'
+        response, port, ledger, file = make(bad)
+        with self.assertRaisesRegex(Refused, 'AMBIGUOUS_FRAMING'):
+            response.begin()
+        self.assertEqual(file.failure_kind, 'KNOWN_SEMANTIC')
+        self.assert_terminal(response, port, ledger, file)
+        response, port, ledger, file = make(b'HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDATA', capacity=2)
+        with self.assertRaisesRegex(Refused, 'SHARED_CREDIT'):
+            response.begin()
+        self.assert_terminal(response, port, ledger, file)
+
+    def test_tagged_parser_uses_65537_without_allocating_that_capacity(self):
+        wire = b'HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDATA'
+        response, port, ledger, file = make([wire[:5], wire[5:]])
+        response.begin()
+        self.assertIsNone(response.completion)
+        self.assertEqual(response.read(4), b'DATA')
+        self.assertEqual(response.completion, 'content-length')
+        self.assertEqual(file.framing + file.body, len(wire))
+        self.assertEqual(ledger.charged, sum(port.requests))
+        self.assertEqual(max(port.requests), 4)
+        self.assertEqual((file.calls, ledger.calls, port.closes), (len(port.requests), len(port.requests), 1))
+
+    def test_line_without_newline_refuses_at_framing_credit(self):
+        response, port, ledger, _ = make(b'A' * 8193)
+        with self.assertRaisesRegex(Refused, 'FRAMING_CAP'):
+            response.begin()
+        self.assertEqual(max(port.requests), 1)
+        self.assertEqual(ledger.charged, 8192)
+
+    def test_shared_credit_exhaustion_precedes_next_receive(self):
+        response, port, ledger, _ = make(b'HTTP/1.1 200 OK\r\n\r\n', capacity=8)
+        with self.assertRaisesRegex(Refused, 'SHARED_CREDIT'):
+            response.begin()
+        self.assertEqual((ledger.charged, len(port.requests)), (8, 8))
+
+    def test_readinto_exact_fill_across_fragments(self):
+        wire = b'HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDATA'
+        response, _, _, file = make([wire[:-4], b'D', b'AT', b'A'])
+        response.begin()
+        target = bytearray(4)
+        self.assertEqual(response.readinto(target), 4)
+        self.assertEqual(bytes(target), b'DATA')
+        self.assertEqual(file.body, 4)
+
+    def test_fixed_length_partial_real_eof_refuses(self):
+        wire = b'HTTP/1.1 200 OK\r\nContent-Length: 4\r\n\r\nDA'
+        response, _, _, _ = make([wire, CLEAN_EOF])
+        response.begin()
+        with self.assertRaisesRegex(Refused, 'INCOMPLETE_LENGTH'):
+            response.read(4)
+
+    def test_valid_chunk_and_trailer_actual_parser_path(self):
+        wire = b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nDATA\r\n0\r\nX-Test: yes\r\n\r\n'
+        response, _, _, file = make(wire)
+        response.begin()
+        self.assertIsNone(response.completion)
+        self.assertEqual(response.read(4), b'DATA')
+        self.assertIsNone(response.completion)
+        self.assertEqual(response.read(4), b'')
+        self.assertEqual(response.completion, 'chunked')
+        self.assertEqual(file.body, 4)
+
+    def test_chunk_delimiter_and_missing_trailer_terminator_refuse(self):
+        for suffix, code in ((b'4\r\nDATAxx0\r\n\r\n', 'CHUNK_CRLF'), (b'4\r\nDATA\r\n0\r\nX: y\r\n', 'FRAMING_EOF')):
+            wire = b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n' + suffix
+            response, _, _, _ = make([wire, CLEAN_EOF])
+            response.begin()
+            self.assertEqual(response.read(4), b'DATA')
+            with self.assertRaisesRegex(Refused, code):
+                response.read(4)
+
+    def test_ambiguous_framing_and_folded_header_refuse(self):
+        for headers in (b'Content-Length: 1\r\nContent-Length: 1\r\n', b'Content-Length: 1\r\nTransfer-Encoding: chunked\r\n', b'Content-Length: +1\r\n', b'Transfer-Encoding: gzip\r\n', b'X-Test: x\r\n continued\r\n', b'Content-Length : 1\r\n', b'Content-Length: 1\r\nNoColon\r\n'):
+            response, _, _, _ = make(b'HTTP/1.1 200 OK\r\n' + headers + b'\r\n')
+            with self.assertRaises(Refused):
+                response.begin()
+
+    def test_unclean_eof_is_not_completion(self):
+        response, _, _, _ = make([b'HTTP/1.1 200 OK\r\n\r\n', b''])
+        response.begin()
+        with self.assertRaisesRegex(Refused, 'UNCLEAN_OR_INVALID_READ'):
+            response.read(1)
+
+    def test_clean_eof_during_headers_is_not_blank_line(self):
+        response, _, _, _ = make([b'HTTP/1.1 200 OK\r\nX: y\r\n', CLEAN_EOF])
+        with self.assertRaisesRegex(Refused, 'FRAMING_EOF'):
+            response.begin()
+
+    def test_close_delimited_needs_explicit_clean_eof(self):
+        response, _, _, file = make([b'HTTP/1.0 200 OK\r\n\r\nDATA', CLEAN_EOF])
+        response.begin()
+        self.assertEqual(response.read(4), b'DATA')
+        self.assertEqual(response.read(1), b'')
+        self.assertTrue(file.clean_eof)
+        self.assertEqual(response.completion, 'transport-eof')
+
+    def test_no_unbounded_body_or_second_makefile(self):
+        response, _, _, _ = make(b'HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n')
+        response.begin()
+        for value in (None, -1, True, 4097):
+            with self.assertRaises(Refused):
+                response.read(value)
+        with self.assertRaises(Refused):
+            response.readline(1)
+
+    def test_no_body_and_oversized_length_headers_refuse_before_entity(self):
+        for head in (b'HTTP/1.1 204 No Content\r\nContent-Length: 4\r\n', b'HTTP/1.1 204 No Content\r\nTransfer-Encoding: chunked\r\n', b'HTTP/1.1 200 OK\r\nContent-Length: 65537\r\n', b'HTTP/1.1 200 OK\r\nContent-Length: ' + b'9' * 5000 + b'\r\n'):
+            response, _, _, file = make(head + b'\r\nDATA')
+            with self.assertRaises(Refused):
+                response.begin()
+            self.assertEqual(file.body, 0)
+
+    def test_repeated_interim_headers_share_single_framing_credit(self):
+        interim = b'HTTP/1.1 100 Continue\r\nX-A: ' + b'x' * 90 + b'\r\n\r\n'
+        response, _, ledger, file = make(interim * 90 + b'HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n')
+        with self.assertRaisesRegex(Refused, 'FRAMING_CAP'):
+            response.begin()
+        self.assertEqual(file.framing, 8192)
+        self.assertEqual(ledger.charged, 8192)
+
+    def test_exact_body_cap_requires_clean_eof_probe(self):
+        response, port, ledger, file = make([b'HTTP/1.0 200 OK\r\n\r\nDATA', CLEAN_EOF], body_limit=4)
+        response.begin()
+        self.assertEqual(response.read(4), b'DATA')
+        self.assertEqual(response.read(1), b'')
+        self.assertTrue(file.clean_eof)
+        self.assertEqual(ledger.charged, sum(port.requests))
+        response, _, _, _ = make([b'HTTP/1.0 200 OK\r\n\r\nDATA', b'X'], body_limit=4)
+        response.begin()
+        self.assertEqual(response.read(4), b'DATA')
+        with self.assertRaisesRegex(Refused, 'BODY_CAP_NO_EOF'):
+            response.read(1)
+
+    def test_chunk_declared_over_body_cap_refuses_before_body_receive(self):
+        wire = b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nABCDE\r\n0\r\n\r\n'
+        response, _, _, file = make(wire, body_limit=4)
+        response.begin()
+        with self.assertRaisesRegex(Refused, 'CHUNK_BODY_CAP'):
+            response.read(4)
+        self.assertEqual(file.body, 0)
+
+    def test_chunk_extension_control_refuses(self):
+        wire = b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n4;bad\x00ext\r\nDATA\r\n0\r\n\r\n'
+        response, _, _, file = make(wire)
+        response.begin()
+        with self.assertRaisesRegex(Refused, 'CHUNK_EXTENSION'):
+            response.read(4)
+        self.assertEqual(file.body, 0)
+
+    def test_owner_revocation_after_receive_blocks_accepted_bytes(self):
+
+        class RevokingPort(Port):
+
+            def recv(self, size, timeout):
+                value = super().recv(size, timeout)
+                valid[0] = False
+                return value
+        valid = [True]
+        port = RevokingPort([b'A'])
+        ledger = Ledger()
+
+        def owner():
+            if not valid[0]:
+                raise Refused('OWNER_STALE')
+        reader = BoundedFile(port, ledger, authority=ReplayHooks(owner, lambda: 1.0), deadline=30.0, body_limit=4)
+        with self.assertRaisesRegex(Refused, 'OWNER_STALE'):
+            reader.readline(65537)
+        self.assertEqual((ledger.charged, port.requests), (1, [1]))
+
+    def test_deadline_and_bad_clock_refuse_before_receive(self):
+        for sample in (float('nan'), -1.0, 30.0, True):
+            port = Port([b'A'])
+            reader = BoundedFile(port, Ledger(), authority=ReplayHooks(lambda: None, lambda sample=sample: sample), deadline=30.0, body_limit=4)
+            with self.assertRaisesRegex(Refused, 'DEADLINE'):
+                reader.readline(65537)
+            self.assertEqual(port.requests, [])
+
+    def test_close_unknown_is_sticky_and_never_retried(self):
+
+        class BadClose(Port):
+
+            def close(self):
+                self.closes += 1
+                raise RuntimeError('close failed')
+        port = BadClose([])
+        reader = BoundedFile(port, Ledger(), authority=ReplayHooks(lambda: None, lambda: 1.0), deadline=30.0, body_limit=4)
+        with self.assertRaises(RuntimeError):
+            reader.close()
+        with self.assertRaisesRegex(Refused, 'CLOSE_UNKNOWN'):
+            reader.close()
+        self.assertEqual(port.closes, 1)
+
+    def test_short_refill_keeps_capacity_precharge(self):
+        port = Port([b'D', b'A', b'TA'])
+        ledger = Ledger(capacity=4)
+        reader = BoundedFile(port, ledger, authority=ReplayHooks(lambda: None, lambda: 1.0), deadline=30.0, body_limit=4)
+        reader.set_mode('body')
+        with self.assertRaisesRegex(Refused, 'SHARED_CREDIT'):
+            reader.read(4)
+        self.assertEqual((port.requests, ledger.charged, reader.body), ([4], 4, 1))
+if __name__ == '__main__':
+    unittest.main()

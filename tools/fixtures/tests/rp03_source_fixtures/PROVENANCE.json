@@ -1,0 +1,24 @@
+{
+  "scope": "Source-only selected parser AST; not Python3.11 stdlib equivalence or runtime transport qualification. CPython parser data remains exact tagged bytes; only selected pure definitions are evaluated in isolated source-check interpreter.",
+  "sourceFreezeSHA256": "57bafb89511fb9ffdbbe900fe8245a87277550a88e89d22269a3ff988503a28c",
+  "independentSourceReviewSHA256": "370a72ab7f379a6733f0d3efd23fc410c07fc7ea480f37c4545cb829c59a69ff",
+  "parser": {
+    "tag": "python/cpython v3.14.6",
+    "url": "https://raw.githubusercontent.com/python/cpython/v3.14.6/Lib/http/client.py",
+    "sha256": "3fb2bf964bf8553a404bffdc47d2483832fb402128021bab650c452fc5b41bbb"
+  },
+  "license": {
+    "source": "https://github.com/python/cpython/blob/v3.14.6/LICENSE",
+    "ref": "v3.14.6",
+    "gitBlobSHA": "20cf39097c68baa17cc566b64e76d34ebf034044",
+    "bytes": 13804,
+    "sha256": "b0e25a78cffb43f4d92de8b61ccfa1f1f98ecbc22330b54b5251e7b6ba010231",
+    "path": "LICENSE.cpython-3.14.6.txt"
+  },
+  "tests": {
+    "legacyMethods": 42,
+    "authorityMethods": 14,
+    "authorityCausalRows": 206,
+    "legacyAuthorityLimitation": "ReplayHooks is sequential legacy replay only, never trusted checkpoint evidence. StateAuthority is an inert coherent memory fixture, not a real root binding."
+  }
+}
