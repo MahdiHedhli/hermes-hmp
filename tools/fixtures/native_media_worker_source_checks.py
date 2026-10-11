@@ -11,7 +11,7 @@ import pathlib
 import runpy
 import sys
 import time
-from types import FunctionType, ModuleType
+from types import FunctionType, ModuleType, SimpleNamespace
 
 HERE = pathlib.Path(__file__).resolve().parent
 WORKER = HERE / "native_media_worker.py"
@@ -25,7 +25,25 @@ assert (
     hashlib.sha256(ORCH_TEST.read_bytes()).hexdigest()
     == "3354a5d0597b0f1de1b90550e6ac0bcac1fab39bbfa393c74dfc5a9d15b48721"
 )
+
+
+def manual_run(coroutine):
+    try:
+        coroutine.send(None)
+    except StopIteration as result:
+        return result.value
+    raise AssertionError("unexpected suspension")
+
+
+async def manual_wait_for(coroutine, **kwargs):
+    assert set(kwargs) == {"timeout"} and kwargs["timeout"] > 0
+    return await coroutine
+
+
 w = runpy.run_path(str(WORKER), run_name="_inert_worker_source")
+w["Dispatcher"].dispatch.__globals__["asyncio"] = SimpleNamespace(
+    wait_for=manual_wait_for, CancelledError=asyncio.CancelledError
+)
 Gate, RefusalError, Dispatcher, Ledger = (
     w[n] for n in ("LatePermitGate", "RefusalError", "Dispatcher", "Ledger")
 )
@@ -197,6 +215,48 @@ def obs(status=200, body=b"PNG", typ="image/png"):
     }
 
 
+def mutation_obs(case, before_sha):
+    """Inert schema fixture only; no native or parent qualification proof."""
+    union = {"event": "actual_native_union_readback", "noIndependentGrantObserved": True}
+    before = {"approved": True, "authz": "authorized", "noIndependentGrant": True}
+    if case == "NM07":
+        after = {"approved": False, "authz": "pending_operator", "noIndependentGrant": True}
+        result = {
+            "event": "public_native_revoke_observation",
+            "unionBefore": union,
+            "unionAfter": union,
+            "actualAuthzAfter": "pending_operator",
+        }
+    else:
+        key_hash = w["_opaque_native_hash"]("session-key", "key")
+        before.update(
+            sessionKeySHA256=key_hash,
+            sessionIdSHA256=w["_opaque_native_hash"]("session-id", "ses1_" + "A" * 22),
+        )
+        after = {
+            "approved": True,
+            "authz": "authorized",
+            "noIndependentGrant": True,
+            "sessionKeySHA256": key_hash,
+            "sessionIdSHA256": w["_opaque_native_hash"]("session-id", "ses1_" + "B" * 22),
+        }
+        result = {
+            "event": "actual_running_public_store_rotation",
+            "oldSessionId": "ses1_" + "A" * 22,
+            "newSessionId": "ses1_" + "B" * 22,
+            "sessionKeySHA256": key_hash,
+            "unionBefore": union,
+            "unionAfter": union,
+        }
+    evidence = {"case": case, "actorScopeSHA256": "e" * 64, "before": before, "after": after}
+    result.update(
+        nativeEvidence=evidence,
+        beforeCaptureSHA256=before_sha,
+        afterNativeSHA256=w["native_evidence_hash"](case, before_sha, evidence),
+    )
+    return result
+
+
 checks = []
 a, ap, ad = make("A")
 b, bp, bd = make("B")
@@ -264,7 +324,7 @@ mutation = {
     "profile": "media-alpha",
 }
 ticket = a.pre(mutation)
-a.post(mutation, ticket, {"event": "public_native_revoke_observation"})
+a.post(mutation, ticket, mutation_obs("NM07", ticket[3][1]))
 r = a.pre(cmd(after))
 a.post(cmd(after), r, obs(403, b"denied", "application/json"))
 r = a.pre(cmd(control))
@@ -282,7 +342,7 @@ rotation = {
     "profile": "media-alpha",
 }
 ticket = b.pre(rotation)
-b.post(rotation, ticket, {"event": "actual_running_public_store_rotation"})
+b.post(rotation, ticket, mutation_obs("NM08", ticket[3][1]))
 r = b.pre(cmd(br["after_rotate"]))
 b.post(cmd(br["after_rotate"]), r, obs(404, b"missing", "application/json"))
 checks.append("rotate_before_after")
@@ -328,9 +388,9 @@ def inert_bind():
 
 
 D.bind_runtime = inert_bind
-result = asyncio.run(D.dispatch(command))
+result = manual_run(D.dispatch(command))
 assert result["status"] == "OBSERVATION_ONLY" and a.before["NM07"][1] == obs()["bodySHA256"]
-assert asyncio.run(D.dispatch(command))["status"] == "FAILED_UNQUALIFIED" and D.failed
+assert manual_run(D.dispatch(command))["status"] == "FAILED_UNQUALIFIED" and D.failed
 checks.append("actual_dispatcher_oneuse")
 for op, role, actor, profile in (
     ("REVOKE", "A", "A2", "media-alpha"),
@@ -361,16 +421,12 @@ for op, role, actor, profile in (
     calls = []
 
     class CountRuntime:
-        async def action(self, command, *, calls=calls, op=op):
+        async def action(self, command, *, before_capture_sha=None, calls=calls, op=op):
             calls.append(command["op"])
             return (
                 obs()
                 if command["op"] == "LATE_OWN_READ"
-                else {
-                    "event": "public_native_revoke_observation"
-                    if op == "REVOKE"
-                    else "actual_running_public_store_rotation"
-                }
+                else mutation_obs("NM07" if op == "REVOKE" else "NM08", before_capture_sha)
             )
 
     DD = Dispatcher(
@@ -388,8 +444,8 @@ for op, role, actor, profile in (
         dispatcher.late = local
 
     DD.bind_runtime = bind_target
-    assert asyncio.run(DD.dispatch(first))["status"] == "OBSERVATION_ONLY"
-    assert asyncio.run(DD.dispatch(bad))["status"] == "FAILED_UNQUALIFIED"
+    assert manual_run(DD.dispatch(first))["status"] == "OBSERVATION_ONLY"
+    assert manual_run(DD.dispatch(bad))["status"] == "FAILED_UNQUALIFIED"
     assert calls == ["LATE_OWN_READ"] and not local.mutated and DD.failed
     checks.append("actual_dispatcher_wrong_mutation_target_" + actor + "_" + profile)
 for stale in ("ref", "generation", "p4", "source"):
@@ -414,7 +470,7 @@ target = next(x for x in lp["entries"] if x["key"] == "before_revoke")
 x = local.pre(cmd(target))
 local.post(cmd(target), x, obs())
 t = local.pre(mutation)
-local.post(mutation, t, {"event": "public_native_revoke_observation"})
+local.post(mutation, t, mutation_obs("NM07", t[3][1]))
 refuse(lambda: local.pre(mutation))
 checks.append("duplicate_mutation_refused")
 local, lp, _ = make("A")
@@ -441,10 +497,10 @@ DC = Dispatcher(
 
 
 class CancelDuringMutation:
-    async def action(self, command):
+    async def action(self, command, *, before_capture_sha=None):
         if command["op"] == "REVOKE":
             DC.cancelled = True
-            return {"event": "public_native_revoke_observation"}
+            return mutation_obs("NM07", before_capture_sha)
         return obs()
 
 
@@ -454,8 +510,8 @@ def bind_cancel():
 
 
 DC.bind_runtime = bind_cancel
-assert asyncio.run(DC.dispatch(first))["status"] == "OBSERVATION_ONLY"
-assert asyncio.run(DC.dispatch(second))["status"] == "FAILED_UNQUALIFIED"
+assert manual_run(DC.dispatch(first))["status"] == "OBSERVATION_ONLY"
+assert manual_run(DC.dispatch(second))["status"] == "FAILED_UNQUALIFIED"
 assert DC.failed and DC.cancelled and not local.mutated
 checks.append("late_mutation_return_after_cancel_not_sealed")
 for role, op, case in (("A", "REVOKE", "NM07"), ("B", "ROTATE", "NM08")):
@@ -475,13 +531,9 @@ for role, op, case in (("A", "REVOKE", "NM07"), ("B", "ROTATE", "NM08")):
     third = {**cmd(after_row), "sequence": 3}
 
     class OrderedRuntime:
-        async def action(self, command, *, op=op):
+        async def action(self, command, *, before_capture_sha=None, op=op):
             if command["op"] in ("REVOKE", "ROTATE"):
-                return {
-                    "event": "public_native_revoke_observation"
-                    if op == "REVOKE"
-                    else "actual_running_public_store_rotation"
-                }
+                return mutation_obs("NM07" if op == "REVOKE" else "NM08", before_capture_sha)
             return (
                 obs(403 if op == "REVOKE" else 404, b"denied", "application/json")
                 if command["sequence"] == 3
@@ -504,7 +556,7 @@ for role, op, case in (("A", "REVOKE", "NM07"), ("B", "ROTATE", "NM08")):
 
     DP.bind_runtime = bind_ordered
     for c in (first, mut, third):
-        assert asyncio.run(DP.dispatch(c))["status"] == "OBSERVATION_ONLY"
+        assert manual_run(DP.dispatch(c))["status"] == "OBSERVATION_ONLY"
     assert case in local.before and case in local.mutated and case in local.after
     checks.append("actual_dispatcher_correct_" + case + "_before_mutation_after")
 new_command = {**cmd(next(x for x in ap["entries"] if x["key"] == "after_revoke")), "sequence": 2}
@@ -532,7 +584,7 @@ def inert_reentry_bind():
 
 
 D2.bind_runtime = inert_reentry_bind
-outer = asyncio.run(D2.dispatch(command))
+outer = manual_run(D2.dispatch(command))
 assert outer["status"] == "FAILED_UNQUALIFIED" and D2.failed
 checks.append("actual_dispatcher_caught_reentry_sticky")
 assert w["OPS"]["OWN_READ"] == {"CLOSED_NONOWNER_CASES", "FINAL_START_POSITIVES", "NM06_DART_INPUT"}
@@ -604,6 +656,7 @@ for role, op, case in (("A", "REVOKE", "NM07"), ("B", "ROTATE", "NM08")):
                 gate=gate,
                 gate_spec=gate_spec,
                 role=role,
+                before_capture_sha=None,
             ):
                 actions.append(command["op"])
                 if command["op"] == "LATE_OWN_READ":
@@ -640,7 +693,7 @@ for role, op, case in (("A", "REVOKE", "NM07"), ("B", "ROTATE", "NM08")):
                     command["actor"] = "A2" if role == "A" else "A1"
                 if drift == "command_profile":
                     command["profile"] = "media-beta"
-                return {"event": expected_event}
+                return mutation_obs(case, before_capture_sha)
 
         DD = Dispatcher(
             {
@@ -657,9 +710,9 @@ for role, op, case in (("A", "REVOKE", "NM07"), ("B", "ROTATE", "NM08")):
             dispatcher.late = gate
 
         DD.bind_runtime = bind_drift
-        assert asyncio.run(DD.dispatch(first))["status"] == "OBSERVATION_ONLY"
+        assert manual_run(DD.dispatch(first))["status"] == "OBSERVATION_ONLY"
         old_observation = DD.last_observation
-        assert asyncio.run(DD.dispatch(mutation_command))["status"] == "FAILED_UNQUALIFIED"
+        assert manual_run(DD.dispatch(mutation_command))["status"] == "FAILED_UNQUALIFIED"
         assert DD.failed and not gate.mutated and DD.last_observation is old_observation
         assert actions == ["LATE_OWN_READ", op]
         checks.append("actual_post_mutation_drift_" + case + "_" + drift)
@@ -713,7 +766,7 @@ for drift in (
         dispatcher.late = gate
 
     DD.bind_runtime = bind_read_drift
-    assert asyncio.run(DD.dispatch(first))["status"] == "FAILED_UNQUALIFIED"
+    assert manual_run(DD.dispatch(first))["status"] == "FAILED_UNQUALIFIED"
     assert DD.failed and not gate.before and DD.last_observation is None
     checks.append("actual_post_read_drift_" + drift)
 for role, op, case in (("A", "REVOKE", "NM07"), ("B", "ROTATE", "NM08")):
@@ -763,6 +816,7 @@ for role, op, case in (("A", "REVOKE", "NM07"), ("B", "ROTATE", "NM08")):
                 mutation=mutation,
                 op=op,
                 role=role,
+                before_capture_sha=None,
             ):
                 actions.append(current["op"])
                 if current["op"] == "LATE_OWN_READ":
@@ -792,7 +846,7 @@ for role, op, case in (("A", "REVOKE", "NM07"), ("B", "ROTATE", "NM08")):
                     target["args"] = None
                 elif drift == "plan_args":
                     mutation["args"]["unexpected"] = "x"
-                return {"event": accepted_event}
+                return mutation_obs("NM07" if op == "REVOKE" else "NM08", before_capture_sha)
 
         dd = Dispatcher(
             {
@@ -809,9 +863,9 @@ for role, op, case in (("A", "REVOKE", "NM07"), ("B", "ROTATE", "NM08")):
             dd.late = gate
 
         dd.bind_runtime = bind_mutation
-        assert asyncio.run(dd.dispatch(first))["status"] == "OBSERVATION_ONLY"
+        assert manual_run(dd.dispatch(first))["status"] == "OBSERVATION_ONLY"
         prior = dd.last_observation
-        result = asyncio.run(dd.dispatch(mutation))
+        result = manual_run(dd.dispatch(mutation))
         assert result["status"] == "FAILED_UNQUALIFIED" and result["sequence"] == 2
         assert result["op"] == op and dd.failed and dd.last_observation is prior
         assert case not in gate.mutated and actions == ["LATE_OWN_READ", op]
@@ -875,7 +929,7 @@ for role, op, case in (("A", "REVOKE", "NM07"), ("B", "ROTATE", "NM08")):
             dd.late = gate
 
         dd.bind_runtime = bind_read
-        result = asyncio.run(dd.dispatch(first))
+        result = manual_run(dd.dispatch(first))
         assert result["status"] == "FAILED_UNQUALIFIED" and result["sequence"] == 1
         assert result["op"] == "LATE_OWN_READ" and dd.failed and dd.last_observation is None
         assert case not in gate.before and len(gate.used) == 1 and actions == ["LATE_OWN_READ"]

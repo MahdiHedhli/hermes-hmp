@@ -625,10 +625,7 @@ class LatePermitGate:
                 if op == "REVOKE"
                 else "actual_running_public_store_rotation"
             )
-            require(
-                type(observation) is dict and observation.get("event") == event,
-                "late_mutation_actual_receipt",
-            )
+            validate_mutation_receipt(case, row[3][1], observation, event)
             self.mutated.add(case)
             return
         require(command["op"] == "LATE_OWN_READ", "late_ticket_opcode")
@@ -738,6 +735,135 @@ def bounded_value(value, *, depth=0, counter=None):
         )
         bounded_value(key, depth=depth + 1, counter=counter)
         bounded_value(item, depth=depth + 1, counter=counter)
+
+
+def native_evidence_hash(case, before_capture_sha, evidence):
+    """Hash allowlisted native readbacks and the sealed immediate before GET."""
+    require(case in {"NM07", "NM08"}, "mutation_case")
+    require(
+        type(before_capture_sha) is str
+        and re.fullmatch(r"[a-f0-9]{64}", before_capture_sha) is not None,
+        "mutation_before_hash",
+    )
+    bounded_value(evidence)
+    require(type(evidence) is dict and evidence.get("case") == case, "native_evidence_case")
+    document = {
+        "domain": "hermes.native-media.mutation-evidence.v1",
+        "case": case,
+        "beforeCaptureSHA256": before_capture_sha,
+        "nativeEvidence": evidence,
+    }
+    body = json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode()
+    require(len(body) <= 8192, "native_evidence_cap")
+    return hashlib.sha256(body).hexdigest()
+
+
+def _opaque_native_hash(domain, value):
+    require(domain in {"user", "device", "session-key", "session-id"}, "native_hash_domain")
+    require(type(value) is str and 0 < len(value) <= 4096, "native_hash_value")
+    return hashlib.sha256(("hermes.native-media." + domain + ".v1\0" + value).encode()).hexdigest()
+
+
+def validate_native_evidence(case, observation):
+    evidence = observation["nativeEvidence"]
+    require(type(evidence) is dict and evidence.get("case") == case, "native_evidence_shape")
+    require(
+        type(evidence.get("actorScopeSHA256")) is str
+        and re.fullmatch(r"[a-f0-9]{64}", evidence["actorScopeSHA256"]) is not None,
+        "native_actor_scope",
+    )
+    before, after = evidence.get("before"), evidence.get("after")
+    require(type(before) is dict and type(after) is dict, "native_transition_shape")
+    for state in (before, after):
+        require(
+            type(state.get("approved")) is bool and type(state.get("noIndependentGrant")) is bool,
+            "native_transition_boolean",
+        )
+    for key in ("unionBefore", "unionAfter"):
+        union = observation.get(key)
+        require(
+            type(union) is dict
+            and set(union) == {"event", "noIndependentGrantObserved"}
+            and union["event"] == "actual_native_union_readback"
+            and union["noIndependentGrantObserved"] is True,
+            "native_union_receipt_shape",
+        )
+    if case == "NM07":
+        require(
+            set(evidence) == {"case", "actorScopeSHA256", "before", "after"}
+            and before == {"approved": True, "authz": "authorized", "noIndependentGrant": True}
+            and after
+            == {"approved": False, "authz": "pending_operator", "noIndependentGrant": True}
+            and set(observation)
+            == {
+                "event",
+                "unionBefore",
+                "unionAfter",
+                "actualAuthzAfter",
+                "nativeEvidence",
+                "beforeCaptureSHA256",
+                "afterNativeSHA256",
+            }
+            and observation["unionBefore"]["noIndependentGrantObserved"] is True
+            and observation["unionAfter"]["noIndependentGrantObserved"] is True
+            and observation["actualAuthzAfter"] == "pending_operator",
+            "native_revoke_transition",
+        )
+    else:
+        keys = {"approved", "authz", "sessionKeySHA256", "sessionIdSHA256", "noIndependentGrant"}
+        for value in (
+            before.get("sessionKeySHA256"),
+            after.get("sessionKeySHA256"),
+            observation.get("sessionKeySHA256"),
+        ):
+            require(
+                type(value) is str and re.fullmatch(r"[a-f0-9]{64}", value) is not None,
+                "native_session_key_hash",
+            )
+        require(
+            set(evidence) == {"case", "actorScopeSHA256", "before", "after"}
+            and set(before) == keys
+            and set(after) == keys
+            and before["approved"] is True
+            and after["approved"] is True
+            and before["authz"] == after["authz"] == "authorized"
+            and before["noIndependentGrant"] is True
+            and after["noIndependentGrant"] is True
+            and before["sessionKeySHA256"] == after["sessionKeySHA256"]
+            and before["sessionIdSHA256"] != after["sessionIdSHA256"]
+            and set(observation)
+            == {
+                "event",
+                "oldSessionId",
+                "newSessionId",
+                "sessionKeySHA256",
+                "unionBefore",
+                "unionAfter",
+                "nativeEvidence",
+                "beforeCaptureSHA256",
+                "afterNativeSHA256",
+            }
+            and before["sessionIdSHA256"]
+            == _opaque_native_hash("session-id", observation["oldSessionId"])
+            and after["sessionIdSHA256"]
+            == _opaque_native_hash("session-id", observation["newSessionId"])
+            and before["sessionKeySHA256"] == observation["sessionKeySHA256"]
+            and observation["unionBefore"]["noIndependentGrantObserved"] is True
+            and observation["unionAfter"]["noIndependentGrantObserved"] is True,
+            "native_rotation_transition",
+        )
+
+
+def validate_mutation_receipt(case, before_capture_sha, observation, event):
+    require(
+        type(observation) is dict
+        and observation.get("event") == event
+        and observation.get("beforeCaptureSHA256") == before_capture_sha,
+        "late_mutation_actual_receipt",
+    )
+    digest = native_evidence_hash(case, before_capture_sha, observation.get("nativeEvidence"))
+    require(observation.get("afterNativeSHA256") == digest, "late_mutation_evidence_digest")
+    validate_native_evidence(case, observation)
 
 
 def encode_receipt(receipt):
@@ -942,9 +1068,15 @@ class Dispatcher:
                 type(phase_end) in (int, float) and time.monotonic() < phase_end <= self.ledger.end,
                 "phase_deadline",
             )
-            observation = await asyncio.wait_for(
-                self.runtime.action(runtime_command), timeout=phase_end - time.monotonic()
+            before_capture = (
+                late_row[3][1] if (late_row is not None and late_row[0] == "mutation") else None
             )
+            action = (
+                self.runtime.action(runtime_command, before_capture_sha=before_capture)
+                if before_capture is not None
+                else self.runtime.action(runtime_command)
+            )
+            observation = await asyncio.wait_for(action, timeout=phase_end - time.monotonic())
             self.ledger.tick()
             require(time.monotonic() < phase_end, "phase_deadline")
             require(not self.failed and not self.cancelled, "late_result_after_cancel")
@@ -1135,8 +1267,43 @@ class NativeRuntime:
 
         return self.runner._under_authorization_profile(source, inspect_union)
 
-    async def action(self, command):
+    def actor_scope_hash(self, command, actor):
+        """Observe current native actor/device/listener scope without exporting bearer."""
+        self.live()
+        require(self.actor(command) is actor, "native_actor_replaced")
+        require(
+            actor.name == command["actor"]
+            and actor.iid == self.ctx.iid == self.spec["iid"]
+            and actor.port == self.spec["port"]
+            and command["profile"] in PROFILES,
+            "native_actor_scope",
+        )
+        device = self.ctx.store.get_device(actor.device_id)
+        require(
+            type(device) is dict
+            and device.get("state") == "ACTIVE"
+            and device.get("user_id") == actor.user_id,
+            "native_actor_device_current",
+        )
+        scope = {
+            "domain": "hermes.native-media.actor-scope.v1",
+            "iid": self.ctx.iid,
+            "port": actor.port,
+            "role": command["role"],
+            "actor": actor.name,
+            "profile": command["profile"],
+            "deviceSHA256": _opaque_native_hash("device", actor.device_id),
+            "userSHA256": _opaque_native_hash("user", actor.user_id),
+            "deviceState": device["state"],
+        }
+        body = json.dumps(scope, sort_keys=True, separators=(",", ":")).encode()
+        require(len(body) <= 1024, "native_scope_cap")
+        return hashlib.sha256(body).hexdigest()
+
+    async def action(self, command, *, before_capture_sha=None):
         op, args = command["op"], command["args"]
+        if op not in {"REVOKE", "ROTATE"}:
+            require(before_capture_sha is None, "unexpected_before_capture")
         if op == "CHECK_GRAPH":
             return {"event": "native_imported_observation", "versionsQualified": False}
         if op == "CREATE_PROFILES":
@@ -1231,7 +1398,9 @@ class NativeRuntime:
             )
             producer_receipt = self.seed._producer_receipt(
                 copy.deepcopy(self.producer_receipts[invocation]),
-                self.raw[invocation], invocation, command["profile"],
+                self.raw[invocation],
+                invocation,
+                command["profile"],
             )
             self.ledger.charge("messages", 6)
             custody = self.hmp_identity.resolve_custody(hermes_root=self.home)
@@ -1322,25 +1491,65 @@ class NativeRuntime:
         if op == "REVOKE":
             self.live()
             actor = self.actor(command)
+            require(before_capture_sha is not None, "mutation_before_unsealed")
             # No canary-only authorization-union inference. Exact actual configuration/source
             # union readback must be separately source-qualified before this runtime action.
             require(self.spec.get("authUnionReadbackRoute") is not None, "unbound_auth_union_route")
             read_pin(self.spec["authUnionReadbackRoute"], self.ledger)
-            union = self.observe_no_independent_union(actor, command["profile"])
+            scope_before = self.actor_scope_hash(command, actor)
+            union_before = self.observe_no_independent_union(actor, command["profile"])
+            require(
+                union_before
+                == {"event": "actual_native_union_readback", "noIndependentGrantObserved": True},
+                "native_union_before",
+            )
             pairing = self.PairingStore(profile=command["profile"])
-            require(pairing.is_approved("hmp", actor.user_id) is True, "grant_before_revoke")
+            require(pairing.profile == command["profile"], "native_pairing_scope")
+            approved_before = pairing.is_approved("hmp", actor.user_id)
+            auth_before = self.ctx.bridge.authz_state(actor.user_id, command["profile"])
+            require(
+                approved_before is True and auth_before.value == "authorized",
+                "grant_before_revoke",
+            )
             require(pairing.revoke("hmp", actor.user_id) is True, "actual_revoke_refused")
-            require(pairing.is_approved("hmp", actor.user_id) is False, "grant_after_revoke")
-            observed = self.ctx.bridge.authz_state(actor.user_id, command["profile"])
-            require(observed.value == "pending_operator", "live_native_auth_after_revoke")
+            approved_after = pairing.is_approved("hmp", actor.user_id)
+            auth_after = self.ctx.bridge.authz_state(actor.user_id, command["profile"])
+            union_after = self.observe_no_independent_union(actor, command["profile"])
+            scope_after = self.actor_scope_hash(command, actor)
+            require(
+                approved_after is False
+                and auth_after.value == "pending_operator"
+                and union_after == union_before
+                and scope_after == scope_before,
+                "live_native_auth_after_revoke",
+            )
+            evidence = {
+                "case": "NM07",
+                "actorScopeSHA256": scope_after,
+                "before": {
+                    "approved": approved_before,
+                    "authz": auth_before.value,
+                    "noIndependentGrant": union_before["noIndependentGrantObserved"],
+                },
+                "after": {
+                    "approved": approved_after,
+                    "authz": auth_after.value,
+                    "noIndependentGrant": union_after["noIndependentGrantObserved"],
+                },
+            }
             return {
                 "event": "public_native_revoke_observation",
-                "union": union,
-                "actualAuthzAfter": observed.value,
+                "unionBefore": union_before,
+                "unionAfter": union_after,
+                "actualAuthzAfter": auth_after.value,
+                "nativeEvidence": evidence,
+                "beforeCaptureSHA256": before_capture_sha,
+                "afterNativeSHA256": native_evidence_hash("NM07", before_capture_sha, evidence),
             }
         if op == "ROTATE":
             self.live()
             actor = self.actor(command)
+            require(before_capture_sha is not None, "mutation_before_unsealed")
             require(
                 (command["actor"], command["profile"]) in self.routed, "rotation_before_positive"
             )
@@ -1349,6 +1558,19 @@ class NativeRuntime:
                 "rotation_chat_binding",
             )
             key = self.spec["actorSessionKeys"][command["actor"]][command["profile"]]
+            scope_before = self.actor_scope_hash(command, actor)
+            union_before = self.observe_no_independent_union(actor, command["profile"])
+            pairing = self.PairingStore(profile=command["profile"])
+            require(pairing.profile == command["profile"], "native_pairing_scope")
+            approved_before = pairing.is_approved("hmp", actor.user_id)
+            auth_before = self.ctx.bridge.authz_state(actor.user_id, command["profile"])
+            require(
+                union_before
+                == {"event": "actual_native_union_readback", "noIndependentGrantObserved": True}
+                and approved_before is True
+                and auth_before.value == "authorized",
+                "rotation_before_auth_scope",
+            )
             before = self.runner.session_store.lookup_by_session_key(key)
             require(
                 before is not None
@@ -1376,11 +1598,46 @@ class NativeRuntime:
             require(
                 actual is not None and actual.session_id == entry.session_id, "live_rotation_lookup"
             )
+            scope_after = self.actor_scope_hash(command, actor)
+            union_after = self.observe_no_independent_union(actor, command["profile"])
+            approved_after = pairing.is_approved("hmp", actor.user_id)
+            auth_after = self.ctx.bridge.authz_state(actor.user_id, command["profile"])
+            require(
+                scope_after == scope_before
+                and union_after == union_before
+                and approved_after is True
+                and auth_after.value == "authorized",
+                "rotation_after_auth_scope",
+            )
+            key_hash = _opaque_native_hash("session-key", key)
+            evidence = {
+                "case": "NM08",
+                "actorScopeSHA256": scope_after,
+                "before": {
+                    "approved": approved_before,
+                    "authz": auth_before.value,
+                    "sessionKeySHA256": key_hash,
+                    "sessionIdSHA256": _opaque_native_hash("session-id", before.session_id),
+                    "noIndependentGrant": union_before["noIndependentGrantObserved"],
+                },
+                "after": {
+                    "approved": approved_after,
+                    "authz": auth_after.value,
+                    "sessionKeySHA256": key_hash,
+                    "sessionIdSHA256": _opaque_native_hash("session-id", actual.session_id),
+                    "noIndependentGrant": union_after["noIndependentGrantObserved"],
+                },
+            }
             return {
                 "event": "actual_running_public_store_rotation",
                 "oldSessionId": args["oldSessionId"],
                 "newSessionId": entry.session_id,
-                "sessionKey": key,
+                "sessionKeySHA256": key_hash,
+                "unionBefore": union_before,
+                "unionAfter": union_after,
+                "nativeEvidence": evidence,
+                "beforeCaptureSHA256": before_capture_sha,
+                "afterNativeSHA256": native_evidence_hash("NM08", before_capture_sha, evidence),
             }
         if op == "OWNED_FAULT":
             raise RefusalError("unimplemented_NM09_owned_action")
