@@ -639,6 +639,75 @@ def open_components(adapter: Any) -> server.ServerContext:
         raise
 
 
+_FIXTURE_CONTEXT_FIELDS = (
+    "registry", "scope", "role", "ordinal", "config", "runner", "original_entry",
+    "original_factory", "adapter_type", "source_module", "source_origin", "source_sha256",
+    "source_generation", "worker_generation", "listener_owner", "deadline",
+)
+
+
+def _fixture_binding_parts(
+    adapter: Any, slot: object, *, accepted: bool
+) -> tuple[object, object, tuple[object, ...]]:
+    """Inspect only the already-loaded private helper; these checks are not source authority."""
+    import sys
+    from importlib.machinery import ModuleSpec
+
+    module = sys.modules.get("native_media_listener_factory")
+    if type(module) is not ModuleType:
+        raise RuntimeError("FIXTURE_HELPER_MODULE_UNAVAILABLE")
+    space = vars(module)
+    spec = space.get("__spec__")
+    origin = space.get("__file__")
+    if (type(spec) is not ModuleSpec or spec.name != "native_media_listener_factory"
+            or spec.loader is None or type(origin) is not str or spec.origin != origin):
+        raise RuntimeError("FIXTURE_HELPER_SPEC_CHANGED")
+    classes = tuple(
+        space.get(name) for name in ("_StartupSlot", "FixtureScopeOwner", "StartupBinding")
+    )
+    for cls in classes:
+        if type(cls) is not type:
+            raise RuntimeError("FIXTURE_HELPER_CLASS_CHANGED")
+        constructor = vars(cls).get("__init__")
+        if (type(constructor) is not FunctionType or constructor.__globals__ is not space
+                or constructor.__code__.co_filename != origin):
+            raise RuntimeError("FIXTURE_HELPER_CONSTRUCTOR_CHANGED")
+    slot_type, owner_type, binding_type = classes
+    if type(slot) is not slot_type:
+        raise RuntimeError("FIXTURE_SLOT_CHANGED")
+    slot_fields = vars(slot)
+    owner, binding = slot_fields.get("owner"), slot_fields.get("binding")
+    if type(owner) is not owner_type or type(binding) is not binding_type:
+        raise RuntimeError("FIXTURE_OWNER_CONTEXT_CHANGED")
+    owner_fields, context = vars(owner), vars(binding)
+    accept = vars(owner_type).get("accept_adapter_binding")
+    if (type(accept) is not FunctionType or accept.__globals__ is not space
+            or accept.__code__.co_filename != origin
+            or "accept_adapter_binding" in owner_fields):
+        raise RuntimeError("FIXTURE_HELPER_HOOK_CHANGED")
+    if (context.get("source_module") is not module or context.get("source_origin") != origin
+            or context.get("adapter_type") is not HmpAdapter or type(adapter) is not HmpAdapter
+            or context.get("config") is not adapter.config):
+        raise RuntimeError("FIXTURE_ADAPTER_CONTEXT_CHANGED")
+    if any(context.get(name) is None for name in _FIXTURE_CONTEXT_FIELDS):
+        raise RuntimeError("FIXTURE_CONTEXT_INCOMPLETE")
+    if (owner_fields.get("slot") is not slot or owner_fields.get("binding") is not binding
+            or slot_fields.get("claimed") is not True
+            or owner_fields.get("state") != "FACTORY_CLAIMED"
+            or owner_fields.get("first_failure") is not None
+            or owner_fields.get("adapter_debt") is not adapter
+            or owner_fields.get("operation") is None
+            or owner_fields.get("in_callback") is not True
+            or owner_fields.get("binding_hook_active") is not True
+            or owner_fields.get("binding_attempted") is not True
+            or owner_fields.get("bound_adapter") is not (adapter if accepted else None)):
+        raise RuntimeError("FIXTURE_BINDING_PHASE_CHANGED")
+    already_wired = getattr(adapter, "gateway_runner", None)
+    if already_wired is not None and already_wired is not context["runner"]:
+        raise RuntimeError("FIXTURE_RUNNER_CHANGED")
+    return owner, binding, tuple(context[name] for name in _FIXTURE_CONTEXT_FIELDS)
+
+
 class HmpAdapter(BasePlatformAdapter):
     def __init__(self, config: Any) -> None:
         super().__init__(config=config, platform=Platform(PLATFORM_NAME))
@@ -653,6 +722,40 @@ class HmpAdapter(BasePlatformAdapter):
         self._profile_refresh_task: asyncio.Task[None] | None = None
         self._record_lock = threading.Lock()
         self._read_worker_budget = server.ReadWorkerBudget()
+        self._fixture_binding_attempted = False
+        self._fixture_binding_failed = False
+        self._fixture_listener_binding: (
+            tuple[object, object, object, tuple[object, ...]] | None
+        ) = None
+
+    def _bind_fixture_listener(self, slot: object) -> None:
+        """One private issued binding; never import a fixture helper or acquire a listener."""
+        if self._fixture_binding_attempted:
+            self._fixture_binding_failed = True
+            raise RuntimeError("FIXTURE_BINDING_CONSUMED")
+        self._fixture_binding_attempted = True
+        try:
+            if type(self) is not HmpAdapter:
+                raise RuntimeError("FIXTURE_ADAPTER_TYPE_CHANGED")
+            if self._server is not None or self._fixture_listener_binding is not None:
+                raise RuntimeError("FIXTURE_ADAPTER_ALREADY_ACTIVE")
+            owner, binding, context = _fixture_binding_parts(self, slot, accepted=False)
+            # The exact source-owned hook runs only in the delegate's guarded callback.
+            # Its None return and local identities supply no runtime/FD authority certificate.
+            result = owner.accept_adapter_binding(slot, self)
+            after_owner, after_binding, after_context = _fixture_binding_parts(
+                self, slot, accepted=True
+            )
+            if (result is not None or self._fixture_binding_failed or after_owner is not owner
+                    or after_binding is not binding
+                    or any(left is not right for left, right in zip(
+                        context, after_context, strict=True
+                    ))):
+                raise RuntimeError("FIXTURE_BINDING_CHANGED")
+            self._fixture_listener_binding = (slot, owner, binding, context)
+        except BaseException:
+            self._fixture_binding_failed = True
+            raise
 
     @staticmethod
     def _health_snapshot(
@@ -696,6 +799,27 @@ class HmpAdapter(BasePlatformAdapter):
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
         """Run the compat gate, then start the TLS listener (server-modules.md "Startup order")."""
+        if self._fixture_binding_attempted or self._fixture_listener_binding is not None:
+            retained = self._fixture_listener_binding
+            if self._fixture_binding_failed or retained is None:
+                raise RuntimeError("FIXTURE_BINDING_UNAVAILABLE")
+            _slot, _owner, binding, saved_context = retained
+            context = vars(binding)
+            if any(context.get(name) is not saved for name, saved in zip(
+                _FIXTURE_CONTEXT_FIELDS, saved_context, strict=True
+            )):
+                raise RuntimeError("FIXTURE_CONTEXT_CHANGED")
+            if self.config is not context["config"]:
+                raise RuntimeError("FIXTURE_CONFIG_CHANGED")
+            runner = context["runner"]
+            if getattr(self, "gateway_runner", None) is not runner:
+                raise RuntimeError("FIXTURE_RUNNER_CHANGED")
+            session_store = vars(runner).get("session_store")
+            if session_store is None or getattr(self, "_session_store", None) is not session_store:
+                raise RuntimeError("FIXTURE_SESSION_WIRING_CHANGED")
+            # Binding is in-memory identity only. No alias-owner backend exists in this slice.
+            # Refuse before settings, components, threads, or either listener start path.
+            raise RuntimeError("FIXTURE_LISTENER_OWNERSHIP_UNBOUND")
         if self._server is not None:
             return True
         try:
