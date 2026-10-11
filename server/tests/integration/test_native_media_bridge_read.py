@@ -43,7 +43,9 @@ def check():
         }), tool_name="image_generate", tool_call_id="synthetic-call")
         db.append_message("synthetic-media", "assistant", content=f"MEDIA:{image}")
         for call_id, payload in (
-            ("cross-home-call", {"success": True, "image": str(tmp_path / "other/cache/images/image.png")}),
+            ("cross-home-call", {
+                "success": True, "image": str(tmp_path / "other/cache/images/image.png"),
+            }),
             ("failed-call", {"success": False, "image": str(image)}),
         ):
             db.append_message("synthetic-media", "assistant", content="", tool_calls=[{
