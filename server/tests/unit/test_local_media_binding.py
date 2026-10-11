@@ -982,10 +982,27 @@ def test_every_route_answers_identically_with_the_flag_and_availability_off_and_
     assert server.build_app
     assert seen["off"] and seen["off"] == seen["on"]
     assert calls == {"flag": 0, "available": 0}
+    _assert_server_media_references(READ_SRC["server.py"])
+
+
+S2_MEDIA_COMPONENT_BINDING = ('    if owner is not None:\n'
+ '        service = app[media_fetch.MEDIA_SERVICE_KEY]\n'
+ '        if owner._media_service is not None:\n'
+ '            raise RuntimeError("FIXTURE_MEDIA_ALREADY_BOUND")\n'
+ '        owner._media_service = service\n'
+ '        owner._carriers = (*owner._carriers, service)\n'
+ '        service._fixture_work = owner\n'
+ '        service._fixture_adapter = owner.adapter\n')
+
+
+def _assert_server_media_references(source: str) -> None:
+    # Invert only this exact reviewed component attachment, including its ownership guard.
+    assert source.count(S2_MEDIA_COMPONENT_BINDING) == 1
+    source = source.replace(S2_MEDIA_COMPONENT_BINDING, "", 1)
     # S4: the server's media references are the emission module; S5 adds only the fetch route, its
     # orchestrator module and that module's per-app service. It names no carrier, twin, registry or
     # `local_media_*` module itself.
-    server_src = READ_SRC["server.py"].lower().replace("immediately", "")
+    server_src = source.lower().replace("immediately", "")
     assert "local_media" not in server_src and "_with_media" not in server_src
     # one import and the five call sites of the four read handlers (SES-2 has two branches)
     assert server_src.count("media_emission") == 6
@@ -998,6 +1015,26 @@ def test_every_route_answers_identically_with_the_flag_and_availability_off_and_
     ):
         rest = rest.replace(allowed, "")
     assert rest.count("media") == 0
+
+
+def test_reviewed_server_media_references_are_closed() -> None:
+    _assert_server_media_references(READ_SRC["server.py"])
+
+
+@pytest.mark.parametrize("old,new", [
+    ("owner._media_service = service", "owner._media_service = other"),
+    ("if owner._media_service is not None:", "if False:"),
+    ("service._fixture_work = owner", "service._fixture_work = None"),
+    ("service._fixture_adapter = owner.adapter", "service._fixture_adapter = other"),
+    ("app.on_cleanup.append(media_fetch.close_service)",
+     "app.on_cleanup.append(media_fetch.close_service)\n    media = None"),
+])
+def test_server_media_reference_guard_rejects_unreviewed_edits(old: str, new: str) -> None:
+    source = READ_SRC["server.py"]
+    assert source.count(old) == 1
+    with pytest.raises(AssertionError):
+        _assert_server_media_references(source.replace(old, new, 1))
+
 
 
 # --------------------------------------------------------------------------------------------

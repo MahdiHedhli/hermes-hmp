@@ -1496,7 +1496,7 @@ MUTANTS = {
         _scenario_outer_mint_failure,
     ),
     "job_copies_context": (
-        "    got, binding = await asyncio.to_thread(job)",
+        "    got, binding = await _worker(ctx, _WorkSite.CW045, job)",
         "    got, binding = await asyncio.get_running_loop().run_in_executor(None, job)",
         _scenario_thread_context,
     ),
@@ -1786,12 +1786,111 @@ AR1_READINESS_ADDITIONS = (
 )
 
 
+# Exact reviewed S2 reversals precede the unchanged AR1 and original S5 hash gates.
+S2_BRIDGE_SHA = "e4b457194857d4bdcf45a54c36e61f354f1fdccf7b51065f7a4661a4f78f8e4a"
+S2_BRIDGE_REVERSALS = ((')\n'
+  'from .fixture_work import _await_publication, _owner, _p6_submit, _publication, _worker, '
+  '_WorkSite\n'
+  'from .logging_policy import log_bridge_exception, log_event\n',
+  ')\nfrom .logging_policy import log_bridge_exception, log_event\n'),
+ ('            adapter = self._adapter\n'
+  '            future = _p6_submit(self, adapter.handle_message(event), real_loop)\n'
+  '        except Exception as exc:\n',
+  '            adapter = self._adapter\n'
+  '            future = asyncio.run_coroutine_threadsafe(adapter.handle_message(event), '
+  'real_loop)\n'
+  '        except Exception as exc:\n'),
+ ('            return AuthorizeResult(authz=AuthzState.UNVERIFIABLE)\n'
+  '        if _owner(self) is None:\n'
+  '            self._pending_triggers.add(future)\n'
+  '            future.add_done_callback(self._trigger_done)\n'
+  '        _publication(self)\n'
+  '        if hasattr(self._adapter, "note_inert_reply"):\n',
+  '            return AuthorizeResult(authz=AuthzState.UNVERIFIABLE)\n'
+  '        self._pending_triggers.add(future)\n'
+  '        future.add_done_callback(self._trigger_done)\n'
+  '        if hasattr(self._adapter, "note_inert_reply"):\n'),
+ ('        definitive admission outcome. None means the result is ambiguous."""\n'
+  '        event = await _worker(\n'
+  '            self,\n'
+  '            _WorkSite.CW013,\n'
+  '            self._phone_event,\n'
+  '            user_id=user_id,\n'
+  '            profile=profile,\n'
+  '            text=text,\n'
+  '            message_id=message_id,\n'
+  '        )\n',
+  '        definitive admission outcome. None means the result is ambiguous."""\n'
+  '        event = await asyncio.to_thread(\n'
+  '            self._phone_event, user_id=user_id, profile=profile, text=text, '
+  'message_id=message_id\n'
+  '        )\n'),
+ ('        )\n'
+  '        await _await_publication(self, self._adapter.handle_message(event))\n'
+  '        accepted = getattr(event, "_gateway_accepted", None) is True\n',
+  '        )\n'
+  '        await self._adapter.handle_message(event)\n'
+  '        accepted = getattr(event, "_gateway_accepted", None) is True\n'),
+ ('            # never flagged, so it is unknown, never a definitive refusal.\n'
+  '            _publication(self)\n'
+  '            return True if accepted else None\n',
+  '            # never flagged, so it is unknown, never a definitive refusal.\n'
+  '            return True if accepted else None\n'),
+ ('        if ticket is None:\n            _publication(self)\n            return None\n',
+  '        if ticket is None:\n            return None\n'),
+ ('                if outcome == "admitted":\n'
+  '                    _publication(self)\n'
+  '                    return True\n',
+  '                if outcome == "admitted":\n                    return True\n'),
+ ('                }:\n'
+  '                    _publication(self)\n'
+  '                    return False\n',
+  '                }:\n                    return False\n'),
+ ('                # is not on the ticket, so this cannot safely be called definitive.\n'
+  '                _publication(self)\n'
+  '                return None\n',
+  '                # is not on the ticket, so this cannot safely be called definitive.\n'
+  '                return None\n'),
+ ('            if remaining <= 0:\n'
+  '                _publication(self)\n'
+  '                return None\n',
+  '            if remaining <= 0:\n                return None\n'),
+ ('                return None\n'
+  '            await _await_publication(self, asyncio.sleep(min(0.025, remaining)))\n'
+  '\n',
+  '                return None\n            await asyncio.sleep(min(0.025, remaining))\n\n'))
+
+
+def _s2_bridge_predecessor(text: str) -> str:
+    assert hashlib.sha256(text.encode()).hexdigest() == S2_BRIDGE_SHA
+    for after, before in S2_BRIDGE_REVERSALS:
+        assert text.count(after) == 1
+        text = text.replace(after, before, 1)
+    assert hashlib.sha256(text.encode()).hexdigest() == AR1_READINESS_BRIDGE_SHA
+    return text
+
+
+@pytest.mark.parametrize("old,new", [
+    ("_p6_submit(self, adapter.handle_message(event), real_loop)",
+     "_p6_submit(self, adapter.handle_message(event), other_loop)"),
+    ("_WorkSite.CW013", "_WorkSite.CW014"),
+    ("await _await_publication(self, self._adapter.handle_message(event))",
+     "await self._adapter.handle_message(event)"),
+    ("PHONE_ADMISSION_WAIT_S", "OTHER_ADMISSION_WAIT_S"),
+])
+def test_bridge_source_gate_rejects_unreviewed_s2_edits(old: str, new: str) -> None:
+    source = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
+    assert old in source
+    with pytest.raises(AssertionError):
+        _s2_bridge_predecessor(source.replace(old, new, 1))
+
+
 def test_the_bridge_differs_from_the_base_only_by_the_s5_additions() -> None:
-    """Invert exact reviewed readiness additions, then the existing S5 imports/methods.
+    """Invert exact S2 wiring, readiness additions, then the existing S5 imports/methods.
 
     Both intermediate and original baseline hashes remain gates. No unrelated edit is accepted.
     """
-    text = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
+    text = _s2_bridge_predecessor((PACKAGE / "bridge.py").read_text(encoding="utf-8"))
     assert hashlib.sha256(text.encode()).hexdigest() == AR1_READINESS_BRIDGE_SHA
     for addition in AR1_READINESS_ADDITIONS:
         assert text.count(addition) == 1
