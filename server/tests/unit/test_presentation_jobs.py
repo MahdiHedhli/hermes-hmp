@@ -101,6 +101,17 @@ class Authority:
         return True
 
 
+class ClockSamples:
+    def __init__(self, *values: object) -> None:
+        self.values = list(values)
+
+    def __call__(self) -> object:
+        value = self.values[0] if len(self.values) == 1 else self.values.pop(0)
+        if isinstance(value, Exception):
+            raise value
+        return value
+
+
 class Frames(unittest.TestCase):
     def test_blobatar_yaml_event_frame_public_projection(self) -> None:
         def scalar(value: str, style: str = "plain") -> presentation_yaml.YamlEvent:
@@ -429,6 +440,115 @@ class Ownership(unittest.IsolatedAsyncioTestCase):
         self.owner.custody(self.job, "RESULT_EOF", child)
         self.assertIs(self.owner.inspect(self.job)[0], State.UNKNOWN)
         self.assertFalse(self.owner.inspect(self.job)[2])
+
+    async def test_later_clock_domain_and_rollback_refuse_before_authority(self) -> None:
+        for bad in (
+            -1.0,
+            -float("inf"),
+            float("nan"),
+            float("inf"),
+            True,
+            "100",
+            99.0,
+            RuntimeError("bad clock"),
+        ):
+            with self.subTest(bad=bad):
+                clock = ClockSamples(100)
+                authority = Authority()
+                owner = JobOwner("iid", authority, clock, lambda: CHALLENGE)
+                job = owner.queue(lease(), "METADATA")  # Initial exact int remains valid.
+                clock.values[:] = [bad]
+                await owner.authorize(job)
+                self.assertIs(owner.inspect(job)[0], State.REFUSED)
+                self.assertFalse(owner.inspect(job)[1])
+                self.assertTrue(owner.inspect(job)[2])
+                self.assertEqual(authority.calls, [])
+
+    async def test_initial_clock_needs_representable_finite_deadline(self) -> None:
+        for first in (
+            True,
+            -1.0,
+            float("nan"),
+            float("inf"),
+            float.fromhex("0x1.fffffffffffffp+1023"),
+            10**1000,
+        ):
+            with self.subTest(first=str(first)[:20]):
+                owner = JobOwner("iid", Authority(), ClockSamples(first), lambda: CHALLENGE)
+                with self.assertRaises(FrameError):
+                    owner.queue(lease(), "METADATA")
+                self.assertEqual(len(owner._jobs), 0)
+
+    async def test_after_authority_clock_sample_cannot_revive_job(self) -> None:
+        for bad in (float("nan"), -1.0, True, RuntimeError("later failure")):
+            with self.subTest(bad=bad):
+                clock = ClockSamples(100.0, 100.5, bad)
+                authority = Authority()
+                owner = JobOwner("iid", authority, clock, lambda: CHALLENGE)
+                job = owner.queue(lease(), "METADATA")
+                await owner.authorize(job)
+                self.assertIs(owner.inspect(job)[0], State.REFUSED)
+                self.assertTrue(owner.inspect(job)[2])
+                self.assertEqual(authority.calls, ["BEFORE"])
+
+    async def test_invalid_clock_after_authority_await_cannot_revive_job(self) -> None:
+        self.authority.entered = asyncio.Event()
+        self.authority.release = asyncio.Event()
+        task = asyncio.create_task(self.owner.authorize(self.job))
+        await self.authority.entered.wait()
+        self.now = float("nan")
+        self.authority.release.set()
+        await task
+        self.assertIs(self.owner.inspect(self.job)[0], State.REFUSED)
+        self.assertFalse(self.owner.inspect(self.job)[1])
+        self.assertTrue(self.owner.inspect(self.job)[2])
+
+    async def test_invalid_running_deadline_drains_then_unknown_retains_credit(self) -> None:
+        child = await self._running()
+        self.now = float("nan")
+        self.owner.deadline(self.job)
+        self.assertIs(self.owner.inspect(self.job)[0], State.DRAINING)
+        self.assertFalse(self.owner.inspect(self.job)[2])
+        self.owner.custody(self.job, "RESULT_EOF", child)
+        self.assertIs(self.owner.inspect(self.job)[0], State.UNKNOWN)
+        self.assertTrue(self.owner.disabled)
+        self.assertFalse(self.owner.inspect(self.job)[2])
+
+    async def test_later_invalid_sample_cannot_reauthorize_or_emit(self) -> None:
+        await self._complete()
+        self.now = float("nan")
+        await self.owner.reauthorize(self.job)
+        self.assertIs(self.owner.inspect(self.job)[0], State.REFUSED)
+        self.assertTrue(self.owner.inspect(self.job)[2])
+        self.assertEqual(self.authority.calls, ["BEFORE"])
+
+        owner = JobOwner("iid", Authority(), lambda: self.now, lambda: CHALLENGE)
+        self.now = 100.0
+        job = owner.queue(lease(), "METADATA")
+        await owner.authorize(job)
+        owner.start(job)
+        child = object()
+        owner.bind_child(job, child)
+        owner.go(job, child, owner.challenge(job))
+        header = header_row()
+        header["challenge"] = owner.challenge(job)
+        owner.feed_result(job, encode_output(header, b""), child)
+        for event in (
+            "RESULT_EOF",
+            "DIAGNOSTIC_EOF",
+            "WAIT_OK",
+            "GROUP_GONE",
+            "IPC_CLOSED",
+            "SIGNAL_CLOSED",
+        ):
+            owner.custody(job, event, child)
+        await owner.reauthorize(job)
+        self.now = True
+        emitted: list[object] = []
+        owner.emit_inline(job, lambda _: True, lambda h, b: emitted.append(h))
+        self.assertEqual(emitted, [])
+        self.assertIs(owner.inspect(job)[0], State.REFUSED)
+        self.assertTrue(owner.inspect(job)[2])
 
     async def test_canceled_running_clean_refusal_can_drain_without_emit(self) -> None:
         child = await self._running()

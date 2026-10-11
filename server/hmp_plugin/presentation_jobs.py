@@ -448,6 +448,7 @@ class _Job:
     profile: str
     queued_at: float
     deadline: float
+    last_clock: float | int
     state: State = State.QUEUED
     child: object | None = None
     go_sent: bool = False
@@ -503,13 +504,24 @@ class JobOwner:
     def disabled(self) -> bool:
         return self._disabled
 
+    def _checked_clock(self, job: _Job) -> float | int | None:
+        """Reject invalid or backward later samples without extending the job deadline."""
+        try:
+            now = self._clock()
+        except Exception:
+            return None
+        if type(now) not in (float, int) or not 0 <= now < float("inf"):
+            return None
+        if now < job.last_clock:
+            return None
+        job.last_clock = now
+        return now
+
     def _current(self, job: _Job) -> bool:
-        return (
-            not self._disabled
-            and not job.emit_revoked
-            and job.lease.epoch == self._epoch
-            and self._clock() < job.deadline
-        )
+        if self._disabled or job.emit_revoked or job.lease.epoch != self._epoch:
+            return False
+        now = self._checked_clock(job)
+        return now is not None and now < job.deadline
 
     def queue(self, lease: CapturedLease, operation: str) -> JobHandle:
         if (
@@ -533,12 +545,25 @@ class JobOwner:
         now = self._clock()
         if type(now) not in (float, int) or not 0 <= now < float("inf"):
             _fail()
+        try:
+            deadline = now + JOB_SECONDS
+        except OverflowError:
+            _fail()
+        if not now < deadline < float("inf"):
+            _fail()
         if len(self._waiting) >= MAX_WAITING or any(
             job.challenge == challenge for job in self._jobs.values()
         ):
             _fail()
         job = _Job(
-            self._next_number, challenge, lease, operation, lease.profile, now, now + JOB_SECONDS
+            self._next_number,
+            challenge,
+            lease,
+            operation,
+            lease.profile,
+            now,
+            deadline,
+            now,
         )
         handle = JobHandle()
         self._next_number += 1
@@ -586,7 +611,7 @@ class JobOwner:
     async def authorize(self, handle: JobHandle) -> None:
         job = self._resolve(handle)
         self._require(job, State.QUEUED)
-        if not self._current(job) or self._clock() - job.queued_at >= JOB_SECONDS:
+        if not self._current(job):
             self.cancel(handle)
             return
         try:
@@ -837,7 +862,8 @@ class JobOwner:
         if handle in self._terminal:
             return
         job = self._resolve(handle)
-        if self._clock() >= job.deadline:
+        now = self._checked_clock(job)
+        if now is None or now >= job.deadline:
             self.cancel(handle)
 
     def cancel(self, handle: JobHandle) -> None:
