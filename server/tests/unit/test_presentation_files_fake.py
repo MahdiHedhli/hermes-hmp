@@ -495,6 +495,74 @@ class FixedReaderFakeTests(unittest.TestCase):
         self.assertEqual(fs.call_count.get("open"), 1)
         self.assertEqual(fs.call_count.get("close"), 1)
 
+    def test_invalid_clock_domain_refuses_before_any_io(self):
+        for value in (-1.0, float("-inf"), float("inf"), float("nan"), 1, True, None, "1"):
+            with self.subTest(value=value):
+                fs = FakeOS()
+                self.assert_refused(fs, "DEADLINE", clock=lambda value=value: value)
+                self.assertEqual(fs.before_calls, [])
+                self.assertEqual(fs.close_calls, [])
+
+    def test_later_invalid_clock_closes_every_owned_fd(self):
+        for value in (-1.0, float("-inf"), float("inf"), float("nan"), 1, True, None, "1"):
+            with self.subTest(value=value):
+                fs = FakeOS()
+                moment = [1.0]
+                owned = set()
+
+                def invalidate_on_body(
+                    fake, kind, arg, n, value=value, moment=moment, owned=owned
+                ):
+                    if kind == "read" and n == 1:
+                        owned.update(fake.handles)
+                        moment[0] = value
+
+                fs.hook = invalidate_on_body
+                self.assert_refused(fs, "DEADLINE", clock=lambda moment=moment: moment[0])
+                self.assertTrue(owned)
+                self.assertEqual(set(fs.close_calls), owned)
+                self.assertEqual(fs.call_count["read"], 1)
+                read_index = next(i for i, call in enumerate(fs.before_calls) if call[0] == "read")
+                self.assertTrue(
+                    all(call[0] == "close" for call in fs.before_calls[read_index + 1 :])
+                )
+
+    def test_invalid_clock_and_unknown_close_preserve_original(self):
+        fs = FakeOS()
+        moment = [1.0]
+        owned = set()
+
+        def invalidate_on_body(fake, kind, arg, n):
+            if kind == "read" and n == 1:
+                owned.update(fake.handles)
+                moment[0] = float("-inf")
+
+        fs.hook = invalidate_on_body
+        fs.fail_close_at = 1
+        with self.assertRaises(reader.UnknownCloseError) as raised:
+            self.run_reader(fs, clock=lambda: moment[0])
+        self.assertIsInstance(raised.exception.original, reader.PresentationReadError)
+        self.assertEqual(raised.exception.original.label, "DEADLINE")
+        self.assertTrue(raised.exception.close_labels)
+        self.assertTrue(owned)
+        self.assertEqual(set(fs.close_calls), owned)
+        self.assertEqual(len(fs.close_calls), len(set(fs.close_calls)))
+        self.assertEqual(fs.handles, {})
+        self.assertEqual(fs.call_count["read"], 1)
+
+    def test_zero_clock_preserves_complete_reader_result(self):
+        fs = FakeOS()
+        result = self.run_reader(fs, clock=lambda: 0.0)
+        self.assertEqual(result.metadata, fs.meta.body)
+        self.assertEqual(result.avatar, fs.avatar.body)
+        self.assertTrue(result.raster_and_yaml_unvalidated)
+        self.assertEqual(
+            result.budget["readBytesCharged"],
+            2 * (len(fs.meta.body) + len(fs.avatar.body) + 2),
+        )
+        self.assertEqual(fs.handles, {})
+        self.assertEqual(len(fs.close_calls), len(set(fs.close_calls)))
+
     def test_deadline_during_body_preserves_owned_close(self):
         fs = FakeOS()
         moment = [1.0]

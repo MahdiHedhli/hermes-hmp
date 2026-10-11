@@ -215,7 +215,7 @@ class _Budget:
 
     def tick(self) -> None:
         now = self.clock()
-        if type(now) is not float or not now < self.deadline:
+        if type(now) is not float or not 0 <= now < self.deadline:
             raise PresentationReadError("DEADLINE")
         if self.unknown_close:
             raise PresentationReadError("UNKNOWN_CLOSE")
