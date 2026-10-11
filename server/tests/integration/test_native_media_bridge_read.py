@@ -68,6 +68,25 @@ def check():
         assert [candidate.tool_row_id for candidate in result.candidates] == [tool]
         assert len(result.rows) == 7
         assert result.rows[2].text == f"MEDIA:{image}"
+        from hmp_plugin.local_media_sidecar import MediaSidecar, MediaOrigin, SidecarStatus
+        sidecar = MediaSidecar(
+            status=SidecarStatus.CANDIDATES, origin=MediaOrigin.BROWSED_SESSION,
+            user_id="synthetic-user", profile="default", session_id="synthetic-media",
+            query_tip="synthetic-media", lineage_tip="synthetic-media",
+            candidates=result.candidates,
+        )
+        binding = bridge.bind_media_batch(sidecar)
+        assert binding.ok
+        assert binding.accepted == (tool,)
+        changed_db = SessionDB(home / "state.db")
+        try:
+            changed_db.replace_messages("synthetic-media", [])
+            assert changed_db.get_messages("synthetic-media") == []
+        finally:
+            changed_db.close()
+        stale = bridge.bind_media_batch(sidecar)
+        # A coherent scan may succeed with zero eligible selectors; none may mint.
+        assert stale.accepted == ()
     finally:
         store.close()
 
