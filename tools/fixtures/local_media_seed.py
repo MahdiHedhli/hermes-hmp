@@ -53,12 +53,39 @@ def check_environment(home: Path, runtime: Path) -> None:
         try:
             for component in path.parts[1:]:
                 child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=fd)
-                os.close(fd)
+                previous = fd
+                fd = None
+                try:
+                    os.close(previous)
+                except BaseException as parent_error:
+                    try:
+                        os.close(child)
+                    except BaseException as child_error:
+                        raise child_error from parent_error
+                    raise
                 fd = child
             s = os.fstat(fd)
             require(s.st_uid == os.getuid() and stat.S_IMODE(s.st_mode) == 0o700, "owned_mode")
         finally:
-            os.close(fd)
+            if fd is not None:
+                os.close(fd)
+
+
+def _leaf_identity(s) -> tuple[int, ...]:
+    """Stable leaf metadata; read-induced access time is deliberately excluded."""
+    values = (
+        s.st_dev,
+        s.st_ino,
+        s.st_mode,
+        s.st_uid,
+        s.st_gid,
+        s.st_nlink,
+        s.st_size,
+        s.st_mtime_ns,
+        s.st_ctime_ns,
+    )
+    require(all(type(value) is int for value in values), "leaf_metadata")
+    return values
 
 
 def source_pin(function, expected_path: Path, expected_sha256: str) -> None:
@@ -67,7 +94,16 @@ def source_pin(function, expected_path: Path, expected_sha256: str) -> None:
     try:
         for component in expected_path.parts[1:-1]:
             child = os.open(component, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
-            os.close(parent)
+            previous = parent
+            parent = None
+            try:
+                os.close(previous)
+            except BaseException as parent_error:
+                try:
+                    os.close(child)
+                except BaseException as child_error:
+                    raise child_error from parent_error
+                raise
             parent = child
         fd = os.open(expected_path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
         try:
@@ -76,6 +112,7 @@ def source_pin(function, expected_path: Path, expected_sha256: str) -> None:
                 stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_size <= 65536,
                 "factory_leaf",
             )
+            before_identity = _leaf_identity(before)
             digest = hashlib.sha256()
             remaining = before.st_size
             while remaining:
@@ -85,14 +122,18 @@ def source_pin(function, expected_path: Path, expected_sha256: str) -> None:
                 digest.update(chunk)
             require(not os.read(fd, 1) and digest.hexdigest() == expected_sha256, "factory_body")
             require(
-                os.fstat(fd) == before
-                and os.stat(expected_path.name, dir_fd=parent, follow_symlinks=False) == before,
+                _leaf_identity(os.fstat(fd)) == before_identity
+                and _leaf_identity(
+                    os.stat(expected_path.name, dir_fd=parent, follow_symlinks=False)
+                )
+                == before_identity,
                 "factory_drift",
             )
         finally:
             os.close(fd)
     finally:
-        os.close(parent)
+        if parent is not None:
+            os.close(parent)
 
 
 def client_observation(client, *, sdk_type, httpx_type, base_url: str) -> dict:

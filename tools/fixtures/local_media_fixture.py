@@ -27,6 +27,23 @@ _IID = re.compile(r"[a-z2-7]{51}[aq]\Z")
 _PROFILES = {"media-alpha", "media-beta"}
 
 
+def _leaf_identity(s) -> tuple[int, ...]:
+    """Stable leaf metadata; read-induced access time is deliberately excluded."""
+    values = (
+        s.st_dev,
+        s.st_ino,
+        s.st_mode,
+        s.st_uid,
+        s.st_gid,
+        s.st_nlink,
+        s.st_size,
+        s.st_mtime_ns,
+        s.st_ctime_ns,
+    )
+    require(all(type(value) is int for value in values), "leaf_metadata")
+    return values
+
+
 def read_descriptor(path: Path) -> dict:
     """Private regular input; exact scope/custody/pins are a later admission prerequisite."""
     require(
@@ -37,7 +54,16 @@ def read_descriptor(path: Path) -> dict:
     try:
         for part in path.parts[1:-1]:
             child = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW, dir_fd=parent)
-            os.close(parent)
+            previous = parent
+            parent = None
+            try:
+                os.close(previous)
+            except BaseException as parent_error:
+                try:
+                    os.close(child)
+                except BaseException as child_error:
+                    raise child_error from parent_error
+                raise
             parent = child
         leaf = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
         try:
@@ -50,6 +76,7 @@ def read_descriptor(path: Path) -> dict:
                 and 0 < before.st_size <= 131072,
                 "descriptor_leaf",
             )
+            before_identity = _leaf_identity(before)
             data = bytearray()
             while len(data) < before.st_size:
                 part = os.read(leaf, min(8192, before.st_size - len(data)))
@@ -57,14 +84,16 @@ def read_descriptor(path: Path) -> dict:
                 data.extend(part)
             require(not os.read(leaf, 1), "descriptor_growth")
             require(
-                os.fstat(leaf) == before
-                and os.stat(path.name, dir_fd=parent, follow_symlinks=False) == before,
+                _leaf_identity(os.fstat(leaf)) == before_identity
+                and _leaf_identity(os.stat(path.name, dir_fd=parent, follow_symlinks=False))
+                == before_identity,
                 "descriptor_drift",
             )
         finally:
             os.close(leaf)
     finally:
-        os.close(parent)
+        if parent is not None:
+            os.close(parent)
     document = json.loads(data)
     require(document.get("format") == "native-media-fixture-v1", "descriptor_kind")
     require(
