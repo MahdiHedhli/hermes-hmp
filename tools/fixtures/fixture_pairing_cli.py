@@ -184,7 +184,14 @@ def _pairing_id_for(args: argparse.Namespace) -> str:
     return _find_pairing_id_by_sas(store_path, crypto, sas=args.sas, sas_group=args.sas_group)
 
 
-def _run_real_cli_pty(home: str, xdg_state: str, argv: list[str], *, timeout: float = 30.0) -> str:
+def _run_real_cli_pty(
+    home: str,
+    xdg_state: str,
+    argv: list[str],
+    *,
+    timeout: float = 30.0,
+    grant_owner_controls: bool | None = None,
+) -> str:
     """`hermes hmp <argv...>` (T032) under a real pseudo-terminal, both stdin and stdout attached
     to the slave end, so `CliEnv.interactive()` (`stdin.isatty() and stdout.isatty()`) is
     genuinely true -- see the module docstring. `hermes` here is `sys.executable`'s own venv
@@ -203,6 +210,7 @@ def _run_real_cli_pty(home: str, xdg_state: str, argv: list[str], *, timeout: fl
         os.close(slave_fd)
         slave_fd = -1
         chunks: list[bytes] = []
+        owner_controls_answered = False
         sel = selectors.DefaultSelector()
         sel.register(master_fd, selectors.EVENT_READ)
         deadline = time.monotonic() + timeout
@@ -222,6 +230,16 @@ def _run_real_cli_pty(home: str, xdg_state: str, argv: list[str], *, timeout: fl
             if not data:
                 break
             chunks.append(data)
+            # Pairing asks for a separate privileged-control grant. Most
+            # reference devices leave it off; the owner-control fixture sends
+            # GRANT only after this exact host prompt appears.
+            if (
+                grant_owner_controls is not None
+                and not owner_controls_answered
+                and b"or Enter to keep it off:" in b"".join(chunks)
+            ):
+                os.write(master_fd, b"GRANT\n" if grant_owner_controls else b"\n")
+                owner_controls_answered = True
         returncode = proc.wait(timeout=timeout)
     finally:
         if slave_fd != -1:
@@ -247,6 +265,7 @@ def cmd_confirm(args: argparse.Namespace) -> None:
             "--",
             pairing_id,
         ],
+        grant_owner_controls=False,
     )
     print(json.dumps({"ok": True, "pairing_id": pairing_id, "output": output}))
 
@@ -369,6 +388,7 @@ def cmd_pair_reference_client(args: argparse.Namespace) -> None:
             "--",
             p2["pairing_id"],
         ],
+        grant_owner_controls=args.grant_owner_controls,
     )
 
     pairing_raw = wire.b64u_decode(p2["pairing_id"], length=16)
@@ -454,6 +474,8 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--endpoint", required=True)
     p.add_argument("--user", required=True, help="HMP user id to activate the device under")
     p.add_argument("--label", default=None)
+    p.add_argument("--grant-owner-controls", action="store_true",
+                   help="fixture only: answer the host's separate controls prompt with GRANT")
     p.set_defaults(func=cmd_pair_reference_client)
 
     return parser

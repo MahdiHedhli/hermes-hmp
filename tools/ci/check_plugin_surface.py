@@ -18,7 +18,7 @@ Rules:
   S2  Dynamic imports. `__import__`, `import_module`, `module_from_spec`, `exec_module`,
       `load_module`, `spec_from_file_location`, `spec_from_loader`, and the builtins `exec`,
       `eval` and `compile` are allowed only in `bridge.py` and inside `compat.py`'s
-      `probe_read_dependencies`.
+      `probe_dependencies`.
       `find_spec` is allowed only in `bridge.py` and `compat.py`.
   S3  Bridge isolation. No module imports `bridge` at module level; `compat.py` never imports it.
       `bridge.py` is imported only after the compat gate reports SUPPORTED.
@@ -46,7 +46,7 @@ DEFAULT_PACKAGE = Path(__file__).resolve().parents[2] / "server" / "hmp_plugin"
 
 BRIDGE_MODULE = "bridge.py"
 COMPAT_MODULE = "compat.py"
-PROBE_FUNCTION = "probe_read_dependencies"
+PROBE_FUNCTION = "probe_dependencies"
 INIT_MODULE = "__init__.py"
 ADAPTER_MODULE = "adapter.py"
 IDENTITY_MODULE = "identity.py"

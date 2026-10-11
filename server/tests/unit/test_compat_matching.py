@@ -1,25 +1,17 @@
 """CS-19 build identity and matching rule (research R8 steps 3-5; IR-5).
 
-`BuildIdentity` rejects a git SHA without a fingerprint, and `match_build`, the rule the gate
-always uses, is tested here over every combination of install kind and entry kind.
+`BuildIdentity` rejects a git SHA without a fingerprint, and `match_build`, the evidence rule for
+"this build matches a tested sample", is tested here over every combination of install kind and
+entry kind. It never admits or refuses a build (owner policy 2026-10-01).
 """
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 from pathlib import Path
 
 import pytest
 
-from hmp_plugin.compat import (
-    BuildEntry,
-    BuildIdentity,
-    CompatGate,
-    CompatStatus,
-    ReadCompatList,
-    match_build,
-)
-from hmp_plugin.contract import OtherWhy
+from hmp_plugin.compat import BuildEntry, BuildIdentity, match_build
 
 SHA_A = "a" * 40
 SHA_B = "b" * 40
@@ -171,62 +163,24 @@ def test_match_build(
 
 
 # --------------------------------------------------------------------------------------------
-# The gate applies the rule itself: T023's five CS-19 cases, end to end.
+# The match is evidence: it labels a build as "tested" and never decides availability.
 # --------------------------------------------------------------------------------------------
 
 
-class Reader:
-    def __init__(self, identity: BuildIdentity | None) -> None:
-        self.identity = identity
+@pytest.mark.parametrize("matches", [True, False])
+def test_match_result_never_changes_availability(matches: bool) -> None:
+    """E11 (identity view): an evidence matcher that finds the build and one that finds nothing
+    produce the same availability."""
+    from hmp_plugin.compat import Feature, evaluate_eligibility
+    from hmp_plugin.hermes_version import HermesVersion, Scheme, VersionSource
 
-    def read(self, hermes_root: Path) -> BuildIdentity | None:
-        return self.identity
-
-
-def _gate(identity: BuildIdentity, *builds: BuildEntry) -> CompatGate:
-    def probe() -> Sequence[str]:
-        return ()
-
-    return CompatGate(
-        Reader(identity),
-        ReadCompatList(format=1, bridge_files=(), builds=builds),
-        probe,
+    version = HermesVersion(Scheme.SEMVER, (0, 22, 0), VersionSource.LITERAL)
+    labels = dict.fromkeys(Feature, "tested-sample" if matches else None)
+    eligibility = evaluate_eligibility(
         root_locator=lambda: Path("/nonexistent-hermes-root"),
+        version_reader=lambda _root: version,
+        probe=lambda _root, _specs: (),
+        evidence=lambda _root: labels,
     )
-
-
-@pytest.mark.parametrize(
-    ("identity", "builds", "supported"),
-    [
-        (GIT_INSTALL_A_1, (GIT_A_1,), True),  # git SHA listed + fingerprint match
-        (GIT_INSTALL_A_2, (GIT_A_1,), False),  # git SHA listed + fingerprint mismatch
-        (GIT_INSTALL_A_1, (FPONLY_1,), False),  # SHA unlisted, fp equals a fp-only entry
-        (NOGIT_INSTALL_1, (FPONLY_1,), True),  # no .git + fp-only match
-        (NOGIT_INSTALL_1, (GIT_A_1,), False),  # no .git + fp matches only a git entry
-    ],
-    ids=[
-        "git-listed-fp-match",
-        "git-listed-fp-mismatch",
-        "git-unlisted-fp-only-equal",
-        "nogit-fp-only-match",
-        "nogit-fp-matches-git-entry-only",
-    ],
-)
-def test_gate_applies_cs19(
-    identity: BuildIdentity, builds: tuple[BuildEntry, ...], supported: bool
-) -> None:
-    result = _gate(identity, *builds).evaluate()
-    if supported:
-        assert result.status is CompatStatus.SUPPORTED
-    else:
-        assert (result.status, result.why) == (
-            CompatStatus.UNSUPPORTED,
-            OtherWhy.HERMES_BUILD_UNSUPPORTED,
-        )
-
-
-def test_gate_revalidates_identity_mutated_after_construction() -> None:
-    identity = BuildIdentity(FP_1, SHA_A)
-    object.__setattr__(identity, "fingerprint", None)  # a buggy reader bypassing the dataclass
-    result = _gate(identity, GIT_A_1).evaluate()
-    assert result.why is OtherWhy.HERMES_BUILD_UNSUPPORTED
+    assert all(eligibility.available(f) for f in Feature)
+    assert eligibility.features[Feature.READ].tested_label == ("tested-sample" if matches else None)

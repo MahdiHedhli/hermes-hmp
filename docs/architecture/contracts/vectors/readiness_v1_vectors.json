@@ -1,0 +1,560 @@
+{
+  "_meta": {
+    "contract": "hmp-readiness-wire",
+    "revision": 1,
+    "scope": "synthetic protocol-1 data; no authority, freshness, operation or binary-transport proof"
+  },
+  "positive": [
+    {
+      "name": "missing_controls",
+      "producer_input": {
+        "jobs_status": "available",
+        "model_status": "available",
+        "entitlement": "missing",
+        "jobs_host_setting": "enabled",
+        "model_host_setting": "enabled",
+        "profile_api": "configured"
+      },
+      "capabilities": {
+        "protocol": 1,
+        "features": {
+          "jobs": {
+            "capability": "available"
+          },
+          "model": {
+            "capability": "available"
+          }
+        }
+      },
+      "bot": {
+        "protocol": 1,
+        "checked_at": 1900000000,
+        "generation": "0123456789abcdef0123456789abcdef",
+        "features": {
+          "jobs": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          },
+          "model": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          }
+        }
+      }
+    },
+    {
+      "name": "disabled_model",
+      "producer_input": {
+        "jobs_status": "available",
+        "model_status": "available",
+        "entitlement": "missing",
+        "jobs_host_setting": "enabled",
+        "model_host_setting": "disabled",
+        "profile_api": "configured"
+      },
+      "capabilities": {
+        "protocol": 1,
+        "features": {
+          "jobs": {
+            "capability": "available"
+          },
+          "model": {
+            "capability": "available"
+          }
+        }
+      },
+      "bot": {
+        "protocol": 1,
+        "checked_at": 1900000001,
+        "generation": "11111111111111111111111111111111",
+        "features": {
+          "jobs": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          },
+          "model": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "disabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing",
+              "host_flag_disabled"
+            ],
+            "action": "plan_host_remediation"
+          }
+        }
+      }
+    },
+    {
+      "name": "unknown_axes",
+      "producer_input": {
+        "jobs_status": "unknown",
+        "model_status": "unknown",
+        "entitlement": "unknown",
+        "jobs_host_setting": "unknown",
+        "model_host_setting": "unknown",
+        "profile_api": "unknown"
+      },
+      "capabilities": {
+        "protocol": 1,
+        "features": {
+          "jobs": {
+            "capability": "unknown"
+          },
+          "model": {
+            "capability": "unknown"
+          }
+        }
+      },
+      "bot": {
+        "protocol": 1,
+        "checked_at": 9007199254740991,
+        "generation": "22222222222222222222222222222222",
+        "features": {
+          "jobs": {
+            "capability": "unknown",
+            "entitlement": "unknown",
+            "host_setting": "unknown",
+            "profile_api": "unknown",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "compatibility_unknown",
+              "controls_unknown",
+              "profile_api_unknown"
+            ],
+            "action": "check_host"
+          },
+          "model": {
+            "capability": "unknown",
+            "entitlement": "unknown",
+            "host_setting": "unknown",
+            "profile_api": "unknown",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "compatibility_unknown",
+              "controls_unknown",
+              "profile_api_unknown"
+            ],
+            "action": "check_host"
+          }
+        }
+      }
+    },
+    {
+      "name": "below_floor_jobs",
+      "producer_input": {
+        "jobs_status": "below_floor",
+        "model_status": "available",
+        "entitlement": "granted",
+        "jobs_host_setting": "enabled",
+        "model_host_setting": "enabled",
+        "profile_api": "configured"
+      },
+      "capabilities": {
+        "protocol": 1,
+        "features": {
+          "jobs": {
+            "capability": "below_floor"
+          },
+          "model": {
+            "capability": "available"
+          }
+        }
+      },
+      "bot": {
+        "protocol": 1,
+        "checked_at": 1900000003,
+        "generation": "33333333333333333333333333333333",
+        "features": {
+          "jobs": {
+            "capability": "below_floor",
+            "entitlement": "granted",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "version_below_floor"
+            ],
+            "action": "plan_host_remediation"
+          },
+          "model": {
+            "capability": "available",
+            "entitlement": "granted",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed"
+            ],
+            "action": "check_host"
+          }
+        }
+      }
+    },
+    {
+      "name": "missing_profile_api",
+      "producer_input": {
+        "jobs_status": "available",
+        "model_status": "available",
+        "entitlement": "missing",
+        "jobs_host_setting": "enabled",
+        "model_host_setting": "enabled",
+        "profile_api": "missing"
+      },
+      "capabilities": {
+        "protocol": 1,
+        "features": {
+          "jobs": {
+            "capability": "available"
+          },
+          "model": {
+            "capability": "available"
+          }
+        }
+      },
+      "bot": {
+        "protocol": 1,
+        "checked_at": 1900000002,
+        "generation": "44444444444444444444444444444444",
+        "features": {
+          "jobs": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "missing",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing",
+              "profile_api_missing"
+            ],
+            "action": "plan_host_remediation"
+          },
+          "model": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "missing",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing",
+              "profile_api_missing"
+            ],
+            "action": "plan_host_remediation"
+          }
+        }
+      }
+    }
+  ],
+  "negative": [
+    {
+      "name": "capabilities_extra_top",
+      "target": "capabilities",
+      "body": {
+        "protocol": 1,
+        "features": {
+          "jobs": {
+            "capability": "available"
+          },
+          "model": {
+            "capability": "available"
+          }
+        },
+        "device": "private-marker"
+      }
+    },
+    {
+      "name": "capabilities_extra_feature",
+      "target": "capabilities",
+      "body": {
+        "protocol": 1,
+        "features": {
+          "jobs": {
+            "capability": "available",
+            "endpoint": "private-marker"
+          },
+          "model": {
+            "capability": "available"
+          }
+        }
+      }
+    },
+    {
+      "name": "bot_extra_top",
+      "target": "bot",
+      "body": {
+        "protocol": 1,
+        "checked_at": 1900000000,
+        "generation": "0123456789abcdef0123456789abcdef",
+        "features": {
+          "jobs": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          },
+          "model": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          }
+        },
+        "profile": "private-marker"
+      }
+    },
+    {
+      "name": "bot_extra_feature",
+      "target": "bot",
+      "body": {
+        "protocol": 1,
+        "checked_at": 1900000000,
+        "generation": "0123456789abcdef0123456789abcdef",
+        "features": {
+          "jobs": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access",
+            "endpoint": "private-marker"
+          },
+          "model": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          }
+        }
+      }
+    },
+    {
+      "name": "unsafe_checked_at",
+      "target": "bot",
+      "body": {
+        "protocol": 1,
+        "checked_at": 9007199254740992,
+        "generation": "0123456789abcdef0123456789abcdef",
+        "features": {
+          "jobs": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          },
+          "model": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          }
+        }
+      }
+    },
+    {
+      "name": "unknown_reason",
+      "target": "bot",
+      "body": {
+        "protocol": 1,
+        "checked_at": 1900000000,
+        "generation": "0123456789abcdef0123456789abcdef",
+        "features": {
+          "jobs": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "private-marker"
+            ],
+            "action": "request_access"
+          },
+          "model": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          }
+        }
+      }
+    },
+    {
+      "name": "uppercase_generation",
+      "target": "bot",
+      "body": {
+        "protocol": 1,
+        "checked_at": 1900000000,
+        "generation": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        "features": {
+          "jobs": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          },
+          "model": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          }
+        }
+      }
+    },
+    {
+      "name": "short_generation",
+      "target": "bot",
+      "body": {
+        "protocol": 1,
+        "checked_at": 1900000000,
+        "generation": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        "features": {
+          "jobs": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          },
+          "model": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          }
+        }
+      }
+    },
+    {
+      "name": "shared_entitlement_mismatch",
+      "target": "bot",
+      "body": {
+        "protocol": 1,
+        "checked_at": 1900000000,
+        "generation": "0123456789abcdef0123456789abcdef",
+        "features": {
+          "jobs": {
+            "capability": "available",
+            "entitlement": "missing",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed",
+              "controls_missing"
+            ],
+            "action": "request_access"
+          },
+          "model": {
+            "capability": "available",
+            "entitlement": "granted",
+            "host_setting": "enabled",
+            "profile_api": "configured",
+            "api_reachability": "not_probed",
+            "reasons": [
+              "api_not_probed"
+            ],
+            "action": "check_host"
+          }
+        }
+      }
+    }
+  ]
+}

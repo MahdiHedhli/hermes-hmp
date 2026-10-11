@@ -15,8 +15,9 @@ construction, since they are never committed in the first place — for four con
                ranges written out exactly as CIDR/wildcard *contract syntax*
                (`100\x2e64.0.0/10`, `fd7a:115c:a1e0::/48`, `*.ts.net`) the way
                docs/architecture/contracts/HMP_V1.md documents them.
-  HOME_PATH  - an absolute `/Users/<real-name>/...` or `/home/<real-name>/...` path, excluding
-               already-redacted placeholders (`<user>`, `youruser`, ...).
+  HOME_PATH  - an absolute `/Users/<real-name>/...` or `/home/<real-name>/...` path, or a
+               slugged `-Users-<real-name>-` path in scratch exports, excluding already-redacted
+               placeholders (`<user>`, `youruser`, ...).
   TEAM_ID    - a non-empty Xcode `DEVELOPMENT_TEAM` value (an Apple Developer Team ID).
 
 This is intentionally a narrow, precise v1: it is not a general secrets scanner (T033's
@@ -89,6 +90,7 @@ CGNAT_RE = re.compile(
 TS_ULA_RE = re.compile(r"\bfd7a:115c:a1e0:[0-9a-fA-F:]*(?:/[0-9]{1,3})?\b")
 TS_NET_RE = re.compile(r"(\*|[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)\.ts\.net\b")
 HOME_PATH_RE = re.compile(r"(?<!\w)/(?:Users|home)/([A-Za-z0-9_.-]+)/")
+SLUG_HOME_PATH_RE = re.compile(r"(?<!\w)-Users-([A-Za-z0-9_.]+)-")
 TEAM_ID_RE = re.compile(r'DEVELOPMENT_TEAM\s*=\s*"?([A-Za-z0-9]{10})"?\s*;')
 
 
@@ -120,10 +122,11 @@ def find_tailnet(line: str) -> list[str]:
 
 def find_home_paths(line: str) -> list[str]:
     out = []
-    for m in HOME_PATH_RE.finditer(line):
-        if m.group(1).lower() in PLACEHOLDER_USERS:
-            continue
-        out.append(m.group(0))
+    for pattern in (HOME_PATH_RE, SLUG_HOME_PATH_RE):
+        for m in pattern.finditer(line):
+            if m.group(1).lower() in PLACEHOLDER_USERS:
+                continue
+            out.append(m.group(0))
     return out
 
 

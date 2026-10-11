@@ -51,13 +51,16 @@ from __future__ import annotations
 import contextlib
 import re
 import secrets
+import threading
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
+from types import ModuleType
 from typing import Any
 
 from . import wire
 from .contract import (
     CONVERSATION_ID,
+    DIRECT_SEND_GATE_CLOSED_REASON,
     HISTORY_RESET_REASONS,
     PER_BOT_GATE_REFUSALS,
     SESSION_SOURCE_MAX_BYTES,
@@ -87,8 +90,10 @@ from .contract import (
     TurnObservedState,
     WireMessage,
     WriteGate,
+    WriteGateState,
 )
 from .logging_policy import log_bridge_exception
+from .prompts import phone_open_request
 
 # Amendment A1 (session browsing, SES-1a): the opaque session_ref prefix, matching the §13-style
 # identifier convention (`device_id`, `pairing_id`, ...): a fixed tag plus b64u of random bytes.
@@ -268,6 +273,104 @@ def _decode_sessions_cursor(text: str) -> int:
     return offset
 
 
+class _MediaShapeError(RuntimeError):
+    """An opted-in bridge returned a shape the media protocol does not approve. Fixed text; mapped
+    to the same `500 internal_error` as any bridge fault (`_internal_error`)."""
+
+    def __init__(self) -> None:
+        super().__init__("unapproved media read shape")
+
+
+class _Found:
+    """What the media path learned from one read: `kind` is `unsupported`, `none` (no rows were
+    fetched for media: no conversation, a reset) or `page` (`query`, `candidates`, `lineage_tip`).
+    Private to this module; the sidecar is built from it only by `_media_result`."""
+
+    __slots__ = ("candidates", "kind", "lineage_tip", "query")
+
+    def __init__(
+        self,
+        kind: str,
+        query: Any = None,
+        candidates: tuple[Any, ...] = (),
+        lineage_tip: Any = None,
+    ) -> None:
+        self.kind = kind
+        self.query = query
+        self.candidates = candidates
+        self.lineage_tip = lineage_tip
+
+
+# `MediaOrigin` values, spelled here so this module never imports the sidecar at module scope.
+_ORIGIN_OWN = "own_conversation"
+_ORIGIN_BROWSED = "browsed_session"
+
+_FOUND_UNSUPPORTED = _Found("unsupported")
+_FOUND_NONE = _Found("none")
+
+
+def _bridge_opted_in(bridge: object) -> bool:
+    """The explicit class-level marker, read from the type only. Never an instance or dynamic
+    probe: a fake's `__getattr__` answers every name."""
+    return getattr(type(bridge), "LOCAL_MEDIA_SIDECAR", False) is True
+
+
+def _with_tip(found: _Found | None, lineage: LineageInfo) -> _Found | None:
+    """Bind the separately read lineage tip of the same request to a fetched page."""
+    if found is None or found.kind != "page":
+        return found
+    return _Found("page", found.query, found.candidates, lineage.lineage_tip)
+
+
+# Per-load media module cache (RC1): `(local_media_sidecar,)`, set once and never refilled. The
+# media sites below read the carrier module from here, never from a request-time import, so a later
+# whole-package eviction cannot give a running listener a different copy. The adapter's
+# listener-open availability binding proves this cache coherent with the bridge's chain and keeps a
+# strong reference to it; an inert media twin on a listener whose media is closed may have filled
+# it first. Start-up, the old read methods and the gate-closed path never call it.
+_local_media_cache: tuple[ModuleType, ...] | None = None
+_local_media_lock = threading.Lock()
+
+
+def _local_media_modules() -> tuple[ModuleType, ...]:
+    global _local_media_cache
+    cached = _local_media_cache
+    if cached is not None:
+        return cached
+    from . import local_media_sidecar  # unlocked: only the set-once publication is locked
+
+    fresh = (local_media_sidecar,)
+    with _local_media_lock:
+        if _local_media_cache is None:
+            _local_media_cache = fresh
+        return _local_media_cache
+
+
+def _accept_media(got: object, *, allow_reset: bool) -> tuple[Any, _Found]:
+    """The only shapes an opted-in bridge may return: its carrier, the exact old row list (the
+    downgrade: unchanged text, no media metadata) or, for `after`, a `ResetReason`. Anything else
+    is a fault: never a silent fallback, never a second query."""
+    BridgeMediaRows = _local_media_modules()[0].BridgeMediaRows  # noqa: N806
+
+    shape = type(got)
+    if shape is list:
+        if any(type(r) is not Row for r in got):  # type: ignore[attr-defined]
+            raise _MediaShapeError
+        return got, _FOUND_UNSUPPORTED
+    if allow_reset and shape is ResetReason:
+        return got, _FOUND_NONE
+    if shape is BridgeMediaRows:
+        return list(got.rows), _Found("page", got.query, got.candidates)  # type: ignore[attr-defined]
+    raise _MediaShapeError
+
+
+def _idle_found(bridge: object, media: bool) -> _Found | None:
+    """The note for a read that fetched no rows (no conversation, a reset before the query)."""
+    if not media:
+        return None
+    return _FOUND_NONE if _bridge_opted_in(bridge) else _FOUND_UNSUPPORTED
+
+
 class Reads:
     def __init__(
         self,
@@ -277,15 +380,18 @@ class Reads:
         iid: str,
         guarantees: Callable[[], Guarantees],
         write_gate: Callable[[], WriteGate],
+        send_gate: Callable[[str], WriteGate] | None = None,
         clock: Callable[[], int] = lambda: int(time.time()),
         epoch: str | None = None,
         on_served_profiles: Callable[[Sequence[str]], None] | None = None,
+        prompt_store: Any = None,
     ) -> None:
         self._bridge = bridge
         self._store = store
         self._iid = iid
         self._guarantees = guarantees
         self._write_gate = write_gate
+        self._send_gate = send_gate
         self._clock = clock
         # F1 serves no live tail (FR-053). The ring is empty, so the lower bound is `seq` 0 in
         # this process's epoch. It is still read first (RO-4), so the order holds when a tail
@@ -297,6 +403,7 @@ class Reads:
         # build with no adapter wired in (tests, an unsupported build). Never allowed to affect
         # the response: any exception it raises is swallowed here, not propagated to the caller.
         self._on_served_profiles = on_served_profiles
+        self._prompt_store = prompt_store
 
     # ------------------------------------------------------------------------------------------
     # RO-1 roster
@@ -311,22 +418,48 @@ class Reads:
             with contextlib.suppress(Exception):  # the hook must never break a roster read
                 self._on_served_profiles(served)
         bots = []
+        authorized_gates: list[WriteGate] = []
         for profile in served:
             try:
                 authz = self._bridge.authz_state(user_id, profile)
             except Exception as exc:  # the bridge fails closed itself; this is belt and braces
                 log_bridge_exception(exc)
                 authz = AuthzState.UNVERIFIABLE
+            send_gate = None
+            if authz is AuthzState.AUTHORIZED and self._send_gate is not None:
+                try:
+                    send_gate = self._send_gate(profile)
+                except Exception as exc:
+                    log_bridge_exception(exc)
+                    send_gate = WriteGate(
+                        WriteGateState.CLOSED, DIRECT_SEND_GATE_CLOSED_REASON
+                    )
+                authorized_gates.append(send_gate)
             bots.append(
                 RosterBot(
-                    profile=profile, display_name=_fallback_display_name(profile), authz=authz
+                    profile=profile,
+                    display_name=_fallback_display_name(profile),
+                    authz=authz,
+                    send_gate=send_gate,
                 )
             )
+        roster_gate = self._write_gate()
+        if self._send_gate is not None:
+            # An older client only sees the instance-wide field. Keep it conservative when
+            # authorized bots have mixed send availability.
+            if not authorized_gates or any(
+                g.state is WriteGateState.CLOSED for g in authorized_gates
+            ):
+                roster_gate = WriteGate(WriteGateState.CLOSED, DIRECT_SEND_GATE_CLOSED_REASON)
+            elif any(g.state is WriteGateState.OPEN_GUARDED for g in authorized_gates):
+                roster_gate = WriteGate(WriteGateState.OPEN_GUARDED, None)
+            else:
+                roster_gate = WriteGate(WriteGateState.OPEN, None)
         return RosterResponse(
             instance=self._iid,
             served_at=int(self._clock()),
             guarantees=self._guarantees(),
-            write_gate=self._write_gate(),
+            write_gate=roster_gate,
             bots=tuple(bots),
         )
 
@@ -396,6 +529,16 @@ class Reads:
         return TailPosition(epoch=self._epoch, seq=0)
 
     def snapshot(self, user_id: str, profile: str, limit: int) -> SnapshotResponse:
+        return self._snapshot(user_id, profile, limit, media=False)[0]
+
+    def snapshot_with_media(self, user_id: str, profile: str, limit: int) -> Any:
+        """RO-3 plus a non-wire sidecar (a `MediaReadResult`). Not called by any route yet."""
+        public, found = self._snapshot(user_id, profile, limit, media=True)
+        return self._media_result(_ORIGIN_OWN, user_id, profile, public, found)
+
+    def _snapshot(
+        self, user_id: str, profile: str, limit: int, *, media: bool
+    ) -> tuple[SnapshotResponse, _Found | None]:
         tail = self._tail()  # RO-4: before any other state
         self._gate(user_id, profile)
         try:
@@ -403,41 +546,87 @@ class Reads:
             if ref is None:
                 if self._baseline(user_id, profile) is not None:
                     self._drop_baseline(user_id, profile)
-                return self._empty_snapshot(tail)
+                return (
+                    self._empty_snapshot(tail, user_id, profile),
+                    _idle_found(self._bridge, media),
+                )
             lineage = self._bridge.lineage(ref)
-            rows = self._bridge.latest(ref, limit)
+            rows, found = self._latest_page(ref, limit, media)
         except HmpError:
             raise
         except Exception as exc:
             raise _internal_error(exc) from exc
         self._save_baseline(user_id, profile, lineage)
-        return SnapshotResponse(
+        durable = tuple(_wire(r) for r in rows)
+        public = SnapshotResponse(
             conversation_id=CONVERSATION_ID,
             session_id=lineage.lineage_tip,
             # The head is the newest active row id, read in the same query as the window (RO-7),
             # so it never names a row the client does not hold.
             head_message_id=rows[-1].id if rows else None,
-            messages=tuple(_wire(r) for r in rows),
+            messages=self._with_observations(user_id, profile, durable),
             turn=TurnObservation(observed_state=TurnObservedState.UNKNOWN, since=None),
             partial=None,
             partial_lost=False,
-            open_requests=(),
+            open_requests=self._phone_open_requests(user_id, profile),
             tail=tail,
         )
+        return public, _with_tip(found, lineage)
 
-    @staticmethod
-    def _empty_snapshot(tail: TailPosition) -> SnapshotResponse:
+    def _latest_page(
+        self, ref: ConversationRef, limit: int, media: bool
+    ) -> tuple[list[Row], _Found | None]:
+        """The newest page. `media=False` and a bridge that has not opted in make exactly the old
+        `latest` call; an opted-in bridge's twin is accepted only in an approved shape."""
+        if not media:
+            return self._bridge.latest(ref, limit), None
+        if not _bridge_opted_in(self._bridge):
+            return self._bridge.latest(ref, limit), _FOUND_UNSUPPORTED
+        got = self._bridge.latest_with_media(ref, limit)  # type: ignore[attr-defined]
+        page, found = _accept_media(got, allow_reset=False)
+        return page, found  # type: ignore[return-value]
+
+    def _empty_snapshot(
+        self, tail: TailPosition, user_id: str = "", profile: str = ""
+    ) -> SnapshotResponse:
         return SnapshotResponse(
             conversation_id=CONVERSATION_ID,
             session_id=None,
             head_message_id=None,
-            messages=(),
+            messages=self._with_observations(user_id, profile, ()),
             turn=TurnObservation(observed_state=TurnObservedState.UNKNOWN, since=None),
             partial=None,
             partial_lost=False,
-            open_requests=(),
+            open_requests=self._phone_open_requests(user_id, profile),
             tail=tail,
         )
+
+    def _phone_open_requests(self, user_id: str, profile: str) -> tuple[Mapping[str, object], ...]:
+        store = self._prompt_store
+        if store is None or not user_id:
+            return ()
+        store.purge(int(self._clock()))
+        return tuple(
+            phone_open_request(row)
+            for row in store.list_visible(self._iid, user_id, profile, now=int(self._clock()))
+            if row.surface == "phone_chat"
+        )
+
+    def _with_observations(
+        self, user_id: str, profile: str, durable: tuple[WireMessage, ...]
+    ) -> tuple[WireMessage, ...]:
+        """Phone-chat observations Hermes has not yet written. A durable row with the same text
+        replaces the observation (AP-6)."""
+        store = self._prompt_store
+        if store is None or not user_id:
+            return durable
+        store.purge(int(self._clock()))
+        store.discard_durable_observations(
+            self._iid, user_id, profile, {(row.role, row.text) for row in durable}
+        )
+        # Observations have no durable id or lineage. Never splice them into cursor-addressed
+        # history: repeated text and a sliding fetch window cannot prove message identity.
+        return durable
 
     # ------------------------------------------------------------------------------------------
     # RO-6 history
@@ -446,32 +635,55 @@ class Reads:
     def history(
         self, user_id: str, profile: str, after: int, limit: int
     ) -> HistoryPage | HistoryReset:
+        return self._history_read(user_id, profile, after, limit, media=False)[0]
+
+    def history_with_media(self, user_id: str, profile: str, after: int, limit: int) -> Any:
+        """RO-6 plus a non-wire sidecar (a `MediaReadResult`). Not called by any route yet."""
+        public, found = self._history_read(user_id, profile, after, limit, media=True)
+        return self._media_result(_ORIGIN_OWN, user_id, profile, public, found)
+
+    def _history_read(
+        self, user_id: str, profile: str, after: int, limit: int, *, media: bool
+    ) -> tuple[HistoryPage | HistoryReset, _Found | None]:
         self._gate(user_id, profile)
         try:
-            return self._history(user_id, profile, after, limit)
+            return self._history(user_id, profile, after, limit, media)
         except HmpError:
             raise
         except Exception as exc:
             raise _internal_error(exc) from exc
 
+    def _after_page(
+        self, ref: ConversationRef, after: int, limit: int, media: bool
+    ) -> tuple[list[Row] | ResetReason, _Found | None]:
+        """Rows after the cursor, or the reset. The same selection rule as `_latest_page`."""
+        if not media:
+            return self._bridge.after(ref, after, limit), None
+        if not _bridge_opted_in(self._bridge):
+            return self._bridge.after(ref, after, limit), _FOUND_UNSUPPORTED
+        got = self._bridge.after_with_media(ref, after, limit)  # type: ignore[attr-defined]
+        return _accept_media(got, allow_reset=True)
+
     def _history(
-        self, user_id: str, profile: str, after: int, limit: int
-    ) -> HistoryPage | HistoryReset:
+        self, user_id: str, profile: str, after: int, limit: int, media: bool
+    ) -> tuple[HistoryPage | HistoryReset, _Found | None]:
         baseline = self._baseline(user_id, profile)
         ref = self._bridge.conversation_ref(user_id, profile)
+        idle = _idle_found(self._bridge, media)
         if ref is None:
             if baseline is not None:
                 self._drop_baseline(user_id, profile)
-                return HistoryReset(reason=ResetReason.SESSION_REPLACED)
+                return HistoryReset(reason=ResetReason.SESSION_REPLACED), idle
             if after == 0:
-                return HistoryPage(messages=(), head_message_id=None)
-            return HistoryReset(reason=ResetReason.CURSOR_NOT_RESOLVABLE)
+                return HistoryPage(messages=(), head_message_id=None), idle
+            return HistoryReset(reason=ResetReason.CURSOR_NOT_RESOLVABLE), idle
 
         lineage = self._bridge.lineage(ref)
         reason = self._lineage_reset(ref, baseline, lineage) if baseline is not None else None
         rows: list[Row] = []
+        found = idle
         if reason is None:
-            page = self._bridge.after(ref, after, limit)
+            page, found = self._after_page(ref, after, limit, media)
             if isinstance(page, ResetReason):
                 # Only RO-6 reasons go on the wire; anything else is still a reset.
                 reason = (
@@ -481,11 +693,12 @@ class Reads:
                 rows = page
         self._save_baseline(user_id, profile, lineage)
         if reason is not None:
-            return HistoryReset(reason=reason)
+            return HistoryReset(reason=reason), found
         head = lineage.head_row_id
         if rows:
             head = max(head or 0, rows[-1].id)
-        return HistoryPage(messages=tuple(_wire(r) for r in rows), head_message_id=head)
+        public = HistoryPage(messages=tuple(_wire(r) for r in rows), head_message_id=head)
+        return public, _with_tip(found, lineage)
 
     # ------------------------------------------------------------------------------------------
     # Amendment A1 (session browsing, OD-F9/OD-F10): SES-1 list, SES-2 messages
@@ -589,23 +802,36 @@ class Reads:
         self, user_id: str, profile: str, session_ref: str, limit: int
     ) -> SessionSnapshot:
         """SES-2 snapshot-equivalent branch (no `after`, or `after=0`)."""
+        return self._session_snapshot(user_id, profile, session_ref, limit, media=False)[0]
+
+    def session_snapshot_with_media(
+        self, user_id: str, profile: str, session_ref: str, limit: int
+    ) -> Any:
+        """SES-2 plus a non-wire sidecar (a `MediaReadResult`). Not called by any route yet."""
+        public, found = self._session_snapshot(user_id, profile, session_ref, limit, media=True)
+        return self._media_result(_ORIGIN_BROWSED, user_id, profile, public, found)
+
+    def _session_snapshot(
+        self, user_id: str, profile: str, session_ref: str, limit: int, *, media: bool
+    ) -> tuple[SessionSnapshot, _Found | None]:
         self._gate(user_id, profile)
         session_id = self._resolve_ref(user_id, profile, session_ref)
         try:
             ref = self._resolve_other(user_id, profile, session_id)
             lineage = self._bridge.lineage(ref)
-            rows = self._bridge.latest(ref, limit)
+            rows, found = self._latest_page(ref, limit, media)
         except HmpError:
             raise
         except Exception as exc:
             raise _internal_error(exc) from exc
         self._save_other_baseline(user_id, profile, session_id, lineage)
-        return SessionSnapshot(
+        public = SessionSnapshot(
             session_ref=session_ref,
             messages=tuple(_wire(r) for r in rows),
             head_message_id=rows[-1].id if rows else None,
             truncated=len(rows) >= limit,
         )
+        return public, _with_tip(found, lineage)
 
     def session_history(
         self, user_id: str, profile: str, session_ref: str, after: int, limit: int
@@ -613,25 +839,44 @@ class Reads:
         """SES-2 paged branch (`after=<id>`): exactly RO-6's shape and reset algorithm (§2 SES-2),
         generalized from the one `session_baselines` row to `other_session_baselines`, keyed by
         `session_id` as well."""
+        page, _ = self._session_history_read(
+            user_id, profile, session_ref, after, limit, media=False
+        )
+        return page
+
+    def session_history_with_media(
+        self, user_id: str, profile: str, session_ref: str, after: int, limit: int
+    ) -> Any:
+        """SES-2 paged branch and SES-2a plus a non-wire sidecar (a `MediaReadResult`). Not
+        called by any route yet."""
+        public, found = self._session_history_read(
+            user_id, profile, session_ref, after, limit, media=True
+        )
+        return self._media_result(_ORIGIN_BROWSED, user_id, profile, public, found)
+
+    def _session_history_read(
+        self, user_id: str, profile: str, session_ref: str, after: int, limit: int, *, media: bool
+    ) -> tuple[HistoryPage | HistoryReset, _Found | None]:
         self._gate(user_id, profile)
         session_id = self._resolve_ref(user_id, profile, session_ref)
         try:
-            return self._session_history(user_id, profile, session_id, after, limit)
+            return self._session_history(user_id, profile, session_id, after, limit, media)
         except HmpError:
             raise
         except Exception as exc:
             raise _internal_error(exc) from exc
 
     def _session_history(
-        self, user_id: str, profile: str, session_id: str, after: int, limit: int
-    ) -> HistoryPage | HistoryReset:
+        self, user_id: str, profile: str, session_id: str, after: int, limit: int, media: bool
+    ) -> tuple[HistoryPage | HistoryReset, _Found | None]:
         baseline = self._other_baseline(user_id, profile, session_id)
         ref = self._resolve_other(user_id, profile, session_id)
         lineage = self._bridge.lineage(ref)
         reason = self._lineage_reset(ref, baseline, lineage) if baseline is not None else None
         rows: list[Row] = []
+        found = _idle_found(self._bridge, media)
         if reason is None:
-            page = self._bridge.after(ref, after, limit)
+            page, found = self._after_page(ref, after, limit, media)
             if isinstance(page, ResetReason):
                 reason = (
                     page if page in HISTORY_RESET_REASONS else ResetReason.CURSOR_NOT_RESOLVABLE
@@ -640,8 +885,66 @@ class Reads:
                 rows = page
         self._save_other_baseline(user_id, profile, session_id, lineage)
         if reason is not None:
-            return HistoryReset(reason=reason)
+            return HistoryReset(reason=reason), found
         head = lineage.head_row_id
         if rows:
             head = max(head or 0, rows[-1].id)
-        return HistoryPage(messages=tuple(_wire(r) for r in rows), head_message_id=head)
+        public = HistoryPage(messages=tuple(_wire(r) for r in rows), head_message_id=head)
+        return public, _with_tip(found, lineage)
+
+    # ------------------------------------------------------------------------------------------
+    # S2d: the non-wire sidecar. Nothing calls the `*_with_media` methods yet (no route, handler or
+    # gate); they establish no authority.
+    # ------------------------------------------------------------------------------------------
+
+    def _media_result(
+        self, origin: str, user_id: str, profile: str, public: Any, found: _Found | None
+    ) -> Any:
+        # Start-up, the old read methods and the gate-closed path never load it.
+        sidecar = _local_media_modules()[0]
+        MediaCarrierRefusal = sidecar.MediaCarrierRefusal  # noqa: N806
+        MediaOrigin = sidecar.MediaOrigin  # noqa: N806
+        MediaReadResult = sidecar.MediaReadResult  # noqa: N806
+        MediaSidecar = sidecar.MediaSidecar  # noqa: N806
+        SidecarStatus = sidecar.SidecarStatus  # noqa: N806
+
+        assert found is not None  # the media cores always return a note
+        origin_kind = MediaOrigin(origin)
+        messages = () if isinstance(public, HistoryReset) else public.messages
+        sidecar = None
+        if found.kind == "page" and messages:
+            # Only tool rows actually returned in the public page. A history head, a lineage row
+            # or the origin label authorizes nothing.
+            returned = {m.id for m in messages if m.role == "tool"}
+            candidates = tuple(c for c in found.candidates if c.tool_row_id in returned)
+            try:
+                sidecar = MediaSidecar(
+                    status=SidecarStatus.CANDIDATES,
+                    origin=origin_kind,
+                    user_id=user_id,
+                    profile=profile,
+                    session_id=found.query.session_id,
+                    query_tip=found.query.query_tip,
+                    lineage_tip=found.lineage_tip,
+                    candidates=candidates,
+                )
+            except MediaCarrierRefusal:
+                # The separately read lineage tip (native, unbounded) cannot be represented. The
+                # text read succeeded: keep it, drop the media metadata. No retry, no truncation.
+                found = _FOUND_UNSUPPORTED
+        if sidecar is None:
+            sidecar = MediaSidecar(
+                status=(
+                    SidecarStatus.UNSUPPORTED_BRIDGE
+                    if found.kind == "unsupported"
+                    else SidecarStatus.NO_ROWS
+                ),
+                origin=origin_kind,
+                user_id=user_id,
+                profile=profile,
+                session_id=None,
+                query_tip=None,
+                lineage_tip=None,
+                candidates=(),
+            )
+        return MediaReadResult(public, sidecar)

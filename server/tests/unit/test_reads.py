@@ -29,7 +29,9 @@ from hmp_plugin.contract import (
     WriteGate,
     WriteGateState,
 )
+from hmp_plugin.gate import direct_send_gate
 from hmp_plugin.reads import Reads, _fallback_display_name, _is_bot_view_session
+from hmp_plugin.request_ctx import _plain
 from hmp_plugin.store import Store
 
 from . import hmp_kit
@@ -170,6 +172,84 @@ def test_roster(h: Harness) -> None:
     assert [b.display_name for b in roster.bots] == ["Alpha", "Beta", "Lonely"]
     assert h.chats_count() == 0  # reading the roster mints nothing
     assert "conversation_ref" not in h.log  # no bot content is read for the roster
+
+
+def test_roster_reports_only_authorized_bot_send_gates(h: Harness) -> None:
+    h.world.runner.served = ["alpha", "beta", "lonely"]
+    available = True
+    seen: list[str] = []
+
+    def send_gate(profile: str) -> WriteGate:
+        seen.append(profile)
+        return WriteGate(
+            WriteGateState.OPEN_GUARDED if available else WriteGateState.CLOSED,
+            None if available else "write_gate_closed",
+        )
+
+    reads = Reads(
+        h.recorder,  # type: ignore[arg-type]
+        h.store,
+        iid="i" * 52,
+        guarantees=Guarantees,
+        write_gate=lambda: WriteGate(WriteGateState.OPEN_GUARDED, None),
+        send_gate=send_gate,
+        clock=lambda: h.now,
+    )
+    first = reads.roster(USER)
+    assert seen == ["alpha"]  # no key availability disclosure for unauthorized bots
+    assert first.bots[0].send_gate == WriteGate(WriteGateState.OPEN_GUARDED, None)
+    assert first.bots[1].send_gate is None
+    assert first.bots[2].send_gate is None
+    wire_bots = _plain(first)["bots"]
+    assert "send_gate" in wire_bots[0]
+    assert "send_gate" not in wire_bots[1]
+    assert "send_gate" not in wire_bots[2]
+    assert first.write_gate.state is WriteGateState.OPEN_GUARDED
+
+    available = False
+    second = reads.roster(USER)
+    assert seen == ["alpha", "alpha"]
+    assert second.bots[0].send_gate == WriteGate(WriteGateState.CLOSED, "write_gate_closed")
+    assert second.write_gate == WriteGate(WriteGateState.CLOSED, "write_gate_closed")
+
+
+def test_roster_uses_each_profile_key_and_recovers_after_a_key_is_added(h: Harness) -> None:
+    h.world.runner.served = ["alpha", "beta"]
+    h.world.approve(USER, "beta")
+    h.world.api.api_server_keys["alpha"] = "a" * 20
+    base = WriteGate(WriteGateState.CLOSED, "guarantees_unavailable")
+
+    def send_gate(profile: str) -> WriteGate:
+        return direct_send_gate(
+            base_write_gate=base,
+            flag_enabled=True,
+            endpoint=h.bridge.direct_send_endpoint(profile),
+        )
+
+    reads = Reads(
+        h.recorder,  # type: ignore[arg-type]
+        h.store,
+        iid="i" * 52,
+        guarantees=Guarantees,
+        write_gate=lambda: WriteGate(WriteGateState.OPEN_GUARDED, None),
+        send_gate=send_gate,
+        clock=lambda: h.now,
+    )
+    first = reads.roster(USER)
+    assert [b.send_gate.state for b in first.bots if b.send_gate] == [
+        WriteGateState.OPEN_GUARDED,
+        WriteGateState.CLOSED,
+    ]
+    assert first.write_gate.state is WriteGateState.CLOSED
+
+    h.world.api.api_server_keys["beta"] = "b" * 20
+    second = reads.roster(USER)
+    assert [b.send_gate.state for b in second.bots if b.send_gate] == [
+        WriteGateState.OPEN_GUARDED,
+        WriteGateState.OPEN_GUARDED,
+    ]
+    assert second.write_gate.state is WriteGateState.OPEN_GUARDED
+    assert h.world.runner.scope is None  # A→B→A resolution leaves no profile scope behind
 
 
 def test_roster_default_profile_falls_back_to_hermes(h: Harness) -> None:
@@ -592,6 +672,9 @@ def test_session_snapshot_and_history_unknown_ref_is_not_found(h: Harness) -> No
     with pytest.raises(HmpError) as err:
         h.reads.session_history(USER, "alpha", "ses1_unguessable", 1, 100)
     assert err.value.code == ErrorCode.NOT_FOUND
+    with pytest.raises(HmpError) as err:
+        h.reads.session_history(USER, "alpha", "ses1_unguessable", 0, 100)
+    assert err.value.code == ErrorCode.NOT_FOUND
 
 
 def test_session_ref_foreign_user_is_not_found(h: Harness) -> None:
@@ -600,6 +683,9 @@ def test_session_ref_foreign_user_is_not_found(h: Harness) -> None:
     ref = h.reads.list_sessions(USER, "alpha", cursor=None, limit=30).sessions[0].session_ref
     with pytest.raises(HmpError) as err:
         h.reads.session_snapshot(OTHER, "alpha", ref, 200)
+    assert err.value.code == ErrorCode.NOT_FOUND
+    with pytest.raises(HmpError) as err:
+        h.reads.session_history(OTHER, "alpha", ref, 0, 200)
     assert err.value.code == ErrorCode.NOT_FOUND
 
 
@@ -631,6 +717,22 @@ def test_session_history_pages_and_resets(h: Harness) -> None:
 
     db.compact_in_place("s-foreign", keep=1)
     reset = h.reads.session_history(USER, "alpha", ref, ids[-1], 100)
+    assert reset == HistoryReset(reason=ResetReason.HISTORY_REWRITTEN)
+
+
+def test_session_history_from_start_pages_earliest_active_rows(h: Harness) -> None:
+    db = h.world.dbs["alpha"]
+    ref = _session_ref(h, "s-bot-chat")
+    ids = [db.append("s-bot-chat", "user", f"synthetic {i}") for i in range(3)]
+    first = h.reads.session_history(USER, "alpha", ref, 0, 1)
+    assert isinstance(first, HistoryPage)
+    assert [m.id for m in first.messages] == ids[:1]
+    assert first.head_message_id == ids[-1]
+    rest = h.reads.session_history(USER, "alpha", ref, ids[0], 2)
+    assert isinstance(rest, HistoryPage)
+    assert [m.id for m in rest.messages] == ids[1:]
+    db.compact_in_place("s-bot-chat", keep=1)
+    reset = h.reads.session_history(USER, "alpha", ref, 0, 1)
     assert reset == HistoryReset(reason=ResetReason.HISTORY_REWRITTEN)
 
 
@@ -989,8 +1091,32 @@ def test_routes_end_to_end(tmp_path: Path) -> None:
         )
         assert status == 200 and body["messages"] == [] and body["head_message_id"] == did
 
+        next_ids = [
+            world.dbs["alpha"].append("s-bot-chat", "assistant", f"synthetic {i}")
+            for i in range(2)
+        ]
+        start_path = f"/bots/alpha/sessions/{ref}/messages/from-start"
+        status, body = await hmp_kit.get(client, start_path + "?limit=1")
+        assert status == 401 and body["error"]["code"] == "wrong_instance"
+        status, body = await hmp_kit.get(client, start_path + "?limit=1", headers=headers)
+        assert status == 200 and [m["id"] for m in body["messages"]] == [did]
+        assert body["head_message_id"] == next_ids[-1]
+        assert "session_ref" not in body  # paged shape, not the latest snapshot
+        status, body = await hmp_kit.get(
+            client, f"/bots/alpha/sessions/{ref}/messages?after={did}&limit=2", headers=headers
+        )
+        assert status == 200 and [m["id"] for m in body["messages"]] == next_ids
+        for bad in ("?limit=1001", "?after=0", "?q=synthetic"):
+            status, body = await hmp_kit.get(client, start_path + bad, headers=headers)
+            assert status == 400 and body["error"]["code"] == "bad_request"
+
         status, body = await hmp_kit.get(
             client, "/bots/alpha/sessions/ses1_doesnotexist/messages", headers=headers
+        )
+        assert status == 404 and body["error"]["code"] == "not_found"
+        status, body = await hmp_kit.get(
+            client, "/bots/alpha/sessions/ses1_doesnotexist/messages/from-start",
+            headers=headers,
         )
         assert status == 404 and body["error"]["code"] == "not_found"
 
@@ -1004,5 +1130,9 @@ def test_routes_end_to_end(tmp_path: Path) -> None:
             client, f"/bots/beta/sessions/{ref}/messages", headers=headers
         )
         assert status == 403  # the per-bot gate refuses beta first (ERR-3 ordering)
+        status, body = await hmp_kit.get(
+            client, f"/bots/beta/sessions/{ref}/messages/from-start", headers=headers
+        )
+        assert status == 403
 
     hmp_kit.run(env, scenario)

@@ -39,15 +39,19 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import dataclasses
+import hashlib
 import json
 import os
 import re
 import secrets
-from collections.abc import Iterator, Mapping, Sequence
+import threading
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from pathlib import Path
-from typing import Any, Protocol
+from types import ModuleType
+from typing import Any, ClassVar, Protocol
 from urllib.parse import quote
 
+from . import media_payload
 from .contract import (
     CONVERSATION_ID,
     TOOL_ARGUMENTS_CAP,
@@ -64,6 +68,7 @@ from .contract import (
     WireToolCall,
 )
 from .logging_policy import log_bridge_exception, log_event
+from .prompts import HelperChangedError, HelperUnavailableError
 
 # P6 inert trigger (PR6-1, GU-4 exception, RV-7): fixed text, no user content, no request. It does
 # not start with "/", and `allow_gateway_control` is off, so it is never a gateway command.
@@ -213,12 +218,19 @@ REACHED_DATA_ATTRIBUTES: frozenset[str] = frozenset(
         "session_id",
         "profile_route_rejected",
         "config",
+        "platforms",
         "extra",
+        "_gateway_accepted",
+        "defer_policy",
+        "admission_ticket",
+        "reported",
+        "value",
     }
 )
 
 # HMP-originated rows carry `platform_message_id = "hmp:<chat_id>:<cmid>"` (§2, `chat_id` row).
 _CMID_RE = re.compile(r"[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}")
+PHONE_ADMISSION_WAIT_S = 5.0
 
 
 class BridgeError(RuntimeError):
@@ -276,6 +288,77 @@ class HermesApi:
 
         return _profile_runtime_scope(Path(profile_home))
 
+    def model_config(self) -> object:
+        """Read the current profile's config inside `profile_runtime_scope`."""
+        from hermes_cli.config import load_config
+
+        config = load_config()
+        return config.get("model") if isinstance(config, Mapping) else None
+
+    def write_profile_model(self, home: Path, provider: str, model: str) -> bool:
+        """Use the same scoped, validated writer as Hermes Desktop/dashboard.
+
+        A validation refusal is data, never a caller-visible upstream exception.
+        Other errors fail the feature closed and are logged by type only.
+        """
+        from fastapi import HTTPException
+        from hermes_cli.web_routers.profiles import _write_profile_model
+
+        try:
+            _write_profile_model(home, provider, model)
+        except HTTPException as exc:
+            if exc.status_code == 400:
+                return False
+            raise
+        return True
+
+    def create_mobile_cron(self, fields: Mapping[str, object]) -> Mapping[str, object]:
+        """Use Hermes's scheduler registration path inside the selected profile scope."""
+        from cron.scheduler import create_job_with_scheduler_registration
+        from tools.cronjob_prompt_scan import _scan_cron_prompt
+
+        prompt = str(fields["prompt"])
+        if _scan_cron_prompt(prompt):
+            raise ValueError("Cron prompt rejected by Hermes")
+        continuity = fields.get("continuity") is True
+        return create_job_with_scheduler_registration(
+            name=fields["name"], schedule=fields["schedule"], prompt=prompt,
+            deliver=fields["deliver"], paused=True, repeat=fields.get("repeat"),
+            context_from=["self"] if continuity else None,
+        )
+
+    def edit_mobile_cron(
+        self, job_id: str, fields: Mapping[str, object]
+    ) -> Mapping[str, object] | None:
+        """Apply only HMP's fields through Hermes's own update writer."""
+        from cron.jobs import get_job, update_job
+        from cron.lifecycle_guard import check_gateway_lifecycle
+        from cron.scheduler import _notify_provider_jobs_changed
+        from tools.cronjob_prompt_scan import _scan_cron_prompt
+
+        if "prompt" in fields and _scan_cron_prompt(str(fields["prompt"])):
+            raise ValueError("Cron prompt rejected by Hermes")
+        if "prompt" in fields:
+            check_gateway_lifecycle(str(fields["prompt"]), None)
+        existing = get_job(job_id)
+        if existing is None:
+            return None
+        if any(existing.get(key) for key in (
+            "script", "no_agent", "workdir", "monitor_script", "monitor_url",
+        )):
+            raise ValueError("This job needs the Hermes desktop cron editor")
+        changes = {k: v for k, v in fields.items() if k != "continuity"}
+        if "continuity" in fields:
+            refs = [r for r in (existing.get("context_from") or []) if isinstance(r, str)
+                    and r.lower() != "self"]
+            if fields["continuity"] is True:
+                refs.append("self")
+            changes["context_from"] = refs or None
+        updated = update_job(job_id, changes)
+        if updated is not None:
+            _notify_provider_jobs_changed()
+        return updated
+
     def build_session_key(self, source: Any, profile: str | None) -> str:
         from gateway.session import build_session_key  # §12, E-GAP-6
 
@@ -331,6 +414,33 @@ class HermesApi:
 
         value = get_scoped_secret("API_SERVER_KEY", "")
         return value if isinstance(value, str) else ""
+
+    def readiness_api_server_extra(self) -> object:
+        """Return raw readiness config shape, unlike the error-collapsing endpoint helper."""
+        from gateway.config import Platform, load_gateway_config  # §12, E-GAP-14
+
+        config = load_gateway_config()
+        platforms = getattr(config, "platforms", None)
+        if not isinstance(platforms, Mapping):
+            raise BridgeError("profile config is malformed")
+        if Platform.API_SERVER not in platforms:
+            return None
+        platform_config = platforms[Platform.API_SERVER]
+        if platform_config is None:
+            raise BridgeError("profile platform config is malformed")
+        try:
+            extra = platform_config.extra
+        except AttributeError:
+            raise BridgeError("profile platform extra is malformed") from None
+        if not isinstance(extra, Mapping):
+            raise BridgeError("profile platform extra is malformed")
+        return extra
+
+    def readiness_scoped_api_server_key(self) -> object:
+        """Return the scoped secret value for validation; it is never returned or logged."""
+        from gateway.platforms._shared import get_scoped_secret  # §12, E-GAP-31
+
+        return get_scoped_secret("API_SERVER_KEY", "")
 
     def inert_trigger_event(self, *, source: Any, user_id: str, user_name: str) -> Any:
         """The P6 trigger `MessageEvent`. Optional fields are set only when this build has them:
@@ -553,6 +663,49 @@ def _cmid(platform_message_id: object, chat_id: str | None) -> str | None:
     return cmid if _CMID_RE.fullmatch(cmid) else None
 
 
+# Per-load media module cache (RC1). Set once, never refilled: the media twins and the C6b
+# binding read the modules from here, never from a request-time import, so a later whole-package
+# eviction cannot hand a running listener a different copy. Order (the adapter's availability
+# binding and the sites below rely on it): sidecar, candidate, active_scan, result, file_safety,
+# active_batch, batch_binding. The adapter's listener-open binding proves this tuple coherent and
+# keeps a strong reference to it; an inert media twin may fill it first on a listener whose media
+# is closed, which no consumer relies on. Start-up and the old read methods never call it.
+_local_media_cache: tuple[ModuleType, ...] | None = None
+_local_media_lock = threading.Lock()
+
+
+def _local_media_modules() -> tuple[ModuleType, ...]:
+    global _local_media_cache
+    cached = _local_media_cache
+    if cached is not None:
+        return cached
+    # The import statement runs unlocked (an import lock may be held elsewhere); only the
+    # set-once publication is locked, so concurrent first calls agree on one tuple.
+    from . import (
+        local_media_active_batch,
+        local_media_active_scan,
+        local_media_batch_binding,
+        local_media_candidate,
+        local_media_file_safety,
+        local_media_result,
+        local_media_sidecar,
+    )
+
+    fresh = (
+        local_media_sidecar,
+        local_media_candidate,
+        local_media_active_scan,
+        local_media_result,
+        local_media_file_safety,
+        local_media_active_batch,
+        local_media_batch_binding,
+    )
+    with _local_media_lock:
+        if _local_media_cache is None:
+            _local_media_cache = fresh
+        return _local_media_cache
+
+
 class HermesReadBridge:
     """`contract.ReadBridge` over a running Hermes gateway (HMP v1 §12)."""
 
@@ -570,6 +723,11 @@ class HermesReadBridge:
         # P6 hand-off with `run_coroutine_threadsafe`, which returns that type regardless of
         # which thread calls it from.
         self._pending_triggers: set[Any] = set()
+        # AP-10: strong references to the Hermes callables Phone chat calls, captured after the
+        # `phone_chat` probe passes, and the callback that closes the local generation when one of
+        # them is later found rebound. Both are set by `adapter.open_components`.
+        self._phone_bound: dict[str, object] | None = None
+        self._on_phone_binding_changed: Callable[[], None] | None = None
 
     # ------------------------------------------------------------------------------------------
     # Runner and sources
@@ -613,6 +771,42 @@ class HermesReadBridge:
             if name not in out:
                 out.append(name)
         return out
+
+    def profile_default_model(self, profile: str) -> Mapping[str, object]:
+        """Read only the routed profile's persisted provider and default model."""
+        home = self._profile_home(profile)
+        with self._hermes.profile_runtime_scope(home):
+            model = self._hermes.model_config()
+        if isinstance(model, Mapping):
+            provider, default = model.get("provider"), model.get("default")
+            return {
+                "provider": provider if isinstance(provider, str) else "",
+                "model": default if isinstance(default, str) else "",
+            }
+        return {"provider": "", "model": model if isinstance(model, str) else ""}
+
+    def set_profile_default_model(
+        self, profile: str, provider: str, model: str
+    ) -> Mapping[str, object] | None:
+        """Validate and save via Hermes, then report the stored (possibly normalized) choice."""
+        home = self._profile_home(profile)
+        if not self._hermes.write_profile_model(home, provider, model):
+            return None
+        return self.profile_default_model(profile)
+
+    def create_mobile_cron(
+        self, profile: str, fields: Mapping[str, object]
+    ) -> Mapping[str, object]:
+        home = self._profile_home(profile)
+        with self._hermes.profile_runtime_scope(home):
+            return self._hermes.create_mobile_cron(fields)
+
+    def edit_mobile_cron(
+        self, profile: str, job_id: str, fields: Mapping[str, object]
+    ) -> Mapping[str, object] | None:
+        home = self._profile_home(profile)
+        with self._hermes.profile_runtime_scope(home):
+            return self._hermes.edit_mobile_cron(job_id, fields)
 
     # ------------------------------------------------------------------------------------------
     # Authorization (ERR-3, PR6-1): fails closed to UNVERIFIABLE
@@ -737,6 +931,8 @@ class HermesReadBridge:
             return AuthorizeResult(authz=AuthzState.UNVERIFIABLE)
         self._pending_triggers.add(future)
         future.add_done_callback(self._trigger_done)
+        if hasattr(self._adapter, "note_inert_reply"):
+            self._adapter.note_inert_reply(chat_id)
         log_event("p6_trigger", outcome="sent")
         return AuthorizeResult(authz=AuthzState.PENDING_OPERATOR)
 
@@ -774,17 +970,24 @@ class HermesReadBridge:
         return ConversationRef(user_id=user_id, profile=profile, session_id=session_id)
 
     @contextlib.contextmanager
-    def _db(self, profile: str) -> Iterator[Any]:
-        """The profile's own `SessionDB` (E-PRV-9), acquired from Hermes's shared registry and
-        released afterwards. A missing database file is an error, never created here."""
-        db_path = self._profile_home(profile) / STATE_DB_FILENAME
+    def _db_home(self, profile: str) -> Iterator[tuple[Path, Any]]:
+        """The profile home captured by this one `_profile_home` call, and that profile's own
+        `SessionDB` (E-PRV-9), acquired from Hermes's shared registry and released afterwards. A
+        missing database file is an error, never created here."""
+        home = self._profile_home(profile)
+        db_path = home / STATE_DB_FILENAME
         if not db_path.is_file():
             raise BridgeError("session database missing")
         db = self._hermes.acquire(db_path)
         try:
-            yield db
+            yield home, db
         finally:
             self._hermes.release(db)
+
+    @contextlib.contextmanager
+    def _db(self, profile: str) -> Iterator[Any]:
+        with self._db_home(profile) as (_, db):
+            yield db
 
     @staticmethod
     def _tip(db: Any, session_id: str) -> str:
@@ -848,11 +1051,38 @@ class HermesReadBridge:
 
         return self._read(run)
 
+    def _latest_query(self, ref: ConversationRef, limit: int) -> tuple[Path, str, object]:
+        """The native latest-page query: the captured home, the exact tip queried, the raw rows."""
+        with self._db_home(ref.profile) as (home, db):
+            tip = self._tip(db, ref.session_id)
+            rows = db.get_messages(tip, latest=True, limit=limit)
+        return home, tip, rows
+
+    def _after_query(
+        self, ref: ConversationRef, after_id: int, limit: int
+    ) -> tuple[Path, str, object] | ResetReason:
+        """The native after-cursor query: as `_latest_query`, or the reset the cursor calls for."""
+        with self._db_home(ref.profile) as (home, db):
+            tip = self._tip(db, ref.session_id)
+            if after_id > 0:
+                probe = db.get_messages(tip, include_inactive=True, after_id=after_id - 1, limit=1)
+                if not isinstance(probe, list):
+                    raise BridgeError("message rows are not a list")
+                if not probe or not isinstance(probe[0], Mapping):
+                    return ResetReason.CURSOR_NOT_RESOLVABLE
+                if probe[0].get("id") != after_id:
+                    return ResetReason.CURSOR_NOT_RESOLVABLE
+                active = probe[0].get("active")
+                if active not in (0, 1):
+                    raise BridgeError("row activity flag missing")
+                if active == 0:
+                    return ResetReason.HISTORY_REWRITTEN
+            rows = db.get_messages(tip, after_id=after_id, limit=limit)
+        return home, tip, rows
+
     def latest(self, ref: ConversationRef, limit: int) -> list[Row]:
         def run() -> list[Row]:
-            with self._db(ref.profile) as db:
-                tip = self._tip(db, ref.session_id)
-                rows = db.get_messages(tip, latest=True, limit=limit)
+            _, _, rows = self._latest_query(ref, limit)
             return self._rows(ref, rows)
 
         return self._read(run)
@@ -863,27 +1093,379 @@ class HermesReadBridge:
         (RO-8 (a)). One that does not exist in the lineage tip cannot be resolved."""
 
         def run() -> list[Row] | ResetReason:
-            with self._db(ref.profile) as db:
-                tip = self._tip(db, ref.session_id)
-                if after_id > 0:
-                    probe = db.get_messages(
-                        tip, include_inactive=True, after_id=after_id - 1, limit=1
-                    )
-                    if not isinstance(probe, list):
-                        raise BridgeError("message rows are not a list")
-                    if not probe or not isinstance(probe[0], Mapping):
-                        return ResetReason.CURSOR_NOT_RESOLVABLE
-                    if probe[0].get("id") != after_id:
-                        return ResetReason.CURSOR_NOT_RESOLVABLE
-                    active = probe[0].get("active")
-                    if active not in (0, 1):
-                        raise BridgeError("row activity flag missing")
-                    if active == 0:
-                        return ResetReason.HISTORY_REWRITTEN
-                rows = db.get_messages(tip, after_id=after_id, limit=limit)
-            return self._rows(ref, rows)
+            query = self._after_query(ref, after_id, limit)
+            if isinstance(query, ResetReason):
+                return query
+            return self._rows(ref, query[2])
 
         return self._read(run)
+
+    # S2c: the media-aware twins of `latest` and `after`. They run the same native queries, then
+    # derive non-wire candidates from the UNCAPPED raw rows. Nothing calls them yet (the class
+    # marker is the only selector a later slice may read; it never probes attributes).
+    LOCAL_MEDIA_SIDECAR: ClassVar[bool] = True
+
+    def _media_rows(self, ref: ConversationRef, query: tuple[Path, str, object]) -> Any:
+        home, tip, raw = query
+        parsed = self._rows(ref, raw)  # fails exactly like the old path, before any media code
+        # Start-up and the old read methods never load the local media modules; these come from
+        # the per-load cache, never a request-time import.
+        sidecar, candidate = _local_media_modules()[:2]
+        collect_candidates = candidate.collect_candidates
+        MAX_ROWS = sidecar.MAX_ROWS  # noqa: N806
+        BridgeMediaRows = sidecar.BridgeMediaRows  # noqa: N806
+        MediaCarrierRefusal = sidecar.MediaCarrierRefusal  # noqa: N806
+        MediaRowsQuery = sidecar.MediaRowsQuery  # noqa: N806
+
+        # Media-only downgrade: metadata the carrier cannot represent (native ids and tips have no
+        # bound of their own) or an oversized page returns the SAME parsed list, as the old method
+        # would. Only this refusal is caught; nothing else, and not the construction below.
+        try:
+            media_query = MediaRowsQuery(ref.profile, ref.session_id, tip)
+        except MediaCarrierRefusal:
+            return parsed
+        if len(parsed) > MAX_ROWS:
+            return parsed
+        tool_ids = frozenset(
+            r.id for r in parsed if r.role == "tool" and type(r.id) is int and r.id >= 1
+        )
+        candidates = collect_candidates(raw, os.fspath(home), tool_ids)  # type: ignore[arg-type]
+        return BridgeMediaRows(tuple(parsed), media_query, candidates)
+
+    def latest_with_media(self, ref: ConversationRef, limit: int) -> Any:
+        def run() -> Any:
+            return self._media_rows(ref, self._latest_query(ref, limit))
+
+        return self._read(run)
+
+    def after_with_media(self, ref: ConversationRef, after_id: int, limit: int) -> Any:
+        def run() -> Any:
+            query = self._after_query(ref, after_id, limit)
+            if isinstance(query, ResetReason):
+                return query
+            return self._media_rows(ref, query)
+
+        return self._read(run)
+
+    # C6b: the media batch binding. Nothing calls these yet. Each proof has three outcomes (proven,
+    # closed negative, uncertain); a native exception, a wrong type or a missing required field is
+    # uncertain, a known contrary fact is negative. No exception text or native value leaves them.
+
+    def _phone_proof(self, db: Any, user_id: str, profile: str, session_id: str) -> Any:
+        """The caller's own existing conversation is exactly the bound session, resolved strictly
+        (no `_tip` fallback). A compressed own ancestor qualifies; a browsed projected tip that
+        differs from the own bound id does not."""
+        binding = _local_media_modules()[6]
+        PROOF_NEGATIVE, PROOF_UNCERTAIN = binding.PROOF_NEGATIVE, binding.PROOF_UNCERTAIN  # noqa: N806
+        proven = binding.proven
+
+        try:
+            own = self.conversation_ref(user_id, profile)
+            if own is None:
+                return PROOF_NEGATIVE
+            if (
+                type(own) is not ConversationRef
+                or type(own.session_id) is not str
+                or not own.session_id
+                or type(own.user_id) is not str
+                or type(own.profile) is not str
+                or own.user_id != user_id
+                or own.profile != profile
+            ):
+                return PROOF_UNCERTAIN
+            if own.session_id != session_id:
+                return PROOF_NEGATIVE
+            tip = db.resolve_resume_session_id(own.session_id)
+            if type(tip) is not str or not tip:
+                return PROOF_UNCERTAIN
+            return proven(tip)
+        except Exception:
+            return PROOF_UNCERTAIN
+
+    def _bot_chat_proof(self, db: Any, session_id: str) -> Any:
+        """The canonical Bot Chat lineage proof: a titled holder, its native lineage equal to the
+        unchanged parent walk from the tip, the bound session in it and resolving to the same tip,
+        and strict root/holder/tip row facts (D1). No mirrored fork predicate and no
+        `resolve_bot_chat`."""
+        binding = _local_media_modules()[6]
+        PROOF_NEGATIVE, PROOF_UNCERTAIN = binding.PROOF_NEGATIVE, binding.PROOF_UNCERTAIN  # noqa: N806
+        proven = binding.proven
+
+        try:
+            row = db.get_session_by_title(_CANONICAL_BOT_CHAT_TITLE)
+            if row is None:
+                return PROOF_NEGATIVE
+            if type(row) is not dict:
+                return PROOF_UNCERTAIN
+            holder, title = row.get("id"), row.get("title")
+            if type(holder) is not str or not holder or type(title) is not str:
+                return PROOF_UNCERTAIN
+            if title != _CANONICAL_BOT_CHAT_TITLE:
+                return PROOF_UNCERTAIN
+            tip = db.resolve_resume_session_id(holder)
+            lineage = db.get_compression_lineage(holder)
+            if type(tip) is not str or not tip or type(lineage) is not list:
+                return PROOF_UNCERTAIN
+            if not 0 < len(lineage) <= _LINEAGE_WALK_BOUND:
+                return PROOF_UNCERTAIN
+            if any(type(sid) is not str or not sid for sid in lineage):
+                return PROOF_UNCERTAIN
+            if len(set(lineage)) != len(lineage):
+                return PROOF_UNCERTAIN
+            chain = _parent_chain(db, tip)
+            if chain is None:
+                return PROOF_UNCERTAIN
+            # `_parent_chain` is lax (a missing id or parent key reads as a root), so the walk is
+            # strictly re-read first: an incomplete walk is uncertain, never a negative.
+            rows = [db.get_session(sid) for sid in chain]
+            for index, (sid, item) in enumerate(zip(chain, rows, strict=True)):
+                if type(item) is not dict or type(item.get("id")) is not str or item["id"] != sid:
+                    return PROOF_UNCERTAIN
+                if "title" not in item or "parent_session_id" not in item:
+                    return PROOF_UNCERTAIN
+                link = item["parent_session_id"]
+                if link is not None and type(link) is not str:
+                    return PROOF_UNCERTAIN
+                if index and link != chain[index - 1]:
+                    return PROOF_UNCERTAIN
+            if tuple(lineage) != chain or holder not in chain or session_id not in chain:
+                return PROOF_NEGATIVE
+            bound_tip = db.resolve_resume_session_id(session_id)
+            if type(bound_tip) is not str or not bound_tip:
+                return PROOF_UNCERTAIN
+            negative = bound_tip != tip
+            for index, (sid, item) in enumerate(zip(chain, rows, strict=True)):
+                held = item["title"]
+                if sid == holder:
+                    if held is not None and type(held) is not str:
+                        return PROOF_UNCERTAIN
+                    negative = negative or held != _CANONICAL_BOT_CHAT_TITLE
+                elif held is not None:
+                    if type(held) is not str:
+                        return PROOF_UNCERTAIN
+                    negative = negative or held != ""
+                if index == 0:
+                    if "hidden" not in item:
+                        return PROOF_UNCERTAIN
+                    parent, hidden = item["parent_session_id"], item["hidden"]
+                    if type(hidden) is not int:
+                        return PROOF_UNCERTAIN
+                    negative = negative or parent is not None or hidden != 1
+                if index == 0 or sid in (holder, tip):
+                    archived = item.get("archived")
+                    if type(archived) is not int:
+                        return PROOF_UNCERTAIN
+                    negative = negative or archived != 0
+            return PROOF_NEGATIVE if negative else proven(tip)
+        except Exception:
+            return PROOF_UNCERTAIN
+
+    def media_eligibility(
+        self, db: Any, user_id: str, profile: str, session_id: str, expected_tip: str
+    ) -> Any:
+        """`(reason, kind, tip)` for the bound primitive inputs on the caller's captured `db`.
+
+        Both kinds are always evaluated; an uncertain proof in either closes the result, exactly
+        one proven kind may be `ok`, and its tip must equal `expected_tip`. Mint and (later) fetch
+        share this one helper. It consults no `MediaOrigin`, hint or text, and no authorization."""
+        binding = _local_media_modules()[6]
+        ELIGIBILITY_UNCERTAIN = binding.ELIGIBILITY_UNCERTAIN  # noqa: N806
+        classify = binding.classify
+
+        values = (user_id, profile, session_id, expected_tip)
+        if any(type(value) is not str or not value for value in values):
+            return (ELIGIBILITY_UNCERTAIN, None, None)
+        phone = self._phone_proof(db, user_id, profile, session_id)
+        bot = self._bot_chat_proof(db, session_id)
+        return classify(phone, bot, expected_tip)
+
+    def bind_media_batch(self, sidecar: Any) -> Any:
+        """The exact `MediaBatchBinding` for a valid exact sidecar, else `None`.
+
+        One `_db_home` supplies the home and database. A CANDIDATES sidecar with consistent tips is
+        classified, then judged by exactly one fresh `scan_active_batch` whose `current_tip`
+        re-runs the full classification (both kinds). Any media-only failure is a closed reason;
+        nothing is logged and no old read result changes. It never raises for such a failure."""
+        modules = _local_media_modules()
+        sidecar_module, binding = modules[0], modules[6]
+        scan_active_batch = modules[5].scan_active_batch
+        ELIGIBILITY_UNCERTAIN = binding.ELIGIBILITY_UNCERTAIN  # noqa: N806
+        HOME_INVALID = binding.HOME_INVALID  # noqa: N806
+        NOT_CANDIDATES = binding.NOT_CANDIDATES  # noqa: N806
+        OK = binding.OK  # noqa: N806
+        PROVENANCE_MISMATCH = binding.PROVENANCE_MISMATCH  # noqa: N806
+        MediaBatchBinding = binding.MediaBatchBinding  # noqa: N806
+        strict_home = binding.strict_home
+        MediaSidecar = sidecar_module.MediaSidecar  # noqa: N806
+        SidecarStatus = sidecar_module.SidecarStatus  # noqa: N806
+
+        if type(sidecar) is not MediaSidecar:
+            return None
+        zero = (0, 0, 0, 0)
+
+        def closed(reason: str, stats: tuple[int, ...] = zero) -> Any:
+            counts = (len(sidecar.candidates), 0, *stats)
+            return MediaBatchBinding(sidecar, None, reason, (), counts)  # type: ignore[arg-type]
+
+        if sidecar.status is not SidecarStatus.CANDIDATES or not sidecar.candidates:
+            return closed(NOT_CANDIDATES)
+        session_id, tip, profile = sidecar.session_id, sidecar.query_tip, sidecar.profile
+        if type(session_id) is not str or type(tip) is not str or sidecar.lineage_tip != tip:
+            return closed(PROVENANCE_MISMATCH)
+        selectors = tuple((c.tool_row_id, c.raw_digest) for c in sidecar.candidates)
+        user_id = sidecar.user_id
+        try:
+            with self._db_home(profile) as (home_path, db):
+                home = os.fspath(home_path)
+                if not strict_home(home):
+                    return closed(HOME_INVALID)
+                reason, kind, _ = self.media_eligibility(db, user_id, profile, session_id, tip)
+                if reason != OK:
+                    return closed(reason)
+
+                def current_tip() -> str:
+                    again, same, now = self.media_eligibility(db, user_id, profile, session_id, tip)
+                    if again != OK or same is not kind or type(now) is not str:
+                        raise BridgeError("media eligibility changed")
+                    return now
+
+                result = scan_active_batch(db, tip, selectors, home=home, current_tip=current_tip)
+            stats = tuple(count for _, count in result.stats)
+            if not result.ok:
+                return closed(result.reason, stats)
+            accepted = tuple(sorted(result.accepted, reverse=True))
+            counts = (len(sidecar.candidates), len(accepted), *stats)
+            return MediaBatchBinding(sidecar, kind, OK, accepted, counts)  # type: ignore[arg-type]
+        except Exception:
+            return closed(ELIGIBILITY_UNCERTAIN)
+
+    # S5: the two off-loop native phases of the authenticated image fetch (HMP v1 §7e LM-11). They
+    # run only on the dedicated media executor, never on the event loop, and import nothing: the
+    # accepted modules come from the per-load cache the caller passes (it must BE that cache), the
+    # registry types from the caller's bound registry module and the carrier from this load's own
+    # `media_payload` import, which the listener binder proved is the one the route uses. Every
+    # failure is a private `None` / `False`; no exception text, path, name, size or digest leaves.
+
+    def _media_fetch_bound(self, binding: Any, chain: Any, registry_module: Any) -> bool:
+        """Exact bound inputs, checked before any native call: the registry module's own `Binding`
+        and `SessionKind`, and the passed chain being this bridge's current media cache itself."""
+        if type(registry_module) is not ModuleType or type(chain) is not tuple:
+            return False
+        binding_type = vars(registry_module).get("Binding")
+        kind_type = vars(registry_module).get("SessionKind")
+        return (
+            isinstance(binding_type, type)
+            and isinstance(kind_type, type)  # an Enum class has its own metaclass
+            and type(binding) is binding_type
+            and type(binding.kind) is kind_type
+            and chain is _local_media_cache
+            and len(chain) == 7
+        )
+
+    def media_fetch_phase_one(
+        self, binding: Any, chain: Any, registry_module: Any, raster_module: Any
+    ) -> Any:
+        """The private `MediaPayload` for the exact bound tool row, or `None`.
+
+        Fresh native authorization, one captured `(home, db)` (a missing database is never
+        created), both-kind media eligibility with the bound session and tip, the accepted active
+        scan of exactly the bound tool row (strict digest equality), the accepted lexical name
+        derivation against that captured home string, the accepted file leaf, the bound raster
+        structure check (it fixes the MIME) and the SHA-256, then the accepted rescan. Every
+        `current_tip` callback re-runs the full classification and requires the same kind."""
+        try:
+            if not self._media_fetch_bound(binding, chain, registry_module):
+                return None
+            if type(raster_module) is not ModuleType:
+                return None
+            check = vars(raster_module).get("check_raster_structure")
+            function_type = type(_cap_chars)  # the plain function type
+            if type(check) is not function_type or check.__globals__ is not vars(raster_module):
+                return None
+            candidate, active_scan, file_safety, batch_binding = (
+                chain[1],
+                chain[2],
+                chain[4],
+                chain[6],
+            )
+            mint_kind = batch_binding.MintKind
+            ok = batch_binding.OK
+            user_id, profile = binding.user_id, binding.profile
+            session_id, tip = binding.session_id, binding.tip
+            row_id, digest = binding.tool_row_id, binding.raw_digest
+            if self.authz_state(user_id, profile) is not AuthzState.AUTHORIZED:
+                return None
+            with self._db_home(profile) as (home_path, db):
+                home = os.fspath(home_path)
+                if not batch_binding.strict_home(home):
+                    return None
+                reason, kind, now = self.media_eligibility(db, user_id, profile, session_id, tip)
+                if reason != ok or type(kind) is not mint_kind or now != tip:
+                    return None
+                if kind.value != binding.kind.value:
+                    return None
+
+                def current_tip() -> str:
+                    again, same, current = self.media_eligibility(
+                        db, user_id, profile, session_id, tip
+                    )
+                    if again != ok or same is not kind or type(current) is not str:
+                        raise BridgeError("media eligibility changed")
+                    return current
+
+                scan = active_scan.scan_active_set(db, tip, row_id, current_tip=current_tip)
+                claim = scan.claim
+                if not scan.ok or claim is None:
+                    return None
+                if claim.tool_row_id != row_id or claim.tip != tip:
+                    return None
+                if not secrets.compare_digest(claim.tool_digest, digest):
+                    return None
+                name = candidate.derive_flat_name(claim.image, home)
+                if name is None:
+                    return None
+                read = file_safety.read_profile_cache_image(home, name)
+                if read.outcome is not file_safety.Outcome.OK:
+                    return None
+                data = read.unvalidated_raster_bytes()
+                del read
+                mime = {"png": "image/png", "jpeg": "image/jpeg", "webp": "image/webp"}.get(
+                    check(data).kind
+                )
+                if mime is None:
+                    return None
+                sha = hashlib.sha256(data).digest()
+                if not active_scan.recheck(db, claim, current_tip=current_tip).ok:
+                    return None
+                return media_payload.MediaPayload(data, mime, sha)
+        except Exception:
+            return None
+
+    def media_fetch_phase_two(self, binding: Any, chain: Any, registry_module: Any) -> bool:
+        """The post-worker final native check: fresh authorization, the captured profile database
+        and both-kind eligibility with the bound session and tip. Reads no image file and holds no
+        bytes. Exactly `True` or `False`."""
+        try:
+            if not self._media_fetch_bound(binding, chain, registry_module):
+                return False
+            batch_binding = chain[6]
+            user_id, profile = binding.user_id, binding.profile
+            if self.authz_state(user_id, profile) is not AuthzState.AUTHORIZED:
+                return False
+            with self._db_home(profile) as (home_path, db):
+                if not batch_binding.strict_home(os.fspath(home_path)):
+                    return False
+                reason, kind, now = self.media_eligibility(
+                    db, user_id, profile, binding.session_id, binding.tip
+                )
+                return bool(
+                    reason == batch_binding.OK
+                    and type(kind) is batch_binding.MintKind
+                    and kind.value == binding.kind.value
+                    and now == binding.tip
+                )
+        except Exception:
+            return False
 
     def lineage(self, ref: ConversationRef) -> LineageInfo:
         def run() -> LineageInfo:
@@ -1138,3 +1720,261 @@ class HermesReadBridge:
             return None  # no usable key: the gate stays closed (never a short key, never a 401)
         prefix = "" if is_default else f"/p/{quote(profile, safe='')}"
         return DirectSendEndpoint(host=host, port=port, api_key=key, path_prefix=prefix)
+
+    def readiness_profile_api_state(
+        self, profile: str, *, checkpoint: Callable[[], None]
+    ) -> str:
+        """Exception-preserving, no-network profile endpoint status for readiness only."""
+        home = self._profile_home(profile)
+        checkpoint()
+        served = self.served_profiles()
+        checkpoint()
+        is_default = bool(served) and profile == served[0]
+        with self._hermes.profile_runtime_scope(home):
+            raw_extra = self._hermes.readiness_api_server_extra()
+            checkpoint()
+            raw_scoped_key = self._hermes.readiness_scoped_api_server_key()
+        checkpoint()
+        if raw_extra is None:
+            return "missing"
+        if not isinstance(raw_extra, Mapping):
+            raise ValueError("profile endpoint config malformed")
+        host = raw_extra.get("host")
+        if host is not None and not isinstance(host, str):
+            raise ValueError("profile endpoint host malformed")
+        if host is None or host == "":
+            host = os.environ.get("API_SERVER_HOST", DEFAULT_API_SERVER_HOST)
+        if host == _LOCALHOST_ALIAS:
+            host = DEFAULT_API_SERVER_HOST
+        if host not in _LOOPBACK_LITERALS:
+            return "missing"
+        raw_port = raw_extra.get("port")
+        if raw_port is None:
+            raw_port = os.environ.get("API_SERVER_PORT", str(DEFAULT_API_SERVER_PORT))
+        if type(raw_port) is int:
+            port = raw_port
+        elif isinstance(raw_port, str) and re.fullmatch(r"[0-9]{1,5}", raw_port):
+            port = int(raw_port)
+        else:
+            raise ValueError("profile endpoint port malformed")
+        if not 1 <= port <= 65535:
+            return "missing"
+        if not isinstance(raw_scoped_key, str):
+            raise ValueError("profile endpoint key malformed")
+        key = raw_scoped_key
+        if is_default:
+            inline = raw_extra.get("key", None)
+            if inline is not None:
+                if not isinstance(inline, str):
+                    raise ValueError("profile endpoint key malformed")
+                if inline.strip():
+                    key = inline
+        return "configured" if _has_usable_secret(key) else "missing"
+
+    # ------------------------------------------------------------------------------------------
+    # Amendment F3 (HMP_V1.md §7b). Function-local imports, only called once the direct-send
+    # gate is open. `resolve_all` is never passed. Private clarify indexes are not read.
+    # ------------------------------------------------------------------------------------------
+
+    def phone_session_key(self, user_id: str, profile: str) -> str | None:
+        """The session key `handle_message` will derive for this user's Phone chat. Not the
+        Bot Chat key, and not a value the phone sent."""
+        chat_id = self._directory.chat_id(user_id, profile)
+        if chat_id is None:
+            return None
+        source = self._source(chat_id=chat_id, user_id=user_id, profile=profile, user_name=None)
+        if _not_routed(source, profile):
+            return None
+        key = self._hermes.build_session_key(source, profile)
+        return key if isinstance(key, str) and key else None
+
+    # Phone-chat helper binding (AP-10) and use-time failures (AP-7a). The six helpers below are
+    # reached only through `_phone_helper`, which refuses anything that is not the object bound
+    # at listener open. This compares object identity. It reads no file or manifest, and it is not
+    # authenticity or loaded-bytecode proof.
+
+    @staticmethod
+    def _phone_helpers_now() -> dict[str, object]:
+        from tools.approval import list_gateway_approvals, resolve_gateway_approval
+        from tools.approval_context import _get_approval_timeout
+        from tools.clarify_gateway import (
+            get_clarify_timeout,
+            mark_awaiting_text,
+            resolve_gateway_clarify,
+        )
+
+        return {
+            "list_gateway_approvals": list_gateway_approvals,
+            "resolve_gateway_approval": resolve_gateway_approval,
+            "resolve_gateway_clarify": resolve_gateway_clarify,
+            "mark_awaiting_text": mark_awaiting_text,
+            "get_clarify_timeout": get_clarify_timeout,
+            "_get_approval_timeout": _get_approval_timeout,
+        }
+
+    def bind_phone_chat_helpers(self, on_changed: Callable[[], None] | None = None) -> bool:
+        """Capture the Phone-chat helpers (blocking; call after the probe, at listener open).
+        `False` when any of them could not be imported: Phone chat then stays closed."""
+        try:
+            captured = self._phone_helpers_now()
+        except (ImportError, AttributeError, TypeError):
+            return False
+        self._phone_bound = dict(captured)
+        self._on_phone_binding_changed = on_changed
+        return True
+
+    def _phone_helper(self, name: str) -> Any:
+        bound = self._phone_bound
+        if bound is None or name not in bound:
+            raise HelperUnavailableError("phone chat helpers are not bound")
+        try:
+            current = self._phone_helpers_now()
+        except (ImportError, AttributeError, TypeError):
+            raise HelperUnavailableError("phone chat helper unavailable") from None
+        if current.get(name) is not bound[name]:
+            callback = self._on_phone_binding_changed
+            if callback is not None:
+                try:
+                    callback()
+                except Exception as exc:  # the fence still raises below
+                    log_bridge_exception(exc)
+            raise HelperChangedError("phone chat helper was rebound")
+        return bound[name]
+
+    def _call_phone(self, name: str, *args: Any, **kwargs: Any) -> Any:
+        """Call one bound helper. An `ImportError`, `AttributeError` or `TypeError` at call time is
+        an actual capability failure (AP-7a): fixed text, never the Hermes exception text."""
+        helper = self._phone_helper(name)
+        try:
+            return helper(*args, **kwargs)
+        except (ImportError, AttributeError, TypeError):
+            raise HelperUnavailableError("phone chat helper failed") from None
+
+    def list_gateway_approvals(self, session_key: str) -> list[dict[str, object]]:
+        rows = self._call_phone("list_gateway_approvals", session_key)
+        if not isinstance(rows, list):
+            raise BridgeError("approval list is not a list")
+        return [row for row in rows if isinstance(row, dict)]
+
+    def resolve_gateway_approval(self, session_key: str, choice: str, request_id: str) -> int:
+        resolved = self._call_phone(
+            "resolve_gateway_approval",
+            session_key,
+            choice,
+            resolve_all=False,
+            request_id=request_id,
+        )
+        return resolved if isinstance(resolved, int) and not isinstance(resolved, bool) else 0
+
+    def resolve_gateway_clarify(self, clarify_id: str, response: str) -> bool:
+        return bool(self._call_phone("resolve_gateway_clarify", clarify_id, response))
+
+    def mark_clarify_awaiting_text(self, clarify_id: str) -> bool:
+        return bool(self._call_phone("mark_awaiting_text", clarify_id))
+
+    def approval_timeout_s(self, profile: str) -> int:
+        """Bot Chat's display hint. Not a Phone-chat helper: it is unbound, and a missing helper is
+        the caller's default (AP-3)."""
+        from tools.approval_context import _get_approval_timeout
+
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = _get_approval_timeout()
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 300
+        return value
+
+    def phone_approval_timeout_s(self, profile: str) -> int:
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = self._call_phone("_get_approval_timeout")
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 300
+        return value
+
+    def phone_clarify_timeout_s(self, profile: str) -> int:
+        with self._hermes.profile_runtime_scope(self._profile_home(profile)):
+            value = self._call_phone("get_clarify_timeout")
+        if isinstance(value, bool) or not isinstance(value, int):
+            return 3600
+        return value
+
+    async def deliver_phone_message(
+        self, *, user_id: str, profile: str, text: str, message_id: str
+    ) -> bool | None:
+        """AP-6. Builds the event off the loop (the Hermes import) and hands it to
+        `handle_message` on the loop. `allow_gateway_control` is false. On builds with
+        admission tickets, task scheduling is not a successful submission: wait for the
+        definitive admission outcome. None means the result is ambiguous."""
+        event = await asyncio.to_thread(
+            self._phone_event, user_id=user_id, profile=profile, text=text, message_id=message_id
+        )
+        await self._adapter.handle_message(event)
+        accepted = getattr(event, "_gateway_accepted", None) is True
+        if getattr(event, "defer_policy", None) != "reject":
+            # Older stock builds have no admission ticket. `_gateway_accepted` is only set True on
+            # acceptance; False or missing also covers a busy-queued event that was retained but
+            # never flagged, so it is unknown, never a definitive refusal.
+            return True if accepted else None
+        # Reject policy: the reported admission ticket is authoritative. The initial scheduling
+        # flag is deliberately not consulted (busy queue debounce leaves it False while the event
+        # is retained).
+        ticket = getattr(event, "admission_ticket", None)
+        if ticket is None:
+            return None
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + PHONE_ADMISSION_WAIT_S
+        while True:
+            reported = getattr(ticket, "reported", None)
+            if reported is not None:
+                outcome = getattr(reported, "value", None)
+                if outcome == "admitted":
+                    return True
+                if outcome in {
+                    "refused_busy",
+                    "refused_draining",
+                    "refused_precondition_head",
+                    "refused_precondition_expired",
+                    "refused_lease_timeout",
+                    "refused_unauthorized",
+                }:
+                    return False
+                # REFUSED_OTHER includes persist_failed and unreported_exit. Its detail
+                # is not on the ticket, so this cannot safely be called definitive.
+                return None
+            remaining = deadline - loop.time()
+            if remaining <= 0:
+                return None
+            await asyncio.sleep(min(0.025, remaining))
+
+    def _phone_event(self, *, user_id: str, profile: str, text: str, message_id: str) -> Any:
+        try:
+            from gateway.platforms.event import MessageEvent, MessageType
+        except (ImportError, AttributeError):
+            raise HelperUnavailableError("phone chat event is unavailable") from None
+
+        chat_id = self._directory.chat_id(user_id, profile)
+        if chat_id is None:
+            raise BridgeError("no chat for the phone message")
+        label = self._directory.operator_label(user_id) or OPERATOR_LABEL_UNKNOWN
+        source = self._source(chat_id=chat_id, user_id=user_id, profile=profile, user_name=label)
+        if _not_routed(source, profile):
+            raise BridgeError("source is not routed to the profile")
+        names = {f.name for f in dataclasses.fields(MessageEvent)}
+        kwargs: dict[str, Any] = {
+            "text": text,
+            "message_type": MessageType.TEXT,
+            "message_id": message_id,
+            "source": source,
+            "user_id": user_id,
+            "user_name": label,
+        }
+        if "internal" in names:
+            kwargs["internal"] = False
+        if "allow_gateway_control" not in names:
+            raise HelperUnavailableError("MessageEvent lacks allow_gateway_control")
+        kwargs["allow_gateway_control"] = False
+        if "defer_policy" in names:
+            kwargs["defer_policy"] = "reject"
+        try:
+            return MessageEvent(**kwargs)
+        except TypeError:
+            raise HelperUnavailableError("phone chat event is unavailable") from None

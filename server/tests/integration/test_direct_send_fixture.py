@@ -61,8 +61,12 @@ if str(FIXTURES_DIR) not in sys.path:
 import _fixture_common as fc  # noqa: E402
 import direct_send_fixture as dsf  # noqa: E402
 
-BUILDS = ("stock-base", "experimental", "owner-local")
+_DEFAULT_BUILDS = ("stock-base", "experimental", "owner-local")
 BUILDS_DIR_ENV = os.environ.get("HMP_HERMES_BUILDS_DIR", "")
+# Opt-in: one extra, uniquely named candidate build (never an alias of a default label).
+BUILDS = _DEFAULT_BUILDS + dsf.candidate_build_labels(
+    os.environ.get(dsf.CANDIDATE_LABEL_ENV, ""), BUILDS_DIR_ENV, _DEFAULT_BUILDS
+)
 
 DEFAULT_PROFILE = "f1-alpha"
 NO_BOT_CHAT_PROFILE = "f1-empty"
@@ -176,6 +180,7 @@ class DirectSendFixture:
         fake_model_module,
         client: Client,
         no_bot_chat_key: str,
+        user_id: str,
     ) -> None:
         self.build = build
         self.paths = paths
@@ -187,14 +192,17 @@ class DirectSendFixture:
         self.fake_model_module = fake_model_module
         self.client = client
         self.no_bot_chat_key = no_bot_chat_key
+        self.user_id = user_id
         self._lease_holders: list[Any] = []
+        self.approval_timeout = 120  # `approvals.timeout` seconds written by `_rewrite_config`
 
-    def acquire_lease(self, profile: str, session_id: str) -> None:
+    def acquire_lease(self, profile: str, session_id: str, *, desktop_held: bool = False) -> None:
         """A synthetic lease that stays live until this fixture tears down (`stop`) -- see
         `direct_send_fixture.start_lease_holder`'s own docstring for why the holder process must
         keep running rather than exit after acquiring."""
         self._lease_holders.append(dsf.start_lease_holder(
-            self.build, self.paths, profile=profile, session_id=session_id
+            self.build, self.paths, profile=profile, session_id=session_id,
+            desktop_held=desktop_held,
         ))
 
     def stop(self) -> None:
@@ -203,14 +211,24 @@ class DirectSendFixture:
         self._lease_holders.clear()
 
     def _rewrite_config(
-        self, *, direct_send_enabled: bool = True, api_server_host: str = "127.0.0.1"
+        self, *, direct_send_enabled: bool = True, api_server_host: str = "127.0.0.1",
+        owner_device_ids: tuple[str, ...] | None = None,
+        approval_timeout: int | None = None,
+        cron_enabled: bool = False, model_enabled: bool = False,
     ) -> None:
+        if approval_timeout is not None:
+            self.approval_timeout = approval_timeout
         dsf.write_direct_send_config(
             self.paths, (DEFAULT_PROFILE, NO_BOT_CHAT_PROFILE, "f1-pending", "f1-roles"),
             hmp_port=self.hmp_port, api_server_port=self.api_server_port, api_key=self.api_key,
             model_base_url=self.fake_model.base_url,
             named_profile_keys={NO_BOT_CHAT_PROFILE: self.no_bot_chat_key},
             direct_send_enabled=direct_send_enabled, api_server_host=api_server_host,
+            approval_timeout=self.approval_timeout,
+            owner_device_ids=(
+                (self.reference_device_id,) if owner_device_ids is None else owner_device_ids
+            ),
+            cron_enabled=cron_enabled, model_enabled=model_enabled,
         )
 
     def set_api_server_host(self, host: str) -> None:
@@ -249,11 +267,19 @@ class DirectSendFixture:
 
     def restart_gateway(self) -> None:
         dsf.stop_gateway(self.gateway_proc)
+        gateway_log = self.paths.home / "logs" / "gateway.log"
+        prior_ready_count = (
+            gateway_log.read_text(encoding="utf-8", errors="replace").count("Press Ctrl+C to stop")
+            if gateway_log.exists()
+            else 0
+        )
         log_path = self.paths.out_dir / f"gateway-restart-{int(time.time())}.log"
-        self.gateway_proc = dsf.start_gateway(self.build, self.paths, log_path=log_path)
-        if not dsf.wait_for_port(self.hmp_port, timeout=45.0):
-            tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
-            raise RuntimeError(f"HMP listener did not come back up after restart.\n{tail}")
+        # Process-aware readiness under the same 45s hard deadline: a listener never counts once
+        # the spawned gateway has exited. Readiness only, not ownership. A failure stops the new
+        # process first.
+        self.gateway_proc = dsf.start_native_gateway(
+            self.build, self.paths, port=self.hmp_port, phase="restart", log_path=log_path
+        )
         # The TLS listener accepting connections does not mean Hermes's own profile-reconcile
         # scan has finished re-populating `served_profile_names()` yet -- poll the roster until
         # the default profile this suite targets is actually served again, so a request sent
@@ -267,24 +293,37 @@ class DirectSendFixture:
         )
         if not found:
             raise RuntimeError(f"{DEFAULT_PROFILE!r} never reappeared in the roster after restart")
+        # Experimental Hermes rejects reject-policy messages during startup restore even after
+        # HMP's listener and profile roster are live. This marker follows the restore gate.
+        ready = wait_for(
+            lambda: gateway_log.read_text(
+                encoding="utf-8", errors="replace"
+            ).count("Press Ctrl+C to stop") > prior_ready_count,
+            timeout=30.0,
+        )
+        if not ready:
+            tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
+            raise RuntimeError(f"Gateway never finished startup restore.\n{tail}")
 
 
 @pytest.fixture(params=BUILDS)
-def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSendFixture]:
+def gateway(
+    request: pytest.FixtureRequest, tmp_path: Path, *, approval_owner_enrollment: bool = False
+) -> Iterator[DirectSendFixture]:
     label = request.param
     if label not in ("stock-base",) and not (
         Path(BUILDS_DIR_ENV) / label / "src"
     ).is_dir():
         pytest.skip(f"build {label!r} not extracted on this host")
     build = fc.resolve_build(BUILDS_DIR_ENV, label)
+    hmp_port = fc.find_free_port()
+    api_server_port = fc.find_free_port()
     out = tmp_path / "fixture"
     info = dsf.build_offline(label, out, builds_dir=BUILDS_DIR_ENV, instances="A")
     paths = fc.instance_paths(out, "A")
     profile_names = tuple(p["name"] for p in info["instances"][0]["profiles"])
     assert profile_names[0] == DEFAULT_PROFILE, profile_names
 
-    hmp_port = fc.find_free_port()
-    api_server_port = fc.find_free_port()
     api_key = dsf.synthetic_api_key()
     no_bot_chat_key = dsf.synthetic_api_key()
 
@@ -299,26 +338,31 @@ def gateway(request: pytest.FixtureRequest, tmp_path: Path) -> Iterator[DirectSe
             named_profile_keys={NO_BOT_CHAT_PROFILE: no_bot_chat_key},
         )
         log_path = out / "gateway.log"
-        proc = dsf.start_gateway(build, paths, log_path=log_path)
+        proc = dsf.start_native_gateway(
+            build, paths, port=hmp_port, phase="first_start", log_path=log_path
+        )
         direct_send_fixture: DirectSendFixture | None = None
         try:
-            if not dsf.wait_for_port(hmp_port, timeout=45.0):
-                tail = log_path.read_text(encoding="utf-8", errors="replace")[-4000:]
-                raise RuntimeError(f"HMP listener did not come up.\nLog tail:\n{tail}")
             authorized_user_id = next(
                 p["user_id"] for p in info["instances"][0]["profiles"] if p.get("user_id")
             )
             ref = dsf.pair_reference_device(
                 build, paths, port=hmp_port, user_id=authorized_user_id,
                 label="direct-send-fixture",
+                # Opt-in for the approval wrappers only. The grant just clears the host's explicit
+                # denial; `_rewrite_config` still has to allowlist this device as approval owner.
+                grant_owner_controls=approval_owner_enrollment,
             )
             client = Client(hmp_port, ref["iid"], ref["device"]["access_token"])
             direct_send_fixture = DirectSendFixture(
                 build, paths, hmp_port=hmp_port, api_server_port=api_server_port,
                 api_key=api_key, gateway_proc=proc, fake_model=fake_model,
                 fake_model_module=fake_model_module, client=client,
-                no_bot_chat_key=no_bot_chat_key,
+                no_bot_chat_key=no_bot_chat_key, user_id=authorized_user_id,
             )
+            direct_send_fixture.reference_device_id = ref["device"]["device_id"]
+            direct_send_fixture._rewrite_config()
+            direct_send_fixture.restart_gateway()
             try:
                 yield direct_send_fixture
             finally:
@@ -435,12 +479,8 @@ def test_flag_off_is_503(gateway: DirectSendFixture) -> None:
     must re-open it just as fast, so the rest of this suite's fixture (which relies on the flag
     being on) is left exactly as it was.
 
-    DS-2(b): on a build whose base gate is genuinely `"open"` (this round's own "additional
-    finding" against `experimental`), the flag cannot close it at all -- that is correct, not a
-    bug (`gate.direct_send_gate`'s own "OPEN wins unchanged"), so this test expects `200` there
-    instead of `503`."""
+    A full-guarantee build still requires this owner switch; no build may bypass it."""
     client = gateway.client
-    genuinely_open = gateway.base_gate_state() == "open"
     gateway.set_direct_send_flag(False)
     try:
         ref = bot_chat_ref(client, DEFAULT_PROFILE)
@@ -449,11 +489,8 @@ def test_flag_off_is_503(gateway: DirectSendFixture) -> None:
             client, DEFAULT_PROFILE, cmid=str(uuid.uuid4()), expected_head=head,
             text="closed while off",
         )
-        if genuinely_open:
-            assert status == 200, body
-        else:
-            assert status == 503, body
-            assert body["error"]["code"] == "write_gate_closed"
+        assert status == 503, body
+        assert body["error"]["code"] == "write_gate_closed"
     finally:
         gateway.set_direct_send_flag(True)
 
@@ -469,19 +506,16 @@ def test_non_loopback_bind_configured_closes_the_gate(gateway: DirectSendFixture
     """Round 2 BLOCKER #3: a configured non-loopback (or unverifiable) bind must fail closed, on
     a REAL config read against a live gateway -- not only the unit-level fake.
 
-    DS-2(b): on a build whose base gate is genuinely `"open"`, an unusable loopback endpoint does
-    not close the GATE (Hermes itself still reports full guarantees) -- it makes the one
-    delivery mechanism unavailable, `api_server_unavailable`, not `write_gate_closed`."""
+    The route closes on either a full- or reduced-guarantee build when its only
+    implemented delivery endpoint is not loopback-bound."""
     client = gateway.client
-    genuinely_open = gateway.base_gate_state() == "open"
     gateway.set_api_server_host("0.0.0.0")  # noqa: S104 -- deliberately refused, never connected
     try:
         status, body = send(
             client, DEFAULT_PROFILE, cmid=str(uuid.uuid4()), expected_head=0, text="never sent"
         )
         assert status == 503, body
-        expected_code = "api_server_unavailable" if genuinely_open else "write_gate_closed"
-        assert body["error"]["code"] == expected_code
+        assert body["error"]["code"] == "write_gate_closed"
     finally:
         gateway.set_api_server_host("127.0.0.1")  # restore for any later test in this session
 
@@ -518,3 +552,45 @@ def test_timeout_then_lookup_reaches_accepted_without_a_resend(gateway: DirectSe
     # turn (the response is exactly the finalized outcome, no network call).
     status, body = send(client, DEFAULT_PROFILE, cmid=cmid, expected_head=head, text="be slow")
     assert status == 200 and body["state"] == "accepted", body
+
+
+def test_host_grant_is_per_device_on_real_gateway(gateway: DirectSendFixture) -> None:
+    """Pairing one privileged phone must not elevate a sibling of the same user."""
+    gateway._rewrite_config(cron_enabled=True, model_enabled=True)
+    gateway.restart_gateway()
+    jobs_path = f"/hmp/v1/bots/{DEFAULT_PROFILE}/jobs"
+    model_path = f"/hmp/v1/bots/{DEFAULT_PROFILE}/model/default"
+
+    # The first reference client explicitly declined controls at the host
+    # prompt. Both routes hide themselves from it even with feature flags on.
+    for path in (jobs_path, model_path):
+        status, body = gateway.client.get(path)
+        assert status == 404, body
+
+    granted_ref = dsf.pair_reference_device(
+        gateway.build, gateway.paths, port=gateway.hmp_port,
+        user_id=gateway.user_id, label="granted-fixture-phone",
+        grant_owner_controls=True,
+    )
+    granted = Client(
+        gateway.hmp_port, granted_ref["iid"], granted_ref["device"]["access_token"]
+    )
+    status, body = granted.get(jobs_path)
+    assert status == 200 and body["jobs"] == [], body
+    status, body = granted.post(jobs_path, {
+        "name": "owner-grant fixture", "schedule": "every 1h",
+        "prompt": "Summarize fixture status",
+    })
+    assert status == 200 and body["job"]["enabled"] is False, body
+    if gateway.build.label == "stock-base":
+        status, body = granted.get(model_path)
+        assert status == 200 and "model" in body, body
+    else:
+        # Experimental Hermes retains the qualified cron bridge fingerprint,
+        # but its model bridge fingerprint is not in the separate allowlist.
+        # A device grant must not bypass that build gate.
+        status, body = granted.get(model_path)
+        assert status == 503 and body["error"]["code"] == "model_unavailable", body
+    for path in (jobs_path, model_path):
+        status, body = gateway.client.get(path)
+        assert status == 404, body

@@ -498,9 +498,9 @@ def test_instance_header_checked_before_any_token_lookup(tmp_path: Path) -> None
         def __init__(self, inner: Any) -> None:
             self.inner, self.lookups = inner, 0
 
-        def get_access_token(self, h: bytes) -> Any:
+        def access_authority_snapshot(self, h: bytes) -> Any:
             self.lookups += 1
-            return self.inner.get_access_token(h)
+            return self.inner.access_authority_snapshot(h)
 
         def __getattr__(self, name: str) -> Any:
             return getattr(self.inner, name)

@@ -2,7 +2,7 @@
 
 ## I. Hermes owns agent behavior
 
-HMP is a gateway platform adapter. It may not bypass Hermes authorization, session ownership, or approval decisions. Unknown compatibility states fail closed.
+HMP is a gateway platform adapter. It may not bypass Hermes authorization, session ownership, or approval decisions. Builds below HMP's minimum supported Hermes version are refused. Newer or unknown versions are attempted, and a feature closes only when its own required Hermes API or a security check fails.
 
 ## II. Device trust is explicit
 
@@ -18,7 +18,7 @@ For each behavior change, write or update a Spec Kit feature specification, desi
 
 ## V. Verify on Hermes
 
-Unit tests, lint, the closed plugin surface check, log and privacy scans, and fixture compatibility checks gate release. Qualify guarded send behavior against exact Hermes build fingerprints. Test installs use an isolated Hermes home.
+Unit tests, lint, the closed plugin surface check, log and privacy scans, and fixture compatibility checks gate release. Record exact Hermes build fingerprints as test evidence; they never admit or refuse a build. Test installs use an isolated Hermes home.
 
 ## VI. Review security findings
 
