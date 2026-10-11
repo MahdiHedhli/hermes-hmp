@@ -107,6 +107,10 @@ from .fixture_work import (
     _Ingress,
     _owner,
     _publication,
+    _require_fixture_resource_policy,
+    _resources,
+    _ResourceSite,
+    _ServingResources,
     _worker,
     _WorkSite,
 )
@@ -1645,6 +1649,10 @@ async def handle_phone_send(request: web.Request) -> web.Response:
 @web.middleware
 async def _fixture_request_frame(request: web.Request, handler: Handler) -> web.StreamResponse:
     ctx = context(request)
+    scope = _resources(ctx, draining=True)
+    if scope is None:
+        raise RuntimeError("FIXTURE_RESOURCES_MISSING")
+    scope.retain_request_transport(request)
     with _Ingress(ctx, _WorkSite.HTTP_REQUEST):
         response = await handler(request)
         _publication(ctx)
@@ -1683,7 +1691,21 @@ def build_app(ctx: ServerContext) -> web.Application:
     app[CTX_KEY] = ctx
     # S5: this app's own fetch service (dedicated executor, permits); never module-global. Threads
     # start lazily on the first submission, and cleanup closes admissions without waiting.
-    app[media_fetch.MEDIA_SERVICE_KEY] = media_fetch.MediaFetchService()
+    if owner is None:
+        app[media_fetch.MEDIA_SERVICE_KEY] = media_fetch.MediaFetchService()
+    else:
+        scope = _resources(ctx)
+        if scope is None:
+            raise RuntimeError("FIXTURE_RESOURCES_MISSING")
+        record = scope.attempt(_ResourceSite.MEDIA, app)
+        try:
+            service = media_fetch.MediaFetchService(_fixture_resources=scope)
+            scope.returned(record, service)
+            app[media_fetch.MEDIA_SERVICE_KEY] = service
+        except BaseException as error:
+            if not record.acquired:
+                scope.failed(record, error)
+            raise
     if owner is not None:
         service = app[media_fetch.MEDIA_SERVICE_KEY]
         if owner._media_service is not None:
@@ -1935,10 +1957,13 @@ class _FixtureSockSite(web.SockSite):  # type: ignore[misc]
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
+        self._fixture_resources: _ServingResources | None = None
         self._fixture_close_started = False
         self._fixture_closed = False
 
     async def start(self) -> None:
+        if self._fixture_resources is not None:
+            return await self._start_owned(self._fixture_resources)
         await web.BaseSite.start(self)
         protocol_server = self._runner.server
         if protocol_server is None:
@@ -1955,6 +1980,8 @@ class _FixtureSockSite(web.SockSite):  # type: ignore[misc]
         await self._server.start_serving()
 
     def close_owned(self) -> None:
+        if self._fixture_resources is not None:
+            return self._close_source_owned(self._fixture_resources)
         if self._fixture_close_started:
             if not self._fixture_closed:
                 raise RuntimeError("fixture listener closure unknown")
@@ -1968,8 +1995,92 @@ class _FixtureSockSite(web.SockSite):  # type: ignore[misc]
         self._server = None
 
     async def stop(self) -> None:
+        if self._fixture_resources is not None:
+            return await self._stop_source_owned(self._fixture_resources)
         self.close_owned()
         await web.BaseSite.stop(self)
+
+    async def _start_owned(self, scope: _ServingResources) -> None:
+        record = scope.owned(_ResourceSite.LISTENER, self)
+        scope.check()
+        await web.BaseSite.start(self)
+        scope.check()
+        protocol_server = self._runner.server
+        if protocol_server is None:
+            raise RuntimeError("FIXTURE_RUNNER_NOT_READY")
+        record.transferred = True  # A throwing create_server may already own the alias.
+        try:
+            self._server = await asyncio.get_running_loop().create_server(
+                protocol_server, sock=self._sock, ssl=self._ssl_context,
+                backlog=self._backlog, start_serving=False,
+            )
+        except BaseException as error:
+            record.failure = error
+            record.unknown = True
+            raise
+        record.transfer_target = self._server
+        scope.check()
+        await self._server.start_serving()
+        scope.check()
+
+    def _close_source_owned(self, scope: _ServingResources) -> None:
+        record = scope.owned(_ResourceSite.LISTENER, self)
+        if record.close_attempted:
+            if not record.close_returned:
+                raise RuntimeError("FIXTURE_SITE_CLOSE_UNKNOWN")
+            return
+        if record.unknown or (record.transferred and record.transfer_target is None):
+            raise RuntimeError("FIXTURE_SITE_TRANSFER_UNKNOWN")
+        record.close_attempted = True
+        self._fixture_close_started = True
+        try:
+            if record.transfer_target is None:
+                self._sock.close()
+            else:
+                record.transfer_target.close()
+        except BaseException as error:
+            record.close_failure = error
+            record.unknown = True
+            raise
+        record.close_returned = True
+        self._fixture_closed = True
+        # Keep the actual server reference until wait_closed is observed.
+
+    async def _stop_source_owned(self, scope: _ServingResources) -> None:
+        record = scope.owned(_ResourceSite.LISTENER, self)
+        self._close_source_owned(scope)
+        if record.site_stop_attempted:
+            if not record.site_stop_returned:
+                raise RuntimeError("FIXTURE_SITE_STOP_UNKNOWN")
+            return
+        record.site_stop_attempted = True
+        try:
+            await web.BaseSite.stop(self)
+        except BaseException as error:
+            record.close_failure = error
+            record.unknown = True
+            raise
+        record.site_stop_returned = True
+
+    async def _wait_source_closed(self, scope: _ServingResources) -> None:
+        record = scope.owned(_ResourceSite.LISTENER, self)
+        if not record.close_returned or not record.site_stop_returned or record.unknown:
+            raise RuntimeError("FIXTURE_SITE_CLOSE_UNKNOWN")
+        if record.wait_attempted:
+            if not record.wait_returned:
+                raise RuntimeError("FIXTURE_SITE_WAIT_UNKNOWN")
+            return
+        record.wait_attempted = True
+        try:
+            if record.transfer_target is not None:
+                async with asyncio.timeout(SHUTDOWN_TIMEOUT_S):
+                    await record.transfer_target.wait_closed()
+        except BaseException as error:
+            record.close_failure = error
+            record.unknown = True
+            raise
+        record.wait_returned = True
+
 
 
 class HmpServer:
@@ -1984,6 +2095,7 @@ class HmpServer:
         on_closed: Callable[[], None] | None = None,
     ) -> None:
         self.ctx = ctx
+        self._fixture_scope = _resources(ctx)
         self.settings = settings
         self._interval = watchdog_interval
         self._on_closed = on_closed
@@ -2068,6 +2180,9 @@ class HmpServer:
         failed/ambiguous close or cancelled cleanup remains an unqualified
         failure; this API supplies no custody or runtime qualification receipt.
         """
+        scope = _resources(self.ctx)
+        if scope is not None:
+            return await self._start_owned_fixture_listener(listener, scope)
         if (
             self._starting
             or self._startup_uncertain
@@ -2115,11 +2230,185 @@ class HmpServer:
         finally:
             self._starting = False
 
+    async def _start_owned_fixture_listener(
+        self, listener: socket.socket, scope: _ServingResources,
+    ) -> None:
+        scope.check()
+        _require_fixture_resource_policy(scope.lifecycle)
+        if (scope.server is not self or self.ctx is not scope.work.context
+                or self._starting or self._fixture_used or self._runner is not None
+                or self._startup_uncertain or self.closed.is_set()):
+            raise RuntimeError("FIXTURE_SERVER_NOT_FRESH")
+        listener_record = scope.attempt(_ResourceSite.LISTENER_ALIAS, self)
+        scope.listener = listener_record
+        scope.returned(listener_record, listener)
+        _check_fixture_listener(listener, self.settings)
+        scope.check()
+        # The exact RP01 one-way consumption boundary precedes the first await.
+        self._fixture_used = True
+        listener_record.transferred = True
+        listener_record.transfer_target = self
+        self._starting = True
+        active = None
+        try:
+            active = scope.attempt(_ResourceSite.TLS, self)
+            ssl_ctx = server_ssl_context(self.ctx.identity, self._identity_changed)
+            scope.returned(active, ssl_ctx)
+            active = scope.attempt(_ResourceSite.APP, self)
+            app = build_app(self.ctx)
+            scope.returned(active, app)
+            active = scope.attempt(_ResourceSite.RUNNER, self)
+            scope.runner = active
+            runner = _HmpAppRunner(
+                app,
+                access_log_class=AllowListedAccessLogger,
+                access_log=logging.getLogger(ACCESS_LOGGER_NAME),
+                logger=_ParserSafeLogger(),
+                shutdown_timeout=SHUTDOWN_TIMEOUT_S,
+                handle_signals=False,
+            )
+            self._runner = runner
+            scope.returned(active, runner)
+            active.start_attempted = True
+            await runner.setup()
+            active.start_returned = True
+            scope.check()
+            active = scope.attempt(_ResourceSite.LISTENER, runner)
+            scope.site = active
+            site = _FixtureSockSite(runner, listener, ssl_context=ssl_ctx)
+            scope.returned(active, site)
+            site._fixture_resources = scope
+            active.start_attempted = True
+            await site.start()
+            active.start_returned = True
+            scope.check()
+            sockets = getattr(site._server, "sockets", None) or ()
+            if len(sockets) != 1 or sockets[0].getsockname() != listener.getsockname():
+                raise RuntimeError("FIXTURE_LISTENER_READBACK")
+            scope.check()
+            self.bound = ("127.0.0.1", self.settings.port)
+        except BaseException as error:
+            scope.start_failure = error
+            scope.work.request_stop(error)
+            if active is not None and not active.acquired:
+                scope.failed(active, error)
+            try:
+                self._close_owned_fixture_socket(scope)
+            except BaseException as cleanup_error:
+                scope.cleanup_failures.append(cleanup_error)
+            raise
+        finally:
+            self._starting = False
+
+    def _close_owned_fixture_socket(self, scope: _ServingResources) -> None:
+        scope.check(draining=True)
+        if scope.server is not self or not self._fixture_used:
+            return
+        record = scope.site
+        if record is not None:
+            if record.unknown or not record.acquired:
+                # Constructor may have acquired/transferred before throwing.
+                raise RuntimeError("FIXTURE_SITE_ACQUISITION_UNKNOWN")
+            record.object.close_owned()
+            return
+        record = scope.listener
+        if record is None or not record.transferred or record.transfer_target is not self:
+            raise RuntimeError("FIXTURE_LISTENER_CUSTODY_UNKNOWN")
+        if record.close_attempted:
+            if not record.close_returned:
+                raise RuntimeError("FIXTURE_LISTENER_CLOSE_UNKNOWN")
+            return
+        record.close_attempted = True
+        try:
+            record.object.close()
+        except BaseException as error:
+            record.close_failure = error
+            record.unknown = True
+            raise
+        record.close_returned = True
+
+    async def _stop_owned_fixture(self, scope: _ServingResources) -> None:
+        scope.check(draining=True)
+        if scope.server is not self or self._starting or scope.stop_started:
+            raise RuntimeError("FIXTURE_STOP_NOT_OWNED")
+        scope.stop_started = True
+        # Attempt independent known cleanup even if another close failed. Keep
+        # each actual object and every first/cleanup exception privately.
+        if scope.operator is not None and scope.operator.acquired:
+            try:
+                await scope.operator.object._stop_fixture()
+            except BaseException as error:
+                scope.cleanup_failures.append(error)
+        try:
+            self._close_owned_fixture_socket(scope)
+        except BaseException as error:
+            scope.cleanup_failures.append(error)
+        if scope.site is not None and scope.site.acquired and not scope.site.unknown:
+            try:
+                await scope.site.object.stop()
+            except BaseException as error:
+                scope.cleanup_failures.append(error)
+        runner = scope.runner
+        if runner is not None and runner.acquired and not runner.close_attempted:
+            runner.close_attempted = True
+            try:
+                await runner.object.cleanup()
+            except BaseException as error:
+                runner.close_failure = error
+                runner.unknown = True
+                scope.cleanup_failures.append(error)
+            else:
+                runner.close_returned = True
+        if scope.site is not None and scope.site.acquired and not scope.site.unknown:
+            try:
+                await scope.site.object._wait_source_closed(scope)
+                for resource in scope.resources:
+                    if resource.site is _ResourceSite.HTTP_TRANSPORT and resource.parent is self:
+                        resource.wait_returned = True
+            except BaseException as error:
+                scope.cleanup_failures.append(error)
+        for resource in scope.resources:
+            if (resource.site is _ResourceSite.EXECUTOR and resource.acquired
+                    and not resource.close_attempted):
+                resource.close_attempted = True
+                try:
+                    resource.object.shutdown(wait=False)
+                except BaseException as error:
+                    resource.close_failure = error
+                    resource.unknown = True
+                    scope.cleanup_failures.append(error)
+                else:
+                    resource.close_returned = True
+        if scope.cleanup_failures or any(r.unknown for r in scope.resources):
+            raise RuntimeError("FIXTURE_RESOURCE_DRAIN_UNKNOWN")
+        scope.stop_returned = True
+
+
     async def start_operator_read(self, anchor_dir: Path, nonce: str) -> None:
         from .operator_read import OperatorReadService
 
         if self._operator_read is not None or self._runner is None:
             raise RuntimeError("operator read listener unavailable")
+        scope = _resources(self.ctx)
+        if scope is not None:
+            record = scope.attempt(_ResourceSite.OPERATOR, self)
+            scope.operator = record
+            try:
+                service = OperatorReadService(self.ctx, anchor_dir, nonce)
+                self._operator_read = service
+                scope.returned(record, service)
+                record.start_attempted = True
+                await service._start_fixture(scope)
+                record.start_returned = True
+                scope.check()
+                return
+            except BaseException as error:
+                if not record.acquired:
+                    scope.failed(record, error)
+                else:
+                    record.failure = error
+                    scope.work.request_stop(error)
+                raise
         service = OperatorReadService(self.ctx, anchor_dir, nonce)
         await service.start()
         self._operator_read = service
@@ -2141,6 +2430,11 @@ class HmpServer:
                 return
 
     def _identity_changed(self) -> None:
+        scope = self._fixture_scope
+        if scope is not None:
+            scope.work.request_stop(RuntimeError("FIXTURE_IDENTITY_CHANGED"))
+            scope.lifecycle.request_stop(RuntimeError("FIXTURE_IDENTITY_CHANGED"))
+            return
         if self._stopping is None:
             log_event("identity_changed", outcome="listener_closed")
             self._stopping = asyncio.get_running_loop().create_task(self.stop())

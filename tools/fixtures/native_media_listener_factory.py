@@ -545,15 +545,40 @@ class ListenerAliasOwner:
         _require_root_listener_issuance(self.issuance)
 
     def handoff(self, server):
-        # Serving cannot be admitted until the exact worker/resource inventory,
-        # operator endpoint policy and real root issuer are independently bound.
-        raise ScopeRefusedError("FIXTURE_SERVING_WORK_UNBOUND")
+        try:
+            require(self.first_failure is None and self.state == "SETUP", "ALIAS_TERMINAL")
+            require(self.server is None, "ALIAS_HANDOFF_CONSUMED")
+            lifecycle = self.lifecycle
+            require(lifecycle is not None and lifecycle.adapter is self.adapter, "ALIAS_LIFECYCLE")
+            scope = lifecycle.resources
+            require(
+                scope is not None and scope.lifecycle is lifecycle
+                and scope.server is server and self.adapter._server is server
+                and server.ctx is lifecycle.ctx and server._fixture_scope is scope
+                and not server._fixture_used and not server._starting,
+                "ALIAS_SERVER_JOIN",
+            )
+            _require_root_listener_issuance(self.issuance)
+            require(self.first_failure is None and not lifecycle.stopping, "ALIAS_TERMINAL")
+            self.server = server
+            self.state = "HANDOFF_PENDING"
+        except BaseException as error:
+            self.poison(error)
+            raise
 
     def observe_handoff(self, server):
         require(server is self.server and self.state == "HANDOFF_PENDING", "ALIAS_HANDOFF")
-        # No path in this first source slice enters HANDOFF_PENDING. The next
-        # reviewed slice must join this transition to RP01's exact used latch.
-        raise ScopeRefusedError("FIXTURE_SERVING_WORK_UNBOUND")
+        scope = self.lifecycle.resources
+        require(scope.server is server and server._fixture_scope is scope, "ALIAS_SERVER_JOIN")
+        # Observe the exact source-owned one-way consumption latch. It is never
+        # reset or treated as a kernel custody/close certificate.
+        if server._fixture_used is True:
+            self.state = "SERVER_OWNED"
+        elif server._fixture_used is False and not server._starting:
+            self.state = "SETUP"  # Known validation refusal; no new handoff is permitted.
+        else:
+            self.state = "HANDOFF_UNKNOWN"
+            raise ScopeRefusedError("ALIAS_HANDOFF_UNKNOWN")
 
     def retire_unconsumed(self):
         if self.close_attempted:

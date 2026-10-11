@@ -1098,6 +1098,14 @@ class WorkTests(unittest.TestCase):
     def test_s2_actual_http_frame_before_handler_and_late_response_refusal(self):
         for stop in ("before", "inside", "none"):
             owner, loop, _site, _ = self.serving()
+            owner.lifecycle.request_stop = lambda error: None
+            scope = self.module._ServingResources(owner)
+            scope.serving_ready = True
+            scope.server = object()
+            app = object()
+            resource = scope.attempt(self.module._ResourceSite.APP, scope.server)
+            scope.returned(resource, app)
+            request = SimpleNamespace(app=app, transport=object())
             selected = self.selected(
                 "server",
                 {"_fixture_request_frame": None},
@@ -1113,7 +1121,7 @@ class WorkTests(unittest.TestCase):
 
             if stop == "before":
                 owner.request_stop(RuntimeError("queued after stop"))
-            task = loop.start_caller(selected._fixture_request_frame(object(), handler))
+            task = loop.start_caller(selected._fixture_request_frame(request, handler))
             loop.run()
             assert effects == ([] if stop == "before" else [True])
             assert (task.value == "response") == (stop == "none")

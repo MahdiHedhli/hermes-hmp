@@ -175,6 +175,7 @@ class _WorkRecord:
         self.failure: BaseException | None = None
         self.result: Any = None
         self.collected = False
+        self.cancel_attempted = False
         self.completed_task_id: int | None = None
         self.unknown = False
         self.registry: Any = None
@@ -212,6 +213,7 @@ class _ServingWork:
         self._foreign_local = threading.local()
         self._records: list[_WorkRecord] = []
         self._resources: list[_ResourceRecord] = []
+        self._resource_scope: _ServingResources | None = None
         self._submissions: list[Any] = []
         self._media_service: Any = None
         self._cmid_acquisitions: list[_CmidAcquisition] = []
@@ -233,6 +235,7 @@ class _ServingWork:
         # No foreign callback or record-publication lock under this mutex.
         with self._mutex:
             self._poison_locked(error)
+        _notify_resources(self)
 
     def _context_current(self, *, draining: bool = False) -> bool:
         # Source-bound object checks outside the state mutex: no foreign
@@ -354,7 +357,9 @@ class _ServingWork:
         with self._mutex:
             self._live_locked(current)
             if (type(site) is not _WorkSite or site not in _INGRESS_SITES
-                    or getattr(self._foreign_local, "busy", False)):
+                    or getattr(self._foreign_local, "busy", False)
+                    or (self._resource_scope is not None
+                        and not self._resource_scope.serving_ready)):
                 error = _WorkRefusedError()
                 self._poison_locked(error)
                 raise error
@@ -403,6 +408,7 @@ class _ServingWork:
                 item.abandoned = True
         for item in abandoned:
             _schedule_cmid_disposition(item)
+        _notify_resources(self)
 
     def launch(
         self, site: _WorkSite, coroutine: Coroutine[Any, Any, Any],
@@ -531,6 +537,7 @@ class _ServingWork:
             with self._mutex:
                 record.body_exited = True
             _CURRENT_FRAME.reset(frame_token)
+            _notify_resources(self)
 
     def _invoke_worker(self, record: _WorkRecord) -> Any:
         # Claim the one actual invocation before any context-check callback.
@@ -579,6 +586,7 @@ class _ServingWork:
             _budget_completed(record)
             if record.cleanup is None:
                 _cmid_body_completed(record)
+            _notify_resources(self)
 
     async def collect(self, record: _WorkRecord) -> Any:
         # Collection is permitted while draining; it never grants a new effect
@@ -597,13 +605,16 @@ class _ServingWork:
             with self._mutex:
                 if record.body_exited and record.failure is error:
                     record.collected = True
+            _notify_resources(self)
             raise
         except BaseException:
             with self._mutex:
                 record.collected = record.body_exited
+            _notify_resources(self)
             raise
         with self._mutex:
             record.collected = True
+        _notify_resources(self)
         return result
 
     def discard_collected_payload(self, record: _WorkRecord) -> None:
@@ -721,6 +732,7 @@ _WORKER_SITES = frozenset(
 _TASK_SITES = frozenset(
     {
         _WorkSite.CW002,
+        _WorkSite.CW006,
         _WorkSite.CW020,
         _WorkSite.CW057,
         _WorkSite.CW071,
@@ -1014,6 +1026,7 @@ def _media_body(record: _MediaSubmission, run: Callable[[], bool]) -> bool:
             with owner._mutex:
                 record.exited = True
             _CURRENT_FRAME.reset(token)
+            _notify_resources(owner)
 
 
 def _media_finished(record: _MediaSubmission, future: Any) -> None:
@@ -1025,6 +1038,7 @@ def _media_finished(record: _MediaSubmission, future: Any) -> None:
             owner._poison_locked(_WorkRefusedError())
         else:
             record.collected = True
+    _notify_resources(owner)
 
 
 def _p6_submit(bridge: Any, coroutine: Coroutine[Any, Any, Any], loop: Any) -> Any:
@@ -1474,6 +1488,8 @@ def _p6_returned(record: _WorkRecord, future: Any) -> None:
             record.unknown = True
             owner._poison_locked(_WorkRefusedError())
 
+    _notify_resources(owner)
+
 
 class _CmidAcquisition:
     """Retained before reserve call: row disposition survives a lost HTTP waiter."""
@@ -1666,3 +1682,245 @@ def _join_cmid_task(
         acquisition = matches[0]
         acquisition.handoff = record
         record.cmid_acquisition = acquisition
+
+
+class _ResourceSite(Enum):
+    SERVER = "server"
+    APP = "application"
+    TLS = "tls-context"
+    RUNNER = "runner"
+    LISTENER_ALIAS = "listener-alias"
+    LISTENER = "listener-site"
+    MEDIA = "media-service"
+    EXECUTOR = "media-executor"
+    OPERATOR = "operator-service"
+    OPERATOR_PARENT = "operator-parent"
+    OPERATOR_DIRECTORY = "operator-directory"
+    OPERATOR_SOCKET = "operator-socket"
+    OPERATOR_ACCEPTOR = "operator-acceptor"
+    OPERATOR_WRITER = "operator-writer"
+    HTTP_TRANSPORT = "http-transport"
+    PUBLICATION = "listener-record"
+
+
+def _require_fixture_resource_policy(lifecycle: Any) -> None:
+    # Exact Unix endpoint/umask concurrency, kernel handoff and runtime source
+    # qualification is absent. No caller-supplied capability can replace it.
+    raise _WorkRefusedError
+
+
+class _OwnedResource:
+    """Source acquisition journal, not a closure certificate or runtime authority."""
+
+    def __init__(self, scope: _ServingResources, site: _ResourceSite, parent: Any) -> None:
+        self.scope, self.site, self.parent = scope, site, parent
+        self.object: Any = None
+        self.acquiring = True
+        self.acquired = False
+        self.unknown = False
+        self.failure: BaseException | None = None
+        self.close_attempted = False
+        self.close_returned = False
+        self.close_failure: BaseException | None = None
+        self.transferred = False
+        self.transfer_target: Any = None
+        self.start_attempted = False
+        self.start_returned = False
+        self.site_stop_attempted = False
+        self.site_stop_returned = False
+        self.wait_attempted = False
+        self.wait_returned = False
+
+
+class _ServingResources:
+    """Retain every source-known object independently of legacy maps and counters."""
+
+    def __init__(self, work: _ServingWork) -> None:
+        if type(work) is not _ServingWork or work._resource_scope is not None:
+            raise _WorkRefusedError
+        self.work = work
+        self.lifecycle = work.lifecycle
+        self.resources: list[_OwnedResource] = []
+        self.server: Any = None
+        self.listener: _OwnedResource | None = None
+        self.site: _OwnedResource | None = None
+        self.runner: _OwnedResource | None = None
+        self.operator: _OwnedResource | None = None
+        self.start_failure: BaseException | None = None
+        self.cleanup_failures: list[BaseException] = []
+        self.publication: Any = None
+        self.start: _WorkRecord | None = None
+        self.background: list[_WorkRecord] = []
+        self.serving_ready = False
+        self.stop_started = False
+        self.stop_returned = False
+        self.context_close_started = False
+        self.waiter: Any = None
+        self.wait_loop: Any = None
+        self.notification_unknown = False
+        self.stop_signal_attempted = False
+        self.stop_signal_returned = False
+        self.loop: Any = None
+        work._resource_scope = self
+        self.loop = asyncio.get_running_loop()
+
+    def check(self, *, draining: bool = False) -> None:
+        work = self.work
+        current = work._context_current(draining=draining)
+        with work._mutex:
+            if (work._resource_scope is not self or self.lifecycle is not work.lifecycle
+                    or not current or (not draining and work.stopping)):
+                error = _WorkRefusedError()
+                work._poison_locked(error)
+                raise error
+
+    def attempt(self, site: _ResourceSite, parent: Any) -> _OwnedResource:
+        self.check()
+        if type(site) is not _ResourceSite:
+            raise _WorkRefusedError
+        with self.work._mutex:
+            if (site not in (
+                _ResourceSite.OPERATOR_WRITER, _ResourceSite.HTTP_TRANSPORT,
+                _ResourceSite.OPERATOR_DIRECTORY,
+            ) and any(owned.site is site for owned in self.resources)):
+                error = _WorkRefusedError()
+                self.work._poison_locked(error)
+                raise error
+            record = _OwnedResource(self, site, parent)
+            self.resources.append(record)
+        return record
+
+    def returned(self, record: _OwnedResource, value: Any) -> None:
+        # Retain the actual returned object before any post-return checks.
+        with self.work._mutex:
+            if record.scope is not self or not any(r is record for r in self.resources):
+                raise _WorkRefusedError
+            record.object = value
+            record.acquiring = False
+            record.acquired = True
+        self.check()
+
+    def failed(self, record: _OwnedResource, error: BaseException) -> None:
+        with self.work._mutex:
+            record.failure = error
+            record.unknown = True
+            record.acquiring = False
+            self.work._poison_locked(error)
+        self.notify()
+
+    def owned(self, site: _ResourceSite, value: Any) -> _OwnedResource:
+        self.check(draining=True)
+        with self.work._mutex:
+            matches = [r for r in self.resources if r.site is site and r.object is value]
+            if len(matches) != 1 or not matches[0].acquired:
+                raise _WorkRefusedError
+            return matches[0]
+
+    def retain_request_transport(self, request: Any) -> _OwnedResource:
+        self.check(draining=True)
+        with self.work._mutex:
+            record = _OwnedResource(self, _ResourceSite.HTTP_TRANSPORT, self.server)
+            record.request = request
+            self.resources.append(record)
+        try:
+            app = next(r.object for r in self.resources if r.site is _ResourceSite.APP)
+            if request.app is not app:
+                raise _WorkRefusedError
+            record.object = request.transport
+            record.acquiring = False
+            record.acquired = True
+            if record.object is None:
+                raise _WorkRefusedError
+            return record
+        except BaseException as error:
+            self.failed(record, error)
+            raise
+
+    def notify(self) -> None:
+        # Stop scheduling is retained before touching the loop, including a
+        # thread-safe notification that throws after queueing the callback.
+        signal = False
+        with self.work._mutex:
+            if self.work.stopping and not self.stop_signal_attempted:
+                self.stop_signal_attempted = True
+                signal = True
+            waiter, loop = self.waiter, self.wait_loop
+        if signal:
+            try:
+                self.loop.call_soon_threadsafe(
+                    self.lifecycle.request_stop, self.work.first_failure or _WorkRefusedError()
+                )
+                self.stop_signal_returned = True
+            except BaseException as error:
+                with self.work._mutex:
+                    self.notification_unknown = True
+                    self.work._poison_locked(error)
+        if waiter is None:
+            return
+        try:
+            loop.call_soon_threadsafe(self._wake, waiter)
+        except BaseException as error:
+            with self.work._mutex:
+                self.notification_unknown = True
+                self.work._poison_locked(error)
+
+    def _wake(self, waiter: Any) -> None:
+        with self.work._mutex:
+            if self.waiter is not waiter:
+                return
+            self.waiter = None
+        if not waiter.done():
+            waiter.set_result(None)
+
+    async def wait_users(self) -> None:
+        # The caller applies the existing shutdown bound. Registration is
+        # closed first; notifications cause finite reinspection, never credits.
+        while True:
+            self.check(draining=True)
+            for record in tuple(self.work._records):
+                if (record.kind not in ("ingress", "p6") and record.task is not None
+                        and not record.collected and record.body_exited):
+                    try:
+                        await self.work.collect(record)
+                    except BaseException:
+                        if not record.collected:
+                            raise
+            loop = asyncio.get_running_loop()
+            waiter = loop.create_future()
+            with self.work._mutex:
+                if self.notification_unknown:
+                    raise _WorkRefusedError
+                if (self.work._resources
+                        or any(record.unknown for record in self.work._records)
+                        or any(r.unknown for r in self.resources)
+                        or any(r.unknown for r in self.work._submissions)
+                        or any(r.unknown for r in self.work._cmid_acquisitions)):
+                    raise _WorkRefusedError
+                pending = [r for r in self.work._records if self.work._pending_locked(r)]
+                pending += [r for r in self.work._submissions if r.pending()]
+                pending += [r for r in self.work._cmid_acquisitions if r.pending()]
+                pending += [r for r in self.resources if r.site in (
+                    _ResourceSite.OPERATOR_WRITER, _ResourceSite.HTTP_TRANSPORT,
+                ) and not r.wait_returned]
+                if not pending:
+                    return
+                self.waiter, self.wait_loop = waiter, loop
+            await waiter
+
+
+def _resources(carrier: Any, *, draining: bool = False) -> _ServingResources | None:
+    fields = vars(carrier)
+    work = fields.get("_fixture_work")
+    if work is None:
+        return _owner(carrier)  # None only for an ordinary, unbound component.
+    if type(work) is not _ServingWork or type(work._resource_scope) is not _ServingResources:
+        raise _WorkRefusedError
+    scope = work._resource_scope
+    scope.check(draining=draining)
+    return scope
+
+
+def _notify_resources(work: _ServingWork) -> None:
+    scope = work._resource_scope
+    if scope is not None:
+        scope.notify()

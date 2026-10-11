@@ -80,6 +80,10 @@ from .fixture_work import (
     _await_publication,
     _Ingress,
     _publication,
+    _require_fixture_resource_policy,
+    _resources,
+    _ResourceSite,
+    _ServingResources,
     _ServingWork,
     _worker,
     _WorkRefusedError,
@@ -783,6 +787,8 @@ class _FixtureLifecycle:
         self.store_close_attempted = False
         self.context_closed = False
         self.unknown_context = False
+        self.serving: _ServingWork | None = None
+        self.resources: _ServingResources | None = None
 
     def _fail(self, error: BaseException) -> None:
         if self.first_failure is None:
@@ -824,6 +830,8 @@ class _FixtureLifecycle:
             self._ordinary_live(token)
             if not self.alias_claimed:
                 raise RuntimeError("FIXTURE_ALIAS_CLAIM_MISSING")
+            _require_fixture_resource_policy(self)
+            self._ordinary_live(token)
             extra = getattr(adapter.config, "extra", None)
             self._ordinary_live(token)
             self.settings = server.listener_settings(extra)
@@ -943,9 +951,20 @@ class _FixtureLifecycle:
             self._ordinary_live(token)
             self.alias.setup_checkpoint(self)
             self._ordinary_live(token)
-            # This slice owns setup results but cannot start a server, publish
-            # metadata, or return success. Exact serving work remains unbound.
-            raise RuntimeError("FIXTURE_SERVING_WORK_UNBOUND")
+            _require_fixture_resource_policy(self)
+            self._ordinary_live(token)
+            work = _ServingWork(self, self.ctx)
+            self.serving = work
+            self.adapter._bind_fixture_work(work)
+            scope = _ServingResources(work)
+            self.resources = scope
+            record = work._begin(_WorkSite.CW002, "task", None)
+            scope.start = record
+            record.payload = self._start_serving_owned()
+            work._spawn(record)
+            await work.collect(record)
+            scope.check()
+            return True
         except BaseException as error:
             self._fail(error)
             self.request_stop(error)
@@ -955,8 +974,116 @@ class _FixtureLifecycle:
                 raise
         raise RuntimeError("FIXTURE_LIFECYCLE_UNAVAILABLE") from None
 
+    async def _start_serving_owned(self) -> None:
+        scope = self.resources
+        work = self.serving
+        if scope is None or work is None or scope.work is not work:
+            raise _WorkRefusedError
+        scope.check()
+        record = scope.attempt(_ResourceSite.SERVER, self)
+        try:
+            srv = server.HmpServer(self.ctx, self.settings, on_closed=self.adapter._listener_closed)
+            scope.server = srv
+            self.adapter._server = srv
+            scope.returned(record, srv)
+        except BaseException as error:
+            if not record.acquired:
+                scope.failed(record, error)
+            raise
+        self.alias.handoff(srv)
+        scope.check()
+        startup_error = None
+        try:
+            await srv._start_fixture_listener(self.alias.listener)
+        except BaseException as error:
+            startup_error = error
+            if scope.start_failure is None:
+                scope.start_failure = error
+            work.request_stop(error)
+            raise
+        finally:
+            try:
+                self.alias.observe_handoff(srv)
+            except BaseException as error:
+                scope.cleanup_failures.append(error)
+                work.request_stop(error)
+                if startup_error is None:
+                    raise
+        scope.check()
+        anchor = self.ctx.identity.custody.anchor_dir
+        self.adapter._record = listener_record_path(anchor)
+        self.adapter._nonce = secrets.token_hex(16)
+        scope.check()
+        cli._ListenerRecordOwner(scope, self.adapter._record, self.adapter._nonce)
+        await srv.start_operator_read(anchor, self.adapter._nonce)
+        scope.check()
+        self.adapter._fixture_publish_initial(scope)
+        scope.check()
+        # Record each exact background task before its factory/gate release.
+        watch = work._begin(_WorkSite.CW106, "task", scope.start)
+        scope.background.append(watch)
+        watch.payload = srv._watchdog()
+        work._spawn(watch)
+        srv._watch = watch.task
+        if self.ctx.bridge is not None:
+            refresh = work._begin(_WorkSite.CW006, "task", scope.start)
+            scope.background.append(refresh)
+            refresh.payload = self.adapter._periodic_profile_refresh()
+            work._spawn(refresh)
+            self.adapter._profile_refresh_task = refresh.task
+        scope.check()
+        with work._mutex:
+            work._live_locked(True)
+            scope.serving_ready = True
+        self.adapter._mark_connected()
+        scope.check()
+
+    async def _drain_serving_owned(self) -> None:
+        scope, work = self.resources, self.serving
+        if scope is None or work is None or scope.work is not work:
+            raise _WorkRefusedError
+        work.request_stop(self.first_failure or _WorkRefusedError())
+        start = scope.start
+        if start is None or start.unknown or start.task is None:
+            raise RuntimeError("FIXTURE_STARTUP_UNKNOWN")
+        try:
+            await work.collect(start)
+        except BaseException:
+            if not start.collected:
+                raise
+        for record in tuple(work._records):
+            if (record.kind == "task" and record is not start and record.task is not None
+                    and not record.body_exited and not record.cancel_attempted):
+                record.cancel_attempted = True
+                try:
+                    record.task.cancel()
+                except BaseException as error:
+                    record.unknown = True
+                    scope.cleanup_failures.append(error)
+        if scope.server is not None:
+            try:
+                await scope.server._stop_owned_fixture(scope)
+            except BaseException as error:
+                scope.cleanup_failures.append(error)
+        # Retained work bodies, not legacy task maps or counters, govern Store
+        # lifetime. A timeout/unknown acquisition retains this entire context.
+        async with asyncio.timeout(server.SHUTDOWN_TIMEOUT_S):
+            await scope.wait_users()
+        if (scope.cleanup_failures or any(r.unknown for r in scope.resources)
+                or (scope.server is not None and not scope.stop_returned)):
+            raise RuntimeError("FIXTURE_SERVING_DRAIN_UNKNOWN")
+        publication = scope.publication
+        if publication is not None:
+            with self.adapter._record_lock:
+                cli.remove_listener_record(publication.path, _fixture_owner=publication)
+        scope.context_close_started = True
+
+
     def request_stop(self, reason: BaseException) -> None:
         self._fail(reason)
+        if self.serving is not None:
+            with self.serving._mutex:
+                self.serving._poison_locked(reason)
         self._retain_alias_claim()
         if (self.cleanup is not None or self.launching
                 or (self.setup is None and not self.alias_claimed)):
@@ -992,6 +1119,13 @@ class _FixtureLifecycle:
                     # may have left its to_thread worker running without result.
                     self.unknown_context = True
                     raise
+        if self.serving is not None:
+            try:
+                await self._drain_serving_owned()
+            except BaseException as error:
+                self.cleanup_failures.append(error)
+                self.unknown_context = True
+                raise
         ctx = self.ctx
         if ctx is not None:
             if not self.prompt_close_attempted:
@@ -1008,10 +1142,11 @@ class _FixtureLifecycle:
                     self.cleanup_failures.append(error)
                     self.unknown_context = True
             self.context_closed = not self.cleanup_failures and not self.unknown_context
-        try:
-            self.alias.retire_unconsumed()
-        except BaseException as error:
-            self.cleanup_failures.append(error)
+        if self.alias.state != "SERVER_OWNED":
+            try:
+                self.alias.retire_unconsumed()
+            except BaseException as error:
+                self.cleanup_failures.append(error)
         if self.cleanup_failures or self.unknown_context:
             raise RuntimeError("FIXTURE_CLEANUP_UNCERTAIN")
 
@@ -1312,6 +1447,60 @@ class HmpAdapter(BasePlatformAdapter):
         never itself change what this key sees as "the same served set"."""
         return tuple(sorted(name for name, _display in profiles or ()))
 
+    def _fixture_publish_initial(self, scope: _ServingResources) -> None:
+        scope.check()
+        srv = scope.server
+        if srv is not self._server or srv.bound is None or scope.publication is None:
+            raise _WorkRefusedError
+        profiles = None
+        if srv.ctx.bridge is not None:
+            _publication(self)
+            profiles = [(p, _fallback_display_name(p)) for p in srv.ctx.bridge.served_profiles()]
+        _publication(self)
+        health = self._health_snapshot(srv.ctx, profiles) if profiles is not None else None
+        _publication(self)
+        with self._record_lock:
+            cli.write_listener_record(
+                self._record, host=srv.bound[0], port=srv.bound[1], iid=srv.ctx.iid,
+                nonce=self._nonce, profiles=profiles,
+                health_checked_at=int(time.time()) if health is not None else None,
+                health=health, _fixture_owner=scope.publication,
+            )
+            _publication(self)
+            self._known_profiles = tuple(profiles) if profiles is not None else None
+
+    def _fixture_sync_refresh(
+        self, scope: _ServingResources, served: Iterable[str], *, refresh_health: bool,
+    ) -> None:
+        scope.check()
+        srv = self._server
+        if (srv is not scope.server or srv is None or srv.bound is None
+                or scope.publication is None or self._record is not scope.publication.path
+                or self._nonce != scope.publication.nonce):
+            raise _WorkRefusedError
+        profiles = [(p, _fallback_display_name(p)) for p in served]
+        _publication(self)
+        if not refresh_health and self._profile_names_key(profiles) == self._profile_names_key(
+            self._known_profiles
+        ):
+            return
+        health = self._health_snapshot(srv.ctx, profiles)
+        _publication(self)
+        with self._record_lock:
+            scope.check()
+            if not refresh_health and self._profile_names_key(profiles) == self._profile_names_key(
+                self._known_profiles
+            ):
+                return
+            cli.write_listener_record(
+                self._record, host=srv.bound[0], port=srv.bound[1], iid=srv.ctx.iid,
+                nonce=self._nonce, profiles=profiles, health_checked_at=int(time.time()),
+                health=health, _fixture_owner=scope.publication,
+            )
+            _publication(self)
+            self._known_profiles = tuple(profiles)
+
+
     def _sync_refresh(self, served: Iterable[str], *, refresh_health: bool = False) -> None:
         """The one place that compares and, on a change, rewrites the record. Synchronous and
         blocking (file I/O) by design: `Reads.roster`/`Authorize.authorize` already call this from
@@ -1322,6 +1511,9 @@ class HmpAdapter(BasePlatformAdapter):
         because nothing was written (the comparison short-circuited) or because
         `cli.write_listener_record`'s own atomic temp-file-then-`rename` never replaced the real
         path (it fails before that point, or not at all)."""
+        scope = _resources(self)
+        if scope is not None:
+            return self._fixture_sync_refresh(scope, served, refresh_health=refresh_health)
         srv = self._server
         if srv is None or self._record is None or self._nonce is None:
             return  # disconnected (or never fully connected) since this was scheduled/called
@@ -1405,6 +1597,8 @@ class HmpAdapter(BasePlatformAdapter):
             await task
 
     def _drop_record(self) -> None:
+        if self._fixture_work is not None:
+            raise _WorkRefusedError
         with self._record_lock:
             record, self._record = self._record, None
             self._nonce = None

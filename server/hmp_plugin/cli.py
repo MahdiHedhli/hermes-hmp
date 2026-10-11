@@ -114,6 +114,13 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Optional, TextIO
 
+from .fixture_work import (
+    _publication,
+    _require_fixture_resource_policy,
+    _ServingResources,
+    _WorkRefusedError,
+)
+
 SUBCOMMAND_DEST = "hmp_command"
 
 # (group, action) pairs that mutate state: TTY + HERMES_SESSION_* refusals apply.
@@ -201,6 +208,318 @@ def listener_record_path(anchor_dir: Path) -> Path:
     return Path(anchor_dir).parent / LISTENER_RECORD_FILENAME
 
 
+class _RecordAttempt:
+    """Private actual-handle journal; an attempted or failed call is never replayed."""
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.fd: int | None = None
+        self.open_attempted = False
+        self.open_unknown = False
+        self.inode: tuple[int, int] | None = None
+        self.close_attempted = False
+        self.close_returned = False
+        self.unlink_attempted = False
+        self.unlink_returned = False
+        self.rename_attempted = False
+        self.rename_returned = False
+        self.write_attempts: list[tuple[int, int]] = []
+        self.write_returns: list[int] = []
+        self.fchmod_attempted = False
+        self.fchmod_returned = False
+        self.fsync_attempted = False
+        self.fsync_returned = False
+        self.failure: BaseException | None = None
+        self.cleanup_failures: list[BaseException] = []
+
+
+class _ListenerRecordOwner:
+    """One fixture generation's publication; real resource policy remains closed.
+
+    Source checks and the retained directory descriptor narrow custody. They do
+    not make pathname comparison and a subsequent kernel operation atomic.
+    Actual namespace exclusion and inode semantics need runtime qualification.
+    """
+
+    def __init__(self, scope: _ServingResources, path: Path, nonce: str) -> None:
+        if type(scope) is not _ServingResources or scope.publication is not None:
+            raise _WorkRefusedError
+        _require_fixture_resource_policy(scope.lifecycle)
+        scope.check()
+        ctx = scope.work.context
+        expected = listener_record_path(ctx.identity.custody.anchor_dir)
+        if (path != expected or type(nonce) is not str
+                or re.fullmatch(r"[0-9a-f]{32}", nonce) is None):
+            raise _WorkRefusedError
+        self.scope, self.path, self.nonce = scope, path, nonce
+        self.iid = ctx.iid
+        self.parent = _RecordAttempt(path.parent.name)
+        self.attempts: list[_RecordAttempt] = []
+        self.published: _RecordAttempt | None = None
+        self.operation: object | None = None
+        self.first_failure: BaseException | None = None
+        self.remove_attempted = False
+        self.removed = False
+        self.remove_failure: BaseException | None = None
+        self.unknown = False
+        scope.publication = self
+
+    def _check(self, *, draining: bool = False) -> None:
+        self.scope.check(draining=draining)
+        if (self.scope.publication is not self or self.scope.work.context.iid != self.iid
+                or self.path != listener_record_path(
+                    self.scope.work.context.identity.custody.anchor_dir
+                ) or (not draining and (self.first_failure is not None or self.remove_attempted))):
+            raise _WorkRefusedError
+        if not draining:
+            _publication(self.scope.work.context)
+
+    def _fail(self, error: BaseException) -> None:
+        if self.first_failure is None:
+            self.first_failure = error
+        self.unknown = True
+        self.scope.work.request_stop(error)
+
+    def _parent_current(self, *, draining: bool = False) -> None:
+        self._check(draining=draining)
+        parent = self.parent
+        if parent.fd is None or parent.open_unknown or parent.close_attempted:
+            raise _WorkRefusedError
+        held = os.fstat(parent.fd)
+        self._check(draining=draining)
+        named = os.lstat(self.path.parent)
+        self._check(draining=draining)
+        if (parent.inode != (held.st_dev, held.st_ino)
+                or parent.inode != (named.st_dev, named.st_ino)
+                or not stat.S_ISDIR(held.st_mode) or held.st_uid != os.getuid()
+                or held.st_mode & (stat.S_IWGRP | stat.S_IWOTH)):
+            raise _WorkRefusedError
+
+    def _open_parent(self) -> None:
+        if self.parent.open_attempted:
+            self._parent_current()
+            return
+        self._check()
+        self.parent.open_attempted = True
+        try:
+            self.parent.fd = os.open(
+                self.path.parent, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+            )
+        except BaseException as error:
+            self.parent.open_unknown = True
+            self.parent.failure = error
+            raise
+        self._check()
+        held = os.fstat(self.parent.fd)
+        self.parent.inode = (held.st_dev, held.st_ino)
+        self._parent_current()
+
+    def _close_record_fd(self, record: _RecordAttempt) -> None:
+        # The only close primitive for a record descriptor. A thrown close
+        # leaves the exact number and exception retained; never retry it.
+        if type(record) is not _RecordAttempt or not (
+            record is self.parent or any(known is record for known in self.attempts)
+        ):
+            raise _WorkRefusedError
+        if record.fd is None or record.close_attempted:
+            return
+        record.close_attempted = True
+        try:
+            os.close(record.fd)
+        except BaseException as error:
+            record.cleanup_failures.append(error)
+            self._fail(error)
+            raise
+        record.close_returned = True
+
+    def _named_owned(self, record: _RecordAttempt, name: str, *, draining: bool) -> None:
+        self._parent_current(draining=draining)
+        current = os.stat(name, dir_fd=self.parent.fd, follow_symlinks=False)
+        self._check(draining=draining)
+        if (record.inode is None or (current.st_dev, current.st_ino) != record.inode
+                or not stat.S_ISREG(current.st_mode) or current.st_uid != os.getuid()
+                or stat.S_IMODE(current.st_mode) != RECORD_MODE):
+            raise _WorkRefusedError
+
+    def _read_owned_publication(self, record: _RecordAttempt, *, draining: bool) -> None:
+        self._named_owned(record, self.path.name, draining=draining)
+        read = _RecordAttempt(self.path.name)
+        self.attempts.append(read)
+        read.open_attempted = True
+        try:
+            try:
+                read.fd = os.open(
+                    self.path.name, os.O_RDONLY | os.O_NOFOLLOW, dir_fd=self.parent.fd
+                )
+            except BaseException as error:
+                read.open_unknown = True
+                raise error
+            self._check(draining=draining)
+            held = os.fstat(read.fd)
+            read.inode = (held.st_dev, held.st_ino)
+            if read.inode != record.inode or not stat.S_ISREG(held.st_mode):
+                raise _WorkRefusedError
+            self._check(draining=draining)
+            raw = _read_fd(read.fd, _fixture_owner=self)
+            self._check(draining=draining)
+            data = json.loads(raw.decode("utf-8")) if raw is not None else None
+            if (type(data) is not dict or data.get("format") != LISTENER_RECORD_FORMAT
+                    or type(data.get("nonce")) is not str or data["nonce"] != self.nonce
+                    or type(data.get("iid")) is not str or data["iid"] != self.iid):
+                raise _WorkRefusedError
+            self._named_owned(record, self.path.name, draining=draining)
+        except BaseException as error:
+            read.failure = error
+            self._fail(error)
+            raise
+        finally:
+            try:
+                self._close_record_fd(read)
+            except BaseException:
+                if read.failure is None:
+                    raise
+
+    def write(self, path: Path, body: bytes, nonce: str | None, iid: str) -> None:
+        if type(body) is not bytes or len(body) > MAX_RECORD_BYTES:
+            error = _WorkRefusedError()
+            self._fail(error)
+            raise error
+        try:
+            data = json.loads(body)
+            bound = self.scope.server.bound if self.scope.server is not None else None
+            if (type(data) is not dict or set(data) != {
+                    "format", "host", "port", "iid", "pid", "nonce", "profiles",
+                    "health_checked_at", "health",
+                } or body != json.dumps(data).encode("utf-8")
+                    or data["format"] != LISTENER_RECORD_FORMAT
+                    or type(data["nonce"]) is not str or data["nonce"] != self.nonce
+                    or type(data["iid"]) is not str or data["iid"] != self.iid
+                    or bound is None or type(data["port"]) is not int
+                    or (data["host"], data["port"]) != bound):
+                raise _WorkRefusedError
+        except BaseException as error:
+            self._fail(error)
+            raise
+        self._check()
+        if (path is not self.path or type(nonce) is not str or nonce != self.nonce
+                or type(iid) is not str or iid != self.iid or self.operation is not None):
+            error = _WorkRefusedError()
+            self._fail(error)
+            raise error
+        token = self.operation = object()
+        attempt = None
+        try:
+            self._open_parent()
+            if self.published is not None:
+                self._read_owned_publication(self.published, draining=False)
+            else:
+                # Initial publication may not silently replace another lifetime.
+                try:
+                    os.stat(self.path.name, dir_fd=self.parent.fd, follow_symlinks=False)
+                except FileNotFoundError:
+                    pass
+                else:
+                    raise _WorkRefusedError
+            self._check()
+            name = f".{self.path.name}.{secrets.token_hex(8)}.tmp"
+            attempt = _RecordAttempt(name)
+            self.attempts.append(attempt)
+            self._check()
+            attempt.open_attempted = True
+            try:
+                attempt.fd = os.open(
+                    name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW,
+                    RECORD_MODE, dir_fd=self.parent.fd,
+                )
+            except BaseException:
+                attempt.open_unknown = True
+                raise
+            self._check()
+            held = os.fstat(attempt.fd)
+            attempt.inode = (held.st_dev, held.st_ino)
+            self._check()
+            attempt.fchmod_attempted = True
+            os.fchmod(attempt.fd, RECORD_MODE)
+            attempt.fchmod_returned = True
+            self._named_owned(attempt, name, draining=False)
+            offset = 0
+            while offset < len(body):
+                self._check()
+                attempt.write_attempts.append((offset, len(body) - offset))
+                wrote = os.write(attempt.fd, body[offset:])
+                attempt.write_returns.append(wrote)
+                if type(wrote) is not int or not 0 < wrote <= len(body) - offset:
+                    raise _WorkRefusedError
+                offset += wrote
+            self._check()
+            attempt.fsync_attempted = True
+            os.fsync(attempt.fd)
+            attempt.fsync_returned = True
+            self._close_record_fd(attempt)
+            self._named_owned(attempt, name, draining=False)
+            if self.published is not None:
+                self._read_owned_publication(self.published, draining=False)
+            self._check()
+            if self.operation is not token:
+                raise _WorkRefusedError
+            attempt.rename_attempted = True
+            os.replace(name, self.path.name, src_dir_fd=self.parent.fd, dst_dir_fd=self.parent.fd)
+            attempt.rename_returned = True
+            self.published = attempt
+            self._read_owned_publication(attempt, draining=False)
+        except BaseException as error:
+            if attempt is not None:
+                attempt.failure = error
+            self._fail(error)
+            # Cleanup retains its own failure; neither exception is flattened
+            # into a successful record write or an unowned retry.
+            if attempt is not None:
+                # Already retained by the one-use close operation.
+                with contextlib.suppress(BaseException):
+                    self._close_record_fd(attempt)
+            raise
+        finally:
+            self.operation = None
+
+    def remove(self, path: Path) -> None:
+        self._check(draining=True)
+        if path is not self.path or self.operation is not None or self.remove_attempted:
+            raise _WorkRefusedError
+        self.remove_attempted = True
+        try:
+            published = self.published
+            if published is not None:
+                self._read_owned_publication(published, draining=True)
+                self._named_owned(published, self.path.name, draining=True)
+                published.unlink_attempted = True
+                os.unlink(self.path.name, dir_fd=self.parent.fd)
+                published.unlink_returned = True
+            # Only a known pre-rename temporary may be removed. A throwing
+            # rename may have transferred it: retain debt and never guess.
+            for attempt in self.attempts:
+                if (attempt.inode is not None and attempt.name != self.path.name
+                        and not attempt.rename_attempted and not attempt.unlink_attempted):
+                    self._named_owned(attempt, attempt.name, draining=True)
+                    attempt.unlink_attempted = True
+                    os.unlink(attempt.name, dir_fd=self.parent.fd)
+                    attempt.unlink_returned = True
+        except BaseException as error:
+            self.remove_failure = error
+            self._fail(error)
+            raise
+        finally:
+            try:
+                self._close_record_fd(self.parent)
+            except BaseException:
+                if self.remove_failure is None:
+                    raise
+                # Parent close failure and handle remain in its journal; the
+                # earlier read/unlink cause remains this operation's failure.
+        if self.unknown or any(a.open_unknown or a.cleanup_failures for a in self.attempts):
+            raise _WorkRefusedError
+        self.removed = True
+
+
 def write_listener_record(
     path: Path,
     *,
@@ -211,6 +530,7 @@ def write_listener_record(
     profiles: Sequence[tuple[str, str]] | None = None,
     health_checked_at: int | None = None,
     health: Sequence[tuple[str, str, str, str]] | None = None,
+    _fixture_owner: _ListenerRecordOwner | None = None,
 ) -> None:
     """Atomically write the record: a new 0600 temp file in the same directory, fsync, rename.
 
@@ -241,6 +561,11 @@ def write_listener_record(
     ).encode("utf-8")
     if len(body) > MAX_RECORD_BYTES:
         raise OSError("listener record exceeds size limit")
+    if _fixture_owner is not None:
+        if type(_fixture_owner) is not _ListenerRecordOwner:
+            raise _WorkRefusedError
+        _fixture_owner.write(path, body, nonce, iid)
+        return
     tmp = path.with_name(f".{path.name}.{secrets.token_hex(8)}.tmp")
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(tmp, flags, RECORD_MODE)
@@ -257,11 +582,17 @@ def write_listener_record(
         raise
 
 
-def _read_fd(fd: int, *, limit: int = MAX_RECORD_BYTES) -> bytes | None:
+def _read_fd(
+    fd: int, *, limit: int = MAX_RECORD_BYTES, _fixture_owner: _ListenerRecordOwner | None = None,
+) -> bytes | None:
     """Every byte from `fd` (already `O_NOFOLLOW`-opened), or `None` if it exceeds `limit`."""
     chunks: list[bytes] = []
     total = 0
     while True:
+        if _fixture_owner is not None:
+            if type(_fixture_owner) is not _ListenerRecordOwner:
+                raise _WorkRefusedError
+            _fixture_owner._check(draining=_fixture_owner.remove_attempted)
         chunk = os.read(fd, 65_536)
         if not chunk:
             break
@@ -288,7 +619,9 @@ def _check_listener_dir_safety(parent: Path) -> None:
         raise ListenerRecordError("the listener record directory is unsafe")
 
 
-def remove_listener_record(path: Path) -> None:
+def remove_listener_record(
+    path: Path, *, _fixture_owner: _ListenerRecordOwner | None = None
+) -> None:
     """Remove the record if this process wrote it (a record of another process is left alone).
 
     SR-7 race safety: the pid is read from an `O_NOFOLLOW`-opened descriptor (`fstat`, never a
@@ -298,6 +631,11 @@ def remove_listener_record(path: Path) -> None:
     `os.replace` (PR1-4's own atomic record write) could otherwise make this process delete the
     NEW record instead of nothing.
     """
+    if _fixture_owner is not None:
+        if type(_fixture_owner) is not _ListenerRecordOwner:
+            raise _WorkRefusedError
+        _fixture_owner.remove(path)
+        return
     flags = os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0)
     try:
         fd = os.open(path, flags)

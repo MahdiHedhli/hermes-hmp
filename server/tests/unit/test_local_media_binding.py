@@ -995,7 +995,32 @@ S2_MEDIA_COMPONENT_BINDING = ('    if owner is not None:\n'
  '        service._fixture_adapter = owner.adapter\n')
 
 
+S3_MEDIA_RESOURCE_BINDING = (
+    '    if owner is None:\n'
+    '        app[media_fetch.MEDIA_SERVICE_KEY] = media_fetch.MediaFetchService()\n'
+    '    else:\n'
+    '        scope = _resources(ctx)\n'
+    '        if scope is None:\n'
+    '            raise RuntimeError("FIXTURE_RESOURCES_MISSING")\n'
+    '        record = scope.attempt(_ResourceSite.MEDIA, app)\n'
+    '        try:\n'
+    '            service = media_fetch.MediaFetchService(_fixture_resources=scope)\n'
+    '            scope.returned(record, service)\n'
+    '            app[media_fetch.MEDIA_SERVICE_KEY] = service\n'
+    '        except BaseException as error:\n'
+    '            if not record.acquired:\n'
+    '                scope.failed(record, error)\n'
+    '            raise\n'
+)
+
+
 def _assert_server_media_references(source: str) -> None:
+    # Invert the exact S3 acquisition to the original owner-None constructor.
+    assert source.count(S3_MEDIA_RESOURCE_BINDING) == 1
+    source = source.replace(
+        S3_MEDIA_RESOURCE_BINDING,
+        "    app[media_fetch.MEDIA_SERVICE_KEY] = media_fetch.MediaFetchService()\n", 1,
+    )
     # Invert only this exact reviewed component attachment, including its ownership guard.
     assert source.count(S2_MEDIA_COMPONENT_BINDING) == 1
     source = source.replace(S2_MEDIA_COMPONENT_BINDING, "", 1)
@@ -1688,3 +1713,16 @@ def test_unwrap_guard_mutations_are_detected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, edit: tuple[str, str]
 ) -> None:
     assert not _property_unwrap_bound(tmp_path, monkeypatch, {"adapter.py": [edit]})
+
+
+@pytest.mark.parametrize("old,new", [
+    ("MediaFetchService(_fixture_resources=scope)", "MediaFetchService()"),
+    ("scope.attempt(_ResourceSite.MEDIA, app)", "scope.attempt(_ResourceSite.MEDIA, ctx)"),
+    ("scope.returned(record, service)\n            app[media_fetch.MEDIA_SERVICE_KEY] = service",
+     "scope.returned(record, object())\n            app[media_fetch.MEDIA_SERVICE_KEY] = service"),
+])
+def test_s3_resource_binding_mutations_remain_detectable(old: str, new: str) -> None:
+    source = READ_SRC["server.py"]
+    assert source.count(old) == 1
+    with pytest.raises(AssertionError):
+        _assert_server_media_references(source.replace(old, new, 1))

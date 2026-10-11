@@ -60,6 +60,8 @@ from .fixture_work import (
     _media_submit,
     _owner,
     _publication,
+    _ResourceSite,
+    _ServingResources,
     _worker,
     _WorkSite,
 )
@@ -227,6 +229,7 @@ class MediaFetchService:
         _worker_cap: int = MEDIA_WORKERS,
         _device_cap: int = MEDIA_PERMITS_PER_DEVICE,
         _instance_cap: int = MEDIA_PERMITS_PER_INSTANCE,
+        _fixture_resources: _ServingResources | None = None,
     ) -> None:
         for value, limit in (
             (_worker_cap, MEDIA_WORKERS),
@@ -235,6 +238,7 @@ class MediaFetchService:
         ):
             if type(value) is not int or not 1 <= value <= limit:  # lower-only test seams
                 raise MediaServiceRefusal from None
+        self._fixture_resources = _fixture_resources
         self._fixture_work = None
         self._fixture_adapter = None
         self._lock = threading.Lock()
@@ -245,9 +249,24 @@ class MediaFetchService:
         self._workers_active = 0
         self._instance_used = 0
         self._device_used: dict[str, int] = {}
-        self._executor = ThreadPoolExecutor(
-            max_workers=MEDIA_WORKERS, thread_name_prefix="hmp-media"
-        )
+        if _fixture_resources is None:
+            self._executor = ThreadPoolExecutor(
+                max_workers=MEDIA_WORKERS, thread_name_prefix="hmp-media"
+            )
+        else:
+            scope = _fixture_resources
+            if type(scope) is not _ServingResources:
+                raise MediaServiceRefusal
+            record = scope.attempt(_ResourceSite.EXECUTOR, self)
+            try:
+                self._executor = ThreadPoolExecutor(
+                    max_workers=MEDIA_WORKERS, thread_name_prefix="hmp-media"
+                )
+                scope.returned(record, self._executor)
+            except BaseException as error:
+                if not record.acquired:
+                    scope.failed(record, error)
+                raise
 
     def __repr__(self) -> str:
         return "MediaFetchService()"
@@ -261,6 +280,25 @@ class MediaFetchService:
 
     def close(self) -> None:
         """Close admissions and release the executor without waiting or cancelling."""
+        if self._fixture_resources is not None:
+            scope = self._fixture_resources
+            record = scope.owned(_ResourceSite.EXECUTOR, self._executor)
+            with self._lock:
+                self._closed = True
+            if record.close_attempted:
+                if not record.close_returned:
+                    raise MediaServiceRefusal
+                return
+            record.close_attempted = True
+            try:
+                self._executor.shutdown(wait=False)
+            except BaseException as error:
+                record.close_failure = error
+                record.unknown = True
+                scope.work.request_stop(error)
+                raise
+            record.close_returned = True
+            return  # Actual submitted bodies remain separate retained records.
         with self._lock:
             already, self._closed = self._closed, True
         if not already:
