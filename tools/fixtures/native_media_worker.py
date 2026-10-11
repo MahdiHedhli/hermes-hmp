@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import binascii
+import copy
 import hashlib
 import json
 import os
@@ -1052,6 +1053,7 @@ class NativeRuntime:
         self.runner = self.adapter = self.ctx = None
         self.actors = {}
         self.raw = {}
+        self.producer_receipts = {}
         self.minted = False
         self.final_read_started = False
         self.routed = set()
@@ -1207,6 +1209,10 @@ class NativeRuntime:
                 factory_path=Path(self.spec["factoryPath"]),
                 factory_sha256=self.spec["factorySHA256"],
             )
+            observation = self.seed._producer_receipt(
+                observation, raw, invocation, command["profile"]
+            )
+            self.producer_receipts[invocation] = copy.deepcopy(observation)
             self.raw[invocation] = raw
             encoded = base64.b64encode(raw.encode()).decode("ascii")
             return {
@@ -1218,6 +1224,15 @@ class NativeRuntime:
             require(self.runner is None, "gateway_must_be_stopped")
             actor = self.actor(command)
             require(command["profile"] not in self.seeded_profiles, "canonical_profile_seed_replay")
+            invocation = args["invocation"]
+            require(
+                invocation in self.raw and invocation in self.producer_receipts,
+                "producer_receipt_missing",
+            )
+            producer_receipt = self.seed._producer_receipt(
+                copy.deepcopy(self.producer_receipts[invocation]),
+                self.raw[invocation], invocation, command["profile"],
+            )
             self.ledger.charge("messages", 6)
             custody = self.hmp_identity.resolve_custody(hermes_root=self.home)
             store = self.Store(self.store_path(custody.anchor_dir))
@@ -1236,6 +1251,7 @@ class NativeRuntime:
                 raw_result=self.raw[args["invocation"]],
                 invocation=args["invocation"],
                 bot_session_id=args["botSessionId"],
+                producer_receipt=producer_receipt,
             )
             self.seeded_profiles.add(command["profile"])
             return {"event": "actual_public_native_seed", **result}
