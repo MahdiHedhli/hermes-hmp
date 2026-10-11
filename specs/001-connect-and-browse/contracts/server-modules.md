@@ -84,6 +84,7 @@ server/
                                   #   size limits, rate limits (TR-6), error shaping (ERR-1), compat refusal (ERR-2a)
     readiness.py                  # v1.6 AR1: fixed closed readiness DTO mapping only; no authority or I/O
     presentation.py               # BI1 optional pure bounded projection; no route, authority, or I/O
+    presentation_files.py         # BI1 optional worker-only fixed-name FD reader; no owner, route, or startup I/O
     unicode17.py                  # BI1 pure Unicode 17 normalization/grapheme/category provider; no import I/O
     unicode17_data.py             # BI1 fixed generated Unicode 17 tuple tables; see UNICODE_LICENSE.txt
     controls_requests.py          # AR1 ControlsRequestStore: bounded exact-origin request/CAS SQL only

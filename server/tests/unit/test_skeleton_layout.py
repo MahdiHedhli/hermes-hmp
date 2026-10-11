@@ -39,6 +39,7 @@ CONTRACT_MODULES = {
     "readiness.py",
     # BI1 pure closed presentation projection and fixed Unicode 17 tables; no Hermes import.
     "presentation.py",
+    "presentation_files.py",
     "unicode17.py",
     "unicode17_data.py",
     # AR1 reviewed request Store, authenticated self routes, and read-only host TTY bridge.
