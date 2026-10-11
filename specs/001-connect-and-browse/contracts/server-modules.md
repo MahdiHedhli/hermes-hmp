@@ -86,6 +86,7 @@ server/
     presentation.py               # BI1 optional pure bounded projection; no route, authority, or I/O
     presentation_files.py         # BI1 optional worker-only fixed-name FD reader; no owner, route, or startup I/O
     presentation_yaml.py          # BI1 optional pure bounded event reducer; no YAML provider, file I/O, or route
+    presentation_jobs.py          # BI1 private frame/owner core; native authority and child supervisor unbound
     unicode17.py                  # BI1 pure Unicode 17 normalization/grapheme/category provider; no import I/O
     unicode17_data.py             # BI1 fixed generated Unicode 17 tuple tables; see UNICODE_LICENSE.txt
     controls_requests.py          # AR1 ControlsRequestStore: bounded exact-origin request/CAS SQL only

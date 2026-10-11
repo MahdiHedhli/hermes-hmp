@@ -41,6 +41,7 @@ CONTRACT_MODULES = {
     "presentation.py",
     "presentation_files.py",
     "presentation_yaml.py",
+    "presentation_jobs.py",
     "unicode17.py",
     "unicode17_data.py",
     # AR1 reviewed request Store, authenticated self routes, and read-only host TTY bridge.
