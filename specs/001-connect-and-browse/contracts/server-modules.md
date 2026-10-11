@@ -87,6 +87,7 @@ server/
     presentation_files.py         # BI1 optional worker-only fixed-name FD reader; no owner, route, or startup I/O
     presentation_yaml.py          # BI1 optional pure bounded event reducer; no YAML provider, file I/O, or route
     presentation_jobs.py          # BI1 private frame/owner core; native authority and child supervisor unbound
+    presentation_authority.py     # BI1 private parent-only authority custody; native read-only service unbound
     presentation_raster.py        # BI1 optional worker-only bounded raster fork; no reader or route import
     unicode17.py                  # BI1 pure Unicode 17 normalization/grapheme/category provider; no import I/O
     unicode17_data.py             # BI1 fixed generated Unicode 17 tuple tables; see UNICODE_LICENSE.txt

@@ -42,6 +42,7 @@ CONTRACT_MODULES = {
     "presentation_files.py",
     "presentation_yaml.py",
     "presentation_jobs.py",
+    "presentation_authority.py",
     "presentation_raster.py",
     "unicode17.py",
     "unicode17_data.py",
