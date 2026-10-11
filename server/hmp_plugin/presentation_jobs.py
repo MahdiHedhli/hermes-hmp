@@ -41,7 +41,11 @@ _FIELD_NAMES = frozenset({"display_name", "title", "shape", "color", "custom"})
 _SHAPES = frozenset(
     {"circle", "squircle", "pill", "triangle", "hexagon", "cloud", "drop", "blobatar"}
 )
-_COLOR = re.compile(r"#[0-9a-f]{6}\Z")
+_BLOB_KINDS = frozenset(
+    {"round", "organic", "boxy", "capsule", "nub", "cloud", "droplet", "hexagon", "sun", "triangle"}
+)
+_BLOB = re.compile(r"blobatar(?::([a-z0-9]{0,32})(?::([a-z]+))?)?\Z", re.ASCII)
+_COLOR = re.compile(r"#[0-9a-fA-F]{6}\Z", re.ASCII)
 _INPUT_KEYS = frozenset(
     {
         "schema",
@@ -291,8 +295,12 @@ def validate_header(value: object) -> dict[str, object]:
         if key in ("display_name", "title"):
             _utf8(item, 256)
         elif key == "shape":
-            if type(item) is not str or item not in _SHAPES:
+            if type(item) is not str or len(item) > 128:
                 _fail()
+            if item not in _SHAPES:
+                match = _BLOB.fullmatch(item)
+                if match is None or (match[2] is not None and match[2] not in _BLOB_KINDS):
+                    _fail()
         elif key == "color":
             if type(item) is not str or _COLOR.fullmatch(item) is None:
                 _fail()

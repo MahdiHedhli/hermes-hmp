@@ -8,6 +8,7 @@ import json
 import struct
 import unittest
 
+from hmp_plugin import presentation, presentation_jobs, presentation_yaml
 from hmp_plugin.presentation_jobs import (
     BoundedResultBuffer,
     CapturedLease,
@@ -101,6 +102,132 @@ class Authority:
 
 
 class Frames(unittest.TestCase):
+    def test_blobatar_yaml_event_frame_public_projection(self) -> None:
+        def scalar(value: str, style: str = "plain") -> presentation_yaml.YamlEvent:
+            return presentation_yaml.YamlEvent("scalar", value, style)
+
+        def event(kind: str) -> presentation_yaml.YamlEvent:
+            return presentation_yaml.YamlEvent(kind)
+
+        revisions: list[str] = []
+        for shape, expected_custom in (
+            ("blobatar", {"seed": "", "kind": None}),
+            ("blobatar:abc123:hexagon", {"seed": "abc123", "kind": "hexagon"}),
+            ("blobatar::droplet", {"seed": "", "kind": "droplet"}),
+        ):
+            with self.subTest(shape=shape):
+                source = (
+                    "display_name: Ada\nui_meta:\n  hermes-bots:\n"
+                    f"    title: Aster\n    shape: {shape}\n    custom: true\n"
+                ).encode()
+                events = [
+                    event("stream_start"),
+                    event("document_start"),
+                    event("mapping_start"),
+                    scalar("display_name"),
+                    scalar("Ada"),
+                    scalar("ui_meta"),
+                    event("mapping_start"),
+                    scalar("hermes-bots"),
+                    event("mapping_start"),
+                    scalar("title"),
+                    scalar("Aster"),
+                    scalar("shape"),
+                    scalar(shape),
+                    scalar("custom"),
+                    scalar("true"),
+                    event("mapping_end"),
+                    event("mapping_end"),
+                    event("mapping_end"),
+                    event("document_end"),
+                    event("stream_end"),
+                ]
+                raw = presentation_yaml.reduce_presentation_events(
+                    source, events, clock=lambda: 1.0, deadline=2.0
+                )
+                header = header_row()
+                header["fields"] = {
+                    "display_name": raw.display_name,
+                    "title": raw.title,
+                    "shape": raw.shape,
+                    "custom": raw.custom,
+                }
+                decoded, body = decode_output(encode_output(header, b""), CHALLENGE, 1)
+                self.assertEqual(body, b"")
+                fields = decoded["fields"]
+                result = presentation.project_presentation(
+                    iid="a" * 52,
+                    profile="alpha",
+                    bot_title=fields["title"],
+                    profile_display_name=fields["display_name"],
+                    canonical_fallback="Hermes",
+                    shape=fields["shape"],
+                    color=None,
+                    custom=fields["custom"],
+                    avatar=None,
+                    observed_at=100,
+                )
+                self.assertEqual(
+                    result["character"],
+                    {"version": 2, "shape": "blobatar", "color": None, "custom": expected_custom},
+                )
+                revisions.append(result["metadata_revision"])
+        self.assertEqual(len(set(revisions)), 3)
+        self.assertEqual(
+            revisions[1], "887eb42671a14c879b1df0de6740070f5956cf8d01cc3330f50542f0d6f99df8"
+        )
+
+    def test_frame_shape_grammar_matches_pure_projection(self) -> None:
+        self.assertEqual(presentation_jobs._BLOB.pattern, presentation.BLOB.pattern)
+        self.assertEqual(presentation_jobs._BLOB_KINDS, presentation.BLOB_KINDS)
+        self.assertEqual(
+            presentation_jobs._SHAPES,
+            presentation.CLASSIC_SHAPES | {"blobatar"},
+        )
+        for shape in (
+            "blobatar",
+            "blobatar:",
+            "blobatar:abc123",
+            "blobatar::droplet",
+            "blobatar:" + "a" * 32 + ":sun",
+        ):
+            with self.subTest(shape=shape):
+                header = header_row()
+                header["fields"]["shape"] = shape
+                self.assertEqual(decode_output(encode_output(header, b""), CHALLENGE, 1)[0], header)
+        for shape in (
+            "blobatarx",
+            "blobatar:ABC",
+            "blobatar:abc:unknown",
+            "blobatar::",
+            "blobatar:abc:Sun",
+            "blobatar:" + "a" * 33,
+            "blobatar:../secret",
+            "blobatar:https://bad.invalid",
+            "<svg>",
+        ):
+            with self.subTest(shape=shape):
+                header = header_row()
+                header["fields"]["shape"] = shape
+                with self.assertRaises(FrameError):
+                    encode_output(header, b"")
+        header = header_row()
+        header["fields"].update(shape="circle", color="#Aa33Ff", custom=True)
+        decoded = decode_output(encode_output(header, b""), CHALLENGE, 1)[0]
+        result = presentation.project_presentation(
+            iid="a" * 52,
+            profile="alpha",
+            bot_title="Aster",
+            profile_display_name=None,
+            canonical_fallback="Hermes",
+            shape=decoded["fields"]["shape"],
+            color=decoded["fields"]["color"],
+            custom=decoded["fields"]["custom"],
+            avatar=None,
+            observed_at=100,
+        )
+        self.assertEqual(result["character"]["color"], "#aa33ff")
+
     def test_closed_input_round_trip(self) -> None:
         row = input_row()
         self.assertEqual(decode_input(encode_input(row)), row)
