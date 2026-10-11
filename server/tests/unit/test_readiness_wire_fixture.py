@@ -17,11 +17,10 @@ from hmp_plugin.compat import (
     FeatureStatus,
     Unavailable,
 )
-from hmp_plugin.hermes_version import UNKNOWN_VERSION
 from hmp_plugin.contract import AuthzState
+from hmp_plugin.hermes_version import UNKNOWN_VERSION
 
 from .hmp_kit import Env, pair, run, url
-
 
 FIXTURE = (
     Path(__file__).resolve().parents[3]

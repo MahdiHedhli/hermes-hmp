@@ -1633,7 +1633,8 @@ BASE_HASHES = {
 
 
 R1_GUARD_HASHES = {
-    "local_media_active_scan.py": "1a81b3bc37164fdade921174f10b87ea4a67a9c793d3738e670935596643421a",
+    "local_media_active_scan.py": '1a81b3bc37164fdade921174f10b87ea4a67a9c793d3738e67093559'
+        '6643421a',
     "local_media_candidate.py": "f27337dfa5b3cfe315becd4fa30302147b4ef72a7d102c1c15e9c6a390c2768e",
 }
 R1_REVERSES = {
@@ -1649,14 +1650,24 @@ R1_REVERSES = {
     ),
     "local_media_candidate.py": (
         (
-            "    A repeated positive native row id makes the page ambiguous and yields no candidates.\n"
+            '    A repeated positive native row id makes '
+                'the page ambiguous and yields no candidates.'
+                '\n'
             "    Only ids in `returned_tool_ids` are considered. At most\n",
-            "    Only ids in `returned_tool_ids` are considered, and a repeated id is parsed once. At most\n",
+            '    Only ids in `returned_tool_ids` are '
+                'considered, and a repeated id is parsed once. '
+                'At most\n',
         ),
         (
-            "        # A native page with two rows claiming one id has no unique returned-row identity.\n"
-            "        # Refuse the whole optional media sidecar before parsing any result; the ordinary\n"
-            "        # text read retains its existing behavior.  This is bounded by MAX_ROWS above.\n"
+            '        # A native page with two rows '
+                'claiming one id has no unique returned-row '
+                'identity.\n'
+            '        # Refuse the whole optional media '
+                'sidecar before parsing any result; the '
+                'ordinary\n'
+            '        # text read retains its existing '
+                'behavior.  This is bounded by MAX_ROWS '
+                'above.\n'
             "        raw_ids = [_row_id(row) for row in raw_rows]\n"
             "        positive_ids = [row_id for row_id in raw_ids if row_id > 0]\n"
             "        if len(positive_ids) != len(set(positive_ids)):\n"

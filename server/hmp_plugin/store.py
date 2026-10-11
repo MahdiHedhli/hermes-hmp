@@ -295,7 +295,8 @@ _REQUEST_TRIGGERS = {
     "controls_revision_update": "CREATE TRIGGER controls_revision_update AFTER UPDATE ON "
     "device_owner_controls BEGIN " + _REVISION_STEP + "; END",
     "controls_revision_delete": "CREATE TRIGGER controls_revision_delete AFTER DELETE ON "
-    "device_owner_controls BEGIN " + _REVISION_STEP.replace("NEW.device_id", "OLD.device_id") + "; END",
+    "device_owner_controls BEGIN " + _REVISION_STEP.replace("NEW.device_id", "OLD.device_id")
+        + "; END",
 }
 
 
@@ -360,13 +361,11 @@ def _request_schema_valid(conn: sqlite3.Connection) -> bool:
         return False
     if conn.execute("PRAGMA foreign_key_check").fetchone() is not None:
         return False
-    if conn.execute(
+    return conn.execute(
         "SELECT 1 FROM device_owner_controls AS c LEFT JOIN "
         "device_owner_controls_revision AS r ON r.device_id = c.device_id "
         "WHERE r.revision IS NULL OR r.revision < 1 LIMIT 1"
-    ).fetchone() is not None:
-        return False
-    return True
+    ).fetchone() is None
 
 
 def _widen_cmid_status(conn: sqlite3.Connection) -> None:
@@ -470,7 +469,10 @@ class Store:
                     existing_version = conn.execute(
                         "SELECT schema_version FROM meta WHERE id = 1"
                     ).fetchone()
-                    if existing_version is None or type(existing_version["schema_version"]) is not int:
+                    if (
+                        existing_version is None
+                            or type(existing_version["schema_version"]) is not int
+                    ):
                         raise RuntimeError("store schema version unavailable")
                     if existing_version["schema_version"] > SCHEMA_VERSION:
                         # Old code must not edit, downgrade, or use an unknown future schema.
@@ -809,14 +811,18 @@ class Store:
     def revoke_family(self, family_id: str, now: int) -> None:
         with self._serialized_writer() as conn:
             conn.execute(
-                "UPDATE token_families SET revoked_at = ? WHERE family_id = ? AND revoked_at IS NULL",
+                'UPDATE token_families SET revoked_at = ? '
+                    'WHERE family_id = ? AND revoked_at IS '
+                    'NULL',
                 (now, family_id),
             )
 
     def revoke_families_for_device(self, device_id: str, now: int) -> None:
         with self._serialized_writer() as conn:
             conn.execute(
-                "UPDATE token_families SET revoked_at = ? WHERE device_id = ? AND revoked_at IS NULL",
+                'UPDATE token_families SET revoked_at = ? '
+                    'WHERE device_id = ? AND revoked_at IS '
+                    'NULL',
                 (now, device_id),
             )
 

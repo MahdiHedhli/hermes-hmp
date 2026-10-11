@@ -396,7 +396,9 @@ class ControlsRequestStore:
             if not _clock(conn, now):
                 return RequestStoreResult("clock_unknown")
             existing = conn.execute(
-                "SELECT * FROM controls_requests WHERE " + _ORIGIN_WHERE + " AND client_id = ?",
+                'SELECT * FROM controls_requests WHERE device_id = ? AND user_id = ? AND '
+                'family_id = ? AND iid = ? AND instance_epoch = ? AND '
+                'store_revocation_epoch = ? AND client_id = ?',
                 (*origin.values(), client_id),
             ).fetchone()
             if existing is not None:
@@ -455,7 +457,9 @@ class ControlsRequestStore:
             _ready(conn)
             clock_ok = _clock(conn, now)
             row = conn.execute(
-                "SELECT * FROM controls_requests WHERE " + _ORIGIN_WHERE + " AND client_id = ?",
+                'SELECT * FROM controls_requests WHERE device_id = ? AND user_id = ? AND '
+                'family_id = ? AND iid = ? AND instance_epoch = ? AND '
+                'store_revocation_epoch = ? AND client_id = ?',
                 (*origin.values(), client_id),
             ).fetchone()
             if row is None:
@@ -478,8 +482,9 @@ class ControlsRequestStore:
             _ready(conn)
             clock_ok = _clock(conn, now)
             row = conn.execute(
-                "SELECT * FROM controls_requests WHERE " + _ORIGIN_WHERE +
-                " AND request_id = ?", (*origin.values(), request_id),
+                'SELECT * FROM controls_requests WHERE device_id = ? AND user_id = ? AND '
+                'family_id = ? AND iid = ? AND instance_epoch = ? AND '
+                'store_revocation_epoch = ? AND request_id = ?', (*origin.values(), request_id),
             ).fetchone()
             if row is None:
                 return RequestRecordResult("not_found")
@@ -499,8 +504,9 @@ class ControlsRequestStore:
             _ready(conn)
             clock_ok = _clock(conn, now)
             row = conn.execute(
-                "SELECT * FROM controls_requests WHERE " + _ORIGIN_WHERE +
-                " AND client_id = ?", (*origin.values(), client_id),
+                'SELECT * FROM controls_requests WHERE device_id = ? AND user_id = ? AND '
+                'family_id = ? AND iid = ? AND instance_epoch = ? AND '
+                'store_revocation_epoch = ? AND client_id = ?', (*origin.values(), client_id),
             ).fetchone()
             if row is None:
                 return RequestRecordResult("not_found")
@@ -519,7 +525,9 @@ class ControlsRequestStore:
             _ready(conn)
             clock_ok = _clock(conn, now)
             row = conn.execute(
-                "SELECT * FROM controls_requests WHERE " + _ORIGIN_WHERE + " AND client_id = ?",
+                'SELECT * FROM controls_requests WHERE device_id = ? AND user_id = ? AND '
+                'family_id = ? AND iid = ? AND instance_epoch = ? AND '
+                'store_revocation_epoch = ? AND client_id = ?',
                 (*origin.values(), client_id),
             ).fetchone()
             if row is None:
@@ -545,8 +553,9 @@ class ControlsRequestStore:
             _ready(conn)
             clock_ok = _clock(conn, now)
             row = conn.execute(
-                "SELECT * FROM controls_requests WHERE " + _ORIGIN_WHERE +
-                " AND request_id = ?", (*origin.values(), request_id),
+                'SELECT * FROM controls_requests WHERE device_id = ? AND user_id = ? AND '
+                'family_id = ? AND iid = ? AND instance_epoch = ? AND '
+                'store_revocation_epoch = ? AND request_id = ?', (*origin.values(), request_id),
             ).fetchone()
             if row is None:
                 return RequestStoreResult("not_found")

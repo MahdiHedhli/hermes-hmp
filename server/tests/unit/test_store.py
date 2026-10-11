@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from hmp_plugin.contract import LIMITER_TABLE_MAX
-from hmp_plugin.store import PAIRING_PENDING_STATE, SCHEMA_VERSION, Store, _SCHEMA
+from hmp_plugin.store import _SCHEMA, PAIRING_PENDING_STATE, SCHEMA_VERSION, Store
 
 # Column-name signals that would mean raw secret/text material ended up in a table. Hash columns
 # (e.g. `secret_hash`, `hash`, `successor_hash`) are exactly how PR4-4/R16 say tokens and offer

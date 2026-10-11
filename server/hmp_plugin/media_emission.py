@@ -42,8 +42,8 @@ from .contract import (
     SnapshotResponse,
     WireMediaDescriptor,
 )
-from .request_ctx import MediaBound, ServerContext
 from .reads import require_bot_authorized
+from .request_ctx import MediaBound, ServerContext
 
 MEDIA_TOOL_NAME: Final = "image_generate"
 MAX_DESCRIPTORS: Final = MEDIA_DESCRIPTORS_PER_RESPONSE

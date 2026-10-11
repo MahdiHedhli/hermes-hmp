@@ -13,9 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from hmp_plugin.store import SCHEMA_VERSION, Store
 from hmp_plugin.auth import Authenticator
 from hmp_plugin.contract import ErrorCode, HmpError
+from hmp_plugin.store import SCHEMA_VERSION, Store
 
 WRITERS = frozenset({
     "revoke_all_for_identity_change", "insert_offer", "insert_pairing", "record_p4_ts",
@@ -97,17 +97,19 @@ def test_foreign_controls_reader_waits_for_committed_state(tmp_path: Path, commi
             done.set()
 
     try:
-        with pytest.raises(RuntimeError, match="abort") if not commit else _no_exception():
-            with store.transaction() as conn:
-                conn.execute("INSERT INTO device_owner_controls VALUES ('device', 1, 2)")
-                worker = threading.Thread(target=read)
-                worker.start()
-                assert started.wait(2)
-                assert not done.wait(0.05)
-                # The independent connection cannot observe this tentative authority either.
-                assert _separate_controls(store._path) is None
-                if not commit:
-                    raise RuntimeError("abort")
+        with (
+            (pytest.raises(RuntimeError, match="abort") if not commit else _NoException()),
+            store.transaction() as conn,
+        ):
+            conn.execute("INSERT INTO device_owner_controls VALUES ('device', 1, 2)")
+            worker = threading.Thread(target=read)
+            worker.start()
+            assert started.wait(2)
+            assert not done.wait(0.05)
+            # The independent connection cannot observe this tentative authority either.
+            assert _separate_controls(store._path) is None
+            if not commit:
+                raise RuntimeError("abort")
         worker.join(timeout=2)
         assert not worker.is_alive() and done.is_set() and not errors
         expected = (True, 1) if commit else (None, None)
@@ -117,7 +119,7 @@ def test_foreign_controls_reader_waits_for_committed_state(tmp_path: Path, commi
         store.close()
 
 
-class _no_exception:
+class _NoException:
     def __enter__(self):
         return None
     def __exit__(self, *args):
@@ -141,25 +143,29 @@ def test_foreign_nonce_writer_survives_request_rollback(tmp_path: Path) -> None:
             done.set()
 
     try:
-        with pytest.raises(RuntimeError, match="abort"):
-            with store.transaction() as conn:
-                conn.execute("INSERT INTO device_owner_controls VALUES ('device', 1, 2)")
-                worker = threading.Thread(target=write)
-                worker.start()
-                assert started.wait(2)
-                assert not done.wait(0.05)
-                raise RuntimeError("abort")
+        with (
+            pytest.raises(RuntimeError, match="abort"),
+            store.transaction() as conn,
+        ):
+            conn.execute("INSERT INTO device_owner_controls VALUES ('device', 1, 2)")
+            worker = threading.Thread(target=write)
+            worker.start()
+            assert started.wait(2)
+            assert not done.wait(0.05)
+            raise RuntimeError("abort")
         worker.join(timeout=2)
         assert not worker.is_alive() and done.is_set() and not errors
         assert store.nonce_seen("device", nonce)
         assert _separate_controls(store._path) is None
         with sqlite3.connect(store._path) as conn:
-            assert conn.execute("SELECT COUNT(*) FROM p5_nonces WHERE nonce = ?", (nonce,)).fetchone()[0] == 1
+            assert conn.execute("SELECT COUNT(*) FROM p5_nonces WHERE nonce = ?", (nonce,
+                )).fetchone()[0] == 1
     finally:
         store.close()
 
 
-def test_owner_reentry_joins_without_nested_begin_and_repeated_migration_reuses_conn(tmp_path: Path) -> None:
+def test_owner_reentry_joins_without_nested_begin_and_repeated_migration_reuses_conn(
+    tmp_path: Path) -> None:
     store = _store(tmp_path)
     try:
         original = store._conn
@@ -169,9 +175,11 @@ def test_owner_reentry_joins_without_nested_begin_and_repeated_migration_reuses_
             store.insert_token_family("fam", "device", 2)
             assert store.get_token_family("fam") is not None
             assert store.epoch_authority_snapshot() == (0, 0)
-            with pytest.raises(RuntimeError, match="nested"):
-                with store.transaction():
-                    pass
+            with (
+                pytest.raises(RuntimeError, match="nested"),
+                store.transaction(),
+            ):
+                pass
         assert store.get_token_family("fam") is not None
     finally:
         store.close()
@@ -240,7 +248,8 @@ def _write_public(store: Store, name: str) -> None:
     calls = {
         "revoke_all_for_identity_change": lambda: store.revoke_all_for_identity_change(4),
         "insert_offer": lambda: store.insert_offer("new-offer", b"t" * 32, 101),
-        "insert_pairing": lambda: store.insert_pairing("new-pair", "offer", b"pub", "Phone", b"x" * 16, b"y" * 16, 101),
+        "insert_pairing": lambda: store.insert_pairing("new-pair", "offer", b"pub", "Phone",
+            b"x" * 16, b"y" * 16, 101),
         "record_p4_ts": lambda: store.record_p4_ts("pair", 4),
         "insert_user": lambda: store.insert_user("new-user", "New", 4),
         "insert_device": lambda: store.insert_device("new-device", "user", "fp2", b"pub", "New", 4),
@@ -250,18 +259,27 @@ def _write_public(store: Store, name: str) -> None:
         "revoke_family": lambda: store.revoke_family("family", 4),
         "revoke_families_for_device": lambda: store.revoke_families_for_device("device", 4),
         "insert_refresh_token": lambda: store.insert_refresh_token(b"q" * 32, "family", 4),
-        "insert_access_token": lambda: store.insert_access_token(b"q" * 32, "family", "device", "iid", 101),
-        "rotate_refresh_token": lambda: store.rotate_refresh_token(old_hash=b"r" * 32, family_id="family", new_hash=b"q" * 32, successor_hash=b"z" * 32, issued_at=4),
+        "insert_access_token": lambda: store.insert_access_token(b"q" * 32, "family", "device",
+            "iid", 101),
+        "rotate_refresh_token": lambda: store.rotate_refresh_token(old_hash=b"r" * 32,
+            family_id="family", new_hash=b"q" * 32, successor_hash=b"z" * 32, issued_at=4),
         "record_p5_nonce": lambda: store.record_p5_nonce("device", b"new", 4),
         "set_chat": lambda: store.set_chat("user", "default", "conv", "new-chat"),
-        "set_session_baseline": lambda: store.set_session_baseline("user", "default", "new-session", "new-tip", 2, 4),
-        "mint_or_get_session_ref": lambda: store.mint_or_get_session_ref("user", "default", "new-session", "newref", 4),
-        "set_other_session_baseline": lambda: store.set_other_session_baseline("user", "default", "other", "new-tip", 2, 4),
+        "set_session_baseline": lambda: store.set_session_baseline("user", "default",
+            "new-session", "new-tip", 2, 4),
+        "mint_or_get_session_ref": lambda: store.mint_or_get_session_ref("user", "default",
+            "new-session", "newref", 4),
+        "set_other_session_baseline": lambda: store.set_other_session_baseline("user",
+            "default", "other", "new-tip", 2, 4),
         "reserve_cmid": lambda: store.reserve_cmid("iid", "user", "default", "new-cmid", b"q", 4),
-        "delete_cmid_reservation": lambda: store.delete_cmid_reservation("iid", "user", "default", "existing"),
-        "finalize_cmid": lambda: store.finalize_cmid("iid", "user", "default", "existing", status="accepted", result_json=None, updated_at=4),
-        "reserve_phone_cmid": lambda: store.reserve_phone_cmid("iid", "user", "default", "new-phone", b"q", 4),
-        "finalize_phone_cmid": lambda: store.finalize_phone_cmid("iid", "user", "default", "phone", status="submitted", result_json=None, updated_at=4),
+        "delete_cmid_reservation": lambda: store.delete_cmid_reservation("iid", "user",
+            "default", "existing"),
+        "finalize_cmid": lambda: store.finalize_cmid("iid", "user", "default", "existing",
+            status="accepted", result_json=None, updated_at=4),
+        "reserve_phone_cmid": lambda: store.reserve_phone_cmid("iid", "user", "default",
+            "new-phone", b"q", 4),
+        "finalize_phone_cmid": lambda: store.finalize_phone_cmid("iid", "user", "default",
+            "phone", status="submitted", result_json=None, updated_at=4),
         "set_roster_state": lambda: store.set_roster_state("user", "new", 4),
         "set_authorize_cooldown": lambda: store.set_authorize_cooldown("user", "default", 4),
         "write_audit": lambda: store.write_audit(4, "after", "ok"),
@@ -277,7 +295,8 @@ def _durable_dump(path: Path) -> tuple[str, ...]:
 
 @pytest.mark.parametrize("commit", [False, True])
 @pytest.mark.parametrize("name", sorted(READERS))
-def test_each_public_reader_waits_for_foreign_transaction(tmp_path: Path, name: str, commit: bool) -> None:
+def test_each_public_reader_waits_for_foreign_transaction(tmp_path: Path, name: str,
+    commit: bool) -> None:
     store = _store(tmp_path)
     _seed_full(store)
     started = threading.Event()
@@ -295,14 +314,16 @@ def test_each_public_reader_waits_for_foreign_transaction(tmp_path: Path, name: 
             finished.set()
 
     try:
-        with _no_exception() if commit else pytest.raises(RuntimeError, match="rollback-marker"):
-            with store.transaction() as conn:
-                conn.execute("INSERT INTO device_owner_controls VALUES ('device', 1, 4)")
-                worker = threading.Thread(target=work)
-                worker.start()
-                assert started.wait(2) and not finished.wait(0.03)
-                if not commit:
-                    raise RuntimeError("rollback-marker")
+        with (
+            (_NoException() if commit else pytest.raises(RuntimeError, match="rollback-marker")),
+            store.transaction() as conn,
+        ):
+            conn.execute("INSERT INTO device_owner_controls VALUES ('device', 1, 4)")
+            worker = threading.Thread(target=work)
+            worker.start()
+            assert started.wait(2) and not finished.wait(0.03)
+            if not commit:
+                raise RuntimeError("rollback-marker")
         worker.join(timeout=2)
         assert not worker.is_alive() and finished.is_set() and not errors
         assert len(values) == 1
@@ -316,7 +337,8 @@ def test_each_public_reader_waits_for_foreign_transaction(tmp_path: Path, name: 
 
 
 @pytest.mark.parametrize("name", sorted(WRITERS))
-def test_each_public_writer_owns_its_commit_after_foreign_rollback(tmp_path: Path, name: str) -> None:
+def test_each_public_writer_owns_its_commit_after_foreign_rollback(tmp_path: Path,
+    name: str) -> None:
     store = _store(tmp_path)
     _seed_full(store)
     baseline = _durable_dump(store._path)
@@ -334,14 +356,16 @@ def test_each_public_writer_owns_its_commit_after_foreign_rollback(tmp_path: Pat
             finished.set()
 
     try:
-        with pytest.raises(RuntimeError, match="rollback-marker"):
-            with store.transaction() as conn:
-                conn.execute("INSERT INTO device_owner_controls VALUES ('device', 1, 4)")
-                worker = threading.Thread(target=work)
-                worker.start()
-                assert started.wait(2) and not finished.wait(0.03)
-                assert _durable_dump(store._path) == baseline
-                raise RuntimeError("rollback-marker")
+        with (
+            pytest.raises(RuntimeError, match="rollback-marker"),
+            store.transaction() as conn,
+        ):
+            conn.execute("INSERT INTO device_owner_controls VALUES ('device', 1, 4)")
+            worker = threading.Thread(target=work)
+            worker.start()
+            assert started.wait(2) and not finished.wait(0.03)
+            assert _durable_dump(store._path) == baseline
+            raise RuntimeError("rollback-marker")
         worker.join(timeout=2)
         assert not worker.is_alive() and finished.is_set() and not errors
         assert _separate_controls(store._path) is None or name == "set_owner_controls"
@@ -350,7 +374,8 @@ def test_each_public_writer_owns_its_commit_after_foreign_rollback(tmp_path: Pat
         store.close()
 
 
-def test_future_schema_poison_refuses_every_authority_surface_without_downgrade(tmp_path: Path) -> None:
+def test_future_schema_poison_refuses_every_authority_surface_without_downgrade(
+    tmp_path: Path) -> None:
     path = tmp_path / "future.sqlite3"
     # Use a separate exact database with a complete old schema and only a future version
     # marker. Ordinary tables existing must not allow bearer or Store authority to continue.
@@ -371,7 +396,10 @@ def test_future_schema_poison_refuses_every_authority_surface_without_downgrade(
     with pytest.raises(RuntimeError, match="future store schema"):
         future.migrate()
     with sqlite3.connect(path) as conn:
-        assert conn.execute("SELECT schema_version FROM meta WHERE id=1").fetchone()[0] == SCHEMA_VERSION + 1
+        assert (
+            conn.execute("SELECT schema_version FROM meta WHERE id=1").fetchone()[0]
+                == SCHEMA_VERSION + 1
+        )
         assert conn.execute("PRAGMA journal_mode").fetchone()[0] == original_journal
         assert tuple(conn.execute(
             "SELECT type,name,sql FROM sqlite_master ORDER BY type,name"
@@ -411,13 +439,17 @@ def test_boundary_failure_poisons_connection_without_replay(tmp_path: Path, comm
     store._conn = _FailingBoundary(real, command)  # type: ignore[assignment]
     try:
         if command == "ROLLBACK":
-            with pytest.raises(sqlite3.OperationalError, match="injected"):
-                with store.transaction():
-                    raise RuntimeError("force rollback")
+            with (
+                pytest.raises(sqlite3.OperationalError, match="injected"),
+                store.transaction(),
+            ):
+                raise RuntimeError("force rollback")
         else:
-            with pytest.raises(sqlite3.OperationalError, match="injected"):
-                with store.transaction() as conn:
-                    conn.execute("INSERT INTO device_owner_controls VALUES ('device', 1, 2)")
+            with (
+                pytest.raises(sqlite3.OperationalError, match="injected"),
+                store.transaction() as conn,
+            ):
+                conn.execute("INSERT INTO device_owner_controls VALUES ('device', 1, 2)")
         for call in (store.instance_epoch, lambda: store.insert_user("later", "Later", 3)):
             with pytest.raises(RuntimeError, match="state unavailable"):
                 call()
@@ -472,10 +504,12 @@ def test_same_owner_writer_reentry_rolls_back_with_owner(tmp_path: Path, name: s
     _seed_full(store)
     baseline = _durable_dump(store._path)
     try:
-        with pytest.raises(RuntimeError, match="abort owner"):
-            with store.transaction():
-                _write_public(store, name)
-                raise RuntimeError("abort owner")
+        with (
+            pytest.raises(RuntimeError, match="abort owner"),
+            store.transaction(),
+        ):
+            _write_public(store, name)
+            raise RuntimeError("abort owner")
         assert _durable_dump(store._path) == baseline
     finally:
         store.close()
@@ -536,21 +570,37 @@ def _mutate_reader_target(conn: sqlite3.Connection, name: str) -> None:
         "owner_controls_decision": "INSERT INTO device_owner_controls VALUES ('device',1,4)",
         "readiness_owner_controls_value": "INSERT INTO device_owner_controls VALUES ('device',1,4)",
         "get_token_family": "UPDATE token_families SET revoked_at=4 WHERE family_id='family'",
-        "get_refresh_token": "UPDATE refresh_tokens SET issued_at=4 WHERE hash=x'" + (b"r" * 32).hex() + "'",
-        "get_access_token": "UPDATE access_tokens SET expires_at=101 WHERE hash=x'" + (b"a" * 32).hex() + "'",
+        "get_refresh_token": "UPDATE refresh_tokens SET issued_at=4 WHERE hash=?",
+        "get_access_token": "UPDATE access_tokens SET expires_at=101 WHERE hash=?",
         "nonce_seen": "DELETE FROM p5_nonces WHERE device_id='device' AND nonce=x'6f6c64'",
         "count_p5_nonces": "INSERT INTO p5_nonces VALUES ('device',x'6e6577',4)",
-        "get_chat": "UPDATE chats SET chat_id='changed' WHERE user_id='user' AND profile='default' AND conversation_id='conv'",
-        "get_session_baseline": "UPDATE session_baselines SET lineage_tip='changed' WHERE user_id='user' AND profile='default'",
+        "get_chat": "UPDATE chats SET chat_id='changed' WHERE "
+            "user_id='user' AND profile='default' AND "
+            "conversation_id='conv'",
+        "get_session_baseline": 'UPDATE session_baselines SET '
+            "lineage_tip='changed' WHERE user_id='user' AND"
+            " profile='default'",
         "resolve_session_ref": "UPDATE session_refs SET ref='changedref' WHERE ref='oldref'",
-        "get_other_session_baseline": "UPDATE other_session_baselines SET lineage_tip='changed' WHERE user_id='user' AND profile='default' AND session_id='other'",
-        "get_cmid_record": "UPDATE direct_send_idempotency SET status='accepted' WHERE iid='iid' AND user_id='user' AND profile='default' AND cmid='existing'",
-        "get_roster_state": "UPDATE roster_state SET served_set_hash='changed' WHERE user_id='user'",
-        "get_authorize_cooldown": "UPDATE authorize_cooldowns SET last_trigger_at=4 WHERE user_id='user' AND profile='default'",
+        "get_other_session_baseline": 'UPDATE other_session_baselines SET '
+            "lineage_tip='changed' WHERE user_id='user' AND "
+            "profile='default' AND session_id='other'",
+        "get_cmid_record": "UPDATE direct_send_idempotency SET status='accepted' WHERE "
+            "iid='iid' AND user_id='user' AND profile='default' AND "
+            "cmid='existing'",
+        "get_roster_state": 'UPDATE roster_state SET '
+            "served_set_hash='changed' WHERE "
+            "user_id='user'",
+        "get_authorize_cooldown": 'UPDATE authorize_cooldowns SET '
+            "last_trigger_at=4 WHERE user_id='user' AND "
+            "profile='default'",
         "audit_events": "INSERT INTO audit VALUES (4,'changed',NULL,'ok')",
     }
     assert set(sql) == READERS
-    conn.execute(sql[name])
+    parameters = {
+        "get_refresh_token": (b"r" * 32,),
+        "get_access_token": (b"a" * 32,),
+    }.get(name, ())
+    conn.execute(sql[name], parameters)
 
 
 @pytest.mark.parametrize("commit", [False, True])
@@ -574,16 +624,18 @@ def test_each_reader_exposes_only_its_own_committed_value(
         finally:
             done.set()
     try:
-        with _no_exception() if commit else pytest.raises(RuntimeError, match="abort reader"):
-            with store.transaction() as conn:
-                _mutate_reader_target(conn, name)
-                tentative = _reader_value(_read_public(store, name))
-                assert tentative != before  # exact reader target, never an unrelated Controls row
-                worker = threading.Thread(target=read)
-                worker.start()
-                assert started.wait(2) and not done.wait(0.03)
-                if not commit:
-                    raise RuntimeError("abort reader")
+        with (
+            (_NoException() if commit else pytest.raises(RuntimeError, match="abort reader")),
+            store.transaction() as conn,
+        ):
+            _mutate_reader_target(conn, name)
+            tentative = _reader_value(_read_public(store, name))
+            assert tentative != before  # exact reader target, never an unrelated Controls row
+            worker = threading.Thread(target=read)
+            worker.start()
+            assert started.wait(2) and not done.wait(0.03)
+            if not commit:
+                raise RuntimeError("abort reader")
         worker.join(timeout=2)
         assert not worker.is_alive() and done.is_set() and not errors
         assert values == [tentative if commit else before]
@@ -596,7 +648,8 @@ def test_each_reader_exposes_only_its_own_committed_value(
             reopened = Store(store._path)
             reopened.migrate()
             try:
-                assert _reader_value(_read_public(reopened, name)) == (tentative if commit else before)
+                assert _reader_value(_read_public(reopened, name)) == (tentative if commit
+                    else before)
             finally:
                 reopened.close()
     finally:
@@ -607,7 +660,8 @@ def test_two_valid_actors_never_yield_a_mixed_access_or_epoch_pair(tmp_path: Pat
     from hmp_plugin import crypto
     store = _store(tmp_path)
     store.insert_user("other-user", "Other", 1)
-    store.insert_device("other-device", "other-user", "other-fp", b"other-key", "Other", 1, state="ACTIVE")
+    store.insert_device("other-device", "other-user", "other-fp", b"other-key", "Other", 1,
+        state="ACTIVE")
     store.insert_token_family("family-one", "device", 1)
     store.insert_token_family("family-two", "other-device", 1)
     token_one, token_two = b"1" * 32, b"2" * 32
@@ -627,8 +681,12 @@ def test_two_valid_actors_never_yield_a_mixed_access_or_epoch_pair(tmp_path: Pat
     other = sqlite3.connect(store._path, isolation_level=None)
     try:
         other.execute("BEGIN IMMEDIATE")
-        other.execute("UPDATE access_tokens SET family_id='family-two', device_id='other-device' WHERE hash=?", (hash_one,))
-        other.execute("UPDATE access_tokens SET family_id='family-one', device_id='device' WHERE hash=?", (hash_two,))
+        other.execute('UPDATE access_tokens SET '
+            "family_id='family-two', "
+            "device_id='other-device' WHERE hash=?", (hash_one,))
+        other.execute('UPDATE access_tokens SET '
+            "family_id='family-one', "
+            "device_id='device' WHERE hash=?", (hash_two,))
         other.execute("UPDATE meta SET instance_epoch=1, store_revocation_epoch=1 WHERE id=1")
         assert pair() == before  # foreign changes are uncommitted on a separate connection
         other.execute("COMMIT")
@@ -643,7 +701,10 @@ def test_two_valid_actors_never_yield_a_mixed_access_or_epoch_pair(tmp_path: Pat
         assert store.epoch_authority_snapshot() == (2, 2)
         with pytest.raises(HmpError) as exc:
             auth.authenticate(bearer_one, "iid")
-        assert exc.value.code is ErrorCode.UNAUTHENTICATED  # mismatched family/device, no positive binding
+        assert (
+            exc.value.code is ErrorCode
+                .UNAUTHENTICATED  # mismatched family/device, no positive binding
+        )
     finally:
         if other.in_transaction:
             other.execute("ROLLBACK")

@@ -15,7 +15,10 @@ from . import wire
 from .auth import AuthContext, Authenticator
 from .contract import ErrorCode, HmpError
 from .controls_requests import (
-    ControlsRequestStore, RequestOrigin, RequestRecordView, remote_record_fields,
+    ControlsRequestStore,
+    RequestOrigin,
+    RequestRecordView,
+    remote_record_fields,
 )
 from .reads import require_bot_authorized
 from .request_ctx import context, peer_key, single_header
@@ -214,7 +217,8 @@ def _feature_available(ctx: Any, feature: str) -> bool:
     return ctx.is_model_available() and ctx.model_enabled()
 
 
-def _record_by_request(ctx: Any, origin: RequestOrigin, request_id: str, now: int) -> RequestRecordView:
+def _record_by_request(ctx: Any, origin: RequestOrigin, request_id: str,
+    now: int) -> RequestRecordView:
     try:
         result = ControlsRequestStore(ctx.store).status_by_request_id(
             origin, request_id=request_id, now=now, current_iid=ctx.iid
@@ -276,7 +280,8 @@ async def create(request: web.Request) -> web.Response:
     _current(request, ctx, who, origin)
     record = _record_by_request(ctx, origin, outcome.request_id, _now(ctx))
     return _record_response(request, ctx, who, origin, record,
-                            status=202 if outcome.code == "created" and record.state == "PENDING" else 200)
+                            status=202 if outcome.code == "created" and record.state
+                                == "PENDING" else 200)
 
 
 async def by_client_id(request: web.Request) -> web.Response:

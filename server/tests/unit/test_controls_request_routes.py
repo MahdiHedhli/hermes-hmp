@@ -9,7 +9,8 @@ from aiohttp.test_utils import TestClient
 from hmp_plugin import controls_request_routes
 from hmp_plugin.auth import Authenticator
 from hmp_plugin.contract import AuthzState
-from .hmp_kit import Env, code, get, pair, post, run, url
+
+from .hmp_kit import Env, code, get, pair, post, run
 
 PREFIX = "/devices/self/controls-requests"
 
@@ -57,13 +58,17 @@ def test_create_retry_recovery_cancel_and_history_only(tmp_path: Path) -> None:
         assert set(first) == {"protocol", "request_id", "client_request_id", "bot_profile",
                               "feature", "state", "expires_at", "scope",
                               "effective_controls", "controls_revision"}
-        assert first["state"] == "PENDING" and first["client_request_id"] == body["client_request_id"]
+        assert (
+            first["state"] == "PENDING" and first["client_request_id"] == body["client_request_id"]
+        )
         assert first["effective_controls"] == "missing"
         status, repeat = await post(client, PREFIX, body, headers=headers)
         assert status == 200 and repeat["request_id"] == first["request_id"]
-        status, conflict = await post(client, PREFIX, {**body, "feature": "models"}, headers=headers)
+        status, conflict = await post(client, PREFIX, {**body, "feature": "models"},
+            headers=headers)
         assert status == 409 and code(conflict) == "idempotency_conflict"
-        status, by_client = await get(client, PREFIX + "/by-client-id/" + body["client_request_id"], headers=headers)
+        status, by_client = await get(client, PREFIX + "/by-client-id/"
+            + body["client_request_id"], headers=headers)
         assert status == 200 and by_client["request_id"] == first["request_id"]
         rid = first["request_id"]
         status, by_id = await get(client, PREFIX + "/" + rid, headers=headers)
@@ -88,7 +93,8 @@ def test_foreign_origin_revocation_and_clock_refuse(tmp_path: Path) -> None:
         for path in (PREFIX + "/" + rid, PREFIX + "/by-client-id/" + body["client_request_id"]):
             status, reply = await get(client, path, headers=env.headers(second))
             assert status == 404 and code(reply) == "not_found"
-        status, reply = await post(client, PREFIX + "/" + rid + "/cancel", {}, headers=env.headers(second))
+        status, reply = await post(client, PREFIX + "/" + rid + "/cancel", {}, headers=env
+            .headers(second))
         assert status == 404 and code(reply) == "not_found"
         env.clock.now -= 1
         status, reply = await post(client, PREFIX, _body(), headers=env.headers(first))
@@ -196,7 +202,8 @@ def test_revocation_during_body_await_never_inserts(tmp_path: Path, monkeypatch)
     run(env, scenario)
 
 
-def test_host_denial_between_insert_and_record_read_returns_200(tmp_path: Path, monkeypatch) -> None:
+def test_host_denial_between_insert_and_record_read_returns_200(tmp_path: Path,
+    monkeypatch) -> None:
     env = _enabled(tmp_path)
     async def scenario(client: TestClient) -> None:
         dev = await pair(env, client)

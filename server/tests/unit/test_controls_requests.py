@@ -5,16 +5,16 @@ These tests do not exercise a live bearer, host TTY, bridge, or a real Controls 
 
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 import threading
-import contextlib
 from pathlib import Path
 
 import pytest
 
-from hmp_plugin.controls_requests import ControlsRequestStore, RequestOrigin
 import hmp_plugin.controls_requests as requests_module
-from hmp_plugin.store import Store, _SCHEMA
+from hmp_plugin.controls_requests import ControlsRequestStore, RequestOrigin
+from hmp_plugin.store import _SCHEMA, Store
 
 IID = "a" * 52
 CLIENT = "00000000-0000-4000-8000-000000000001"
@@ -58,9 +58,10 @@ def test_atomic_v2_migration_backfill_and_legacy_writers(tmp_path: Path) -> None
     store.migrate()
     assert store.request_schema_ready()
     db = store._require_conn()
-    revision = lambda dev: db.execute(
-        "SELECT revision FROM device_owner_controls_revision WHERE device_id = ?", (dev,)
-    ).fetchone()[0]
+    def revision(dev: str) -> int:
+        return db.execute(
+            "SELECT revision FROM device_owner_controls_revision WHERE device_id = ?", (dev,)
+        ).fetchone()[0]
     assert revision("dev_a") == 1
     assert revision("dev_b") == 0
 
@@ -103,7 +104,8 @@ def test_migration_failure_rolls_back_request_schema(tmp_path: Path, monkeypatch
     original = store_module._REQUEST_TRIGGERS
     monkeypatch.setattr(
         store_module, "_REQUEST_TRIGGERS",
-        {**original, "fault": "CREATE TRIGGER fault AFTER INSERT ON absent_table BEGIN SELECT 1; END"},
+        {**original,
+            "fault": "CREATE TRIGGER fault AFTER INSERT ON absent_table BEGIN SELECT 1; END"},
     )
     with pytest.raises(sqlite3.DatabaseError):
         Store(path).migrate()
@@ -242,13 +244,21 @@ def test_public_device_family_writer_cannot_interleave_checked_grant(
     assert historical.code == "ok" and historical.state == "GRANTED"
     db = store._require_conn()
     if writer == "insert_device":
-        assert db.execute("SELECT state FROM devices WHERE device_id='dev_new'").fetchone()[0] == "PENDING"
+        assert (
+            db.execute("SELECT state FROM devices WHERE device_id='dev_new'").fetchone()[0]
+                == "PENDING"
+        )
     elif writer == "insert_family":
-        assert db.execute("SELECT device_id FROM token_families WHERE family_id='fam_new'").fetchone()[0] == origin.device_id
+        assert (
+            db.execute("SELECT device_id FROM token_families WHERE family_id='fam_new'")
+                .fetchone()[0] == origin.device_id
+        )
     elif writer == "device":
-        assert db.execute("SELECT state FROM devices WHERE device_id=?", (origin.device_id,)).fetchone()[0] == "REVOKED"
+        assert db.execute("SELECT state FROM devices WHERE device_id=?", (origin.device_id,
+            )).fetchone()[0] == "REVOKED"
     else:
-        assert db.execute("SELECT revoked_at FROM token_families WHERE family_id=?", (origin.family_id,)).fetchone()[0] == 1002
+        assert db.execute("SELECT revoked_at FROM token_families WHERE family_id=?", (origin
+            .family_id,)).fetchone()[0] == 1002
     separate = sqlite3.connect(store._path)
     try:
         assert separate.execute(
@@ -272,10 +282,13 @@ def test_revocation_helper_joins_same_thread_transaction(tmp_path: Path) -> None
     origin = _seed(store)
     with store.transaction() as conn:
         store.revoke_family(origin.family_id, 1000)
-        assert conn.execute("SELECT revoked_at FROM token_families WHERE family_id=?", (origin.family_id,)).fetchone()[0] == 1000
-        with pytest.raises(RuntimeError, match="nested Store.transaction"):
-            with store.transaction():
-                pass
+        assert conn.execute("SELECT revoked_at FROM token_families WHERE family_id=?", (origin
+            .family_id,)).fetchone()[0] == 1000
+        with (
+            pytest.raises(RuntimeError, match=r"nested Store.transaction"),
+            store.transaction(),
+        ):
+            pass
     assert store.get_token_family(origin.family_id)["revoked_at"] == 1000
     store.close()
 
@@ -300,9 +313,11 @@ def test_revocation_committed_first_refuses_allow(tmp_path: Path, writer: str) -
     assert answer.code == "already_decided" and answer.state == "REVOKED"
     db = store._require_conn()
     assert db.execute("SELECT COUNT(*) FROM device_owner_controls").fetchone()[0] == 0
-    assert db.execute("SELECT revision FROM device_owner_controls_revision WHERE device_id=?", (origin.device_id,)).fetchone() is None
+    assert db.execute("SELECT revision FROM device_owner_controls_revision WHERE device_id=?",
+        (origin.device_id,)).fetchone() is None
     assert requests_module._revision(db, origin.device_id) == (0, None)
-    assert db.execute("SELECT state FROM controls_requests WHERE request_id=?", (request.request_id,)).fetchone()[0] == "REVOKED"
+    assert db.execute("SELECT state FROM controls_requests WHERE request_id=?", (request
+        .request_id,)).fetchone()[0] == "REVOKED"
     store.close()
 
 
@@ -527,7 +542,8 @@ def test_clock_expiry_cancel_and_positive_readback_boundary(tmp_path: Path) -> N
     first = _request(api, origin)
     assert api.status(origin, client_id=CLIENT, now=1001, current_iid=IID).state == "PENDING"
     assert api.status(origin, client_id=CLIENT, now=999, current_iid=IID).code == "clock_unknown"
-    assert _request(api, origin, client="00000000-0000-4000-8000-000000000002", now=999).code == "clock_unknown"
+    assert _request(api, origin, client="00000000-0000-4000-8000-000000000002",
+        now=999).code == "clock_unknown"
     assert api.decide(
         first.request_id, allow=True, now=999, current_iid=IID,
         precommit_external_verified=True,
@@ -544,7 +560,8 @@ def test_clock_expiry_cancel_and_positive_readback_boundary(tmp_path: Path) -> N
     )
     assert positive.code == "committed_needs_effective_readback"
     assert positive.state == "GRANTED" and store.owner_controls_decision(origin.device_id)
-    assert api.cancel(origin, client_id=second_client, now=1004, current_iid=IID).code == "already_decided"
+    assert api.cancel(origin, client_id=second_client, now=1004,
+        current_iid=IID).code == "already_decided"
     assert api.decide(
         second.request_id, allow=True, now=1004, current_iid=IID,
         precommit_external_verified=True,
@@ -756,6 +773,7 @@ def test_remote_history_projection_is_closed_bounded_and_not_authority(
     tmp_path: Path,
 ) -> None:
     from dataclasses import replace
+
     from hmp_plugin.controls_requests import remote_record_fields
 
     store = Store(tmp_path / 'dto.sqlite3')
@@ -776,7 +794,7 @@ def test_remote_history_projection_is_closed_bounded_and_not_authority(
     known_missing = remote_record_fields(record, effective_controls='missing')
     assert known_missing['effective_controls'] == 'missing'
     assert known_missing['controls_revision'] == '0'
-    assert not set(('device_id', 'user_id', 'family_id', 'iid')).intersection(fields)
+    assert not {'device_id', 'user_id', 'family_id', 'iid'}.intersection(fields)
     with pytest.raises(ValueError):
         remote_record_fields(record, effective_controls='allowed')
     with pytest.raises(ValueError):
