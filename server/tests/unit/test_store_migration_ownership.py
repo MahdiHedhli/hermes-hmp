@@ -182,7 +182,9 @@ def test_migration_success_keeps_connection_for_owner(monkeypatch, existing):
 
 @pytest.mark.parametrize("existing", [False, True])
 def test_future_schema_still_refused_before_writes(monkeypatch, existing):
-    harness = MigrationHarness(store_module, monkeypatch, existing=existing, version=3).run()
+    harness = MigrationHarness(
+        store_module, monkeypatch, existing=existing, version=store_module.SCHEMA_VERSION + 1
+    ).run()
     assert isinstance(harness.caught, RuntimeError)
     assert str(harness.caught) == "future store schema unavailable"
     assert not harness.returned and harness.store._poisoned
