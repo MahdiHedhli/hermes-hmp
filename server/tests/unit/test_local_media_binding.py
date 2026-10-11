@@ -41,6 +41,7 @@ import ast
 import builtins
 import dataclasses
 import functools
+import hashlib
 import io
 import logging
 import os
@@ -1282,15 +1283,71 @@ def test_publication_assigns_one_global_tuple_and_has_no_split_names() -> None:
     assert not {n for n in module_level if "bridge" in n and n not in {"_bridge_cache"}}
 
 
-DYNAMIC_IMPORT_NAMES = {"importlib", "__import__", "import_module", "find_spec"}
+DYNAMIC_IMPORT_NAMES = {
+    "importlib", "__import__", "import_module", "find_spec", "exec_module", "load_module",
+    "reload", "module_from_spec", "spec_from_file_location", "spec_from_loader",
+}
+
+# Accepted binding-only adapter source f1518bc6, peer review df3d08dc. This pin
+# covers the WHOLE private function, not a blanket exception for its name.
+FIXTURE_BINDING_PARTS_AST_SHA256 = (
+    "d112a18a068e2ba14bb1e7c4cfb087ec8e3592c3048c4265929ccb8007574c2c"
+)
 
 
-def _dynamic_media_lookups(source: str) -> list[str]:
+def _fixture_ast_shape(node: object) -> object:
+    """Stable shape across supported AST versions; empty type_params has no behavior."""
+    if isinstance(node, ast.AST):
+        return type(node).__name__, tuple(
+            (name, _fixture_ast_shape(value))
+            for name, value in ast.iter_fields(node)
+            if name != "type_params" or value
+        )
+    if isinstance(node, list):
+        return tuple(_fixture_ast_shape(value) for value in node)
+    return node
+
+
+def _fixture_lookup_exceptions(tree: ast.Module) -> tuple[set[int], list[str]]:
+    """Permit only the three exact subtrees in the accepted readonly private lookup."""
+    matches = [
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_fixture_binding_parts"
+    ]
+    if not matches:
+        return set(), []
+    if len(matches) != 1:
+        return set(), ["duplicate_fixture_binding_parts"]
+    function = matches[0]
+    digest = hashlib.sha256(repr(_fixture_ast_shape(function)).encode()).hexdigest()
+    if digest != FIXTURE_BINDING_PARTS_AST_SHA256:
+        return set(), ["changed_fixture_binding_parts"]
+    allowed: set[int] = set()
+    for source in (
+        "import sys",
+        "from importlib.machinery import ModuleSpec",
+        "module = sys.modules.get('native_media_listener_factory')",
+    ):
+        expected = ast.dump(ast.parse(source).body[0], include_attributes=False)
+        statements = [
+            node for node in function.body
+            if ast.dump(node, include_attributes=False) == expected
+        ]
+        if len(statements) != 1:
+            return set(), ["invalid_fixture_lookup_subtree"]
+        allowed.update(id(node) for node in ast.walk(statements[0]))
+    return allowed, []
+
+
+def _dynamic_media_lookups(source: str, *, allow_fixture_binding: bool = False) -> list[str]:
     """Dynamic module lookups anywhere in a source: `importlib`/`__import__`/`import_module`/
     `find_spec` by name, attribute or import, and `sys.modules`. A local variable that merely is
     called `modules` is not one."""
-    bad: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    tree = ast.parse(source)
+    allowed, bad = _fixture_lookup_exceptions(tree) if allow_fixture_binding else (set(), [])
+    for node in ast.walk(tree):
+        if id(node) in allowed:
+            continue
         if isinstance(node, ast.Name) and (node.id in DYNAMIC_IMPORT_NAMES or node.id == "sys"):
             bad.append(node.id)
         elif isinstance(node, ast.Attribute) and (
@@ -1316,7 +1373,79 @@ def _dynamic_media_lookups(source: str) -> list[str]:
 
 @pytest.mark.parametrize("name", ["adapter.py", "bridge.py", "reads.py"])
 def test_adapter_bridge_and_reads_use_no_dynamic_module_lookup(name: str) -> None:
-    assert _dynamic_media_lookups(READ_SRC[name]) == []
+    assert _dynamic_media_lookups(READ_SRC[name], allow_fixture_binding=name == "adapter.py") == []
+
+
+@pytest.mark.parametrize(
+    "before,after",
+    [
+        ("sys.modules.get(\"native_media_listener_factory\")", "sys.modules.get(\"arbitrary\")"),
+        ("sys.modules.get(\"native_media_listener_factory\")", "sys.modules.get(adapter.config)"),
+        ("    import sys\n", "    import sys as other\n"),
+        ("from importlib.machinery import ModuleSpec", "from importlib.util import find_spec"),
+        (
+            "    return owner, binding, tuple(",
+            "    sys.modules['x'] = module\n    return owner, binding, tuple(",
+        ),
+        (
+            "    return owner, binding, tuple(",
+            "    del sys.modules['x']\n    return owner, binding, tuple(",
+        ),
+        (
+            "    return owner, binding, tuple(",
+            "    sys.modules.update({'x': module})\n    return owner, binding, tuple(",
+        ),
+        (
+            "    return owner, binding, tuple(",
+            "    spec.loader.exec_module(module)\n    return owner, binding, tuple(",
+        ),
+        (
+            "    return owner, binding, tuple(",
+            "    spec.loader.load_module('x')\n    return owner, binding, tuple(",
+        ),
+        (
+            "    return owner, binding, tuple(",
+            "    __import__('x')\n    return owner, binding, tuple(",
+        ),
+    ],
+)
+def test_private_fixture_lookup_rejects_key_import_write_and_loader_mutations(
+    before: str, after: str,
+) -> None:
+    source = READ_SRC["adapter.py"]
+    assert _dynamic_media_lookups(source, allow_fixture_binding=True) == []
+    mutant = source.replace(before, after)
+    assert mutant != source
+    assert _dynamic_media_lookups(mutant, allow_fixture_binding=True)
+
+
+@pytest.mark.parametrize(
+    "injection",
+    [
+        "import sys\nsys.modules.get('native_media_listener_factory')\n",
+        "def production():\n    import sys\n"
+        "    return sys.modules.get('native_media_listener_factory')\n",
+        "def production():\n    from importlib.machinery import ModuleSpec\n"
+        "    return ModuleSpec\n",
+        "def production():\n    loader.exec_module(module)\n",
+        "def production():\n    loader.load_module('x')\n",
+        "def production():\n    reload(module)\n",
+    ],
+)
+def test_fixture_exception_does_not_apply_outside_the_private_function(injection: str) -> None:
+    source = READ_SRC["adapter.py"]
+    assert _dynamic_media_lookups(source, allow_fixture_binding=True) == []
+    assert _dynamic_media_lookups(source + "\n" + injection, allow_fixture_binding=True)
+
+
+def test_private_fixture_lookup_duplicate_function_is_not_an_escape() -> None:
+    source = READ_SRC["adapter.py"]
+    function = next(
+        node for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == "_fixture_binding_parts"
+    )
+    mutant = source + "\n" + ast.unparse(function) + "\n"
+    assert _dynamic_media_lookups(mutant, allow_fixture_binding=True)
 
 
 @pytest.mark.parametrize(
