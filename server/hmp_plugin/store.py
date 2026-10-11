@@ -16,7 +16,9 @@ import contextlib
 import functools
 import sqlite3
 import threading
+import weakref
 from collections.abc import Iterator, Sequence
+from enum import Enum
 from pathlib import Path
 
 from .contract import LIMITER_TABLE_MAX
@@ -444,6 +446,13 @@ class Store:
         self._write_lock = threading.Lock()
         self._transaction_owner: int | None = None
         self._poisoned = False
+
+    @classmethod
+    def open_existing_readonly(
+        cls, path: Path, *, view: ExistingReadView
+    ) -> ExistingStoreReader:
+        """Open an existing read view; caller must qualify custody and view currentness."""
+        return _readonly_open(cls, path, view)
 
     def migrate(self) -> None:
         """Open the database (creating it if needed) and apply the schema. Idempotent: safe to
@@ -1301,3 +1310,397 @@ class Store:
     @_owned_read
     def audit_events(self) -> Sequence[sqlite3.Row]:
         return self._require_conn().execute("SELECT * FROM audit ORDER BY ts ASC").fetchall()
+
+
+_READONLY_ISSUED_READERS = weakref.WeakKeyDictionary()
+
+
+class ExistingReadView(Enum):
+    LIVE_WAL = "live_wal"
+    QUIESCENT_IMMUTABLE = "quiescent_immutable"
+
+
+class ExistingStoreReadOnlyError(RuntimeError):
+    """Fixed public refusal; original failures and debt stay in private custody."""
+
+    def __init__(self) -> None:
+        super().__init__("HMP existing store read view unavailable")
+
+
+class _ReadOnlyCustody:
+    def __init__(self) -> None:
+        self.connection = None
+        self.first_failure = None
+        self.cleanup_failure = None
+        self.cleanup_failures = []
+        self.phase = "OPENING"
+        self.close_attempted = False
+
+    def fail(self, failure: BaseException) -> None:
+        if self.first_failure is None:
+            self.first_failure = failure
+
+    def cleanup_fail(self, primitive: str, failure: BaseException) -> None:
+        if self.cleanup_failure is None:
+            self.cleanup_failure = failure
+        self.cleanup_failures.append((primitive, failure))
+
+
+def _readonly_raise(custody, failure: BaseException) -> None:
+    if custody is not None:
+        custody.fail(failure)
+    if isinstance(failure, Exception):
+        public = ExistingStoreReadOnlyError()
+        public._custody = custody
+        raise public from None
+    # Preserve cancellation itself; bypass a foreign exception's setattr override.
+    BaseException.__setattr__(failure, "_existing_store_readonly_custody", custody)
+    raise failure
+
+
+def _readonly_sql_tokens(sql: str) -> tuple[str, ...]:
+    if (
+        type(sql) is not str or len(sql) > 16_384 or "\0" in sql
+        or len(sql.encode("utf-8")) > 16_384
+    ):
+        raise ValueError("schema input unavailable")
+    whitespace = " \t\r\n\f\v"
+    if any(
+        (ord(char) < 32 and char not in whitespace) or 0x7F <= ord(char) <= 0x9F
+        for char in sql
+    ):
+        raise ValueError("schema input unavailable")
+    letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_"
+    digits = "0123456789"
+    punctuation = "(),.=<>+-*/%;!|&~"
+    tokens = []
+    cursor = 0
+    size = len(sql)
+    while cursor < size:
+        char = sql[cursor]
+        if char in whitespace:
+            cursor += 1
+            continue
+        if sql.startswith("--", cursor):
+            cursor += 2
+            while cursor < size and sql[cursor] != "\n":
+                cursor += 1
+            continue
+        if sql.startswith("/*", cursor):
+            cursor += 2
+            while cursor < size and not sql.startswith("*/", cursor):
+                if sql.startswith("/*", cursor):
+                    raise ValueError("schema input unavailable")
+                cursor += 1
+            if cursor == size:
+                raise ValueError("schema input unavailable")
+            cursor += 2
+            continue
+        start = cursor
+        if char in "'\"`[":
+            delimiter = "]" if char == "[" else char
+            cursor += 1
+            while cursor < size:
+                if sql[cursor] == delimiter:
+                    cursor += 1
+                    if cursor < size and sql[cursor] == delimiter:
+                        if char == "[":
+                            raise ValueError("schema input unavailable")
+                        cursor += 1
+                        continue
+                    break
+                cursor += 1
+            else:
+                raise ValueError("schema input unavailable")
+        elif char in letters:
+            cursor += 1
+            while cursor < size and sql[cursor] in letters + digits:
+                cursor += 1
+        elif char in digits:
+            cursor += 1
+            while cursor < size and sql[cursor] in digits:
+                cursor += 1
+        elif char in punctuation:
+            cursor += 1
+        else:
+            raise ValueError("schema input unavailable")
+        tokens.append(sql[start:cursor])
+        if len(tokens) > 4_096:
+            raise ValueError("schema input unavailable")
+    return tuple(tokens)
+
+
+def _readonly_table_tokens(tokens: tuple[str, ...]) -> tuple[str, ...]:
+    if tokens and tokens[-1] == ";":
+        tokens = tokens[:-1]
+    if ";" in tokens:
+        raise ValueError("schema input unavailable")
+    if tokens[:5] == ("CREATE", "TABLE", "IF", "NOT", "EXISTS"):
+        tokens = tokens[:2] + tokens[5:]
+    if tokens[:2] != ("CREATE", "TABLE"):
+        raise ValueError("schema input unavailable")
+    return tokens
+
+
+def _readonly_expected_tables() -> dict[str, tuple[str, ...]]:
+    required = {"meta", "users", "devices", "token_families", "access_tokens", "chats"}
+    expected = {}
+    statement = []
+    for lexeme in _readonly_sql_tokens(_SCHEMA):
+        statement.append(lexeme)
+        if lexeme == ";":
+            normalized = _readonly_table_tokens(tuple(statement))
+            name = normalized[2]
+            if name in required:
+                if name in expected:
+                    raise ValueError("schema input unavailable")
+                expected[name] = normalized
+            statement = []
+    if statement or set(expected) != required:
+        raise ValueError("schema input unavailable")
+    return expected
+
+
+def _readonly_catalog_sql(conn, kind: str, name: str) -> str:
+    rows = conn.execute(
+        "SELECT length(CAST(sql AS BLOB)) AS sql_bytes FROM sqlite_master "
+        "WHERE type = ? AND name = ?", (kind, name),
+    ).fetchmany(2)
+    if len(rows) != 1:
+        raise ValueError("schema input unavailable")
+    count = rows[0]["sql_bytes"]
+    if type(count) is not int or not 0 <= count <= 16_384:
+        raise ValueError("schema input unavailable")
+    rows = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type = ? AND name = ?", (kind, name),
+    ).fetchmany(2)
+    if len(rows) != 1:
+        raise ValueError("schema input unavailable")
+    sql = rows[0]["sql"]
+    if type(sql) is not str or len(sql) > 16_384 or len(sql.encode("utf-8")) != count:
+        raise ValueError("schema input unavailable")
+    _readonly_sql_tokens(sql)
+    return sql
+
+
+def _readonly_validate(conn) -> None:
+    for name, expected in _readonly_expected_tables().items():
+        actual = _readonly_catalog_sql(conn, "table", name)
+        if _readonly_table_tokens(_readonly_sql_tokens(actual)) != expected:
+            raise ValueError("schema input unavailable")
+    for sql in _REQUEST_SCHEMA:
+        kind = "index" if sql.startswith("CREATE INDEX") else "table"
+        _readonly_catalog_sql(conn, kind, sql.split()[2])
+    for name in _REQUEST_TRIGGERS:
+        _readonly_catalog_sql(conn, "trigger", name)
+    rows = conn.execute(
+        "SELECT COUNT(*) AS trigger_count FROM sqlite_master WHERE type = 'trigger' AND "
+        "tbl_name IN ('device_owner_controls','controls_requests',"
+        "'device_owner_controls_revision')"
+    ).fetchmany(2)
+    if (
+        len(rows) != 1 or type(rows[0]["trigger_count"]) is not int
+        or rows[0]["trigger_count"] != len(_REQUEST_TRIGGERS)
+        or not _request_schema_valid(conn)
+    ):
+        raise ValueError("schema input unavailable")
+
+
+def _readonly_cleanup(custody: _ReadOnlyCustody) -> None:
+    if custody.connection is None or custody.close_attempted:
+        return
+    custody.close_attempted = True
+    custody.phase = "CLOSE_IN_PROGRESS"
+    try:
+        custody.connection.close()
+    except BaseException as failure:
+        custody.cleanup_fail("close", failure)
+        custody.phase = "CLOSE_UNKNOWN"
+        raise
+    custody.connection = None
+    custody.phase = "CLOSED"
+
+
+def _readonly_rollback(conn, custody: _ReadOnlyCustody) -> None:
+    try:
+        conn.execute("ROLLBACK")
+    except BaseException as failure:
+        custody.cleanup_fail("rollback", failure)
+        raise
+
+
+def _readonly_open(cls, path: Path, view: ExistingReadView) -> ExistingStoreReader:
+    custody = _ReadOnlyCustody()
+    try:
+        if (
+            cls is not Store or type(path) is not type(Path()) or not path.is_absolute()
+            or "\0" in str(path) or type(view) is not ExistingReadView
+            or view not in (ExistingReadView.LIVE_WAL, ExistingReadView.QUIESCENT_IMMUTABLE)
+        ):
+            raise ValueError("read view unavailable")
+        query = "mode=ro"
+        if view is ExistingReadView.QUIESCENT_IMMUTABLE:
+            query += "&immutable=1"
+        try:
+            conn = sqlite3.connect(
+                path.as_uri() + "?" + query, uri=True, isolation_level=None,
+                check_same_thread=False, cached_statements=0,
+            )
+        except BaseException:
+            custody.phase = "OPEN_UNKNOWN"
+            raise
+        custody.connection = conn
+        custody.phase = "VALIDATING"
+        conn.row_factory = sqlite3.Row
+        conn.execute("BEGIN")
+        try:
+            _readonly_validate(conn)
+            store = Store(path)
+            store._conn = conn
+            epochs = store.epoch_authority_snapshot()
+            if (
+                type(epochs) is not tuple or len(epochs) != 2
+                or any(type(value) is not int or value < 0 for value in epochs)
+            ):
+                raise ValueError("reader origin unavailable")
+        except BaseException as failure:
+            custody.fail(failure)
+            try:
+                _readonly_rollback(conn, custody)
+            except BaseException as cleanup:
+                if isinstance(failure, Exception) and not isinstance(cleanup, Exception):
+                    raise
+            raise
+        else:
+            _readonly_rollback(conn, custody)
+        # Connection is source-owned and validated; no fixture injects _conn.
+        reader = object.__new__(ExistingStoreReader)
+        reader._store = store
+        reader._custody = custody
+        reader._lock = threading.Lock()
+        reader._operation_owner = None
+        _READONLY_ISSUED_READERS[reader] = custody
+        custody.phase = "OPEN"
+        return reader
+    except BaseException as failure:
+        custody.fail(failure)
+        try:
+            _readonly_cleanup(custody)
+        except BaseException as cleanup:
+            # Preserve the first cancellation, and retain cleanup failure separately.
+            if isinstance(failure, Exception) and not isinstance(cleanup, Exception):
+                _readonly_raise(custody, cleanup)
+        _readonly_raise(custody, failure)
+
+
+class ExistingStoreReader:
+    """Restricted existing-state view; no writer, raw connection or general forwarding."""
+
+    def __init__(self) -> None:
+        _readonly_raise(None, ValueError("reader construction unavailable"))
+
+    def _owned(self):
+        custody = getattr(self, "_custody", None)
+        if (
+            type(self) is not ExistingStoreReader or type(custody) is not _ReadOnlyCustody
+            or _READONLY_ISSUED_READERS.get(self) is not custody
+        ):
+            _readonly_raise(None, ValueError("reader custody unavailable"))
+        return custody
+
+    def _enter(self, custody) -> None:
+        if self._operation_owner == threading.get_ident():
+            _readonly_raise(custody, ValueError("reader operation reentry"))
+
+    def _guard(self, custody) -> None:
+        if (
+            custody.phase != "OPEN" or custody.first_failure is not None
+            or custody.connection is None or self._store._conn is not custody.connection
+            or self._operation_owner != threading.get_ident()
+        ):
+            _readonly_raise(custody, ValueError("reader state unavailable"))
+
+    def _read(self, method: str, *args):
+        custody = self._owned()
+        if type(method) is not str or method not in (
+            "request_schema_ready", "revocation_epoch", "epoch_authority_snapshot",
+            "get_device", "access_authority_snapshot", "get_chat",
+        ):
+            _readonly_raise(custody, ValueError("reader method unavailable"))
+        self._enter(custody)
+        with self._lock:
+            self._operation_owner = threading.get_ident()
+            begun = False
+            try:
+                self._guard(custody)
+                conn = custody.connection
+                conn.execute("BEGIN")
+                begun = True
+                self._guard(custody)
+                epochs = self._store.epoch_authority_snapshot()
+                self._guard(custody)
+                if (
+                    type(epochs) is not tuple or len(epochs) != 2
+                    or any(type(value) is not int or value < 0 for value in epochs)
+                ):
+                    raise ValueError("reader origin unavailable")
+                result = getattr(self._store, method)(*args)
+                self._guard(custody)
+                begun = False
+                _readonly_rollback(conn, custody)
+                self._guard(custody)
+                if method == "request_schema_ready" and result is not True:
+                    custody.fail(ValueError("request schema unavailable"))
+                    return False
+                return result
+            except BaseException as failure:
+                custody.fail(failure)
+                if begun:
+                    begun = False
+                    try:
+                        _readonly_rollback(custody.connection, custody)
+                    except BaseException as cleanup:
+                        if isinstance(failure, Exception) and not isinstance(cleanup, Exception):
+                            _readonly_raise(custody, cleanup)
+                _readonly_raise(custody, failure)
+            finally:
+                self._operation_owner = None
+
+    def request_schema_ready(self) -> bool:
+        return self._read("request_schema_ready")
+
+    def revocation_epoch(self) -> int:
+        return self._read("revocation_epoch")
+
+    def epoch_authority_snapshot(self) -> tuple[int, int] | None:
+        return self._read("epoch_authority_snapshot")
+
+    def get_device(self, device_id: str) -> sqlite3.Row | None:
+        return self._read("get_device", device_id)
+
+    def access_authority_snapshot(self, token_hash: bytes) -> dict[str, object] | None:
+        return self._read("access_authority_snapshot", token_hash)
+
+    def get_chat(self, user_id: str, profile: str, conversation_id: str) -> sqlite3.Row | None:
+        return self._read("get_chat", user_id, profile, conversation_id)
+
+    def close(self) -> None:
+        custody = self._owned()
+        self._enter(custody)
+        with self._lock:
+            self._operation_owner = threading.get_ident()
+            try:
+                if custody.phase == "CLOSED":
+                    return
+                if custody.close_attempted or custody.connection is None:
+                    _readonly_raise(custody, ValueError("reader close unavailable"))
+                original_failure = custody.first_failure
+                try:
+                    _readonly_cleanup(custody)
+                except BaseException as failure:
+                    _readonly_raise(custody, failure)
+                self._store._conn = None
+                if custody.first_failure is not original_failure:
+                    _readonly_raise(custody, custody.first_failure)
+            finally:
+                self._operation_owner = None
