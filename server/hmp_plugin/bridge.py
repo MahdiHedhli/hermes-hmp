@@ -67,6 +67,7 @@ from .contract import (
     SessionSummary,
     WireToolCall,
 )
+from .fixture_work import _await_publication, _owner, _p6_submit, _publication, _worker, _WorkSite
 from .logging_policy import log_bridge_exception, log_event
 from .prompts import HelperChangedError, HelperUnavailableError
 
@@ -925,12 +926,14 @@ class HermesReadBridge:
             )
             real_loop = loop if loop is not None else asyncio.get_running_loop()
             adapter = self._adapter
-            future = asyncio.run_coroutine_threadsafe(adapter.handle_message(event), real_loop)
+            future = _p6_submit(self, adapter.handle_message(event), real_loop)
         except Exception as exc:
             log_bridge_exception(exc)
             return AuthorizeResult(authz=AuthzState.UNVERIFIABLE)
-        self._pending_triggers.add(future)
-        future.add_done_callback(self._trigger_done)
+        if _owner(self) is None:
+            self._pending_triggers.add(future)
+            future.add_done_callback(self._trigger_done)
+        _publication(self)
         if hasattr(self._adapter, "note_inert_reply"):
             self._adapter.note_inert_reply(chat_id)
         log_event("p6_trigger", outcome="sent")
@@ -1904,21 +1907,29 @@ class HermesReadBridge:
         `handle_message` on the loop. `allow_gateway_control` is false. On builds with
         admission tickets, task scheduling is not a successful submission: wait for the
         definitive admission outcome. None means the result is ambiguous."""
-        event = await asyncio.to_thread(
-            self._phone_event, user_id=user_id, profile=profile, text=text, message_id=message_id
+        event = await _worker(
+            self,
+            _WorkSite.CW013,
+            self._phone_event,
+            user_id=user_id,
+            profile=profile,
+            text=text,
+            message_id=message_id,
         )
-        await self._adapter.handle_message(event)
+        await _await_publication(self, self._adapter.handle_message(event))
         accepted = getattr(event, "_gateway_accepted", None) is True
         if getattr(event, "defer_policy", None) != "reject":
             # Older stock builds have no admission ticket. `_gateway_accepted` is only set True on
             # acceptance; False or missing also covers a busy-queued event that was retained but
             # never flagged, so it is unknown, never a definitive refusal.
+            _publication(self)
             return True if accepted else None
         # Reject policy: the reported admission ticket is authoritative. The initial scheduling
         # flag is deliberately not consulted (busy queue debounce leaves it False while the event
         # is retained).
         ticket = getattr(event, "admission_ticket", None)
         if ticket is None:
+            _publication(self)
             return None
         loop = asyncio.get_running_loop()
         deadline = loop.time() + PHONE_ADMISSION_WAIT_S
@@ -1927,6 +1938,7 @@ class HermesReadBridge:
             if reported is not None:
                 outcome = getattr(reported, "value", None)
                 if outcome == "admitted":
+                    _publication(self)
                     return True
                 if outcome in {
                     "refused_busy",
@@ -1936,14 +1948,17 @@ class HermesReadBridge:
                     "refused_lease_timeout",
                     "refused_unauthorized",
                 }:
+                    _publication(self)
                     return False
                 # REFUSED_OTHER includes persist_failed and unreported_exit. Its detail
                 # is not on the ticket, so this cannot safely be called definitive.
+                _publication(self)
                 return None
             remaining = deadline - loop.time()
             if remaining <= 0:
+                _publication(self)
                 return None
-            await asyncio.sleep(min(0.025, remaining))
+            await _await_publication(self, asyncio.sleep(min(0.025, remaining)))
 
     def _phone_event(self, *, user_id: str, profile: str, text: str, message_id: str) -> Any:
         try:

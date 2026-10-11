@@ -64,6 +64,7 @@ import secrets
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 from types import FunctionType, ModuleType
 from typing import Any
@@ -75,6 +76,15 @@ from . import cli, compat, direct_send, identity, prompts, reads, server
 from .authorize import Authorize
 from .cli import listener_record_path
 from .contract import PLATFORM_NAME, OtherWhy, WriteGateState
+from .fixture_work import (
+    _await_publication,
+    _Ingress,
+    _publication,
+    _ServingWork,
+    _worker,
+    _WorkRefusedError,
+    _WorkSite,
+)
 from .logging_policy import log_event
 from .reads import Reads, _fallback_display_name
 from .store import Store
@@ -625,6 +635,14 @@ def open_components(adapter: Any) -> server.ServerContext:
                 iid=ident.iid,
                 phone_available=ctx.is_phone_chat_available,
             )
+        if vars(adapter).get("_fixture_binding_attempted"):
+            # Negative marker before the completed context can be returned or served.
+            ctx._fixture_adapter = adapter
+            if ctx.direct_send_deps is not None:
+                ctx.direct_send_deps = replace(ctx.direct_send_deps, _fixture_adapter=adapter)
+            for component in (ctx.bridge, ctx.prompt_store, vars(adapter).get("_hmp_hooks")):
+                if component is not None:
+                    vars(component)["_fixture_adapter"] = adapter
         log_event("adapter_open", outcome=result.status.value)
         return ctx
     except BaseException as setup_failure:
@@ -640,9 +658,22 @@ def open_components(adapter: Any) -> server.ServerContext:
 
 
 _FIXTURE_CONTEXT_FIELDS = (
-    "registry", "scope", "role", "ordinal", "config", "runner", "original_entry",
-    "original_factory", "adapter_type", "source_module", "source_origin", "source_sha256",
-    "source_generation", "worker_generation", "listener_owner", "deadline",
+    "registry",
+    "scope",
+    "role",
+    "ordinal",
+    "config",
+    "runner",
+    "original_entry",
+    "original_factory",
+    "adapter_type",
+    "source_module",
+    "source_origin",
+    "source_sha256",
+    "source_generation",
+    "worker_generation",
+    "listener_owner",
+    "deadline",
 )
 
 
@@ -1030,12 +1061,66 @@ class HmpAdapter(BasePlatformAdapter):
         self._profile_refresh_task: asyncio.Task[None] | None = None
         self._record_lock = threading.Lock()
         self._read_worker_budget = server.ReadWorkerBudget()
+        self._fixture_work = None
         self._fixture_lifecycle: _FixtureLifecycle | None = None
         self._fixture_binding_attempted = False
         self._fixture_binding_failed = False
-        self._fixture_listener_binding: (
-            tuple[object, object, object, tuple[object, ...]] | None
-        ) = None
+        self._fixture_listener_binding: tuple[object, object, object, tuple[object, ...]] | None = (
+            None
+        )
+
+    def _bind_fixture_work(self, work: _ServingWork) -> None:
+        # Source-only installation. Real issuer and serving remain closed.
+        if (
+            type(self) is not HmpAdapter
+            or type(work) is not _ServingWork
+            or work.adapter is not self
+            or work.lifecycle is not self._fixture_lifecycle
+            or self._fixture_work is not None
+            or not work._context_current()
+        ):
+            raise _WorkRefusedError
+        ctx = work.context
+        if type(ctx) is not server.ServerContext or ctx._fixture_adapter is not self:
+            raise _WorkRefusedError
+        if ctx.direct_send_deps is not None:
+            if type(ctx.direct_send_deps) is not direct_send.DirectSendDeps:
+                raise _WorkRefusedError
+            ctx.direct_send_deps = replace(ctx.direct_send_deps, _fixture_work=work)
+        carriers = (
+            ctx,
+            self,
+            ctx.bridge,
+            ctx.direct_send_deps,
+            ctx.prompt_store,
+            vars(self).get("_hmp_hooks"),
+        )
+        work._context_objects = tuple(
+            (key, vars(ctx).get(key))
+            for key in (
+                "store",
+                "identity",
+                "bridge",
+                "reads",
+                "authorize",
+                "clock",
+                "direct_send_deps",
+                "prompt_store",
+                "read_worker_budget",
+                "readiness_generation",
+            )
+        )
+        current = work._context_current()
+        with work._mutex:
+            work._live_locked(current)
+            work._carriers = carriers
+        for component in carriers:
+            if component is not None and component is not ctx.direct_send_deps:
+                vars(component)["_fixture_work"] = work
+        if not work._context_current():
+            work.request_stop(_WorkRefusedError())
+            raise _WorkRefusedError
+        work._component_bind_complete = True
 
     def _bind_fixture_listener(self, slot: object) -> None:
         """One private issued binding; never import a fixture helper or acquire a listener."""
@@ -1248,9 +1333,8 @@ class HmpAdapter(BasePlatformAdapter):
         except Exception:
             log_event("listener_record_profiles", outcome="refresh_failed")
             return
-        if (
-            not refresh_health
-            and self._profile_names_key(profiles) == self._profile_names_key(self._known_profiles)
+        if not refresh_health and self._profile_names_key(profiles) == self._profile_names_key(
+            self._known_profiles
         ):
             return  # the periodic tick handles flag/key changes on an unchanged roster
         try:
@@ -1258,12 +1342,11 @@ class HmpAdapter(BasePlatformAdapter):
             with self._record_lock:
                 if self._server is not srv or self._record is None:
                     return  # disconnect won the race; never recreate a stale record
-                if (
-                    not refresh_health
-                    and self._profile_names_key(profiles)
-                    == self._profile_names_key(self._known_profiles)
-                ):
+                if not refresh_health and self._profile_names_key(
+                    profiles
+                ) == self._profile_names_key(self._known_profiles):
                     return  # an unchanged opportunistic read need not rewrite
+                _publication(self)
                 cli.write_listener_record(
                     self._record,
                     host=bound[0],
@@ -1304,11 +1387,13 @@ class HmpAdapter(BasePlatformAdapter):
             if srv is None or srv.ctx.bridge is None:
                 return
             try:
-                served = await asyncio.to_thread(srv.ctx.bridge.served_profiles)
+                served = await _worker(self, _WorkSite.CW007, srv.ctx.bridge.served_profiles)
             except Exception:
                 log_event("listener_record_profiles", outcome="refresh_failed")
             else:
-                await asyncio.to_thread(self._sync_refresh, served, refresh_health=True)
+                await _worker(
+                    self, _WorkSite.CW008, self._sync_refresh, served, refresh_health=True
+                )
             await asyncio.sleep(PROFILE_REFRESH_INTERVAL_S)
 
     async def _cancel_profile_refresh(self) -> None:
@@ -1384,9 +1469,10 @@ class HmpAdapter(BasePlatformAdapter):
 
     def note_inert_reply(self, chat_id: str) -> None:
         """The P6 trigger's outbound reply is still dropped (PR6-2)."""
-        hooks = self._hooks()
-        if hooks is not None:
-            hooks.note_inert(chat_id)
+        with _Ingress(self, _WorkSite.NATIVE_INERT):
+            hooks = self._hooks()
+            if hooks is not None:
+                hooks.note_inert(chat_id)
 
     async def send(
         self,
@@ -1397,21 +1483,28 @@ class HmpAdapter(BasePlatformAdapter):
     ) -> SendResult:
         """Phone-chat replies create bounded observations. The inert-trigger reply does not.
         Nothing here is logged (PR6-2, SEC-4)."""
-        hooks = self._hooks()
-        if hooks is None:
+        with _Ingress(self, _WorkSite.NATIVE_SEND):
+            hooks = self._hooks()
+            if hooks is None:
+                _publication(self)
+                return SendResult(success=True)
+            await _await_publication(self, hooks.reconcile_chat(chat_id))
+            _publication(self)
+            hooks.on_send(chat_id, content, reply_to, metadata)
+            _publication(self)
             return SendResult(success=True)
-        await hooks.reconcile_chat(chat_id)
-        hooks.on_send(chat_id, content, reply_to, metadata)
-        return SendResult(success=True)
 
     async def _send_exec_approval_prompt(self, prompt: Any) -> SendResult:
         """AP-6 / §3.3. An exact match becomes a card; ambiguous entries get deny-only recovery.
         Unbound text cannot become an approval answer."""
-        hooks = self._hooks()
-        if hooks is None:
-            return SendResult(success=False)
-        stored = await hooks.on_exec_approval(prompt)
-        return SendResult(success=stored)
+        with _Ingress(self, _WorkSite.NATIVE_APPROVAL):
+            hooks = self._hooks()
+            if hooks is None:
+                _publication(self)
+                return SendResult(success=False)
+            stored = await _await_publication(self, hooks.on_exec_approval(prompt))
+            _publication(self)
+            return SendResult(success=stored)
 
     async def send_clarify(
         self,
@@ -1423,26 +1516,33 @@ class HmpAdapter(BasePlatformAdapter):
         metadata: dict[str, Any] | None = None,
     ) -> SendResult:
         """Phone-chat clarify card. Does not call the base numbered-list implementation."""
-        del metadata
-        hooks = self._hooks()
-        if hooks is None:
-            return SendResult(success=False)
-        offered = [choice for choice in choices if isinstance(choice, str)] if choices else None
-        stored = await hooks.on_clarify(
-            chat_id=chat_id,
-            question=question,
-            choices=offered,
-            clarify_id=clarify_id,
-            session_key=session_key,
-        )
-        return SendResult(success=stored)
+        with _Ingress(self, _WorkSite.NATIVE_CLARIFY):
+            del metadata
+            hooks = self._hooks()
+            if hooks is None:
+                _publication(self)
+                return SendResult(success=False)
+            offered = [choice for choice in choices if isinstance(choice, str)] if choices else None
+            stored = await _await_publication(
+                self,
+                hooks.on_clarify(
+                    chat_id=chat_id,
+                    question=question,
+                    choices=offered,
+                    clarify_id=clarify_id,
+                    session_key=session_key,
+                ),
+            )
+            _publication(self)
+            return SendResult(success=stored)
 
     async def retire_clarify_card(self, clarify_id: str, notice: str | None = None) -> None:
         """The wait ended with no answer. The next poll omits the card. `notice` is not logged."""
-        del notice
-        hooks = self._hooks()
-        if hooks is not None:
-            hooks.retire(clarify_id)
+        with _Ingress(self, _WorkSite.NATIVE_RETIRE):
+            del notice
+            hooks = self._hooks()
+            if hooks is not None:
+                hooks.retire(clarify_id)
 
     async def get_chat_info(self, chat_id: str) -> dict[str, Any]:
         del chat_id

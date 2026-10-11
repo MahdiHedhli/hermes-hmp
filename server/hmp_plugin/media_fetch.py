@@ -55,6 +55,14 @@ from .contract import (
     ErrorCode,
     HmpError,
 )
+from .fixture_work import (
+    _await_publication,
+    _media_submit,
+    _owner,
+    _publication,
+    _worker,
+    _WorkSite,
+)
 from .logging_policy import log_event
 from .reads import require_bot_authorized
 from .request_ctx import bearer, context
@@ -102,6 +110,7 @@ class _Lease:
     def _publish(self, payload: Any) -> bool:
         """Hand a phase-one payload to the live handler; refuse (the caller drops it) after
         `finish()`. Returns only a bool."""
+        _publication(self._service)
         with self._service._lock:
             if self._finished or self._payload is not None:
                 return False
@@ -137,6 +146,9 @@ class _Lease:
         returns an exact `payload_type` instance publishes it to the mailbox; the future's own
         result is only a bool. A submission failure unwinds its permits exactly."""
         service = self._service
+        owner = _owner(service)
+        if owner is not None:
+            _publication(service)
         with service._lock:
             if service._closed or self._finished:
                 return CLOSED, None
@@ -146,6 +158,13 @@ class _Lease:
             self._pending += 1
         run = _runner(self, call, payload_type)
         copied = contextvars.copy_context()
+        if owner is not None:
+            # Unknown submission retains both permits and its exact debt record.
+            # The source wrapper releases only after its physical body returns.
+            try:
+                return STARTED, _media_submit(owner, self, copied, run)
+            except Exception:
+                return SUBMISSION_FAILED, None
         try:
             future: Future[bool] = service._executor.submit(copied.run, run)
         except BaseException:
@@ -216,6 +235,8 @@ class MediaFetchService:
         ):
             if type(value) is not int or not 1 <= value <= limit:  # lower-only test seams
                 raise MediaServiceRefusal from None
+        self._fixture_work = None
+        self._fixture_adapter = None
         self._lock = threading.Lock()
         self._closed = False
         self._worker_cap = _worker_cap
@@ -334,7 +355,7 @@ async def serve(request: web.Request) -> web.StreamResponse:
     if bridge is None:
         raise HmpError(ErrorCode.MEDIA_UNAVAILABLE)
     # 5: the initial per-bot grant, ERR-3 unchanged, on the shared default executor.
-    await asyncio.to_thread(require_bot_authorized, bridge, who.user_id, profile)
+    await _worker(ctx, _WorkSite.CW052, require_bot_authorized, bridge, who.user_id, profile)
     service = request.app.get(MEDIA_SERVICE_KEY)
     bound = ctx.media_snapshot() if ctx.media_enabled() else None  # 6
     if bound is None or not _service_ok(service, bound):
@@ -364,7 +385,7 @@ async def serve(request: web.Request) -> web.StreamResponse:
         )
         if future is None:
             raise _not_started(status)
-        if await _wait(future, deadline) is not True:
+        if await _await_publication(context(request), _wait(future, deadline)) is not True:
             log_event(_LOG_EVENT, outcome="phase_one_refused")
             raise _not_found()
         payload = lease.take()
@@ -375,12 +396,14 @@ async def serve(request: web.Request) -> web.StreamResponse:
         )
         if future is None:
             raise _not_started(status)
-        if await _wait(future, deadline) is not True:
+        if await _await_publication(context(request), _wait(future, deadline)) is not True:
             log_event(_LOG_EVENT, outcome="phase_two_refused")
             raise _not_found()
         # LM-12: from here to `prepare` there is no await, native call, file read or import.
+        _publication(ctx)
         response = _final_section(request, ctx, who, bound, service, ref, caller, entry, payload)
-        return await _stream(request, response, payload)
+        _publication(context(request))
+        return await _await_publication(context(request), _stream(request, response, payload))
     finally:
         payload = None
         lease.finish()
@@ -453,10 +476,13 @@ async def _stream(
     deadline = asyncio.get_running_loop().time() + MEDIA_WRITE_DEADLINE_S
     try:
         async with asyncio.timeout_at(deadline):
-            await response.prepare(request)
+            _publication(context(request))
+            await _await_publication(context(request), response.prepare(request))
             for start in range(0, size, STREAM_SLICE_BYTES):
-                await response.write(data[start : start + STREAM_SLICE_BYTES])
-            await response.write_eof()
+                await _await_publication(
+                    context(request), response.write(data[start : start + STREAM_SLICE_BYTES])
+                )
+            await _await_publication(context(request), response.write_eof())
     except asyncio.CancelledError:
         _abort(request)
         raise
@@ -468,6 +494,7 @@ async def _stream(
     finally:
         data = b""
         payload = None
+    _publication(context(request))
     return response
 
 

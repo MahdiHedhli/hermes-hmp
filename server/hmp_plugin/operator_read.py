@@ -3,6 +3,7 @@
 This endpoint never grants Controls. A TTY caller must independently verify its
 listener, repeat the read after confirmation, and use Store's final origin/CAS gate.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -22,6 +23,7 @@ from typing import Any
 
 from .contract import AuthzState
 from .controls_requests import ControlsRequestStore
+from .fixture_work import _budget_task, _Ingress, _owner, _publication, _WorkSite
 
 SOCKET_NAME = "controls-operator.sock"
 MAX_REQUEST = 512
@@ -368,19 +370,31 @@ class OperatorReadService:
 
     async def _context(self, request_id: str, challenge: str) -> dict[str, object]:
         ctx = self.ctx
+        _publication(ctx)
         if self._stopping or not ctx.read_worker_budget.reserve(operator=True):
             raise OperatorUnavailableError("operator capacity unavailable")
         self._outstanding += 1
         generation = ctx.readiness_generation
         deadline = time.monotonic() + DEADLINE_S
         try:
-            work = asyncio.create_task(asyncio.to_thread(
-                _collect, ctx, request_id, challenge, self.nonce, generation, deadline,
-            ))
+            work = _budget_task(
+                ctx,
+                _WorkSite.CW058,
+                _collect,
+                ctx,
+                request_id,
+                challenge,
+                self.nonce,
+                generation,
+                deadline,
+                operator=self,
+            )
         except BaseException:
-            ctx.read_worker_budget.release(operator=True)
-            self._outstanding -= 1
+            if _owner(ctx) is None:
+                ctx.read_worker_budget.release(operator=True)
+                self._outstanding -= 1
             raise
+
         def release(done: asyncio.Task[Any]) -> None:
             with contextlib.suppress(BaseException):
                 done.exception()
@@ -388,46 +402,59 @@ class OperatorReadService:
             self._outstanding -= 1
             if self._stopping and self._outstanding == 0:
                 self._drained.set()
-        work.add_done_callback(release)
+
+        if _owner(ctx) is None:
+            work.add_done_callback(release)
         try:
             return await asyncio.wait_for(asyncio.shield(work), DEADLINE_S)
         except (TimeoutError, asyncio.CancelledError):
             raise OperatorUnavailableError("operator context unavailable") from None
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        task = asyncio.current_task()
-        assert task is not None
-        self._clients.add(task)
-        self._active += 1
-        try:
-            if self._stopping or self._active > 2:
+        with _Ingress(self.ctx, _WorkSite.OPERATOR_CLIENT):
+            task = asyncio.current_task()
+            assert task is not None
+            self._clients.add(task)
+            self._active += 1
+            try:
+                if self._stopping or self._active > 2:
+                    return
+                sock = writer.get_extra_info("socket")
+                if sock is None or _peer_uid(sock) != os.getuid():
+                    return
+                raw = await asyncio.wait_for(reader.readline(), DEADLINE_S)
+                _publication(self.ctx)
+                if not raw.endswith(b"\n") or len(raw) > MAX_REQUEST:
+                    return
+                request_id, challenge = _request(raw[:-1], iid=self.ctx.iid, nonce=self.nonce)
+                payload = await self._context(request_id, challenge)
+                if not _safe_ijson(payload):
+                    return
+                body = (
+                    json.dumps(
+                        payload,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        ensure_ascii=True,
+                        allow_nan=False,
+                    ).encode("ascii")
+                    + b"\n"
+                )
+                if len(body) > MAX_RESPONSE or self._stopping:
+                    return
+                _publication(self.ctx)
+                writer.write(body)
+                await asyncio.wait_for(writer.drain(), DEADLINE_S)
+            except (Exception, asyncio.CancelledError):
+                # Deliberate empty-response refusal; no private exception text is exposed.
+                # The existing finally block still closes the writer and releases client state.
                 return
-            sock = writer.get_extra_info("socket")
-            if sock is None or _peer_uid(sock) != os.getuid():
-                return
-            raw = await asyncio.wait_for(reader.readline(), DEADLINE_S)
-            if not raw.endswith(b"\n") or len(raw) > MAX_REQUEST:
-                return
-            request_id, challenge = _request(raw[:-1], iid=self.ctx.iid, nonce=self.nonce)
-            payload = await self._context(request_id, challenge)
-            if not _safe_ijson(payload):
-                return
-            body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
-                              allow_nan=False).encode("ascii") + b"\n"
-            if len(body) > MAX_RESPONSE or self._stopping:
-                return
-            writer.write(body)
-            await asyncio.wait_for(writer.drain(), DEADLINE_S)
-        except (Exception, asyncio.CancelledError):
-            # Deliberate empty-response refusal; no private exception text is exposed.
-            # The existing finally block still closes the writer and releases client state.
-            return
-        finally:
-            self._active -= 1
-            self._clients.discard(task)
-            writer.close()
-            with contextlib.suppress(Exception):
-                await asyncio.wait_for(writer.wait_closed(), DEADLINE_S)
+            finally:
+                self._active -= 1
+                self._clients.discard(task)
+                writer.close()
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(writer.wait_closed(), DEADLINE_S)
 
 
 def read_context(path: Path, *, iid: str, nonce: str, request_id: str) -> dict[str, Any]:
