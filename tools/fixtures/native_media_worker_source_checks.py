@@ -4,12 +4,14 @@ import asyncio
 import base64
 import copy
 import hashlib
+import importlib.machinery
 import importlib.util
 import json
 import pathlib
 import runpy
 import sys
 import time
+from types import FunctionType, ModuleType
 
 HERE = pathlib.Path(__file__).resolve().parent
 WORKER = HERE / "native_media_worker.py"
@@ -27,12 +29,74 @@ w = runpy.run_path(str(WORKER), run_name="_inert_worker_source")
 Gate, RefusalError, Dispatcher, Ledger = (
     w[n] for n in ("LatePermitGate", "RefusalError", "Dispatcher", "Ledger")
 )
+
+
 # Published test module contains only source fakes.
 # Its collected test function is not called here.
-spec = importlib.util.spec_from_file_location("_inert_published_python8_cases", ORCH_TEST)
-m = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = m
-spec.loader.exec_module(m)
+def _existing_published_cases(registry):
+    """Reuse one collector-owned module; never replace another module's ownership."""
+    assert type(registry) is dict and len(registry) <= 16384
+    matches = []
+    for name, module in tuple(registry.items()):
+        if type(module) is not ModuleType:
+            continue
+        namespace = vars(module)
+        if namespace.get("__file__") == str(ORCH_TEST):
+            matches.append((name, module))
+    assert len(matches) <= 1, "ambiguous_published_test_modules"
+    if not matches:
+        return None
+    name, module = matches[0]
+    namespace = vars(module)
+    spec = namespace.get("__spec__")
+    assert type(spec) is importlib.machinery.ModuleSpec
+    assert spec.origin == str(ORCH_TEST) and spec.name == name
+    assert namespace.get("__name__") == name and spec.loader is not None
+    orchestrator = registry.get("_hmp_python8_orchestrator_v2_fixture")
+    assert type(orchestrator) is ModuleType and namespace.get("m") is orchestrator
+    source = vars(orchestrator)
+    source_spec = source.get("__spec__")
+    assert type(source_spec) is importlib.machinery.ModuleSpec
+    assert source.get("__file__") == str(ORCH)
+    assert source.get("__name__") == "_hmp_python8_orchestrator_v2_fixture"
+    assert source_spec.name == "_hmp_python8_orchestrator_v2_fixture"
+    assert source_spec.origin == str(ORCH) and source_spec.loader is not None
+    assert namespace.get("spec") is source_spec
+    for function_name in ("create", "run_all", "test_python8_inert_causal_groups"):
+        function = namespace.get(function_name)
+        assert type(function) is FunctionType
+        assert function.__globals__ is namespace
+        assert function.__code__.co_filename == str(ORCH_TEST)
+    fake_port = namespace.get("FakePort")
+    assert type(fake_port) is type and fake_port.__module__ == name
+    owner = source.get("PhaseOrchestrator")
+    assert type(owner) is type and owner.__module__ == source_spec.name
+    assert type(owner.__init__) is FunctionType
+    assert owner.__init__.__globals__ is source
+    assert owner.__init__.__code__.co_filename == str(ORCH)
+    return module
+
+
+def _published_cases():
+    # The two exact source hashes above are mandatory before either branch.
+    existing = _existing_published_cases(sys.modules)
+    if existing is not None:
+        return existing
+    test_name = "_inert_published_python8_cases"
+    assert test_name not in sys.modules, "unowned_test_namespace"
+    assert "_hmp_python8_orchestrator_v2_fixture" not in sys.modules, "unowned_orchestrator"
+    spec = importlib.util.spec_from_file_location(test_name, ORCH_TEST)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    # This installs only our previously absent slot. Failure retains it;
+    # never erase/pop/replace a collected or partially loaded module.
+    sys.modules[test_name] = module
+    spec.loader.exec_module(module)
+    assert _existing_published_cases(sys.modules) is module
+    return module
+
+
+m = _published_cases()
 assert len(m.m.STEPS) == 37
 assert len([s for s in m.m.STEPS if s.case in ("NM07", "NM08") and s.action == "fetch"]) == 6
 full = m.create(port=m.FakePort())
