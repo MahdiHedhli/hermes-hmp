@@ -798,3 +798,27 @@ def test_failed_commit_with_unreadable_transaction_state_poisons_store(tmp_path:
             store.instance_epoch()
     finally:
         store.close()
+
+
+def test_commit_applied_then_error_poisoned_without_claiming_rollback(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    real = store._conn
+    assert real is not None
+    class Applied(_FailingBoundary):
+        def execute(self, sql, *args):
+            result = self.real.execute(sql, *args)
+            if sql == "COMMIT":
+                raise sqlite3.OperationalError("synthetic lost commit acknowledgement")
+            return result
+    store._conn = Applied(real, "COMMIT")
+    try:
+        with (
+            pytest.raises(RuntimeError, match="commit outcome unavailable"),
+            store.transaction() as conn,
+        ):
+            conn.execute("INSERT INTO device_owner_controls VALUES ('device', 1, 2)")
+        assert _separate_controls(store._path) == 1
+        with pytest.raises(RuntimeError, match="state unavailable"):
+            store.instance_epoch()
+    finally:
+        store.close()

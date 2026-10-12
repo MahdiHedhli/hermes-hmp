@@ -592,14 +592,19 @@ class Store:
                 raise
             self._transaction_owner = threading.get_ident()
             settled = False
+            commit_started = False
             try:
                 yield conn
+                commit_started = True
                 conn.execute("COMMIT")
                 settled = True
             except BaseException:
                 try:
                     # SQLite may already have rolled back SQLITE_FULL/IOERR.
-                    if conn.in_transaction:
+                    active = conn.in_transaction
+                    if commit_started and not active:
+                        raise RuntimeError("Store commit outcome unavailable")
+                    if active:
                         conn.execute("ROLLBACK")
                     if conn.in_transaction:
                         raise RuntimeError("Store rollback state unavailable")
