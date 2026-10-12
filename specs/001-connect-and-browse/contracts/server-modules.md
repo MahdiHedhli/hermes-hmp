@@ -486,3 +486,5 @@ Native/helper/socket/current device and release qualifications remain separate.
 - `presentation_process.py`: fixed launch attempt custody, exact terminal waitpid and one signal-zero group observation. No destructive signal, runtime qualification or native route binding.
 
 - `presentation_control_pipe.py`: owned nonblocking schema2 input/one GO/control closure; binding only, no native authorization or process termination.
+
+- `presentation_input_v3.py`: closed input3 parent-policy/work transfer; no legacy decoder fallback or native authority. Actual entry migration/result2 remain pending.

@@ -354,3 +354,7 @@ authorized parent policy acquisition are still unbound. Independent review pendi
 ## October 12: seed preallocation correction
 
 Review held304d46b (BUDGET-SEED-01): despite the prior checkpoint claim, the intended early scalar-length guard had not applied to the actual source. Corrected exact-str/4096scalar guard now precedes NUL scan/split/encoding, retaining UTF8 byte ceiling. Added an actual allocation regression with a preallocated2MBhome;17budgetcasespass. The original inaccurate guard claim and review evidence remain recorded; closure pending.
+
+## October 12: strict input3 codec
+
+Added closed input3 with exact complete parent_work_counts, geometry-coupled N/4N/3S schedule and existing total caps. Common schema2 validation is reused only on a copied field subset; the new decoder refuses legacy schemas and missing/extra/duplicate counter fields. Original8192 envelope cap remains including new counts. Actual child/control/result migration remains pending and legacy actual source still performs no parent acquisition; no fallback/activation introduced. Focused input3/seed/layout initially269passed; extra named/full-envelope cases added. Independent codec review pending.
