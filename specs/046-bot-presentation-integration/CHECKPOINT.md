@@ -276,3 +276,7 @@ scope preparation. A late factory cannot proceed into profile I/O or output even
 with otherwise matching scope data. The new causal reports zero opens/output;
 20 real-file cases and selected lint pass. The factory itself is not forcibly
 bounded by these checks; actual child hard-deadline supervision remains required.
+
+## October 12: strict child schema 2 transfer
+
+Added the closed parent-qualified directory policy and bounded projection context codec, plus a schema-2-only GO reader. Canonical fallback must already match the existing normalized presentation name. Legacy schema 1 is rejected by the new path. No child entry, supervisor, native route, deployment or physical character result is claimed. Focused codec/control/layout verification: 260 passed; targeted Ruff imports repaired. Initial verification mistakenly referenced a nonexistent test file and ran no tests; the corrected invocation above completed. Independent source review remains pending.

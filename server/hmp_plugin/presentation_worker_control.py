@@ -11,6 +11,7 @@ import struct
 from collections.abc import Callable
 from typing import BinaryIO
 
+from .presentation_input_v2 import decode_input_v2
 from .presentation_jobs import INPUT_LIMIT, FrameError, decode_input
 
 
@@ -48,11 +49,28 @@ def read_worker_go(
     Matching challenges are solely a local job/IPC binding. The parent still
     has to prove its original native authority and own this actual child.
     """
+    return _read_go(stream, clock=clock, deadline=deadline, decoder=decode_input)
+
+
+def read_worker_go_v2(
+    stream: BinaryIO, *, clock: Callable[[], float], deadline: float
+) -> dict[str, object]:
+    """Strict schema2 child input; never retry as the legacy schema1 codec."""
+    return _read_go(stream, clock=clock, deadline=deadline, decoder=decode_input_v2)
+
+
+def _read_go(
+    stream: BinaryIO,
+    *,
+    clock: Callable[[], float],
+    deadline: float,
+    decoder: Callable[[bytes], dict[str, object]],
+) -> dict[str, object]:
     prefix = _exact(stream, 4, clock, deadline)
     size = struct.unpack(">I", prefix)[0]
     if size > INPUT_LIMIT:
         raise FrameError("BI1_CONTROL_REFUSED")
-    row = decode_input(prefix + _exact(stream, size, clock, deadline))
+    row = decoder(prefix + _exact(stream, size, clock, deadline))
     original_deadline = row["deadline_ns"] / 1_000_000_000
     if original_deadline > deadline:
         raise FrameError("BI1_CONTROL_REFUSED")
