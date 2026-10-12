@@ -390,3 +390,13 @@ Actual synthetic parent directory IO now feeds input3 child processing and a
 chunked result2 consumer; changed child inode is refused.47result/real-file cases
 pass. JobOwner consumption/native binding/hard termination are still open.
 Independent bounded receiver/comparison review pending.
+
+## October 12: review execution audit and acquisition regressions
+
+Live agent inventory showed reviewer completed atad31a3e, so subsequent queued
+send_message requests were not proof of running reviews. Restarted that same
+reviewer with explicit followup for74d75d3/9ba5e39/944bbac/dd924f9/90a0aad; all
+remain pending until actual receipts. No unreviewed deployment. Current source
+presentation suite379passed+190subtests. Added real parent-record allocation
+failure and exhausted-open-credit tests: retained pending FD closes after failure;
+exhaustion has0kernelopens.34real-file cases pass.

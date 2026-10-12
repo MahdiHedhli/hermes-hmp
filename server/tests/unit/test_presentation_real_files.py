@@ -1171,3 +1171,58 @@ def test_actual_parent_policy_and_child_result_preserve_counts_and_directory_cha
     with pytest.raises(FrameError):
         compare_parent_snapshot(header, snapshot=snapshot, parent_home=bound.home_path)
     # Synthetic IO composition only: no native grant, thread join or live route proof.
+
+
+def test_parent_pending_fd_survives_record_allocation_failure(scope, monkeypatch):
+    from hmp_plugin import presentation_parent_policy as module
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_jobs import FrameError
+
+    _, bound = scope
+    fs = TrackedOS()
+    owner = module.ParentPolicyReadOwner(
+        root=bound.root_path,
+        home=bound.home_path,
+        profile="default",
+        uid=os.geteuid(),
+        gid=os.getegid(),
+        ledger=PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline),
+        fs=fs,
+        current=lambda: True,
+    )
+
+    def fail(*args, **kwargs):
+        raise MemoryError("synthetic record allocation failure")
+
+    monkeypatch.setattr(module, "_HeldDirectory", fail)
+    with pytest.raises(FrameError):
+        owner.run()
+    assert fs.open_attempts == 1 and fs.opened == set()
+    assert owner.descriptors_closed and owner._pending_fd is None
+    assert owner._pending_close_attempted
+    assert isinstance(owner._failure, MemoryError)
+
+
+def test_parent_exhausted_open_credit_refuses_before_kernel_open(scope):
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_jobs import FrameError
+    from hmp_plugin.presentation_parent_policy import ParentPolicyReadOwner
+
+    _, bound = scope
+    fs = TrackedOS()
+    work = PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline)
+    for _ in range(80):
+        work.charge_open()
+    owner = ParentPolicyReadOwner(
+        root=bound.root_path,
+        home=bound.home_path,
+        profile="default",
+        uid=os.geteuid(),
+        gid=os.getegid(),
+        ledger=work,
+        fs=fs,
+        current=lambda: True,
+    )
+    with pytest.raises(FrameError):
+        owner.run()
+    assert fs.open_attempts == 0 and owner.descriptors_closed
