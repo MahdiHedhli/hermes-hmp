@@ -320,3 +320,7 @@ PIPES-01 independent closure accepted6c600de,11cases, receipt SHA739bdb986fc8ce2
 ## October 12: actual launch/terminal-wait ownership
 
 Implemented retained fixed Popen launch owner, typed uncertain launch failure, nonblocking serialized/sticky reentry checks, stable child PID binding, exact terminal os.waitpid evidence and one post-reap signal-zero group probe. No Popen poll/wait/signal helpers are used. Actual isolated reader with empty input returned its expected refusal/exit1, bounded pipes drained and group absence was observed. 248 initial process/layout cases passed; later bound-PID focused cases pass. Destructive signalling, auto-reap/competing-reaper runtime exclusion, hard termination schedule and JobOwner binding remain unimplemented; no activation. Independent source review pending.
+
+## October 12: owned control input/GO/EOF
+
+Implemented exclusive nonblocking control pipe with fixed schema2 byte packet, original deadline, descriptor identity/blocking checks, one-use input and existing GoHandoff, exact close attempt and retained unknown outcome. Caught callback reentry prevents writes; changed blocking flags refuse before effects. Native PRE_GO must still call this through ParentAuthorityAdapter; no credentials/authority are conveyed. 243 control/layout cases passed. Real reader composition with this control path added separately; process hard deadline/termination, reaper/source qualification and full binder remain open. Independent review pending.

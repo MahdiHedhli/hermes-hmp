@@ -763,7 +763,7 @@ def test_schema2_real_child_processing_preserves_projection_and_closes_files(sco
     assert body == b"" and fs.opened == set()
 
 
-@pytest.mark.parametrize("bounded_pipes", [False, True])
+@pytest.mark.parametrize("bounded_pipes", [False, True, "control"])
 def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope, bounded_pipes):
     import subprocess
     import sys
@@ -809,8 +809,19 @@ def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope, bou
         )
         try:
             owner = OwnedPresentationPipes(child.stdout, child.stderr)
-            child.stdin.write(payload)
-            child.stdin.close()
+            if bounded_pipes == "control":
+                from hmp_plugin.presentation_control_pipe import OwnedControlPipe
+
+                handle = object()
+                control = OwnedControlPipe(
+                    child.stdin, handle=handle, child=child, current=lambda: True
+                )
+                control.write_input(encode_input_v2(row))
+                control.send_go(handle, child, bound.challenge)
+                assert control.closed
+            else:
+                child.stdin.write(payload)
+                child.stdin.close()
             while not owner.drained:
                 owner.poll(deadline=bound.deadline)
             assert child.wait(timeout=1) == 0

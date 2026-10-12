@@ -484,3 +484,5 @@ Native/helper/socket/current device and release qualifications remain separate.
 - `presentation_pipes.py`: exclusive nonblocking bounded result/diagnostic pipe ownership; actual EOF/close only, no process wait/group/authority claim.
 
 - `presentation_process.py`: fixed launch attempt custody, exact terminal waitpid and one signal-zero group observation. No destructive signal, runtime qualification or native route binding.
+
+- `presentation_control_pipe.py`: owned nonblocking schema2 input/one GO/control closure; binding only, no native authorization or process termination.
