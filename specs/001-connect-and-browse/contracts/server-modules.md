@@ -492,3 +492,5 @@ Native/helper/socket/current device and release qualifications remain separate.
 - `presentation_output_v2.py`: closed result2 eight-total accounting and retained-parent comparison. Counter/cleanup claims do not prove authority, IO or resource custody.
 
 - `presentation_parent_policy.py`: retained directory-only no-follow policy observation and exact precharged success schedule; actual native permission, job reservation/thread join and one-use transfer remain binder obligations.
+
+- `presentation_policy_thread.py`: retained actual directory-policy worker/start/join observations; task completion/cancellation does not settle it. Native job reservation/authority/transfer remain binder obligations.

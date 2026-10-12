@@ -70,6 +70,7 @@ CONTRACT_MODULES = {
     "presentation_input_v3.py",
     "presentation_output_v2.py",
     "presentation_parent_policy.py",
+    "presentation_policy_thread.py",
     "presentation_yaml.py",
     "presentation_yaml_adapter.py",
     "presentation_jobs.py",

@@ -1226,3 +1226,96 @@ def test_parent_exhausted_open_credit_refuses_before_kernel_open(scope):
     with pytest.raises(FrameError):
         owner.run()
     assert fs.open_attempts == 0 and owner.descriptors_closed
+
+
+def test_policy_thread_result_waits_for_actual_worker_and_known_closes(scope):
+    import threading
+
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_jobs import FrameError
+    from hmp_plugin.presentation_parent_policy import ParentPolicyReadOwner
+    from hmp_plugin.presentation_policy_thread import PolicyThreadOwner
+
+    _, bound = scope
+    entered, release = threading.Event(), threading.Event()
+
+    class HeldStat(TrackedOS):
+        first = True
+
+        def stat(self, *args, **kwargs):
+            if self.first:
+                self.first = False
+                entered.set()
+                assert release.wait(timeout=1)
+            return super().stat(*args, **kwargs)
+
+    fs = HeldStat()
+    policy = ParentPolicyReadOwner(
+        root=bound.root_path,
+        home=bound.home_path,
+        profile="default",
+        uid=os.geteuid(),
+        gid=os.getegid(),
+        ledger=PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline),
+        fs=fs,
+        current=lambda: True,
+    )
+    owner = PolicyThreadOwner(policy)
+    owner.start()
+    try:
+        assert entered.wait(timeout=1)
+        assert not owner.poll_join() and not owner.joined
+        with pytest.raises(FrameError):
+            owner.observed_snapshot()
+    finally:
+        release.set()
+        while not owner.poll_join():
+            assert time.monotonic() < bound.deadline
+            time.sleep(0.005)
+    snapshot = owner.observed_snapshot()
+    assert snapshot.counts["opens"] == len(bound.directory_rules)
+    assert policy.descriptors_closed and fs.opened == set()
+    assert owner._worker is not None and not owner._worker.is_alive()
+
+
+def test_policy_thread_start_failure_retains_owner_without_replay(scope, monkeypatch):
+    from hmp_plugin import presentation_policy_thread as module
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_jobs import FrameError
+    from hmp_plugin.presentation_parent_policy import ParentPolicyReadOwner
+
+    _, bound = scope
+    policy = ParentPolicyReadOwner(
+        root=bound.root_path,
+        home=bound.home_path,
+        profile="default",
+        uid=os.geteuid(),
+        gid=os.getegid(),
+        ledger=PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline),
+        fs=TrackedOS(),
+        current=lambda: True,
+    )
+
+    class FailedThread:
+        calls = 0
+
+        def __init__(self, **kwargs):
+            pass
+
+        def start(self):
+            self.calls += 1
+            raise OSError("synthetic unknown thread start")
+
+    monkeypatch.setattr(module.threading, "Thread", FailedThread)
+    owner = module.PolicyThreadOwner(policy)
+    with pytest.raises(module.PolicyThreadStartError) as captured:
+        owner.start()
+    assert captured.value.failed_owner is owner and owner.uncertain
+    assert owner._worker is not None and owner._worker.calls == 1
+    with pytest.raises(FrameError):
+        owner.start()
+    with pytest.raises(FrameError):
+        owner.poll_join()
+    with pytest.raises(FrameError):
+        owner.observed_snapshot()
+    assert owner._worker.calls == 1 and not owner.joined

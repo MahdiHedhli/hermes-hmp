@@ -400,3 +400,14 @@ remain pending until actual receipts. No unreviewed deployment. Current source
 presentation suite379passed+190subtests. Added real parent-record allocation
 failure and exhausted-open-credit tests: retained pending FD closes after failure;
 exhaustion has0kernelopens.34real-file cases pass.
+
+## October 12: actual parent policy thread ownership
+
+Added pre-recorded one-attempt non-daemon policy worker with retained start-failure
+owner/cause, nonblocking serialized join observations and snapshot access only
+after actual thread join plus known descriptor closure. No cancellation/forced
+thread kill/replay. A real held-stat worker stays unavailable while running, then
+joins with closed descriptors; unknown start cannot manufacture join or retry.
+36real-file cases pass;278initial real-file/layout cases pass. Native admission,
+authorization/current-home postchecks and one-use transfer are still unbound.
+Independent thread-owner review pending; no deployment.
