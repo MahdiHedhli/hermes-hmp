@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from .approval_test_producer import TargetBinding
-from .contract import AuthzState
+from .contract import AuthzState, WriteGateState
+from .gate import direct_send_gate
 from .request_ctx import ServerContext
 
 
@@ -24,6 +25,12 @@ def target_current(ctx: ServerContext, target: TargetBinding) -> bool:
         bridge = ctx.bridge
         if (bridge is None
                 or bridge.authz_state(target.user_id, target.profile) is not AuthzState.AUTHORIZED):
+            return False
+        operational = direct_send_gate(
+            base_write_gate=ctx.write_gate(), flag_enabled=True,
+            endpoint=bridge.direct_send_endpoint(target.profile),
+        )
+        if operational.state not in (WriteGateState.OPEN, WriteGateState.OPEN_GUARDED):
             return False
         canonical = bridge.resolve_bot_chat(target.profile)
         return canonical is not None and canonical.live_tip_session_id == target.session_id
