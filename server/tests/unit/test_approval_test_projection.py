@@ -32,3 +32,16 @@ def test_closed_store_and_elapsed_deadline_refuse_publication() -> None:
     assert not projection.publish(notice)
     store.close(100)
     assert not projection.publish(replace(notice, deadline_monotonic=20))
+
+
+def test_projection_never_rounds_deadline_beyond_native_waiter() -> None:
+    store = PromptStore(clock=lambda: 100.25)
+    projection = Projection(store, wall_clock=lambda: 100.25, monotonic=lambda: 10)
+    notice = Notice("synthetic-instance", "synthetic-user", "default", "synthetic-session",
+                    "synthetic-device", "synthetic-request", deadline_monotonic=11)
+    assert projection.publish(notice)
+    row = store.get((notice.instance_id, notice.user_id, notice.profile, notice.request_id))
+    assert row is not None and row.expires_at == 101
+    assert row.expires_at <= 101.25
+    assert projection.remove(notice)
+    assert not projection.publish(replace(notice, deadline_monotonic=10.1))

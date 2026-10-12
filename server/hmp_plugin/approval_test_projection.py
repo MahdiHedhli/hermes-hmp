@@ -26,12 +26,15 @@ class TestProjection:
         remaining = notice.deadline_monotonic - self._monotonic()
         if not math.isfinite(remaining) or remaining <= 0:
             return False
+        expires_at = math.floor(self._wall_clock() + remaining)
+        if expires_at <= self._wall_clock():
+            return False
         row = PromptRow(
             iid=notice.instance_id, user_id=notice.user_id, profile=notice.profile,
             request_id=notice.request_id, kind="approval", surface="phone_chat",
             choices=notice.choices, command=notice.command, description=notice.description,
             target_device_id=notice.device_id,
-            expires_at=math.ceil(self._wall_clock() + remaining),
+            expires_at=expires_at,
         )
         self._store.put(row)
         key = (row.iid, row.user_id, row.profile, row.request_id)
