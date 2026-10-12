@@ -18,7 +18,7 @@
 - [x] Bind actual policy thread/join to native-authorized reserved job; callback closure reviewed a2746c8.
 - [x] Bind result2 job receiver to retained parent identity/work; reviewed7955c06.
 - [x] Transfer private input3 once after native postcheck; reviewed1784355.
-- [ ] Close independent review of pre-transfer abort/credential retirement (4ea76f2 successor).
+- [x] Close independent review of pre-transfer abort/credential retirement (4ea76f2, twelve cases).
 - [ ] Implement reviewed listener startup/shutdown and authenticated metadata route.
 - [x] Implement source-only revision-bound client avatar transport, bounded codec and per-widget image owner; independently reviewed.
 - [x] Review stable app-level aggregate avatar budget binding (3881fa2); screen regression122cases pass.

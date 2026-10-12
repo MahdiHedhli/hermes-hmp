@@ -2,8 +2,8 @@
 
 Native policy callback findings are closed by independent review. The job receiver
 now compares result2 against retained parent work and directory identity (reviewed).
-One-use native-policy input transfer is implemented and locally tested; independent
-review is pending. Authenticated route activation, process supervision/runtime
+One-use native-policy input transfer and known pre-transfer cleanup are implemented
+and independently reviewed. Full composed regressions are running. Authenticated route activation, process supervision/runtime
 attestation and physical character display remain incomplete. Installed app/host
 versions have not changed; host-local image phone display remains unverified.
 
