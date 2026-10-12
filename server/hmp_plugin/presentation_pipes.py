@@ -15,9 +15,21 @@ from typing import BinaryIO
 from .presentation_jobs import DIAGNOSTIC_LIMIT, OUTPUT_LIMIT, FrameError
 
 
+class PipeAcquisitionError(FrameError):
+    """Closed failure retaining the exact owner and ambiguous cleanup debt."""
+
+    def __init__(
+        self, owner: OwnedPresentationPipes, original: BaseException, cleanup: BaseException | None
+    ):
+        super().__init__("BI1_PIPE_ACQUISITION_REFUSED")
+        self.failed_owner = owner
+        self._original = original
+        self._cleanup = cleanup
+
+
 class OwnedPresentationPipes:
     def __init__(self, result: BinaryIO, diagnostic: BinaryIO):
-        self._selector = selectors.DefaultSelector()
+        self._selector = None
         self._streams = {"result": result, "diagnostic": diagnostic}
         self._identities: dict[str, tuple[int, int, int]] = {}
         self._eof: set[str] = set()
@@ -27,7 +39,9 @@ class OwnedPresentationPipes:
         self.uncertain = False
         self.refused = False
         self._selector_closed = False
+        self._selector_close_attempted = False
         try:
+            self._selector = selectors.DefaultSelector()
             fds = [stream.fileno() for stream in self._streams.values()]
             if len(set(fds)) != 2:
                 raise ValueError
@@ -39,12 +53,28 @@ class OwnedPresentationPipes:
                 self._identities[name] = (fd, row.st_dev, row.st_ino)
                 os.set_blocking(fd, False)
                 self._selector.register(fd, selectors.EVENT_READ, name)
-        except BaseException:
+        except BaseException as original:
             # Caller retains both supplied stream records on failed acquisition.
             self.uncertain = True
+            cleanup = None
+            if self._selector is not None:
+                try:
+                    self._close_selector()
+                except BaseException as error:
+                    cleanup = error
+            raise PipeAcquisitionError(self, original, cleanup) from None
+
+    def _close_selector(self) -> None:
+        if self._selector_close_attempted or self._selector is None:
+            self.uncertain = True
+            raise FrameError("BI1_SELECTOR_CLOSE_REFUSED")
+        self._selector_close_attempted = True
+        try:
             self._selector.close()
-            self._selector_closed = True
-            raise FrameError("BI1_PIPE_ACQUISITION_REFUSED") from None
+        except BaseException:
+            self.uncertain = True
+            raise
+        self._selector_closed = True
 
     @property
     def output(self) -> bytes:
@@ -109,8 +139,7 @@ class OwnedPresentationPipes:
                 self._streams[name].close()
                 self._closed.add(name)
             if self._closed == {"result", "diagnostic"}:
-                self._selector.close()
-                self._selector_closed = True
+                self._close_selector()
         except FrameError:
             raise
         except BaseException:

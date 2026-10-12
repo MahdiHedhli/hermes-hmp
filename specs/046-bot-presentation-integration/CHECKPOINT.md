@@ -304,3 +304,7 @@ Added OwnedPresentationPipes with pre-effect descriptor identity checks, finite 
 ## October 12: actual child/pipe composition
 
 Added a second real isolated-child execution path using OwnedPresentationPipes rather than subprocess capture. It verifies bounded result collection, diagnostic count, actual EOF/stream closure and successful wait while preserving Synthetic/hexagon projection. 23 real-file cases pass. Cleanup in this test targets only its exact synthetic Popen process; no production signal/group custody is inferred. The full suite started at e9c9a23 remains separately observed and must not be claimed to cover this later test delta.
+
+## October 12: PIPES-01 ownership repair
+
+Independent review held e9c9a23 because acquisition plus selector-close failure lost the exact selector owner. PipeAcquisitionError now retains the failed owner plus original/cleanup exceptions under a closed diagnostic. Selector construction is inside the owned failure path; close is marked attempted before effects and cannot be retried after uncertainty. Causal creation/double-failure/no-retry tests plus real child/pipes: 29 passed. Review closure remains pending; no activation. The e9c9a23 broad suite is a separate prior-source run, not evidence for this repair.

@@ -65,3 +65,50 @@ def test_externally_closed_stream_retains_uncertain_ownership(pipes):
     with pytest.raises(FrameError, match="BI1_PIPE_UNCERTAIN"):
         owner.poll(deadline=time.monotonic() + 1.0)
     assert owner.uncertain and not owner.drained
+
+
+def test_failed_acquisition_retains_selector_owner_when_cleanup_also_fails(monkeypatch):
+    import io
+
+    from hmp_plugin import presentation_pipes
+    from hmp_plugin.presentation_pipes import PipeAcquisitionError
+
+    class Selector:
+        closes = 0
+
+        def close(self):
+            self.closes += 1
+            raise OSError("synthetic cleanup error")
+
+    selector = Selector()
+    monkeypatch.setattr(presentation_pipes.selectors, "DefaultSelector", lambda: selector)
+    # BytesIO has no OS descriptor, so acquisition fails after selector creation.
+    with pytest.raises(PipeAcquisitionError) as captured:
+        OwnedPresentationPipes(io.BytesIO(), io.BytesIO())
+    owner = captured.value.failed_owner
+    assert owner._selector is selector
+    assert owner.uncertain and not owner.drained
+    assert captured.value._original is not None
+    assert isinstance(captured.value._cleanup, OSError)
+    assert str(captured.value) == "BI1_PIPE_ACQUISITION_REFUSED"
+    assert selector.closes == 1
+    with pytest.raises(FrameError, match="BI1_SELECTOR_CLOSE_REFUSED"):
+        owner._close_selector()
+    assert selector.closes == 1
+
+
+def test_selector_creation_failure_still_returns_explicit_uncertain_owner(monkeypatch):
+    import io
+
+    from hmp_plugin import presentation_pipes
+    from hmp_plugin.presentation_pipes import PipeAcquisitionError
+
+    def fail():
+        raise OSError("synthetic acquisition error")
+
+    monkeypatch.setattr(presentation_pipes.selectors, "DefaultSelector", fail)
+    with pytest.raises(PipeAcquisitionError) as captured:
+        OwnedPresentationPipes(io.BytesIO(), io.BytesIO())
+    assert captured.value.failed_owner.uncertain
+    assert not captured.value.failed_owner.drained
+    assert captured.value._cleanup is None
