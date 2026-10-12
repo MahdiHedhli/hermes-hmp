@@ -16,10 +16,12 @@ from .approval_test_producer import ApprovalTestProducer, TargetBinding, TestSta
 
 class OperatorHandler:
     def __init__(self, generation: HostGeneration, producer: ApprovalTestProducer, *,
-                 admit: Callable[[HostBeginRequest], Awaitable[TargetBinding | None]]) -> None:
+                 admit: Callable[[HostBeginRequest], Awaitable[TargetBinding | None]],
+                 current: Callable[[TargetBinding], Awaitable[bool]]) -> None:
         self._generation = generation
         self._producer = producer
         self._admit = admit
+        self._current = current
         self._active: tuple[HostBeginRequest, str, TargetBinding] | None = None
         self._operation_id: str | None = None
         self._deadline = 0.0
@@ -34,6 +36,12 @@ class OperatorHandler:
             outcome = await self._producer.wait_outcome(handle, target.device_id, timeout=1)
             if outcome.status not in (TestStatus.PENDING, TestStatus.CLEANUP_PENDING):
                 return
+            try:
+                current = await self._current(target)
+            except Exception:
+                current = False
+            if current is not True:
+                await self._producer.cancel_test(handle, target.device_id)
 
     async def responses(self, request) -> AsyncGenerator[HostResponse, None]:
         if type(request) is HostOperationRequest:
