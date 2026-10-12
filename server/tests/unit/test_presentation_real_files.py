@@ -568,3 +568,102 @@ def test_complete_child_stream_requires_go_then_emits_only_bounded_projection(sc
             observed_at=100,
         )
     assert len(calls) == 1 and fs.open_attempts == attempts
+
+
+def test_factory_cannot_substitute_original_deadline_hash_or_epoch(scope):
+    import io
+    from dataclasses import replace
+
+    from hmp_plugin.presentation_jobs import FrameError, encode_input
+    from hmp_plugin.presentation_worker import process_child_stream
+
+    _, bound = scope
+    ns = int(bound.deadline * 1_000_000_000)
+    row = {
+        "schema": 1,
+        "challenge": bound.challenge,
+        "epoch": 1,
+        "profile": "default",
+        "root": bound.root_path,
+        "home": bound.home_path,
+        "operation": "METADATA",
+        "expected_avatar_sha": None,
+        "uid": bound.service_uid,
+        "gid": bound.service_gid,
+        "dir_modes": [448, 488, 493],
+        "leaf_modes": [384, 416, 420],
+        "source_manifest_sha": bound.source_manifest_sha256,
+        "deadline_ns": ns,
+    }
+
+    def substitute(value):
+        value["deadline_ns"] += 2_000_000_000
+        value["source_manifest_sha"] = "c" * 64
+        value["epoch"] = 2
+        return replace(
+            bound,
+            deadline=value["deadline_ns"] / 1_000_000_000,
+            source_manifest_sha256=value["source_manifest_sha"],
+        )
+
+    fs = TrackedOS()
+    sink = io.BytesIO()
+    with pytest.raises(FrameError, match="BI1_CHILD_SCOPE_REFUSED"):
+        process_child_stream(
+            io.BytesIO(encode_input(row) + bound.challenge.encode() + b"\n"),
+            sink,
+            scope_factory=substitute,
+            fs=fs,
+            clock=time.monotonic,
+            deadline=bound.deadline + 0.1,
+            iid="a" * 52,
+            canonical_fallback="Hermes",
+            observed_at=100,
+        )
+    assert fs.open_attempts == 0 and sink.getvalue() == b""
+
+
+def test_factory_private_copy_cannot_change_emitted_epoch(scope):
+    import io
+    from dataclasses import replace
+    from hmp_plugin.presentation_jobs import decode_output, encode_input
+    from hmp_plugin.presentation_worker import process_child_stream
+
+    _, bound = scope
+    ns = int(bound.deadline * 1_000_000_000)
+    row = {
+        "schema": 1,
+        "challenge": bound.challenge,
+        "epoch": 1,
+        "profile": "default",
+        "root": bound.root_path,
+        "home": bound.home_path,
+        "operation": "METADATA",
+        "expected_avatar_sha": None,
+        "uid": bound.service_uid,
+        "gid": bound.service_gid,
+        "dir_modes": [448, 488, 493],
+        "leaf_modes": [384, 416, 420],
+        "source_manifest_sha": bound.source_manifest_sha256,
+        "deadline_ns": ns,
+    }
+
+    def mutate_copy(value):
+        value["epoch"] = 2
+        value["dir_modes"][0] = 0
+        return replace(bound, deadline=ns / 1_000_000_000)
+
+    sink = io.BytesIO()
+    process_child_stream(
+        io.BytesIO(encode_input(row) + bound.challenge.encode() + b"\n"),
+        sink,
+        scope_factory=mutate_copy,
+        fs=PosixFileOps(),
+        clock=time.monotonic,
+        deadline=bound.deadline + 0.1,
+        iid="a" * 52,
+        canonical_fallback="Hermes",
+        observed_at=100,
+    )
+    header, _ = decode_output(sink.getvalue(), bound.challenge, 1)
+    assert header["epoch"] == 1 and row["dir_modes"] == [448, 488, 493]

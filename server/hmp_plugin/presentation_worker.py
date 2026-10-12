@@ -7,6 +7,7 @@ Stream calls can block, so the parent still owns hard deadline and termination.
 
 from __future__ import annotations
 
+import copy
 from collections.abc import Callable
 from typing import BinaryIO
 
@@ -29,7 +30,9 @@ def process_child_stream(
     observed_at: int,
 ) -> None:
     row = read_worker_go(source, clock=clock, deadline=deadline)
-    scope = scope_factory(row)
+    # The factory receives its own bounded primitive copy, never the original
+    # comparison/deadline/epoch source retained by this child flow.
+    scope = scope_factory(copy.deepcopy(row))
     original_deadline = row["deadline_ns"] / 1_000_000_000
     if type(scope) is not OwnedWorkerRead or (
         scope.root_path != row["root"]

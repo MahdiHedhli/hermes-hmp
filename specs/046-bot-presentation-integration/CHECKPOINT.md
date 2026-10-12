@@ -245,3 +245,16 @@ inside tool_call; the card is above the collapsible tool header. Therefore no ne
 wrapper-name exception or expansion of assistant MEDIA-path authority is justified
 by the screenshot alone. The historical named JPG is absent; fresh physical image
 confirmation remains open. This is source evidence, not live rendering proof.
+
+## WORKER-01 original-input preservation
+
+Independent review of5b1961 found the scope factory could mutate the decoded row
+used to validate its own deadline/hash/epoch. The factory now receives a deep copy
+of the bounded primitive input; the original comparison/processing/emission source
+never leaves the flow. Actual file cases reject deadline/hash substitution before
+opens and preserve epoch1 despite a private-copy epoch/list mutation. Twenty
+real-file/actual-pipe cases and selected lint pass. Independent closure pending.
+
+The parent GO writer and child decoder also passed a real-pipe composition case.
+No actual presentation child process, native permission or cleanup ownership is
+qualified by that pipe-only test. Live routing remains absent.
