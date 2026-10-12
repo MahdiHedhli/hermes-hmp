@@ -18,6 +18,6 @@ async def test_shutdown_never_certifies_residual_producer_debt(status) -> None:
             return Outcome(status)
     service = object.__new__(Service)
     service.operator, service.producer = Operator(), Producer()
-    with pytest.raises(RuntimeError, match="^approval test cleanup unavailable$"):
+    with pytest.raises(RuntimeError, match=r"^approval test cleanup unavailable$"):
         await service.shutdown()
     assert calls == ["operator", "producer"]
