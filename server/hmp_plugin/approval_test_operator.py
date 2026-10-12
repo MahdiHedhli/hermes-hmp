@@ -5,7 +5,12 @@ import asyncio
 import secrets
 from collections.abc import AsyncGenerator, Awaitable, Callable
 
-from .approval_test_host_codec import HostBeginRequest, HostGeneration, HostResponse
+from .approval_test_host_codec import (
+    HostBeginRequest,
+    HostGeneration,
+    HostOperationRequest,
+    HostResponse,
+)
 from .approval_test_producer import ApprovalTestProducer, TargetBinding, TestStatus
 
 
@@ -16,6 +21,8 @@ class OperatorHandler:
         self._producer = producer
         self._admit = admit
         self._active: tuple[HostBeginRequest, str, TargetBinding] | None = None
+        self._operation_id: str | None = None
+        self._deadline = 0.0
         self._closing = False
         self._shutdown_task: asyncio.Task[None] | None = None
 
@@ -26,6 +33,23 @@ class OperatorHandler:
                 return
 
     async def responses(self, request) -> AsyncGenerator[HostResponse, None]:
+        if type(request) is HostOperationRequest:
+            active = self._active
+            if (self._closing or request.generation != self._generation or active is None
+                    or request.operation_id != self._operation_id):
+                yield HostResponse("unavailable")
+                return
+            if request.op == "cancel":
+                outcome = await self._producer.cancel_test(active[1], active[2].device_id)
+                yield HostResponse("cancel_requested", operation_id=request.operation_id,
+                                   state=outcome.status.value)
+            else:
+                outcome = await self._producer.outcome(active[1], active[2].device_id)
+                remaining = max(0, min(60000, int(
+                    (self._deadline - asyncio.get_running_loop().time()) * 1000)))
+                yield HostResponse("status", operation_id=request.operation_id,
+                                   state=outcome.status.value, remaining_ms=remaining)
+            return
         if (self._closing or type(request) is not HostBeginRequest
                 or request.generation != self._generation or self._active is not None):
             yield HostResponse("unavailable")
@@ -40,6 +64,8 @@ class OperatorHandler:
             return
         self._active = (request, handle, target)
         operation_id = secrets.token_hex(16)
+        self._operation_id = operation_id
+        self._deadline = asyncio.get_running_loop().time() + request.timeout_ms / 1000
         try:
             yield HostResponse("accepted", operation_id=operation_id, timeout_ms=request.timeout_ms)
             await self._join(handle, target)
@@ -56,6 +82,7 @@ class OperatorHandler:
                     cancelled = True
             cleanup.result()
             self._active = None
+            self._operation_id = None
             if cancelled:
                 raise asyncio.CancelledError
 

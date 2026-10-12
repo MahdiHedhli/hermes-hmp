@@ -59,3 +59,17 @@ async def test_accepted_begin_reports_only_joined_completion() -> None:
     assert final.operation_id == first.operation_id
     await responses.aclose()
     assert len(calls) == 1 and handler._active is None
+
+
+@pytest.mark.asyncio
+async def test_unknown_status_and_cancel_do_not_touch_producer() -> None:
+    from hmp_plugin.approval_test_host_codec import HostOperationRequest
+
+    generation = HostGeneration("a" * 52, os.getpid(), "b" * 32)
+    async def admit(_):
+        raise AssertionError("operation must not admit a new test")
+    handler = OperatorHandler(generation, object(), admit=admit)
+    for op in ("status", "cancel"):
+        request = HostOperationRequest(generation, op, "c" * 32)
+        replies = [reply async for reply in handler.responses(request)]
+        assert len(replies) == 1 and replies[0].result == "unavailable"
