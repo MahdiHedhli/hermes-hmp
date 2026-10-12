@@ -339,3 +339,31 @@ def test_actual_owning_module_replacement_restore_cannot_revive_generation(
         asyncio.run(scenario())
     finally:
         env.store.close()
+
+
+def test_composed_disconnect_keeps_store_until_readiness_debt_joins(
+        adapter_module, tmp_path, monkeypatch):
+    env = Env(tmp_path)
+    adapter = adapter_module.HmpAdapter(_Config({"bind": "127.0.0.1", "port": 12345}))
+    original_close = env.ctx.store.close
+    async def scenario():
+        release = asyncio.Event()
+        closed = asyncio.Event()
+        class Listener:
+            ctx = env.ctx
+            operator_worker_debt = 1
+            async def stop(self, **_kwargs):
+                return None
+            async def wait_operator_drain(self):
+                await release.wait()
+        adapter._server = Listener()
+        monkeypatch.setattr(adapter, "_drop_record", lambda: None)
+        monkeypatch.setattr(env.ctx.store, "close", closed.set)
+        await adapter.disconnect()
+        assert not closed.is_set()
+        release.set()
+        await closed.wait()
+    try:
+        asyncio.run(scenario())
+    finally:
+        original_close()
