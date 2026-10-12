@@ -41,10 +41,22 @@ class TestService:
             publish=self.projection.publish,
             remove=self.projection.remove,
         )
+        async def generation_admit(request):
+            if type(request) is not HostBeginRequest or request.generation != self._generation:
+                return None
+            target = await admit(request)
+            if target is None or target.instance_id != self._generation.iid:
+                return None
+            if (target.device_id, target.profile, target.session_id) != (
+                request.device_id, request.profile, request.session_id,
+            ):
+                return None
+            return target
+
         self.operator = OperatorHandler(
             generation,
             self.producer,
-            admit=admit,
+            admit=generation_admit,
             current=current,
             owns_notice=self.projection.owns_notice,
         )
