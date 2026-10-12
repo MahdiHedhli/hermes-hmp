@@ -91,3 +91,94 @@ def test_changed_blocking_flag_refuses_before_input_write(pipe):
     os.set_blocking(stream.fileno(), False)
     owner.close_for_drain()
     assert os.read(read, 1) == b""
+
+
+def test_go_pipe_callback_poison_cannot_reach_actual_write(pipe):
+    owner, read, _, handle, child = pipe
+    data = packet()
+    owner.write_input(data)
+    original = owner._go._pipe_info
+
+    def poison(fd):
+        info = original(fd)
+        with pytest.raises(FrameError):
+            owner.send_go(handle, child, "a" * 64)
+        return info
+
+    owner._go._pipe_info = poison
+    with pytest.raises(FrameError):
+        owner.send_go(handle, child, "a" * 64)
+    owner.close_for_drain()
+    assert os.read(read, 8192) == data
+    assert os.read(read, 1) == b""
+
+
+def test_expired_after_go_pipe_callback_cannot_reach_actual_write(pipe):
+    owner, read, _, handle, child = pipe
+    data = packet()
+    owner.write_input(data)
+    original = owner._go._pipe_info
+
+    def expire(fd):
+        info = original(fd)
+        owner._deadline = time.monotonic() - 1.0
+        return info
+
+    owner._go._pipe_info = expire
+    with pytest.raises(FrameError):
+        owner.send_go(handle, child, "a" * 64)
+    owner.close_for_drain()
+    assert os.read(read, 8192) == data
+
+
+@pytest.mark.parametrize("stage", ["input", "go"])
+def test_reentry_during_final_write_never_reports_clean_success(pipe, monkeypatch, stage):
+    from hmp_plugin import presentation_control_pipe as module
+
+    owner, read, _, handle, child = pipe
+    data = packet()
+    if stage == "go":
+        owner.write_input(data)
+    actual_write = os.write
+
+    def poison(fd, body):
+        count = actual_write(fd, body)
+        with pytest.raises(FrameError):
+            if stage == "input":
+                owner.write_input(data)
+            else:
+                owner.send_go(handle, child, "a" * 64)
+        return count
+
+    monkeypatch.setattr(module.os, "write", poison)
+    with pytest.raises(FrameError):
+        if stage == "input":
+            owner.write_input(data)
+        else:
+            owner.send_go(handle, child, "a" * 64)
+    assert owner.uncertain and not owner.closed
+    if stage == "input":
+        assert not owner._input_ready
+    owner.close_for_drain()
+    expected = data if stage == "input" else data + b"a" * 64 + b"\n"
+    assert os.read(read, 8192) == expected
+
+
+def test_current_scope_lost_during_pipe_check_cannot_send_go(pipe):
+    owner, read, _, handle, child = pipe
+    data = packet()
+    owner.write_input(data)
+    active = [True]
+    owner._current = lambda: active[0]
+    original = owner._go._pipe_info
+
+    def changed(fd):
+        info = original(fd)
+        active[0] = False
+        return info
+
+    owner._go._pipe_info = changed
+    with pytest.raises(FrameError):
+        owner.send_go(handle, child, "a" * 64)
+    owner.close_for_drain()
+    assert os.read(read, 8192) == data

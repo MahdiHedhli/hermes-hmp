@@ -41,7 +41,9 @@ class OwnedControlPipe:
                 raise ValueError
             self._identity = (fd, row.st_dev, row.st_ino)
             os.set_blocking(fd, False)
-            self._go = GoHandoff(handle=handle, child=child, fd=fd, current=self._current_go)
+            self._go = GoHandoff(
+                handle=handle, child=child, fd=fd, current=self._current_go, write=self._write_go
+            )
         except BaseException:
             # No additional FD was acquired; caller retains this exact stream.
             self.uncertain = True
@@ -77,6 +79,22 @@ class OwnedControlPipe:
             and time.monotonic() < self._deadline
         )
 
+    def _write_go(self, fd: int, data: bytes) -> int:
+        # GoHandoff already checked its pipe identity. This owner-aware fence
+        # follows those callbacks and precedes the actual one-use syscall.
+        current = self._current()
+        now = time.monotonic()
+        if (
+            current is not True
+            or self.uncertain
+            or self.closed
+            or not self._input_ready
+            or fd != self._identity[0]
+            or now >= self._deadline
+        ):
+            raise FrameError("BI1_CONTROL_GO_REFUSED")
+        return os.write(fd, data)
+
     def write_input(self, packet: bytes) -> None:
         self._enter()
         try:
@@ -105,7 +123,8 @@ class OwnedControlPipe:
                 if type(count) is not int or not 0 < count <= len(packet) - offset:
                     raise FrameError("BI1_CONTROL_INPUT_UNCERTAIN")
                 offset += count
-            if time.monotonic() >= self._deadline:
+            now = time.monotonic()
+            if self.uncertain or now >= self._deadline:
                 raise FrameError("BI1_CONTROL_INPUT_REFUSED")
             self._input_ready = True
         except BaseException as error:
@@ -122,7 +141,13 @@ class OwnedControlPipe:
             if not self._input_ready or challenge != self._challenge:
                 raise FrameError("BI1_CONTROL_GO_REFUSED")
             self._go.send(handle, child, challenge)
+            now = time.monotonic()
+            if self.uncertain or now >= self._deadline:
+                raise FrameError("BI1_CONTROL_GO_UNCERTAIN")
             self._close()
+            now = time.monotonic()
+            if self.uncertain or now >= self._deadline:
+                raise FrameError("BI1_CONTROL_GO_UNCERTAIN")
         except BaseException as error:
             self.uncertain = True
             if isinstance(error, FrameError):

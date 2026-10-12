@@ -324,3 +324,7 @@ Implemented retained fixed Popen launch owner, typed uncertain launch failure, n
 ## October 12: owned control input/GO/EOF
 
 Implemented exclusive nonblocking control pipe with fixed schema2 byte packet, original deadline, descriptor identity/blocking checks, one-use input and existing GoHandoff, exact close attempt and retained unknown outcome. Caught callback reentry prevents writes; changed blocking flags refuse before effects. Native PRE_GO must still call this through ParentAuthorityAdapter; no credentials/authority are conveyed. 243 control/layout cases passed. Real reader composition with this control path added separately; process hard deadline/termination, reaper/source qualification and full binder remain open. Independent review pending.
+
+## October 12: CONTROL-01 prewrite/terminal repair
+
+Independent review held c64f89e: control-owner poison or expiry during pipe callback could still send GO, and caught reentry in final writes could report normal completion. Added owner-aware actual GO write wrapper after pipe callbacks, rechecking current scope, poison and original deadline; final input-ready and post-GO/post-close success fences retain uncertainty. One-use GO/write/close debt is preserved without replay. Five new causal real-pipe cases cover callback poison/expiry/scope loss and final input/GO reentry; 33 real reader/control cases pass. Original HOLD receipt SHA595c656056d0a3a0a215fdc814da87d13b3aed7391d52e5b704edbb81b2bb12c retained. Review closure pending; no live activation/incident.
