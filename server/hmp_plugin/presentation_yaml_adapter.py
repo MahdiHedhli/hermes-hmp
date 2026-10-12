@@ -18,7 +18,7 @@ from .presentation_yaml import (
 )
 
 
-def _events(raw: bytes) -> Iterator[YamlEvent]:
+def _events(raw: bytes, clock: Callable[[], float], deadline: float) -> Iterator[YamlEvent]:
     import yaml
 
     kinds = {
@@ -35,6 +35,17 @@ def _events(raw: bytes) -> Iterator[YamlEvent]:
     }
     styles = {None: "plain", "'": "single", '"': "double", "|": "literal", ">": "folded"}
     try:
+        # PyYAML drops unknown directives before emitting document events.
+        # Inspect actual scanner tokens; text in a quoted/block scalar is not
+        # a DirectiveToken and must not be rejected by a textual heuristic.
+        for count, token in enumerate(yaml.scan(raw, Loader=yaml.SafeLoader), start=1):
+            now = clock()
+            if type(now) is not float or not 0 <= now < deadline:
+                raise PresentationYamlError("DEADLINE")
+            if count > 2048:
+                raise PresentationYamlError("TOKEN_LIMIT")
+            if isinstance(token, yaml.tokens.DirectiveToken):
+                raise PresentationYamlError("YAML_FEATURE")
         for event in yaml.parse(raw, Loader=yaml.SafeLoader):
             kind = kinds.get(type(event))
             if kind is None:
@@ -60,4 +71,6 @@ def parse_presentation_yaml(
 ) -> RawPresentationFields:
     if type(raw) is not bytes or not 1 <= len(raw) <= RAW_LIMIT:
         raise PresentationYamlError("RAW_SIZE")
-    return reduce_presentation_events(raw, _events(raw), clock=clock, deadline=deadline)
+    return reduce_presentation_events(
+        raw, _events(raw, clock, deadline), clock=clock, deadline=deadline
+    )

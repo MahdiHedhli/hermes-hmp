@@ -62,3 +62,12 @@ def test_quoted_boolean_is_not_silently_coerced():
 def test_parser_cannot_bypass_shared_expired_deadline():
     with pytest.raises(PresentationYamlError):
         parse_presentation_yaml(b"display_name: Name", clock=lambda: 2.0, deadline=2.0)
+
+
+def test_unknown_directive_is_not_silently_discarded_by_parser():
+    with pytest.raises(PresentationYamlError):
+        parse(b"%FOO synthetic\n---\ndisplay_name: Label\n")
+
+
+def test_directive_like_text_inside_block_scalar_is_preserved():
+    assert parse(b"display_name: |-\n  %FOO synthetic\n").display_name == "%FOO synthetic"

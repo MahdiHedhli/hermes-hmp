@@ -94,3 +94,13 @@ CI-pinned Ruff 0.16.9 checks; 34 focused backend/native/parser/pipeline cases pa
 Formatting and literal-dictionary cleanup do not alter the accepted native
 ownership algorithm. The lint environment is available through the pinned tool
 runner; the earlier missing-module limitation is superseded. No activation occurred.
+
+## PYAML-01 review repair
+
+Exact `d15c938` review found that PyYAML discards unknown directives before
+document events, contradicting the all-directives rejection claim. The adapter
+now scans bounded source tokens under the same deadline and refuses every actual
+DirectiveToken, including unknown names, before parsing events. Token count is
+bounded at 2048; block/quoted scalar text is not treated as a directive. The actual
+unknown-directive and block-scalar regression cases pass. Combined parser/pipeline
+run: 25 passed. Review of this repair remains pending; no route was activated.
