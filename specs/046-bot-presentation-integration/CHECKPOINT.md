@@ -56,3 +56,14 @@ keys, multiple documents, selected-field type confusion, malformed UTF-8 and
 expired shared deadlines refuse. Fifteen real-parser cases passed using synthetic
 documents. No live metadata was read. Supervisor-enforced process deadline and
 independent parser review remain prerequisites before route activation.
+
+## Real fixed-reader transaction evidence
+
+Three real-kernel synthetic cases passed: complete fixed metadata transaction
+feeding the actual YAML reducer, symlink metadata refusal with all owned FDs
+closed, and name replacement during read refusal with all owned FDs closed.
+The synthetic test parent was explicitly selected under a safe ancestor chain;
+no live Hermes directory or profile file was opened. Other test environments
+with unsafe ancestors skip these fixtures rather than weaken production policy.
+These cases qualify transaction/backend composition, not request authentication,
+worker process isolation, live routing or physical parity.
