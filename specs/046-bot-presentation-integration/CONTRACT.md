@@ -60,8 +60,8 @@ The child remains blocked until the reviewed synchronous GO handoff. It receives
 bounded, closed source input from the authorized parent, uses the explicit POSIX
 backend and fixed-reader no-follow/FD/mode/inode checks, and executes actual YAML
 scanner/event reduction and raster inspection under the same deadline and one
-nonresetting work ledger. That shared ledger still needs implementation; current
-phase-local counters must not be presented as a completed shared owner budget.
+nonresetting work ledger. The shared nonresetting ledger is implemented and source-reviewed; actual
+parent policy acquisition must still be charged under the original job budget.
 
 The parent bounds stdout/header/body and diagnostics before buffering. Success
 requires actual result/diagnostic EOF, observed child wait, process-group closure,

@@ -312,3 +312,7 @@ Independent review held e9c9a23 because acquisition plus selector-close failure 
 ## October 12: exact broad-suite result
 
 The exact e9c9a23 source run (session9372) completed exit0: 5631 passed, 38 skipped, 18 warnings, 190 subtests in179.52s. It includes the relative-import repair and original pipe reader, but predates ef58812 composition-test and6c600de PIPES-01 repair. Those later deltas have their separately scoped focused results; full-suite success does not close the held acquisition issue or physical gates. Log: /private/tmp/hermes-character-full-suite-e9c9a23-20261012.log.
+
+## October 12: process wait/signal decision
+
+PIPES-01 independent closure accepted6c600de,11cases, receipt SHA739bdb986fc8ce23cd315bca63310ffdb6223cb843ee21480a162ae91ee2376f. Added precise exclusive process lifetime proposal: direct waitpid proof rather than Popen ECHILD compatibility, held unreaped-group signals only, post-reap group absence probe with no further signals, typed failed owner retention and separate pipe/control cleanup. Contract review is required before binding; no new launch/deployment performed. Corrected stale shared-ledger contract prose to reflect implemented source while retaining parent-accounting gate.
