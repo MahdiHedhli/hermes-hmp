@@ -358,3 +358,7 @@ Review held304d46b (BUDGET-SEED-01): despite the prior checkpoint claim, the int
 ## October 12: strict input3 codec
 
 Added closed input3 with exact complete parent_work_counts, geometry-coupled N/4N/3S schedule and existing total caps. Common schema2 validation is reused only on a copied field subset; the new decoder refuses legacy schemas and missing/extra/duplicate counter fields. Original8192 envelope cap remains including new counts. Actual child/control/result migration remains pending and legacy actual source still performs no parent acquisition; no fallback/activation introduced. Focused input3/seed/layout initially269passed; extra named/full-envelope cases added. Independent codec review pending.
+
+## October 12: closed result2 accounting
+
+Added versioned result2 validation/encode/decode retaining prior frame/proof/body rules while adding hash_bytes and yaml_tokens. Complete eight-total parent comparison maps body_bytes exactly to read_bytes, refuses totals below the retained successful parent snapshot, and never sums already-included costs. Legacy result versions and missing/extra totals refuse; same original header/body caps and exact challenge/epoch remain.265result/input/layout cases initiallypass; exactexpected-epoch cases added. Child producer/parent consumer/native binder are not migrated yet. Counter claims are not proof of work/custody/permission. Independent codec review pending.
