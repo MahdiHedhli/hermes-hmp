@@ -293,6 +293,7 @@ class TokenService:
                 "INSERT INTO audit (ts, event, id_prefix8, outcome) VALUES (?, ?, ?, ?)",
                 (now, "refresh_reuse", req.device_id[:8], "family_revoked"),
             )
+        store.cleanup_push_after_commit(now=now)
         log_event("token_reuse", outcome="family_revoked", device_id=req.device_id)
         raise HmpError(ErrorCode.REVOKED)
 

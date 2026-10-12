@@ -35,6 +35,9 @@ After configuring and starting the gateway, draft `hermes hmp setup check`
 checks build and listener readiness without changing host configuration.
 Draft `hermes hmp health check` additionally reports each served bot's enabled
 send, jobs, and model prerequisites without exposing keys.
+Draft `hermes hmp push status` reports configured push state and read-only
+registration counts. It sends no notification and reports no delivery outcome.
+See [push diagnostics](docs/PUSH_STATUS.md) for unavailable states and verification limits.
 
 | Start here | Purpose |
 | --- | --- |

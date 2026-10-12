@@ -48,6 +48,13 @@ from hmp_plugin.contract import (
 from hmp_plugin.reads import Reads
 
 from . import hmp_kit
+from .approved_push_bridge_witness import (
+    APPROVED_AT1_BRIDGE_BLOCK,
+    APPROVED_PRE_AT1_BRIDGE_SHA256,
+    assert_approved_s5_block,
+    reverse_approved_at1_bridge,
+    reverse_approved_push_diagnostics,
+)
 from .media_binding_world import World as PackageWorld
 from .media_binding_world import install_gateway_stubs
 from .test_local_media_batch_binding import USER
@@ -1786,23 +1793,25 @@ AR1_READINESS_ADDITIONS = (
 )
 
 
-def test_the_bridge_differs_from_the_base_only_by_the_s5_additions() -> None:
-    """Invert exact reviewed readiness additions, then the existing S5 imports/methods.
-
-    Both intermediate and original baseline hashes remain gates. No unrelated edit is accepted.
-    """
-    text = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
-    assert hashlib.sha256(text.encode()).hexdigest() == AR1_READINESS_BRIDGE_SHA
+def reverse_readiness_additions(text: str) -> str:
     for addition in AR1_READINESS_ADDITIONS:
         assert text.count(addition) == 1
         text = text.replace(addition, "", 1)
-    assert hashlib.sha256(text.encode()).hexdigest() == AR1_PRE_READINESS_BRIDGE_SHA
+    return text
+
+
+def test_the_bridge_differs_from_the_base_only_by_the_s5_additions() -> None:
+    """Reverse exact readiness, AT1 and push additions before the original S5 witness."""
+    text = reverse_approved_push_diagnostics(reverse_approved_at1_bridge(
+        reverse_readiness_additions((PACKAGE / "bridge.py").read_text(encoding="utf-8"))
+    ))
     assert text.count("import hashlib\n") == 1
     assert text.count("from . import media_payload\n") == 1
     start = text.index("    # S5: the two off-loop native phases")
     end = text.index("    def lineage(self, ref: ConversationRef) -> LineageInfo:")
     assert start < end
     block = text[start:end]
+    assert_approved_s5_block(block)
     assert [
         line.strip().split("(")[0]
         for line in block.splitlines()
@@ -1811,6 +1820,22 @@ def test_the_bridge_differs_from_the_base_only_by_the_s5_additions() -> None:
     base = text[:start] + text[end:]
     base = base.replace("import hashlib\n", "", 1).replace("from . import media_payload\n", "", 1)
     assert hashlib.sha256(base.encode()).hexdigest() == BASE_HASHES["bridge.py"]
+
+
+def test_composed_bridge_witness_rejects_a_media_guard_mutation() -> None:
+    text = reverse_approved_push_diagnostics(reverse_approved_at1_bridge(
+        reverse_readiness_additions((PACKAGE / "bridge.py").read_text(encoding="utf-8"))
+    ))
+    start = text.index("    # S5: the two off-loop native phases")
+    end = text.index("    def lineage(self, ref: ConversationRef) -> LineageInfo:", start)
+    block = text[start:end]
+    assert_approved_s5_block(block)
+    guard = "        if type(registry_module) is not ModuleType or type(chain) is not tuple:\n"
+    assert block.count(guard) == 1
+    mutant = block.replace(guard, "        if False:\n", 1)
+    assert mutant != block
+    with pytest.raises(AssertionError):
+        assert_approved_s5_block(mutant)
 
 
 def test_the_sidecar_delta_is_exactly_the_protocol_annotation() -> None:
@@ -1862,3 +1887,43 @@ def test_the_registry_bind_function_has_no_await_sys_modules_or_file_access() ->
         label = node.id if isinstance(node, ast.Name) else getattr(node, "attr", None)
         assert label not in {"importlib", "__import__", "import_module", "sys", "modules"}
         assert label not in {"open", "os", "Path", "stat", "read_text"}
+
+
+@pytest.mark.parametrize("damage", ["body", "import", "duplicate", "relocate", "site"])
+def test_exact_at1_bridge_restoration_refuses_every_changed_addition(damage: str) -> None:
+    original = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
+    block = APPROVED_AT1_BRIDGE_BLOCK
+    assert original.count(block) == 1
+    if damage == "body":
+        changed = block.replace("type(value) is not str", "type(value) is not bytes", 1)
+        assert changed != block
+        mutant = original.replace(block, changed, 1)
+    elif damage == "import":
+        mutant = original.replace("    ApprovalTestTarget,\n",
+                                  "    ApprovalTestTarget as OtherTarget,\n", 1)
+    elif damage == "duplicate":
+        mutant = original.replace(block, block + block, 1)
+    elif damage == "relocate":
+        mutant = original.replace(block, "", 1) + block
+    else:
+        mutant = original.replace(block, "    # displaced site\n" + block, 1)
+    assert mutant != original
+    with pytest.raises(AssertionError):
+        reverse_approved_at1_bridge(mutant)
+
+
+def test_at1_restoration_retains_the_entire_approved_pre_at1_bridge() -> None:
+    original = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
+    restored = reverse_approved_at1_bridge(reverse_readiness_additions(original))
+    assert hashlib.sha256(restored.encode()).hexdigest() == APPROVED_PRE_AT1_BRIDGE_SHA256
+
+
+def test_at1_restoration_does_not_mask_an_old_bridge_method_change() -> None:
+    original = (PACKAGE / "bridge.py").read_text(encoding="utf-8")
+    line = "    def resolve_bot_chat(self, profile: str) -> BotChatTarget | None:\n"
+    assert original.count(line) == 1
+    mutant = original.replace(line, line + "        raise RuntimeError('causal mutation')\n", 1)
+    assert mutant != original
+    restored = reverse_approved_at1_bridge(reverse_readiness_additions(mutant))
+    with pytest.raises(AssertionError):
+        assert hashlib.sha256(restored.encode()).hexdigest() == APPROVED_PRE_AT1_BRIDGE_SHA256

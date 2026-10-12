@@ -956,7 +956,7 @@ def test_module_imports_only_the_standard_library_subset_and_no_decoder():
         assert forbidden not in code
 
 
-def test_fresh_interpreter_check_loads_no_imaging_module():
+def test_fresh_interpreter_check_loads_no_imaging_module(tmp_path: Path):
     script = (
         f"import sys; sys.path.insert(0, {str(SOURCE.parent)!r})\n"
         "import local_media_raster_structure as m\n"
@@ -967,7 +967,14 @@ def test_fresh_interpreter_check_loads_no_imaging_module():
         "print(len(bad))\n"
     )
     out = subprocess.run(
-        [sys.executable, "-I", "-c", script],
+        [
+            sys.executable,
+            "-I",
+            "-X",
+            f"pycache_prefix={tmp_path / 'raster-bytecode'}",
+            "-c",
+            script,
+        ],
         capture_output=True,
         text=True,
         timeout=60,

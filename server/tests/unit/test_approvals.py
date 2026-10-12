@@ -7,6 +7,7 @@ import json
 import logging
 from collections.abc import AsyncIterator
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -46,6 +47,17 @@ class FakeResolver:
     async def mark_awaiting(self, row: PromptRow) -> str:
         self.calls.append(("other", row.request_id))
         return "ok" if self.verdict != "stale" else "stale"
+
+
+class _UnownedDesktopOwnershipPort:
+    """A test-only explicit unowned premise for legacy AP-3/AP-4 behavior cases."""
+
+    can_observe = True
+
+    async def observe(
+        self, *, profile: str, canonical_lineage: tuple[str, ...]
+    ) -> prompts.DesktopOwnership:
+        return prompts.DesktopOwnership.UNOWNED
 
 
 def _store_approval(store: PromptStore, *, user: str = USER, **overrides: Any) -> None:
@@ -89,6 +101,9 @@ def _store_clarify(store: PromptStore, **overrides: Any) -> None:
 async def _answer(
     store: PromptStore, resolver: FakeResolver, body: dict[str, Any], **kw: Any
 ) -> prompts.HttpResult:
+    async def unowned(_row: PromptRow) -> prompts.DesktopOwnership:
+        return prompts.DesktopOwnership.UNOWNED
+
     return await prompts.answer_prompt(
         store,
         iid=kw.get("iid", IID),
@@ -98,6 +113,7 @@ async def _answer(
         body=body,
         resolver=resolver,
         now=kw.get("now", 2_000),
+        ownership_check=kw.get("ownership_check", unowned),
     )
 
 
@@ -635,6 +651,10 @@ def _arm(env: Env, *, flag: bool) -> None:
     env.ctx.approvals_available = lambda: True
     env.ctx.phone_chat_available = lambda: True
     env.ctx.prompt_store = PromptStore(clock=lambda: 1)
+    env.ctx.desktop_ownership = _UnownedDesktopOwnershipPort()  # type: ignore[assignment]
+    env.bridge.resolve_bot_chat = lambda _profile: SimpleNamespace(  # type: ignore[method-assign]
+        compression_chain=("test-root", "test-tip")
+    )
     env.bridge.direct_send_endpoint = lambda *_a, **_k: DirectSendEndpoint(  # type: ignore[method-assign]
         host="127.0.0.1", port=9, api_key="k" * 20, path_prefix=""
     )
@@ -682,7 +702,9 @@ def test_empty_prompt_list_and_unknown_answer(tmp_path: Path) -> None:
         dev = await pair(env, client)
         env.ctx.owner_device_ids = lambda: frozenset({dev.device_id})
         status, body = await get(client, "/bots/b/prompts", headers=env.headers(dev))
-        assert status == 200 and body == {"prompts": [], "desktop_held": False}
+        assert status == 200 and body == {
+            "prompts": [], "desktop_held": False, "desktop_ownership": "unknown"
+        }
         status, body = await post(
             client,
             "/bots/b/prompts/not-a-stored-id",
