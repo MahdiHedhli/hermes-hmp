@@ -434,3 +434,15 @@ postcheck correctly uses STARTING phasePRE_GO (BEFORE belongs QUEUED). No actual
 bearer/native gateway qualification, child/input transfer, clean-abort, retirement
 integration or routes. Full exact361cf69 suite5705passed/53skipped/190subtests.
 Independent binding review pending.
+
+## Native policy callback fences — October 12, 2026
+
+Review of 783eede found NPOLICY-01 (reentrant postcheck could issue duplicate
+PRE_GO) and NPOLICY-02 (clock callback could retire the listener before snapshot
+publication). The successor reserves postcheck before callbacks, retains sticky
+invalidity on repeated entry, and revalidates source-owned authority and policy
+joins after the retained clock sample without another callback loop. Two causal
+regressions exercise caught reentry and listener retirement. Focused real-file
+and authority checks: 63 passed, 23 subtests; Ruff passes. Independent closure
+remains pending; no live route, deployment, signed app or phone qualification.
+Review: /private/tmp/hermes-presentation-chain-review-20261012/native-policy-REVIEW.json.

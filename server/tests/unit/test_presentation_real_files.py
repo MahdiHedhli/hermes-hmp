@@ -1354,7 +1354,8 @@ def test_parent_constructor_bounds_paths_before_large_allocation(scope):
 
 
 @pytest.mark.asyncio
-async def test_native_policy_binding_requires_admitted_operation_and_fresh_postcheck(scope):
+@pytest.mark.parametrize("attack", ["none", "reentrant_postcheck", "retired_listener"])
+async def test_native_policy_binding_requires_admitted_operation_and_fresh_postcheck(scope, attack):
     from hmp_plugin.presentation_authority import (
         AuthorityRefusalError,
         ListenerFence,
@@ -1433,7 +1434,33 @@ async def test_native_policy_binding_requires_admitted_operation_and_fresh_postc
         await __import__("asyncio").sleep(0.005)
     with pytest.raises(AuthorityRefusalError):
         work.observed_snapshot()
+    original_clock = authority._clock
+    if attack == "reentrant_postcheck":
+        def clock():
+            authority._clock = original_clock
+            nested = work.postcheck()
+            with pytest.raises(AuthorityRefusalError):
+                nested.send(None)
+            return original_clock()
+
+        authority._clock = clock
+        with pytest.raises(AuthorityRefusalError):
+            await work.postcheck()
+        with pytest.raises(AuthorityRefusalError):
+            work.observed_snapshot()
+        assert native.calls == ["INITIAL", "BEFORE"]
+        return
     assert await work.postcheck()
+    if attack == "retired_listener":
+        def clock():
+            authority._clock = original_clock
+            authority._record(operation).fence.retire()
+            return original_clock()
+
+        authority._clock = clock
+        with pytest.raises(AuthorityRefusalError):
+            work.observed_snapshot()
+        return
     assert work.observed_snapshot().counts["opens"] == len(bound.directory_rules)
     assert native.calls == ["INITIAL", "BEFORE", "PRE_GO"]
     with pytest.raises(AuthorityRefusalError):

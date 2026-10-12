@@ -333,7 +333,17 @@ class ParentAuthorityAdapter:
             now = self._clock()
         except Exception:
             return False
-        return type(now) in (float, int) and 0 <= now < record.deadline
+        # The clock is foreign code: revalidate local authority after it returns.
+        return (
+            type(now) in (float, int)
+            and 0 <= now < record.deadline
+            and not self.disabled
+            and self._by_operation.get(record.operation) is record
+            and record.fence.current
+            and record.fence.epoch == record.fence_epoch
+            and record.owner.epoch == record.lease.epoch
+            and not record.owner.disabled
+        )
 
     def _observation_matches(self, record: _Record, value: object) -> bool:
         if type(value) is not NativeObservation or value.allowed is not True:

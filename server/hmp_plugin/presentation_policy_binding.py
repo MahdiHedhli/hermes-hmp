@@ -40,12 +40,13 @@ class NativePolicyWork:
             root = home[: -len(suffix)]
         self._authority, self._operation, self._record = authority, operation, record
         record.policy_work = self  # one operation owns even partial construction
+        self._invalid = False
         self._attempted = False
         self._postcheck_attempted = False
         self._postchecked = False
         self._policy = None
         self._thread = None
-        if not authority._current(record):
+        if not self._current():
             raise AuthorityRefusalError
         self._policy = ParentPolicyReadOwner(
             root=root,
@@ -59,18 +60,32 @@ class NativePolicyWork:
         )
         self._thread = PolicyThreadOwner(self._policy)
 
-    def _current(self) -> bool:
+    def _local_current(self) -> bool:
         record = self._record
         return (
-            self._authority._by_operation.get(self._operation) is record
+            not self._invalid
+            and self._authority._by_operation.get(self._operation) is record
             and record.policy_work is self
-            and self._authority._current(record)
+            and not self._authority.disabled
+            and not record.owner.disabled
+            and record.fence.current
+            and record.fence.epoch == record.fence_epoch
+            and record.owner.epoch == record.lease.epoch
             and record.child is None
             and record.owner.inspect(record.handle)[0] is State.STARTING
         )
 
+    def _current(self) -> bool:
+        # No callbacks in the final local fence check.
+        return (
+            self._local_current()
+            and self._authority._current(self._record)
+            and self._local_current()
+        )
+
     def start(self) -> None:
         if self._attempted:
+            self._invalid = True
             raise AuthorityRefusalError
         self._attempted = True
         if not self._current() or self._thread is None:
@@ -83,9 +98,12 @@ class NativePolicyWork:
         return self._thread.poll_join()
 
     async def postcheck(self) -> bool:
-        if self._postcheck_attempted or not self._current():
+        if self._postcheck_attempted:
+            self._invalid = True
             raise AuthorityRefusalError
-        self._postcheck_attempted = True
+        self._postcheck_attempted = True  # reserve before any foreign callback
+        if not self._current():
+            raise AuthorityRefusalError
         if self._thread is None:
             raise AuthorityRefusalError
         self._thread.observed_snapshot()
