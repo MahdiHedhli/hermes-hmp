@@ -1853,6 +1853,22 @@ class HermesReadBridge:
         except (ImportError, AttributeError, TypeError):
             raise HelperUnavailableError("phone chat helper failed") from None
 
+    def approval_test_bindings(self) -> Any:
+        """Bind the inert no-op producer only after the existing compatibility gate.
+
+        Captured helper identity/signatures are rechecked by the producer at use time.
+        This method does not enqueue an approval or register any operator endpoint.
+        """
+        from tools import approval, approval_gateway_wait, interrupt
+
+        from .approval_test_producer import NativeApprovalBindings
+
+        return NativeApprovalBindings(
+            waiter_module=approval_gateway_wait,
+            approval_module=approval,
+            interrupt_module=interrupt,
+        )
+
     def list_gateway_approvals(self, session_key: str) -> list[dict[str, object]]:
         rows = self._call_phone("list_gateway_approvals", session_key)
         if not isinstance(rows, list):
