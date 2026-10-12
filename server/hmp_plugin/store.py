@@ -594,21 +594,20 @@ class Store:
             settled = False
             try:
                 yield conn
+                conn.execute("COMMIT")
+                settled = True
             except BaseException:
                 try:
-                    conn.execute("ROLLBACK")
+                    # SQLite may already have rolled back SQLITE_FULL/IOERR.
+                    if conn.in_transaction:
+                        conn.execute("ROLLBACK")
+                    if conn.in_transaction:
+                        raise RuntimeError("Store rollback state unavailable")
                 except BaseException:
                     self._poisoned = True
                     raise
                 settled = True
                 raise
-            else:
-                try:
-                    conn.execute("COMMIT")
-                except BaseException:
-                    self._poisoned = True
-                    raise
-                settled = True
             finally:
                 if settled:
                     self._transaction_owner = None

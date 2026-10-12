@@ -622,15 +622,18 @@ def test_delete_transactional_liveness_precedes_cas(env, race, monkeypatch):
 
         @contextmanager
         def revoke_before_begin():
-            if race == "revoke":
-                env.store.set_device_state(dev.device_id, "REVOKED")
-            else:
-                row = (
-                    env.store._require_conn()
-                    .execute("SELECT family_id FROM push_registrations")
-                    .fetchone()
-                )
-                env.store.revoke_family(row[0], env.clock.now)
+            # Use the unwrapped transaction for the causal write; public writers now
+            # serialize through transaction(), so invoking them outside it would recurse.
+            with original():
+                if race == "revoke":
+                    env.store.set_device_state(dev.device_id, "REVOKED")
+                else:
+                    row = (
+                        env.store._require_conn()
+                        .execute("SELECT family_id FROM push_registrations")
+                        .fetchone()
+                    )
+                    env.store.revoke_family(row[0], env.clock.now)
             with original() as conn:
                 yield conn
 
