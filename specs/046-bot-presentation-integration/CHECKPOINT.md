@@ -144,3 +144,14 @@ with21 separate checks, receipt SHA256
 `2fc1c83c70a0fc10dde8bec5979894d3171fe3f56c9668a16976d1bbee5f456f`.
 Combined presentation/Unicode suites on that exact processing source passed256
 tests plus190 subtests. Later framing changes require their own focused review.
+
+## FRAME-NONE repair
+
+Review of `98e7ca2` found null-character metadata for the default profile was
+reconstructed as an implicit purple squircle because the normalized frame omitted
+custom. The frame now explicitly suppresses that implicit default for every
+normalized result, preserving a null character and its metadata revision. Raw
+customization provenance is not claimed by these projection inputs. Two actual
+file-to-codec-to-projection negative cases cover custom-only and invalid-color
+characters;16 real-file cases and selected lint pass. Independent closure pending.
+No host activation or updated phone install occurred.

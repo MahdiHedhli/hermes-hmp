@@ -177,7 +177,10 @@ def encode_completed_worker(
     if type(work) is not CompletedPresentationWork:
         raise PresentationYamlError("WORK_RESULT_SCHEMA")
     metadata = work.result.metadata
-    fields: dict[str, object] = {}
+    # The frame carries normalized projection inputs, not raw customization
+    # provenance. Explicit True suppresses the default-profile implicit shape
+    # when the observed character is absent, preserving its letter fallback.
+    fields: dict[str, object] = {"custom": True}
     if metadata["name_source"] == "bot_title":
         fields["title"] = metadata["display_name"]
     elif metadata["name_source"] == "profile_display_name":

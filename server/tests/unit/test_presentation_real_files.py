@@ -462,3 +462,46 @@ def test_default_profile_blobatar_frame_reprojects_same_character(scope):
         observed_at=100,
     )
     assert rebuilt == completed.result.metadata
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"ui_meta: {hermes-bots: {custom: true}}\n",
+        b"ui_meta: {hermes-bots: {shape: circle, color: invalid, custom: true}}\n",
+    ],
+)
+def test_null_character_frame_preserves_fallback_and_metadata_revision(scope, raw):
+    from hmp_plugin.presentation import project_presentation
+    from hmp_plugin.presentation_jobs import decode_output
+    from hmp_plugin.presentation_pipeline import encode_completed_worker, run_fixed_worker
+
+    home, bound = scope
+    (home / "profile.yaml").write_bytes(raw)
+    completed = run_fixed_worker(
+        bound,
+        fs=PosixFileOps(),
+        iid="a" * 52,
+        profile="default",
+        canonical_fallback="Hermes",
+        observed_at=100,
+        clock=time.monotonic,
+    )
+    assert completed.result.metadata["character"] is None
+    header, _ = decode_output(
+        encode_completed_worker(completed, challenge="a" * 64, epoch=1), "a" * 64, 1
+    )
+    fields = header["fields"]
+    rebuilt = project_presentation(
+        iid="a" * 52,
+        profile="default",
+        canonical_fallback="Hermes",
+        bot_title=fields.get("title"),
+        profile_display_name=fields.get("display_name"),
+        shape=fields.get("shape"),
+        color=fields.get("color"),
+        custom=fields.get("custom"),
+        avatar=None,
+        observed_at=100,
+    )
+    assert rebuilt == completed.result.metadata
