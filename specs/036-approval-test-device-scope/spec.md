@@ -7,3 +7,5 @@ Acceptance: another device of the same user cannot list, answer or replay the sc
 Selected-device test rows expire at their exact advertised deadline without ordinary approval grace. Persistent session/always choices are not offered by the test. Ordinary approvals retain the existing grace period.
 
 Cancellation removes only the exact internally owned target row. A replaced row is untouched; ordinary rows cannot use this withdrawal port. Answer locks with active waiters remain retained until their users leave.
+
+An answer is acknowledged only when the producer confirms the matching once/deny terminal outcome after owned cleanup. Pending, cleanup-pending, unavailable or mismatched outcomes cannot be reported applied; cancellation and expiry are stale.

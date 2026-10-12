@@ -8,7 +8,7 @@ from __future__ import annotations
 import math
 from collections.abc import Callable
 
-from .approval_test_producer import TestNotice
+from .approval_test_producer import TestNotice, TestOutcome, TestStatus
 from .prompts import PromptRow, PromptStore
 
 
@@ -69,3 +69,15 @@ class TestProjection:
             return False
         del self._owned[notice.request_id]
         return True
+
+
+def settled_answer_verdict(outcome: TestOutcome, choice: str) -> str:
+    """A queued choice or unfinished cleanup is never an acknowledged answer."""
+    if type(outcome) is not TestOutcome or choice not in ("once", "deny"):
+        return "unavailable"
+    expected = TestStatus.ONCE_ACKNOWLEDGED if choice == "once" else TestStatus.DENIED
+    if outcome.status is expected:
+        return "accepted"
+    if outcome.status in (TestStatus.CANCELLED, TestStatus.EXPIRED):
+        return "stale"
+    return "unavailable"

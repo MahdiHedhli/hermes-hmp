@@ -62,3 +62,19 @@ def test_answer_lookup_requires_owned_row_device_and_live_deadline() -> None:
     clock[0] = 20
     assert projection.notice_for_answer(row, notice.device_id) is None
     assert projection.remove(notice)
+
+
+def test_pending_cleanup_or_other_choice_never_acknowledges_answer() -> None:
+    from hmp_plugin.approval_test_producer import TestOutcome as Outcome
+    from hmp_plugin.approval_test_producer import TestStatus as Status
+    from hmp_plugin.approval_test_projection import settled_answer_verdict
+
+    for status in (Status.PENDING, Status.CLEANUP_PENDING, Status.UNAVAILABLE):
+        assert settled_answer_verdict(Outcome(status), "once") == "unavailable"
+        assert settled_answer_verdict(Outcome(status), "deny") == "unavailable"
+    assert settled_answer_verdict(Outcome(Status.ONCE_ACKNOWLEDGED), "once") == "accepted"
+    assert settled_answer_verdict(Outcome(Status.DENIED), "deny") == "accepted"
+    assert settled_answer_verdict(Outcome(Status.DENIED), "once") == "unavailable"
+    assert settled_answer_verdict(Outcome(Status.ONCE_ACKNOWLEDGED), "always") == "unavailable"
+    for status in (Status.CANCELLED, Status.EXPIRED):
+        assert settled_answer_verdict(Outcome(status), "once") == "stale"
