@@ -268,3 +268,11 @@ causals, receipt SHA256
 This does not establish process custody, native route binding or installed support.
 The draft branch was pushed for a fresh exact-head public CI run; prior failed CI
 evidence stays intact. No live host/app or grants were updated.
+
+## Scope preparation expiry fence
+
+Worker flow checks the retained original deadline immediately before and after
+scope preparation. A late factory cannot proceed into profile I/O or output even
+with otherwise matching scope data. The new causal reports zero opens/output;
+20 real-file cases and selected lint pass. The factory itself is not forcibly
+bounded by these checks; actual child hard-deadline supervision remains required.

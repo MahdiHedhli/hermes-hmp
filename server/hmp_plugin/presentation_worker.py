@@ -30,10 +30,16 @@ def process_child_stream(
     observed_at: int,
 ) -> None:
     row = read_worker_go(source, clock=clock, deadline=deadline)
+    original_deadline = row["deadline_ns"] / 1_000_000_000
+    now = clock()
+    if type(now) is not float or not 0 <= now < original_deadline:
+        raise FrameError("BI1_CHILD_DEADLINE")
     # The factory receives its own bounded primitive copy, never the original
     # comparison/deadline/epoch source retained by this child flow.
     scope = scope_factory(copy.deepcopy(row))
-    original_deadline = row["deadline_ns"] / 1_000_000_000
+    now = clock()
+    if type(now) is not float or not 0 <= now < original_deadline:
+        raise FrameError("BI1_CHILD_DEADLINE")
     if type(scope) is not OwnedWorkerRead or (
         scope.root_path != row["root"]
         or scope.home_path != row["home"]

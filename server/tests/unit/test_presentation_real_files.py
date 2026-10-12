@@ -668,3 +668,51 @@ def test_factory_private_copy_cannot_change_emitted_epoch(scope):
     )
     header, _ = decode_output(sink.getvalue(), bound.challenge, 1)
     assert header["epoch"] == 1 and row["dir_modes"] == [448, 488, 493]
+
+
+def test_late_scope_factory_returns_without_opening_profile_files(scope):
+    import io
+    from dataclasses import replace
+
+    from hmp_plugin.presentation_jobs import FrameError, encode_input
+    from hmp_plugin.presentation_worker import process_child_stream
+
+    _, bound = scope
+    ns = int(bound.deadline * 1_000_000_000)
+    row = {
+        "schema": 1,
+        "challenge": bound.challenge,
+        "epoch": 1,
+        "profile": "default",
+        "root": bound.root_path,
+        "home": bound.home_path,
+        "operation": "METADATA",
+        "expected_avatar_sha": None,
+        "uid": bound.service_uid,
+        "gid": bound.service_gid,
+        "dir_modes": [448, 488, 493],
+        "leaf_modes": [384, 416, 420],
+        "source_manifest_sha": bound.source_manifest_sha256,
+        "deadline_ns": ns,
+    }
+    now = [time.monotonic()]
+
+    def late(value):
+        now[0] = ns / 1_000_000_000
+        return replace(bound, deadline=ns / 1_000_000_000)
+
+    fs = TrackedOS()
+    sink = io.BytesIO()
+    with pytest.raises(FrameError, match="BI1_CHILD_DEADLINE"):
+        process_child_stream(
+            io.BytesIO(encode_input(row) + bound.challenge.encode() + b"\n"),
+            sink,
+            scope_factory=late,
+            fs=fs,
+            clock=lambda: now[0],
+            deadline=bound.deadline + 0.1,
+            iid="a" * 52,
+            canonical_fallback="Hermes",
+            observed_at=100,
+        )
+    assert fs.open_attempts == 0 and sink.getvalue() == b""
