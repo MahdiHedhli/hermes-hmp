@@ -15,7 +15,7 @@ from collections.abc import Callable
 from typing import BinaryIO
 
 from .presentation_go import GoHandoff
-from .presentation_input_v2 import decode_input_v2
+from .presentation_input_v3 import decode_input_v3
 from .presentation_jobs import FrameError
 
 
@@ -104,7 +104,7 @@ class OwnedControlPipe:
             self._input_attempted = True
             if type(packet) is not bytes:
                 raise FrameError("BI1_CONTROL_INPUT_REFUSED")
-            row = decode_input_v2(packet)
+            row = decode_input_v3(packet)
             self._deadline = row["deadline_ns"] / 1_000_000_000
             self._challenge = row["challenge"]
             offset = 0

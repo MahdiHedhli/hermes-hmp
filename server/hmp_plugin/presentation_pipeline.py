@@ -118,6 +118,7 @@ def run_fixed_worker(
     observed_at: int,
     clock: Callable[[], float],
     expected_avatar_revision: str | None = None,
+    parent_counts: dict[str, int] | None = None,
 ) -> CompletedPresentationWork:
     """Processing entry for the future GO-authorized disposable child only.
 
@@ -132,7 +133,12 @@ def run_fixed_worker(
     wire.require_iid(iid)
     if type(scope) is not OwnedWorkerRead or profile != (scope.profile or "default"):
         raise PresentationYamlError("WORK_SCOPE")
-    work = PresentationWorkLedger(clock=clock, deadline=scope.deadline)
+    work = PresentationWorkLedger(
+        clock=clock,
+        deadline=scope.deadline,
+        parent_counts=parent_counts,
+        parent_home=scope.home_path if parent_counts is not None else None,
+    )
     fixed = read_fixed_presentation_files(scope, fs=fs, clock=clock, ledger=work)
     processed = reduce_fixed_result(
         fixed,
@@ -165,7 +171,7 @@ def run_fixed_worker(
 
 
 def encode_completed_worker(
-    work: CompletedPresentationWork, *, challenge: str, epoch: int
+    work: CompletedPresentationWork, *, challenge: str, epoch: int, result_version: int = 1
 ) -> bytes:
     """Bounded private processing frame, never an authorization receipt.
 
@@ -174,6 +180,8 @@ def encode_completed_worker(
     """
     from .presentation_jobs import encode_output
 
+    if type(result_version) is not int or result_version not in (1, 2):
+        raise PresentationYamlError("WORK_RESULT_VERSION")
     if type(work) is not CompletedPresentationWork:
         raise PresentationYamlError("WORK_RESULT_SCHEMA")
     metadata = work.result.metadata
@@ -220,4 +228,12 @@ def encode_completed_worker(
         },
         "cleanup": {"known_fds_closed": True, "unknown_close": False},
     }
+    if result_version == 2:
+        from .presentation_output_v2 import encode_output_v2
+
+        header["schema"] = 2
+        header["ledger"].update(
+            hash_bytes=work.charges["hash_bytes"], yaml_tokens=work.charges["yaml_tokens"]
+        )
+        return encode_output_v2(header, work.result.avatar_bytes or b"")
     return encode_output(header, work.result.avatar_bytes or b"")

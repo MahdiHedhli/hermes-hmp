@@ -97,3 +97,31 @@ def test_full_input_envelope_stays_bounded_with_parent_counters():
     data["parent_work_counts"].update(opens=2, metadata=8, path_bytes=12288)
     with pytest.raises(FrameError):
         encode_input_v3(data)
+
+
+def test_processing_input3_refuses_legacy_before_any_file_effect():
+    import io
+
+    from hmp_plugin.presentation_jobs import INPUT_LIMIT, _envelope
+    from hmp_plugin.presentation_worker import process_child_stream_v3
+
+    legacy = row()
+    legacy["schema"] = 2
+    legacy.pop("parent_work_counts")
+
+    class NoFiles:
+        def __getattr__(self, name):
+            raise AssertionError("unexpected file effect: " + name)
+
+    output = io.BytesIO()
+    with pytest.raises(FrameError):
+        process_child_stream_v3(
+            io.BytesIO(_envelope(legacy, INPUT_LIMIT) + b"a" * 64 + b"\n"),
+            output,
+            fs=NoFiles(),
+            clock=lambda: 1.0,
+            deadline=2.0,
+            effective_uid=501,
+            effective_gid=20,
+        )
+    assert output.getvalue() == b""

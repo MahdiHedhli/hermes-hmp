@@ -38,9 +38,9 @@ def main() -> int:
         # Fixed own-code relative closure. No plugin initializer, sys.path edit,
         # environment/config lookup or input-selected module is involved.
         from .presentation_posix import PosixFileOps
-        from .presentation_worker import process_child_stream_v2
+        from .presentation_worker import process_child_stream_v3
 
-        process_child_stream_v2(
+        process_child_stream_v3(
             sys.stdin.buffer,
             sys.stdout.buffer,
             fs=PosixFileOps(),

@@ -12,10 +12,12 @@ from collections.abc import Callable
 from typing import BinaryIO
 
 from .presentation_files import DirectoryRule, FileOps, OwnedWorkerRead, bind_owned_worker_read
+from .presentation_input_v2 import _KEYS as _V2_KEYS
 from .presentation_input_v2 import prefixes, validate_input_v2
+from .presentation_input_v3 import validate_input_v3
 from .presentation_jobs import FrameError
 from .presentation_pipeline import encode_completed_worker, run_fixed_worker
-from .presentation_worker_control import read_worker_go, read_worker_go_v2
+from .presentation_worker_control import read_worker_go, read_worker_go_v2, read_worker_go_v3
 
 
 def scope_from_v2(
@@ -47,6 +49,38 @@ def scope_from_v2(
         challenge=row["challenge"],
         source_manifest_sha256=row["source_manifest_sha"],
         worker_go_challenge=row["challenge"],
+    )
+
+
+def process_child_stream_v3(
+    source: BinaryIO,
+    destination: BinaryIO,
+    *,
+    fs: FileOps,
+    clock: Callable[[], float],
+    deadline: float,
+    effective_uid: int,
+    effective_gid: int,
+) -> None:
+    row = read_worker_go_v3(source, clock=clock, deadline=deadline)
+
+    def factory(value):
+        validate_input_v3(value)
+        common = {key: value[key] for key in _V2_KEYS}
+        common["schema"] = 2
+        return scope_from_v2(common, effective_uid=effective_uid, effective_gid=effective_gid)
+
+    _process_row(
+        row,
+        destination,
+        scope_factory=factory,
+        fs=fs,
+        clock=clock,
+        iid=row["iid"],
+        canonical_fallback=row["canonical_fallback"],
+        observed_at=row["observed_at"],
+        parent_counts=row["parent_work_counts"],
+        result_version=2,
     )
 
 
@@ -111,6 +145,8 @@ def _process_row(
     iid: str,
     canonical_fallback: str,
     observed_at: int,
+    parent_counts: dict[str, int] | None = None,
+    result_version: int = 1,
 ) -> None:
     original_deadline = row["deadline_ns"] / 1_000_000_000
     now = clock()
@@ -142,8 +178,11 @@ def _process_row(
         observed_at=observed_at,
         clock=clock,
         expected_avatar_revision=row["expected_avatar_sha"],
+        parent_counts=parent_counts,
     )
-    wire = encode_completed_worker(completed, challenge=row["challenge"], epoch=row["epoch"])
+    wire = encode_completed_worker(
+        completed, challenge=row["challenge"], epoch=row["epoch"], result_version=result_version
+    )
     offset = 0
     while offset < len(wire):
         now = clock()

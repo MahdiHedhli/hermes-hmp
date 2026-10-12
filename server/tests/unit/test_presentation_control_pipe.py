@@ -4,14 +4,14 @@ import time
 import pytest
 
 from hmp_plugin.presentation_control_pipe import OwnedControlPipe
-from hmp_plugin.presentation_input_v2 import encode_input_v2
+from hmp_plugin.presentation_input_v3 import encode_input_v3
 from hmp_plugin.presentation_jobs import FrameError
 
 
 def packet():
-    return encode_input_v2(
+    return encode_input_v3(
         {
-            "schema": 2,
+            "schema": 3,
             "challenge": "a" * 64,
             "epoch": 1,
             "profile": "default",
@@ -29,6 +29,16 @@ def packet():
             "iid": "a" * 52,
             "canonical_fallback": "Hermes",
             "observed_at": 100,
+            "parent_work_counts": {
+                "read_bytes": 0,
+                "hash_bytes": 0,
+                "opens": 3,
+                "metadata": 12,
+                "path_bytes": 30,
+                "yaml_nodes": 0,
+                "yaml_tokens": 0,
+                "raster_units": 0,
+            },
         }
     )
 

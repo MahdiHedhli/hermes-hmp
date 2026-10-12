@@ -768,12 +768,12 @@ def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope, bou
     import subprocess
     import sys
 
-    from hmp_plugin.presentation_input_v2 import encode_input_v2
-    from hmp_plugin.presentation_jobs import decode_output
+    from hmp_plugin.presentation_input_v3 import encode_input_v3
+    from hmp_plugin.presentation_output_v2 import decode_output_v2
 
     _, bound = scope
     row = {
-        "schema": 2,
+        "schema": 3,
         "challenge": bound.challenge,
         "epoch": 1,
         "profile": "default",
@@ -791,10 +791,20 @@ def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope, bou
         "iid": "a" * 52,
         "canonical_fallback": "Hermes",
         "observed_at": 100,
+        "parent_work_counts": {
+            "read_bytes": 0,
+            "hash_bytes": 0,
+            "opens": len(bound.directory_rules),
+            "metadata": 4 * len(bound.directory_rules),
+            "path_bytes": 3 * (1 + sum(len(p.encode()) for p in bound.home_path[1:].split("/"))),
+            "yaml_nodes": 0,
+            "yaml_tokens": 0,
+            "raster_units": 0,
+        },
     }
     script = Path(__file__).parents[2] / "hmp_plugin" / "presentation_child.py"
     argv = [sys.executable, "-I", "-B", str(script)]
-    payload = encode_input_v2(row) + bound.challenge.encode() + b"\n"
+    payload = encode_input_v3(row) + bound.challenge.encode() + b"\n"
     if bounded_pipes:
         from hmp_plugin.presentation_pipes import OwnedPresentationPipes
 
@@ -824,7 +834,7 @@ def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope, bou
                 control = OwnedControlPipe(
                     child.stdin, handle=handle, child=child, current=lambda: True
                 )
-                control.write_input(encode_input_v2(row))
+                control.write_input(encode_input_v3(row))
                 control.send_go(handle, child, bound.challenge)
                 assert control.closed
             else:
@@ -870,6 +880,75 @@ def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope, bou
         assert result.returncode == 0, result.stderr
         assert result.stderr == b""
         output = result.stdout
-    header, body = decode_output(output, bound.challenge, 1)
+    header, body = decode_output_v2(output, bound.challenge, 1)
     assert header["fields"]["display_name"] == "Synthetic"
     assert header["fields"]["shape"] == "hexagon" and body == b""
+
+
+def test_input3_processing_carries_parent_credits_into_complete_result2(scope):
+    import io
+
+    from hmp_plugin.presentation_input_v3 import encode_input_v3
+    from hmp_plugin.presentation_output_v2 import compare_parent_totals, decode_output_v2
+    from hmp_plugin.presentation_pipeline import run_fixed_worker
+    from hmp_plugin.presentation_worker import process_child_stream_v3
+
+    _, bound = scope
+    n = len(bound.directory_rules)
+    s = 1 + sum(len(part.encode()) for part in bound.home_path[1:].split("/"))
+    counts = {
+        "read_bytes": 0,
+        "hash_bytes": 0,
+        "opens": n,
+        "metadata": 4 * n,
+        "path_bytes": 3 * s,
+        "yaml_nodes": 0,
+        "yaml_tokens": 0,
+        "raster_units": 0,
+    }
+    row = {
+        "schema": 3,
+        "challenge": bound.challenge,
+        "epoch": 1,
+        "profile": "default",
+        "root": bound.root_path,
+        "home": bound.home_path,
+        "operation": "METADATA",
+        "expected_avatar_sha": None,
+        "uid": bound.service_uid,
+        "gid": bound.service_gid,
+        "dir_modes": [448, 488, 493],
+        "leaf_modes": [384, 416, 420],
+        "source_manifest_sha": bound.source_manifest_sha256,
+        "deadline_ns": int(bound.deadline * 1_000_000_000),
+        "directory_policy": [[r.uid, r.gid, r.modes[0]] for r in bound.directory_rules],
+        "iid": "a" * 52,
+        "canonical_fallback": "Hermes",
+        "observed_at": 100,
+        "parent_work_counts": counts,
+    }
+    # The parent credits are synthetic declarations here, not native IO proof.
+    baseline = run_fixed_worker(
+        bound,
+        fs=TrackedOS(),
+        iid="a" * 52,
+        profile="default",
+        canonical_fallback="Hermes",
+        observed_at=100,
+        clock=time.monotonic,
+    )
+    output = io.BytesIO()
+    process_child_stream_v3(
+        io.BytesIO(encode_input_v3(row) + bound.challenge.encode() + b"\n"),
+        output,
+        fs=TrackedOS(),
+        clock=time.monotonic,
+        deadline=bound.deadline + 0.1,
+        effective_uid=os.geteuid(),
+        effective_gid=os.getegid(),
+    )
+    header, body = decode_output_v2(output.getvalue(), bound.challenge, 1)
+    totals = compare_parent_totals(header, parent_home=bound.home_path, parent_counts=counts)
+    assert header["fields"]["display_name"] == "Synthetic" and body == b""
+    assert totals == {key: baseline.charges[key] + counts[key] for key in counts}
+    assert totals["yaml_tokens"] > 0

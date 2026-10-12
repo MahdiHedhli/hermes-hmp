@@ -12,6 +12,7 @@ from collections.abc import Callable
 from typing import BinaryIO
 
 from .presentation_input_v2 import decode_input_v2
+from .presentation_input_v3 import decode_input_v3
 from .presentation_jobs import INPUT_LIMIT, FrameError, decode_input
 
 
@@ -57,6 +58,13 @@ def read_worker_go_v2(
 ) -> dict[str, object]:
     """Strict schema2 child input; never retry as the legacy schema1 codec."""
     return _read_go(stream, clock=clock, deadline=deadline, decoder=decode_input_v2)
+
+
+def read_worker_go_v3(
+    stream: BinaryIO, *, clock: Callable[[], float], deadline: float
+) -> dict[str, object]:
+    """Strict input3 only; no legacy path or fresh parent credits."""
+    return _read_go(stream, clock=clock, deadline=deadline, decoder=decode_input_v3)
 
 
 def _read_go(
