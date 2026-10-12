@@ -1,4 +1,5 @@
 """Listener-owned operator lifecycle; construction confers no admission authority."""
+
 from __future__ import annotations
 
 import asyncio
@@ -11,17 +12,24 @@ from .approval_test_host_codec import (
     HostOperationRequest,
     HostResponse,
 )
-from .approval_test_producer import ApprovalTestProducer, TargetBinding, TestStatus
+from .approval_test_producer import ApprovalTestProducer, TargetBinding, TestNotice, TestStatus
 
 
 class OperatorHandler:
-    def __init__(self, generation: HostGeneration, producer: ApprovalTestProducer, *,
-                 admit: Callable[[HostBeginRequest], Awaitable[TargetBinding | None]],
-                 current: Callable[[TargetBinding], Awaitable[bool]]) -> None:
+    def __init__(
+        self,
+        generation: HostGeneration,
+        producer: ApprovalTestProducer,
+        *,
+        admit: Callable[[HostBeginRequest], Awaitable[TargetBinding | None]],
+        current: Callable[[TargetBinding], Awaitable[bool]],
+        owns_notice: Callable[[TestNotice], bool],
+    ) -> None:
         self._generation = generation
         self._producer = producer
         self._admit = admit
         self._current = current
+        self._owns_notice = owns_notice
         self._active: tuple[HostBeginRequest, str, TargetBinding] | None = None
         self._operation_id: str | None = None
         self._deadline = 0.0
@@ -30,6 +38,32 @@ class OperatorHandler:
         self._admitting = False
         self._closing = False
         self._shutdown_task: asyncio.Task[None] | None = None
+
+    def handle_for_notice(self, notice: TestNotice) -> str | None:
+        active = self._active
+        if (
+            self._closing
+            or type(notice) is not TestNotice
+            or active is None
+            or self._owns_notice(notice) is not True
+        ):
+            return None
+        target = active[2]
+        if (
+            notice.instance_id,
+            notice.user_id,
+            notice.profile,
+            notice.session_id,
+            notice.device_id,
+        ) != (
+            target.instance_id,
+            target.user_id,
+            target.profile,
+            target.session_id,
+            target.device_id,
+        ):
+            return None
+        return active[1]
 
     async def _join(self, handle: str, target: TargetBinding) -> None:
         while True:
@@ -46,24 +80,40 @@ class OperatorHandler:
     async def responses(self, request) -> AsyncGenerator[HostResponse, None]:
         if type(request) is HostOperationRequest:
             active = self._active
-            if (self._closing or request.generation != self._generation or active is None
-                    or request.operation_id != self._operation_id):
+            if (
+                self._closing
+                or request.generation != self._generation
+                or active is None
+                or request.operation_id != self._operation_id
+            ):
                 yield HostResponse("unavailable")
                 return
             if request.op == "cancel":
                 outcome = await self._producer.cancel_test(active[1], active[2].device_id)
-                yield HostResponse("cancel_requested", operation_id=request.operation_id,
-                                   state=outcome.status.value)
+                yield HostResponse(
+                    "cancel_requested",
+                    operation_id=request.operation_id,
+                    state=outcome.status.value,
+                )
             else:
                 outcome = await self._producer.outcome(active[1], active[2].device_id)
-                remaining = max(0, min(60000, int(
-                    (self._deadline - asyncio.get_running_loop().time()) * 1000)))
-                yield HostResponse("status", operation_id=request.operation_id,
-                                   state=outcome.status.value, remaining_ms=remaining)
+                remaining = max(
+                    0, min(60000, int((self._deadline - asyncio.get_running_loop().time()) * 1000))
+                )
+                yield HostResponse(
+                    "status",
+                    operation_id=request.operation_id,
+                    state=outcome.status.value,
+                    remaining_ms=remaining,
+                )
             return
-        if (self._closing or type(request) is not HostBeginRequest
-                or request.generation != self._generation or self._active is not None
-                or self._admitting):
+        if (
+            self._closing
+            or type(request) is not HostBeginRequest
+            or request.generation != self._generation
+            or self._active is not None
+            or self._admitting
+        ):
             yield HostResponse("unavailable")
             return
         self._admitting = True
