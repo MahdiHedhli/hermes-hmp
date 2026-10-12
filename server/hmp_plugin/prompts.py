@@ -261,6 +261,25 @@ class PromptStore:
                 self._locks.pop(key, None)
             self._purge_observations(now)
 
+    def withdraw_target_row(self, row: PromptRow, now: int) -> bool:
+        """Retire only the exact device-scoped row owned by a test operation.
+
+        Keep any active answer lock until its users leave; a replacement must never inherit
+        cleanup from an older operation. Ordinary rows cannot be withdrawn through this port.
+        """
+        if row.target_device_id is None:
+            return False
+        key = (row.iid, row.user_id, row.profile, row.request_id)
+        with self._guard:
+            current = self._rows.get(key)
+            if current is not row:
+                return current is None
+            self.expire(row, now)
+            del self._rows[key]
+            if not self._lock_users.get(key):
+                self._locks.pop(key, None)
+            return True
+
     def _purge_observations(self, now: float) -> None:
         for key in list(self._observations):
             kept = [item for item in self._observations[key] if now - item[2] < OBSERVATION_TTL_S]

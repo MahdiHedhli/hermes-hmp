@@ -107,3 +107,30 @@ def test_ordinary_approval_expiry_grace_is_preserved() -> None:
     _store_approval(store, expires_at=10)
     assert len(store.list_visible(IID, USER, PROFILE, now=40)) == 1
     assert not store.list_visible(IID, USER, PROFILE, now=41)
+
+
+@pytest.mark.asyncio
+async def test_withdraw_only_exact_target_row_and_retain_active_lock() -> None:
+    store = prompts.PromptStore(clock=lambda: 1)
+    _store_approval(store, target_device_id="synthetic-target-device")
+    key = (IID, USER, PROFILE, REQ)
+    original = store.get(key)
+    assert original is not None
+    async with store.answer_row(key) as pinned:
+        assert pinned is original
+        held_lock = store._locks[key]
+        assert store.withdraw_target_row(original, 2)
+        assert original.status == "expired" and store.get(key) is None
+        assert store._locks[key] is held_lock
+        _store_approval(store, target_device_id="synthetic-target-device")
+        replacement = store.get(key)
+        assert replacement is not None and replacement is not original
+        assert not store.withdraw_target_row(original, 3)
+        assert store.get(key) is replacement and replacement.status == "open"
+    assert store.withdraw_target_row(replacement, 4)
+    assert key not in store._locks
+    _store_approval(store)
+    ordinary = store.get(key)
+    assert ordinary is not None
+    assert not store.withdraw_target_row(ordinary, 5)
+    assert store.get(key) is ordinary and ordinary.status == "open"
