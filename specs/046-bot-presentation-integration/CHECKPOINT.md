@@ -181,3 +181,21 @@ Actual function-depth checks now reject module/nested eager classes and preserve
 function-local class imports, including the analogous bridge late-binding rule.
 Seventy scanner cases and238 control/layout cases passed; independent
 review of the new lazy-scope repair remains required. No activation.
+
+## Parent GO handoff
+
+A synchronous one-use handoff binds the exact job handle/child and an observed
+nonblocking pipe identity. Blocking/non-pipe or replaced descriptors refuse;
+retired/wrong-child scopes perform no write. The65-byte GO uses one syscall, and
+partial/invalid results or exceptions after actual writes cannot be retried.
+Ten focused cases pass, including a real pipe and actual write-then-lost-ack.
+An initial five failures were synthetic tests lacking the newly required explicit
+pipe-info port; fixture correction preserved the production checks. Selected lint
+and the preceding241 GO/layout tests pass. This module creates no process and
+does not own/close its borrowed descriptor; the supervisor must supply exclusive
+FD custody and native reauthorization. Independent handoff review remains open.
+
+The lazy-import dependency repair `80c1406` received independent source acceptance
+with37 separate scanner cases (receipt SHA256
+`4fea051371c8a08f4cd05c65171b2ed5da8dc2658b25df2c56f096b1525a6789`).
+This does not include the separate child control decoder or GO handoff.
