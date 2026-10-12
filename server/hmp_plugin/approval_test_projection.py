@@ -43,6 +43,22 @@ class TestProjection:
         self._owned[notice.request_id] = (notice, row)
         return True
 
+    def notice_for_answer(self, row: PromptRow, device_id: str) -> TestNotice | None:
+        """Exact in-memory operation association, never a caller-supplied route key."""
+        owned = self._owned.get(row.request_id)
+        if owned is None or owned[1] is not row:
+            return None
+        notice = owned[0]
+        if (
+            type(device_id) is not str or device_id != notice.device_id
+            or row.target_device_id != device_id or row.status != "open"
+            or self._store.closed or self._store.phone_closed
+            or self._monotonic() >= notice.deadline_monotonic
+        ):
+            return None
+        key = (row.iid, row.user_id, row.profile, row.request_id)
+        return notice if self._store.get(key) is row else None
+
     def remove(self, notice: TestNotice) -> bool:
         owned = self._owned.get(notice.request_id)
         if owned is None:

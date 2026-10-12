@@ -45,3 +45,20 @@ def test_projection_never_rounds_deadline_beyond_native_waiter() -> None:
     assert row.expires_at <= 101.25
     assert projection.remove(notice)
     assert not projection.publish(replace(notice, deadline_monotonic=10.1))
+
+
+def test_answer_lookup_requires_owned_row_device_and_live_deadline() -> None:
+    clock = [10.0]
+    store = PromptStore(clock=lambda: 100)
+    projection = Projection(store, wall_clock=lambda: 100, monotonic=lambda: clock[0])
+    notice = Notice("synthetic-instance", "synthetic-user", "default", "synthetic-session",
+                    "synthetic-device", "synthetic-request", deadline_monotonic=20)
+    assert projection.publish(notice)
+    row = store.get((notice.instance_id, notice.user_id, notice.profile, notice.request_id))
+    assert row is not None
+    assert projection.notice_for_answer(row, notice.device_id) is notice
+    assert projection.notice_for_answer(row, "synthetic-other-device") is None
+    assert projection.notice_for_answer(replace(row), notice.device_id) is None
+    clock[0] = 20
+    assert projection.notice_for_answer(row, notice.device_id) is None
+    assert projection.remove(notice)
