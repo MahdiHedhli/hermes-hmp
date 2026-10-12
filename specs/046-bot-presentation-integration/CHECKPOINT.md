@@ -167,3 +167,17 @@ rejected by negative cases.64 scanner tests and selected lint pass in an isolate
 fixture. The earlier successful61-case run had81 old temporary-artifact cleanup
 warnings; those unrelated artifacts were not modified. Independent review of the
 closed-surface amendment remains required. No live dependency installation occurred.
+
+## Child control codec / lazy-import review repair
+
+A bounded child control decoder now accepts only the existing closed input frame,
+its exact64-byte GO challenge/newline and EOF before profile I/O. Missing/mismatched
+GO, trailing data and oversized prefixes refuse. Seven stream cases pass; actual
+stream reads can block and the parent hard-deadline/child custody remains open.
+This is a local IPC binding, never native authority.
+
+Independent dependency review found eager class bodies bypassed lazy-import rules.
+Actual function-depth checks now reject module/nested eager classes and preserve
+function-local class imports, including the analogous bridge late-binding rule.
+Seventy scanner cases and238 control/layout cases passed; independent
+review of the new lazy-scope repair remains required. No activation.
