@@ -377,3 +377,8 @@ cannot close from its own code.
   tighten, not a live gap. Suggested fix: flag any `Attribute` node on `self._adapter`, on
   `self._hermes` call results and on values returned from `REACHED_METHODS`-table calls, and
   compare `(receiver, method)` pairs against `compat.READ_DEPENDENCIES` instead of bare names.
+
+
+## AT1 inert integration modules
+
+The exact package inventory also includes `approval_test_producer.py`, `approval_test_projection.py`, `approval_test_answers.py`, `approval_test_authority.py`, `approval_test_host_codec.py` and `approval_test_host_transport.py`. These provide the no-op producer lifecycle, selected-device in-memory projection, checked answer coordination, read-only admission, closed local DATA codec and same-UID owned Unix transport. All import without Hermes; only bridge.py may bind native helpers. No endpoint or operator command is registered yet. Listener generation/family checks and production handler integration remain required.

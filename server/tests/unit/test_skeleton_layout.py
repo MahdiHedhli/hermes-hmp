@@ -33,6 +33,13 @@ CONTRACT_MODULES = {
     "gate.py",
     "direct_send.py",
     "prompts.py",
+    # AT1 inert components; no endpoint or CLI registration yet.
+    "approval_test_producer.py",
+    "approval_test_projection.py",
+    "approval_test_answers.py",
+    "approval_test_authority.py",
+    "approval_test_host_codec.py",
+    "approval_test_host_transport.py",
     "mobile_cron.py",
     "mobile_model.py",
     "server.py",
