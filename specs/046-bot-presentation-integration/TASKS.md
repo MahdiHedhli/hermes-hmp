@@ -17,7 +17,8 @@
 - [ ] Review schema3 parent policy/work accounting, then implement actual policy acquisition.
 - [ ] Implement reviewed listener startup/shutdown and authenticated metadata route.
 - [x] Implement source-only revision-bound client avatar transport, bounded codec and per-widget image owner; independently reviewed.
-- [ ] Review and qualify stable app-level aggregate avatar budget binding.
+- [x] Review stable app-level aggregate avatar budget binding (3881fa2); screen regression122cases pass.
+- [ ] Sample aggregate avatar resources on exact signed physical devices.
 - [ ] Implement authenticated host avatar route and qualify revision/cache behavior physically.
 - [ ] Complete header/details, blobatar v2 and custom static image parity.
 - [ ] Run exact native/transport/UI causal checks and independent security review.
