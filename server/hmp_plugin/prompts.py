@@ -275,9 +275,12 @@ class PromptStore:
             if current is not row:
                 return current is None
             self.expire(row, now)
+            # An answer in flight may still commit its acknowledgement to this exact row.
+            # Keep it non-visible until that answer settles; purge owns bounded retention.
+            if self._lock_users.get(key):
+                return True
             del self._rows[key]
-            if not self._lock_users.get(key):
-                self._locks.pop(key, None)
+            self._locks.pop(key, None)
             return True
 
     def _purge_observations(self, now: float) -> None:

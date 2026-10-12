@@ -120,17 +120,41 @@ async def test_withdraw_only_exact_target_row_and_retain_active_lock() -> None:
         assert pinned is original
         held_lock = store._locks[key]
         assert store.withdraw_target_row(original, 2)
-        assert original.status == "expired" and store.get(key) is None
+        assert original.status == "expired" and store.get(key) is original
         assert store._locks[key] is held_lock
-        _store_approval(store, target_device_id="synthetic-target-device")
-        replacement = store.get(key)
-        assert replacement is not None and replacement is not original
-        assert not store.withdraw_target_row(original, 3)
-        assert store.get(key) is replacement and replacement.status == "open"
-    assert store.withdraw_target_row(replacement, 4)
+        assert not store.list_visible(IID, USER, PROFILE, device_id="synthetic-target-device")
+    assert store.withdraw_target_row(original, 3)
+    _store_approval(store, target_device_id="synthetic-target-device")
+    replacement = store.get(key)
+    assert replacement is not None and replacement is not original
+    assert not store.withdraw_target_row(original, 4)
+    assert store.get(key) is replacement and replacement.status == "open"
+    assert store.withdraw_target_row(replacement, 5)
     assert key not in store._locks
     _store_approval(store)
     ordinary = store.get(key)
     assert ordinary is not None
     assert not store.withdraw_target_row(ordinary, 5)
     assert store.get(key) is ordinary and ordinary.status == "open"
+
+
+@pytest.mark.asyncio
+async def test_native_cleanup_during_answer_preserves_exact_acknowledgement_replay() -> None:
+    store = prompts.PromptStore(clock=lambda: 1)
+    _store_approval(store, target_device_id="synthetic-target-device", choices=("once", "deny"))
+    class Resolver(FakeResolver):
+        async def resolve_approval(self, row, choice):
+            assert store.withdraw_target_row(row, 2)
+            return await super().resolve_approval(row, choice)
+    resolver = Resolver()
+    async def answer():
+        return await prompts.answer_prompt(
+            store, iid=IID, user_id=USER, profile=PROFILE, request_id=REQ,
+            body={"choice": "once"}, resolver=resolver, now=2,
+            device_id="synthetic-target-device",
+        )
+    first = await answer()
+    assert first.status == 200 and first.body["applied"] is True
+    assert (await answer()).body == first.body
+    assert len(resolver.calls) == 1
+    assert not store.list_visible(IID, USER, PROFILE, device_id="synthetic-target-device")
