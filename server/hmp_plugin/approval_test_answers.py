@@ -25,7 +25,7 @@ class TestAnswers:
         self._current = current
         self._handle_for = handle_for
 
-    async def resolve(self, row: PromptRow, device_id: str, choice: str) -> str:
+    async def _resolve(self, row: PromptRow, device_id: str, choice: str) -> str:
         notice = self._projection.notice_for_answer(row, device_id)
         if notice is None or choice not in ("once", "deny"):
             return "stale"
@@ -42,3 +42,10 @@ class TestAnswers:
         if await self._current(notice) is not True:
             return "unavailable"
         return settled_answer_verdict(outcome, choice)
+
+    async def resolve(self, row: PromptRow, device_id: str, choice: str) -> str:
+        try:
+            return await self._resolve(row, device_id, choice)
+        except Exception:
+            # Cancellation remains observable; dependency failures carry no private details.
+            return "unavailable"
