@@ -427,12 +427,17 @@ class _FailingBoundary:
         if sql == self.command:
             raise sqlite3.OperationalError("injected boundary failure")
         return self.real.execute(sql, *args)
+    @property
+    def in_transaction(self):
+        return self.real.in_transaction
     def close(self) -> None:
         self.real.close()
 
 
 @pytest.mark.parametrize("command", ["BEGIN IMMEDIATE", "COMMIT", "ROLLBACK"])
-def test_boundary_failure_poisons_connection_without_replay(tmp_path: Path, command: str) -> None:
+def test_boundary_failure_recovers_only_proven_rollback_without_replay(
+    tmp_path: Path, command: str,
+) -> None:
     store = _store(tmp_path)
     real = store._conn
     assert real is not None
@@ -450,9 +455,15 @@ def test_boundary_failure_poisons_connection_without_replay(tmp_path: Path, comm
                 store.transaction() as conn,
             ):
                 conn.execute("INSERT INTO device_owner_controls VALUES ('device', 1, 2)")
-        for call in (store.instance_epoch, lambda: store.insert_user("later", "Later", 3)):
-            with pytest.raises(RuntimeError, match="state unavailable"):
-                call()
+        if command == "COMMIT":
+            assert real.in_transaction is False
+            assert _separate_controls(store._path) is None
+            store._conn = real  # Stop injecting failures before probing recovered usability.
+            store.insert_user("later", "Later", 3)
+        else:
+            for call in (store.instance_epoch, lambda: store.insert_user("later", "Later", 3)):
+                with pytest.raises(RuntimeError, match="state unavailable"):
+                    call()
     finally:
         store.close()
 
@@ -767,5 +778,23 @@ def test_phone_cmid_direct_send_status_still_refused(tmp_path: Path) -> None:
             "WHERE iid='iid' AND user_id='user' AND profile='default' AND cmid='phone'"
         ).fetchone()
         assert row is not None and row["status"] == "pending" and row["updated_at"] == 2
+    finally:
+        store.close()
+
+
+def test_failed_commit_with_unreadable_transaction_state_poisons_store(tmp_path: Path) -> None:
+    store = _store(tmp_path)
+    real = store._conn
+    assert real is not None
+    class Unknown(_FailingBoundary):
+        @property
+        def in_transaction(self):
+            raise RuntimeError("synthetic unknown state")
+    store._conn = Unknown(real, "COMMIT")
+    try:
+        with pytest.raises(RuntimeError, match="synthetic unknown state"), store.transaction():
+            pass
+        with pytest.raises(RuntimeError, match="state unavailable"):
+            store.instance_epoch()
     finally:
         store.close()
