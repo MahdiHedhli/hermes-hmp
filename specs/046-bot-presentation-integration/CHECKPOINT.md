@@ -332,3 +332,7 @@ Independent review held c64f89e: control-owner poison or expiry during pipe call
 ## October 12: retained-process composition and CONTROL-02
 
 Added actual reader composition through retained launch/wait owner, owned input/GO and result/diagnostic pipes: exact success wait and observed group absence, no second Popen reaper. Review closed original CONTROL-01 cases but held CONTROL-02: new final current callback could replace inode/blocking mode after earlier identity check. Final owned descriptor validation now follows that callback before the final deadline/poison fence and syscall. 34 real-file/control cases pass; independent successor replay pending. No activation.
+
+## October 12: control security closure
+
+Independent review accepted7ccefeb: CONTROL-01/02 closed,13cases; receipt SHA2cc18801190d53c4e779861099d9452e058bfb38af32542cb7cc4525fa13ada1. Committed repository regressions now reproduce final-current inode replacement and blocking-mode change on real synthetic pipes, proving zero GO output. Control/processfocused25casespass. Prior holds retained. Remaining critical path: parent policy acquisition/accounting and installed code/runtime qualification; hard-deadline termination; native authority/JobOwner/lifecycle routes; exact physical host/app qualification.

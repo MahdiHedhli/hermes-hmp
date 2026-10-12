@@ -182,3 +182,40 @@ def test_current_scope_lost_during_pipe_check_cannot_send_go(pipe):
         owner.send_go(handle, child, "a" * 64)
     owner.close_for_drain()
     assert os.read(read, 8192) == data
+
+
+@pytest.mark.parametrize("change", ["inode", "blocking"])
+def test_final_current_callback_cannot_change_pipe_before_go(pipe, change):
+    owner, read, stream, handle, child = pipe
+    data = packet()
+    owner.write_input(data)
+    new_read, new_write = os.pipe()
+    count = [0]
+
+    def mutate():
+        count[0] += 1
+        if count[0] == 2:
+            if change == "inode":
+                os.dup2(new_write, stream.fileno())
+                os.set_blocking(stream.fileno(), False)
+            else:
+                os.set_blocking(stream.fileno(), True)
+        return True
+
+    owner._current = mutate
+    try:
+        with pytest.raises(FrameError):
+            owner.send_go(handle, child, "a" * 64)
+        assert count[0] == 2 and owner.uncertain and not owner.closed
+        assert os.read(read, 8192) == data
+        if change == "inode":
+            os.set_blocking(new_read, False)
+            with pytest.raises(BlockingIOError):
+                os.read(new_read, 65)
+        else:
+            os.set_blocking(stream.fileno(), False)
+            owner.close_for_drain()
+            assert os.read(read, 1) == b""
+    finally:
+        os.close(new_read)
+        os.close(new_write)
