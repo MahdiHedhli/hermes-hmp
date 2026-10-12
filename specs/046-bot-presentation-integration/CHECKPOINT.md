@@ -340,3 +340,13 @@ Independent review accepted7ccefeb: CONTROL-01/02 closed,13cases; receipt SHA2cc
 ## October 12: current CI and parent accounting decision
 
 GitHub CI38205232793 completed success at exactc78e922. Added explicit parent policy/accounting decision: fixed directory-only no-follow acquisition, before-effect shared charges/actual close ownership and required schema3 counter transfer; current schema2 cannot silently fund a fresh child ledger after parent work. This closes an implementation design gap, not runtime readiness. Mobile budgetbinding3881fa2 review remains pending; no host/app deployment.
+
+## October 12: construction-time parent work seed
+
+Added exact eight-counter successful-parent validation and defensive construction
+copy into the sole work ledger. N/4N/3S schedule must match lexical home; non-parent
+phase counters stay zero, types/bounds/keys are closed, and imported parent-policy
+phase cannot run again. Existing total limits are unchanged: seeded3opens leaves77
+and no refund.16budget cases and341presentation cases plus190subtests pass. This
+is source accounting only: schema3 input, result2 totals/comparison and actual
+authorized parent policy acquisition are still unbound. Independent review pending.

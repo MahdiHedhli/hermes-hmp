@@ -30,7 +30,14 @@ class PresentationWorkLedger:
         }
     )
 
-    def __init__(self, *, clock: Callable[[], float], deadline: float):
+    def __init__(
+        self,
+        *,
+        clock: Callable[[], float],
+        deadline: float,
+        parent_counts: dict[str, int] | None = None,
+        parent_home: str | None = None,
+    ):
         if type(deadline) is not float or not 0 < deadline < float("inf"):
             raise PresentationBudgetError
         self.clock = clock
@@ -38,6 +45,42 @@ class PresentationWorkLedger:
         self._counts = dict.fromkeys(self._LIMITS, 0)
         self._phases: set[str] = set()
         self._poisoned = False
+        if parent_counts is not None or parent_home is not None:
+            self._counts = self.validate_parent_counts(parent_home, parent_counts)
+            self._phases.add("parent_policy")
+        self.tick()
+
+    @classmethod
+    def validate_parent_counts(cls, home: object, counts: object) -> dict[str, int]:
+        """Validate/copy the exact successful parent schedule, never authority."""
+        if type(home) is not str or not home.startswith("/") or home == "/" or "\x00" in home:
+            raise PresentationBudgetError
+        parts = home[1:].split("/")
+        if len(parts) + 1 > 32 or any(part in ("", ".", "..") for part in parts):
+            raise PresentationBudgetError
+        try:
+            encoded = home.encode("utf-8", errors="strict")
+        except UnicodeError:
+            raise PresentationBudgetError from None
+        if len(encoded) > 4096 or type(counts) is not dict or counts.keys() != cls._LIMITS.keys():
+            raise PresentationBudgetError
+        if any(
+            type(value) is not int or not 0 <= value <= cls._LIMITS[key]
+            for key, value in counts.items()
+        ):
+            raise PresentationBudgetError
+        expected = dict.fromkeys(cls._LIMITS, 0)
+        expected.update(
+            opens=len(parts) + 1,
+            metadata=4 * (len(parts) + 1),
+            path_bytes=3 * (1 + sum(len(part.encode("utf-8")) for part in parts)),
+        )
+        if counts != expected:
+            raise PresentationBudgetError
+        return dict(counts)
+
+    def begin_parent_policy(self) -> None:
+        self._phase("parent_policy")
 
     def tick(self) -> None:
         try:
