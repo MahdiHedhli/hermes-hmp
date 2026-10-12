@@ -46,3 +46,35 @@ def test_ordinary_rows_remain_visible_without_target_scope() -> None:
     _store_approval(store)
     for device in (None, "synthetic-target-device", "synthetic-other-device"):
         assert len(store.list_visible(IID, USER, PROFILE, device_id=device)) == 1
+
+
+def test_authenticated_http_target_scope(tmp_path, monkeypatch) -> None:
+    from .hmp_kit import Env, code, get, pair, post, run
+    from .test_approval_route_gates import BOT, _native, _row, _setup
+
+    env = Env(tmp_path)
+    calls = _setup(env)
+    _native(monkeypatch, calls, "accepted")
+
+    async def scenario(client) -> None:
+        target = await pair(env, client)
+        other = await pair(env, client)
+        env.ctx.owner_device_ids = lambda: frozenset({target.device_id, other.device_id})
+        row = _row(env, target, surface="bot_chat", target_device_id=target.device_id)
+        status, listed = await get(client, f"/bots/{BOT}/prompts", headers=env.headers(other))
+        assert status == 200 and listed["prompts"] == []
+        status, rejected = await post(
+            client, f"/bots/{BOT}/prompts/{REQ}",
+            {"choice": "once", "device_id": target.device_id}, headers=env.headers(other),
+        )
+        assert (status, code(rejected)) == (404, "not_found")
+        assert row.status == "open" and calls["native"] == []
+        status, listed = await get(client, f"/bots/{BOT}/prompts", headers=env.headers(target))
+        assert status == 200 and len(listed["prompts"]) == 1
+        status, accepted = await post(
+            client, f"/bots/{BOT}/prompts/{REQ}", {"choice": "once"}, headers=env.headers(target),
+        )
+        assert status == 200 and accepted["status"] == "resolved"
+        assert len(calls["native"]) == 1
+
+    run(env, scenario)
