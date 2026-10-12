@@ -54,6 +54,7 @@ CONTRACT_MODULES = {
     # BI1 pure closed presentation projection and fixed Unicode 17 tables; no Hermes import.
     "presentation.py",
     "presentation_files.py",
+    "presentation_posix.py",
     "presentation_yaml.py",
     "presentation_jobs.py",
     "presentation_authority.py",
