@@ -626,6 +626,7 @@ def test_factory_cannot_substitute_original_deadline_hash_or_epoch(scope):
 def test_factory_private_copy_cannot_change_emitted_epoch(scope):
     import io
     from dataclasses import replace
+
     from hmp_plugin.presentation_jobs import decode_output, encode_input
     from hmp_plugin.presentation_worker import process_child_stream
 
