@@ -1,3 +1,12 @@
+## Character reader integration — October 12, 2026
+
+Native policy callback findings are closed by independent review. The job receiver
+now compares result2 against retained parent work and directory identity (reviewed).
+One-use native-policy input transfer is implemented and locally tested; independent
+review is pending. Authenticated route activation, process supervision/runtime
+attestation and physical character display remain incomplete. Installed app/host
+versions have not changed; host-local image phone display remains unverified.
+
 # HMP features
 
 ## Bot character integration checkpoint — October 12, 2026

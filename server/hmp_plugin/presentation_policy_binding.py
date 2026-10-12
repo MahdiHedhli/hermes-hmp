@@ -1,6 +1,6 @@
 """Policy work attached to one existing native-authorized reserved job.
 
-No route/child launch/input publication/clean-abort is provided here. Initial and
+No route/child launch/clean-abort is provided here. Initial and
 BEFORE observations are required; fresh native postcheck follows actual join.
 """
 
@@ -44,6 +44,8 @@ class NativePolicyWork:
         self._attempted = False
         self._postcheck_attempted = False
         self._postchecked = False
+        self._transfer_attempted = False
+        self._scope = (root, home, profile, os.geteuid(), os.getegid())
         self._policy = None
         self._thread = None
         if not self._current():
@@ -116,3 +118,59 @@ class NativePolicyWork:
         if not self._postchecked or not self._current() or self._thread is None:
             raise AuthorityRefusalError
         return self._thread.observed_snapshot()
+
+    def worker_input(
+        self,
+        *,
+        source_manifest_sha: str,
+        canonical_fallback: str,
+        observed_at: int,
+        expected_avatar_sha: str | None = None,
+    ) -> bytes:
+        """One private input3 transfer; digest is context, not code attestation."""
+        from .presentation_input_v3 import encode_input_v3
+
+        if self._transfer_attempted:
+            self._invalid = True
+            raise AuthorityRefusalError
+        self._transfer_attempted = True
+        snapshot = self.observed_snapshot()
+        record = self._record
+        job = record.owner._resolve(record.handle)
+        root, home, profile, uid, gid = self._scope
+        if job.operation == "METADATA" and expected_avatar_sha is not None:
+            self._invalid = True
+            raise AuthorityRefusalError
+        if job.operation == "AVATAR" and expected_avatar_sha is None:
+            self._invalid = True
+            raise AuthorityRefusalError
+        packet = encode_input_v3(
+            {
+                "schema": 3,
+                "challenge": record.owner.challenge(record.handle),
+                "epoch": record.lease.epoch,
+                "profile": profile,
+                "root": root,
+                "home": home,
+                "operation": job.operation,
+                "expected_avatar_sha": expected_avatar_sha,
+                "uid": uid,
+                "gid": gid,
+                "dir_modes": [0o700, 0o750, 0o755],
+                "leaf_modes": [0o600, 0o640, 0o644],
+                "source_manifest_sha": source_manifest_sha,
+                "deadline_ns": int(record.deadline * 1_000_000_000),
+                "directory_policy": [
+                    [rule.uid, rule.gid, rule.modes[0]] for rule in snapshot.rules
+                ],
+                "iid": record.lease.iid,
+                "canonical_fallback": canonical_fallback,
+                "observed_at": observed_at,
+                "parent_work_counts": dict(snapshot.counts),
+            }
+        )
+        record.owner.bind_parent_result(record.handle, home, snapshot)
+        if not self._current():
+            self._invalid = True
+            raise AuthorityRefusalError
+        return packet

@@ -458,3 +458,17 @@ under-parent totals refuse without releasing custody credit. Focused receiver/jo
 checks: 55 passed, 43 subtests; Ruff passes. Independent receiver integration review
 is pending. Native policy transfer and route callers remain unwired; the default
 legacy receiver remains only for existing fixture flows. No deployment claim.
+
+## Native policy input transfer — October 12, 2026
+
+Result binding 7955c06 passed independent review (20 pure cases), receipt
+/private/tmp/hermes-presentation-chain-review-20261012/job-result-REVIEW.json.
+NativePolicyWork now emits one private input3 packet only after known policy join
+and fresh native postcheck; it binds result2 to the retained parent snapshot before
+returning bytes. Scope/identity/challenge/deadline derive from the admitted record;
+no bearer or user/device credentials enter the packet. Metadata refuses an avatar
+revision; avatar requires one. Duplicate transfer is sticky-invalid, and final
+current fences refuse publication after retirement during result binding.
+84 focused tests plus 23 subtests pass; Ruff passes. Independent transfer review
+remains pending. Supplied manifest digest is context, NOT runtime code attestation.
+No route, subprocess supervisor, signed candidate or physical activation claimed.

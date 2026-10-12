@@ -1354,7 +1354,9 @@ def test_parent_constructor_bounds_paths_before_large_allocation(scope):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("attack", ["none", "reentrant_postcheck", "retired_listener"])
+@pytest.mark.parametrize(
+    "attack", ["none", "reentrant_postcheck", "retired_listener", "transfer", "transfer_retired"]
+)
 async def test_native_policy_binding_requires_admitted_operation_and_fresh_postcheck(scope, attack):
     from hmp_plugin.presentation_authority import (
         AuthorityRefusalError,
@@ -1370,7 +1372,7 @@ async def test_native_policy_binding_requires_admitted_operation_and_fresh_postc
 
     class Headers:
         def getall(self, key, default):
-            return {"Authorization": ["Bearer " + "A" * 43], "HMP-Instance": ["iid"]}.get(
+            return {"Authorization": ["Bearer " + "A" * 43], "HMP-Instance": ["a" * 52]}.get(
                 key, default
             )
 
@@ -1406,8 +1408,8 @@ async def test_native_policy_binding_requires_admitted_operation_and_fresh_postc
             return True
 
     native = NativeFake()
-    authority = ParentAuthorityAdapter("iid", service=native)
-    lease = CapturedLease("iid", "device", "user", "family", "default", "b" * 64, "binding", 1)
+    authority = ParentAuthorityAdapter("a" * 52, service=native)
+    lease = CapturedLease("a" * 52, "device", "user", "family", "default", "b" * 64, "binding", 1)
     operation = authority.reserve(
         lease,
         "METADATA",
@@ -1436,6 +1438,7 @@ async def test_native_policy_binding_requires_admitted_operation_and_fresh_postc
         work.observed_snapshot()
     original_clock = authority._clock
     if attack == "reentrant_postcheck":
+
         def clock():
             authority._clock = original_clock
             nested = work.postcheck()
@@ -1452,6 +1455,7 @@ async def test_native_policy_binding_requires_admitted_operation_and_fresh_postc
         return
     assert await work.postcheck()
     if attack == "retired_listener":
+
         def clock():
             authority._clock = original_clock
             authority._record(operation).fence.retire()
@@ -1463,6 +1467,39 @@ async def test_native_policy_binding_requires_admitted_operation_and_fresh_postc
         return
     assert work.observed_snapshot().counts["opens"] == len(bound.directory_rules)
     assert native.calls == ["INITIAL", "BEFORE", "PRE_GO"]
+    if attack in ("transfer", "transfer_retired"):
+        from hmp_plugin.presentation_input_v3 import decode_input_v3
+
+        if attack == "transfer_retired":
+
+            def clock():
+                authority._record(operation).fence.retire()
+                return original_clock()
+
+            authority._record(operation).owner._clock = clock
+            with pytest.raises(AuthorityRefusalError):
+                work.worker_input(
+                    source_manifest_sha="b" * 64, canonical_fallback="Hermes", observed_at=1
+                )
+            return
+        packet = work.worker_input(
+            source_manifest_sha="b" * 64, canonical_fallback="Hermes", observed_at=1
+        )
+        row = decode_input_v3(packet)
+        assert row["home"] == bound.home_path
+        assert row["iid"] == "a" * 52
+        assert row["profile"] == "default" and row["operation"] == "METADATA"
+        assert row["challenge"] == authority._record(operation).owner.challenge(
+            authority._record(operation).handle
+        )
+        assert row["parent_work_counts"]["opens"] == len(bound.directory_rules)
+        assert row["deadline_ns"] == int(authority._record(operation).deadline * 1_000_000_000)
+        assert "Authorization" not in packet.decode()
+        with pytest.raises(AuthorityRefusalError):
+            work.worker_input(
+                source_manifest_sha="b" * 64, canonical_fallback="Hermes", observed_at=1
+            )
+        return
     with pytest.raises(AuthorityRefusalError):
         await work.postcheck()
     # Native service is synthetic; no actual bearer/native gateway qualification.
