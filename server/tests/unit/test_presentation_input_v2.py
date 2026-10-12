@@ -125,3 +125,44 @@ def test_v2_control_requires_exact_go_eof_and_rejects_legacy_input():
         read_worker_go_v2(
             io.BytesIO(encode_input(legacy) + suffix), clock=lambda: 1.0, deadline=2.0
         )
+
+
+def test_scope_reconstruction_preserves_exact_singleton_policy_and_identity():
+    from hmp_plugin.presentation_worker import scope_from_v2
+
+    data = row()
+    scope = scope_from_v2(data, effective_uid=501, effective_gid=20)
+    assert scope.profile is None
+    assert scope.home_path == data["home"]
+    assert [rule.modes for rule in scope.directory_rules] == [(493,), (493,), (448,)]
+    for uid, gid in ((0, 20), (502, 20), (501, 21), (True, 20)):
+        with pytest.raises(FrameError):
+            scope_from_v2(data, effective_uid=uid, effective_gid=gid)
+    data["profile"] = "alpha"
+    data["home"] = "/srv/hermes/profiles/alpha"
+    data["directory_policy"] += [[501, 20, 448], [501, 20, 448]]
+    assert scope_from_v2(data, effective_uid=501, effective_gid=20).profile == "alpha"
+
+
+def test_v2_processing_does_no_file_work_before_go_or_identity_refusal():
+    import io
+
+    from hmp_plugin.presentation_worker import process_child_stream_v2
+
+    class NoFileEffects:
+        def __getattr__(self, name):
+            raise AssertionError("unexpected filesystem effect: " + name)
+
+    for suffix, uid in ((b"wrong", 501), (b"a" * 64 + b"\n", 0)):
+        output = io.BytesIO()
+        with pytest.raises(FrameError):
+            process_child_stream_v2(
+                io.BytesIO(encode_input_v2(row()) + suffix),
+                output,
+                fs=NoFileEffects(),
+                clock=lambda: 1.0,
+                deadline=2.0,
+                effective_uid=uid,
+                effective_gid=20,
+            )
+        assert output.getvalue() == b""

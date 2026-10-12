@@ -716,3 +716,48 @@ def test_late_scope_factory_returns_without_opening_profile_files(scope):
             observed_at=100,
         )
     assert fs.open_attempts == 0 and sink.getvalue() == b""
+
+
+def test_schema2_real_child_processing_preserves_projection_and_closes_files(scope):
+    import io
+
+    from hmp_plugin.presentation_input_v2 import encode_input_v2
+    from hmp_plugin.presentation_jobs import decode_output
+    from hmp_plugin.presentation_worker import process_child_stream_v2
+
+    _, bound = scope
+    row = {
+        "schema": 2,
+        "challenge": bound.challenge,
+        "epoch": 1,
+        "profile": "default",
+        "root": bound.root_path,
+        "home": bound.home_path,
+        "operation": "METADATA",
+        "expected_avatar_sha": None,
+        "uid": bound.service_uid,
+        "gid": bound.service_gid,
+        "dir_modes": [448, 488, 493],
+        "leaf_modes": [384, 416, 420],
+        "source_manifest_sha": bound.source_manifest_sha256,
+        "deadline_ns": int(bound.deadline * 1_000_000_000),
+        "directory_policy": [[r.uid, r.gid, r.modes[0]] for r in bound.directory_rules],
+        "iid": "a" * 52,
+        "canonical_fallback": "Hermes",
+        "observed_at": 100,
+    }
+    fs = TrackedOS()
+    sink = io.BytesIO()
+    process_child_stream_v2(
+        io.BytesIO(encode_input_v2(row) + bound.challenge.encode() + b"\n"),
+        sink,
+        fs=fs,
+        clock=time.monotonic,
+        deadline=bound.deadline + 0.1,
+        effective_uid=os.geteuid(),
+        effective_gid=os.getegid(),
+    )
+    header, body = decode_output(sink.getvalue(), bound.challenge, 1)
+    assert header["fields"]["display_name"] == "Synthetic"
+    assert header["fields"]["shape"] == "hexagon"
+    assert body == b"" and fs.opened == set()

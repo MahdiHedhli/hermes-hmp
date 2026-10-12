@@ -11,10 +11,69 @@ import copy
 from collections.abc import Callable
 from typing import BinaryIO
 
-from .presentation_files import FileOps, OwnedWorkerRead
+from .presentation_files import DirectoryRule, FileOps, OwnedWorkerRead, bind_owned_worker_read
+from .presentation_input_v2 import prefixes, validate_input_v2
 from .presentation_jobs import FrameError
 from .presentation_pipeline import encode_completed_worker, run_fixed_worker
-from .presentation_worker_control import read_worker_go
+from .presentation_worker_control import read_worker_go, read_worker_go_v2
+
+
+def scope_from_v2(
+    row: dict[str, object], *, effective_uid: int, effective_gid: int
+) -> OwnedWorkerRead:
+    """Reconstruct qualified policy after GO, without filesystem discovery."""
+    validate_input_v2(row)
+    if (
+        type(effective_uid) is not int
+        or type(effective_gid) is not int
+        or effective_uid != row["uid"]
+        or effective_gid != row["gid"]
+    ):
+        raise FrameError("BI1_CHILD_IDENTITY_REFUSED")
+    rules = tuple(
+        DirectoryRule(path, uid, gid, (mode,))
+        for path, (uid, gid, mode) in zip(
+            prefixes(row["home"]), row["directory_policy"], strict=True
+        )
+    )
+    return bind_owned_worker_read(
+        root_path=row["root"],
+        home_path=row["home"],
+        profile=None if row["profile"] == "default" else row["profile"],
+        service_uid=row["uid"],
+        service_gid=row["gid"],
+        directory_rules=rules,
+        deadline=row["deadline_ns"] / 1_000_000_000,
+        challenge=row["challenge"],
+        source_manifest_sha256=row["source_manifest_sha"],
+        worker_go_challenge=row["challenge"],
+    )
+
+
+def process_child_stream_v2(
+    source: BinaryIO,
+    destination: BinaryIO,
+    *,
+    fs: FileOps,
+    clock: Callable[[], float],
+    deadline: float,
+    effective_uid: int,
+    effective_gid: int,
+) -> None:
+    """Fixed schema2 processing path; parent still owns authority and custody."""
+    row = read_worker_go_v2(source, clock=clock, deadline=deadline)
+    _process_row(
+        row,
+        destination,
+        scope_factory=lambda value: scope_from_v2(
+            value, effective_uid=effective_uid, effective_gid=effective_gid
+        ),
+        fs=fs,
+        clock=clock,
+        iid=row["iid"],
+        canonical_fallback=row["canonical_fallback"],
+        observed_at=row["observed_at"],
+    )
 
 
 def process_child_stream(
@@ -30,6 +89,29 @@ def process_child_stream(
     observed_at: int,
 ) -> None:
     row = read_worker_go(source, clock=clock, deadline=deadline)
+    _process_row(
+        row,
+        destination,
+        scope_factory=scope_factory,
+        fs=fs,
+        clock=clock,
+        iid=iid,
+        canonical_fallback=canonical_fallback,
+        observed_at=observed_at,
+    )
+
+
+def _process_row(
+    row: dict[str, object],
+    destination: BinaryIO,
+    *,
+    scope_factory: Callable[[dict[str, object]], OwnedWorkerRead],
+    fs: FileOps,
+    clock: Callable[[], float],
+    iid: str,
+    canonical_fallback: str,
+    observed_at: int,
+) -> None:
     original_deadline = row["deadline_ns"] / 1_000_000_000
     now = clock()
     if type(now) is not float or not 0 <= now < original_deadline:

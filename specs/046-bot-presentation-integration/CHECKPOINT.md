@@ -280,3 +280,7 @@ bounded by these checks; actual child hard-deadline supervision remains required
 ## October 12: strict child schema 2 transfer
 
 Added the closed parent-qualified directory policy and bounded projection context codec, plus a schema-2-only GO reader. Canonical fallback must already match the existing normalized presentation name. Legacy schema 1 is rejected by the new path. No child entry, supervisor, native route, deployment or physical character result is claimed. Focused codec/control/layout verification: 260 passed; targeted Ruff imports repaired. Initial verification mistakenly referenced a nonexistent test file and ran no tests; the corrected invocation above completed. Independent source review remains pending.
+
+## October 12: schema 2 processing binding
+
+Added fixed schema2 processing and lexical policy reconstruction with exact effective UID/GID checks, singleton directory modes, and explicit default-profile mapping. It reuses the original retained-input/deadline/output fences; no child filesystem policy discovery occurs. Real synthetic profile processing preserves name/hexagon projection and closes descriptors. Focused real-file/codec/control tests: 48 passed. Independent schema2 codec review reported no actionable finding in f12a360 (61 independent cases); processing binding still awaits its own review. Actual standalone entry/provenance, parent policy acquisition, process custody, routes, deployment and physical rendering remain open.
