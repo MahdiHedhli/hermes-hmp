@@ -104,3 +104,12 @@ DirectiveToken, including unknown names, before parsing events. Token count is
 bounded at 2048; block/quoted scalar text is not treated as a directive. The actual
 unknown-directive and block-scalar regression cases pass. Combined parser/pipeline
 run: 25 passed. Review of this repair remains pending; no route was activated.
+
+## Nonresetting work ledger foundation
+
+One immutable-limit ledger now retains file/read/hash/open/metadata/path/YAML/token/
+raster counts across phases. Duplicate phase entry or exhaustion poisons it; an
+expired/malformed clock cannot recover by moving back. Snapshot callers receive
+a copy. Six counter tests and layout checks pass; pinned strict lint passes.
+The file/YAML callback bindings and actual child supervisor remain incomplete,
+so the shared-budget task is still open and no route was enabled.
