@@ -8,7 +8,12 @@ from collections.abc import Awaitable, Callable
 from .approval_test_answers import TestAnswers
 from .approval_test_host_codec import HostBeginRequest, HostGeneration
 from .approval_test_operator import OperatorHandler
-from .approval_test_producer import ApprovalTestProducer, NativeApprovalBindings, TargetBinding
+from .approval_test_producer import (
+    ApprovalTestProducer,
+    NativeApprovalBindings,
+    TargetBinding,
+    TestStatus,
+)
 from .approval_test_projection import TestProjection
 from .prompts import PromptStore
 
@@ -60,4 +65,10 @@ class TestService:
 
     async def shutdown(self) -> None:
         await self.operator.shutdown()
-        await self.producer.close()
+        outcome = await self.producer.close()
+        if outcome.status in (
+            TestStatus.PENDING,
+            TestStatus.CLEANUP_PENDING,
+            TestStatus.UNAVAILABLE,
+        ):
+            raise RuntimeError("approval test cleanup unavailable")
