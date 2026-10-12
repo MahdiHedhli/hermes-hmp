@@ -8,3 +8,6 @@
 - [x] Copy the previously reviewed inert producer and implement exact-notice selected-device projection; eight focused store/projection tests pass.
 - [ ] Bind synthetic answer routing to producer handles under current authority; ordinary native resolver must not handle these rows.
 - [ ] Register the reviewed operator transport and CLI only after lifecycle/current-authority integration.
+
+- [x] Add read-only device/owner/bot/canonical-tip admission predicate; fourteen focused authority/coordinator tests pass.
+- [ ] Add current listener generation, API endpoint/write gate and active-family checks at production admission; the predicate alone does not authorize invocation.
