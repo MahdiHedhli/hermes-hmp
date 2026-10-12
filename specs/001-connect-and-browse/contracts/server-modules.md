@@ -132,6 +132,14 @@ server/
     server.py                     # aiohttp app, route table (F1 subset), middlewares: peer policy (TR-4),
                                   #   size limits, rate limits (TR-6), error shaping (ERR-1), compat refusal (ERR-2a)
     readiness.py                  # v1.6 AR1: fixed closed readiness DTO mapping only; no authority or I/O
+    presentation.py               # BI1 optional pure bounded projection; no route, authority, or I/O
+    presentation_files.py         # BI1 optional worker-only fixed-name FD reader; no owner, route, or startup I/O
+    presentation_yaml.py          # BI1 optional pure bounded event reducer; no YAML provider, file I/O, or route
+    presentation_jobs.py          # BI1 private frame/owner core; native authority and child supervisor unbound
+    presentation_authority.py     # BI1 private parent-only authority custody; native read-only service unbound
+    presentation_raster.py        # BI1 optional worker-only bounded raster fork; no reader or route import
+    unicode17.py                  # BI1 pure Unicode 17 normalization/grapheme/category provider; no import I/O
+    unicode17_data.py             # BI1 fixed generated Unicode 17 tuple tables; see UNICODE_LICENSE.txt
     controls_requests.py          # AR1 ControlsRequestStore: bounded exact-origin request/CAS SQL only
                                   #   through Store.transaction(); no independent connection or writer;
                                   #   request history is not current Controls authority; no remote decision
