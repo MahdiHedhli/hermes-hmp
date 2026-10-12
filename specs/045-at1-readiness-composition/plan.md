@@ -9,3 +9,7 @@ Initial conflict-focused run: 275 passes/four failures in composed inventory/wit
 ## Transaction recovery reconciliation
 
 Current composition recovers only when rollback returns and actual connection state proves no transaction remains. Failed begin, failed rollback or unreadable state poisons the connection; no mutation replay occurs. This differs from the earlier readiness blanket commit-failure poison policy and needs fresh independent integrated security review. Tests retain real separate-connection authority visibility, disk-full recovery, revoked liveness and unknown-state poisoning. Corrected transaction suites pass 249 plus four focused boundary cases (overlapping counts). Full exact-head verification remains pending.
+
+## Ambiguous COMMIT safeguard
+
+2479c04 refines recovery: a COMMIT exception with no active transaction is ambiguous and poisons the Store, even though a separate connection may observe committed state. Recovery is allowed only when the transaction remains active, rollback returns, and no transaction remains. The applied-write/lost-ack causal test preserves the committed external state and proves subsequent HMP use refuses. All 251 affected Store/push tests pass. Final full/hosted verification and independent review remain pending.
