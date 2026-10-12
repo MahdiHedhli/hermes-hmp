@@ -128,3 +128,19 @@ This qualifies the processing budget binding, not a spawned process, child frame
 proof, parent authorization, shutdown drain or live route. Independent review of
 this new binding is pending. The shared-budget task awaits that review; supervisor
 and transport remain open.
+
+## Bounded private worker result frame
+
+Completed processing now retains only numeric source proofs/hash/chain rows,
+closed metadata and optional avatar bytes; no raw profile bytes/path enter IPC.
+The existing frozen frame codec bounds header/body and binds challenge/epoch.
+Real-file tests check raw-private-field/path exclusion and wrong challenge refusal;
+default-profile blobatar survives frame-to-parent projection unchanged. Fourteen
+real-file cases and selected lint pass. These frames are processing evidence,
+never permission, and do not establish actual child wait/group/IPC/FD custody.
+
+The shared-budget binding at `d1521fd` received bounded independent acceptance
+with21 separate checks, receipt SHA256
+`2fc1c83c70a0fc10dde8bec5979894d3171fe3f56c9668a16976d1bbee5f456f`.
+Combined presentation/Unicode suites on that exact processing source passed256
+tests plus190 subtests. Later framing changes require their own focused review.

@@ -103,6 +103,9 @@ def reduce_fixed_result(
 class CompletedPresentationWork:
     result: ProcessedPresentation
     charges: dict[str, int]
+    source_proof: dict[str, object]
+    chain: tuple[tuple[int, ...], ...]
+    absence_bitmap: int
 
 
 def run_fixed_worker(
@@ -142,4 +145,76 @@ def run_fixed_worker(
         raster_budget=RasterBudget(deadline=scope.deadline, clock=clock, ledger=work),
         expected_avatar_revision=expected_avatar_revision,
     )
-    return CompletedPresentationWork(processed, work.snapshot())
+    absent = 0 if fixed.metadata is not None else 1
+    for bit, name in enumerate(("avatar.png", "avatar.jpg", "avatar.webp"), start=1):
+        if fixed.avatar_name != name:
+            absent |= 1 << bit
+    proof = {
+        "profile_meta": list(fixed.metadata_nine) if fixed.metadata_nine is not None else None,
+        "profile_sha": fixed.metadata_sha256,
+        "avatar_meta": list(fixed.avatar_nine) if fixed.avatar_nine is not None else None,
+        "avatar_body_sha": fixed.avatar_sha256,
+    }
+    return CompletedPresentationWork(
+        processed,
+        work.snapshot(),
+        proof,
+        tuple(row for _, row in fixed.directory_nines),
+        absent,
+    )
+
+
+def encode_completed_worker(
+    work: CompletedPresentationWork, *, challenge: str, epoch: int
+) -> bytes:
+    """Bounded private processing frame, never an authorization receipt.
+
+    No raw profile bytes or filesystem paths enter IPC. Parent ownership and
+    original authority must still be checked before any public response.
+    """
+    from .presentation_jobs import encode_output
+
+    if type(work) is not CompletedPresentationWork:
+        raise PresentationYamlError("WORK_RESULT_SCHEMA")
+    metadata = work.result.metadata
+    fields: dict[str, object] = {}
+    if metadata["name_source"] == "bot_title":
+        fields["title"] = metadata["display_name"]
+    elif metadata["name_source"] == "profile_display_name":
+        fields["display_name"] = metadata["display_name"]
+    character = metadata["character"]
+    if character is not None:
+        fields["custom"] = True
+        if character["version"] == 1:
+            fields.update(shape=character["shape"], color=character["color"], custom=True)
+        else:
+            custom = character["custom"]
+            fields["shape"] = "blobatar:" + custom["seed"]
+            if custom["kind"] is not None:
+                fields["shape"] += ":" + custom["kind"]
+    avatar = metadata["avatar"]
+    header = {
+        "schema": 1,
+        "challenge": challenge,
+        "epoch": epoch,
+        "outcome": "OK",
+        "fields": fields,
+        "mime": avatar["mime"] if avatar else None,
+        "width": avatar["width"] if avatar else 0,
+        "height": avatar["height"] if avatar else 0,
+        "avatar_sha": avatar["revision"] if avatar else None,
+        "avatar_length": avatar["bytes"] if avatar else 0,
+        "source_proof": work.source_proof,
+        "absence_bitmap": work.absence_bitmap,
+        "chain": [list(row) for row in work.chain],
+        "ledger": {
+            "body_bytes": work.charges["read_bytes"],
+            "opens": work.charges["opens"],
+            "metadata": work.charges["metadata"],
+            "path_bytes": work.charges["path_bytes"],
+            "raster_units": work.charges["raster_units"],
+            "yaml_nodes": work.charges["yaml_nodes"],
+        },
+        "cleanup": {"known_fds_closed": True, "unknown_close": False},
+    }
+    return encode_output(header, work.result.avatar_bytes or b"")

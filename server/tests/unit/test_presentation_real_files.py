@@ -397,3 +397,68 @@ def test_worker_entry_owns_one_ledger_and_refuses_wrong_profile_before_io(scope)
     assert completed.result.metadata["profile"] == "default"
     assert completed.charges["read_bytes"] > 0 and completed.charges["yaml_nodes"] > 0
     assert fs.opened == set()
+
+
+def test_actual_completed_worker_frame_excludes_paths_and_raw_profile(scope):
+    from hmp_plugin.presentation_jobs import FrameError, decode_output
+    from hmp_plugin.presentation_pipeline import encode_completed_worker, run_fixed_worker
+
+    home, bound = scope
+    with (home / "profile.yaml").open("ab") as out:
+        out.write(b"private: synthetic-private-not-projected\n")
+    completed = run_fixed_worker(
+        bound,
+        fs=PosixFileOps(),
+        iid="a" * 52,
+        profile="default",
+        canonical_fallback="Hermes",
+        observed_at=100,
+        clock=time.monotonic,
+    )
+    framed = encode_completed_worker(completed, challenge="a" * 64, epoch=1)
+    header, body = decode_output(framed, "a" * 64, 1)
+    assert header["fields"]["display_name"] == "Synthetic"
+    assert header["fields"]["shape"] == "hexagon"
+    assert header["cleanup"] == {"known_fds_closed": True, "unknown_close": False}
+    assert header["absence_bitmap"] == 14 and body == b""
+    assert str(home).encode() not in framed
+    assert b"synthetic-private-not-projected" not in framed
+    with pytest.raises(FrameError):
+        decode_output(framed, "b" * 64, 1)
+
+
+def test_default_profile_blobatar_frame_reprojects_same_character(scope):
+    from hmp_plugin.presentation import project_presentation
+    from hmp_plugin.presentation_jobs import decode_output
+    from hmp_plugin.presentation_pipeline import encode_completed_worker, run_fixed_worker
+
+    home, bound = scope
+    (home / "profile.yaml").write_bytes(
+        b'ui_meta: {hermes-bots: {shape: "blobatar:abc:hexagon", custom: true}}\n'
+    )
+    completed = run_fixed_worker(
+        bound,
+        fs=PosixFileOps(),
+        iid="a" * 52,
+        profile="default",
+        canonical_fallback="Hermes",
+        observed_at=100,
+        clock=time.monotonic,
+    )
+    header, _ = decode_output(
+        encode_completed_worker(completed, challenge="a" * 64, epoch=1), "a" * 64, 1
+    )
+    fields = header["fields"]
+    rebuilt = project_presentation(
+        iid="a" * 52,
+        profile="default",
+        canonical_fallback="Hermes",
+        bot_title=fields.get("title"),
+        profile_display_name=fields.get("display_name"),
+        shape=fields.get("shape"),
+        color=fields.get("color"),
+        custom=fields.get("custom"),
+        avatar=None,
+        observed_at=100,
+    )
+    assert rebuilt == completed.result.metadata

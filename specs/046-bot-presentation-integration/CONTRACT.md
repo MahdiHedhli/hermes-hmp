@@ -35,8 +35,7 @@ from the canonical metadata digest.
 
 Planned read: `GET /bots/{profile}/presentation/avatar/{revision}`. Revision is a
 lowercase SHA-256, never a path, URL or filename. The reader derives the native
-home and selects only fixed assets/avatar.png, avatar.jpg or avatar.webp according
-to the already frozen preference. A changed or cleared image cannot satisfy an
+home and selects only fixed assets/avatar.png, avatar.jpg or avatar.webp with ambiguous multiple fixed avatars refused. A changed or cleared image cannot satisfy an
 older requested revision. The response is static PNG/JPEG/WebP, at most2,000,000
 bytes, each declared edge at most1024 and at most1,048,576 declared pixels. No
 redirect, arbitrary URL/path, SVG, animated fallback or generic asset selection.
