@@ -5,3 +5,7 @@ Parents: current app HMP pin 26e41db43e14245153ae2202d2782d9b9c94b6c0 and review
 Conflict decisions: preserve readiness Store transaction serialization/poison ownership; combine terminal REVOKED predicate with serialized writes. Keep AT1 retained stop owner and perform readiness operator stop inside it; defer Store close while readiness worker debt remains. Preserve both route sets and exact uniqueness assertions. Reverse exact readiness additions before original AT1/push/S5 bridge witnesses; do not drop baseline or mutation checks.
 
 Initial conflict-focused run: 275 passes/four failures in composed inventory/witness/fixture shape. Corrected run: 279 passes. Broad source/runtime review, full tests and actual composed native/device qualification remain required before updating app gitlink. No deployment, grant/provider configuration or release action is implied.
+
+## Transaction recovery reconciliation
+
+Current composition recovers only when rollback returns and actual connection state proves no transaction remains. Failed begin, failed rollback or unreadable state poisons the connection; no mutation replay occurs. This differs from the earlier readiness blanket commit-failure poison policy and needs fresh independent integrated security review. Tests retain real separate-connection authority visibility, disk-full recovery, revoked liveness and unknown-state poisoning. Corrected transaction suites pass 249 plus four focused boundary cases (overlapping counts). Full exact-head verification remains pending.
