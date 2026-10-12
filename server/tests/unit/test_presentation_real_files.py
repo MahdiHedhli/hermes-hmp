@@ -1355,7 +1355,18 @@ def test_parent_constructor_bounds_paths_before_large_allocation(scope):
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
-    "attack", ["none", "reentrant_postcheck", "retired_listener", "transfer", "transfer_retired"]
+    "attack",
+    [
+        "none",
+        "reentrant_postcheck",
+        "retired_listener",
+        "transfer",
+        "transfer_retired",
+        "abort_before_start",
+        "abort_after_join",
+        "abort_unjoined",
+        "abort_uncertain",
+    ],
 )
 async def test_native_policy_binding_requires_admitted_operation_and_fresh_postcheck(scope, attack):
     from hmp_plugin.presentation_authority import (
@@ -1430,10 +1441,34 @@ async def test_native_policy_binding_requires_admitted_operation_and_fresh_postc
     work = NativePolicyWork(authority, operation)
     with pytest.raises(AuthorityRefusalError):
         NativePolicyWork(authority, operation)
+    if attack == "abort_before_start":
+        assert authority.refuse_policy_prelaunch(operation)
+        assert work.resources_closed
+        with pytest.raises(AuthorityRefusalError):
+            work.start()
+        assert await authority.retire_known(operation)
+        return
     work.start()
+    if attack == "abort_unjoined":
+        assert not authority.refuse_policy_prelaunch(operation)
+        assert (
+            authority._record(operation).owner.inspect(authority._record(operation).handle)[2]
+            is False
+        )
     while not work.poll_join():
         assert time.monotonic() < bound.deadline
         await __import__("asyncio").sleep(0.005)
+    if attack in ("abort_after_join", "abort_unjoined", "abort_uncertain"):
+        if attack == "abort_uncertain":
+            work._policy.uncertain = True
+            assert not authority.refuse_policy_prelaunch(operation)
+            assert not await authority.retire_known(operation)
+            return
+        authority.cancel(operation)
+        assert authority.refuse_policy_prelaunch(operation)
+        assert work.resources_closed
+        assert await authority.retire_known(operation)
+        return
     with pytest.raises(AuthorityRefusalError):
         work.observed_snapshot()
     original_clock = authority._clock
@@ -1485,6 +1520,7 @@ async def test_native_policy_binding_requires_admitted_operation_and_fresh_postc
         packet = work.worker_input(
             source_manifest_sha="b" * 64, canonical_fallback="Hermes", observed_at=1
         )
+        assert not authority.refuse_policy_prelaunch(operation)
         row = decode_input_v3(packet)
         assert row["home"] == bound.home_path
         assert row["iid"] == "a" * 52

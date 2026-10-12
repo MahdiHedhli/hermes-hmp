@@ -690,7 +690,8 @@ class JobOwner:
             type(snapshot.chain) is not tuple
             or len(snapshot.chain) != counts["opens"]
             or any(
-                type(item) is not tuple or len(item) != 9
+                type(item) is not tuple
+                or len(item) != 9
                 or any(type(v) is not int or not 0 <= v < 1 << 63 for v in item)
                 for item in snapshot.chain
             )
@@ -701,8 +702,11 @@ class JobOwner:
             _fail()
         # No foreign callbacks after checking the retained sample.
         if (
-            self._disabled or job.emit_revoked or job.lease.epoch != self._epoch
-            or job.state is not State.STARTING or job.child is not None
+            self._disabled
+            or job.emit_revoked
+            or job.lease.epoch != self._epoch
+            or job.state is not State.STARTING
+            or job.child is not None
             or job.parent_result_context is not None
         ):
             _fail()
@@ -925,6 +929,22 @@ class JobOwner:
             self._retire(handle)
         elif job.state not in (State.REFUSED, State.UNKNOWN, State.EMIT):
             job.state = State.DRAINING
+
+    def refuse_prelaunch(self, handle: JobHandle) -> None:
+        """Caller must first establish policy closure and no launch/input attempt."""
+        job = self._resolve(handle)
+        if (
+            job.state not in (State.STARTING, State.DRAINING)
+            or job.child is not None
+            or job.go_sent
+            or job.parent_result_context is not None
+            or self._disabled
+        ):
+            _fail()
+        job.emit_revoked = True
+        job.state = State.REFUSED
+        job.credit_released = True
+        self._retire(handle)
 
     def retire_epoch(self) -> None:
         self._epoch += 1

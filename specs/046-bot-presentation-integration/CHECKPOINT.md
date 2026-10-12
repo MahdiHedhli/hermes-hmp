@@ -472,3 +472,15 @@ current fences refuse publication after retirement during result binding.
 84 focused tests plus 23 subtests pass; Ruff passes. Independent transfer review
 remains pending. Supplied manifest digest is context, NOT runtime code attestation.
 No route, subprocess supervisor, signed candidate or physical activation claimed.
+
+## Known pre-transfer abort — October 12, 2026
+
+Independent transfer review accepted 1784355 (18 pure cases), receipt
+/private/tmp/hermes-presentation-chain-review-20261012/worker-transfer-REVIEW.json.
+Policy work now supports clean refusal only before any input transfer/child/native
+claim and only after the policy owner is sealed never-started or actually joined
+with known descriptor closure. Unjoined, uncertain or transferred work retains its
+slot. Native credential retirement additionally checks policy resource closure
+before and after its native drain. Start is permanently refused after closure.
+Focused real-file/authority/job causals: 105 passed, 66 subtests; Ruff passes.
+Independent cleanup review is pending. No launch supervisor, route or deployment.

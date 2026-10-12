@@ -581,9 +581,37 @@ class ParentAuthorityAdapter:
         record.permit = None
         record.owner.cancel(record.handle)
 
+    def refuse_policy_prelaunch(self, operation: OpaqueOperation) -> bool:
+        from .presentation_policy_binding import NativePolicyWork
+
+        record = self._record(operation)
+        work = record.policy_work
+        if (
+            type(work) is not NativePolicyWork
+            or work._authority is not self
+            or work._record is not record
+            or record.child is not None
+            or record.native_claim is not None
+        ):
+            return False
+        if not work.close_pretransfer():
+            return False
+        record.permit = None
+        record.fence.retire()
+        record.owner.refuse_prelaunch(record.handle)
+        return True
+
     async def retire_known(self, operation: OpaqueOperation) -> bool:
         """Release credentials only after both owner planes report known closure."""
         record = self._record(operation)
+        if record.policy_work is not None:
+            from .presentation_policy_binding import NativePolicyWork
+
+            if (
+                type(record.policy_work) is not NativePolicyWork
+                or not record.policy_work.resources_closed
+            ):
+                return False
         try:
             state, _, credit_released = record.owner.inspect(record.handle)
         except FrameError:
@@ -615,6 +643,9 @@ class ParentAuthorityAdapter:
             self._unknown(record)
             return False
         if state not in (State.REFUSED, State.EMIT) or not credit_released:
+            self._unknown(record)
+            return False
+        if record.policy_work is not None and not record.policy_work.resources_closed:
             self._unknown(record)
             return False
         record.native_drained = True

@@ -112,3 +112,17 @@ class PolicyThreadOwner:
         ):
             raise FrameError("BI1_POLICY_THREAD_RESULT_REFUSED")
         return self._snapshot
+
+    def seal_closed(self) -> bool:
+        """Retire only a never-started or actually joined, known-closed owner."""
+        self._enter()
+        try:
+            if self._attempted and not self.joined:
+                return False
+            if self.uncertain or self.policy.uncertain or not self.policy.descriptors_closed:
+                return False
+            # Reserve start permanently even when no thread was ever created.
+            self._attempted = True
+            return True
+        finally:
+            self._lock.release()

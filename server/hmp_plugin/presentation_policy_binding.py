@@ -45,6 +45,7 @@ class NativePolicyWork:
         self._postcheck_attempted = False
         self._postchecked = False
         self._transfer_attempted = False
+        self._closed_pretransfer = False
         self._scope = (root, home, profile, os.geteuid(), os.getegid())
         self._policy = None
         self._thread = None
@@ -174,3 +175,31 @@ class NativePolicyWork:
             self._invalid = True
             raise AuthorityRefusalError
         return packet
+
+    def close_pretransfer(self) -> bool:
+        """Known closure before any packet escapes; cancellation grants no join."""
+        record = self._record
+        if (
+            self._authority._by_operation.get(self._operation) is not record
+            or record.policy_work is not self
+            or record.child is not None
+            or record.native_claim is not None
+            or self._transfer_attempted
+        ):
+            return False
+        self._invalid = True
+        if self._thread is None or not self._thread.seal_closed():
+            return False
+        self._closed_pretransfer = True
+        return True
+
+    @property
+    def resources_closed(self) -> bool:
+        return (
+            self._thread is not None
+            and (self._thread.joined or self._closed_pretransfer)
+            and not self._thread.uncertain
+            and self._policy is not None
+            and not self._policy.uncertain
+            and self._policy.descriptors_closed
+        )
