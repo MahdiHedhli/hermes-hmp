@@ -535,3 +535,15 @@ def test_direct_send_idempotency_status_is_constrained(store: Store) -> None:
             result_json=None,
             updated_at=1010,
         )
+
+
+def test_composed_serialized_device_write_cannot_reactivate_revoked_device(store: Store) -> None:
+    store.insert_user("synthetic-user", "Synthetic", 1)
+    store.insert_device("synthetic-device", "synthetic-user", "synthetic-fp", bytes(32),
+                        "Synthetic", 1, state="ACTIVE")
+    with store.transaction():
+        store.set_device_state("synthetic-device", "REVOKED")
+        store.set_device_state("synthetic-device", "ACTIVE")
+    assert store.get_device("synthetic-device")["state"] == "REVOKED"
+    store.set_device_state("synthetic-device", "PENDING")
+    assert store.get_device("synthetic-device")["state"] == "REVOKED"
