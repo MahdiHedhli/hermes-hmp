@@ -19,3 +19,5 @@ author: Hermes Bot Mobile
 # core extras, so a higher floor cannot be admitted (reviews/dependencies.md, `qrcode`).
 python_dependencies:
   - "qrcode>=7.4.2,<9"
+  # BI1 disposable worker only: bounded token/event parser, no object construction.
+  - "PyYAML>=6,<7"

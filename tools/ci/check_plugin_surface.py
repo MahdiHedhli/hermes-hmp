@@ -6,7 +6,8 @@ A static AST scan; it never imports or runs the plugin. Standard library only.
 Rules:
   S1  Imports. Outside `bridge.py`, a module may import only the standard library, the approved
       runtime packages (aiohttp, cryptography; qrcode in `cli.py` only, and only lazily, inside a
-      function, not at module level) and its own package. `qrcode` is restricted to `cli.py`
+      function, not at module level; yaml only in presentation_yaml_adapter.py,
+      as an exact lazy module import) and its own package. `qrcode` is restricted to `cli.py`
       even for `bridge.py`, which is otherwise exempt from this rule for Hermes internals.
       Every other absolute import is treated as a Hermes internal, which fails closed for unknown
       packages.
@@ -55,7 +56,12 @@ THIRD_PARTY_ALLOWED: frozenset[str] = frozenset({"aiohttp", "cryptography"})
 # Third-party packages allowed in exactly one module. `qrcode` is the operator CLI's terminal QR
 # renderer (T032; reviews/dependencies.md): only `cli.py` may import it.
 CLI_MODULE = "cli.py"
-MODULE_ONLY_THIRD_PARTY: dict[str, str] = {"qrcode": CLI_MODULE}
+# The BI1 worker uses only bounded scanner/parser events, never yaml.load/config reads.
+# Keep this exception local and lazy; every other import, including bridge.py, refuses.
+MODULE_ONLY_THIRD_PARTY: dict[str, str] = {
+    "qrcode": CLI_MODULE,
+    "yaml": "presentation_yaml_adapter.py",
+}
 
 # S1 closed exception: (module file, imported module) -> allowed names. Exact pairs only.
 DOCUMENTED_PLUGIN_API: dict[tuple[str, str], frozenset[str]] = {
@@ -172,6 +178,9 @@ class _ModuleScanner(ast.NodeVisitor):
     # --- S1 / S3 ---
     def _check_absolute(self, node: ast.AST, module: str, names: list[str] | None) -> None:
         root = module.split(".", 1)[0]
+        if root == "yaml" and (module != "yaml" or names is not None):
+            self._add("S1", node, "yaml permits only the exact worker module import")
+            return
         only_module = MODULE_ONLY_THIRD_PARTY.get(root)
         if only_module is not None:
             # A module-restricted third-party package (qrcode: cli.py only, lazily). This check

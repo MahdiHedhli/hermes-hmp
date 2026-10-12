@@ -155,3 +155,15 @@ customization provenance is not claimed by these projection inputs. Two actual
 file-to-codec-to-projection negative cases cover custom-only and invalid-color
 characters;16 real-file cases and selected lint pass. Independent closure pending.
 No host activation or updated phone install occurred.
+
+## Parser runtime declaration / CI correction
+
+CI38196929251 rejected the undeclared yaml import (11 scanner-suite failures;
+source processing tests were not proof of install packaging). Runtime PyYAML>=6,<7
+is now declared in plugin.yaml/project/lock; the already locked version did not
+change. A narrow lazy module-import exception is confined to the worker adapter.
+Other modules, module-level worker imports, from-imports and submodules remain
+rejected by negative cases.64 scanner tests and selected lint pass in an isolated
+fixture. The earlier successful61-case run had81 old temporary-artifact cleanup
+warnings; those unrelated artifacts were not modified. Independent review of the
+closed-surface amendment remains required. No live dependency installation occurred.
