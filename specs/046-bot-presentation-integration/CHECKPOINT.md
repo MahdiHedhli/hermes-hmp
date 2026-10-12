@@ -46,3 +46,13 @@ of task cancellation, and refuses closure after any ambiguous start exception.
 Eight service tests now include native revocation during lookup, cancellation of
 the owned task itself and ambiguous start. The combined service/parent/layout run
 passed 258 tests plus 23 subtests. Independent re-review remains pending.
+
+## Actual YAML parser integration
+
+A worker-only PyYAML SafeLoader event adapter now feeds the existing closed reducer
+without loading a profile object graph. Only the five allowlisted presentation
+fields can leave the reducer. Explicit tags/directives, aliases/anchors, ambiguous
+keys, multiple documents, selected-field type confusion, malformed UTF-8 and
+expired shared deadlines refuse. Fifteen real-parser cases passed using synthetic
+documents. No live metadata was read. Supervisor-enforced process deadline and
+independent parser review remain prerequisites before route activation.
