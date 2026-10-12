@@ -61,3 +61,20 @@ async def test_authority_exception_never_calls_producer_or_leaks_details() -> No
             raise AssertionError("must not invoke")
     answers = Answers(projection, Producer(), current=current, handle_for=lambda _: "handle")
     assert await answers.resolve(row, notice.device_id, "once") == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_truthy_nonboolean_authority_cannot_answer() -> None:
+    store = PromptStore(clock=lambda: 100)
+    projection = Projection(store, wall_clock=lambda: 100, monotonic=lambda: 10)
+    notice = Notice("synthetic-instance", "synthetic-user", "default", "synthetic-session",
+                    "synthetic-device", "synthetic-request", deadline_monotonic=20)
+    assert projection.publish(notice)
+    row = store.get((notice.instance_id, notice.user_id, notice.profile, notice.request_id))
+    async def current(_):
+        return 1
+    class Producer:
+        async def answer_test(self, *_):
+            raise AssertionError("must not invoke")
+    answers = Answers(projection, Producer(), current=current, handle_for=lambda _: "handle")
+    assert await answers.resolve(row, notice.device_id, "once") == "stale"
