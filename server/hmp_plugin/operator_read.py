@@ -3,6 +3,7 @@
 This endpoint never grants Controls. A TTY caller must independently verify its
 listener, repeat the read after confirmation, and use Store's final origin/CAS gate.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -22,6 +23,18 @@ from typing import Any
 
 from .contract import AuthzState
 from .controls_requests import ControlsRequestStore
+from .fixture_work import (
+    _budget_task,
+    _Ingress,
+    _OwnedResource,
+    _owner,
+    _publication,
+    _require_fixture_resource_policy,
+    _ResourceSite,
+    _ServingResources,
+    _WorkRefusedError,
+    _WorkSite,
+)
 
 SOCKET_NAME = "controls-operator.sock"
 MAX_REQUEST = 512
@@ -129,6 +142,69 @@ def _parent_fd(path: Path) -> tuple[int, os.stat_result]:
         return fd, held
     except BaseException:
         os.close(fd)
+        raise
+
+
+def _fixture_parent_fd(path: Path, owner: _OperatorResourceOwner) -> tuple[int, os.stat_result]:
+    """Walk trusted ancestors without symlinks, then hold the exact private parent.
+
+    Root-owned non-writable ancestors are allowed; a root-owned sticky temporary
+    directory must lead directly into a current-user 0700 suffix. User-owned
+    ancestors may be readable but cannot be writable by another account. The
+    final directory must be 0700, and its named identity is rechecked at use.
+    """
+    parent = path.parent
+    if not parent.is_absolute():
+        raise OperatorUnavailableError("operator directory unavailable")
+    # Both flags are required for the supported Darwin/Linux host contract.
+    # An unsupported platform must refuse rather than follow a substituted path.
+    flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW
+    fd = owner._directory_open("/", flags)
+    must_private_next = False
+    try:
+        for part in parent.parts[1:]:
+            if part in ("", ".", ".."):
+                raise OperatorUnavailableError("operator directory unavailable")
+            named = os.stat(part, dir_fd=fd, follow_symlinks=False)
+            child = owner._directory_open(part, flags, dir_fd=fd)
+            try:
+                held = os.fstat(child)
+                if ((named.st_dev, named.st_ino) != (held.st_dev, held.st_ino)
+                        or not stat.S_ISDIR(held.st_mode)):
+                    raise OperatorUnavailableError("operator directory unavailable")
+                mode = stat.S_IMODE(held.st_mode)
+                sticky_root_tmp = held.st_uid == 0 and bool(mode & stat.S_ISVTX)
+                if must_private_next:
+                    if held.st_uid != os.getuid() or mode != 0o700:
+                        raise OperatorUnavailableError("operator directory unavailable")
+                    must_private_next = False
+                elif sticky_root_tmp:
+                    if not mode & stat.S_IWOTH:
+                        raise OperatorUnavailableError("operator directory unavailable")
+                    must_private_next = True
+                elif (held.st_uid not in {0, os.getuid()}
+                      or mode & (stat.S_IWGRP | stat.S_IWOTH)):
+                    raise OperatorUnavailableError("operator directory unavailable")
+            except BaseException as error:
+                if owner.failure is None:
+                    owner.failure = error
+                owner._directory_close(child)
+                raise
+            # Transfer the validated child before closing the previous parent.
+            # The outer handler now owns exactly fd if that close raises.
+            previous_parent = fd
+            fd = child
+            owner._directory_close(previous_parent)
+        held, named = os.fstat(fd), os.lstat(parent)
+        if (must_private_next or (held.st_dev, held.st_ino) != (named.st_dev, named.st_ino)
+                or not stat.S_ISDIR(held.st_mode) or held.st_uid != os.getuid()
+                or stat.S_IMODE(held.st_mode) != 0o700):
+            raise OperatorUnavailableError("operator directory unavailable")
+        return fd, held
+    except BaseException as error:
+        if owner.failure is None:
+            owner.failure = error
+        owner._directory_close(fd)
         raise
 
 
@@ -260,6 +336,295 @@ def _collect(ctx: Any, request_id: str, challenge: str, nonce: str,
     }
 
 
+class _OperatorResourceOwner:
+    """Exact service resources; endpoint and umask runtime policy remains unbound."""
+
+    def __init__(self, service: OperatorReadService, scope: _ServingResources) -> None:
+        _require_fixture_resource_policy(scope.lifecycle)
+        scope.check()
+        if (scope.operator is None or scope.operator.object is not service
+                or service.ctx is not scope.work.context or service._fixture_resource is not None):
+            raise _WorkRefusedError
+        self.service, self.scope = service, scope
+        self.directories: list[Any] = []
+        self.parent: Any = None
+        self.parent_stat: Any = None
+        self.raw: Any = None
+        self.acceptor: Any = None
+        self.writers: list[Any] = []
+        self.created: tuple[int, int] | None = None
+        self.walk_index = 0
+        self.bind_attempted = False
+        self.bind_returned = False
+        self.listen_attempted = False
+        self.listen_returned = False
+        self.nonblocking_attempted = False
+        self.nonblocking_returned = False
+        self.umask_attempted = False
+        self.previous_umask: int | None = None
+        self.umask_restore_attempted = False
+        self.umask_restored = False
+        self.unlink_attempted = False
+        self.unlink_returned = False
+        self.stop_attempted = False
+        self.stop_returned = False
+        self.failure: BaseException | None = None
+        self.cleanup_failures: list[BaseException] = []
+        service._fixture_resource = self
+
+    def _check(self, *, draining: bool = False) -> None:
+        self.scope.check(draining=draining)
+        if (self.service._fixture_resource is not self
+                or self.scope.operator.object is not self.service
+                or self.service.ctx is not self.scope.work.context):
+            raise _WorkRefusedError
+
+    def _directory_open(self, name: str, flags: int, *, dir_fd: int | None = None) -> int:
+        self._check()
+        parts = ("/", *self.service.path.parent.parts[1:])
+        if (self.walk_index >= len(parts) or name != parts[self.walk_index]
+                or flags != os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW):
+            raise _WorkRefusedError
+        record = self.scope.attempt(_ResourceSite.OPERATOR_DIRECTORY, self.service)
+        self.directories.append(record)
+        self.walk_index += 1
+        try:
+            value = os.open(name, flags) if dir_fd is None else os.open(name, flags, dir_fd=dir_fd)
+            self.scope.returned(record, value)
+            return value
+        except BaseException as error:
+            if not record.acquired:
+                self.scope.failed(record, error)
+            raise
+
+    def _directory_close(self, fd: int) -> None:
+        matches = [r for r in self.directories if r.acquired and r.object == fd
+                   and not r.close_attempted]
+        if len(matches) != 1:
+            raise _WorkRefusedError
+        record = matches[0]
+        record.close_attempted = True
+        try:
+            os.close(fd)
+        except BaseException as error:
+            record.close_failure = error
+            record.unknown = True
+            self.cleanup_failures.append(error)
+            raise
+        record.close_returned = True
+
+    def _bound_identity(self) -> tuple[int, int]:
+        self._check()
+        fd, parent = self.parent, self.parent_stat
+        named_parent, held_parent = os.lstat(self.service.path.parent), os.fstat(fd)
+        named, held_entry = os.lstat(self.service.path), _entry(fd)
+        self._check()
+        if ((parent.st_dev, parent.st_ino) != (held_parent.st_dev, held_parent.st_ino)
+                or (parent.st_dev, parent.st_ino) != (named_parent.st_dev, named_parent.st_ino)
+                or (named.st_dev, named.st_ino) != self.created
+                or (held_entry.st_dev, held_entry.st_ino) != self.created
+                or not stat.S_ISSOCK(named.st_mode) or named.st_uid != os.getuid()
+                or stat.S_IMODE(named.st_mode) & 0o077):
+            raise OperatorUnavailableError("operator socket unsafe")
+        return named.st_dev, named.st_ino
+
+    async def start(self) -> None:
+        self._check()
+        service = self.service
+        if _NONCE.fullmatch(service.nonce) is None or len(os.fsencode(service.path)) >= 104:
+            raise OperatorUnavailableError("operator socket path unavailable")
+        try:
+            self.parent, self.parent_stat = _fixture_parent_fd(service.path, self)
+            service._fd = self.parent
+            self._check()
+            try:
+                _entry(self.parent)
+            except FileNotFoundError:
+                pass
+            else:
+                raise OperatorUnavailableError("operator socket already exists")
+            self.raw = self.scope.attempt(_ResourceSite.OPERATOR_SOCKET, service)
+            try:
+                raw = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                self.scope.returned(self.raw, raw)
+            except BaseException as error:
+                if not self.raw.acquired:
+                    self.scope.failed(self.raw, error)
+                raise
+            # os.umask is process-global. Only a separately qualified runtime
+            # policy can authorize this unchanged original critical section.
+            self._check()
+            self.umask_attempted = True
+            self.previous_umask = os.umask(0o077)
+            try:
+                self._check()
+                self.bind_attempted = True
+                raw.bind(str(service.path))
+                self.bind_returned = True
+                self._check()
+                bound = _entry(self.parent)
+                self.created = (bound.st_dev, bound.st_ino)
+            except BaseException as error:
+                if self.failure is None:
+                    self.failure = error
+                raise
+            finally:
+                self.umask_restore_attempted = True
+                try:
+                    os.umask(self.previous_umask)
+                    self.umask_restored = True
+                except BaseException as error:
+                    self.cleanup_failures.append(error)
+                    if self.failure is None:
+                        raise
+            service._inode = self._bound_identity()
+            self._check()
+            self.listen_attempted = True
+            raw.listen(2)
+            self.listen_returned = True
+            self._check()
+            self.nonblocking_attempted = True
+            raw.setblocking(False)
+            self.nonblocking_returned = True
+            self.acceptor = self.scope.attempt(_ResourceSite.OPERATOR_ACCEPTOR, service)
+            self.raw.transferred = True
+            try:
+                listener = await asyncio.start_unix_server(
+                    service._handle, sock=raw, limit=MAX_REQUEST,
+                )
+                service._server = listener
+                self.raw.transfer_target = listener
+                self.scope.returned(self.acceptor, listener)
+            except BaseException as error:
+                if not self.acceptor.acquired:
+                    self.scope.failed(self.acceptor, error)
+                raise
+            service._inode = self._bound_identity()
+        except BaseException as error:
+            if self.failure is None:
+                self.failure = error
+            self.scope.work.request_stop(self.failure)
+            raise
+
+    def retain_writer(self, reader: Any, writer: Any) -> Any:
+        self._check(draining=True)
+        with self.scope.work._mutex:
+            if any(r.object is writer for r in self.writers):
+                error = _WorkRefusedError()
+                self.scope.work._poison_locked(error)
+                raise error
+            record = _OwnedResource(self.scope, _ResourceSite.OPERATOR_WRITER, self.service)
+            record.object, record.reader = writer, reader
+            record.acquiring, record.acquired = False, True
+            record.task = None
+            self.writers.append(record)
+            self.scope.resources.append(record)
+        # The framework may call us after stop: retain its already acquired
+        # writer before any task lookup or ingress check, then close it once.
+        record.task = asyncio.current_task()
+        return record
+
+    async def close_writer(self, record: Any) -> None:
+        self._check(draining=True)
+        with self.scope.work._mutex:
+            if not any(owned is record for owned in self.writers):
+                raise _WorkRefusedError
+            if record.close_attempted:
+                return  # The original handler/retained drain owns the pending wait.
+            record.close_attempted = True
+        try:
+            record.object.close()
+            record.close_returned = True
+            record.wait_attempted = True
+            await asyncio.wait_for(record.object.wait_closed(), DEADLINE_S)
+            record.wait_returned = True
+        except BaseException as error:
+            record.close_failure = error
+            record.unknown = True
+            self.cleanup_failures.append(error)
+            self.scope.work.request_stop(error)
+            raise
+        finally:
+            self.scope.notify()
+
+    async def stop(self) -> None:
+        self._check(draining=True)
+        if self.stop_attempted:
+            if not self.stop_returned:
+                raise _WorkRefusedError
+            return
+        self.stop_attempted = True
+        self.service._stopping = True
+        acceptor = self.acceptor
+        if acceptor is not None and acceptor.acquired:
+            acceptor.close_attempted = True
+            try:
+                acceptor.object.close()
+                acceptor.close_returned = True
+            except BaseException as error:
+                acceptor.close_failure = error
+                acceptor.unknown = True
+                self.cleanup_failures.append(error)
+        elif self.raw is not None and self.raw.acquired and not self.raw.transferred:
+            self.raw.close_attempted = True
+            try:
+                self.raw.object.close()
+                self.raw.close_returned = True
+            except BaseException as error:
+                self.raw.close_failure = error
+                self.raw.unknown = True
+                self.cleanup_failures.append(error)
+        for record in tuple(self.writers):
+            # Exact error and writer are retained above.
+            with contextlib.suppress(BaseException):
+                await self.close_writer(record)
+        # Keep the original two-second client bound, without cancelling the
+        # retained handler on cancellation/timeout of this cleanup waiter.
+        try:
+            async with asyncio.timeout(2.0):
+                for record in tuple(self.writers):
+                    if record.task is not None and record.task is not asyncio.current_task():
+                        await asyncio.shield(record.task)
+            if acceptor is not None and acceptor.close_returned:
+                acceptor.wait_attempted = True
+                async with asyncio.timeout(DEADLINE_S):
+                    await acceptor.object.wait_closed()
+                acceptor.wait_returned = True
+        except BaseException as error:
+            self.cleanup_failures.append(error)
+        # No unlink from a failed/unknown bind, transfer or replaced parent.
+        try:
+            if self.created is not None and self.parent is not None:
+                if (self.raw is None or self.raw.unknown
+                        or (self.raw.transferred and (acceptor is None
+                            or not acceptor.wait_returned or acceptor.unknown))):
+                    raise _WorkRefusedError
+                parent = os.fstat(self.parent)
+                named = os.lstat(self.service.path.parent)
+                current = _entry(self.parent)
+                if ((parent.st_dev, parent.st_ino) != (
+                        self.parent_stat.st_dev, self.parent_stat.st_ino)
+                        or (named.st_dev, named.st_ino) != (parent.st_dev, parent.st_ino)
+                        or (current.st_dev, current.st_ino) != self.created):
+                    raise _WorkRefusedError
+                self.unlink_attempted = True
+                os.unlink(SOCKET_NAME, dir_fd=self.parent)
+                self.unlink_returned = True
+        except BaseException as error:
+            self.cleanup_failures.append(error)
+        for directory in self.directories:
+            if directory.acquired and not directory.close_attempted:
+                # Already retained; a failed descriptor close is never retried.
+                with contextlib.suppress(BaseException):
+                    self._directory_close(directory.object)
+        if (self.cleanup_failures or any(r.unknown for r in self.scope.resources)
+                or any(not r.wait_returned for r in self.writers)
+                or (self.umask_attempted and not self.umask_restored)
+                or (self.bind_attempted and (not self.bind_returned or self.created is None))):
+            raise _WorkRefusedError
+        self.stop_returned = True
+
+
 class OperatorReadService:
     def __init__(self, ctx: Any, anchor_dir: Path, nonce: str) -> None:
         self.ctx = ctx
@@ -273,6 +638,16 @@ class OperatorReadService:
         self._active = 0
         self._drained = asyncio.Event()
         self._outstanding = 0
+        self._fixture_resource: _OperatorResourceOwner | None = None
+
+    async def _start_fixture(self, scope: _ServingResources) -> None:
+        owner = _OperatorResourceOwner(self, scope)
+        await owner.start()
+
+    async def _stop_fixture(self) -> None:
+        if type(self._fixture_resource) is not _OperatorResourceOwner:
+            raise _WorkRefusedError
+        await self._fixture_resource.stop()
 
     async def start(self) -> None:
         if _NONCE.fullmatch(self.nonce) is None or len(os.fsencode(self.path)) >= 104:
@@ -368,19 +743,31 @@ class OperatorReadService:
 
     async def _context(self, request_id: str, challenge: str) -> dict[str, object]:
         ctx = self.ctx
+        _publication(ctx)
         if self._stopping or not ctx.read_worker_budget.reserve(operator=True):
             raise OperatorUnavailableError("operator capacity unavailable")
         self._outstanding += 1
         generation = ctx.readiness_generation
         deadline = time.monotonic() + DEADLINE_S
         try:
-            work = asyncio.create_task(asyncio.to_thread(
-                _collect, ctx, request_id, challenge, self.nonce, generation, deadline,
-            ))
+            work = _budget_task(
+                ctx,
+                _WorkSite.CW058,
+                _collect,
+                ctx,
+                request_id,
+                challenge,
+                self.nonce,
+                generation,
+                deadline,
+                operator=self,
+            )
         except BaseException:
-            ctx.read_worker_budget.release(operator=True)
-            self._outstanding -= 1
+            if _owner(ctx) is None:
+                ctx.read_worker_budget.release(operator=True)
+                self._outstanding -= 1
             raise
+
         def release(done: asyncio.Task[Any]) -> None:
             with contextlib.suppress(BaseException):
                 done.exception()
@@ -388,46 +775,115 @@ class OperatorReadService:
             self._outstanding -= 1
             if self._stopping and self._outstanding == 0:
                 self._drained.set()
-        work.add_done_callback(release)
+
+        if _owner(ctx) is None:
+            work.add_done_callback(release)
         try:
             return await asyncio.wait_for(asyncio.shield(work), DEADLINE_S)
         except (TimeoutError, asyncio.CancelledError):
             raise OperatorUnavailableError("operator context unavailable") from None
 
     async def _handle(self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter) -> None:
-        task = asyncio.current_task()
-        assert task is not None
-        self._clients.add(task)
-        self._active += 1
+        if self._fixture_resource is not None:
+            return await self._handle_fixture(reader, writer)
+        with _Ingress(self.ctx, _WorkSite.OPERATOR_CLIENT):
+            task = asyncio.current_task()
+            assert task is not None
+            self._clients.add(task)
+            self._active += 1
+            try:
+                if self._stopping or self._active > 2:
+                    return
+                sock = writer.get_extra_info("socket")
+                if sock is None or _peer_uid(sock) != os.getuid():
+                    return
+                raw = await asyncio.wait_for(reader.readline(), DEADLINE_S)
+                _publication(self.ctx)
+                if not raw.endswith(b"\n") or len(raw) > MAX_REQUEST:
+                    return
+                request_id, challenge = _request(raw[:-1], iid=self.ctx.iid, nonce=self.nonce)
+                payload = await self._context(request_id, challenge)
+                if not _safe_ijson(payload):
+                    return
+                body = (
+                    json.dumps(
+                        payload,
+                        sort_keys=True,
+                        separators=(",", ":"),
+                        ensure_ascii=True,
+                        allow_nan=False,
+                    ).encode("ascii")
+                    + b"\n"
+                )
+                if len(body) > MAX_RESPONSE or self._stopping:
+                    return
+                _publication(self.ctx)
+                writer.write(body)
+                await asyncio.wait_for(writer.drain(), DEADLINE_S)
+            except (Exception, asyncio.CancelledError):
+                # Deliberate empty-response refusal; no private exception text is exposed.
+                # The existing finally block still closes the writer and releases client state.
+                return
+            finally:
+                self._active -= 1
+                self._clients.discard(task)
+                writer.close()
+                with contextlib.suppress(Exception):
+                    await asyncio.wait_for(writer.wait_closed(), DEADLINE_S)
+
+    async def _handle_fixture(
+        self, reader: asyncio.StreamReader, writer: asyncio.StreamWriter,
+    ) -> None:
+        owner = self._fixture_resource
+        if type(owner) is not _OperatorResourceOwner:
+            raise _WorkRefusedError
+        record = owner.retain_writer(reader, writer)
         try:
-            if self._stopping or self._active > 2:
-                return
-            sock = writer.get_extra_info("socket")
-            if sock is None or _peer_uid(sock) != os.getuid():
-                return
-            raw = await asyncio.wait_for(reader.readline(), DEADLINE_S)
-            if not raw.endswith(b"\n") or len(raw) > MAX_REQUEST:
-                return
-            request_id, challenge = _request(raw[:-1], iid=self.ctx.iid, nonce=self.nonce)
-            payload = await self._context(request_id, challenge)
-            if not _safe_ijson(payload):
-                return
-            body = json.dumps(payload, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
-                              allow_nan=False).encode("ascii") + b"\n"
-            if len(body) > MAX_RESPONSE or self._stopping:
-                return
-            writer.write(body)
-            await asyncio.wait_for(writer.drain(), DEADLINE_S)
-        except (Exception, asyncio.CancelledError):
-            # Deliberate empty-response refusal; no private exception text is exposed.
-            # The existing finally block still closes the writer and releases client state.
-            return
+            with _Ingress(self.ctx, _WorkSite.OPERATOR_CLIENT):
+                task = asyncio.current_task()
+                assert task is not None
+                self._clients.add(task)
+                self._active += 1
+                try:
+                    if self._stopping or self._active > 2:
+                        return
+                    sock = writer.get_extra_info("socket")
+                    if sock is None or _peer_uid(sock) != os.getuid():
+                        return
+                    raw = await asyncio.wait_for(reader.readline(), DEADLINE_S)
+                    _publication(self.ctx)
+                    if not raw.endswith(b"\n") or len(raw) > MAX_REQUEST:
+                        return
+                    request_id, challenge = _request(raw[:-1], iid=self.ctx.iid, nonce=self.nonce)
+                    payload = await self._context(request_id, challenge)
+                    if not _safe_ijson(payload):
+                        return
+                    body = (
+                        json.dumps(
+                            payload,
+                            sort_keys=True,
+                            separators=(",", ":"),
+                            ensure_ascii=True,
+                            allow_nan=False,
+                        ).encode("ascii")
+                        + b"\n"
+                    )
+                    if len(body) > MAX_RESPONSE or self._stopping:
+                        return
+                    _publication(self.ctx)
+                    writer.write(body)
+                    await asyncio.wait_for(writer.drain(), DEADLINE_S)
+                except (Exception, asyncio.CancelledError):
+                    # Deliberate empty-response refusal; no private exception text is exposed.
+                    # The existing finally block still closes the writer and releases client state.
+                    return
+                finally:
+                    self._active -= 1
+                    self._clients.discard(task)
         finally:
-            self._active -= 1
-            self._clients.discard(task)
-            writer.close()
-            with contextlib.suppress(Exception):
-                await asyncio.wait_for(writer.wait_closed(), DEADLINE_S)
+            # Retained cleanup errors prevent local closure.
+            with contextlib.suppress(BaseException):
+                await owner.close_writer(record)
 
 
 def read_context(path: Path, *, iid: str, nonce: str, request_id: str) -> dict[str, Any]:

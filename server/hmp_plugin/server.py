@@ -46,6 +46,7 @@ import ipaddress
 import json
 import logging
 import re
+import socket
 import ssl
 import time
 from collections.abc import Awaitable, Callable, Mapping
@@ -99,6 +100,19 @@ from .contract import (
     HmpError,
     OtherWhy,
     WriteGateState,
+)
+from .fixture_work import (
+    _await_publication,
+    _budget_task,
+    _Ingress,
+    _owner,
+    _publication,
+    _require_fixture_resource_policy,
+    _resources,
+    _ResourceSite,
+    _ServingResources,
+    _worker,
+    _WorkSite,
 )
 from .gate import direct_send_gate
 from .identity import set_ssl_context_attr
@@ -389,6 +403,7 @@ async def _server_header(_request: web.Request, response: web.StreamResponse) ->
 async def handle_ready(request: web.Request) -> web.Response:
     """PR0-1. Display and diagnostic only; no host details, no `install_id`."""
     ctx = context(request)
+    _publication(context(request))
     return json_response(
         {
             "versions": list(SUPPORTED_VERSIONS),
@@ -442,6 +457,7 @@ async def handle_readiness_capabilities(request: web.Request) -> web.Response:
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
     if len(body) > readiness.MAX_RESPONSE_BYTES:
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+    _publication(context(request))
     return web.Response(
         body=body,
         content_type="application/json",
@@ -654,11 +670,14 @@ async def handle_readiness(request: web.Request) -> web.Response:
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
     authorization = request.headers.get("Authorization")
     instance = request.headers.get("HMP-Instance")
+    _publication(ctx)
     if not ctx.read_worker_budget.reserve(operator=False):
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
     deadline = time.monotonic() + _READINESS_DEADLINE_S
     try:
-        work = asyncio.create_task(asyncio.to_thread(
+        work = _budget_task(
+            ctx,
+            _WorkSite.CW077,
             _collect_readiness,
             ctx,
             authorization=authorization,
@@ -668,9 +687,10 @@ async def handle_readiness(request: web.Request) -> web.Response:
             device_id=who.device_id,
             deadline=deadline,
             generation=generation,
-        ))
+        )
     except Exception:
-        ctx.read_worker_budget.release(operator=False)
+        if _owner(ctx) is None:
+            ctx.read_worker_budget.release(operator=False)
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
 
     def release_worker(done: asyncio.Task[Any]) -> None:
@@ -678,9 +698,12 @@ async def handle_readiness(request: web.Request) -> web.Response:
             done.exception()
         ctx.read_worker_budget.release(operator=False)
 
-    work.add_done_callback(release_worker)
+    if _owner(ctx) is None:
+        work.add_done_callback(release_worker)
     try:
-        payload = await asyncio.wait_for(asyncio.shield(work), timeout=_READINESS_DEADLINE_S)
+        payload = await _await_publication(
+            context(request), asyncio.wait_for(asyncio.shield(work), timeout=_READINESS_DEADLINE_S)
+        )
     except TimeoutError:
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
     except readiness.ReadinessUnavailableError:
@@ -698,6 +721,7 @@ async def handle_readiness(request: web.Request) -> web.Response:
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE) from None
     if len(body) > readiness.MAX_RESPONSE_BYTES:
         raise HmpError(ErrorCode.READINESS_UNAVAILABLE)
+    _publication(context(request))
     return web.Response(
         body=body,
         content_type="application/json",
@@ -760,7 +784,8 @@ async def handle_roster(request: web.Request) -> web.Response:
     # synchronously on the gateway's shared event loop would stall every other platform it
     # serves. `asyncio.to_thread` copies contextvars into the worker thread, so Hermes's own
     # profile secret-scope stays correct there too.
-    result = await asyncio.to_thread(reads.roster, who.user_id)
+    result = await _worker(context(request), _WorkSite.CW081, reads.roster, who.user_id)
+    _publication(context(request))
     return _result_response(result)
 
 
@@ -776,7 +801,10 @@ async def handle_authorize(request: web.Request) -> web.Response:
     # guaranteed correct -- and handed to the (now off-loop) call so its P6 hand-off can still
     # reach this loop (`bridge.request_authorization`'s `loop` parameter).
     loop = asyncio.get_running_loop()
-    result = await asyncio.to_thread(authorize.authorize, who.user_id, profile, loop=loop)
+    result = await _worker(
+        context(request), _WorkSite.CW082, authorize.authorize, who.user_id, profile, loop=loop
+    )
+    _publication(context(request))
     return _result_response(result)
 
 
@@ -789,8 +817,11 @@ async def handle_snapshot(request: web.Request) -> web.Response:
     )
     ctx.limiter.check("bots_snapshot", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now())
     reads = _require(ctx.reads)
-    result = await media_emission.read(
-        ctx, who, profile, "snapshot", reads.snapshot, (who.user_id, profile, limit)
+    result = await _await_publication(
+        context(request),
+        media_emission.read(
+            ctx, who, profile, "snapshot", reads.snapshot, (who.user_id, profile, limit)
+        ),
     )
     if hasattr(result, "open_requests"):
         # `open_requests` carries Phone-chat prompts only (`Reads._phone_open_requests`), so it
@@ -802,12 +833,14 @@ async def handle_snapshot(request: web.Request) -> web.Response:
         )
         if not visible:
             result = replace(result, open_requests=())
+    _publication(context(request))
     return _result_response(result)
 
 
 async def handle_media_fetch(request: web.Request) -> web.StreamResponse:
     """LM-10: `GET /bots/{p}/media/{ref}`. The whole route lives in `media_fetch.serve`."""
-    return await media_fetch.serve(request)
+    _publication(context(request))
+    return await _await_publication(context(request), media_fetch.serve(request))
 
 
 async def handle_history(request: web.Request) -> web.Response:
@@ -818,9 +851,13 @@ async def handle_history(request: web.Request) -> web.Response:
     limit = _query_int(request, "limit", default=HISTORY_LIMIT_DEFAULT, lo=1, hi=HISTORY_LIMIT_MAX)
     ctx.limiter.check("bots_history", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now())
     reads = _require(ctx.reads)
-    result = await media_emission.read(
-        ctx, who, profile, "history", reads.history, (who.user_id, profile, after, limit)
+    result = await _await_publication(
+        context(request),
+        media_emission.read(
+            ctx, who, profile, "history", reads.history, (who.user_id, profile, after, limit)
+        ),
     )
+    _publication(context(request))
     return _result_response(result)
 
 
@@ -837,9 +874,16 @@ async def handle_sessions_list(request: web.Request) -> web.Response:
         "bots_sessions_list", who.device_id, RATE_SESSIONS_LIST_PER_MIN_PER_DEVICE_ID, ctx.now()
     )
     reads = _require(ctx.reads)
-    result = await asyncio.to_thread(
-        reads.list_sessions, who.user_id, profile, cursor=cursor, limit=limit
+    result = await _worker(
+        context(request),
+        _WorkSite.CW083,
+        reads.list_sessions,
+        who.user_id,
+        profile,
+        cursor=cursor,
+        limit=limit,
     )
+    _publication(context(request))
     return _result_response(result)
 
 
@@ -859,23 +903,30 @@ async def handle_session_messages(request: web.Request) -> web.Response:
     )
     reads = _require(ctx.reads)
     if after == 0:
-        result: Any = await media_emission.read(
-            ctx,
-            who,
-            profile,
-            "session_snapshot",
-            reads.session_snapshot,
-            (who.user_id, profile, ref, limit),
+        result: Any = await _await_publication(
+            context(request),
+            media_emission.read(
+                ctx,
+                who,
+                profile,
+                "session_snapshot",
+                reads.session_snapshot,
+                (who.user_id, profile, ref, limit),
+            ),
         )
     else:
-        result = await media_emission.read(
-            ctx,
-            who,
-            profile,
-            "session_history",
-            reads.session_history,
-            (who.user_id, profile, ref, after, limit),
+        result = await _await_publication(
+            context(request),
+            media_emission.read(
+                ctx,
+                who,
+                profile,
+                "session_history",
+                reads.session_history,
+                (who.user_id, profile, ref, after, limit),
+            ),
         )
+    _publication(context(request))
     return _result_response(result)
 
 
@@ -896,14 +947,18 @@ async def handle_session_history_start(request: web.Request) -> web.Response:
         "bots_session_messages", who.device_id, RATE_READ_PER_MIN_PER_DEVICE_ID, ctx.now()
     )
     reads = _require(ctx.reads)
-    result = await media_emission.read(
-        ctx,
-        who,
-        profile,
-        "session_history",
-        reads.session_history,
-        (who.user_id, profile, ref, 0, limit),
+    result = await _await_publication(
+        context(request),
+        media_emission.read(
+            ctx,
+            who,
+            profile,
+            "session_history",
+            reads.session_history,
+            (who.user_id, profile, ref, 0, limit),
+        ),
     )
+    _publication(context(request))
     return _result_response(result)
 
 
@@ -966,7 +1021,7 @@ async def handle_chat_send(request: web.Request) -> web.Response:
     ctx = context(request)
     profile = request.match_info["p"]
     require_bot_authorized(_require(ctx.bridge), who.user_id, profile)
-    body = await read_json_body(request)
+    body = await _await_publication(context(request), read_json_body(request))
     req = _parse_direct_send_body(body)
     base_gate = ctx.write_gate()
     deps = _require(ctx.direct_send_deps)
@@ -975,23 +1030,27 @@ async def handle_chat_send(request: web.Request) -> web.Response:
     # the synchronous route, unchanged. Never re-decided after a stream failure.
     stream = False
     if ctx.direct_send_effective() and ctx.prompt_store is not None:
-        stream = ctx.is_approvals_available() and await asyncio.to_thread(
-            ctx.is_approval_owner_device, who.device_id
+        stream = ctx.is_approvals_available() and await _worker(
+            context(request), _WorkSite.CW084, ctx.is_approval_owner_device, who.device_id
         )
     try:
-        outcome = await direct_send.handle_direct_send(
-            deps,
-            iid=ctx.iid,
-            user_id=who.user_id,
-            profile=profile,
-            request=req,
-            flag_enabled=ctx.direct_send_effective(),
-            base_write_gate=base_gate,
-            stream=stream,
+        outcome = await _await_publication(
+            context(request),
+            direct_send.handle_direct_send(
+                deps,
+                iid=ctx.iid,
+                user_id=who.user_id,
+                profile=profile,
+                request=req,
+                flag_enabled=ctx.direct_send_effective(),
+                base_write_gate=base_gate,
+                stream=stream,
+            ),
         )
     except direct_send.DirectSendError as exc:
         raise HmpError(exc.failure.code) from exc
     guarded = base_gate.state is not WriteGateState.OPEN
+    _publication(context(request))
     return _direct_send_outcome_response(outcome, guarded=guarded)
 
 
@@ -1002,47 +1061,66 @@ async def _cron_endpoint(request: web.Request, *, write: bool) -> Any:
     if not ctx.is_owner_device(who.device_id):
         raise HmpError(ErrorCode.NOT_FOUND)
     ctx.limiter.check(
-        "cron_write" if write else "cron_read", who.device_id,
-        20 if write else 60, ctx.now(),
+        "cron_write" if write else "cron_read",
+        who.device_id,
+        20 if write else 60,
+        ctx.now(),
     )
     profile = request.match_info["p"]
-    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
+    await _worker(
+        ctx, _WorkSite.CW085, require_bot_authorized, _require(ctx.bridge), who.user_id, profile
+    )
     if not ctx.cron_enabled() or not ctx.is_cron_available():
         raise HmpError(ErrorCode.CRON_UNAVAILABLE)
-    endpoint = await asyncio.to_thread(ctx.bridge.direct_send_endpoint, profile)
+    endpoint = await _worker(ctx, _WorkSite.CW086, ctx.bridge.direct_send_endpoint, profile)
     if endpoint is None:
         raise HmpError(ErrorCode.CRON_UNAVAILABLE)
     return endpoint
 
 
 async def handle_cron_list(request: web.Request) -> web.Response:
-    endpoint = await _cron_endpoint(request, write=False)
-    return json_response(await mobile_cron.call(endpoint, method="GET"))
+    endpoint = await _await_publication(context(request), _cron_endpoint(request, write=False))
+    _publication(context(request))
+    return json_response(
+        await _await_publication(context(request), mobile_cron.call(endpoint, method="GET"))
+    )
 
 
 async def handle_cron_create(request: web.Request) -> web.Response:
-    await _cron_endpoint(request, write=True)
-    body = mobile_cron.create_body(await read_json_body(request))
+    await _await_publication(context(request), _cron_endpoint(request, write=True))
+    body = mobile_cron.create_body(
+        await _await_publication(context(request), read_json_body(request))
+    )
     try:
-        raw = await asyncio.to_thread(
+        raw = await _worker(
+            context(request),
+            _WorkSite.CW087,
             _require(context(request).bridge).create_mobile_cron,
-            request.match_info["p"], body,
+            request.match_info["p"],
+            body,
         )
     except ValueError as exc:
         raise HmpError(ErrorCode.BAD_REQUEST) from exc
     except Exception as exc:
         raise HmpError(ErrorCode.CRON_UNAVAILABLE) from exc
+    _publication(context(request))
     return json_response({"job": mobile_cron.project_job(raw)})
 
 
 async def handle_cron_edit(request: web.Request) -> web.Response:
-    await _cron_endpoint(request, write=True)
+    await _await_publication(context(request), _cron_endpoint(request, write=True))
     job_id = mobile_cron.job_id(request.match_info["job_id"])
-    body = mobile_cron.edit_body(await read_json_body(request))
+    body = mobile_cron.edit_body(
+        await _await_publication(context(request), read_json_body(request))
+    )
     try:
-        raw = await asyncio.to_thread(
+        raw = await _worker(
+            context(request),
+            _WorkSite.CW088,
             _require(context(request).bridge).edit_mobile_cron,
-            request.match_info["p"], job_id, body,
+            request.match_info["p"],
+            job_id,
+            body,
         )
     except ValueError as exc:
         raise HmpError(ErrorCode.BAD_REQUEST) from exc
@@ -1050,26 +1128,38 @@ async def handle_cron_edit(request: web.Request) -> web.Response:
         raise HmpError(ErrorCode.CRON_UNAVAILABLE) from exc
     if raw is None:
         raise HmpError(ErrorCode.NOT_FOUND)
+    _publication(context(request))
     return json_response({"job": mobile_cron.project_job(raw)})
 
 
 async def handle_cron_delete(request: web.Request) -> web.Response:
-    endpoint = await _cron_endpoint(request, write=True)
+    endpoint = await _await_publication(context(request), _cron_endpoint(request, write=True))
     job_id = mobile_cron.job_id(request.match_info["job_id"])
-    return json_response(await mobile_cron.call(endpoint, method="DELETE", job=job_id))
+    _publication(context(request))
+    return json_response(
+        await _await_publication(
+            context(request), mobile_cron.call(endpoint, method="DELETE", job=job_id)
+        )
+    )
 
 
 async def handle_cron_pause(request: web.Request) -> web.Response:
-    endpoint = await _cron_endpoint(request, write=True)
+    endpoint = await _await_publication(context(request), _cron_endpoint(request, write=True))
     job_id = mobile_cron.job_id(request.match_info["job_id"])
-    result = await mobile_cron.call(endpoint, method="POST", job=job_id, action="pause")
+    result = await _await_publication(
+        context(request), mobile_cron.call(endpoint, method="POST", job=job_id, action="pause")
+    )
+    _publication(context(request))
     return json_response(result)
 
 
 async def handle_cron_resume(request: web.Request) -> web.Response:
-    endpoint = await _cron_endpoint(request, write=True)
+    endpoint = await _await_publication(context(request), _cron_endpoint(request, write=True))
     job_id = mobile_cron.job_id(request.match_info["job_id"])
-    result = await mobile_cron.call(endpoint, method="POST", job=job_id, action="resume")
+    result = await _await_publication(
+        context(request), mobile_cron.call(endpoint, method="POST", job=job_id, action="resume")
+    )
+    _publication(context(request))
     return json_response(result)
 
 
@@ -1080,52 +1170,70 @@ async def _model_profile(request: web.Request, *, write: bool) -> str:
     if not ctx.is_owner_device(who.device_id):
         raise HmpError(ErrorCode.NOT_FOUND)
     ctx.limiter.check(
-        "model_write" if write else "model_read", who.device_id,
-        10 if write else 30, ctx.now(),
+        "model_write" if write else "model_read",
+        who.device_id,
+        10 if write else 30,
+        ctx.now(),
     )
     profile = request.match_info["p"]
-    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
+    await _worker(
+        ctx, _WorkSite.CW089, require_bot_authorized, _require(ctx.bridge), who.user_id, profile
+    )
     if not ctx.model_enabled() or not ctx.is_model_available():
         raise HmpError(ErrorCode.MODEL_UNAVAILABLE)
     return profile
 
 
 async def handle_model_current(request: web.Request) -> web.Response:
-    profile = await _model_profile(request, write=False)
+    profile = await _await_publication(context(request), _model_profile(request, write=False))
     try:
         bridge = _require(context(request).bridge)
-        raw = await asyncio.to_thread(bridge.profile_default_model, profile)
+        raw = await _worker(
+            context(request), _WorkSite.CW090, bridge.profile_default_model, profile
+        )
     except Exception as exc:
         log_bridge_exception(exc)
         raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
+    _publication(context(request))
     return json_response(mobile_model.project_current(raw))
 
 
 async def handle_model_options(request: web.Request) -> web.Response:
-    profile = await _model_profile(request, write=False)
+    profile = await _await_publication(context(request), _model_profile(request, write=False))
     try:
         bridge = _require(context(request).bridge)
-        endpoint = await asyncio.to_thread(bridge.direct_send_endpoint, profile)
+        endpoint = await _worker(
+            context(request), _WorkSite.CW091, bridge.direct_send_endpoint, profile
+        )
     except Exception as exc:
         log_bridge_exception(exc)
         raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
     if endpoint is None:
         raise HmpError(ErrorCode.MODEL_UNAVAILABLE)
-    return json_response(await mobile_model.options(endpoint))
+    _publication(context(request))
+    return json_response(await _await_publication(context(request), mobile_model.options(endpoint)))
 
 
 async def handle_model_update(request: web.Request) -> web.Response:
-    profile = await _model_profile(request, write=True)
-    provider, model = mobile_model.selection(await read_json_body(request))
+    profile = await _await_publication(context(request), _model_profile(request, write=True))
+    provider, model = mobile_model.selection(
+        await _await_publication(context(request), read_json_body(request))
+    )
     try:
-        raw = await asyncio.to_thread(
-            _require(context(request).bridge).set_profile_default_model, profile, provider, model
+        raw = await _worker(
+            context(request),
+            _WorkSite.CW092,
+            _require(context(request).bridge).set_profile_default_model,
+            profile,
+            provider,
+            model,
         )
     except Exception as exc:
         log_bridge_exception(exc)
         raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
     if raw is None:
         raise HmpError(ErrorCode.BAD_REQUEST)
+    _publication(context(request))
     return json_response(mobile_model.project_current(raw))
 
 
@@ -1166,29 +1274,50 @@ async def handle_chat_lookup(request: web.Request) -> web.Response:
     cmid = request.match_info["cmid"]
     require_bot_authorized(_require(ctx.bridge), who.user_id, profile)
     store = _require(ctx.store)
-    record = await asyncio.to_thread(store.get_cmid_record, ctx.iid, who.user_id, profile, cmid)
+    record = await _worker(
+        context(request),
+        _WorkSite.CW093,
+        store.get_cmid_record,
+        ctx.iid,
+        who.user_id,
+        profile,
+        cmid,
+    )
     if record is None:
+        _publication(context(request))
         return json_response({"state": "unknown", "message_id": None})
     status = record["status"]
     if status == "unknown":
+        _publication(context(request))
         return json_response({"state": "unknown", "message_id": None})
     if status == "pending":
         deps = ctx.direct_send_deps
         key = (ctx.iid, who.user_id, profile, cmid)
         task = deps.tasks.get(key) if deps is not None else None
         if task is not None and not task.done():
+            _publication(context(request))
             return json_response({"state": "submitted", "message_id": None})
         # Either no task was ever tracked here (a fresh process since a restart), or it just
         # finished a moment ago -- re-read once so a task that settled between the two checks
         # above is reported by its real, now-finalized outcome instead of a stale "unknown".
-        record = await asyncio.to_thread(store.get_cmid_record, ctx.iid, who.user_id, profile, cmid)
+        record = await _worker(
+            context(request),
+            _WorkSite.CW094,
+            store.get_cmid_record,
+            ctx.iid,
+            who.user_id,
+            profile,
+            cmid,
+        )
         if record is None or record["status"] == "pending":
+            _publication(context(request))
             return json_response({"state": "unknown", "message_id": None})
         status = record["status"]
     result_json = record["result_json"]
     if status == "rejected":
         code = _stored_rejection_code(result_json)
         state = "not_accepted" if code in _NOT_ACCEPTED_CODES else "rejected"
+        _publication(context(request))
         return json_response({"state": state, "message_id": None})
     message_id = None
     interleave_detected = False
@@ -1201,6 +1330,7 @@ async def handle_chat_lookup(request: web.Request) -> web.Response:
     body: dict[str, Any] = {"state": state, "message_id": message_id}
     if interleave_detected:
         body["interleave_detected"] = True
+    _publication(context(request))
     return json_response(body)
 
 
@@ -1229,48 +1359,69 @@ class _LivePromptResolver:
     async def resolve_approval(self, row: Any, choice: str) -> str:
         if row.surface == "bot_chat":
             if self._endpoint is None or not row.run_id:
+                _publication(self._ctx)
                 return "unavailable"
-            return await direct_send.aiohttp_approval_call(
-                self._endpoint, row.run_id, row.request_id, choice
+            _publication(self._ctx)
+            return await _await_publication(
+                self._ctx,
+                direct_send.aiohttp_approval_call(
+                    self._endpoint, row.run_id, row.request_id, choice
+                ),
             )
         bridge = self._ctx.bridge
         if bridge is None or not row.session_key:
+            _publication(self._ctx)
             return "unavailable"
         try:
-            resolved = await asyncio.to_thread(
-                bridge.resolve_gateway_approval, row.session_key, choice, row.request_id
+            resolved = await _worker(
+                self._ctx,
+                _WorkSite.CW095,
+                bridge.resolve_gateway_approval,
+                row.session_key,
+                choice,
+                row.request_id,
             )
         except prompts.HelperUnavailableError:
             log_event("approval_helper", outcome="unavailable")
+            _publication(self._ctx)
             return "unavailable"
+        _publication(self._ctx)
         return "accepted" if resolved > 0 else "stale"
 
     async def resolve_clarify(self, row: Any, response: str) -> str:
         bridge = self._ctx.bridge
         if bridge is None:
+            _publication(self._ctx)
             return "unavailable"
         try:
-            ok = await asyncio.to_thread(bridge.resolve_gateway_clarify, row.request_id, response)
+            ok = await _worker(
+                self._ctx, _WorkSite.CW096, bridge.resolve_gateway_clarify, row.request_id, response
+            )
         except prompts.HelperUnavailableError:
             log_event("approval_helper", outcome="unavailable")
+            _publication(self._ctx)
             return "unavailable"
+        _publication(self._ctx)
         return "accepted" if ok else "stale"
 
     async def mark_awaiting(self, row: Any) -> str:
         bridge = self._ctx.bridge
         if bridge is None:
+            _publication(self._ctx)
             return "unavailable"
         try:
-            ok = await asyncio.to_thread(bridge.mark_clarify_awaiting_text, row.request_id)
+            ok = await _worker(
+                self._ctx, _WorkSite.CW097, bridge.mark_clarify_awaiting_text, row.request_id
+            )
         except prompts.HelperUnavailableError:
             log_event("approval_helper", outcome="unavailable")
+            _publication(self._ctx)
             return "unavailable"
+        _publication(self._ctx)
         return "ok" if ok else "stale"
 
 
-async def _require_approvals_gate(
-    ctx: ServerContext, profile: str, *, member: str | None
-) -> Any:
+async def _require_approvals_gate(ctx: ServerContext, profile: str, *, member: str | None) -> Any:
     """The DS-2(b) gate for §7b routes. Raises `write_gate_closed` before any endpoint
     resolution, listing, resolver or delivery when the flag, send, the needed member or the
     endpoint says closed. `member` is the surface the route serves: `bot_chat` (approvals),
@@ -1288,7 +1439,7 @@ async def _require_approvals_gate(
     bridge = ctx.bridge
     if deps is None or bridge is None:
         raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
-    endpoint = await asyncio.to_thread(bridge.direct_send_endpoint, profile)
+    endpoint = await _worker(ctx, _WorkSite.CW098, bridge.direct_send_endpoint, profile)
     gate = direct_send_gate(base_write_gate=base, flag_enabled=True, endpoint=endpoint)
     if gate.state not in (WriteGateState.OPEN, WriteGateState.OPEN_GUARDED):
         raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
@@ -1306,13 +1457,19 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
     profile = request.match_info["p"]
     if not ctx.is_approval_owner_device(who.device_id):
         raise HmpError(ErrorCode.NOT_FOUND)
-    ctx.limiter.check(
-        "prompt_reads", who.device_id, RATE_PROMPT_READ_PER_MIN_PER_DEVICE, ctx.now()
+    ctx.limiter.check("prompt_reads", who.device_id, RATE_PROMPT_READ_PER_MIN_PER_DEVICE, ctx.now())
+    await _worker(
+        context(request),
+        _WorkSite.CW099,
+        require_bot_authorized,
+        _require(ctx.bridge),
+        who.user_id,
+        profile,
     )
-    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
-    await _require_approvals_gate(ctx, profile, member=None)
+    await _await_publication(context(request), _require_approvals_gate(ctx, profile, member=None))
     store = ctx.prompt_store
     if store is None:
+        _publication(context(request))
         return json_response({"prompts": [], "desktop_held": False})
     rows = store.list_visible(ctx.iid, who.user_id, profile, now=ctx.now())
     sessions = {
@@ -1323,7 +1480,12 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
     if sessions and ctx.is_phone_chat_available():
         for session_key in sessions:
             try:
-                pending = await asyncio.to_thread(ctx.bridge.list_gateway_approvals, session_key)
+                pending = await _worker(
+                    context(request),
+                    _WorkSite.CW100,
+                    ctx.bridge.list_gateway_approvals,
+                    session_key,
+                )
             except prompts.HelperUnavailableError:
                 # Unavailable is not proof the waiter is gone: the row stays as it was.
                 log_event("approval_helper", outcome="unavailable")
@@ -1342,6 +1504,7 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
         for item in result.body["prompts"]  # type: ignore[attr-defined]
         if ctx.approval_surface_available(str(item.get("surface")))
     ]
+    _publication(context(request))
     return _prompt_result(prompts.HttpResult(200, {**result.body, "prompts": shown}))
 
 
@@ -1356,32 +1519,43 @@ async def handle_prompt_answer(request: web.Request) -> web.Response:
     ctx.limiter.check(
         "prompt_actions", who.device_id, RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE, ctx.now()
     )
-    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
+    await _worker(
+        context(request),
+        _WorkSite.CW101,
+        require_bot_authorized,
+        _require(ctx.bridge),
+        who.user_id,
+        profile,
+    )
     store = ctx.prompt_store
     # The surface of the stored row decides which member the answer needs. An unknown id has no
     # surface: it needs at least one member and then answers 404 without allocating anything.
-    stored = (
-        store.get((ctx.iid, who.user_id, profile, request_id)) if store is not None else None
+    stored = store.get((ctx.iid, who.user_id, profile, request_id)) if store is not None else None
+    endpoint = await _await_publication(
+        context(request),
+        _require_approvals_gate(
+            ctx, profile, member=stored.surface if stored is not None else None
+        ),
     )
-    endpoint = await _require_approvals_gate(
-        ctx, profile, member=stored.surface if stored is not None else None
-    )
-    body = await read_json_body(request)
+    body = await _await_publication(context(request), read_json_body(request))
     if store is None:
-        missing = prompts.HttpResult(
-            404, {"error": {"code": "not_found", "message": "not found"}}
-        )
+        missing = prompts.HttpResult(404, {"error": {"code": "not_found", "message": "not found"}})
+        _publication(context(request))
         return _prompt_result(missing)
-    result = await prompts.answer_prompt(
-        store,
-        iid=ctx.iid,
-        user_id=who.user_id,
-        profile=profile,
-        request_id=request_id,
-        body=body,
-        resolver=_LivePromptResolver(ctx, endpoint),
-        now=ctx.now(),
+    result = await _await_publication(
+        context(request),
+        prompts.answer_prompt(
+            store,
+            iid=ctx.iid,
+            user_id=who.user_id,
+            profile=profile,
+            request_id=request_id,
+            body=body,
+            resolver=_LivePromptResolver(ctx, endpoint),
+            now=ctx.now(),
+        ),
     )
+    _publication(context(request))
     return _prompt_result(result)
 
 
@@ -1408,47 +1582,81 @@ async def handle_phone_send(request: web.Request) -> web.Response:
     ctx.limiter.check(
         "prompt_actions", who.device_id, RATE_PROMPT_ACTION_PER_MIN_PER_DEVICE, ctx.now()
     )
-    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
-    body = await read_json_body(request)
+    await _worker(
+        context(request),
+        _WorkSite.CW102,
+        require_bot_authorized,
+        _require(ctx.bridge),
+        who.user_id,
+        profile,
+    )
+    body = await _await_publication(context(request), read_json_body(request))
     cmid, text = _parse_phone_body(body)
-    endpoint = await _require_approvals_gate(ctx, profile, member="phone_chat")
+    endpoint = await _await_publication(
+        context(request), _require_approvals_gate(ctx, profile, member="phone_chat")
+    )
     store = ctx.prompt_store
     bridge = _require(ctx.bridge)
     if store is None:
         raise HmpError(ErrorCode.WRITE_GATE_CLOSED)
-    chat_id = await asyncio.to_thread(ensure_chat, ctx.store, who.user_id, profile)
+    chat_id = await _worker(
+        context(request), _WorkSite.CW103, ensure_chat, ctx.store, who.user_id, profile
+    )
     resolver = _LivePromptResolver(ctx, endpoint)
 
     def session_key() -> str | None:
+        _publication(context(request))
         return bridge.phone_session_key(who.user_id, profile)
 
     def pending(key: str) -> object:
+        _publication(context(request))
         return bridge.list_gateway_approvals(key)
 
     async def deliver() -> bool | None:
-        return await bridge.deliver_phone_message(
-            user_id=who.user_id,
-            profile=profile,
-            text=text,
-            message_id=f"hmp:{chat_id}:{cmid}",
+        _publication(context(request))
+        return await _await_publication(
+            context(request),
+            bridge.deliver_phone_message(
+                user_id=who.user_id,
+                profile=profile,
+                text=text,
+                message_id=f"hmp:{chat_id}:{cmid}",
+            ),
         )
 
-    result = await prompts.handle_phone_send(
-        prompts=store,
-        sqlite_store=ctx.store,
-        iid=ctx.iid,
-        user_id=who.user_id,
-        profile=profile,
-        chat_id=chat_id,
-        cmid=cmid,
-        text=text,
-        now=ctx.now(),
-        resolver=resolver,
-        session_key=session_key,
-        pending_approvals=pending,
-        deliver=deliver,
+    result = await _await_publication(
+        context(request),
+        prompts.handle_phone_send(
+            prompts=store,
+            sqlite_store=ctx.store,
+            iid=ctx.iid,
+            user_id=who.user_id,
+            profile=profile,
+            chat_id=chat_id,
+            cmid=cmid,
+            text=text,
+            now=ctx.now(),
+            resolver=resolver,
+            session_key=session_key,
+            pending_approvals=pending,
+            deliver=deliver,
+        ),
     )
+    _publication(context(request))
     return _prompt_result(result)
+
+
+@web.middleware
+async def _fixture_request_frame(request: web.Request, handler: Handler) -> web.StreamResponse:
+    ctx = context(request)
+    scope = _resources(ctx, draining=True)
+    if scope is None:
+        raise RuntimeError("FIXTURE_RESOURCES_MISSING")
+    scope.retain_request_transport(request)
+    with _Ingress(ctx, _WorkSite.HTTP_REQUEST):
+        response = await handler(request)
+        _publication(ctx)
+        return response
 
 
 def build_app(ctx: ServerContext) -> web.Application:
@@ -1477,10 +1685,35 @@ def build_app(ctx: ServerContext) -> web.Application:
             "max_headers": PARSER_MAX_HEADERS,
         },
     )
+    owner = _owner(ctx)
+    if owner is not None:
+        app.middlewares.insert(0, _fixture_request_frame)
     app[CTX_KEY] = ctx
     # S5: this app's own fetch service (dedicated executor, permits); never module-global. Threads
     # start lazily on the first submission, and cleanup closes admissions without waiting.
-    app[media_fetch.MEDIA_SERVICE_KEY] = media_fetch.MediaFetchService()
+    if owner is None:
+        app[media_fetch.MEDIA_SERVICE_KEY] = media_fetch.MediaFetchService()
+    else:
+        scope = _resources(ctx)
+        if scope is None:
+            raise RuntimeError("FIXTURE_RESOURCES_MISSING")
+        record = scope.attempt(_ResourceSite.MEDIA, app)
+        try:
+            service = media_fetch.MediaFetchService(_fixture_resources=scope)
+            scope.returned(record, service)
+            app[media_fetch.MEDIA_SERVICE_KEY] = service
+        except BaseException as error:
+            if not record.acquired:
+                scope.failed(record, error)
+            raise
+    if owner is not None:
+        service = app[media_fetch.MEDIA_SERVICE_KEY]
+        if owner._media_service is not None:
+            raise RuntimeError("FIXTURE_MEDIA_ALREADY_BOUND")
+        owner._media_service = service
+        owner._carriers = (*owner._carriers, service)
+        service._fixture_work = owner
+        service._fixture_adapter = owner.adapter
     app.on_cleanup.append(media_fetch.close_service)
     app.on_response_prepare.append(_server_header)
     handlers: dict[str, Handler] = {
@@ -1511,8 +1744,12 @@ def build_app(ctx: ServerContext) -> web.Application:
         "/bots/{p}/model/options": handle_model_options,
     }
     routes = (
-        list(F1_ROUTES) + list(F2_DIRECT_SEND_ROUTES) + list(F3_APPROVAL_ROUTES)
-        + list(MOBILE_CRON_ROUTES) + list(MOBILE_MODEL_ROUTES) + list(S5_MEDIA_ROUTES)
+        list(F1_ROUTES)
+        + list(F2_DIRECT_SEND_ROUTES)
+        + list(F3_APPROVAL_ROUTES)
+        + list(MOBILE_CRON_ROUTES)
+        + list(MOBILE_MODEL_ROUTES)
+        + list(S5_MEDIA_ROUTES)
     )
     if ctx.session_browsing_enabled and ctx.session_browsing_available:
         # Amendment A1 kill switch: when off, SES-1/SES-2 are never added to the router at all,
@@ -1522,15 +1759,23 @@ def build_app(ctx: ServerContext) -> web.Application:
         handlers["/bots/{p}/sessions/{ref}/messages/from-start"] = handle_session_history_start
         routes += list(A1_SESSION_ROUTES)
     if controls_request_routes.registration_ready(ctx):
-        handlers.update({
-            "/devices/self/controls-requests/capabilities": controls_request_routes.capabilities,
-            "/devices/self/controls-requests/by-client-id/{client_id}": (
-                controls_request_routes.by_client_id
-            ),
-            "/devices/self/controls-requests": controls_request_routes.create,
-            "/devices/self/controls-requests/{request_id}/cancel": controls_request_routes.cancel,
-            "/devices/self/controls-requests/{request_id}": controls_request_routes.by_request_id,
-        })
+        handlers.update(
+            {
+                "/devices/self/controls-requests/capabilities": (
+                    controls_request_routes.capabilities
+                ),
+                "/devices/self/controls-requests/by-client-id/{client_id}": (
+                    controls_request_routes.by_client_id
+                ),
+                "/devices/self/controls-requests": controls_request_routes.create,
+                "/devices/self/controls-requests/{request_id}/cancel": (
+                    controls_request_routes.cancel
+                ),
+                "/devices/self/controls-requests/{request_id}": (
+                    controls_request_routes.by_request_id
+                ),
+            }
+        )
         routes += list(CONTROLS_REQUEST_ROUTES)
     for method, path, _clause in routes:
         handler = handlers[path]
@@ -1680,6 +1925,164 @@ class _HmpAppRunner(web.AppRunner):  # type: ignore[misc]
         return server
 
 
+def _check_fixture_listener(listener: socket.socket, settings: ListenerSettings) -> None:
+    """Validate a trusted fixture handoff without creating or rebinding a socket.
+
+    Refusal leaves ownership with the caller. These local checks do not prove the
+    caller's retained-FD custody, process attribution, or TLS identity.
+    """
+    if not isinstance(listener, socket.socket):
+        raise ListenerConfigError("fixture listener must be a socket")
+    if listener.family != socket.AF_INET or listener.type != socket.SOCK_STREAM:
+        raise ListenerConfigError("fixture listener must be an IPv4 stream")
+    if listener.fileno() < 0 or listener.getblocking():
+        raise ListenerConfigError("fixture listener must be open and nonblocking")
+    if listener.getsockopt(socket.SOL_SOCKET, socket.SO_ACCEPTCONN) != 1:
+        raise ListenerConfigError("fixture listener must already be listening")
+    if (
+        settings.bind != "127.0.0.1"
+        or type(settings.port) is not int
+        or not 1 <= settings.port <= 65535
+        or listener.getsockname() != ("127.0.0.1", settings.port)
+    ):
+        raise ListenerConfigError("fixture listener endpoint mismatch")
+
+
+class _FixtureSockSite(web.SockSite):  # type: ignore[misc]
+    """RP01: retain a server before its first serving await.
+
+    Depends on the reviewed aiohttp SockSite/BaseSite and asyncio sock branch.
+    No CLI, configuration, environment, HTTP, or production factory enables it.
+    """
+
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self._fixture_resources: _ServingResources | None = None
+        self._fixture_close_started = False
+        self._fixture_closed = False
+
+    async def start(self) -> None:
+        if self._fixture_resources is not None:
+            return await self._start_owned(self._fixture_resources)
+        await web.BaseSite.start(self)
+        protocol_server = self._runner.server
+        if protocol_server is None:
+            raise RuntimeError("fixture runner not ready")
+        # With the pinned provided-sock branch and start_serving=False there is
+        # no suspension between ownership transfer and the returned Server.
+        self._server = await asyncio.get_running_loop().create_server(
+            protocol_server,
+            sock=self._sock,
+            ssl=self._ssl_context,
+            backlog=self._backlog,
+            start_serving=False,
+        )
+        await self._server.start_serving()
+
+    def close_owned(self) -> None:
+        if self._fixture_resources is not None:
+            return self._close_source_owned(self._fixture_resources)
+        if self._fixture_close_started:
+            if not self._fixture_closed:
+                raise RuntimeError("fixture listener closure unknown")
+            return
+        self._fixture_close_started = True
+        if self._server is None:
+            self._sock.close()
+        else:
+            self._server.close()
+        self._fixture_closed = True
+        self._server = None
+
+    async def stop(self) -> None:
+        if self._fixture_resources is not None:
+            return await self._stop_source_owned(self._fixture_resources)
+        self.close_owned()
+        await web.BaseSite.stop(self)
+
+    async def _start_owned(self, scope: _ServingResources) -> None:
+        record = scope.owned(_ResourceSite.LISTENER, self)
+        scope.check()
+        await web.BaseSite.start(self)
+        scope.check()
+        protocol_server = self._runner.server
+        if protocol_server is None:
+            raise RuntimeError("FIXTURE_RUNNER_NOT_READY")
+        record.transferred = True  # A throwing create_server may already own the alias.
+        try:
+            self._server = await asyncio.get_running_loop().create_server(
+                protocol_server, sock=self._sock, ssl=self._ssl_context,
+                backlog=self._backlog, start_serving=False,
+            )
+        except BaseException as error:
+            record.failure = error
+            record.unknown = True
+            raise
+        record.transfer_target = self._server
+        scope.check()
+        await self._server.start_serving()
+        scope.check()
+
+    def _close_source_owned(self, scope: _ServingResources) -> None:
+        record = scope.owned(_ResourceSite.LISTENER, self)
+        if record.close_attempted:
+            if not record.close_returned:
+                raise RuntimeError("FIXTURE_SITE_CLOSE_UNKNOWN")
+            return
+        if record.unknown or (record.transferred and record.transfer_target is None):
+            raise RuntimeError("FIXTURE_SITE_TRANSFER_UNKNOWN")
+        record.close_attempted = True
+        self._fixture_close_started = True
+        try:
+            if record.transfer_target is None:
+                self._sock.close()
+            else:
+                record.transfer_target.close()
+        except BaseException as error:
+            record.close_failure = error
+            record.unknown = True
+            raise
+        record.close_returned = True
+        self._fixture_closed = True
+        # Keep the actual server reference until wait_closed is observed.
+
+    async def _stop_source_owned(self, scope: _ServingResources) -> None:
+        record = scope.owned(_ResourceSite.LISTENER, self)
+        self._close_source_owned(scope)
+        if record.site_stop_attempted:
+            if not record.site_stop_returned:
+                raise RuntimeError("FIXTURE_SITE_STOP_UNKNOWN")
+            return
+        record.site_stop_attempted = True
+        try:
+            await web.BaseSite.stop(self)
+        except BaseException as error:
+            record.close_failure = error
+            record.unknown = True
+            raise
+        record.site_stop_returned = True
+
+    async def _wait_source_closed(self, scope: _ServingResources) -> None:
+        record = scope.owned(_ResourceSite.LISTENER, self)
+        if not record.close_returned or not record.site_stop_returned or record.unknown:
+            raise RuntimeError("FIXTURE_SITE_CLOSE_UNKNOWN")
+        if record.wait_attempted:
+            if not record.wait_returned:
+                raise RuntimeError("FIXTURE_SITE_WAIT_UNKNOWN")
+            return
+        record.wait_attempted = True
+        try:
+            if record.transfer_target is not None:
+                async with asyncio.timeout(SHUTDOWN_TIMEOUT_S):
+                    await record.transfer_target.wait_closed()
+        except BaseException as error:
+            record.close_failure = error
+            record.unknown = True
+            raise
+        record.wait_returned = True
+
+
+
 class HmpServer:
     """One TLS listener around one loaded identity (PR7-6: it never outlives its key)."""
 
@@ -1692,9 +2095,13 @@ class HmpServer:
         on_closed: Callable[[], None] | None = None,
     ) -> None:
         self.ctx = ctx
+        self._fixture_scope = _resources(ctx)
         self.settings = settings
         self._interval = watchdog_interval
         self._on_closed = on_closed
+        self._fixture_used = False
+        self._starting = False
+        self._startup_uncertain = False
         self._runner: web.AppRunner | None = None
         self._watch: asyncio.Task[None] | None = None
         self._stopping: asyncio.Task[None] | None = None
@@ -1706,40 +2113,302 @@ class HmpServer:
         ctx.on_identity_changed = self._identity_changed
 
     async def start(self) -> None:
+        """Start the production TCPSite with exclusive startup ownership.
+
+        A failure before site.start may retry only after completed cleanup.
+        Once listener start was invoked, or cleanup failed, this owner remains
+        unusable: cancellation may have crossed an unobserved socket handoff.
+        """
+        if (
+            self._starting
+            or self._startup_uncertain
+            or self._fixture_used
+            or self._runner is not None
+            or self.closed.is_set()
+        ):
+            raise RuntimeError("listener owner is not available for startup")
         if not address_allowed(self.settings.bind):
             raise ListenerConfigError("bind must be a loopback or tailnet IP address (TR-4)")
-        ssl_ctx = server_ssl_context(self.ctx.identity, self._identity_changed)
-        app = build_app(self.ctx)
-        runner = _HmpAppRunner(
-            app,
-            access_log_class=AllowListedAccessLogger,
-            access_log=logging.getLogger(ACCESS_LOGGER_NAME),
-            logger=_ParserSafeLogger(),
-            shutdown_timeout=SHUTDOWN_TIMEOUT_S,
-            handle_signals=False,
-        )
-        await runner.setup()
-        site = web.TCPSite(
-            runner, self.settings.bind, self.settings.port, ssl_context=ssl_ctx, reuse_address=True
-        )
+        self._starting = True
+        runner = None
+        site_invoked = False
         try:
+            ssl_ctx = server_ssl_context(self.ctx.identity, self._identity_changed)
+            app = build_app(self.ctx)
+            runner = _HmpAppRunner(
+                app,
+                access_log_class=AllowListedAccessLogger,
+                access_log=logging.getLogger(ACCESS_LOGGER_NAME),
+                logger=_ParserSafeLogger(),
+                shutdown_timeout=SHUTDOWN_TIMEOUT_S,
+                handle_signals=False,
+            )
+            await runner.setup()
+            site = web.TCPSite(
+                runner, self.settings.bind, self.settings.port,
+                ssl_context=ssl_ctx, reuse_address=True,
+            )
+            site_invoked = True
             await site.start()
+            sockets = getattr(site._server, "sockets", None) or ()
+            bound = None
+            if sockets:
+                host, port = sockets[0].getsockname()[:2]
+                bound = (str(host), int(port))
+            log_event("listener_start", outcome="ok")
+            self._watch = asyncio.get_running_loop().create_task(self._watchdog())
+            self.bound = bound
+            self._runner = runner
         except BaseException:
-            await runner.cleanup()
+            self._startup_uncertain = site_invoked
+            try:
+                if runner is not None:
+                    await runner.cleanup()
+            except BaseException:
+                self._startup_uncertain = True
+                raise
             raise
-        self._runner = runner
-        sockets = getattr(site._server, "sockets", None) or ()
-        if sockets:
-            host, port = sockets[0].getsockname()[:2]
-            self.bound = (str(host), int(port))
-        self._watch = asyncio.get_running_loop().create_task(self._watchdog())
-        log_event("listener_start", outcome="ok")
+        finally:
+            self._starting = False
+
+    async def _start_fixture_listener(self, listener: socket.socket) -> None:
+        """Trusted in-process fixture only; valid handoff consumes this exact socket.
+
+        Validation/reentry refusal does not consume it. After validation the
+        caller must never close, duplicate, rebind, or reuse it. Startup failure
+        closes known ownership synchronously before async runner cleanup. Any
+        failed/ambiguous close or cancelled cleanup remains an unqualified
+        failure; this API supplies no custody or runtime qualification receipt.
+        """
+        scope = _resources(self.ctx)
+        if scope is not None:
+            return await self._start_owned_fixture_listener(listener, scope)
+        if (
+            self._starting
+            or self._startup_uncertain
+            or self._fixture_used
+            or self._runner is not None
+            or self.closed.is_set()
+        ):
+            raise RuntimeError("fixture server is not fresh")
+        _check_fixture_listener(listener, self.settings)
+        self._fixture_used = True
+        self._starting = True
+        runner = None
+        site = None
+        try:
+            ssl_ctx = server_ssl_context(self.ctx.identity, self._identity_changed)
+            app = build_app(self.ctx)
+            runner = _HmpAppRunner(
+                app,
+                access_log_class=AllowListedAccessLogger,
+                access_log=logging.getLogger(ACCESS_LOGGER_NAME),
+                logger=_ParserSafeLogger(),
+                shutdown_timeout=SHUTDOWN_TIMEOUT_S,
+                handle_signals=False,
+            )
+            await runner.setup()
+            site = _FixtureSockSite(runner, listener, ssl_context=ssl_ctx)
+            await site.start()
+            sockets = getattr(site._server, "sockets", None) or ()
+            if len(sockets) != 1 or sockets[0].getsockname() != listener.getsockname():
+                raise RuntimeError("fixture server socket readback mismatch")
+            log_event("listener_start", outcome="ok")
+            self._watch = asyncio.get_running_loop().create_task(self._watchdog())
+            self.bound = ("127.0.0.1", self.settings.port)
+            self._runner = runner
+        except BaseException:
+            try:
+                if site is None:
+                    listener.close()
+                else:
+                    site.close_owned()
+            finally:
+                if runner is not None:
+                    await runner.cleanup()
+            raise
+        finally:
+            self._starting = False
+
+    async def _start_owned_fixture_listener(
+        self, listener: socket.socket, scope: _ServingResources,
+    ) -> None:
+        scope.check()
+        _require_fixture_resource_policy(scope.lifecycle)
+        if (scope.server is not self or self.ctx is not scope.work.context
+                or self._starting or self._fixture_used or self._runner is not None
+                or self._startup_uncertain or self.closed.is_set()):
+            raise RuntimeError("FIXTURE_SERVER_NOT_FRESH")
+        listener_record = scope.attempt(_ResourceSite.LISTENER_ALIAS, self)
+        scope.listener = listener_record
+        scope.returned(listener_record, listener)
+        _check_fixture_listener(listener, self.settings)
+        scope.check()
+        # The exact RP01 one-way consumption boundary precedes the first await.
+        self._fixture_used = True
+        listener_record.transferred = True
+        listener_record.transfer_target = self
+        self._starting = True
+        active = None
+        try:
+            active = scope.attempt(_ResourceSite.TLS, self)
+            ssl_ctx = server_ssl_context(self.ctx.identity, self._identity_changed)
+            scope.returned(active, ssl_ctx)
+            active = scope.attempt(_ResourceSite.APP, self)
+            app = build_app(self.ctx)
+            scope.returned(active, app)
+            active = scope.attempt(_ResourceSite.RUNNER, self)
+            scope.runner = active
+            runner = _HmpAppRunner(
+                app,
+                access_log_class=AllowListedAccessLogger,
+                access_log=logging.getLogger(ACCESS_LOGGER_NAME),
+                logger=_ParserSafeLogger(),
+                shutdown_timeout=SHUTDOWN_TIMEOUT_S,
+                handle_signals=False,
+            )
+            self._runner = runner
+            scope.returned(active, runner)
+            active.start_attempted = True
+            await runner.setup()
+            active.start_returned = True
+            scope.check()
+            active = scope.attempt(_ResourceSite.LISTENER, runner)
+            scope.site = active
+            site = _FixtureSockSite(runner, listener, ssl_context=ssl_ctx)
+            scope.returned(active, site)
+            site._fixture_resources = scope
+            active.start_attempted = True
+            await site.start()
+            active.start_returned = True
+            scope.check()
+            sockets = getattr(site._server, "sockets", None) or ()
+            if len(sockets) != 1 or sockets[0].getsockname() != listener.getsockname():
+                raise RuntimeError("FIXTURE_LISTENER_READBACK")
+            scope.check()
+            self.bound = ("127.0.0.1", self.settings.port)
+        except BaseException as error:
+            scope.start_failure = error
+            scope.work.request_stop(error)
+            if active is not None and not active.acquired:
+                scope.failed(active, error)
+            try:
+                self._close_owned_fixture_socket(scope)
+            except BaseException as cleanup_error:
+                scope.cleanup_failures.append(cleanup_error)
+            raise
+        finally:
+            self._starting = False
+
+    def _close_owned_fixture_socket(self, scope: _ServingResources) -> None:
+        scope.check(draining=True)
+        if scope.server is not self or not self._fixture_used:
+            return
+        record = scope.site
+        if record is not None:
+            if record.unknown or not record.acquired:
+                # Constructor may have acquired/transferred before throwing.
+                raise RuntimeError("FIXTURE_SITE_ACQUISITION_UNKNOWN")
+            record.object.close_owned()
+            return
+        record = scope.listener
+        if record is None or not record.transferred or record.transfer_target is not self:
+            raise RuntimeError("FIXTURE_LISTENER_CUSTODY_UNKNOWN")
+        if record.close_attempted:
+            if not record.close_returned:
+                raise RuntimeError("FIXTURE_LISTENER_CLOSE_UNKNOWN")
+            return
+        record.close_attempted = True
+        try:
+            record.object.close()
+        except BaseException as error:
+            record.close_failure = error
+            record.unknown = True
+            raise
+        record.close_returned = True
+
+    async def _stop_owned_fixture(self, scope: _ServingResources) -> None:
+        scope.check(draining=True)
+        if scope.server is not self or self._starting or scope.stop_started:
+            raise RuntimeError("FIXTURE_STOP_NOT_OWNED")
+        scope.stop_started = True
+        # Attempt independent known cleanup even if another close failed. Keep
+        # each actual object and every first/cleanup exception privately.
+        if scope.operator is not None and scope.operator.acquired:
+            try:
+                await scope.operator.object._stop_fixture()
+            except BaseException as error:
+                scope.cleanup_failures.append(error)
+        try:
+            self._close_owned_fixture_socket(scope)
+        except BaseException as error:
+            scope.cleanup_failures.append(error)
+        if scope.site is not None and scope.site.acquired and not scope.site.unknown:
+            try:
+                await scope.site.object.stop()
+            except BaseException as error:
+                scope.cleanup_failures.append(error)
+        runner = scope.runner
+        if runner is not None and runner.acquired and not runner.close_attempted:
+            runner.close_attempted = True
+            try:
+                await runner.object.cleanup()
+            except BaseException as error:
+                runner.close_failure = error
+                runner.unknown = True
+                scope.cleanup_failures.append(error)
+            else:
+                runner.close_returned = True
+        if scope.site is not None and scope.site.acquired and not scope.site.unknown:
+            try:
+                await scope.site.object._wait_source_closed(scope)
+                for resource in scope.resources:
+                    if resource.site is _ResourceSite.HTTP_TRANSPORT and resource.parent is self:
+                        resource.wait_returned = True
+            except BaseException as error:
+                scope.cleanup_failures.append(error)
+        for resource in scope.resources:
+            if (resource.site is _ResourceSite.EXECUTOR and resource.acquired
+                    and not resource.close_attempted):
+                resource.close_attempted = True
+                try:
+                    resource.object.shutdown(wait=False)
+                except BaseException as error:
+                    resource.close_failure = error
+                    resource.unknown = True
+                    scope.cleanup_failures.append(error)
+                else:
+                    resource.close_returned = True
+        if scope.cleanup_failures or any(r.unknown for r in scope.resources):
+            raise RuntimeError("FIXTURE_RESOURCE_DRAIN_UNKNOWN")
+        scope.stop_returned = True
+
 
     async def start_operator_read(self, anchor_dir: Path, nonce: str) -> None:
         from .operator_read import OperatorReadService
 
         if self._operator_read is not None or self._runner is None:
             raise RuntimeError("operator read listener unavailable")
+        scope = _resources(self.ctx)
+        if scope is not None:
+            record = scope.attempt(_ResourceSite.OPERATOR, self)
+            scope.operator = record
+            try:
+                service = OperatorReadService(self.ctx, anchor_dir, nonce)
+                self._operator_read = service
+                scope.returned(record, service)
+                record.start_attempted = True
+                await service._start_fixture(scope)
+                record.start_returned = True
+                scope.check()
+                return
+            except BaseException as error:
+                if not record.acquired:
+                    scope.failed(record, error)
+                else:
+                    record.failure = error
+                    scope.work.request_stop(error)
+                raise
         service = OperatorReadService(self.ctx, anchor_dir, nonce)
         await service.start()
         self._operator_read = service
@@ -1749,7 +2418,9 @@ class HmpServer:
         while True:
             await asyncio.sleep(self._interval)
             if self.ctx.prompt_store is not None:
-                await asyncio.to_thread(self.ctx.prompt_store.purge, self.ctx.now())
+                await _worker(
+                    self.ctx, _WorkSite.CW107, self.ctx.prompt_store.purge, self.ctx.now()
+                )
             try:
                 current = self.ctx.identity.still_current()
             except Exception:
@@ -1759,6 +2430,11 @@ class HmpServer:
                 return
 
     def _identity_changed(self) -> None:
+        scope = self._fixture_scope
+        if scope is not None:
+            scope.work.request_stop(RuntimeError("FIXTURE_IDENTITY_CHANGED"))
+            scope.lifecycle.request_stop(RuntimeError("FIXTURE_IDENTITY_CHANGED"))
+            return
         if self._stopping is None:
             log_event("identity_changed", outcome="listener_closed")
             self._stopping = asyncio.get_running_loop().create_task(self.stop())
@@ -1780,6 +2456,8 @@ class HmpServer:
 
     async def stop(self, *, notify: bool = True) -> None:
         """Close the listener. `notify=False` for an orderly shutdown by the owner."""
+        if self._starting:
+            raise RuntimeError("cancel and drain listener startup before stop")
         service, self._operator_read = self._operator_read, None
         if service is not None:
             debt = await service.stop()

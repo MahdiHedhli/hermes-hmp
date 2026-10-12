@@ -41,6 +41,7 @@ import ast
 import builtins
 import dataclasses
 import functools
+import hashlib
 import io
 import logging
 import os
@@ -181,11 +182,8 @@ M_UNLOCKED_OVERWRITE = {
 M_DROP_BASEEXC = {
     "adapter.py": [
         (
-            "            except BaseException:\n"
-            "                store.close()\n                raise\n"
-            "        adapter._hmp_hooks",
-            "            except Exception:\n                store.close()\n                raise\n"
-            "        adapter._hmp_hooks",
+            "    except BaseException as setup_failure:\n",
+            "    except Exception as setup_failure:\n",
         )
     ]
 }
@@ -215,10 +213,10 @@ M_READS_FILL_RAISES = {
 M_FLAG_TRUTHY = {
     "adapter.py": [
         (
-            '        return isinstance(block, Mapping) and block.get("enabled") is True\n\n'
-            "    def _read_model_enabled",
-            '        return isinstance(block, Mapping) and bool(block.get("enabled"))\n\n'
-            "    def _read_model_enabled",
+            '            return isinstance(block, Mapping) and block.get("enabled") is True\n\n'
+            "        def _read_model_enabled",
+            '            return isinstance(block, Mapping) and bool(block.get("enabled"))\n\n'
+            "        def _read_model_enabled",
         )
     ]
 }
@@ -984,10 +982,52 @@ def test_every_route_answers_identically_with_the_flag_and_availability_off_and_
     assert server.build_app
     assert seen["off"] and seen["off"] == seen["on"]
     assert calls == {"flag": 0, "available": 0}
+    _assert_server_media_references(READ_SRC["server.py"])
+
+
+S2_MEDIA_COMPONENT_BINDING = ('    if owner is not None:\n'
+ '        service = app[media_fetch.MEDIA_SERVICE_KEY]\n'
+ '        if owner._media_service is not None:\n'
+ '            raise RuntimeError("FIXTURE_MEDIA_ALREADY_BOUND")\n'
+ '        owner._media_service = service\n'
+ '        owner._carriers = (*owner._carriers, service)\n'
+ '        service._fixture_work = owner\n'
+ '        service._fixture_adapter = owner.adapter\n')
+
+
+S3_MEDIA_RESOURCE_BINDING = (
+    '    if owner is None:\n'
+    '        app[media_fetch.MEDIA_SERVICE_KEY] = media_fetch.MediaFetchService()\n'
+    '    else:\n'
+    '        scope = _resources(ctx)\n'
+    '        if scope is None:\n'
+    '            raise RuntimeError("FIXTURE_RESOURCES_MISSING")\n'
+    '        record = scope.attempt(_ResourceSite.MEDIA, app)\n'
+    '        try:\n'
+    '            service = media_fetch.MediaFetchService(_fixture_resources=scope)\n'
+    '            scope.returned(record, service)\n'
+    '            app[media_fetch.MEDIA_SERVICE_KEY] = service\n'
+    '        except BaseException as error:\n'
+    '            if not record.acquired:\n'
+    '                scope.failed(record, error)\n'
+    '            raise\n'
+)
+
+
+def _assert_server_media_references(source: str) -> None:
+    # Invert the exact S3 acquisition to the original owner-None constructor.
+    assert source.count(S3_MEDIA_RESOURCE_BINDING) == 1
+    source = source.replace(
+        S3_MEDIA_RESOURCE_BINDING,
+        "    app[media_fetch.MEDIA_SERVICE_KEY] = media_fetch.MediaFetchService()\n", 1,
+    )
+    # Invert only this exact reviewed component attachment, including its ownership guard.
+    assert source.count(S2_MEDIA_COMPONENT_BINDING) == 1
+    source = source.replace(S2_MEDIA_COMPONENT_BINDING, "", 1)
     # S4: the server's media references are the emission module; S5 adds only the fetch route, its
     # orchestrator module and that module's per-app service. It names no carrier, twin, registry or
     # `local_media_*` module itself.
-    server_src = READ_SRC["server.py"].lower().replace("immediately", "")
+    server_src = source.lower().replace("immediately", "")
     assert "local_media" not in server_src and "_with_media" not in server_src
     # one import and the five call sites of the four read handlers (SES-2 has two branches)
     assert server_src.count("media_emission") == 6
@@ -1000,6 +1040,26 @@ def test_every_route_answers_identically_with_the_flag_and_availability_off_and_
     ):
         rest = rest.replace(allowed, "")
     assert rest.count("media") == 0
+
+
+def test_reviewed_server_media_references_are_closed() -> None:
+    _assert_server_media_references(READ_SRC["server.py"])
+
+
+@pytest.mark.parametrize("old,new", [
+    ("owner._media_service = service", "owner._media_service = other"),
+    ("if owner._media_service is not None:", "if False:"),
+    ("service._fixture_work = owner", "service._fixture_work = None"),
+    ("service._fixture_adapter = owner.adapter", "service._fixture_adapter = other"),
+    ("app.on_cleanup.append(media_fetch.close_service)",
+     "app.on_cleanup.append(media_fetch.close_service)\n    media = None"),
+])
+def test_server_media_reference_guard_rejects_unreviewed_edits(old: str, new: str) -> None:
+    source = READ_SRC["server.py"]
+    assert source.count(old) == 1
+    with pytest.raises(AssertionError):
+        _assert_server_media_references(source.replace(old, new, 1))
+
 
 
 # --------------------------------------------------------------------------------------------
@@ -1285,15 +1345,91 @@ def test_publication_assigns_one_global_tuple_and_has_no_split_names() -> None:
     assert not {n for n in module_level if "bridge" in n and n not in {"_bridge_cache"}}
 
 
-DYNAMIC_IMPORT_NAMES = {"importlib", "__import__", "import_module", "find_spec"}
+DYNAMIC_IMPORT_NAMES = {
+    "importlib", "__import__", "import_module", "find_spec", "exec_module", "load_module",
+    "reload", "module_from_spec", "spec_from_file_location", "spec_from_loader",
+}
+
+# Accepted binding-only adapter source f1518bc6, peer review df3d08dc. This pin
+# covers the WHOLE private function, not a blanket exception for its name.
+FIXTURE_BINDING_PARTS_AST_SHA256 = (
+    "d112a18a068e2ba14bb1e7c4cfb087ec8e3592c3048c4265929ccb8007574c2c"
+)
 
 
-def _dynamic_media_lookups(source: str) -> list[str]:
+# Accepted lifecycle V2 source 0fdc364c, peer closure 4d376506.
+# Only this whole source-defined alias lookup receives its own exact pin.
+FIXTURE_LISTENER_ALIAS_AST_SHA256 = (
+    "37d47d7163aeac5b7b936dbf333d4d9c6213b0b76a572e75a0f2b756ee99adca"
+)
+
+
+def _fixture_ast_shape(node: object) -> object:
+    """Stable shape across supported AST versions; empty type_params has no behavior."""
+    if isinstance(node, ast.AST):
+        return type(node).__name__, tuple(
+            (name, _fixture_ast_shape(value))
+            for name, value in ast.iter_fields(node)
+            if name != "type_params" or value
+        )
+    if isinstance(node, list):
+        return tuple(_fixture_ast_shape(value) for value in node)
+    return node
+
+
+def _fixture_lookup_exceptions(tree: ast.Module) -> tuple[set[int], list[str]]:
+    """Permit only exact import/get subtrees in the two wholly pinned private functions."""
+    allowed: set[int] = set()
+    for name, pin, sources in (
+        (
+            "_fixture_binding_parts", FIXTURE_BINDING_PARTS_AST_SHA256,
+            (
+                "import sys",
+                "from importlib.machinery import ModuleSpec",
+                "module = sys.modules.get('native_media_listener_factory')",
+            ),
+        ),
+        (
+            "_fixture_listener_alias", FIXTURE_LISTENER_ALIAS_AST_SHA256,
+            (
+                "import sys",
+                "module = sys.modules.get('native_media_listener_factory')",
+            ),
+        ),
+    ):
+        matches = [
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == name
+        ]
+        if not matches:
+            continue
+        if len(matches) != 1:
+            return set(), [f"duplicate{name}"]
+        function = matches[0]
+        digest = hashlib.sha256(repr(_fixture_ast_shape(function)).encode()).hexdigest()
+        if digest != pin:
+            return set(), [f"changed{name}"]
+        for source in sources:
+            expected = ast.dump(ast.parse(source).body[0], include_attributes=False)
+            statements = [
+                node for node in function.body
+                if ast.dump(node, include_attributes=False) == expected
+            ]
+            if len(statements) != 1:
+                return set(), ["invalid_fixture_lookup_subtree"]
+            allowed.update(id(node) for node in ast.walk(statements[0]))
+    return allowed, []
+
+
+def _dynamic_media_lookups(source: str, *, allow_fixture_binding: bool = False) -> list[str]:
     """Dynamic module lookups anywhere in a source: `importlib`/`__import__`/`import_module`/
     `find_spec` by name, attribute or import, and `sys.modules`. A local variable that merely is
     called `modules` is not one."""
-    bad: list[str] = []
-    for node in ast.walk(ast.parse(source)):
+    tree = ast.parse(source)
+    allowed, bad = _fixture_lookup_exceptions(tree) if allow_fixture_binding else (set(), [])
+    for node in ast.walk(tree):
+        if id(node) in allowed:
+            continue
         if isinstance(node, ast.Name) and (node.id in DYNAMIC_IMPORT_NAMES or node.id == "sys"):
             bad.append(node.id)
         elif isinstance(node, ast.Attribute) and (
@@ -1319,7 +1455,103 @@ def _dynamic_media_lookups(source: str) -> list[str]:
 
 @pytest.mark.parametrize("name", ["adapter.py", "bridge.py", "reads.py"])
 def test_adapter_bridge_and_reads_use_no_dynamic_module_lookup(name: str) -> None:
-    assert _dynamic_media_lookups(READ_SRC[name]) == []
+    assert _dynamic_media_lookups(READ_SRC[name], allow_fixture_binding=name == "adapter.py") == []
+
+
+@pytest.mark.parametrize("function_name", ["_fixture_binding_parts", "_fixture_listener_alias"])
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "arbitrary_key", "input_key", "sys_alias", "unsafe_import", "write",
+        "delete", "update", "exec_module", "load_module", "dynamic_import",
+    ],
+)
+def test_private_fixture_lookup_rejects_key_import_write_and_loader_mutations(
+    function_name: str, mutation: str,
+) -> None:
+    source = READ_SRC["adapter.py"]
+    assert _dynamic_media_lookups(source, allow_fixture_binding=True) == []
+    function = next(
+        node for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    original = ast.get_source_segment(source, function)
+    assert original is not None
+    lookup = 'sys.modules.get("native_media_listener_factory")'
+    if mutation == "arbitrary_key":
+        replacement = original.replace(lookup, 'sys.modules.get("arbitrary")')
+    elif mutation == "input_key":
+        replacement = original.replace(lookup, "sys.modules.get(binding.config)")
+    elif mutation == "sys_alias":
+        replacement = original.replace("    import sys\n", "    import sys as other\n")
+    else:
+        injection = {
+            "unsafe_import": "from importlib.util import find_spec",
+            "write": "sys.modules['x'] = module",
+            "delete": "del sys.modules['x']",
+            "update": "sys.modules.update({'x': module})",
+            "exec_module": "spec.loader.exec_module(module)",
+            "load_module": "spec.loader.load_module('x')",
+            "dynamic_import": "__import__('x')",
+        }[mutation]
+        replacement = original.replace(
+            "    import sys\n", "    import sys\n    " + injection + "\n"
+        )
+    assert replacement != original
+    mutant = source.replace(original, replacement, 1)
+    assert _dynamic_media_lookups(mutant, allow_fixture_binding=True)
+
+
+@pytest.mark.parametrize(
+    "injection",
+    [
+        "import sys\nsys.modules.get('native_media_listener_factory')\n",
+        "def production():\n    import sys\n"
+        "    return sys.modules.get('native_media_listener_factory')\n",
+        "def production():\n    from importlib.machinery import ModuleSpec\n"
+        "    return ModuleSpec\n",
+        "def production():\n    loader.exec_module(module)\n",
+        "def production():\n    loader.load_module('x')\n",
+        "def production():\n    reload(module)\n",
+    ],
+)
+def test_fixture_exception_does_not_apply_outside_the_private_function(injection: str) -> None:
+    source = READ_SRC["adapter.py"]
+    assert _dynamic_media_lookups(source, allow_fixture_binding=True) == []
+    assert _dynamic_media_lookups(source + "\n" + injection, allow_fixture_binding=True)
+
+
+@pytest.mark.parametrize("function_name", ["_fixture_binding_parts", "_fixture_listener_alias"])
+def test_private_fixture_lookup_duplicate_function_is_not_an_escape(function_name: str) -> None:
+    source = READ_SRC["adapter.py"]
+    function = next(
+        node for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    mutant = source + "\n" + ast.unparse(function) + "\n"
+    assert _dynamic_media_lookups(mutant, allow_fixture_binding=True)
+
+
+@pytest.mark.parametrize("function_name", ["_fixture_binding_parts", "_fixture_listener_alias"])
+@pytest.mark.parametrize("placement", ["renamed", "nested", "class_method"])
+def test_private_fixture_lookup_moved_function_is_not_an_escape(
+    function_name: str, placement: str,
+) -> None:
+    source = READ_SRC["adapter.py"]
+    function = next(
+        node for node in ast.parse(source).body
+        if isinstance(node, ast.FunctionDef) and node.name == function_name
+    )
+    original = ast.get_source_segment(source, function)
+    assert original is not None
+    if placement == "renamed":
+        replacement = original.replace("def " + function_name, "def production_lookup", 1)
+    else:
+        prefix = "def production():" if placement == "nested" else "class Production:"
+        replacement = prefix + "\n" + "\n".join("    " + line for line in original.splitlines())
+    mutant = source.replace(original, replacement, 1)
+    assert mutant != source
+    assert _dynamic_media_lookups(mutant, allow_fixture_binding=True)
 
 
 @pytest.mark.parametrize(
@@ -1481,3 +1713,16 @@ def test_unwrap_guard_mutations_are_detected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, edit: tuple[str, str]
 ) -> None:
     assert not _property_unwrap_bound(tmp_path, monkeypatch, {"adapter.py": [edit]})
+
+
+@pytest.mark.parametrize("old,new", [
+    ("MediaFetchService(_fixture_resources=scope)", "MediaFetchService()"),
+    ("scope.attempt(_ResourceSite.MEDIA, app)", "scope.attempt(_ResourceSite.MEDIA, ctx)"),
+    ("scope.returned(record, service)\n            app[media_fetch.MEDIA_SERVICE_KEY] = service",
+     "scope.returned(record, object())\n            app[media_fetch.MEDIA_SERVICE_KEY] = service"),
+])
+def test_s3_resource_binding_mutations_remain_detectable(old: str, new: str) -> None:
+    source = READ_SRC["server.py"]
+    assert source.count(old) == 1
+    with pytest.raises(AssertionError):
+        _assert_server_media_references(source.replace(old, new, 1))

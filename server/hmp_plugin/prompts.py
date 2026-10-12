@@ -22,6 +22,18 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from .contract import IDEMPOTENCY_RETENTION_S
+from .fixture_work import (
+    _await_publication,
+    _cmid_sync,
+    _cmid_worker,
+    _owner,
+    _publication,
+    _reservation_worker,
+    _reserve_phone_cleanup,
+    _send_task,
+    _worker,
+    _WorkSite,
+)
 from .logging_policy import log_event
 
 APPROVAL_CHOICES = ("once", "session", "always", "deny")
@@ -714,8 +726,10 @@ class AdapterHooks:
 
     def _phone_open(self) -> bool:
         try:
+            _publication(self)
             return self.phone_available() is True
         except Exception:
+            _publication(self)
             return False
 
     def note_inert(self, chat_id: str) -> None:
@@ -730,11 +744,14 @@ class AdapterHooks:
     ) -> bool:
         """True when the outbound was stored. False when it was dropped (inert reply)."""
         if self.store.transcript_suppressed(chat_id):
+            _publication(self)
             return False
         if isinstance(reply_to, str) and reply_to.startswith("hmp:auth:"):
+            _publication(self)
             return False
         owner = self._owner_for_chat(chat_id)
         if owner is None:
+            _publication(self)
             return False
         _iid, user_id, profile = owner
         if isinstance(metadata, Mapping) and metadata.get("is_approval_prompt") is True:
@@ -742,50 +759,64 @@ class AdapterHooks:
         self.store.add_observation(
             self.iid, user_id, profile, role="assistant", text=content, now=float(self.now())
         )
+        _publication(self)
         return True
 
     async def reconcile_chat(self, chat_id: str) -> None:
         if not self._phone_open():
             return
         with self.store._guard:
-            keys = [key for key, owner in self.store._sessions.items()
-                    if owner[0] == self.iid and owner[3] == chat_id]
+            keys = [
+                key
+                for key, owner in self.store._sessions.items()
+                if owner[0] == self.iid and owner[3] == chat_id
+            ]
         lister = getattr(self.bridge, "list_gateway_approvals", None)
         if not callable(lister):
             return
         for key in keys:
             try:
-                pending = await asyncio.to_thread(lister, key)
+                pending = await _worker(self, _WorkSite.CW065, lister, key)
             except Exception:
                 _log("prompt_store", "unavailable")
                 continue  # unavailable is not proof the waiter is gone
             if isinstance(pending, list):
-                ids = {row["request_id"] for row in pending if isinstance(row, Mapping)
-                       and isinstance(row.get("request_id"), str)}
+                ids = {
+                    row["request_id"]
+                    for row in pending
+                    if isinstance(row, Mapping) and isinstance(row.get("request_id"), str)
+                }
                 self.store.reconcile_approvals(key, ids, self.now())
 
     def _owner_for_chat(self, chat_id: str) -> tuple[str, str, str] | None:
+        _publication(self)
         return self.store.owner_of_chat(self.iid, chat_id)
 
     async def on_exec_approval(self, prompt: object) -> bool:
         if not self._phone_open():
+            _publication(self)
             return False
         session_key = str(getattr(prompt, "session_key", "") or "")
         command = getattr(prompt, "command", None)
         if not isinstance(command, str):
+            _publication(self)
             return False
         owner = self.store.owner_of_session(session_key)
         if owner is None:
+            _publication(self)
             return False
         iid, user_id, profile, _chat = owner
         lister = getattr(self.bridge, "list_gateway_approvals", None)
         if not callable(lister):
+            _publication(self)
             return False
         try:
-            pending = await asyncio.to_thread(lister, session_key)
+            pending = await _worker(self, _WorkSite.CW066, lister, session_key)
         except Exception:
+            _publication(self)
             return False
         if not isinstance(pending, list):
+            _publication(self)
             return False
         open_ids = self.store.open_request_ids(session_key)
         matches = [
@@ -800,11 +831,16 @@ class AdapterHooks:
         if not matches:
             # The runner may redact the command. Keep only request-bound deny recovery;
             # never infer an allow choice from an ambiguous command string.
-            matches = [entry for entry in pending if isinstance(entry, Mapping)
-                       and isinstance(entry.get("request_id"), str)
-                       and entry["request_id"] not in open_ids]
+            matches = [
+                entry
+                for entry in pending
+                if isinstance(entry, Mapping)
+                and isinstance(entry.get("request_id"), str)
+                and entry["request_id"] not in open_ids
+            ]
         matches = [entry for entry in matches if 0 < len(entry["request_id"]) <= _REQUEST_ID_MAX]
         if not matches:
+            _publication(self)
             return False
         raw_choices = getattr(prompt, "choices", ())
         choices = tuple(
@@ -813,11 +849,15 @@ class AdapterHooks:
             if isinstance(choice, str) and choice in APPROVAL_CHOICES
         )
         if not choices:
+            _publication(self)
             return False
-        timeout_s = await self._timeout("phone_approval_timeout_s", 300, profile)
+        timeout_s = await _await_publication(
+            self, self._timeout("phone_approval_timeout_s", 300, profile)
+        )
         description = getattr(prompt, "description", "") or ""
         if recovery:
             if "deny" not in choices:
+                _publication(self)
                 return False
             choices = ("deny",)
             command = ""
@@ -840,6 +880,7 @@ class AdapterHooks:
                     session_key=session_key,
                 )
             )
+        _publication(self)
         return True
 
     async def on_clarify(
@@ -853,13 +894,17 @@ class AdapterHooks:
     ) -> bool:
         del chat_id
         if not self._phone_open():
+            _publication(self)
             return False
         owner = self.store.owner_of_session(session_key)
         if owner is None or not clarify_id:
+            _publication(self)
             return False
         iid, user_id, profile, _chat = owner
         offered = tuple(choice for choice in (choices or []) if isinstance(choice, str))
-        timeout_s = await self._timeout("phone_clarify_timeout_s", 3600, profile)
+        timeout_s = await _await_publication(
+            self, self._timeout("phone_clarify_timeout_s", 3600, profile)
+        )
         # `send_clarify` does not carry `multi_select`, and HMP does not read the private
         # clarify index (AP-9). The answer path still honors the flag when a row has it.
         self.store.put(
@@ -879,6 +924,7 @@ class AdapterHooks:
                 session_key=session_key,
             )
         )
+        _publication(self)
         return True
 
     def retire(self, clarify_id: str) -> None:
@@ -897,13 +943,17 @@ class AdapterHooks:
     async def _timeout(self, name: str, default: int, profile: str) -> int:
         fn = getattr(self.bridge, name, None)
         if not callable(fn):
+            _publication(self)
             return default
         try:
-            value = await asyncio.to_thread(fn, profile)
+            value = await _worker(self, _WorkSite.CW067, fn, profile)
         except Exception:
+            _publication(self)
             return default
         if isinstance(value, bool) or not isinstance(value, int):
+            _publication(self)
             return default
+        _publication(self)
         return value
 
 
@@ -953,7 +1003,9 @@ async def handle_phone_send(
 ) -> HttpResult:
     """AP-6. Reserves the cmid before any hand-off. A replay does not call `deliver` again."""
     digest = phone_text_hash(text)
-    record, inserted = await asyncio.to_thread(
+    record, inserted = await _reservation_worker(
+        prompts,
+        _WorkSite.CW068,
         sqlite_store.reserve_phone_cmid,  # type: ignore[attr-defined]
         iid,
         user_id,
@@ -964,40 +1016,68 @@ async def handle_phone_send(
     )
     if bytes(record["payload_hash"]) != digest:
         _log("phone_send", "conflict", user_id=user_id)
+        _publication(prompts)
         return _error("idempotency_conflict", "message id reused with a different payload")
     task_key = (iid, user_id, profile, cmid)
     if not inserted:
         stored = _stored_phone(record["result_json"])
         if record["status"] != "pending" and stored is not None:
             _log("phone_send", "replay", user_id=user_id)
+            _publication(prompts)
             return stored
         existing = prompts.phone_task(task_key)
         if existing is not None:
-            return await asyncio.shield(existing)
+            _publication(prompts)
+            return await _await_publication(prompts, asyncio.shield(existing))
+        _publication(prompts)
         return HttpResult(200, {"state": "unknown"})
 
     async def run() -> HttpResult:
+        _cleanup = _reserve_phone_cleanup(prompts, sqlite_store, task_key)
+        _finalize_phone = None if _cleanup is None else _cleanup.calls[1]
         try:
-            result, status_name = await _phone_turn(
-                prompts=prompts,
-                iid=iid,
-                user_id=user_id,
-                profile=profile,
-                chat_id=chat_id,
-                text=text,
-                now=now,
-                resolver=resolver,
-                session_key=session_key,
-                pending_approvals=pending_approvals,
-                deliver=deliver,
+            result, status_name = await _await_publication(
+                prompts,
+                _phone_turn(
+                    prompts=prompts,
+                    iid=iid,
+                    user_id=user_id,
+                    profile=profile,
+                    chat_id=chat_id,
+                    text=text,
+                    now=now,
+                    resolver=resolver,
+                    session_key=session_key,
+                    pending_approvals=pending_approvals,
+                    deliver=deliver,
+                ),
             )
+        except asyncio.CancelledError:
+            if _cleanup is not None:
+                _cmid_sync(
+                    _cleanup,
+                    "finalize",
+                    _finalize_phone,
+                    iid,
+                    user_id,
+                    profile,
+                    cmid,
+                    status="unknown",
+                    result_json=None,
+                    updated_at=now,
+                )
+            raise
         except Exception as exc:
             if isinstance(exc, HelperUnavailableError):
                 log_event("approval_helper", outcome="unavailable")
             result = _error("api_server_unavailable", "direct send delivery is unavailable")
             status_name = "unknown"
-        await asyncio.to_thread(
-            sqlite_store.finalize_phone_cmid,  # type: ignore[attr-defined]
+        if _cleanup is None:
+            _finalize_phone = sqlite_store.finalize_phone_cmid
+        await _cmid_worker(
+            _cleanup,
+            "finalize",
+            _finalize_phone,
             iid,
             user_id,
             profile,
@@ -1006,10 +1086,12 @@ async def handle_phone_send(
             result_json=_dump_phone(result),
             updated_at=now,
         )
+        _publication(prompts)
         return result
 
-    task = asyncio.ensure_future(run())
-    prompts.put_phone_task(task_key, task)
+    task = _send_task(prompts, _WorkSite.CW071, run(), prompts, task_key)
+    if _owner(prompts) is None:
+        prompts.put_phone_task(task_key, task)
 
     def _done(finished: asyncio.Task[HttpResult]) -> None:
         prompts.drop_phone_task(task_key, finished)
@@ -1017,7 +1099,8 @@ async def handle_phone_send(
             finished.exception()
 
     task.add_done_callback(_done)
-    return await asyncio.shield(task)
+    _publication(prompts)
+    return await _await_publication(prompts, asyncio.shield(task))
 
 
 async def _phone_turn(
@@ -1036,27 +1119,32 @@ async def _phone_turn(
 ) -> tuple[HttpResult, str]:
     prompts.purge(now)
     if prompts.open_clarifies(iid, user_id, profile):
+        _publication(prompts)
         return _error("stale", "answer through the prompt route", applied=False), "rejected"
 
-    key = await asyncio.to_thread(session_key)
+    key = await _worker(prompts, _WorkSite.CW074, session_key)
     if not isinstance(key, str) or not key:
         _log("phone_send", "refused", user_id=user_id)
+        _publication(prompts)
         return _error("api_server_unavailable", "direct send delivery is unavailable"), "unknown"
-    pending = await asyncio.to_thread(pending_approvals, key)
+    pending = await _worker(prompts, _WorkSite.CW075, pending_approvals, key)
     if isinstance(pending, list) and pending:
         _log("phone_send", "refused", user_id=user_id)
+        _publication(prompts)
         return _error("stale", "request is no longer answerable", applied=False), "rejected"
     if not isinstance(pending, list):
         _log("phone_send", "refused", user_id=user_id)
+        _publication(prompts)
         return _error("api_server_unavailable", "direct send delivery is unavailable"), "unknown"
 
     prompts.remember_session(key, iid, user_id, profile, chat_id)
     prompts.release_transcript(chat_id)
-    accepted = await deliver()
+    accepted = await _await_publication(prompts, deliver())
     if accepted is False:
         # Only an exact False is definitive "not admitted" (bridge: gateway refusal or an
         # explicit known ticket refusal). It is HMP's own wire answer, not an upstream gap.
         _log("phone_send", "refused", user_id=user_id)
+        _publication(prompts)
         return (
             _error("api_server_unavailable", "direct send delivery is unavailable", applied=False),
             "rejected",
@@ -1064,7 +1152,9 @@ async def _phone_turn(
     if accepted is not True:
         # None and any malformed non-bool result prove neither admitted nor not-sent.
         _log("phone_send", "unknown", user_id=user_id)
+        _publication(prompts)
         return HttpResult(200, {"state": "unknown"}), "unknown"
     prompts.add_observation(iid, user_id, profile, role="user", text=text, now=float(now))
     _log("phone_send", "submitted", user_id=user_id)
+    _publication(prompts)
     return HttpResult(202, {"state": "submitted"}), "submitted"

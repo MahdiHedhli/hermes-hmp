@@ -24,7 +24,6 @@ open (`ServerContext.media_snapshot`), so it never re-imports per request.
 
 from __future__ import annotations
 
-import asyncio
 import dataclasses
 import re
 from collections.abc import Callable
@@ -42,6 +41,7 @@ from .contract import (
     SnapshotResponse,
     WireMediaDescriptor,
 )
+from .fixture_work import _publication, _worker, _WorkSite
 from .reads import require_bot_authorized
 from .request_ctx import MediaBound, ServerContext
 
@@ -82,7 +82,7 @@ async def read(
         or bridge is None
         or not callable(getattr(bridge, "bind_media_batch", None))
     ):
-        return await asyncio.to_thread(old_call, *args)
+        return await _worker(ctx, _WorkSite.CW044, old_call, *args)
 
     def job() -> tuple[Any, Any]:
         got = twin(reads, *args)  # a text-read failure propagates with its own semantics
@@ -101,7 +101,8 @@ async def read(
         except Exception:  # optional: the text result stands, nothing is minted
             return got, None
 
-    got, binding = await asyncio.to_thread(job)
+    got, binding = await _worker(ctx, _WorkSite.CW045, job)
+    _publication(ctx)
     return _emit(ctx, who, profile, bound, got, binding)
 
 

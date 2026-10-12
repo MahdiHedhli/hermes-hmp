@@ -310,6 +310,9 @@ class ServerContext:
     media_payload_module: Any = None
     media_fetch_module: Any = None
 
+    _fixture_work: Any = field(default=None, repr=False, compare=False, kw_only=True)
+    _fixture_adapter: Any = field(default=None, repr=False, compare=False, kw_only=True)
+
     def is_approvals_available(self) -> bool:
         """Bot Chat approvals. Only an exact `True` opens it; anything else closes it."""
         try:

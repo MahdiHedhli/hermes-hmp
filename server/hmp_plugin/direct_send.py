@@ -93,6 +93,18 @@ from .contract import (
     WriteGate,
     WriteGateState,
 )
+from .fixture_work import (
+    _await_publication,
+    _cmid_sync,
+    _cmid_worker,
+    _owner,
+    _publication,
+    _reservation_worker,
+    _reserve_cmid_cleanup,
+    _send_task,
+    _worker,
+    _WorkSite,
+)
 from .logging_policy import log_bridge_exception, log_event
 
 log = logging.getLogger("hmp.direct_send")
@@ -786,6 +798,9 @@ class DirectSendDeps:
     # with `approvals` available, decided before the send). Every other send uses `loopback_call`.
     stream_call: LoopbackCall = aiohttp_stream_call
 
+    _fixture_work: object = field(default=None, repr=False, compare=False, kw_only=True)
+    _fixture_adapter: object = field(default=None, repr=False, compare=False, kw_only=True)
+
 
 def _cmid_key(iid: str, user_id: str, profile: str, cmid: str) -> tuple[str, str, str, str]:
     return (iid, user_id, profile, cmid)
@@ -823,7 +838,7 @@ async def handle_direct_send(
     # endpoint or Hermes call. Off the event loop: this read can hydrate a secret source.
     endpoint: DirectSendEndpoint | None = None
     if flag_enabled:
-        endpoint = await asyncio.to_thread(deps.bridge.direct_send_endpoint, profile)
+        endpoint = await _worker(deps, _WorkSite.CW016, deps.bridge.direct_send_endpoint, profile)
     effective_gate = gate_module.direct_send_gate(
         base_write_gate=base_write_gate, flag_enabled=flag_enabled, endpoint=endpoint
     )
@@ -835,8 +850,16 @@ async def handle_direct_send(
     # DS-3: reserve the cmid atomically, BEFORE anything below (round-1 review's timing BLOCKER).
     payload_hash = _payload_hash(request.text, request.expected_head)
     now = deps.now()
-    record, inserted = await asyncio.to_thread(
-        deps.store.reserve_cmid, iid, user_id, profile, request.client_message_id, payload_hash, now
+    record, inserted = await _reservation_worker(
+        deps,
+        _WorkSite.CW017,
+        deps.store.reserve_cmid,
+        iid,
+        user_id,
+        profile,
+        request.client_message_id,
+        payload_hash,
+        now,
     )
     if bytes(record["payload_hash"]) != payload_hash:
         raise _refuse(ErrorCode.IDEMPOTENCY_CONFLICT, retryable=False)
@@ -847,11 +870,13 @@ async def handle_direct_send(
         # A row already existed for this cmid before this call reserved anything.
         if record["status"] == CmidStatus.UNKNOWN.value:
             # Review round 3: same wire state DS-8 reports. Never a second loopback call.
+            _publication(deps)
             return DirectSendOutcome(state="unknown")
         if record["status"] != CmidStatus.PENDING.value:
             # DS-3: "the same payload replays the stored outcome and never hands off again."
             stored = record["result_json"]
             if record["status"] == CmidStatus.ACCEPTED.value and stored:
+                _publication(deps)
                 return _stored_outcome(stored)
             raise _refuse(ErrorCode(_stored_code(stored)), retryable=False)
         # Still pending, and THIS call did not just create it -- NEVER call the network again.
@@ -859,16 +884,23 @@ async def handle_direct_send(
         # this row), never `submitted`.
         task = deps.tasks.get(key)
         if task is None:
+            _publication(deps)
             return DirectSendOutcome(state="unknown")
         try:
-            return await asyncio.wait_for(asyncio.shield(task), timeout=ADMISSION_WAIT_S)  # type: ignore[arg-type]
+            _publication(deps)
+            return await _await_publication(
+                deps, asyncio.wait_for(asyncio.shield(task), timeout=ADMISSION_WAIT_S)
+            )  # type: ignore[arg-type]
         except TimeoutError:
+            _publication(deps)
             return DirectSendOutcome(state="submitted")
 
     # `inserted` is True: this call owns the fresh reservation. The guard-plus-call-plus-finalize
     # sequence runs as an independent, server-owned background task (BLOCKER #1) that this
     # coroutine never cancels, even if it stops waiting on it below.
-    task = asyncio.ensure_future(
+    task = _send_task(
+        deps,
+        _WorkSite.CW020,
         _execute(
             deps,
             iid=iid,
@@ -877,13 +909,20 @@ async def handle_direct_send(
             request=request,
             endpoint=endpoint,
             stream=stream,
-        )
+        ),
+        deps.tasks,
+        key,
     )
-    deps.tasks.put(key, task)
+    if _owner(deps) is None:
+        deps.tasks.put(key, task)
     task.add_done_callback(lambda t: _on_task_done(deps, key, t))
     try:
-        return await asyncio.wait_for(asyncio.shield(task), timeout=ADMISSION_WAIT_S)
+        _publication(deps)
+        return await _await_publication(
+            deps, asyncio.wait_for(asyncio.shield(task), timeout=ADMISSION_WAIT_S)
+        )
     except TimeoutError:
+        _publication(deps)
         return DirectSendOutcome(state="submitted")
 
 
@@ -981,24 +1020,35 @@ async def _execute(
         settled = True
         deps.store.delete_cmid_reservation(iid, user_id, profile, request.client_message_id)
 
+    _cleanup = _reserve_cmid_cleanup(
+        deps,
+        _cmid_key(iid, user_id, profile, request.client_message_id),
+        _release,
+        _finalize,
+        _finalize_unknown,
+    )
     try:
         if endpoint is None:
             # Defensive only: the gate's OPEN_GUARDED branch always resolves one. Fails closed
             # rather than handing `None` to `deps.loopback_call`.
-            _release()
+            _cmid_sync(_cleanup, "release", _release)
             raise _refuse(ErrorCode.API_SERVER_UNAVAILABLE, retryable=True)
 
         # DS-4(2): resolve the canonical Bot Chat. A read failure, including an uncertain
         # compression lineage, fails closed as session_busy (Hermes never saw this attempt).
         try:
-            target = await asyncio.to_thread(deps.bridge.resolve_bot_chat, profile)
+            target = await _worker(deps, _WorkSite.CW024, deps.bridge.resolve_bot_chat, profile)
         except Exception as exc:
             log_bridge_exception(exc)
-            await asyncio.to_thread(_release)
+            await _cmid_worker(_cleanup, "release", _release)
             raise _refuse(ErrorCode.SESSION_BUSY, retryable=True) from exc
         if target is None:
-            await asyncio.to_thread(
-                _finalize, CmidStatus.REJECTED.value, code=ErrorCode.NO_BOT_CHAT
+            await _cmid_worker(
+                _cleanup,
+                "finalize",
+                _finalize,
+                CmidStatus.REJECTED.value,
+                code=ErrorCode.NO_BOT_CHAT,
             )
             raise _refuse(ErrorCode.NO_BOT_CHAT, retryable=False)
 
@@ -1012,27 +1062,35 @@ async def _execute(
         acquired = False
         try:
             try:
-                await asyncio.wait_for(lock.acquire(), timeout=LOCK_WAIT_S)  # type: ignore[union-attr]
+                await _await_publication(
+                    deps, asyncio.wait_for(lock.acquire(), timeout=LOCK_WAIT_S)
+                )  # type: ignore[union-attr]
             except TimeoutError:
                 # A stuck earlier turn cannot block this queued send forever. Hermes never saw it.
-                await asyncio.to_thread(_release)
+                await _cmid_worker(_cleanup, "release", _release)
                 raise _refuse(ErrorCode.SESSION_BUSY, retryable=True) from None
             acquired = True
             try:
                 # `expected_head` is taken fresh, INSIDE the lock.
                 try:
-                    fresh = await asyncio.to_thread(deps.bridge.resolve_bot_chat, profile)
+                    fresh = await _worker(
+                        deps, _WorkSite.CW029, deps.bridge.resolve_bot_chat, profile
+                    )
                 except Exception as exc:
                     log_bridge_exception(exc)
-                    await asyncio.to_thread(_release)
+                    await _cmid_worker(_cleanup, "release", _release)
                     raise _refuse(ErrorCode.SESSION_BUSY, retryable=True) from exc
                 if fresh is None:
-                    await asyncio.to_thread(
-                        _finalize, CmidStatus.REJECTED.value, code=ErrorCode.NO_BOT_CHAT
+                    await _cmid_worker(
+                        _cleanup,
+                        "finalize",
+                        _finalize,
+                        CmidStatus.REJECTED.value,
+                        code=ErrorCode.NO_BOT_CHAT,
                     )
                     raise _refuse(ErrorCode.NO_BOT_CHAT, retryable=False)
 
-                snapshot = await asyncio.to_thread(deps.bridge.lease_snapshot, profile)
+                snapshot = await _worker(deps, _WorkSite.CW032, deps.bridge.lease_snapshot, profile)
                 chain = set(fresh.compression_chain)
                 busy = snapshot is None
                 if not busy:
@@ -1044,12 +1102,16 @@ async def _execute(
                             busy = True
                             break
                 if busy:
-                    await asyncio.to_thread(_release)
+                    await _cmid_worker(_cleanup, "release", _release)
                     raise _refuse(ErrorCode.SESSION_BUSY, retryable=True)
 
                 if fresh.head_message_id != request.expected_head:
-                    await asyncio.to_thread(
-                        _finalize, CmidStatus.REJECTED.value, code=ErrorCode.STALE_HEAD
+                    await _cmid_worker(
+                        _cleanup,
+                        "finalize",
+                        _finalize,
+                        CmidStatus.REJECTED.value,
+                        code=ErrorCode.STALE_HEAD,
                     )
                     raise _refuse(ErrorCode.STALE_HEAD, retryable=False)
 
@@ -1059,7 +1121,9 @@ async def _execute(
                     timeout_s = 300
                     if deps.approval_timeout is not None:
                         try:
-                            raw_timeout = await asyncio.to_thread(deps.approval_timeout, profile)
+                            raw_timeout = await _worker(
+                                deps, _WorkSite.CW035, deps.approval_timeout, profile
+                            )
                         except Exception as exc:
                             log_bridge_exception(exc)
                             raw_timeout = 300
@@ -1077,13 +1141,13 @@ async def _execute(
                     )
                 try:
                     call = deps.stream_call if stream else deps.loopback_call
-                    result = await call(
-                        endpoint, fresh.live_tip_session_id, request.text
+                    result = await _await_publication(
+                        deps, call(endpoint, fresh.live_tip_session_id, request.text)
                     )
                 except (TimeoutError, aiohttp.ClientError) as exc:
                     log_bridge_exception(exc)
                     # No HTTP response. Store `unknown` (never left pending, never resent).
-                    await asyncio.to_thread(_finalize_unknown)
+                    await _cmid_worker(_cleanup, "unknown", _finalize_unknown)
                     raise _refuse(ErrorCode.API_SERVER_UNAVAILABLE, retryable=True) from exc
                 finally:
                     if bind_token is not None:
@@ -1096,18 +1160,29 @@ async def _execute(
 
         # Hermes answered with a real HTTP status. Every branch below closes the row.
         if result.status == 401:
-            await asyncio.to_thread(
-                _finalize, CmidStatus.REJECTED.value, code=ErrorCode.WRITE_GATE_CLOSED
+            await _cmid_worker(
+                _cleanup,
+                "finalize",
+                _finalize,
+                CmidStatus.REJECTED.value,
+                code=ErrorCode.WRITE_GATE_CLOSED,
             )
             raise _refuse(ErrorCode.WRITE_GATE_CLOSED, retryable=False)
         if result.status not in (200, 202):
-            await asyncio.to_thread(
-                _finalize, CmidStatus.REJECTED.value, code=ErrorCode.API_SERVER_UNAVAILABLE
+            await _cmid_worker(
+                _cleanup,
+                "finalize",
+                _finalize,
+                CmidStatus.REJECTED.value,
+                code=ErrorCode.API_SERVER_UNAVAILABLE,
             )
             raise _refuse(ErrorCode.API_SERVER_UNAVAILABLE, retryable=False)
         if result.status == 202:
             outcome = DirectSendOutcome(state="queued")
-            await asyncio.to_thread(_finalize, CmidStatus.ACCEPTED.value, outcome=outcome)
+            await _cmid_worker(
+                _cleanup, "finalize", _finalize, CmidStatus.ACCEPTED.value, outcome=outcome
+            )
+            _publication(deps)
             return outcome
 
         body = result.body or {}
@@ -1118,14 +1193,16 @@ async def _execute(
         reply_text = reply_content if isinstance(reply_content, str) else None
 
         try:
-            refreshed = await asyncio.to_thread(deps.bridge.resolve_bot_chat, profile)
+            refreshed = await _worker(deps, _WorkSite.CW040, deps.bridge.resolve_bot_chat, profile)
         except Exception as exc:
             log_bridge_exception(exc)
             refreshed = None
         session_for_check = result.effective_session_id or (
             refreshed.live_tip_session_id if refreshed is not None else fresh.live_tip_session_id
         )
-        interleave_detected = await asyncio.to_thread(
+        interleave_detected = await _worker(
+            deps,
+            _WorkSite.CW041,
             _check_interleave,
             deps.bridge,
             profile=profile,
@@ -1144,16 +1221,19 @@ async def _execute(
             reply=reply,
             interleave_detected=interleave_detected,
         )
-        await asyncio.to_thread(_finalize, CmidStatus.ACCEPTED.value, outcome=outcome)
+        await _cmid_worker(
+            _cleanup, "finalize", _finalize, CmidStatus.ACCEPTED.value, outcome=outcome
+        )
+        _publication(deps)
         return outcome
     except asyncio.CancelledError:
         # Sync: a cancelled task cannot reliably await. The row must not stay pending.
-        _finalize_unknown()
+        _cmid_sync(_cleanup, "unknown", _finalize_unknown)
         raise
     except DirectSendError:
         raise
     except Exception:
-        _finalize_unknown()
+        _cmid_sync(_cleanup, "unknown", _finalize_unknown)
         raise
 
 

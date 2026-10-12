@@ -64,6 +64,7 @@ import secrets
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
+from dataclasses import replace
 from pathlib import Path
 from types import FunctionType, ModuleType
 from typing import Any
@@ -75,6 +76,19 @@ from . import cli, compat, direct_send, identity, prompts, reads, server
 from .authorize import Authorize
 from .cli import listener_record_path
 from .contract import PLATFORM_NAME, OtherWhy, WriteGateState
+from .fixture_work import (
+    _await_publication,
+    _Ingress,
+    _publication,
+    _require_fixture_resource_policy,
+    _resources,
+    _ResourceSite,
+    _ServingResources,
+    _ServingWork,
+    _worker,
+    _WorkRefusedError,
+    _WorkSite,
+)
 from .logging_policy import log_event
 from .reads import Reads, _fallback_display_name
 from .store import Store
@@ -430,6 +444,19 @@ def _media_bind(
     return media_available
 
 
+class _ComponentSetupCleanupError(RuntimeError):
+    """Setup failed and its one store-close attempt failed; both causes and custody survive."""
+
+    def __init__(
+        self, store: Store, setup_failure: BaseException, cleanup_failure: BaseException
+    ) -> None:
+        super().__init__("HMP component setup failed with unresolved store cleanup")
+        self.store = store
+        self.setup_failure = setup_failure
+        self.cleanup_failure = cleanup_failure
+        self.store_close_unknown = True
+
+
 def open_components(adapter: Any) -> server.ServerContext:
     """Compat gate, store, identity and (on a supported build only) the bridge. Blocking."""
     try:
@@ -440,172 +467,719 @@ def open_components(adapter: Any) -> server.ServerContext:
         )
     custody = identity.resolve_custody()
     store = Store(server.store_path(custody.anchor_dir))
-    store.migrate()
     try:
+        store.migrate()
         ident = identity.load_or_create(store)
-    except BaseException:
-        store.close()
-        raise
-    config = getattr(adapter, "config", None)
-    extra = getattr(config, "extra", None)
-    session_browsing = extra.get("session_browsing", True) if isinstance(extra, Mapping) else True
-    # Canonical local configuration: platforms.hmp.extra.controls_requests.enabled. The route
-    # family is registered only on this listener start when the value is the literal bool True.
-    # Changing the host config requires a listener restart; requests cannot toggle registration.
-    controls_block = extra.get("controls_requests") if isinstance(extra, Mapping) else None
-    controls_requests_enabled = (
-        isinstance(controls_block, Mapping) and controls_block.get("enabled") is True
-    )
-    eligibility = result.eligibility
-    # Availability comes from the one eligibility evaluation done above (Hermes code cannot change
-    # without a gateway restart), never from a per-request lookup. A result that carries no
-    # eligibility (an injected test double) reports nothing beyond read as available.
-    def _available(feature: compat.Feature) -> bool:
-        return eligibility is not None and eligibility.available(feature)
-
-    send_available = result.supported and _available(compat.Feature.SEND)
-    # Spec 034: the `approvals` and `phone_chat` members, decided once here from the same
-    # eligibility evaluation (no per-request lookup). No build list, fingerprint or latch is read.
-    approvals_member = result.supported and _available(compat.Feature.APPROVALS)
-    phone_member = result.supported and _available(compat.Feature.PHONE_CHAT)
-    # Set only after the bridge captured the Phone-chat helpers (AP-10); closed until then.
-    phone_bound = [False]
-
-    # Amendment F2 (direct send, OD-F14/OD-F15): `gateway.platforms.hmp.extra.direct_send.enabled`,
-    # default False. A malformed (non-mapping) `direct_send` block fails closed to disabled, never
-    # to enabled -- mirrors `session_browsing`'s own "anything but an explicit False is on" only
-    # in the safe direction (this flag's own safe default is OFF, not ON).
-    #
-    # Review round 2, should-fix: a closure over `adapter`, not a one-time bool, so every request
-    # re-reads the LIVE `adapter.config.extra` (`server.py`'s `handle_chat_send` calls this once
-    # per request via `ServerContext.direct_send_enabled()`) -- a host-side flag flip is visible
-    # on the next request, not the next gateway restart. Cheap: an in-memory dict lookup, no I/O.
-    def _read_direct_send_enabled() -> bool:
-        live_config = getattr(adapter, "config", None)
-        live_extra = getattr(live_config, "extra", None)
-        block = live_extra.get("direct_send") if isinstance(live_extra, Mapping) else None
-        return isinstance(block, Mapping) and block.get("enabled") is True
-
-    def _read_owner_device_ids() -> frozenset[str]:
-        live_config = getattr(adapter, "config", None)
-        live_extra = getattr(live_config, "extra", None)
-        ids = live_extra.get("owner_device_ids") if isinstance(live_extra, Mapping) else None
-        if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
-            return frozenset()
-        return frozenset(ids)
-
-    def _readiness_owner_device_ids() -> frozenset[str]:
-        return _readiness_owner_device_ids_from_adapter(adapter)
-
-    def _readiness_settings() -> object:
-        return _readiness_settings_from_adapter(adapter)
-
-    def _read_cron_enabled() -> bool:
-        live_config = getattr(adapter, "config", None)
-        live_extra = getattr(live_config, "extra", None)
-        block = live_extra.get("cron") if isinstance(live_extra, Mapping) else None
-        return isinstance(block, Mapping) and block.get("enabled") is True
-
-    def _read_local_media_enabled() -> bool:
-        live_config = getattr(adapter, "config", None)
-        live_extra = getattr(live_config, "extra", None)
-        block = live_extra.get("local_media") if isinstance(live_extra, Mapping) else None
-        return isinstance(block, Mapping) and block.get("enabled") is True
-
-    def _read_model_enabled() -> bool:
-        live_config = getattr(adapter, "config", None)
-        live_extra = getattr(live_config, "extra", None)
-        block = live_extra.get("model_management") if isinstance(live_extra, Mapping) else None
-        return isinstance(block, Mapping) and block.get("enabled") is True
-
-    ctx = server.ServerContext(
-        identity=ident,
-        store=store,
-        compat=result,
-        session_browsing_enabled=session_browsing is not False,
-        controls_requests_enabled=controls_requests_enabled,
-        read_worker_budget=(getattr(adapter, "_read_worker_budget", None)
-                            or server.ReadWorkerBudget()),
-        direct_send_flag=_read_direct_send_enabled,
-        owner_device_ids=_read_owner_device_ids,
-        readiness_owner_device_ids=_readiness_owner_device_ids,
-        readiness_settings=_readiness_settings,
-        approvals_available=lambda: approvals_member,
-        phone_chat_available=lambda: phone_member and phone_bound[0],
-        cron_flag=_read_cron_enabled,
-        cron_available=lambda: result.supported and _available(compat.Feature.JOBS),
-        model_flag=_read_model_enabled,
-        model_available=lambda: result.supported and _available(compat.Feature.MODEL),
-        session_browsing_available=_available(compat.Feature.SESSION_BROWSING),
-        send_available=lambda: send_available,
-        media_flag=_read_local_media_enabled,
-    )
-    _log_unavailable_features(eligibility)
-    if result.supported:
-        bridge_module, bridge_cls, directory_cls = _bridge_published()
-
-        ctx.bridge = bridge_cls(adapter, directory_cls(store))
-        # Live-bug fix: `adapter._observe_served_profiles` is a bound method of the adapter this
-        # context belongs to (this function's own `adapter` argument), so it is safe to close over
-        # here even though `self._record`/`self._nonce` are not set until `connect()` finishes
-        # further down -- neither `Reads.roster` nor `Authorize.authorize` can run before then.
-        on_served_profiles = getattr(adapter, "_observe_served_profiles", None)
-        prompt_store = prompts.PromptStore(clock=ctx.now)
-        ctx.prompt_store = prompt_store
-        ctx.reads = Reads(
-            ctx.bridge,
-            store,
-            iid=ident.iid,
-            guarantees=ctx.guarantees,
-            write_gate=ctx.reported_write_gate,
-            send_gate=ctx.reported_send_gate,
-            clock=ctx.now,
-            on_served_profiles=on_served_profiles,
-            prompt_store=prompt_store,
+        config = getattr(adapter, "config", None)
+        extra = getattr(config, "extra", None)
+        session_browsing = (
+            extra.get("session_browsing", True) if isinstance(extra, Mapping) else True
         )
-        ctx.authorize = Authorize(
-            ctx.bridge, store, clock=ctx.now, on_served_profiles=on_served_profiles
+        # Canonical local configuration: platforms.hmp.extra.controls_requests.enabled. The route
+        # family is registered only on this listener start when the value is the literal bool True.
+        # Changing the host config requires a listener restart; requests cannot toggle registration.
+        controls_block = extra.get("controls_requests") if isinstance(extra, Mapping) else None
+        controls_requests_enabled = (
+            isinstance(controls_block, Mapping) and controls_block.get("enabled") is True
         )
-        # Amendment F2: constructed on every supported build, regardless of `direct_send_enabled`
-        # -- the flag is re-checked per request (DS-2(b)), not at listener-start time, so a
-        # host-side flag flip takes effect on the next request, not the next restart.
-        def _approval_timeout(profile: str) -> int:
-            bridge = ctx.bridge
-            if bridge is None:
-                return 300
-            return bridge.approval_timeout_s(profile)  # type: ignore[no-any-return]
+        eligibility = result.eligibility
 
-        ctx.direct_send_deps = direct_send.DirectSendDeps(
-            bridge=ctx.bridge,
+        # Availability comes from the one eligibility evaluation done above (Hermes code cannot
+        # change
+        # without a gateway restart), never from a per-request lookup. A result that carries no
+        # eligibility (an injected test double) reports nothing beyond read as available.
+        def _available(feature: compat.Feature) -> bool:
+            return eligibility is not None and eligibility.available(feature)
+
+        send_available = result.supported and _available(compat.Feature.SEND)
+        # Spec 034: the `approvals` and `phone_chat` members, decided once here from the same
+        # eligibility evaluation (no per-request lookup). No build list, fingerprint or latch is
+        # read.
+        approvals_member = result.supported and _available(compat.Feature.APPROVALS)
+        phone_member = result.supported and _available(compat.Feature.PHONE_CHAT)
+        # Set only after the bridge captured the Phone-chat helpers (AP-10); closed until then.
+        phone_bound = [False]
+
+        # Amendment F2 (direct send, OD-F14/OD-F15):
+        # `gateway.platforms.hmp.extra.direct_send.enabled`,
+        # default False. A malformed (non-mapping) `direct_send` block fails closed to disabled,
+        # never
+        # to enabled -- mirrors `session_browsing`'s own "anything but an explicit False is on" only
+        # in the safe direction (this flag's own safe default is OFF, not ON).
+        #
+        # Review round 2, should-fix: a closure over `adapter`, not a one-time bool, so every
+        # request
+        # re-reads the LIVE `adapter.config.extra` (`server.py`'s `handle_chat_send` calls this once
+        # per request via `ServerContext.direct_send_enabled()`) -- a host-side flag flip is visible
+        # on the next request, not the next gateway restart. Cheap: an in-memory dict lookup, no
+        # I/O.
+        def _read_direct_send_enabled() -> bool:
+            live_config = getattr(adapter, "config", None)
+            live_extra = getattr(live_config, "extra", None)
+            block = live_extra.get("direct_send") if isinstance(live_extra, Mapping) else None
+            return isinstance(block, Mapping) and block.get("enabled") is True
+
+        def _read_owner_device_ids() -> frozenset[str]:
+            live_config = getattr(adapter, "config", None)
+            live_extra = getattr(live_config, "extra", None)
+            ids = live_extra.get("owner_device_ids") if isinstance(live_extra, Mapping) else None
+            if not isinstance(ids, list) or not all(isinstance(item, str) for item in ids):
+                return frozenset()
+            return frozenset(ids)
+
+        def _readiness_owner_device_ids() -> frozenset[str]:
+            return _readiness_owner_device_ids_from_adapter(adapter)
+
+        def _readiness_settings() -> object:
+            return _readiness_settings_from_adapter(adapter)
+
+        def _read_cron_enabled() -> bool:
+            live_config = getattr(adapter, "config", None)
+            live_extra = getattr(live_config, "extra", None)
+            block = live_extra.get("cron") if isinstance(live_extra, Mapping) else None
+            return isinstance(block, Mapping) and block.get("enabled") is True
+
+        def _read_local_media_enabled() -> bool:
+            live_config = getattr(adapter, "config", None)
+            live_extra = getattr(live_config, "extra", None)
+            block = live_extra.get("local_media") if isinstance(live_extra, Mapping) else None
+            return isinstance(block, Mapping) and block.get("enabled") is True
+
+        def _read_model_enabled() -> bool:
+            live_config = getattr(adapter, "config", None)
+            live_extra = getattr(live_config, "extra", None)
+            block = live_extra.get("model_management") if isinstance(live_extra, Mapping) else None
+            return isinstance(block, Mapping) and block.get("enabled") is True
+
+        ctx = server.ServerContext(
+            identity=ident,
             store=store,
-            locks=direct_send.ProfileLocks(),
-            now=ctx.now,
-            prompt_store=prompt_store,
-            approval_timeout=_approval_timeout,
+            compat=result,
+            session_browsing_enabled=session_browsing is not False,
+            controls_requests_enabled=controls_requests_enabled,
+            read_worker_budget=(
+                getattr(adapter, "_read_worker_budget", None) or server.ReadWorkerBudget()
+            ),
+            direct_send_flag=_read_direct_send_enabled,
+            owner_device_ids=_read_owner_device_ids,
+            readiness_owner_device_ids=_readiness_owner_device_ids,
+            readiness_settings=_readiness_settings,
+            approvals_available=lambda: approvals_member,
+            phone_chat_available=lambda: phone_member and phone_bound[0],
+            cron_flag=_read_cron_enabled,
+            cron_available=lambda: result.supported and _available(compat.Feature.JOBS),
+            model_flag=_read_model_enabled,
+            model_available=lambda: result.supported and _available(compat.Feature.MODEL),
+            session_browsing_available=_available(compat.Feature.SESSION_BROWSING),
+            send_available=lambda: send_available,
+            media_flag=_read_local_media_enabled,
         )
-        if phone_member:
-            # AP-10: capture the Phone-chat helpers now, after the probe passed. A later rebinding
-            # closes this generation's Phone-chat side; Bot Chat `approvals` is independent.
-            phone_bound[0] = ctx.bridge.bind_phone_chat_helpers(  # type: ignore[attr-defined]
-                lambda: prompt_store.close_phone_chat(ctx.now())
+        _log_unavailable_features(eligibility)
+        if result.supported:
+            bridge_module, bridge_cls, directory_cls = _bridge_published()
+
+            ctx.bridge = bridge_cls(adapter, directory_cls(store))
+            # Live-bug fix: `adapter._observe_served_profiles` is a bound method of the adapter this
+            # context belongs to (this function's own `adapter` argument), so it is safe to close
+            # over
+            # here even though `self._record`/`self._nonce` are not set until `connect()` finishes
+            # further down -- neither `Reads.roster` nor `Authorize.authorize` can run before then.
+            on_served_profiles = getattr(adapter, "_observe_served_profiles", None)
+            prompt_store = prompts.PromptStore(clock=ctx.now)
+            ctx.prompt_store = prompt_store
+            ctx.reads = Reads(
+                ctx.bridge,
+                store,
+                iid=ident.iid,
+                guarantees=ctx.guarantees,
+                write_gate=ctx.reported_write_gate,
+                send_gate=ctx.reported_send_gate,
+                clock=ctx.now,
+                on_served_profiles=on_served_profiles,
+                prompt_store=prompt_store,
             )
-        # Local media (M3): only a listener whose `local_media` member is available is bound; the
-        # result identity may be `None`. Closed (the default) otherwise, with no media import.
-        if _available(compat.Feature.LOCAL_MEDIA):
-            try:
+            ctx.authorize = Authorize(
+                ctx.bridge, store, clock=ctx.now, on_served_profiles=on_served_profiles
+            )
+
+            # Amendment F2: constructed on every supported build, regardless of
+            # `direct_send_enabled`
+            # -- the flag is re-checked per request (DS-2(b)), not at listener-start time, so a
+            # host-side flag flip takes effect on the next request, not the next restart.
+            def _approval_timeout(profile: str) -> int:
+                bridge = ctx.bridge
+                if bridge is None:
+                    return 300
+                return bridge.approval_timeout_s(profile)  # type: ignore[no-any-return]
+
+            ctx.direct_send_deps = direct_send.DirectSendDeps(
+                bridge=ctx.bridge,
+                store=store,
+                locks=direct_send.ProfileLocks(),
+                now=ctx.now,
+                prompt_store=prompt_store,
+                approval_timeout=_approval_timeout,
+            )
+            if phone_member:
+                # AP-10: capture the Phone-chat helpers now, after the probe passed. A later
+                # rebinding
+                # closes this generation's Phone-chat side; Bot Chat `approvals` is independent.
+                phone_bound[0] = ctx.bridge.bind_phone_chat_helpers(  # type: ignore[attr-defined]
+                    lambda: prompt_store.close_phone_chat(ctx.now())
+                )
+            # Local media (M3): only a listener whose `local_media` member is available is bound;
+            # the
+            # result identity may be `None`. Closed (the default) otherwise, with no media import.
+            if _available(compat.Feature.LOCAL_MEDIA):
                 ctx.media_available = _media_bind(ctx, bridge_module, reads)
-            except BaseException:
-                store.close()
+            adapter._hmp_hooks = prompts.AdapterHooks(  # type: ignore[attr-defined]
+                store=prompt_store,
+                bridge=ctx.bridge,
+                now=ctx.now,
+                iid=ident.iid,
+                phone_available=ctx.is_phone_chat_available,
+            )
+        if vars(adapter).get("_fixture_binding_attempted"):
+            # Negative marker before the completed context can be returned or served.
+            ctx._fixture_adapter = adapter
+            if ctx.direct_send_deps is not None:
+                ctx.direct_send_deps = replace(ctx.direct_send_deps, _fixture_adapter=adapter)
+            for component in (ctx.bridge, ctx.prompt_store, vars(adapter).get("_hmp_hooks")):
+                if component is not None:
+                    vars(component)["_fixture_adapter"] = adapter
+        log_event("adapter_open", outcome=result.status.value)
+        return ctx
+    except BaseException as setup_failure:
+        # Construction returned a known handle: this function owns it until context return.
+        # Attempt close once; a throwing close leaves custody unresolved, never successful.
+        try:
+            store.close()
+        except BaseException as cleanup_failure:
+            raise _ComponentSetupCleanupError(
+                store, setup_failure, cleanup_failure
+            ) from setup_failure
+        raise
+
+
+_FIXTURE_CONTEXT_FIELDS = (
+    "registry",
+    "scope",
+    "role",
+    "ordinal",
+    "config",
+    "runner",
+    "original_entry",
+    "original_factory",
+    "adapter_type",
+    "source_module",
+    "source_origin",
+    "source_sha256",
+    "source_generation",
+    "worker_generation",
+    "listener_owner",
+    "deadline",
+)
+
+
+def _fixture_binding_parts(
+    adapter: Any, slot: object, *, accepted: bool
+) -> tuple[object, object, tuple[object, ...]]:
+    """Inspect only the already-loaded private helper; these checks are not source authority."""
+    import sys
+    from importlib.machinery import ModuleSpec
+
+    module = sys.modules.get("native_media_listener_factory")
+    if type(module) is not ModuleType:
+        raise RuntimeError("FIXTURE_HELPER_MODULE_UNAVAILABLE")
+    space = vars(module)
+    spec = space.get("__spec__")
+    origin = space.get("__file__")
+    if (type(spec) is not ModuleSpec or spec.name != "native_media_listener_factory"
+            or spec.loader is None or type(origin) is not str or spec.origin != origin):
+        raise RuntimeError("FIXTURE_HELPER_SPEC_CHANGED")
+    classes = tuple(
+        space.get(name) for name in ("_StartupSlot", "FixtureScopeOwner", "StartupBinding")
+    )
+    for cls in classes:
+        if type(cls) is not type:
+            raise RuntimeError("FIXTURE_HELPER_CLASS_CHANGED")
+        constructor = vars(cls).get("__init__")
+        if (type(constructor) is not FunctionType or constructor.__globals__ is not space
+                or constructor.__code__.co_filename != origin):
+            raise RuntimeError("FIXTURE_HELPER_CONSTRUCTOR_CHANGED")
+    slot_type, owner_type, binding_type = classes
+    if type(slot) is not slot_type:
+        raise RuntimeError("FIXTURE_SLOT_CHANGED")
+    slot_fields = vars(slot)
+    owner, binding = slot_fields.get("owner"), slot_fields.get("binding")
+    if type(owner) is not owner_type or type(binding) is not binding_type:
+        raise RuntimeError("FIXTURE_OWNER_CONTEXT_CHANGED")
+    owner_fields, context = vars(owner), vars(binding)
+    accept = vars(owner_type).get("accept_adapter_binding")
+    if (type(accept) is not FunctionType or accept.__globals__ is not space
+            or accept.__code__.co_filename != origin
+            or "accept_adapter_binding" in owner_fields):
+        raise RuntimeError("FIXTURE_HELPER_HOOK_CHANGED")
+    if (context.get("source_module") is not module or context.get("source_origin") != origin
+            or context.get("adapter_type") is not HmpAdapter or type(adapter) is not HmpAdapter
+            or context.get("config") is not adapter.config):
+        raise RuntimeError("FIXTURE_ADAPTER_CONTEXT_CHANGED")
+    if any(context.get(name) is None for name in _FIXTURE_CONTEXT_FIELDS):
+        raise RuntimeError("FIXTURE_CONTEXT_INCOMPLETE")
+    if (owner_fields.get("slot") is not slot or owner_fields.get("binding") is not binding
+            or slot_fields.get("claimed") is not True
+            or owner_fields.get("state") != "FACTORY_CLAIMED"
+            or owner_fields.get("first_failure") is not None
+            or owner_fields.get("adapter_debt") is not adapter
+            or owner_fields.get("operation") is None
+            or owner_fields.get("in_callback") is not True
+            or owner_fields.get("binding_hook_active") is not True
+            or owner_fields.get("binding_attempted") is not True
+            or owner_fields.get("bound_adapter") is not (adapter if accepted else None)):
+        raise RuntimeError("FIXTURE_BINDING_PHASE_CHANGED")
+    already_wired = getattr(adapter, "gateway_runner", None)
+    if already_wired is not None and already_wired is not context["runner"]:
+        raise RuntimeError("FIXTURE_RUNNER_CHANGED")
+    return owner, binding, tuple(context[name] for name in _FIXTURE_CONTEXT_FIELDS)
+
+
+class _FixtureLaunch:
+    """Retained before task factory entry; absence of a task is not absence of work."""
+
+    def __init__(self, kind: str) -> None:
+        self.kind = kind
+        self.operation: object | None = None
+        self.gate: Any = None
+        self.coroutine: Any = None
+        self.task: Any = None
+        self.returned_handle: Any = None
+        self.started = False
+        self.released = False
+        self.effect_started = False
+        self.collected = False
+        self.result: Any = None
+        self.failure: BaseException | None = None
+        self.unknown = False
+
+
+class _FixtureLifecycle:
+    """Own setup and cleanup; real issuer and serving remain closed in this slice."""
+
+    def __init__(self, adapter: Any, alias: Any) -> None:
+        self.adapter = adapter
+        self.alias = alias
+        self.binding = alias.binding
+        self.context = tuple(vars(self.binding).get(name) for name in _FIXTURE_CONTEXT_FIELDS)
+        self.operation: object | None = None
+        self.connect_token: object | None = None
+        self.cleanup_reserved = False
+        self.setup: _FixtureLaunch | None = None
+        self.cleanup: _FixtureLaunch | None = None
+        self.ctx: Any = None
+        self.settings: Any = None
+        self.first_failure: BaseException | None = None
+        self.cleanup_failures: list[BaseException] = []
+        self.started = False
+        self.alias_claimed = False
+        self.stopping = False
+        self.launching = False
+        self.prompt_close_attempted = False
+        self.store_close_attempted = False
+        self.context_closed = False
+        self.unknown_context = False
+        self.serving: _ServingWork | None = None
+        self.resources: _ServingResources | None = None
+
+    def _fail(self, error: BaseException) -> None:
+        if self.first_failure is None:
+            self.first_failure = error
+        self.stopping = True
+        self.alias.poison(error)
+
+    def _ordinary_live(self, token: object | None) -> None:
+        current = vars(self.binding)
+        if (token is None or self.operation is not token or self.connect_token is not token
+                or not self.started or self.stopping or self.first_failure is not None
+                or self.alias.first_failure is not None or self.alias.binding is not self.binding
+                or self.adapter.config is not current.get("config")
+                or any(current.get(name) is not saved for name, saved in zip(
+                    _FIXTURE_CONTEXT_FIELDS, self.context, strict=True
+                ))):
+            error = RuntimeError("FIXTURE_LIFECYCLE_TERMINAL")
+            self._fail(error)
+            raise error
+
+    def _retain_alias_claim(self) -> None:
+        # A normal callback return is not evidence that custody transferred.
+        # Retain only the source-owned alias's exact lifecycle claim, including
+        # a claim made before the callback subsequently failed.
+        if self.alias.lifecycle is self:
+            self.alias_claimed = True
+
+    def begin_connect(self, adapter: Any) -> None:
+        if self.started or adapter is not self.adapter or self.stopping:
+            error = RuntimeError("FIXTURE_LIFECYCLE_CONSUMED")
+            self._fail(error)
+            raise error
+        self.started = True
+        token = self.connect_token = self.operation = object()
+        try:
+            self._ordinary_live(token)
+            self.alias.begin_setup(self)
+            self._retain_alias_claim()
+            self._ordinary_live(token)
+            if not self.alias_claimed:
+                raise RuntimeError("FIXTURE_ALIAS_CLAIM_MISSING")
+            _require_fixture_resource_policy(self)
+            self._ordinary_live(token)
+            extra = getattr(adapter.config, "extra", None)
+            self._ordinary_live(token)
+            self.settings = server.listener_settings(extra)
+            self._ordinary_live(token)
+        except BaseException as error:
+            self._retain_alias_claim()
+            self._fail(error)
+            raise
+
+    async def _body(self, launch: _FixtureLaunch) -> Any:
+        launch.started = True
+        # Even an eager factory stops here. Only our retained launch routine
+        # releases the gate after receiving the exact task and doing postchecks.
+        await launch.gate
+        if not launch.released or (launch.kind == "setup" and self.stopping):
+            raise RuntimeError("FIXTURE_LAUNCH_REFUSED")
+        if launch.kind == "setup":
+            self._ordinary_live(launch.operation)
+        elif not self.cleanup_reserved or self.cleanup is not launch:
+            raise RuntimeError("FIXTURE_CLEANUP_NOT_OWNED")
+        launch.effect_started = True
+        if launch.kind == "setup":
+            return await asyncio.to_thread(open_components, self.adapter)
+        if launch.kind == "cleanup":
+            return await self._cleanup_owned()
+        raise RuntimeError("FIXTURE_LAUNCH_KIND")
+
+    def _launch(self, kind: str) -> _FixtureLaunch:
+        token = self.connect_token
+        if kind == "setup":
+            self._ordinary_live(token)
+        elif kind == "cleanup" and not self.cleanup_reserved:
+            raise RuntimeError("FIXTURE_CLEANUP_NOT_OWNED")
+        if self.launching or kind not in ("setup", "cleanup"):
+            error = RuntimeError("FIXTURE_LAUNCH_REENTRY")
+            self._fail(error)
+            raise error
+        if (self.setup if kind == "setup" else self.cleanup) is not None:
+            error = RuntimeError("FIXTURE_LAUNCH_CONSUMED")
+            self._fail(error)
+            raise error
+        launch = _FixtureLaunch(kind)
+        launch.operation = token
+        if kind == "setup":
+            self.setup = launch
+        else:
+            self.cleanup = launch
+        self.launching = True
+        transferred = False
+        try:
+            loop = asyncio.get_running_loop()
+            if kind == "setup":
+                self._ordinary_live(token)
+            make_gate = loop.create_future
+            if kind == "setup":
+                self._ordinary_live(token)
+            launch.gate = make_gate()
+            if kind == "setup":
+                self._ordinary_live(token)
+            launch.coroutine = self._body(launch)
+            make_task = loop.create_task
+            if kind == "setup":
+                self._ordinary_live(token)
+            # From this point a throwing factory may already own the coroutine.
+            transferred = True
+            returned = make_task(launch.coroutine)
+            launch.returned_handle = returned
+            if not isinstance(returned, asyncio.Task):
+                raise RuntimeError("FIXTURE_TASK_HANDLE_UNKNOWN")
+            launch.task = returned
+            if kind == "setup":
+                self._ordinary_live(token)
+                self.alias.setup_checkpoint(self)
+                self._ordinary_live(token)
+            launch.released = True
+            launch.gate.set_result(None)
+            return launch
+        except BaseException as error:
+            launch.failure = error
+            # Never close a coroutine after it was passed to the factory,
+            # including when no task handle returned and it appears unstarted.
+            launch.unknown = transferred and launch.task is None
+            if not transferred and launch.coroutine is not None:
+                launch.coroutine.close()
+            self._fail(error)
+            raise
+        finally:
+            self.launching = False
+
+    async def _collect(self, launch: _FixtureLaunch) -> Any:
+        if launch.collected:
+            if launch.failure is not None:
+                raise launch.failure
+            return launch.result
+        if launch.task is None or launch.unknown:
+            raise RuntimeError("FIXTURE_LAUNCH_UNKNOWN")
+        try:
+            result = await asyncio.shield(launch.task)
+        except asyncio.CancelledError:
+            # Shielded wait cancellation does not establish that the task ended.
+            raise
+        except BaseException as error:
+            launch.failure = error
+            launch.collected = True
+            raise
+        launch.result = result
+        launch.collected = True
+        return result
+
+    async def connect(self) -> bool:
+        try:
+            self.begin_connect(self.adapter)
+            token = self.connect_token
+            self._ordinary_live(token)
+            launch = self._launch("setup")
+            self.ctx = await self._collect(launch)
+            self._ordinary_live(token)
+            self.alias.setup_checkpoint(self)
+            self._ordinary_live(token)
+            _require_fixture_resource_policy(self)
+            self._ordinary_live(token)
+            work = _ServingWork(self, self.ctx)
+            self.serving = work
+            self.adapter._bind_fixture_work(work)
+            scope = _ServingResources(work)
+            self.resources = scope
+            record = work._begin(_WorkSite.CW002, "task", None)
+            scope.start = record
+            record.payload = self._start_serving_owned()
+            work._spawn(record)
+            await work.collect(record)
+            scope.check()
+            return True
+        except BaseException as error:
+            self._fail(error)
+            self.request_stop(error)
+            if isinstance(error, asyncio.CancelledError):
                 raise
-        adapter._hmp_hooks = prompts.AdapterHooks(  # type: ignore[attr-defined]
-            store=prompt_store,
-            bridge=ctx.bridge,
-            now=ctx.now,
-            iid=ident.iid,
-            phone_available=ctx.is_phone_chat_available,
-        )
-    log_event("adapter_open", outcome=result.status.value)
-    return ctx
+            if not isinstance(error, Exception):
+                raise
+        raise RuntimeError("FIXTURE_LIFECYCLE_UNAVAILABLE") from None
+
+    async def _start_serving_owned(self) -> None:
+        scope = self.resources
+        work = self.serving
+        if scope is None or work is None or scope.work is not work:
+            raise _WorkRefusedError
+        scope.check()
+        record = scope.attempt(_ResourceSite.SERVER, self)
+        try:
+            srv = server.HmpServer(self.ctx, self.settings, on_closed=self.adapter._listener_closed)
+            scope.server = srv
+            self.adapter._server = srv
+            scope.returned(record, srv)
+        except BaseException as error:
+            if not record.acquired:
+                scope.failed(record, error)
+            raise
+        self.alias.handoff(srv)
+        scope.check()
+        startup_error = None
+        try:
+            await srv._start_fixture_listener(self.alias.listener)
+        except BaseException as error:
+            startup_error = error
+            if scope.start_failure is None:
+                scope.start_failure = error
+            work.request_stop(error)
+            raise
+        finally:
+            try:
+                self.alias.observe_handoff(srv)
+            except BaseException as error:
+                scope.cleanup_failures.append(error)
+                work.request_stop(error)
+                if startup_error is None:
+                    raise
+        scope.check()
+        anchor = self.ctx.identity.custody.anchor_dir
+        self.adapter._record = listener_record_path(anchor)
+        self.adapter._nonce = secrets.token_hex(16)
+        scope.check()
+        cli._ListenerRecordOwner(scope, self.adapter._record, self.adapter._nonce)
+        await srv.start_operator_read(anchor, self.adapter._nonce)
+        scope.check()
+        self.adapter._fixture_publish_initial(scope)
+        scope.check()
+        # Record each exact background task before its factory/gate release.
+        watch = work._begin(_WorkSite.CW106, "task", scope.start)
+        scope.background.append(watch)
+        watch.payload = srv._watchdog()
+        work._spawn(watch)
+        srv._watch = watch.task
+        if self.ctx.bridge is not None:
+            refresh = work._begin(_WorkSite.CW006, "task", scope.start)
+            scope.background.append(refresh)
+            refresh.payload = self.adapter._periodic_profile_refresh()
+            work._spawn(refresh)
+            self.adapter._profile_refresh_task = refresh.task
+        scope.check()
+        with work._mutex:
+            work._live_locked(True)
+            scope.serving_ready = True
+        self.adapter._mark_connected()
+        scope.check()
+
+    async def _drain_serving_owned(self) -> None:
+        scope, work = self.resources, self.serving
+        if scope is None or work is None or scope.work is not work:
+            raise _WorkRefusedError
+        work.request_stop(self.first_failure or _WorkRefusedError())
+        start = scope.start
+        if start is None or start.unknown or start.task is None:
+            raise RuntimeError("FIXTURE_STARTUP_UNKNOWN")
+        try:
+            await work.collect(start)
+        except BaseException:
+            if not start.collected:
+                raise
+        for record in tuple(work._records):
+            if (record.kind == "task" and record is not start and record.task is not None
+                    and not record.body_exited and not record.cancel_attempted):
+                record.cancel_attempted = True
+                try:
+                    record.task.cancel()
+                except BaseException as error:
+                    record.unknown = True
+                    scope.cleanup_failures.append(error)
+        if scope.server is not None:
+            try:
+                await scope.server._stop_owned_fixture(scope)
+            except BaseException as error:
+                scope.cleanup_failures.append(error)
+        # Retained work bodies, not legacy task maps or counters, govern Store
+        # lifetime. A timeout/unknown acquisition retains this entire context.
+        async with asyncio.timeout(server.SHUTDOWN_TIMEOUT_S):
+            await scope.wait_users()
+        if (scope.cleanup_failures or any(r.unknown for r in scope.resources)
+                or (scope.server is not None and not scope.stop_returned)):
+            raise RuntimeError("FIXTURE_SERVING_DRAIN_UNKNOWN")
+        publication = scope.publication
+        if publication is not None:
+            with self.adapter._record_lock:
+                cli.remove_listener_record(publication.path, _fixture_owner=publication)
+        scope.context_close_started = True
+
+
+    def request_stop(self, reason: BaseException) -> None:
+        self._fail(reason)
+        if self.serving is not None:
+            with self.serving._mutex:
+                self.serving._poison_locked(reason)
+        self._retain_alias_claim()
+        if (self.cleanup is not None or self.launching
+                or (self.setup is None and not self.alias_claimed)):
+            return
+        self.cleanup_reserved = True
+        try:
+            self._launch("cleanup")
+        except BaseException as error:
+            self.cleanup_failures.append(error)
+
+    async def _cleanup_owned(self) -> None:
+        setup = self.setup
+        if setup is not None:
+            if setup.task is None or setup.unknown:
+                self.unknown_context = True
+                raise RuntimeError("FIXTURE_SETUP_UNKNOWN")
+            if not setup.released:
+                # This exact retained task can only be waiting at our gate;
+                # cancellation here cannot discard a submitted setup worker.
+                setup.task.cancel()
+                try:
+                    await asyncio.shield(setup.task)
+                except asyncio.CancelledError:
+                    if not setup.task.done():
+                        raise
+                setup.collected = True
+            else:
+                try:
+                    self.ctx = await self._collect(setup)
+                except BaseException as error:
+                    self.cleanup_failures.append(error)
+                    # Includes builder resource/connection debt. A canceled task
+                    # may have left its to_thread worker running without result.
+                    self.unknown_context = True
+                    raise
+        if self.serving is not None:
+            try:
+                await self._drain_serving_owned()
+            except BaseException as error:
+                self.cleanup_failures.append(error)
+                self.unknown_context = True
+                raise
+        ctx = self.ctx
+        if ctx is not None:
+            if not self.prompt_close_attempted:
+                self.prompt_close_attempted = True
+                try:
+                    self.adapter._close_generation(ctx)
+                except BaseException as error:
+                    self.cleanup_failures.append(error)
+            if not self.store_close_attempted:
+                self.store_close_attempted = True
+                try:
+                    ctx.store.close()
+                except BaseException as error:
+                    self.cleanup_failures.append(error)
+                    self.unknown_context = True
+            self.context_closed = not self.cleanup_failures and not self.unknown_context
+        if self.alias.state != "SERVER_OWNED":
+            try:
+                self.alias.retire_unconsumed()
+            except BaseException as error:
+                self.cleanup_failures.append(error)
+        if self.cleanup_failures or self.unknown_context:
+            raise RuntimeError("FIXTURE_CLEANUP_UNCERTAIN")
+
+    async def wait_stopped(self) -> None:
+        if self.cleanup is None:
+            raise RuntimeError("FIXTURE_STOP_UNAVAILABLE")
+        try:
+            await self._collect(self.cleanup)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            raise RuntimeError("FIXTURE_CLEANUP_UNCERTAIN") from None
+        # Local cleanup completion never supplies a native/process drain permit.
+
+
+def _fixture_listener_alias(owner: Any, binding: Any) -> Any:
+    import sys
+
+    module = sys.modules.get("native_media_listener_factory")
+    if type(module) is not ModuleType or module is not binding.source_module:
+        raise RuntimeError("FIXTURE_HELPER_MODULE_UNAVAILABLE")
+    cls = vars(module).get("ListenerAliasOwner")
+    alias = binding.listener_owner
+    if type(cls) is not type or type(alias) is not cls:
+        raise RuntimeError("FIXTURE_LISTENER_OWNERSHIP_UNBOUND")
+    constructor = vars(cls).get("__init__")
+    if (type(constructor) is not FunctionType or constructor.__globals__ is not vars(module)
+            or constructor.__code__.co_filename != binding.source_origin):
+        raise RuntimeError("FIXTURE_ALIAS_SOURCE_CHANGED")
+    if (alias.binding is not binding or alias.slot is not owner.slot
+            or alias.adapter is not owner.bound_adapter):
+        raise RuntimeError("FIXTURE_ALIAS_CONTEXT_CHANGED")
+    return alias
 
 
 class HmpAdapter(BasePlatformAdapter):
@@ -622,6 +1196,95 @@ class HmpAdapter(BasePlatformAdapter):
         self._profile_refresh_task: asyncio.Task[None] | None = None
         self._record_lock = threading.Lock()
         self._read_worker_budget = server.ReadWorkerBudget()
+        self._fixture_work = None
+        self._fixture_lifecycle: _FixtureLifecycle | None = None
+        self._fixture_binding_attempted = False
+        self._fixture_binding_failed = False
+        self._fixture_listener_binding: tuple[object, object, object, tuple[object, ...]] | None = (
+            None
+        )
+
+    def _bind_fixture_work(self, work: _ServingWork) -> None:
+        # Source-only installation. Real issuer and serving remain closed.
+        if (
+            type(self) is not HmpAdapter
+            or type(work) is not _ServingWork
+            or work.adapter is not self
+            or work.lifecycle is not self._fixture_lifecycle
+            or self._fixture_work is not None
+            or not work._context_current()
+        ):
+            raise _WorkRefusedError
+        ctx = work.context
+        if type(ctx) is not server.ServerContext or ctx._fixture_adapter is not self:
+            raise _WorkRefusedError
+        if ctx.direct_send_deps is not None:
+            if type(ctx.direct_send_deps) is not direct_send.DirectSendDeps:
+                raise _WorkRefusedError
+            ctx.direct_send_deps = replace(ctx.direct_send_deps, _fixture_work=work)
+        carriers = (
+            ctx,
+            self,
+            ctx.bridge,
+            ctx.direct_send_deps,
+            ctx.prompt_store,
+            vars(self).get("_hmp_hooks"),
+        )
+        work._context_objects = tuple(
+            (key, vars(ctx).get(key))
+            for key in (
+                "store",
+                "identity",
+                "bridge",
+                "reads",
+                "authorize",
+                "clock",
+                "direct_send_deps",
+                "prompt_store",
+                "read_worker_budget",
+                "readiness_generation",
+            )
+        )
+        current = work._context_current()
+        with work._mutex:
+            work._live_locked(current)
+            work._carriers = carriers
+        for component in carriers:
+            if component is not None and component is not ctx.direct_send_deps:
+                vars(component)["_fixture_work"] = work
+        if not work._context_current():
+            work.request_stop(_WorkRefusedError())
+            raise _WorkRefusedError
+        work._component_bind_complete = True
+
+    def _bind_fixture_listener(self, slot: object) -> None:
+        """One private issued binding; never import a fixture helper or acquire a listener."""
+        if self._fixture_binding_attempted:
+            self._fixture_binding_failed = True
+            raise RuntimeError("FIXTURE_BINDING_CONSUMED")
+        self._fixture_binding_attempted = True
+        try:
+            if type(self) is not HmpAdapter:
+                raise RuntimeError("FIXTURE_ADAPTER_TYPE_CHANGED")
+            if self._server is not None or self._fixture_listener_binding is not None:
+                raise RuntimeError("FIXTURE_ADAPTER_ALREADY_ACTIVE")
+            owner, binding, context = _fixture_binding_parts(self, slot, accepted=False)
+            # The exact source-owned hook runs only in the delegate's guarded callback.
+            # Its None return and local identities supply no runtime/FD authority certificate.
+            result = owner.accept_adapter_binding(slot, self)
+            after_owner, after_binding, after_context = _fixture_binding_parts(
+                self, slot, accepted=True
+            )
+            if (result is not None or self._fixture_binding_failed or after_owner is not owner
+                    or after_binding is not binding
+                    or any(left is not right for left, right in zip(
+                        context, after_context, strict=True
+                    ))):
+                raise RuntimeError("FIXTURE_BINDING_CHANGED")
+            self._fixture_listener_binding = (slot, owner, binding, context)
+        except BaseException:
+            self._fixture_binding_failed = True
+            raise
 
     @staticmethod
     def _health_snapshot(
@@ -665,6 +1328,36 @@ class HmpAdapter(BasePlatformAdapter):
 
     async def connect(self, *, is_reconnect: bool = False) -> bool:
         """Run the compat gate, then start the TLS listener (server-modules.md "Startup order")."""
+        if self._fixture_binding_attempted or self._fixture_listener_binding is not None:
+            retained = self._fixture_listener_binding
+            if self._fixture_binding_failed or retained is None:
+                raise RuntimeError("FIXTURE_BINDING_UNAVAILABLE")
+            _slot, _owner, binding, saved_context = retained
+            context = vars(binding)
+            if any(context.get(name) is not saved for name, saved in zip(
+                _FIXTURE_CONTEXT_FIELDS, saved_context, strict=True
+            )):
+                raise RuntimeError("FIXTURE_CONTEXT_CHANGED")
+            if self.config is not context["config"]:
+                raise RuntimeError("FIXTURE_CONFIG_CHANGED")
+            runner = context["runner"]
+            if getattr(self, "gateway_runner", None) is not runner:
+                raise RuntimeError("FIXTURE_RUNNER_CHANGED")
+            session_store = vars(runner).get("session_store")
+            if session_store is None or getattr(self, "_session_store", None) is not session_store:
+                raise RuntimeError("FIXTURE_SESSION_WIRING_CHANGED")
+            alias = _fixture_listener_alias(_owner, binding)
+            if is_reconnect or self._fixture_lifecycle is not None:
+                self._fixture_binding_failed = True
+                failure = RuntimeError("FIXTURE_LIFECYCLE_CONSUMED")
+                if self._fixture_lifecycle is not None:
+                    self._fixture_lifecycle.request_stop(failure)
+                else:
+                    alias.poison(failure)
+                raise failure
+            lifecycle = _FixtureLifecycle(self, alias)
+            self._fixture_lifecycle = lifecycle
+            return await lifecycle.connect()
         if self._server is not None:
             return True
         try:
@@ -754,6 +1447,60 @@ class HmpAdapter(BasePlatformAdapter):
         never itself change what this key sees as "the same served set"."""
         return tuple(sorted(name for name, _display in profiles or ()))
 
+    def _fixture_publish_initial(self, scope: _ServingResources) -> None:
+        scope.check()
+        srv = scope.server
+        if srv is not self._server or srv.bound is None or scope.publication is None:
+            raise _WorkRefusedError
+        profiles = None
+        if srv.ctx.bridge is not None:
+            _publication(self)
+            profiles = [(p, _fallback_display_name(p)) for p in srv.ctx.bridge.served_profiles()]
+        _publication(self)
+        health = self._health_snapshot(srv.ctx, profiles) if profiles is not None else None
+        _publication(self)
+        with self._record_lock:
+            cli.write_listener_record(
+                self._record, host=srv.bound[0], port=srv.bound[1], iid=srv.ctx.iid,
+                nonce=self._nonce, profiles=profiles,
+                health_checked_at=int(time.time()) if health is not None else None,
+                health=health, _fixture_owner=scope.publication,
+            )
+            _publication(self)
+            self._known_profiles = tuple(profiles) if profiles is not None else None
+
+    def _fixture_sync_refresh(
+        self, scope: _ServingResources, served: Iterable[str], *, refresh_health: bool,
+    ) -> None:
+        scope.check()
+        srv = self._server
+        if (srv is not scope.server or srv is None or srv.bound is None
+                or scope.publication is None or self._record is not scope.publication.path
+                or self._nonce != scope.publication.nonce):
+            raise _WorkRefusedError
+        profiles = [(p, _fallback_display_name(p)) for p in served]
+        _publication(self)
+        if not refresh_health and self._profile_names_key(profiles) == self._profile_names_key(
+            self._known_profiles
+        ):
+            return
+        health = self._health_snapshot(srv.ctx, profiles)
+        _publication(self)
+        with self._record_lock:
+            scope.check()
+            if not refresh_health and self._profile_names_key(profiles) == self._profile_names_key(
+                self._known_profiles
+            ):
+                return
+            cli.write_listener_record(
+                self._record, host=srv.bound[0], port=srv.bound[1], iid=srv.ctx.iid,
+                nonce=self._nonce, profiles=profiles, health_checked_at=int(time.time()),
+                health=health, _fixture_owner=scope.publication,
+            )
+            _publication(self)
+            self._known_profiles = tuple(profiles)
+
+
     def _sync_refresh(self, served: Iterable[str], *, refresh_health: bool = False) -> None:
         """The one place that compares and, on a change, rewrites the record. Synchronous and
         blocking (file I/O) by design: `Reads.roster`/`Authorize.authorize` already call this from
@@ -764,6 +1511,9 @@ class HmpAdapter(BasePlatformAdapter):
         because nothing was written (the comparison short-circuited) or because
         `cli.write_listener_record`'s own atomic temp-file-then-`rename` never replaced the real
         path (it fails before that point, or not at all)."""
+        scope = _resources(self)
+        if scope is not None:
+            return self._fixture_sync_refresh(scope, served, refresh_health=refresh_health)
         srv = self._server
         if srv is None or self._record is None or self._nonce is None:
             return  # disconnected (or never fully connected) since this was scheduled/called
@@ -775,9 +1525,8 @@ class HmpAdapter(BasePlatformAdapter):
         except Exception:
             log_event("listener_record_profiles", outcome="refresh_failed")
             return
-        if (
-            not refresh_health
-            and self._profile_names_key(profiles) == self._profile_names_key(self._known_profiles)
+        if not refresh_health and self._profile_names_key(profiles) == self._profile_names_key(
+            self._known_profiles
         ):
             return  # the periodic tick handles flag/key changes on an unchanged roster
         try:
@@ -785,12 +1534,11 @@ class HmpAdapter(BasePlatformAdapter):
             with self._record_lock:
                 if self._server is not srv or self._record is None:
                     return  # disconnect won the race; never recreate a stale record
-                if (
-                    not refresh_health
-                    and self._profile_names_key(profiles)
-                    == self._profile_names_key(self._known_profiles)
-                ):
+                if not refresh_health and self._profile_names_key(
+                    profiles
+                ) == self._profile_names_key(self._known_profiles):
                     return  # an unchanged opportunistic read need not rewrite
+                _publication(self)
                 cli.write_listener_record(
                     self._record,
                     host=bound[0],
@@ -831,11 +1579,13 @@ class HmpAdapter(BasePlatformAdapter):
             if srv is None or srv.ctx.bridge is None:
                 return
             try:
-                served = await asyncio.to_thread(srv.ctx.bridge.served_profiles)
+                served = await _worker(self, _WorkSite.CW007, srv.ctx.bridge.served_profiles)
             except Exception:
                 log_event("listener_record_profiles", outcome="refresh_failed")
             else:
-                await asyncio.to_thread(self._sync_refresh, served, refresh_health=True)
+                await _worker(
+                    self, _WorkSite.CW008, self._sync_refresh, served, refresh_health=True
+                )
             await asyncio.sleep(PROFILE_REFRESH_INTERVAL_S)
 
     async def _cancel_profile_refresh(self) -> None:
@@ -847,6 +1597,8 @@ class HmpAdapter(BasePlatformAdapter):
             await task
 
     def _drop_record(self) -> None:
+        if self._fixture_work is not None:
+            raise _WorkRefusedError
         with self._record_lock:
             record, self._record = self._record, None
             self._nonce = None
@@ -855,6 +1607,9 @@ class HmpAdapter(BasePlatformAdapter):
                 cli.remove_listener_record(record)
 
     def _listener_closed(self) -> None:
+        if self._fixture_lifecycle is not None:
+            self._fixture_lifecycle.request_stop(RuntimeError("FIXTURE_LISTENER_CLOSED"))
+            return
         srv, self._server = self._server, None
         if srv is None:
             return
@@ -872,6 +1627,10 @@ class HmpAdapter(BasePlatformAdapter):
         self._set_fatal_error(IDENTITY_CHANGED_CODE, IDENTITY_CHANGED_MESSAGE, retryable=False)
 
     async def disconnect(self) -> None:
+        if self._fixture_lifecycle is not None:
+            self._fixture_lifecycle.request_stop(RuntimeError("FIXTURE_DISCONNECT"))
+            await self._fixture_lifecycle.wait_stopped()
+            return
         await self._cancel_profile_refresh()
         srv, self._server = self._server, None
         self._drop_record()
@@ -904,9 +1663,10 @@ class HmpAdapter(BasePlatformAdapter):
 
     def note_inert_reply(self, chat_id: str) -> None:
         """The P6 trigger's outbound reply is still dropped (PR6-2)."""
-        hooks = self._hooks()
-        if hooks is not None:
-            hooks.note_inert(chat_id)
+        with _Ingress(self, _WorkSite.NATIVE_INERT):
+            hooks = self._hooks()
+            if hooks is not None:
+                hooks.note_inert(chat_id)
 
     async def send(
         self,
@@ -917,21 +1677,28 @@ class HmpAdapter(BasePlatformAdapter):
     ) -> SendResult:
         """Phone-chat replies create bounded observations. The inert-trigger reply does not.
         Nothing here is logged (PR6-2, SEC-4)."""
-        hooks = self._hooks()
-        if hooks is None:
+        with _Ingress(self, _WorkSite.NATIVE_SEND):
+            hooks = self._hooks()
+            if hooks is None:
+                _publication(self)
+                return SendResult(success=True)
+            await _await_publication(self, hooks.reconcile_chat(chat_id))
+            _publication(self)
+            hooks.on_send(chat_id, content, reply_to, metadata)
+            _publication(self)
             return SendResult(success=True)
-        await hooks.reconcile_chat(chat_id)
-        hooks.on_send(chat_id, content, reply_to, metadata)
-        return SendResult(success=True)
 
     async def _send_exec_approval_prompt(self, prompt: Any) -> SendResult:
         """AP-6 / §3.3. An exact match becomes a card; ambiguous entries get deny-only recovery.
         Unbound text cannot become an approval answer."""
-        hooks = self._hooks()
-        if hooks is None:
-            return SendResult(success=False)
-        stored = await hooks.on_exec_approval(prompt)
-        return SendResult(success=stored)
+        with _Ingress(self, _WorkSite.NATIVE_APPROVAL):
+            hooks = self._hooks()
+            if hooks is None:
+                _publication(self)
+                return SendResult(success=False)
+            stored = await _await_publication(self, hooks.on_exec_approval(prompt))
+            _publication(self)
+            return SendResult(success=stored)
 
     async def send_clarify(
         self,
@@ -943,26 +1710,33 @@ class HmpAdapter(BasePlatformAdapter):
         metadata: dict[str, Any] | None = None,
     ) -> SendResult:
         """Phone-chat clarify card. Does not call the base numbered-list implementation."""
-        del metadata
-        hooks = self._hooks()
-        if hooks is None:
-            return SendResult(success=False)
-        offered = [choice for choice in choices if isinstance(choice, str)] if choices else None
-        stored = await hooks.on_clarify(
-            chat_id=chat_id,
-            question=question,
-            choices=offered,
-            clarify_id=clarify_id,
-            session_key=session_key,
-        )
-        return SendResult(success=stored)
+        with _Ingress(self, _WorkSite.NATIVE_CLARIFY):
+            del metadata
+            hooks = self._hooks()
+            if hooks is None:
+                _publication(self)
+                return SendResult(success=False)
+            offered = [choice for choice in choices if isinstance(choice, str)] if choices else None
+            stored = await _await_publication(
+                self,
+                hooks.on_clarify(
+                    chat_id=chat_id,
+                    question=question,
+                    choices=offered,
+                    clarify_id=clarify_id,
+                    session_key=session_key,
+                ),
+            )
+            _publication(self)
+            return SendResult(success=stored)
 
     async def retire_clarify_card(self, clarify_id: str, notice: str | None = None) -> None:
         """The wait ended with no answer. The next poll omits the card. `notice` is not logged."""
-        del notice
-        hooks = self._hooks()
-        if hooks is not None:
-            hooks.retire(clarify_id)
+        with _Ingress(self, _WorkSite.NATIVE_RETIRE):
+            del notice
+            hooks = self._hooks()
+            if hooks is not None:
+                hooks.retire(clarify_id)
 
     async def get_chat_info(self, chat_id: str) -> dict[str, Any]:
         del chat_id

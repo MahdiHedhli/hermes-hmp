@@ -82,6 +82,8 @@ server/
     gate.py                       # GU-2/GU-4 guarantee derivation + write gate (implemented, unused by F1 routes)
     server.py                     # aiohttp app, route table (F1 subset), middlewares: peer policy (TR-4),
                                   #   size limits, rate limits (TR-6), error shaping (ERR-1), compat refusal (ERR-2a)
+    fixture_work.py               # Fixture S1: retained task/worker/ingress mechanics; real issuer and serving unbound.
+                                  #   No production callsite uses it in S1; no native/process closure certification.
     readiness.py                  # v1.6 AR1: fixed closed readiness DTO mapping only; no authority or I/O
     controls_requests.py          # AR1 ControlsRequestStore: bounded exact-origin request/CAS SQL only
                                   #   through Store.transaction(); no independent connection or writer;

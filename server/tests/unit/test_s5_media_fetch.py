@@ -2424,23 +2424,52 @@ def test_the_orchestrator_has_no_module_level_service_executor_or_per_request_im
                     assert node.id not in {"importlib", "__import__", "sys", "os", "open", "Path"}
 
 
-def test_the_final_section_is_synchronous_and_every_await_is_enumerated() -> None:
+def _assert_media_awaits(source: str) -> None:
     import ast
 
-    tree = ast.parse((PACKAGE / "media_fetch.py").read_text(encoding="utf-8"))
+    tree = ast.parse(source)
     final = next(n for n in tree.body if getattr(n, "name", "") == "_final_section")
     assert isinstance(final, ast.FunctionDef)  # a plain function: it cannot await
     assert not [n for n in ast.walk(final) if isinstance(n, ast.Await)]
     serve = next(n for n in tree.body if getattr(n, "name", "") == "serve")
-    awaits = [
-        ast.unparse(n.value).split("(")[0] for n in ast.walk(serve) if isinstance(n, ast.Await)
-    ]
-    assert sorted(awaits) == sorted(["asyncio.to_thread", "_wait", "_wait", "_stream"])
+    awaits = [ast.unparse(n.value) for n in ast.walk(serve) if isinstance(n, ast.Await)]
+    # Enumerate full arguments, exact source context and site, not just wrapper names.
+    assert sorted(awaits) == sorted([
+        "_worker(ctx, _WorkSite.CW052, require_bot_authorized, bridge, who.user_id, profile)",
+        "_await_publication(context(request), _wait(future, deadline))",
+        "_await_publication(context(request), _wait(future, deadline))",
+        "_await_publication(context(request), _stream(request, response, payload))",
+    ])
     stream = next(n for n in tree.body if getattr(n, "name", "") == "_stream")
-    inner = [
-        ast.unparse(n.value).split("(")[0] for n in ast.walk(stream) if isinstance(n, ast.Await)
-    ]
-    assert sorted(inner) == sorted(["response.prepare", "response.write", "response.write_eof"])
+    inner = [ast.unparse(n.value) for n in ast.walk(stream) if isinstance(n, ast.Await)]
+    assert sorted(inner) == sorted([
+        "_await_publication(context(request), response.prepare(request))",
+        "_await_publication(context(request), "
+        "response.write(data[start:start + STREAM_SLICE_BYTES]))",
+        "_await_publication(context(request), response.write_eof())",
+    ])
+
+
+def test_the_final_section_is_synchronous_and_every_await_is_enumerated() -> None:
+    _assert_media_awaits((PACKAGE / "media_fetch.py").read_text(encoding="utf-8"))
+
+
+@pytest.mark.parametrize("old,new", [
+    ("def _final_section(", "async def _final_section("),
+    ("_WorkSite.CW052", "_WorkSite.CW053"),
+    ("_wait(future, deadline)", "_wait(future, other_deadline)"),
+    ("_stream(request, response, payload)", "_stream(request, response, other_payload)"),
+    ("_await_publication(context(request), response.prepare(request))",
+     "response.prepare(request)"),
+    ("response.write_eof()", "response.write_eof(b'extra')"),
+    ("response.write(data[start : start + STREAM_SLICE_BYTES])", "response.write(data)"),
+    ("context(request), _wait", "other_context, _wait"),
+])
+def test_media_await_guard_rejects_unreviewed_boundaries(old: str, new: str) -> None:
+    source = (PACKAGE / "media_fetch.py").read_text(encoding="utf-8")
+    assert old in source
+    with pytest.raises(AssertionError):
+        _assert_media_awaits(source.replace(old, new, 1))
 
 
 def test_the_route_is_always_registered_for_get_only() -> None:

@@ -37,6 +37,8 @@ CONTRACT_MODULES = {
     "mobile_model.py",
     "server.py",
     "readiness.py",
+    # Reviewed S1 retained-work primitives; real issuer/serving stay unbound.
+    "fixture_work.py",
     # AR1 reviewed request Store, authenticated self routes, and read-only host TTY bridge.
     # Closed names also extend the Hermes-free import and optional-media boundary tests.
     "controls_requests.py",

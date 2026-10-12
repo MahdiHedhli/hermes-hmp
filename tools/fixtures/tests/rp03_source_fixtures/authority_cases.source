@@ -1,0 +1,468 @@
+"""Inert coherent state model. Not a runtime authority implementation.
+
+The hook executes before the model's commit. After the hook there are no foreign
+callbacks: exact builtin values validate one bound state and supply its time.
+No thread, socket, TLS, native, database, SDK or live host is used.
+"""
+
+CAUSALS = []
+
+class StateAuthority:
+    def __init__(self):
+        self.expected = {
+            'request': 'request-1', 'actor': 'actor-1', 'profile': 'profile-1',
+            'row': 'row-1', 'ref': 'ref-1', 'owner': 'owner-1',
+            'worker': 7, 'listener': 11, 'cancellation_generation': 3,
+        }
+        self.state = dict(self.expected)
+        self.cancelled = False
+        self.now = 1.0
+        self.deadline = 30.0
+        self.hook = None
+        self.samples = []
+
+    def checkpoint(self, deadline):
+        if self.hook is not None:
+            self.hook()
+        # Model commit: builtin state only, no external calls below this line.
+        if deadline != self.deadline:
+            raise Refused('DEADLINE_BINDING')
+        if self.cancelled:
+            raise Refused('CANCELLED')
+        if self.state != self.expected:
+            raise Refused('OWNER_STALE')
+        now = self.now
+        self.samples.append(now)
+        return now
+
+
+def state_file(parts, *, limit=4, capacity=1 << 20):
+    authority, port, ledger = StateAuthority(), Port(parts), Ledger(capacity)
+    file = BoundedFile(port, ledger, authority=authority,
+                       deadline=30.0, body_limit=limit)
+    response = Strict(AdapterSocket(file), body_limit=limit)
+    return response, port, ledger, file, authority
+
+
+def change_authority(authority, change):
+    if change in authority.state:
+        authority.state[change] = 'changed'
+    elif change == 'cancelled':
+        authority.cancelled = True
+    elif change == 'deadline':
+        authority.now = 30.0
+    elif change == 'regression':
+        authority.now = 0.5
+    else:
+        raise AssertionError(change)
+
+
+def parts_for(framing):
+    if framing == 'content-length':
+        return [b'HTTP/1.1 200 OK\r\nContent-Length: 1\r\n\r\nA']
+    if framing == 'chunked':
+        return [b'HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n1\r\nA\r\n0\r\n\r\n']
+    if framing == 'transport-eof':
+        return [b'HTTP/1.0 200 OK\r\n\r\nA', CLEAN_EOF]
+    if framing == 'zero-length':
+        return [b'HTTP/1.1 200 OK\r\nContent-Length: 0\r\n\r\n']
+    if framing == 'no-body':
+        return [b'HTTP/1.1 204 No Content\r\n\r\n']
+    raise AssertionError(framing)
+
+
+class AuthorityChecks(unittest.TestCase):
+    def terminal(self, response, port, ledger, file):
+        first = file.first_failure
+        self.assertIsNotNone(first)
+        self.assertIsNone(response.completion)
+        before = (ledger.charged, ledger.calls, len(port.requests))
+        for action in (lambda: file.read(0), lambda: file.readinto(bytearray()),
+                       lambda: response.read(0), response.begin):
+            with self.assertRaises(Refused): action()
+            self.assertIs(file.first_failure, first)
+        self.assertEqual(before, (ledger.charged, ledger.calls, len(port.requests)))
+        file.close()
+        file.close()
+        self.assertEqual(port.closes, 1)
+        self.assertIs(file.first_failure, first)
+
+    def test_default_authority_unbound(self):
+        port, ledger = Port([b'A']), Ledger()
+        file = BoundedFile(port, ledger, deadline=30, body_limit=4)
+        with self.assertRaisesRegex(Refused, 'AUTHORITY_UNBOUND'):
+            file.read(1)
+        self.assertEqual(port.requests, [])
+        self.assertEqual(ledger.charged, 0)
+        file.close()
+        self.assertEqual(port.closes, 1)
+        CAUSALS.append({'case': 'default-authority-unbound', 'recv': 0, 'charge': 0})
+
+    def test_mutations_before_effects_and_acceptance(self):
+        changes = tuple(StateAuthority().state) + ('cancelled', 'deadline', 'regression')
+        for site in ('checkpoint', 'reserve', 'recv'):
+            for change in changes:
+                response, port, ledger, file, authority = state_file([b'A'])
+                file.set_mode('body')
+                if site == 'checkpoint':
+                    authority.hook = lambda: change_authority(authority, change)
+                elif site == 'reserve':
+                    reserve0 = ledger.reserve_read
+                    def reserve(count):
+                        reserve0(count)
+                        change_authority(authority, change)
+                    ledger.reserve_read = reserve
+                else:
+                    recv0 = port.recv
+                    def recv(count, timeout):
+                        value = recv0(count, timeout)
+                        change_authority(authority, change)
+                        return value
+                    port.recv = recv
+                target = bytearray(b'z')
+                with self.assertRaises(Refused): file.readinto(target)
+                self.assertEqual(target, b'z')
+                self.assertEqual(len(port.requests), 1 if site == 'recv' else 0)
+                self.assertEqual(ledger.charged, 0 if site == 'checkpoint' else 1)
+                self.assertEqual(file.read_unknown, site == 'recv')
+                CAUSALS.append({'case': site + ':' + change, 'recv': len(port.requests),
+                                'charge': ledger.charged, 'failure': file.first_failure.code,
+                                'readUnknown': file.read_unknown, 'outputUntouched': True})
+                self.terminal(response, port, ledger, file)
+
+    def test_refreshed_timeout_after_reservation(self):
+        response, port, ledger, file, authority = state_file([b'A'])
+        file.set_mode('body')
+        reserve0, recv0 = ledger.reserve_read, port.recv
+        timeouts = []
+        def reserve(count):
+            reserve0(count)
+            authority.now = 29.75
+        def recv(count, timeout):
+            timeouts.append(timeout)
+            return recv0(count, timeout)
+        ledger.reserve_read, port.recv = reserve, recv
+        self.assertEqual(file.read(1), b'A')
+        self.assertEqual(timeouts, [0.25])
+        file.close()
+        CAUSALS.append({'case': 'refreshed-timeout-after-reservation', 'timeouts': timeouts})
+
+    def test_close_mutation_all_completion_modes(self):
+        for framing in ('content-length', 'chunked', 'transport-eof', 'zero-length', 'no-body'):
+            for change in ('owner', 'deadline', 'cancelled'):
+                outputs = ('begin',) if framing in ('zero-length', 'no-body') else ('read', 'readinto')
+                for output in outputs:
+                    response, port, ledger, file, authority = state_file(parts_for(framing))
+                    def close():
+                        port.closes += 1
+                        change_authority(authority, change)
+                    port.close = close
+                    target = bytearray(b'zz')
+                    if output != 'begin': response.begin()
+                    with self.assertRaises(Refused):
+                        if output == 'begin': response.begin()
+                        elif output == 'read': response.read(2)
+                        else: response.readinto(target)
+                    self.assertEqual(target, b'zz')
+                    self.assertIsNone(response.completion)
+                    self.assertEqual(port.closes, 1)
+                    self.assertTrue(file.closed)
+                    self.assertFalse(file.close_unknown)
+                    CAUSALS.append({'case': 'close:' + framing + ':' + change + ':' + output,
+                                    'closes': port.closes, 'closeUnknown': file.close_unknown,
+                                    'outputUntouched': True, 'completion': response.completion})
+                    self.terminal(response, port, ledger, file)
+
+    def test_empty_completion_requires_known_close(self):
+        class Cancel(BaseException): pass
+        for framing in ('zero-length', 'no-body'):
+            for failure in (None, RuntimeError('close'), Cancel()):
+                response, port, ledger, file, authority = state_file(parts_for(framing))
+                def close():
+                    port.closes += 1
+                    self.assertIsNone(response.completion)
+                    if failure is not None: raise failure
+                port.close = close
+                if failure is None:
+                    response.begin()
+                    self.assertEqual(response.completion,
+                                     'content-length' if framing == 'zero-length' else 'no-body')
+                    self.assertTrue(file.closed)
+                    response.close()
+                else:
+                    with self.assertRaises(type(failure)): response.begin()
+                    self.assertTrue(file.close_unknown)
+                    self.assertIs(file.first_failure, failure)
+                    self.assertIsNone(response.completion)
+                    with self.assertRaises(Refused): file.close()
+                self.assertEqual(port.closes, 1)
+                CAUSALS.append({'case': 'empty-close:' + framing + ':' + str(type(failure).__name__),
+                                'closes': port.closes, 'closeUnknown': file.close_unknown})
+
+    def test_completed_reads_and_final_output_checkpoint(self):
+        for output in ('read', 'readinto'):
+            response, port, ledger, file, authority = state_file(parts_for('content-length'))
+            response.begin()
+            self.assertEqual(response.read(1), b'A')
+            authority.cancelled = True
+            target = bytearray(b'z')
+            before = (ledger.charged, len(port.requests))
+            with self.assertRaises(Refused):
+                if output == 'read': response.read(0)
+                else: response.readinto(target)
+            self.assertEqual(target, b'z')
+            self.assertIsNone(response.completion)
+            self.assertEqual(before, (ledger.charged, len(port.requests)))
+            CAUSALS.append({'case': 'completed-read-authority:' + output, 'outputUntouched': True})
+        # Mutate at the second checkpoint after closed: the first accepts
+        # close, the second is the final output/completion checkpoint.
+        for output in ('read', 'readinto'):
+            response, port, ledger, file, authority = state_file(parts_for('content-length'))
+            response.begin()
+            closed_checks = []
+            def hook():
+                if file.closed:
+                    self.assertIsNone(response.completion)
+                    closed_checks.append(True)
+                    if len(closed_checks) == 2: authority.cancelled = True
+            authority.hook = hook
+            target = bytearray(b'z')
+            with self.assertRaisesRegex(Refused, 'CANCELLED'):
+                if output == 'read': response.read(1)
+                else: response.readinto(target)
+            self.assertEqual(target, b'z')
+            self.assertIsNone(response.completion)
+            CAUSALS.append({'case': 'final-output-authority:' + output, 'outputUntouched': True})
+
+    def test_no_foreign_callback_after_readinto_copy(self):
+        for framing in ('content-length', 'chunked', 'transport-eof'):
+            response, port, ledger, file, authority = state_file(parts_for(framing))
+            response.begin()
+            target = bytearray(b'zz')
+            def hook(): self.assertEqual(target, b'zz')
+            authority.hook = hook
+            self.assertEqual(response.readinto(target), 1)
+            self.assertEqual(target, b'Az')
+            self.assertEqual(response.completion, framing)
+            CAUSALS.append({'case': 'no-callback-after-copy:' + framing, 'body': 1})
+
+    def test_coherent_partial_eof_exact_credit(self):
+        head = b'HTTP/1.0 200 OK\r\n\r\n'
+        for output in ('read', 'readinto'):
+            response, port, ledger, file, authority = state_file(
+                [head + b'A', CLEAN_EOF, b'B'], capacity=len(head) + 3)
+            response.begin()
+            if output == 'read': self.assertEqual(response.read(2), b'A')
+            else:
+                target = bytearray(b'zz')
+                self.assertEqual(response.readinto(target), 1)
+                self.assertEqual(target, b'Az')
+            self.assertEqual(response.completion, 'transport-eof')
+            self.assertEqual(port.closes, 1)
+            before = (ledger.charged, len(port.requests))
+            self.assertEqual(response.read(2), b'')
+            self.assertEqual(before, (ledger.charged, len(port.requests)))
+            self.assertEqual(ledger.charged, len(head) + 3)
+            self.assertEqual(port.parts, [b'B'])
+            CAUSALS.append({'case': 'coherent-partial-eof:' + output,
+                            'capacity': ledger.charged, 'closes': port.closes,
+                            'laterBytesUnread': True})
+
+    def test_invalid_samples_and_binding(self):
+        for value in (True, -1, float('nan'), float('inf'), '1'):
+            response, port, ledger, file, authority = state_file([b'A'])
+            authority.now = value
+            with self.assertRaisesRegex(Refused, 'DEADLINE'): file.read(1)
+            self.assertEqual(port.requests, [])
+            self.assertEqual(ledger.charged, 0)
+            file.close()
+            CAUSALS.append({'case': 'invalid-sample:' + repr(value), 'recv': 0})
+        response, port, ledger, file, authority = state_file([b'A'])
+        authority.deadline = 31
+        with self.assertRaisesRegex(Refused, 'DEADLINE_BINDING'): file.read(1)
+        self.assertEqual(port.requests, [])
+        file.close()
+        CAUSALS.append({'case': 'bound-deadline-mismatch', 'recv': 0})
+
+    def test_reentry_throw_cancel_matrix(self):
+        class Cancel(BaseException): pass
+        faults = ('reader_read', 'reader_readinto', 'reader_line', 'reader_mode',
+                  'reader_close', 'response_read', 'response_readinto', 'response_begin',
+                  'response_close', 'private_completion', 'private_close', 'throw', 'cancel')
+        for site in ('checkpoint', 'reserve', 'recv', 'close'):
+            for fault in faults:
+                for caught in ((False,) if fault in ('throw', 'cancel') else (True, False)):
+                    response, port, ledger, file, authority = state_file(parts_for('content-length'))
+                    response.begin()
+                    failure = RuntimeError('callback') if fault == 'throw' else Cancel()
+                    def action():
+                        if fault in ('throw', 'cancel'): raise failure
+                        methods = {
+                            'reader_read': lambda: file.read(0),
+                            'reader_readinto': lambda: file.readinto(bytearray()),
+                            'reader_line': lambda: file.readline(1),
+                            'reader_mode': lambda: file.set_mode('body'),
+                            'reader_close': file.close,
+                            'response_read': lambda: response.read(0),
+                            'response_readinto': lambda: response.readinto(bytearray()),
+                            'response_begin': response.begin,
+                            'response_close': response.close,
+                            'private_completion': response._mark_completion,
+                            'private_close': response._close_conn,
+                        }
+                        try: methods[fault]()
+                        except Refused:
+                            if not caught: raise
+                        else: raise AssertionError('nested operation accepted')
+                    if site == 'checkpoint': authority.hook = action
+                    elif site == 'reserve':
+                        reserve0 = ledger.reserve_read
+                        def reserve(count):
+                            reserve0(count)
+                            action()
+                        ledger.reserve_read = reserve
+                    elif site == 'recv':
+                        recv0 = port.recv
+                        def recv(count, timeout):
+                            value = recv0(count, timeout)
+                            action()
+                            return value
+                        port.recv = recv
+                    else:
+                        def close():
+                            port.closes += 1
+                            action()
+                        port.close = close
+                    target = bytearray(b'z')
+                    before = (ledger.charged, len(port.requests))
+                    with self.assertRaises(BaseException): response.readinto(target)
+                    self.assertEqual(target, b'z')
+                    self.assertIsNone(response.completion)
+                    self.assertIsNotNone(file.first_failure)
+                    if site in ('checkpoint', 'reserve'):
+                        self.assertEqual(len(port.requests), before[1])
+                    first = file.first_failure
+                    debt = (ledger.charged, len(port.requests))
+                    with self.assertRaises(Refused): response.read(0)
+                    self.assertEqual(debt, (ledger.charged, len(port.requests)))
+                    authority.hook = None
+                    try: file.close()
+                    except Refused: pass
+                    self.assertEqual(port.closes, 1)
+                    self.assertIs(file.first_failure, first)
+                    CAUSALS.append({'case': 'callback:' + site + ':' + fault + ':' + str(caught),
+                                    'closes': port.closes, 'outputUntouched': True,
+                                    'retainedCapacity': ledger.charged,
+                                    'closeUnknown': file.close_unknown})
+
+    def test_reader_terminal_invalidates_prior_completion(self):
+        response, port, ledger, file, authority = state_file(parts_for('content-length'))
+        response.begin()
+        response.read(1)
+        self.assertEqual(response.completion, 'content-length')
+        with self.assertRaises(Refused): file.read(1)
+        self.assertIsNone(response.completion)
+        CAUSALS.append({'case': 'reader-terminal-invalidates-completion', 'completion': None})
+
+    def test_both_tokens_preserved_across_every_callback(self):
+        for site in ('checkpoint', 'reserve', 'recv', 'close'):
+            for token in ('operation', 'response_operation'):
+                response, port, ledger, file, authority = state_file(parts_for('content-length'))
+                response.begin()
+                def change(): setattr(file, token, object())
+                if site == 'checkpoint': authority.hook = change
+                elif site == 'reserve':
+                    reserve0 = ledger.reserve_read
+                    def reserve(count):
+                        reserve0(count)
+                        change()
+                    ledger.reserve_read = reserve
+                elif site == 'recv':
+                    recv0 = port.recv
+                    def recv(count, timeout):
+                        value = recv0(count, timeout)
+                        change()
+                        return value
+                    port.recv = recv
+                else:
+                    def close():
+                        port.closes += 1
+                        change()
+                    port.close = close
+                target = bytearray(b'z')
+                with self.assertRaises(Refused): response.readinto(target)
+                self.assertEqual(target, b'z')
+                self.assertIsNone(response.completion)
+                self.assertIsNotNone(file.first_failure)
+                # Tampered tokens may retain custody; this test never fabricates
+                # a reset to force cleanup. No IO/output is accepted afterward.
+                before = (ledger.charged, len(port.requests), port.closes)
+                with self.assertRaises(Refused): response.read(0)
+                self.assertEqual(before, (ledger.charged, len(port.requests), port.closes))
+                CAUSALS.append({'case': 'token-replaced:' + site + ':' + token,
+                                'outputUntouched': True, 'recv': len(port.requests),
+                                'closes': port.closes})
+                # Inert fixture teardown only: mark the Python IOBase shell
+                # closed so its destructor does not retry a poisoned token.
+                # This never closes the port or claims resolved custody.
+                http.io.IOBase.close(response)
+
+    def test_close_exception_and_cancel_all_body_modes(self):
+        class Cancel(BaseException): pass
+        for framing in ('content-length', 'chunked', 'transport-eof'):
+            for output in ('read', 'readinto'):
+                for exception_type in (RuntimeError, Cancel):
+                    response, port, ledger, file, authority = state_file(parts_for(framing))
+                    response.begin()
+                    failure = exception_type()
+                    def close():
+                        port.closes += 1
+                        raise failure
+                    port.close = close
+                    target = bytearray(b'zz')
+                    with self.assertRaises(exception_type):
+                        if output == 'read': response.read(2)
+                        else: response.readinto(target)
+                    self.assertEqual(target, b'zz')
+                    self.assertIsNone(response.completion)
+                    self.assertIs(file.first_failure, failure)
+                    self.assertTrue(file.close_unknown)
+                    before = (ledger.charged, len(port.requests))
+                    for operation in (response.close, file.close):
+                        try: operation()
+                        except Refused: pass
+                        self.assertIs(file.first_failure, failure)
+                        self.assertTrue(file.close_unknown)
+                        self.assertIsNone(response.completion)
+                    self.assertEqual(before, (ledger.charged, len(port.requests)))
+                    self.assertEqual(port.closes, 1)
+                    CAUSALS.append({'case': 'close-exception:' + framing + ':' + output + ':' + exception_type.__name__,
+                                    'closes': 1, 'closeUnknown': True, 'outputUntouched': True})
+
+    def test_eof_callback_reentry_and_cancellation(self):
+        class Cancel(BaseException): pass
+        for fault in ('reader', 'response', 'throw', 'cancel'):
+            for caught in ((False,) if fault in ('throw', 'cancel') else (True, False)):
+                response, port, ledger, file, authority = state_file(
+                    [b'HTTP/1.0 200 OK\r\n\r\n', CLEAN_EOF])
+                response.begin()
+                recv0 = port.recv
+                def recv(count, timeout):
+                    value = recv0(count, timeout)
+                    self.assertIs(value, CLEAN_EOF)
+                    if fault == 'throw': raise RuntimeError()
+                    if fault == 'cancel': raise Cancel()
+                    try:
+                        if fault == 'reader': file.read(0)
+                        else: response.read(0)
+                    except Refused:
+                        if not caught: raise
+                    return value
+                port.recv = recv
+                with self.assertRaises(BaseException): response.read(1)
+                self.assertFalse(file.clean_eof)
+                self.assertTrue(file.read_unknown)
+                self.assertIsNone(response.completion)
+                self.terminal(response, port, ledger, file)
+                CAUSALS.append({'case': 'eof-callback:' + fault + ':' + str(caught),
+                                'closes': port.closes, 'readUnknown': True, 'eofAccepted': False})
