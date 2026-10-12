@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import Awaitable, Callable
+from pathlib import Path
 
 from .approval_test_answers import TestAnswers
 from .approval_test_host_codec import HostBeginRequest, HostGeneration
+from .approval_test_host_transport import HostIpcEndpoint
 from .approval_test_operator import OperatorHandler
 from .approval_test_producer import (
     ApprovalTestProducer,
@@ -29,6 +31,8 @@ class TestService:
         admit: Callable[[HostBeginRequest], Awaitable[TargetBinding | None]],
         current: Callable[[TargetBinding], Awaitable[bool]],
     ) -> None:
+        self._generation = generation
+        self._endpoint: HostIpcEndpoint | None = None
         loop = asyncio.get_running_loop()
         self.projection = TestProjection(store, wall_clock=wall_clock, monotonic=loop.time)
         self.producer = ApprovalTestProducer(
@@ -62,6 +66,19 @@ class TestService:
             current=notice_current,
             handle_for=self.operator.handle_for_notice,
         )
+
+    def start(self, listener_record: Path) -> None:
+        if self._endpoint is not None:
+            raise RuntimeError("approval test unavailable")
+        endpoint = HostIpcEndpoint(listener_record, self._generation, self.operator)
+        self._endpoint = endpoint
+        endpoint.start()
+
+    async def close(self) -> None:
+        endpoint = self._endpoint
+        if endpoint is not None and await endpoint.close() is not True:
+            raise RuntimeError("approval test cleanup unavailable")
+        await self.shutdown()
 
     async def shutdown(self) -> None:
         await self.operator.shutdown()
