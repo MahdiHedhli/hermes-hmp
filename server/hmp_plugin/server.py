@@ -1352,11 +1352,19 @@ class _LivePromptResolver:
     A Phone helper that fails at use time (`HelperUnavailableError`, including a rebinding) is
     `unavailable`: nothing is claimed about Hermes's pending request (AP-7a, AP-10)."""
 
-    def __init__(self, ctx: ServerContext, endpoint: Any) -> None:
+    def __init__(self, ctx: ServerContext, endpoint: Any, device_id: str | None = None) -> None:
         self._ctx = ctx
         self._endpoint = endpoint
+        self._device_id = device_id
 
     async def resolve_approval(self, row: Any, choice: str) -> str:
+        if row.target_device_id is not None:
+            service = self._ctx.approval_test_service
+            if service is None or self._device_id is None:
+                return "unavailable"
+            return await _await_publication(
+                self._ctx, service.answers.resolve(row, self._device_id, choice)
+            )
         if row.surface == "bot_chat":
             if self._endpoint is None or not row.run_id:
                 _publication(self._ctx)
@@ -1554,7 +1562,7 @@ async def handle_prompt_answer(request: web.Request) -> web.Response:
             profile=profile,
             request_id=request_id,
             body=body,
-            resolver=_LivePromptResolver(ctx, endpoint),
+            resolver=_LivePromptResolver(ctx, endpoint, who.device_id),
             now=ctx.now(),
             device_id=who.device_id,
         ),

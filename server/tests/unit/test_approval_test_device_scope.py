@@ -55,6 +55,12 @@ def test_authenticated_http_target_scope(tmp_path, monkeypatch) -> None:
     env = Env(tmp_path)
     calls = _setup(env)
     _native(monkeypatch, calls, "accepted")
+    from types import SimpleNamespace
+    synthetic_calls = []
+    async def resolve(row, device, choice):
+        synthetic_calls.append((row, device, choice))
+        return "accepted"
+    env.ctx.approval_test_service = SimpleNamespace(answers=SimpleNamespace(resolve=resolve))
 
     async def scenario(client) -> None:
         target = await pair(env, client)
@@ -75,7 +81,8 @@ def test_authenticated_http_target_scope(tmp_path, monkeypatch) -> None:
             client, f"/bots/{BOT}/prompts/{REQ}", {"choice": "once"}, headers=env.headers(target),
         )
         assert status == 200 and accepted["status"] == "resolved"
-        assert len(calls["native"]) == 1
+        assert calls["native"] == []
+        assert synthetic_calls == [(row, target.device_id, "once")]
 
     run(env, scenario)
 

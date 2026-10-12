@@ -259,6 +259,7 @@ class ServerContext:
     direct_send_deps: Any = None
     # v1.3 prompt rows (process memory). None until a supported listener builds one.
     prompt_store: Any = None
+    approval_test_service: Any = None  # explicit listener-owned service; default inert
     # Approval availability (spec 034, owner policy 2026-10-01): the `approvals` and `phone_chat`
     # eligibility members, computed once at listener open from the actual API checks. Both default
     # CLOSED, so a context built without availability information never opens an approval route.
