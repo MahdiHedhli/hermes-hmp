@@ -54,3 +54,12 @@ def test_device_revoked_during_native_session_lookup_refuses_admission() -> None
         ),
     )
     assert not target_current(ctx, target)
+
+
+def test_target_resolution_refuses_inactive_host_record() -> None:
+    from hmp_plugin.approval_test_authority import target_for_device
+
+    ctx = SimpleNamespace(store=SimpleNamespace(get_device=lambda _: {
+        "state": "REVOKED", "user_id": "synthetic-user",
+    }))
+    assert target_for_device(ctx, "synthetic-device", "default", "synthetic-tip") is None

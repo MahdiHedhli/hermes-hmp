@@ -46,3 +46,19 @@ def target_current(ctx: ServerContext, target: TargetBinding) -> bool:
         )
     except Exception:
         return False
+
+
+def target_for_device(ctx: ServerContext, device_id: str, profile: str,
+                      session_id: str) -> TargetBinding | None:
+    """Resolve user identity from host state, never from operator DATA."""
+    try:
+        device = ctx.store.get_device(device_id)
+        if device is None or device["state"] != "ACTIVE":
+            return None
+        user_id = device["user_id"]
+        if type(user_id) is not str or not user_id:
+            return None
+        target = TargetBinding(ctx.iid, user_id, profile, session_id, device_id)
+        return target if target_current(ctx, target) else None
+    except Exception:
+        return None
