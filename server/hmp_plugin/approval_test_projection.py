@@ -43,6 +43,15 @@ class TestProjection:
         self._owned[notice.request_id] = (notice, row)
         return True
 
+    def owns_notice(self, notice: TestNotice) -> bool:
+        if type(notice) is not TestNotice:
+            return False
+        owned = self._owned.get(notice.request_id)
+        if owned is None or owned[0] is not notice:
+            return False
+        row = owned[1]
+        return self.notice_for_answer(row, notice.device_id) is notice
+
     def notice_for_answer(self, row: PromptRow, device_id: str) -> TestNotice | None:
         """Exact in-memory operation association, never a caller-supplied route key."""
         owned = self._owned.get(row.request_id)

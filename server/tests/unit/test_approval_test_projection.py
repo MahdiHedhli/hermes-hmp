@@ -11,6 +11,8 @@ def test_projection_is_target_scoped_and_cleanup_identity_bound() -> None:
     notice = Notice("synthetic-instance", "synthetic-user", "default", "synthetic-session",
                     "synthetic-device", "synthetic-request", deadline_monotonic=20)
     assert projection.publish(notice)
+    assert projection.owns_notice(notice)
+    assert not projection.owns_notice(replace(notice))
     assert not projection.publish(notice)
     assert not store.list_visible(notice.instance_id, notice.user_id, notice.profile)
     rows = store.list_visible(notice.instance_id, notice.user_id, notice.profile,
@@ -19,6 +21,7 @@ def test_projection_is_target_scoped_and_cleanup_identity_bound() -> None:
     assert rows[0].session_key is None
     assert not projection.remove(replace(notice))
     assert projection.remove(notice)
+    assert not projection.owns_notice(notice)
     assert not store.list_visible(notice.instance_id, notice.user_id, notice.profile,
                                   device_id=notice.device_id)
     assert projection.remove(notice)
