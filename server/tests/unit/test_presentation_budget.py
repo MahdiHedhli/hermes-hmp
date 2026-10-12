@@ -127,3 +127,19 @@ def test_missing_extra_and_invalid_parent_geometry_are_refused():
     counts["unknown"] = 0
     with pytest.raises(PresentationBudgetError):
         PresentationWorkLedger.validate_parent_counts("/srv/hermes", counts)
+
+
+def test_home_scalar_ceiling_precedes_encoding_allocation():
+    import tracemalloc
+
+    home = "/" + "x" * 2_000_000
+    assert not tracemalloc.is_tracing()
+    tracemalloc.start()
+    try:
+        with pytest.raises(PresentationBudgetError):
+            PresentationWorkLedger.validate_parent_counts(home, parent_counts())
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    # The old split/encode path allocated copies of the multi-megabyte home.
+    assert peak < 500_000

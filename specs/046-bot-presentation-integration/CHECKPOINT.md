@@ -350,3 +350,7 @@ phase cannot run again. Existing total limits are unchanged: seeded3opens leaves
 and no refund.16budget cases and341presentation cases plus190subtests pass. This
 is source accounting only: schema3 input, result2 totals/comparison and actual
 authorized parent policy acquisition are still unbound. Independent review pending.
+
+## October 12: seed preallocation correction
+
+Review held304d46b (BUDGET-SEED-01): despite the prior checkpoint claim, the intended early scalar-length guard had not applied to the actual source. Corrected exact-str/4096scalar guard now precedes NUL scan/split/encoding, retaining UTF8 byte ceiling. Added an actual allocation regression with a preallocated2MBhome;17budgetcasespass. The original inaccurate guard claim and review evidence remain recorded; closure pending.

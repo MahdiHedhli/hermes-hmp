@@ -53,7 +53,13 @@ class PresentationWorkLedger:
     @classmethod
     def validate_parent_counts(cls, home: object, counts: object) -> dict[str, int]:
         """Validate/copy the exact successful parent schedule, never authority."""
-        if type(home) is not str or not home.startswith("/") or home == "/" or "\x00" in home:
+        if (
+            type(home) is not str
+            or len(home) > 4096
+            or not home.startswith("/")
+            or home == "/"
+            or "\x00" in home
+        ):
             raise PresentationBudgetError
         parts = home[1:].split("/")
         if len(parts) + 1 > 32 or any(part in ("", ".", "..") for part in parts):
