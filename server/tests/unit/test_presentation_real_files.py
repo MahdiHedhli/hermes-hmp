@@ -1103,3 +1103,71 @@ def test_parent_stat_failure_is_closed_and_retains_original_privately(scope):
     assert str(captured.value) == "BI1_PARENT_READ_REFUSED"
     assert isinstance(owner._failure, OSError)
     assert owner.descriptors_closed
+
+
+def test_actual_parent_policy_and_child_result_preserve_counts_and_directory_chain(scope):
+    import io
+
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_input_v3 import encode_input_v3
+    from hmp_plugin.presentation_jobs import FrameError
+    from hmp_plugin.presentation_output_v2 import BoundedResultBufferV2, compare_parent_snapshot
+    from hmp_plugin.presentation_parent_policy import ParentPolicyReadOwner
+    from hmp_plugin.presentation_worker import process_child_stream_v3
+
+    _, bound = scope
+    parent = ParentPolicyReadOwner(
+        root=bound.root_path,
+        home=bound.home_path,
+        profile="default",
+        uid=os.geteuid(),
+        gid=os.getegid(),
+        ledger=PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline),
+        fs=TrackedOS(),
+        current=lambda: True,
+    )
+    snapshot = parent.run()
+    assert parent.descriptors_closed
+    row = {
+        "schema": 3,
+        "challenge": bound.challenge,
+        "epoch": 1,
+        "profile": "default",
+        "root": bound.root_path,
+        "home": bound.home_path,
+        "operation": "METADATA",
+        "expected_avatar_sha": None,
+        "uid": bound.service_uid,
+        "gid": bound.service_gid,
+        "dir_modes": [448, 488, 493],
+        "leaf_modes": [384, 416, 420],
+        "source_manifest_sha": bound.source_manifest_sha256,
+        "deadline_ns": int(bound.deadline * 1_000_000_000),
+        "directory_policy": [[r.uid, r.gid, r.modes[0]] for r in snapshot.rules],
+        "iid": "a" * 52,
+        "canonical_fallback": "Hermes",
+        "observed_at": 100,
+        "parent_work_counts": dict(snapshot.counts),
+    }
+    output = io.BytesIO()
+    process_child_stream_v3(
+        io.BytesIO(encode_input_v3(row) + bound.challenge.encode() + b"\n"),
+        output,
+        fs=TrackedOS(),
+        clock=time.monotonic,
+        deadline=bound.deadline + 0.1,
+        effective_uid=os.geteuid(),
+        effective_gid=os.getegid(),
+    )
+    buffer = BoundedResultBufferV2()
+    data = output.getvalue()
+    for offset in range(0, len(data), 17):
+        buffer.feed(data[offset : offset + 17])
+    header, body = buffer.finish(bound.challenge, 1)
+    totals = compare_parent_snapshot(header, snapshot=snapshot, parent_home=bound.home_path)
+    assert totals["opens"] > snapshot.counts["opens"] and body == b""
+    assert header["fields"]["display_name"] == "Synthetic"
+    header["chain"][-1][1] += 1
+    with pytest.raises(FrameError):
+        compare_parent_snapshot(header, snapshot=snapshot, parent_home=bound.home_path)
+    # Synthetic IO composition only: no native grant, thread join or live route proof.

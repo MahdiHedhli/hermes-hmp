@@ -379,3 +379,14 @@ pass, including current refusal with0opens, unsafe home cleanup and lost close
 acknowledgement/no replay. Native admission/authorization and actual thread join
 are NOT proved by run completion; no one-use transfer/native binding yet.
 Independent policy-owner review pending.
+
+## October 12: bounded result2 parent comparison
+
+Added version2-only streaming result buffer with bounded prefix/body handling,
+one-use finish and terminal malformed-frame state. Parent snapshot comparison
+requires the exact retained directory chain plus full conserved totals; counters
+and typed snapshots remain processing observations, not grant/thread/custody proof.
+Actual synthetic parent directory IO now feeds input3 child processing and a
+chunked result2 consumer; changed child inode is refused.47result/real-file cases
+pass. JobOwner consumption/native binding/hard termination are still open.
+Independent bounded receiver/comparison review pending.

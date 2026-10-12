@@ -113,3 +113,32 @@ def test_wrong_job_and_trailing_body_cannot_bind():
 def test_expected_epoch_binding_is_exact_integer(epoch):
     with pytest.raises(FrameError):
         decode_output_v2(encode_output_v2(header(), b""), "a" * 64, epoch)
+
+
+def test_stream_buffer_accepts_split_prefix_and_cannot_be_reused():
+    from hmp_plugin.presentation_output_v2 import BoundedResultBufferV2
+
+    wire = encode_output_v2(header(), b"")
+    buffer = BoundedResultBufferV2()
+    for byte in wire:
+        buffer.feed(bytes([byte]))
+    assert buffer.finish("a" * 64, 1) == (header(), b"")
+    with pytest.raises(FrameError):
+        buffer.finish("a" * 64, 1)
+    with pytest.raises(FrameError):
+        buffer.feed(b"x")
+
+
+def test_stream_buffer_refuses_oversize_prefix_and_extra_body_then_stays_terminal():
+    import struct
+
+    from hmp_plugin.presentation_output_v2 import BoundedResultBufferV2
+
+    for packet in (struct.pack(">I", 8193), encode_output_v2(header(), b"") + b"extra"):
+        buffer = BoundedResultBufferV2()
+        with pytest.raises(FrameError):
+            buffer.feed(packet)
+        with pytest.raises(FrameError):
+            buffer.feed(b"x")
+        buffer.wipe()
+        assert buffer._buffer == b""

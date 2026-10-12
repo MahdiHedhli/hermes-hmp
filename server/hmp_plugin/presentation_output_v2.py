@@ -92,3 +92,75 @@ def decode_output_v2(wire: bytes, challenge: str, epoch: int) -> tuple[dict[str,
     ):
         raise FrameError("BI1_OUTPUT_V2_REFUSED")
     return row, avatar
+
+
+class BoundedResultBufferV2:
+    """One version2 result only; bound declared length before body accumulation."""
+
+    def __init__(self):
+        self._buffer = bytearray()
+        self._header_size: int | None = None
+        self._body_size: int | None = None
+        self._done = False
+
+    def feed(self, chunk: bytes) -> None:
+        if self._done or type(chunk) is not bytes or not 0 < len(chunk) <= 65536:
+            self._done = True
+            raise FrameError("BI1_OUTPUT_V2_REFUSED")
+        if len(self._buffer) + len(chunk) > OUTPUT_LIMIT:
+            self._done = True
+            raise FrameError("BI1_OUTPUT_V2_REFUSED")
+        try:
+            self._buffer.extend(chunk)
+            if len(self._buffer) >= 4 and self._header_size is None:
+                self._header_size = struct.unpack(">I", self._buffer[:4])[0]
+                if self._header_size > HEADER_LIMIT:
+                    raise FrameError("BI1_OUTPUT_V2_REFUSED")
+            if self._header_size is not None and len(self._buffer) >= 4 + self._header_size:
+                if self._body_size is None:
+                    row = validate_header_v2(
+                        _json(bytes(self._buffer[4 : 4 + self._header_size]), HEADER_LIMIT)
+                    )
+                    self._body_size = row["avatar_length"]
+                if len(self._buffer) > 4 + self._header_size + self._body_size:
+                    raise FrameError("BI1_OUTPUT_V2_REFUSED")
+        except BaseException:
+            self._done = True
+            raise
+
+    def finish(self, challenge: str, epoch: int) -> tuple[dict[str, object], bytes]:
+        if self._done:
+            raise FrameError("BI1_OUTPUT_V2_REFUSED")
+        self._done = True
+        return decode_output_v2(bytes(self._buffer), challenge, epoch)
+
+    def wipe(self) -> None:
+        self._buffer[:] = b"\x00" * len(self._buffer)
+        self._buffer.clear()
+        self._done = True
+
+
+def compare_parent_snapshot(
+    header: object, *, snapshot: object, parent_home: str
+) -> dict[str, int]:
+    from .presentation_parent_policy import ParentPolicySnapshot
+
+    if type(snapshot) is not ParentPolicySnapshot:
+        raise FrameError("BI1_OUTPUT_PARENT_REFUSED")
+    totals = compare_parent_totals(
+        header, parent_home=parent_home, parent_counts=dict(snapshot.counts)
+    )
+    row = validate_header_v2(header)
+    expected = snapshot.chain
+    if type(expected) is not tuple or not expected or len(expected) != snapshot.counts["opens"]:
+        raise FrameError("BI1_OUTPUT_PARENT_REFUSED")
+    for item in expected:
+        if (
+            type(item) is not tuple
+            or len(item) != 9
+            or any(type(v) is not int or not 0 <= v < 1 << 63 for v in item)
+        ):
+            raise FrameError("BI1_OUTPUT_PARENT_REFUSED")
+    if tuple(tuple(item) for item in row["chain"]) != expected:
+        raise FrameError("BI1_OUTPUT_PARENT_REFUSED")
+    return totals
