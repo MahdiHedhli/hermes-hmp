@@ -1,0 +1,71 @@
+"""Listener-owned operator lifecycle; construction confers no admission authority."""
+from __future__ import annotations
+
+import asyncio
+import secrets
+from collections.abc import AsyncGenerator, Awaitable, Callable
+
+from .approval_test_host_codec import HostBeginRequest, HostGeneration, HostResponse
+from .approval_test_producer import ApprovalTestProducer, TargetBinding, TestStatus
+
+
+class OperatorHandler:
+    def __init__(self, generation: HostGeneration, producer: ApprovalTestProducer, *,
+                 admit: Callable[[HostBeginRequest], Awaitable[TargetBinding | None]]) -> None:
+        self._generation = generation
+        self._producer = producer
+        self._admit = admit
+        self._active: tuple[HostBeginRequest, str, TargetBinding] | None = None
+        self._closing = False
+
+    async def _join(self, handle: str, target: TargetBinding) -> None:
+        while True:
+            outcome = await self._producer.wait_outcome(handle, target.device_id, timeout=1)
+            if outcome.status not in (TestStatus.PENDING, TestStatus.CLEANUP_PENDING):
+                return
+
+    async def responses(self, request) -> AsyncGenerator[HostResponse, None]:
+        if (self._closing or type(request) is not HostBeginRequest
+                or request.generation != self._generation or self._active is not None):
+            yield HostResponse("unavailable")
+            return
+        target = await self._admit(request)
+        if target is None or self._closing or self._active is not None:
+            yield HostResponse("unavailable")
+            return
+        handle = await self._producer.begin_test(target, request.timeout_ms)
+        if type(handle) is not str:
+            yield HostResponse("unavailable")
+            return
+        self._active = (request, handle, target)
+        operation_id = secrets.token_hex(16)
+        try:
+            yield HostResponse("accepted", operation_id=operation_id, timeout_ms=request.timeout_ms)
+            await self._join(handle, target)
+            outcome = await self._producer.outcome(handle, target.device_id)
+            yield HostResponse("completed", operation_id=operation_id, state=outcome.status.value)
+        finally:
+            await self._producer.cancel_test(handle, target.device_id)
+            cleanup = asyncio.create_task(self._join(handle, target))
+            cancelled = False
+            while not cleanup.done():
+                try:
+                    await asyncio.shield(cleanup)
+                except asyncio.CancelledError:
+                    cancelled = True
+            cleanup.result()
+            self._active = None
+            if cancelled:
+                raise asyncio.CancelledError
+
+    async def write_failed(self, request: HostBeginRequest) -> None:
+        active = self._active
+        if active is not None and active[0] is request:
+            await self._producer.cancel_test(active[1], active[2].device_id)
+
+    async def shutdown(self) -> None:
+        self._closing = True
+        active = self._active
+        if active is not None:
+            await self._producer.cancel_test(active[1], active[2].device_id)
+            await self._join(active[1], active[2])

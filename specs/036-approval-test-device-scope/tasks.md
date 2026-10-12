@@ -11,3 +11,6 @@
 
 - [x] Add read-only device/owner/bot/canonical-tip admission predicate; fourteen focused authority/coordinator tests pass.
 - [ ] Add current listener generation, API endpoint/write gate and active-family checks at production admission; the predicate alone does not authorize invocation.
+
+- [x] Begin operator-handler source and refusal test; inert/unregistered.
+- [ ] Complete status/cancel operations, accepted-path and cancellation/cleanup causal tests, current authority monitoring and independent review before activation.
