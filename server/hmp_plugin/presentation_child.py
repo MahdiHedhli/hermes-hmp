@@ -17,6 +17,7 @@ _NAMESPACE = "_hmp_presentation_child"
 
 
 def bootstrap() -> None:
+    global __package__
     if any(name == _NAMESPACE or name.startswith(_NAMESPACE + ".") for name in sys.modules):
         raise RuntimeError("BI1_CHILD_NAMESPACE_REFUSED")
     root = str(Path(__file__).parent)
@@ -26,6 +27,7 @@ def bootstrap() -> None:
     package.__spec__ = importlib.machinery.ModuleSpec(_NAMESPACE, loader=None, is_package=True)
     package.__spec__.submodule_search_locations = [root]
     sys.modules[_NAMESPACE] = package
+    __package__ = _NAMESPACE
 
 
 def main() -> int:
@@ -35,8 +37,8 @@ def main() -> int:
         bootstrap()
         # Fixed own-code relative closure. No plugin initializer, sys.path edit,
         # environment/config lookup or input-selected module is involved.
-        from _hmp_presentation_child.presentation_posix import PosixFileOps
-        from _hmp_presentation_child.presentation_worker import process_child_stream_v2
+        from .presentation_posix import PosixFileOps
+        from .presentation_worker import process_child_stream_v2
 
         process_child_stream_v2(
             sys.stdin.buffer,

@@ -292,3 +292,7 @@ Implemented fixed own-file private namespace bootstrap and schema2 processing en
 ## October 12: CI dependency reconciliation
 
 CI 38200379495 is terminal failure at 08b2c08: three tests retained the old qrcode-only dependency assumption. Local correction additionally exposed an actual root-install manifest omission: PyYAML was declared only in the package manifest. Root manifest now matches the reviewed bounded worker dependency. Routing/config writer absence and global third-party import restriction are retained; QR version checks select QR explicitly. 119 CLI/merge regression cases pass with a dedicated temporary directory. Worker 03f0d2c and entry 873bf02 independent source reviews reported no actionable defect. Runtime provenance must cover bytecode reads (Python -B only prevents writes), interpreter/system-site hooks and dependency origins; activation remains open.
+
+## October 12: full-suite child import correction
+
+Exact broader suite at 8af2c6d: 13 failed, 5613 passed, 38 skipped, 190 subtests; all failures came from the new child absolute private-namespace imports violating the surface scanner. Fixed bootstrap now assigns its explicit private __package__ and uses static relative processing imports, as the reviewed design intended. Scanner/global import policy is unchanged. Mobile header name+character sharing implemented at dbe4111; three widget cases and changed-source analysis passed, independent review pending. No deployed/physical claim.
