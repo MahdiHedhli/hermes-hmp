@@ -4,6 +4,7 @@ Not registered with routes. Each observation authenticates original headers and
 checks native bot authority before resolving its home. A deadline/cancelled
 observer never releases an actual worker; drain requires its real termination.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -29,7 +30,14 @@ class _ReadOwner:
 
 
 class PresentationNativeService:
-    def __init__(self, ctx: Any, *, current: Callable[[], bool], native_current: Callable[[], bool], native_owner: object):
+    def __init__(
+        self,
+        ctx: Any,
+        *,
+        current: Callable[[], bool],
+        native_current: Callable[[], bool],
+        native_owner: object,
+    ):
         if native_owner is None:
             raise ValueError("native owner required")
         self._native_owner = native_owner
@@ -70,7 +78,9 @@ class PresentationNativeService:
             record.headers.authorization, record.headers.instance
         )
         return (who.device_id, who.user_id, who.family_id) == (
-            record.lease.device_id, record.lease.user_id, record.lease.family_id
+            record.lease.device_id,
+            record.lease.user_id,
+            record.lease.family_id,
         )
 
     async def _owned_read(self, record: Any, owner: _ReadOwner) -> str | None:
@@ -84,7 +94,7 @@ class PresentationNativeService:
                 # the request supplies no path and no profile configuration is read.
                 home = self._bridge._profile_home(record.lease.profile)
                 if not isinstance(home, Path) or not home.is_absolute():
-                    raise ValueError('invalid native home')
+                    raise ValueError("invalid native home")
                 require_bot_authorized(self._bridge, record.lease.user_id, record.lease.profile)
                 if self._bridge._profile_home(record.lease.profile) != home:
                     raise ValueError("native routing changed")
@@ -92,7 +102,7 @@ class PresentationNativeService:
             except BaseException:
                 failures.append(True)
 
-        worker = threading.Thread(target=work, name='hmp-bi1-authority', daemon=False)
+        worker = threading.Thread(target=work, name="hmp-bi1-authority", daemon=False)
         owner.worker = worker
         try:
             worker.start()
@@ -108,7 +118,7 @@ class PresentationNativeService:
         return results[0]
 
     async def observe(self, record: Any, phase: str) -> NativeObservation | None:
-        if phase not in {'INITIAL', 'BEFORE', 'PRE_GO', 'PRE_EMIT'} or not self._local(record):
+        if phase not in {"INITIAL", "BEFORE", "PRE_GO", "PRE_EMIT"} or not self._local(record):
             return None
         if record.operation in self._reads or len(self._reads) >= MAX_PROCESSES:
             return None
@@ -128,9 +138,18 @@ class PresentationNativeService:
                 return None
             lease = record.lease
             return NativeObservation(
-                lease.iid, lease.device_id, lease.user_id, lease.family_id,
-                lease.profile, home, self._ctx, self._store, self._bridge,
-                self._identity, record.native_owner, True,
+                lease.iid,
+                lease.device_id,
+                lease.user_id,
+                lease.family_id,
+                lease.profile,
+                home,
+                self._ctx,
+                self._store,
+                self._bridge,
+                self._identity,
+                record.native_owner,
+                True,
             )
         finally:
             if owner.joined and not owner.uncertain:
@@ -142,8 +161,9 @@ class PresentationNativeService:
         worker = owner.worker
         if worker is None or not owner.started:
             return False
-        while worker.is_alive():
-            await asyncio.sleep(.005)
+        # Completion events do not establish Thread termination; join owns release.
+        while worker.is_alive():  # noqa: ASYNC110
+            await asyncio.sleep(0.005)
         worker.join(timeout=0)
         if worker.is_alive():
             return False

@@ -4,6 +4,7 @@ Import performs no I/O. This backend conveys no authority and is never selected
 implicitly; only an authorized disposable worker may supply it to the reader.
 The reader owns flags, budgets, descriptor custody and close outcomes.
 """
+
 from __future__ import annotations
 
 import os

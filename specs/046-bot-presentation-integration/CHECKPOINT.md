@@ -84,3 +84,13 @@ closed by four separate inert checks. Receipt SHA256
 `0514c3c5a2e02b7652166a8344303fa1a14142c22b702eada9bfde59e00746e2`.
 This verdict does not cover the later parser, real-file or pipeline additions and
 does not authorize live activation or certify atomic authority over file I/O.
+
+## Deadline and lint checkpoint
+
+The pipeline now checks the deadline after metadata revision/projection as well
+as before it, and rejects a raster budget with an extended/different clock scope.
+Causal tests cover both boundaries. All eight new source/test modules pass the
+CI-pinned Ruff 0.16.9 checks; 34 focused backend/native/parser/pipeline cases pass.
+Formatting and literal-dictionary cleanup do not alter the accepted native
+ownership algorithm. The lint environment is available through the pinned tool
+runner; the earlier missing-module limitation is superseded. No activation occurred.
