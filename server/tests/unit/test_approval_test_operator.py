@@ -177,9 +177,12 @@ async def test_shutdown_during_admission_cannot_start_waiter() -> None:
     responses = handler.responses(request)
     reply = asyncio.create_task(anext(responses))
     await entered.wait()
-    await handler.shutdown()
+    shutdown = asyncio.create_task(handler.shutdown())
+    await asyncio.sleep(0)
     resume.set()
     assert (await reply).result == "unavailable"
+    await responses.aclose()
+    await shutdown
     await responses.aclose()
 
 

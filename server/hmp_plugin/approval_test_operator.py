@@ -23,6 +23,8 @@ class OperatorHandler:
         self._active: tuple[HostBeginRequest, str, TargetBinding] | None = None
         self._operation_id: str | None = None
         self._deadline = 0.0
+        self._admission_done = asyncio.Event()
+        self._admission_done.set()
         self._admitting = False
         self._closing = False
         self._shutdown_task: asyncio.Task[None] | None = None
@@ -57,26 +59,30 @@ class OperatorHandler:
             yield HostResponse("unavailable")
             return
         self._admitting = True
+        self._admission_done.clear()
+        handle = None
+        target = None
         try:
             try:
                 target = await self._admit(request)
+                if target is not None and not self._closing and self._active is None:
+                    handle = await self._producer.begin_test(target, request.timeout_ms)
             except Exception:
-                yield HostResponse("unavailable")
-                return
-            if target is None or self._closing or self._active is not None:
-                yield HostResponse("unavailable")
-                return
-            handle = await self._producer.begin_test(target, request.timeout_ms)
-            if type(handle) is not str:
-                yield HostResponse("unavailable")
-                return
+                handle = None
         finally:
             self._admitting = False
+            self._admission_done.set()
+        if target is None or type(handle) is not str:
+            yield HostResponse("unavailable")
+            return
         self._active = (request, handle, target)
         operation_id = secrets.token_hex(16)
         self._operation_id = operation_id
         self._deadline = asyncio.get_running_loop().time() + request.timeout_ms / 1000
         try:
+            if self._closing:
+                yield HostResponse("unavailable")
+                return
             yield HostResponse("accepted", operation_id=operation_id, timeout_ms=request.timeout_ms)
             await self._join(handle, target)
             outcome = await self._producer.outcome(handle, target.device_id)
@@ -102,6 +108,7 @@ class OperatorHandler:
             await self._producer.cancel_test(active[1], active[2].device_id)
 
     async def _shutdown_owned(self) -> None:
+        await self._admission_done.wait()
         active = self._active
         if active is not None:
             await self._producer.cancel_test(active[1], active[2].device_id)
