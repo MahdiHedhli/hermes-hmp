@@ -156,3 +156,28 @@ async def test_cancelled_shutdown_observer_still_waits_for_owned_cleanup() -> No
     assert handler._shutdown_task.done() and not handler._shutdown_task.cancelled()
     await responses.aclose()
     assert handler._active is None
+
+
+@pytest.mark.asyncio
+async def test_shutdown_during_admission_cannot_start_waiter() -> None:
+    from hmp_plugin.approval_test_producer import TargetBinding
+
+    generation = HostGeneration("a" * 52, os.getpid(), "b" * 32)
+    request = HostBeginRequest(generation, "synthetic-device", "default", "synthetic-session")
+    entered, resume = asyncio.Event(), asyncio.Event()
+    async def admit(_):
+        entered.set()
+        await resume.wait()
+        return TargetBinding(generation.iid, "synthetic-user", request.profile,
+                             request.session_id, request.device_id)
+    class Producer:
+        async def begin_test(self, *_):
+            raise AssertionError("shutdown must prevent invocation")
+    handler = OperatorHandler(generation, Producer(), admit=admit)
+    responses = handler.responses(request)
+    reply = asyncio.create_task(anext(responses))
+    await entered.wait()
+    await handler.shutdown()
+    resume.set()
+    assert (await reply).result == "unavailable"
+    await responses.aclose()

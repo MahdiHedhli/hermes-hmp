@@ -54,7 +54,11 @@ class OperatorHandler:
                 or request.generation != self._generation or self._active is not None):
             yield HostResponse("unavailable")
             return
-        target = await self._admit(request)
+        try:
+            target = await self._admit(request)
+        except Exception:
+            yield HostResponse("unavailable")
+            return
         if target is None or self._closing or self._active is not None:
             yield HostResponse("unavailable")
             return
