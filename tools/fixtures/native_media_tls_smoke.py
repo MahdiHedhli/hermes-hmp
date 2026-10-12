@@ -11,6 +11,102 @@ import pathlib
 import sys
 
 
+def produce_native_image(home, source):
+    """One real native tool call against a fixed loopback response, no external provider."""
+    import base64
+    import http.server
+    import threading
+
+    import yaml
+
+    png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mMQMgn7DwAClAGc"
+        "wgVUTwAAAABJRU5ErkJggg=="
+    )
+    requests = []
+
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def setup(self):
+            super().setup()
+            self.connection.settimeout(5)
+
+        def do_POST(self):
+            length = int(self.headers.get("Content-Length", "0"))
+            assert 0 < length <= 4096
+            assert self.path == "/v1/images/generations"
+            assert self.headers.get("Authorization") == "Bearer synthetic-only-key"
+            request = json.loads(self.rfile.read(length))
+            assert request["prompt"] == "[media-fixture] fixed raster"
+            requests.append(request)
+            body = json.dumps(
+                {
+                    "created": 0,
+                    "data": [
+                        {
+                            "b64_json": base64.b64encode(png).decode(),
+                        }
+                    ],
+                }
+            ).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    server = http.server.HTTPServer(("127.0.0.1", 0), Handler)
+    worker = None
+    worker_started = False
+    try:
+        server.timeout = 15
+        config_path = home / "config.yaml"
+        config = yaml.safe_load(config_path.read_text())
+        config["image_gen"] = {
+            "provider": "openai",
+            "openai": {
+                "provider": "synthetic",
+                "model": "gpt-image-2",
+            },
+        }
+        config["providers"] = {
+            "synthetic": {
+                "base_url": f"http://127.0.0.1:{server.server_port}/v1",
+                "api_key": "synthetic-only-key",
+            }
+        }
+        config_path.write_text(yaml.safe_dump(config))
+        worker = threading.Thread(target=server.handle_request)
+        worker.start()
+        worker_started = True
+        import model_tools
+
+        assert pathlib.Path(model_tools.__file__).resolve().is_relative_to(source)
+
+        raw = model_tools.handle_function_call(
+            "image_generate",
+            {"prompt": "[media-fixture] fixed raster"},
+            task_id="synthetic-media",
+            tool_call_id="synthetic-fetch-call",
+        )
+        result = json.loads(raw)
+        assert result.get("success") is True
+        image = pathlib.Path(result["image"])
+        assert image.is_relative_to(home / "cache/images")
+        assert image.read_bytes() == png
+        assert len(requests) == 1
+        return raw, image
+    finally:
+        try:
+            if worker_started:
+                worker.join(21)
+                assert not worker.is_alive()
+        finally:
+            server.server_close()
+
+
 def main():
     root = pathlib.Path(sys.argv[1]).resolve()
     source = pathlib.Path(sys.argv[2]).resolve()
@@ -66,7 +162,6 @@ def main():
     try:
         assert ctx.identity.custody.anchor_dir.is_relative_to(root)
         import asyncio
-        import base64
         import types
 
         from hermes_state import SessionDB
@@ -79,13 +174,7 @@ def main():
         assert code
         assert pair.approve_code("hmp", code)
         home = root / "home"
-        image = home / "cache/images/synthetic-fetch.png"
-        image.parent.mkdir(parents=True, exist_ok=True)
-        image.write_bytes(
-            base64.b64decode(
-                "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mMQMgn7DwAClAGcwgVUTwAAAABJRU5ErkJggg=="
-            )
-        )
+        raw_result, image = produce_native_image(home, source)
         db = SessionDB(home / "state.db")
         try:
             db.create_session(sid, "cli")
@@ -106,7 +195,7 @@ def main():
             db.append_message(
                 sid,
                 "tool",
-                content=json.dumps({"success": True, "image": str(image)}),
+                content=raw_result,
                 tool_name="image_generate",
                 tool_call_id=cid,
             )

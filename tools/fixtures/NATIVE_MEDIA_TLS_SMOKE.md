@@ -21,7 +21,9 @@ Arguments, in order:
 5. Materialized app package configuration using the reviewed hmp_client source.
 6. `tools/fixtures/native_media_pinned_fetch.dart`.
 
-The script creates synthetic image rows and dummy device keys only. Pairing offer
+The script invokes the actual registered native image tool against one fixed
+loopback provider response, then explicitly appends its returned result through
+SessionDB. It creates only synthetic image rows and dummy device keys. Pairing offer
 and operator confirmation use the real helper code; request/completion, session
 read and binary fetch use HTTP. The Python client validates the certificate
 fingerprint; the Dart client validates the production SPKI pin. The token file is
@@ -29,7 +31,8 @@ created exclusively with mode 0600 and removed after the child settles. Keep all
 remaining diagnostic files private. A timeout remains a failure; child cleanup is
 not a bounded process-custody certification.
 
-This smoke check does not run a real image provider, full adapter startup/shutdown,
+This smoke check does not run an external image provider, automatic agent-loop
+persistence, full adapter startup/shutdown,
 Flutter screen, or physical Android/iOS device. Do not treat it as release or
 physical feature qualification. The separate producer and Flutter decoder checks
 have their own evidence scopes.
