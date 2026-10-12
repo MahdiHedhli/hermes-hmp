@@ -207,3 +207,38 @@ async def test_concurrent_begin_cannot_enter_second_admission() -> None:
     assert (await reply).result == "unavailable"
     await first.aclose()
     assert not handler._admitting
+
+
+@pytest.mark.asyncio
+async def test_shutdown_waits_for_suspended_begin_and_cancels_late_handle() -> None:
+    from hmp_plugin.approval_test_producer import TargetBinding, TestOutcome, TestStatus
+
+    generation = HostGeneration("a" * 52, os.getpid(), "b" * 32)
+    request = HostBeginRequest(generation, "synthetic-device", "default", "synthetic-session")
+    entered, resume = asyncio.Event(), asyncio.Event()
+    cancelled = []
+    async def admit(_):
+        return TargetBinding(generation.iid, "synthetic-user", request.profile,
+                             request.session_id, request.device_id)
+    class Producer:
+        async def begin_test(self, *_):
+            entered.set()
+            await resume.wait()
+            return "synthetic-handle"
+        async def cancel_test(self, *args):
+            cancelled.append(args)
+            return TestOutcome(TestStatus.CANCELLED)
+        async def wait_outcome(self, *_, **kwargs):
+            return TestOutcome(TestStatus.CANCELLED)
+    handler = OperatorHandler(generation, Producer(), admit=admit)
+    responses = handler.responses(request)
+    reply = asyncio.create_task(anext(responses))
+    await entered.wait()
+    shutdown = asyncio.create_task(handler.shutdown())
+    await asyncio.sleep(0)
+    assert not shutdown.done()
+    resume.set()
+    assert (await reply).result == "unavailable"
+    await responses.aclose()
+    await shutdown
+    assert cancelled and handler._active is None
