@@ -142,3 +142,48 @@ def test_stream_buffer_refuses_oversize_prefix_and_extra_body_then_stays_termina
             buffer.feed(b"x")
         buffer.wipe()
         assert buffer._buffer == b""
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mutation", ["none", "chain", "under_parent", "legacy"])
+async def test_job_owner_retains_parent_result_and_refuses_mismatch(mutation):
+    from types import MappingProxyType
+
+    from hmp_plugin.presentation_jobs import CapturedLease, JobOwner, State, encode_output
+    from hmp_plugin.presentation_parent_policy import ParentPolicySnapshot
+
+    class Authority:
+        async def reauthenticate(self, captured, stage):
+            return True
+
+    owner = JobOwner("iid", authority=Authority(), clock=lambda: 1.0)
+    captured = CapturedLease("iid", "device", "user", "family", "default", "b" * 64, "binding", 1)
+    handle = owner.queue(captured, "METADATA")
+    await owner.authorize(handle)
+    owner.start(handle)
+    chain = ((1, 2, 16877, 0, 0, 1, 0, 3, 4),) * 3
+    snapshot = ParentPolicySnapshot((), chain, MappingProxyType(parent()))
+    owner.bind_parent_result(handle, "/srv/hermes", snapshot)
+    with pytest.raises(FrameError):
+        owner.bind_parent_result(handle, "/srv/hermes", snapshot)
+    child = object()
+    owner.bind_child(handle, child)
+    owner.go(handle, child, owner.challenge(handle))
+    row = header()
+    row["challenge"] = owner.challenge(handle)
+    row["chain"] = [list(item) for item in chain]
+    if mutation == "chain":
+        row["chain"][0][1] += 1
+    if mutation == "under_parent":
+        row["ledger"]["metadata"] = 11
+    if mutation == "legacy":
+        row["schema"] = 1
+        del row["ledger"]["hash_bytes"]
+        del row["ledger"]["yaml_tokens"]
+        wire = encode_output(row, b"")
+    else:
+        wire = encode_output_v2(row, b"")
+    owner.feed_result(handle, wire, child)
+    owner.custody(handle, "RESULT_EOF", child)
+    assert owner.inspect(handle)[0] is (State.RUNNING if mutation == "none" else State.UNKNOWN)
+    # EOF/result correctness alone never releases process custody credits.
+    assert owner.inspect(handle)[2] is False

@@ -453,6 +453,7 @@ class _Job:
     child: object | None = None
     go_sent: bool = False
     output_buffer: BoundedResultBuffer = field(default_factory=BoundedResultBuffer)
+    parent_result_context: tuple[str, object] | None = None
     result: tuple[dict[str, object], bytes] | None = None
     result_eof: bool = False
     diagnostic_eof: bool = False
@@ -670,6 +671,45 @@ class JobOwner:
             _fail()
         job.state = State.STARTING
 
+    def bind_parent_result(self, handle: JobHandle, home: str, snapshot: object) -> None:
+        """Select result2 once before launch, retaining exact parent work/chain."""
+        from types import MappingProxyType
+
+        from .presentation_budget import PresentationWorkLedger
+        from .presentation_output_v2 import BoundedResultBufferV2
+        from .presentation_parent_policy import ParentPolicySnapshot
+
+        job = self._resolve(handle)
+        self._require(job, State.STARTING)
+        if job.child is not None or job.parent_result_context is not None:
+            _fail()
+        if type(snapshot) is not ParentPolicySnapshot:
+            _fail()
+        counts = PresentationWorkLedger.validate_parent_counts(home, dict(snapshot.counts))
+        if (
+            type(snapshot.chain) is not tuple
+            or len(snapshot.chain) != counts["opens"]
+            or any(
+                type(item) is not tuple or len(item) != 9
+                or any(type(v) is not int or not 0 <= v < 1 << 63 for v in item)
+                for item in snapshot.chain
+            )
+        ):
+            _fail()
+        retained = ParentPolicySnapshot(snapshot.rules, snapshot.chain, MappingProxyType(counts))
+        if not self._current(job) or self._jobs.get(handle) is not job:
+            _fail()
+        # No foreign callbacks after checking the retained sample.
+        if (
+            self._disabled or job.emit_revoked or job.lease.epoch != self._epoch
+            or job.state is not State.STARTING or job.child is not None
+            or job.parent_result_context is not None
+        ):
+            _fail()
+        job.output_buffer.wipe()
+        job.output_buffer = BoundedResultBufferV2()
+        job.parent_result_context = (home, retained)
+
     def bind_child(self, handle: JobHandle, child: object) -> None:
         job = self._resolve(handle)
         if job.state not in (State.STARTING, State.DRAINING):
@@ -754,7 +794,13 @@ class JobOwner:
             job.result_eof = True
             if job.go_sent:
                 try:
-                    job.result = job.output_buffer.finish(job.challenge, job.lease.epoch)
+                    result = job.output_buffer.finish(job.challenge, job.lease.epoch)
+                    if job.parent_result_context is not None:
+                        from .presentation_output_v2 import compare_parent_snapshot
+
+                        home, snapshot = job.parent_result_context
+                        compare_parent_snapshot(result[0], snapshot=snapshot, parent_home=home)
+                    job.result = result
                 except FrameError:
                     self.unknown(handle)
                     return

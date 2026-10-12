@@ -446,3 +446,15 @@ regressions exercise caught reentry and listener retirement. Focused real-file
 and authority checks: 63 passed, 23 subtests; Ruff passes. Independent closure
 remains pending; no live route, deployment, signed app or phone qualification.
 Review: /private/tmp/hermes-presentation-chain-review-20261012/native-policy-REVIEW.json.
+
+## Parent-bound result receiver — October 12, 2026
+
+Independent review accepted a2746c8's narrow NPOLICY-01/02 closure (eight original
+causals). Receipt: /private/tmp/hermes-presentation-chain-review-20261012/native-policy-closure-REVIEW.json.
+JobOwner now has an explicit one-use STARTING/pre-child result2 binding retaining
+copied parent counts and immutable numeric directory identity. EOF validates the
+child result against that retained context; legacy result1, changed chains and
+under-parent totals refuse without releasing custody credit. Focused receiver/job
+checks: 55 passed, 43 subtests; Ruff passes. Independent receiver integration review
+is pending. Native policy transfer and route callers remain unwired; the default
+legacy receiver remains only for existing fixture flows. No deployment claim.
