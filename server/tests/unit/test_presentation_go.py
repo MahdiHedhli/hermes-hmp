@@ -121,3 +121,39 @@ def test_write_then_exception_does_not_resend_go():
     finally:
         os.close(write)
         os.close(read)
+
+
+@pytest.mark.parametrize("callback", ["current", "pipe_info"])
+def test_callback_reentry_is_sticky_and_performs_no_write(callback):
+    handle, child = object(), object()
+    holder = {}
+    writes = []
+
+    def reenter():
+        if "sender" in holder:
+            with pytest.raises(FrameError):
+                holder["sender"].send(handle, child, "a" * 64)
+
+    def current():
+        if callback == "current":
+            reenter()
+        return True
+
+    def pipe_info(fd):
+        if callback == "pipe_info":
+            reenter()
+        return (1, 2, stat.S_IFIFO | 0o600, False)
+
+    holder["sender"] = GoHandoff(
+        handle=handle,
+        child=child,
+        fd=99,
+        current=current,
+        write=lambda fd, body: writes.append(body),
+        pipe_info=pipe_info,
+    )
+    with pytest.raises(FrameError):
+        holder["sender"].send(handle, child, "a" * 64)
+    with pytest.raises(FrameError):
+        holder["sender"].send(handle, child, "a" * 64)
+    assert writes == []

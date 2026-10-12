@@ -199,3 +199,11 @@ The lazy-import dependency repair `80c1406` received independent source acceptan
 with37 separate scanner cases (receipt SHA256
 `4fea051371c8a08f4cd05c65171b2ed5da8dc2658b25df2c56f096b1525a6789`).
 This does not include the separate child control decoder or GO handoff.
+
+## GO-01 one-use reentry repair
+
+Review of88f103 reproduced two writes when current/pipe-info callbacks reentered
+the handoff. Entry ownership is now consumed before callbacks; any reentry poisons
+it even if the callback catches the refusal. Two new counterexamples perform zero
+writes after caught reentry;12 GO cases and selected lint pass. Independent
+closure review remains pending. No real worker launch or live route occurred.

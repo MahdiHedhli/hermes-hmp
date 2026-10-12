@@ -52,25 +52,30 @@ class GoHandoff:
         self._current = current
         self._write = write
         self._attempted = False
+        self._poisoned = False
 
     def send(self, handle: object, child: object, challenge: str) -> None:
+        if self._attempted:
+            self._poisoned = True
+            raise FrameError("BI1_GO_REFUSED")
         if (
             handle is not self._handle
             or child is not self._child
-            or self._attempted
             or type(challenge) is not str
             or len(challenge) != 64
             or any(c not in "0123456789abcdef" for c in challenge)
         ):
             raise FrameError("BI1_GO_REFUSED")
+        # Own the one-use entry before either callback. Caught reentry remains
+        # sticky, so a callback cannot resume the outer handoff after refusal.
+        self._attempted = True
         try:
             current = self._current()
             same_pipe = self._pipe_info(self._fd) == self._pipe_identity
         except BaseException:
             raise FrameError("BI1_GO_REFUSED") from None
-        if current is not True or not same_pipe:
+        if self._poisoned or current is not True or not same_pipe:
             raise FrameError("BI1_GO_REFUSED")
-        self._attempted = True  # before syscall: an exception can follow an actual write
         try:
             count = self._write(self._fd, challenge.encode("ascii") + b"\n")
         except BaseException:
