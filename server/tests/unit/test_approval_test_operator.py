@@ -117,3 +117,42 @@ async def test_active_status_cancel_and_wrong_generation_isolation() -> None:
     assert final.result == "completed" and final.state == "cancelled"
     await responses.aclose()
     assert handler._active is None
+
+
+@pytest.mark.asyncio
+async def test_cancelled_shutdown_observer_still_waits_for_owned_cleanup() -> None:
+    from hmp_plugin.approval_test_producer import TargetBinding, TestOutcome, TestStatus
+
+    generation = HostGeneration("a" * 52, os.getpid(), "b" * 32)
+    request = HostBeginRequest(generation, "synthetic-device", "default", "synthetic-session")
+    target = TargetBinding(generation.iid, "synthetic-user", request.profile,
+                           request.session_id, request.device_id)
+    joined = asyncio.Event()
+    cancelled = asyncio.Event()
+    async def admit(_):
+        return target
+    class Producer:
+        async def begin_test(self, *_):
+            return "synthetic-handle"
+        async def wait_outcome(self, *_, **kwargs):
+            await joined.wait()
+            return TestOutcome(TestStatus.CANCELLED)
+        async def outcome(self, *_):
+            return TestOutcome(TestStatus.CANCELLED)
+        async def cancel_test(self, *_):
+            cancelled.set()
+            return TestOutcome(TestStatus.CLEANUP_PENDING)
+    handler = OperatorHandler(generation, Producer(), admit=admit)
+    responses = handler.responses(request)
+    assert (await anext(responses)).result == "accepted"
+    shutdown = asyncio.create_task(handler.shutdown())
+    await cancelled.wait()
+    shutdown.cancel()
+    await asyncio.sleep(0)
+    assert not shutdown.done() and not handler._shutdown_task.done()
+    joined.set()
+    with pytest.raises(asyncio.CancelledError):
+        await shutdown
+    assert handler._shutdown_task.done() and not handler._shutdown_task.cancelled()
+    await responses.aclose()
+    assert handler._active is None
