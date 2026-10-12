@@ -480,3 +480,5 @@ Definitions and expected source census require independent review and root execu
 Native/helper/socket/current device and release qualifications remain separate.
 
 - `presentation_child.py`: fixed isolated processing entry, private own-code namespace; no gateway initializer or native authority. Parent provenance/custody and route activation remain unbound.
+
+- `presentation_pipes.py`: exclusive nonblocking bounded result/diagnostic pipe ownership; actual EOF/close only, no process wait/group/authority claim.

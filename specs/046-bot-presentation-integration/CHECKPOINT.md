@@ -296,3 +296,7 @@ CI 38200379495 is terminal failure at 08b2c08: three tests retained the old qrco
 ## October 12: full-suite child import correction
 
 Exact broader suite at 8af2c6d: 13 failed, 5613 passed, 38 skipped, 190 subtests; all failures came from the new child absolute private-namespace imports violating the surface scanner. Fixed bootstrap now assigns its explicit private __package__ and uses static relative processing imports, as the reviewed design intended. Scanner/global import policy is unchanged. Mobile header name+character sharing implemented at dbe4111; three widget cases and changed-source analysis passed, independent review pending. No deployed/physical claim.
+
+## October 12: bounded actual pipe collection
+
+Added OwnedPresentationPipes with pre-effect descriptor identity checks, finite selector waits under the original deadline, stdout/diagnostic limits before retention, diagnostic-content discard and actual EOF/one-use close records. Timeout/overflow never manufacture closure or release a reservation; errors retain uncertain ownership. An initial causal test found closed FDs disappearing silently from selectors; polling now verifies all held stream identities before select. Four real-pipe cases plus layout: 241 passed after correction. This is the receive/close part of supervision, not process launch/wait/group/signal or source attestation; independent review pending.
