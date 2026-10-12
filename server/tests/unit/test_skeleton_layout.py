@@ -61,6 +61,7 @@ CONTRACT_MODULES = {
     "presentation_worker_control.py",
     "presentation_go.py",
     "presentation_child_launch.py",
+    "presentation_child.py",
     "presentation_worker.py",
     "presentation_input_v2.py",
     "presentation_yaml.py",

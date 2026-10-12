@@ -761,3 +761,49 @@ def test_schema2_real_child_processing_preserves_projection_and_closes_files(sco
     assert header["fields"]["display_name"] == "Synthetic"
     assert header["fields"]["shape"] == "hexagon"
     assert body == b"" and fs.opened == set()
+
+
+def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope):
+    import subprocess
+    import sys
+
+    from hmp_plugin.presentation_input_v2 import encode_input_v2
+    from hmp_plugin.presentation_jobs import decode_output
+
+    _, bound = scope
+    row = {
+        "schema": 2,
+        "challenge": bound.challenge,
+        "epoch": 1,
+        "profile": "default",
+        "root": bound.root_path,
+        "home": bound.home_path,
+        "operation": "METADATA",
+        "expected_avatar_sha": None,
+        "uid": bound.service_uid,
+        "gid": bound.service_gid,
+        "dir_modes": [448, 488, 493],
+        "leaf_modes": [384, 416, 420],
+        "source_manifest_sha": bound.source_manifest_sha256,
+        "deadline_ns": int(bound.deadline * 1_000_000_000),
+        "directory_policy": [[r.uid, r.gid, r.modes[0]] for r in bound.directory_rules],
+        "iid": "a" * 52,
+        "canonical_fallback": "Hermes",
+        "observed_at": 100,
+    }
+    script = Path(__file__).parents[2] / "hmp_plugin" / "presentation_child.py"
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", str(script)],
+        input=encode_input_v2(row) + bound.challenge.encode() + b"\n",
+        capture_output=True,
+        timeout=3,
+        check=False,
+        env={"LANG": "C", "LC_ALL": "C"},
+        close_fds=True,
+        start_new_session=True,
+    )
+    assert result.returncode == 0, result.stderr
+    assert result.stderr == b""
+    header, body = decode_output(result.stdout, bound.challenge, 1)
+    assert header["fields"]["display_name"] == "Synthetic"
+    assert header["fields"]["shape"] == "hexagon" and body == b""

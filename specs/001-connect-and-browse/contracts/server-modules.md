@@ -478,3 +478,5 @@ push, native/provider action, source pin, grant or permission change is introduc
 
 Definitions and expected source census require independent review and root execution.
 Native/helper/socket/current device and release qualifications remain separate.
+
+- `presentation_child.py`: fixed isolated processing entry, private own-code namespace; no gateway initializer or native authority. Parent provenance/custody and route activation remain unbound.

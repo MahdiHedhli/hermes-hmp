@@ -166,3 +166,16 @@ def test_v2_processing_does_no_file_work_before_go_or_identity_refusal():
                 effective_gid=20,
             )
         assert output.getvalue() == b""
+
+
+def test_child_bootstrap_refuses_namespace_collision_without_replacing_modules(monkeypatch):
+    import sys
+    import types
+
+    from hmp_plugin.presentation_child import bootstrap
+
+    sentinel = types.ModuleType("synthetic_sentinel")
+    monkeypatch.setitem(sys.modules, "_hmp_presentation_child.foreign", sentinel)
+    with pytest.raises(RuntimeError, match="BI1_CHILD_NAMESPACE_REFUSED"):
+        bootstrap()
+    assert sys.modules["_hmp_presentation_child.foreign"] is sentinel
