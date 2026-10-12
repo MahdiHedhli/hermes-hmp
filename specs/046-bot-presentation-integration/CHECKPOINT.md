@@ -258,3 +258,13 @@ real-file/actual-pipe cases and selected lint pass. Independent closure pending.
 The parent GO writer and child decoder also passed a real-pipe composition case.
 No actual presentation child process, native permission or cleanup ownership is
 qualified by that pipe-only test. Live routing remains absent.
+
+## Current combined source verification
+
+Exact3e85a38 passes286 presentation/Unicode tests plus190 subtests and complete
+server/tools strict lint. WORKER-01 received independent closure with9 separate
+causals, receipt SHA256
+`d68814fcf2871937debfd4c1a6c4604019bb02026eb8efa152157330498f4b6b`.
+This does not establish process custody, native route binding or installed support.
+The draft branch was pushed for a fresh exact-head public CI run; prior failed CI
+evidence stays intact. No live host/app or grants were updated.

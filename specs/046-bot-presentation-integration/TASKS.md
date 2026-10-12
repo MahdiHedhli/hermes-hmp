@@ -4,12 +4,14 @@
 - [x] Implement explicit POSIX backend and actual synthetic kernel transaction tests.
 - [x] Implement native authority observer; independent review accepted0eef repair.
 - [x] Implement actual YAML token/event adapter; independent review accepted51fc fix.
-- [x] Connect file/parser/raster/closed DTO pipeline (shared total ledger remains open).
+- [x] Connect file/parser/raster/closed DTO pipeline.
 - [x] Add bounded pinned client read, roster capability and foreground fencing.
 - [x] Connect classic renderer to live roster rows (not deployed capability).
 - [ ] Review complete proposed transport/custody contract and mobile integration.
-- [ ] Implement one nonresetting fixed-file/YAML/raster work ledger.
-- [ ] Implement child supervisor/GO/result/wait/group/IPC/signal drain binder.
+- [x] Implement one nonresetting fixed-file/YAML/raster work ledger; bounded source review accepted d1521fd.
+- [x] Implement bounded child control/GO and result processing primitives; source review accepted recorded repairs.
+- [ ] Implement actual child entry with fixed processing-only package bootstrap and source binding.
+- [ ] Implement child supervisor/result/wait/group/IPC/signal drain binder.
 - [ ] Implement reviewed listener startup/shutdown and authenticated metadata route.
 - [ ] Implement revision-bound avatar binary transport and bounded mobile codec/cache.
 - [ ] Complete header/details, blobatar v2 and custom static image parity.
