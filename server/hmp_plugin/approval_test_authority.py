@@ -33,6 +33,16 @@ def target_current(ctx: ServerContext, target: TargetBinding) -> bool:
         if operational.state not in (WriteGateState.OPEN, WriteGateState.OPEN_GUARDED):
             return False
         canonical = bridge.resolve_bot_chat(target.profile)
-        return canonical is not None and canonical.live_tip_session_id == target.session_id
+        if canonical is None or canonical.live_tip_session_id != target.session_id:
+            return False
+        # Native profile/session reads can take time: recheck local authority afterwards.
+        device = ctx.store.get_device(target.device_id)
+        return (
+            device is not None and device["state"] == "ACTIVE"
+            and device["user_id"] == target.user_id
+            and ctx.is_approval_owner_device(target.device_id)
+            and not store.closed and not store.phone_closed
+            and ctx.direct_send_effective() and ctx.is_phone_chat_available()
+        )
     except Exception:
         return False
