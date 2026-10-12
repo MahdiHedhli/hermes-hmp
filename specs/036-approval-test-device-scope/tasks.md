@@ -17,3 +17,6 @@
 
 - [x] Implement active status/cancel and verify wrong-generation refusal, accepted completion and exact operation identity with four focused handler tests.
 - [ ] Verify repeated cancellation, concurrent begin, revoked current-authority monitoring and shutdown observer cancellation before production wiring.
+
+- [x] Compose listener-owned service source with mandatory admission/current-authority callbacks; no registration.
+- [ ] Test actual native service begin/card-answer/completion and shutdown before activation.

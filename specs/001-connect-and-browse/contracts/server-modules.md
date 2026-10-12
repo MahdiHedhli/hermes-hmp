@@ -384,3 +384,5 @@ cannot close from its own code.
 The exact package inventory also includes `approval_test_producer.py`, `approval_test_projection.py`, `approval_test_answers.py`, `approval_test_authority.py`, `approval_test_host_codec.py` and `approval_test_host_transport.py`. These provide the no-op producer lifecycle, selected-device in-memory projection, checked answer coordination, read-only admission, closed local DATA codec and same-UID owned Unix transport. All import without Hermes; only bridge.py may bind native helpers. No endpoint or operator command is registered yet. Listener generation/family checks and production handler integration remain required.
 
 `approval_test_operator.py` is the inert begin lifecycle coordinator under development; status/cancel, generation monitoring, accepted-path cleanup review and registration remain unfinished.
+
+`approval_test_service.py` composes the inert producer, exact projection, operator lifecycle and answer coordinator under supplied current-authority callbacks. It imports without Hermes and does not register itself. Native accepted/answer/cleanup composition and production lifecycle qualification remain required.

@@ -39,6 +39,7 @@ CONTRACT_MODULES = {
     "approval_test_answers.py",
     "approval_test_authority.py",
     "approval_test_operator.py",
+    "approval_test_service.py",
     "approval_test_host_codec.py",
     "approval_test_host_transport.py",
     "mobile_cron.py",
