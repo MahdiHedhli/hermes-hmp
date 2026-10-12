@@ -42,6 +42,7 @@ from .approved_push_bridge_witness import (
     reverse_approved_at1_bridge,
 )
 from .fake_hermes import UNRESOLVED, FakeDirectory, World
+from .test_s4_descriptors import reverse_readiness_additions
 
 SERVER_DIR = Path(__file__).resolve().parents[2]
 REPO_ROOT = SERVER_DIR.parent
@@ -823,7 +824,7 @@ def test_every_reached_internal_is_probed() -> None:
     }
     # AT1 is separately gated by its exact approved factory/native-current contract.
     # Restore only that byte-pinned delta; keep the entire ordinary probe predicate.
-    ordinary = reverse_approved_at1_bridge(BRIDGE_SOURCE)
+    ordinary = reverse_approved_at1_bridge(reverse_readiness_additions(BRIDGE_SOURCE))
     assert hashlib.sha256(ordinary.encode()).hexdigest() == APPROVED_PRE_AT1_BRIDGE_SHA256
     assert _hermes_imports(BRIDGE_SOURCE) - _hermes_imports(ordinary) == {
         ("tools", "approval"), ("tools", "approval_gateway_wait"), ("tools", "interrupt")}
@@ -1474,7 +1475,7 @@ def test_phone_chat_imports_belong_to_their_own_boundary_not_the_read_or_send_li
 
 
 def test_exact_at1_factory_inverse_preserves_ordinary_probe_source():
-    ordinary = reverse_approved_at1_bridge(BRIDGE_SOURCE)
+    ordinary = reverse_approved_at1_bridge(reverse_readiness_additions(BRIDGE_SOURCE))
     assert hashlib.sha256(ordinary.encode()).hexdigest() == APPROVED_PRE_AT1_BRIDGE_SHA256
     assert _hermes_imports(BRIDGE_SOURCE) - _hermes_imports(ordinary) == {
         ("tools", "approval"), ("tools", "approval_gateway_wait"), ("tools", "interrupt")}
@@ -1499,12 +1500,12 @@ def test_exact_factory_inverse_refuses_changed_native_gate_or_placement(damage):
         mutant = BRIDGE_SOURCE.replace(block, "", 1) + block
     assert mutant != BRIDGE_SOURCE
     with pytest.raises(AssertionError):
-        reverse_approved_at1_bridge(mutant)
+        reverse_approved_at1_bridge(reverse_readiness_additions(mutant))
 
 
 def test_exact_factory_inverse_cannot_hide_an_unprobed_ordinary_import():
     mutant = BRIDGE_SOURCE + "\nfrom tools import unapproved_ordinary_helper\n"
-    ordinary = reverse_approved_at1_bridge(mutant)
+    ordinary = reverse_approved_at1_bridge(reverse_readiness_additions(mutant))
     reached = _hermes_imports(ordinary)
     probed = ({(d.module, d.qualname) for d in compat.READ_DEPENDENCIES}
               | {(d.module, d.qualname) for d in compat.DIRECT_SEND_DEPENDENCIES}
