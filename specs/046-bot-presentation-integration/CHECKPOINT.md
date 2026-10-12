@@ -235,3 +235,13 @@ case passes and wrong GO reaches neither the scope factory nor filesystem opens;
 17 real-file cases pass. Selected lint passes. The scope factory remains a trusted
 parent-policy dependency, not request authority. No child entry script, process
 launcher/reap/group/IPC ownership or live route is supplied by this module.
+
+## Local-media rendering source check
+
+Checked the existing deployed scanner's one-entry tool_call declaration linkage
+and the mobile transcript's image-card placement. The scanner accepts the native
+resolved image_generate tool result paired to a single image_generate declaration
+inside tool_call; the card is above the collapsible tool header. Therefore no new
+wrapper-name exception or expansion of assistant MEDIA-path authority is justified
+by the screenshot alone. The historical named JPG is absent; fresh physical image
+confirmation remains open. This is source evidence, not live rendering proof.
