@@ -103,6 +103,7 @@ class PromptRow:
     run_id: str | None = None
     session_key: str | None = None
     status: str = "open"  # open | resolved | expired
+    target_device_id: str | None = None  # internal synthetic-test scope; never on the wire
     answer_hash: bytes | None = None
     stored_status: int | None = None
     stored_body: dict[str, object] | None = None
@@ -440,7 +441,8 @@ class PromptStore:
                 del self._phone_tasks[key]
 
     def list_visible(
-        self, iid: str, user_id: str, profile: str, *, now: int | None = None
+        self, iid: str, user_id: str, profile: str, *, now: int | None = None,
+        device_id: str | None = None
     ) -> tuple[PromptRow, ...]:
         self.purge(int(self._clock()) if now is None else now)
         held = self.desktop_held(iid, user_id, profile)
@@ -450,6 +452,7 @@ class PromptStore:
                 for row in self._rows.values()
                 if row.status == "open"
                 and (row.iid, row.user_id, row.profile) == (iid, user_id, profile)
+                and (row.target_device_id is None or row.target_device_id == device_id)
             ]
         if held:
             rows = [row for row in rows if row.surface != "bot_chat"]
@@ -503,10 +506,11 @@ def phone_open_request(row: PromptRow) -> dict[str, object]:
 
 
 def list_prompts(
-    store: PromptStore, *, iid: str, user_id: str, profile: str, now: int
+    store: PromptStore, *, iid: str, user_id: str, profile: str, now: int,
+    device_id: str | None = None,
 ) -> HttpResult:
     store.purge(now)
-    rows = store.list_visible(iid, user_id, profile, now=now)
+    rows = store.list_visible(iid, user_id, profile, now=now, device_id=device_id)
     return HttpResult(
         200,
         {
@@ -589,6 +593,7 @@ async def answer_prompt(
     body: Mapping[str, object],
     resolver: PromptResolver,
     now: int,
+    device_id: str | None = None,
 ) -> HttpResult:
     """AP-4 / AP-5. The stored row decides the kind. A client session key in `body` is ignored."""
     if len(request_id) > _REQUEST_ID_MAX or not request_id:
@@ -601,7 +606,7 @@ async def answer_prompt(
     store.purge(now)
     key = (iid, user_id, profile, request_id)
     async with store.answer_row(key) as row:
-        if row is None:
+        if row is None or (row.target_device_id is not None and row.target_device_id != device_id):
             _log("prompt_answer", "not_found", user_id=user_id, request_id=request_id)
             return _not_found()
         now = max(now, int(store._clock()))

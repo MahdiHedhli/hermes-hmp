@@ -1957,3 +1957,8 @@ releases whose session stream has no approval notifier, so it is not an availabi
 - **RES-7.** `head_message_id` may include non-conversational rows until P6 exists (RO-7).
 - **RES-8.** Continuity is limited to HMP-originated sessions until P7 exists (§11).
 - **RES-13 (v1.6 draft).** §7e makes no atomic snapshot guarantee; a grant or tip change after the last native check and before response `prepare` is not promised to refuse (LM-12, LM-20).
+
+
+### Synthetic approval target scope (AT1 prerequisite)
+
+An internal selected-device prompt is excluded from list and answer operations unless the authenticated bearer device matches its target. The target identifier is never serialized and a body-supplied device identifier conveys no authority. Scope is checked before idempotent replay or native resolution. Existing unscoped prompts retain their behavior. No synthetic test command is available from this prerequisite alone.

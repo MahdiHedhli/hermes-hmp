@@ -1471,7 +1471,9 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
     if store is None:
         _publication(context(request))
         return json_response({"prompts": [], "desktop_held": False})
-    rows = store.list_visible(ctx.iid, who.user_id, profile, now=ctx.now())
+    rows = store.list_visible(
+        ctx.iid, who.user_id, profile, now=ctx.now(), device_id=who.device_id
+    )
     sessions = {
         row.session_key
         for row in rows
@@ -1496,7 +1498,8 @@ async def handle_prompts_list(request: web.Request) -> web.Response:
                 ctx.now(),
             )
     result = prompts.list_prompts(
-        store, iid=ctx.iid, user_id=who.user_id, profile=profile, now=ctx.now()
+        store, iid=ctx.iid, user_id=who.user_id, profile=profile, now=ctx.now(),
+        device_id=who.device_id,
     )
     # Only rows of an available member are shown. A closed member lists nothing of its own.
     shown = [
@@ -1553,6 +1556,7 @@ async def handle_prompt_answer(request: web.Request) -> web.Response:
             body=body,
             resolver=_LivePromptResolver(ctx, endpoint),
             now=ctx.now(),
+            device_id=who.device_id,
         ),
     )
     _publication(context(request))
