@@ -1962,3 +1962,5 @@ releases whose session stream has no approval notifier, so it is not an availabi
 ### Synthetic approval target scope (AT1 prerequisite)
 
 An internal selected-device prompt is excluded from list and answer operations unless the authenticated bearer device matches its target. The target identifier is never serialized and a body-supplied device identifier conveys no authority. Scope is checked before idempotent replay or native resolution. Existing unscoped prompts retain their behavior. No synthetic test command is available from this prerequisite alone.
+
+Selected-device test rows expire at their exact advertised deadline without ordinary approval grace. Persistent session/always choices are not offered by the test. Ordinary approvals retain the existing grace period.

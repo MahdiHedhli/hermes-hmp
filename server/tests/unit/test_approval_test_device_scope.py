@@ -78,3 +78,32 @@ def test_authenticated_http_target_scope(tmp_path, monkeypatch) -> None:
         assert len(calls["native"]) == 1
 
     run(env, scenario)
+
+
+@pytest.mark.asyncio
+async def test_scoped_test_rejects_persistent_choice_and_expired_answer() -> None:
+    store = prompts.PromptStore(clock=lambda: 1)
+    resolver = FakeResolver()
+    _store_approval(
+        store, target_device_id="synthetic-target-device", choices=("once", "deny"),
+        expires_at=10,
+    )
+    async def answer(choice: str, now: int) -> prompts.HttpResult:
+        return await prompts.answer_prompt(
+            store, iid=IID, user_id=USER, profile=PROFILE, request_id=REQ,
+            body={"choice": choice}, resolver=resolver, now=now,
+            device_id="synthetic-target-device",
+        )
+    assert (await answer("always", 2)).status == 409
+    assert (await answer("session", 2)).status == 409
+    assert not resolver.calls
+    assert (await answer("once", 10)).status == 409
+    assert not resolver.calls
+    assert not store.list_visible(IID, USER, PROFILE, now=10, device_id="synthetic-target-device")
+
+
+def test_ordinary_approval_expiry_grace_is_preserved() -> None:
+    store = prompts.PromptStore(clock=lambda: 1)
+    _store_approval(store, expires_at=10)
+    assert len(store.list_visible(IID, USER, PROFILE, now=40)) == 1
+    assert not store.list_visible(IID, USER, PROFILE, now=41)

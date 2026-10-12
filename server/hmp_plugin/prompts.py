@@ -244,8 +244,13 @@ class PromptStore:
     def purge(self, now: int) -> None:
         with self._guard:
             for row in self._rows.values():
-                if row.expires_at is not None and now > row.expires_at + EXPIRY_GRACE_S:
-                    self.expire(row, now)
+                if row.expires_at is not None:
+                    expired = (
+                        now >= row.expires_at if row.target_device_id is not None
+                        else now > row.expires_at + EXPIRY_GRACE_S
+                    )
+                    if expired:
+                        self.expire(row, now)
             stale = [
                 key for key, row in self._rows.items()
                 if row.settled_at is not None and now - row.settled_at >= IDEMPOTENCY_RETENTION_S
