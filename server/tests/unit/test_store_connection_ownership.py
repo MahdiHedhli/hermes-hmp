@@ -822,3 +822,34 @@ def test_commit_applied_then_error_poisoned_without_claiming_rollback(tmp_path: 
             store.instance_epoch()
     finally:
         store.close()
+
+
+@pytest.mark.parametrize("failure", ["BEGIN", "ROLLBACK", "lost_commit"])
+def test_push_snapshot_unknown_boundary_poison_prevents_authority_reuse(
+    tmp_path: Path, failure: str,
+) -> None:
+    store = _store(tmp_path)
+    real = store._conn
+    assert real is not None
+    class SnapshotBoundary(_FailingBoundary):
+        def execute(self, sql, *args):
+            if failure == "BEGIN" and sql == "BEGIN":
+                raise sqlite3.OperationalError("synthetic snapshot begin failure")
+            if failure == "ROLLBACK" and (
+                sql.startswith("SELECT store_revocation_epoch") or sql == "ROLLBACK"
+            ):
+                raise sqlite3.OperationalError("synthetic snapshot rollback failure")
+            result = self.real.execute(sql, *args)
+            if failure == "lost_commit" and sql == "COMMIT":
+                raise sqlite3.OperationalError("synthetic lost snapshot acknowledgement")
+            return result
+    store._conn = SnapshotBoundary(real, "unused")
+    try:
+        with pytest.raises((sqlite3.OperationalError, RuntimeError)):
+            store.push_status_snapshot("device")
+        with pytest.raises(RuntimeError, match="state unavailable"):
+            store.access_authority_snapshot(bytes(32))
+        with pytest.raises(RuntimeError, match="state unavailable"):
+            store.insert_user("later", "Later", 3)
+    finally:
+        store.close()

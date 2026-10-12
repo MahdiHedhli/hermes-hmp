@@ -959,7 +959,12 @@ class Store:
         """Coherent read-only view, serialized with writers on this connection. No G creation."""
         with self._write_lock:
             conn = self._require_conn()
-            conn.execute("BEGIN")
+            try:
+                conn.execute("BEGIN")
+            except BaseException:
+                self._poisoned = True
+                raise
+            commit_started = False
             try:
                 if family_id is not None:
                     self.require_push_liveness_in(conn, device_id, family_id)
@@ -974,10 +979,20 @@ class Store:
                         "ORDER BY generation DESC, state_changed_at DESC, route_hash DESC LIMIT 1",
                         (device_id,),
                     ).fetchone()
+                commit_started = True
                 conn.execute("COMMIT")
             except BaseException:
-                if conn.in_transaction:
-                    conn.execute("ROLLBACK")
+                try:
+                    active = conn.in_transaction
+                    if commit_started and not active:
+                        raise RuntimeError("Store snapshot outcome unavailable")
+                    if active:
+                        conn.execute("ROLLBACK")
+                    if conn.in_transaction:
+                        raise RuntimeError("Store snapshot rollback unavailable")
+                except BaseException:
+                    self._poisoned = True
+                    raise
                 raise
         return generation, epoch, row
 
