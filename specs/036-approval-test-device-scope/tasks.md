@@ -14,3 +14,6 @@
 
 - [x] Begin operator-handler source and refusal test; inert/unregistered.
 - [ ] Complete status/cancel operations, accepted-path and cancellation/cleanup causal tests, current authority monitoring and independent review before activation.
+
+- [x] Implement active status/cancel and verify wrong-generation refusal, accepted completion and exact operation identity with four focused handler tests.
+- [ ] Verify repeated cancellation, concurrent begin, revoked current-authority monitoring and shutdown observer cancellation before production wiring.

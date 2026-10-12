@@ -73,3 +73,47 @@ async def test_unknown_status_and_cancel_do_not_touch_producer() -> None:
         request = HostOperationRequest(generation, op, "c" * 32)
         replies = [reply async for reply in handler.responses(request)]
         assert len(replies) == 1 and replies[0].result == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_active_status_cancel_and_wrong_generation_isolation() -> None:
+    from hmp_plugin.approval_test_host_codec import HostOperationRequest
+    from hmp_plugin.approval_test_producer import TargetBinding, TestOutcome, TestStatus
+
+    generation = HostGeneration("a" * 52, os.getpid(), "b" * 32)
+    request = HostBeginRequest(generation, "synthetic-device", "default", "synthetic-session")
+    target = TargetBinding(generation.iid, "synthetic-user", request.profile,
+                           request.session_id, request.device_id)
+    joined = asyncio.Event()
+    calls = []
+    async def admit(_):
+        return target
+    class Producer:
+        async def begin_test(self, *_):
+            return "synthetic-handle"
+        async def wait_outcome(self, *_, **kwargs):
+            await joined.wait()
+            return TestOutcome(TestStatus.CANCELLED)
+        async def outcome(self, *_):
+            return TestOutcome(TestStatus.CANCELLED if joined.is_set() else TestStatus.PENDING)
+        async def cancel_test(self, *args):
+            calls.append(args)
+            joined.set()
+            return TestOutcome(TestStatus.CANCELLED)
+    handler = OperatorHandler(generation, Producer(), admit=admit)
+    responses = handler.responses(request)
+    first = await anext(responses)
+    wrong = HostGeneration(generation.iid, generation.pid, "d" * 32)
+    rejected = [r async for r in handler.responses(
+        HostOperationRequest(wrong, "cancel", first.operation_id))]
+    assert rejected[0].result == "unavailable" and not calls
+    status = [r async for r in handler.responses(
+        HostOperationRequest(generation, "status", first.operation_id))]
+    assert status[0].state == "pending" and 0 <= status[0].remaining_ms <= 30000
+    cancelled = [r async for r in handler.responses(
+        HostOperationRequest(generation, "cancel", first.operation_id))]
+    assert cancelled[0].result == "cancel_requested" and len(calls) == 1
+    final = await anext(responses)
+    assert final.result == "completed" and final.state == "cancelled"
+    await responses.aclose()
+    assert handler._active is None
