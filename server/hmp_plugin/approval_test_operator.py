@@ -23,6 +23,7 @@ class OperatorHandler:
         self._active: tuple[HostBeginRequest, str, TargetBinding] | None = None
         self._operation_id: str | None = None
         self._deadline = 0.0
+        self._admitting = False
         self._closing = False
         self._shutdown_task: asyncio.Task[None] | None = None
 
@@ -51,21 +52,26 @@ class OperatorHandler:
                                    state=outcome.status.value, remaining_ms=remaining)
             return
         if (self._closing or type(request) is not HostBeginRequest
-                or request.generation != self._generation or self._active is not None):
+                or request.generation != self._generation or self._active is not None
+                or self._admitting):
             yield HostResponse("unavailable")
             return
+        self._admitting = True
         try:
-            target = await self._admit(request)
-        except Exception:
-            yield HostResponse("unavailable")
-            return
-        if target is None or self._closing or self._active is not None:
-            yield HostResponse("unavailable")
-            return
-        handle = await self._producer.begin_test(target, request.timeout_ms)
-        if type(handle) is not str:
-            yield HostResponse("unavailable")
-            return
+            try:
+                target = await self._admit(request)
+            except Exception:
+                yield HostResponse("unavailable")
+                return
+            if target is None or self._closing or self._active is not None:
+                yield HostResponse("unavailable")
+                return
+            handle = await self._producer.begin_test(target, request.timeout_ms)
+            if type(handle) is not str:
+                yield HostResponse("unavailable")
+                return
+        finally:
+            self._admitting = False
         self._active = (request, handle, target)
         operation_id = secrets.token_hex(16)
         self._operation_id = operation_id

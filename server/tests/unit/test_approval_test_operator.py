@@ -181,3 +181,26 @@ async def test_shutdown_during_admission_cannot_start_waiter() -> None:
     resume.set()
     assert (await reply).result == "unavailable"
     await responses.aclose()
+
+
+@pytest.mark.asyncio
+async def test_concurrent_begin_cannot_enter_second_admission() -> None:
+    generation = HostGeneration("a" * 52, os.getpid(), "b" * 32)
+    request = HostBeginRequest(generation, "synthetic-device", "default", "synthetic-session")
+    entered, resume = asyncio.Event(), asyncio.Event()
+    admissions = []
+    async def admit(candidate):
+        admissions.append(candidate)
+        entered.set()
+        await resume.wait()
+        return None
+    handler = OperatorHandler(generation, object(), admit=admit)
+    first = handler.responses(request)
+    reply = asyncio.create_task(anext(first))
+    await entered.wait()
+    second = [r async for r in handler.responses(request)]
+    assert second[0].result == "unavailable" and len(admissions) == 1
+    resume.set()
+    assert (await reply).result == "unavailable"
+    await first.aclose()
+    assert not handler._admitting
