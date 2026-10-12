@@ -61,6 +61,7 @@ from __future__ import annotations
 import asyncio
 import contextlib
 import secrets
+import sys
 import threading
 import time
 from collections.abc import Callable, Iterable, Mapping, Sequence
@@ -76,6 +77,7 @@ from .authorize import Authorize
 from .cli import listener_record_path
 from .contract import PLATFORM_NAME, OtherWhy, WriteGateState
 from .logging_policy import log_event
+from .push_relay import RelayClient
 from .reads import Reads, _fallback_display_name
 from .store import Store
 
@@ -486,6 +488,11 @@ def open_components(adapter: Any) -> server.ServerContext:
         block = live_extra.get("direct_send") if isinstance(live_extra, Mapping) else None
         return isinstance(block, Mapping) and block.get("enabled") is True
 
+    def _read_push_settings() -> object:
+        live_config = getattr(adapter, "config", None)
+        live_extra = getattr(live_config, "extra", None)
+        return live_extra.get("push") if isinstance(live_extra, Mapping) else None
+
     def _read_owner_device_ids() -> frozenset[str]:
         live_config = getattr(adapter, "config", None)
         live_extra = getattr(live_config, "extra", None)
@@ -527,6 +534,7 @@ def open_components(adapter: Any) -> server.ServerContext:
         read_worker_budget=(getattr(adapter, "_read_worker_budget", None)
                             or server.ReadWorkerBudget()),
         direct_send_flag=_read_direct_send_enabled,
+        push_settings=_read_push_settings,
         owner_device_ids=_read_owner_device_ids,
         readiness_owner_device_ids=_readiness_owner_device_ids,
         readiness_settings=_readiness_settings,
@@ -608,6 +616,10 @@ def open_components(adapter: Any) -> server.ServerContext:
     return ctx
 
 
+_AT1_ADAPTER_MODULE = sys.modules[__name__]
+_AT1_PLUGIN_MODULE = sys.modules[__package__]
+
+
 class HmpAdapter(BasePlatformAdapter):
     def __init__(self, config: Any) -> None:
         super().__init__(config=config, platform=Platform(PLATFORM_NAME))
@@ -677,7 +689,13 @@ class HmpAdapter(BasePlatformAdapter):
         except identity.IdentityError:
             log_event("adapter_connect", outcome="identity_error")
             return False
-        srv = server.HmpServer(ctx, settings, on_closed=self._listener_closed)
+        srv = server.HmpServer(
+            ctx,
+            settings,
+            on_closed=self._listener_closed,
+            push_relay_factory=lambda: RelayClient(ctx.identity),
+            approval_test_owners=(_AT1_PLUGIN_MODULE, _AT1_ADAPTER_MODULE),
+        )
         try:
             await srv.start()
         except Exception as exc:
@@ -730,6 +748,7 @@ class HmpAdapter(BasePlatformAdapter):
                 log_event("listener_record", outcome="write_failed")
             else:
                 self._known_profiles = tuple(profiles) if profiles is not None else None
+                await srv.start_approval_test(self._record, self._nonce)
             if ctx.bridge is not None:
                 # Live-bug fix: the multiplexer brings secondary profiles online strictly AFTER
                 # this `connect()` returns, so the record just written above can already be stale
@@ -873,15 +892,21 @@ class HmpAdapter(BasePlatformAdapter):
 
     async def disconnect(self) -> None:
         await self._cancel_profile_refresh()
-        srv, self._server = self._server, None
-        self._drop_record()
+        srv = self._server
         if srv is not None:
+            # Keep the current pointer/record/dependencies while actual teardown
+            # owns cleanup. Cancellation or unknown join must prevent replacement.
             await srv.stop(notify=False)
+            if self._server is srv:
+                self._server = None
+            self._drop_record()
             if srv.operator_worker_debt:
                 asyncio.get_running_loop().create_task(self._close_after_operator_drain(srv))
             else:
                 self._close_generation(srv.ctx)
                 srv.ctx.store.close()
+        else:
+            self._drop_record()
         self._mark_disconnected()
 
     async def _close_after_operator_drain(self, srv: server.HmpServer) -> None:
@@ -893,6 +918,7 @@ class HmpAdapter(BasePlatformAdapter):
     def _close_generation(ctx: server.ServerContext) -> None:
         """R9: the listener that owned this prompt generation stopped. Its rows expire and a
         stream still bound to it can never insert into a later generation."""
+        ctx.push_hints.clear()
         if ctx.prompt_store is not None:
             ctx.prompt_store.close(ctx.now())
 

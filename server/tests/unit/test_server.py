@@ -644,13 +644,17 @@ def test_route_table_matches_declared_routes(tmp_path: Path) -> None:
             *server.A1_SESSION_ROUTES,
             *server.F2_DIRECT_SEND_ROUTES,
             *server.F3_APPROVAL_ROUTES,
+            *server.approval_test_routes.ROUTES,
             *server.MOBILE_CRON_ROUTES,
             *server.MOBILE_MODEL_ROUTES,
             *server.S5_MEDIA_ROUTES,
+            *server.PUSH_REGISTRATION_ROUTES,
+            *server.PUSH_RESOLVE_ROUTES,
         )
     )
     assert routes == expected
-    assert len(expected) == 29
+    assert len(expected) == 37
+    assert len(expected) == len(set(expected))
 
 
 def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
@@ -668,13 +672,17 @@ def test_a1_session_routes_are_not_registered_when_the_kill_switch_is_off(
             *server.F1_ROUTES,
             *server.F2_DIRECT_SEND_ROUTES,
             *server.F3_APPROVAL_ROUTES,
+            *server.approval_test_routes.ROUTES,
             *server.MOBILE_CRON_ROUTES,
             *server.MOBILE_MODEL_ROUTES,
             *server.S5_MEDIA_ROUTES,
+            *server.PUSH_REGISTRATION_ROUTES,
+            *server.PUSH_RESOLVE_ROUTES,
         )
     )
     assert routes == expected
-    assert len(expected) == 26
+    assert len(expected) == 34
+    assert len(expected) == len(set(expected))
 
 
 def test_e10_session_routes_are_not_registered_when_browsing_is_unavailable(
@@ -689,7 +697,12 @@ def test_e10_session_routes_are_not_registered_when_browsing_is_unavailable(
         (m, server.full_path(p))
         for m, p, _ in (
             *server.F1_ROUTES, *server.F2_DIRECT_SEND_ROUTES, *server.F3_APPROVAL_ROUTES,
-            *server.MOBILE_CRON_ROUTES, *server.MOBILE_MODEL_ROUTES, *server.S5_MEDIA_ROUTES,
+            *server.approval_test_routes.ROUTES,
+            *server.MOBILE_CRON_ROUTES,
+            *server.MOBILE_MODEL_ROUTES,
+            *server.S5_MEDIA_ROUTES,
+            *server.PUSH_REGISTRATION_ROUTES,
+            *server.PUSH_RESOLVE_ROUTES,
         )
     )
     assert routes == expected

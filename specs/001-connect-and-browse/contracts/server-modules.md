@@ -17,8 +17,24 @@ exceptions, each an exact (module, name) allow-list entry in the surface check:
 - `compat.py` may import Hermes modules dynamically, but only inside its dependency probe, and only
   for a build already on the read-compatible list (see "Startup order"; ruling on T013).
 
-The spike is reference only. Code is rewritten and reviewed, never copied wholesale (constitution
-VIII).
+The spike is reference only. Code is rewritten and reviewed, never copied wholesale.
+
+**Proposed outbound-network exception (spec 014 T011; source-only, not implemented).** The three
+exceptions above are import allow-list entries. Spec 014 proposes one different kind of closed
+exception, on network use rather than imports: a single module, `push_relay.py`, may be the one
+outbound non-loopback HTTPS client of the plugin, and its destination comes only from host
+configuration (`push.relay_url`, `push.relay_audience`, `push.relay_kids`, and the optional `push.relay_spki_pins`), never
+from the wire, a phone, a sealed value, a redirect or a default. It is governed by the frozen relay
+policies of `docs/architecture/contracts/HMP_PUSH_RELAY_V1.md` (no redirects, no proxy environment,
+bounded response, signed request, one provider-side attempt, retry only before a provider attempt)
+and HMP v1 §7f. Standard trust-store chain and host-name validation are always required; the optional
+pin setting is omitted or an exact list of 1 to 8 distinct canonical SHA-256 SPKI digests that additionally
+constrains only the relay's leaf certificate, with no environment fallback and no trust fallback (R-PIN, the
+unreviewed root clock and pin delta of 2026-10-02). It imports only packages the surface check already allows (`aiohttp`,
+`cryptography`), so it needs no new import exception. The exception adds no registration, hook,
+tool or dependency, and widens no other socket: every other network call stays on loopback. It takes
+effect only after implementation, independent review and root acceptance. This note describes no
+current runtime or scanner behavior, and `tools/ci/check_plugin_surface.py` is unchanged by it.
 
 ```text
 server/
@@ -51,6 +67,31 @@ server/
                                   #   C6b binding read it, never a request-time import. Old read methods unchanged.
                                   #   Under the minimum-version amendment these caches are bound to the listener's
                                   #   ServerContext and published as one locked tuple assignment (M3 source-reviewed)
+    approval_test_producer.py      # AT1 isolated synthetic no-op producer; receives checked native bindings,
+                                  #   never imports Hermes. Not wired to a CLI, route, adapter or factory;
+                                  #   no tool execution or grant changes. Source-reviewed lifecycle only;
+                                  #   caller/card/phone and release qualification remain separate.
+                                  #   T002-R proposed receipts distinguish begin deadline, control intent,
+                                  #   and actual owner join. close_and_join retains partial-start cleanup debt;
+                                  #   exact-source acceptance and causal test execution remain pending.
+    approval_test_host_codec.py    # AT1 pure host DATA/schema/framing prerequisite; bounded selectors
+                                  #   and generation equality, not peer/device authentication. No I/O,
+                                  #   producer call, route, factory, CLI or phone authority.
+    approval_test_host_transport.py # AT1 private same-OS-user Unix transport prerequisite;
+                                  #   bounded frames/connection leases and owned socket lifecycle.
+                                  #   not wired to current listener, CLI, producer or phone routes;
+                                  #   target-device/session authority remains a separate reviewed port.
+    approval_test_authority.py     # AT1 current device/family/owner/profile/session checks and bounded
+                                  #   owned off-loop metadata reads; real workers retain capacity until join.
+                                  #   Fake-component verified; listener/native/device qualification separate.
+    approval_test_routes.py        # AT1 strict authenticated standalone/profile-scoped projection/control;
+                                  #   ordinary AP3 never invokes or embeds synthetic observations.
+    approval_test_service.py       # AT1 ephemeral synthetic test mapping, projection/control and joined
+                                  #   cleanup ownership; no PromptStore insertion, real action or AT1 push.
+                                  #   Listener and HTTP registration remain pending.
+    approval_test_cli.py           # AT1 single-attempt operator observation and typed first-interrupt cancel;
+                                  #   accepted alone is not completion; no native producer or grant writes.
+                                  #   Parser/controller fake cases verified; real listener binding pending.
     direct_send.py                # amendment F2: DS-2..DS-8 orchestration (gate order, guard, idempotency,
                                   #   the api_server loopback call, post-hoc verification). Never imports a Hermes
                                   #   internal itself -- reads bridge.py for Hermes state, and speaks api_server's
@@ -58,6 +99,14 @@ server/
     pairing.py                    # P2, P4 (PR2-*, PR4-*), sanitization (PR2-3)
     tokens.py                     # P5 exchange, rotation, retry grace (successor = HMAC over the RAW presented
                                   #   token, length-prefixed; R16, CS-13), family revoke (PR5-*)
+    push_issuer.py                # spec 014 T021: pure route/collapse HMAC derivation and saved-hash check;
+                                  #   no I/O, route registration, state mutation or authority decision
+    push_config.py                # PN-AV: immutable live host settings; strict kid/audience/pin grammar, no I/O
+    push_registration.py          # PN-REG authenticated GET/PUT/DELETE; no provider/relay calls
+    push_hints.py                 # bounded listener-memory hint bindings; read-only resolver lookup
+    push_resolve.py               # PN-RES navigation only, no answers, history or relay I/O
+    push_dispatch.py              # PN-DSP bounded insertion worker, relay port injected
+    push_relay.py                 # PN-REL bounded signed HTTPS transport; host-only destination
     auth.py                       # bearer + HMP-Instance middleware (TR-5, PR5-6)
     reads.py                      # roster (RO-1/RO-2), snapshot (RO-3/RO-4/RO-5), history + resets (RO-6/RO-8), baselines;
                                   #   also list_sessions/session_snapshot/session_history (amendment A1, SES-1/SES-2)
@@ -375,3 +424,39 @@ cannot close from its own code.
   tighten, not a live gap. Suggested fix: flag any `Attribute` node on `self._adapter`, on
   `self._hermes` call results and on values returned from `REACHED_METHODS`-table calls, and
   compare `(receiver, method)` pairs against `compat.READ_DEPENDENCIES` instead of bare names.
+
+## AT1 listener and profile-scoped projection amendment (source proposal)
+
+The joined tree includes the accepted styled authority/service and separately accepted
+CLI component. The listener owns one attempted current-generation service and Unix
+endpoint after successful same-nonce record creation. Unknown cleanup retains that
+listener and dependencies. HmpServer.stop immediately fences AT1, retains a shielded
+teardown owner and joins endpoint/service/authority readers before adapter record/store/
+prompt destruction. Exact original adapter/root-plugin and closed module/native bindings
+participate in sticky replacement retirement; no runtime source fingerprint allowlist.
+
+The exact bearer-first AT1 route inventory is four routes under /hmp/v1:
+
+| Method | Path | Clause |
+|---|---|---|
+| GET | /approval-tests/current | standalone DATA projection |
+| GET | /bots/{p}/approval-tests/current | exact canonical profile-scoped projection |
+| POST | /approval-tests/{phone_test_id}/answer | typed new control intent |
+| POST | /approval-tests/{phone_test_id}/cancel | typed new cancel intent |
+
+The scoped handler passes only its canonical decoded path p to actual full
+phone_card(request, profile=p), retaining bounded owned metadata/gate reads and current
+device/family/owner/profile/feature/root/tip/home checks. Final synchronous currentness/
+bearer/service checks and fixed DTO encoding follow immediately, without another await.
+No body/query/caller field substitutes a profile. Strict GET/POST schemas,256-byte input,
+1024-byte no-store response and generic fixed result distinctions remain. Significant
+Content-Length digits determine numeric size; leading zeroes are not a body-size failure.
+
+Ordinary AP3 and AP4 retain their exact original bodies, calls, clocks, awaits, purge/view,
+Desktop ownership and resolver sequence. No combined observation, extension or cap is
+added to AP3; it does not call AT1. Independent same-screen mobile reads are governed by
+the separately accepted profile-scoped amendment. No PromptStore alias, public HTTP begin,
+push, native/provider action, source pin, grant or permission change is introduced.
+
+Definitions and expected source census require independent review and root execution.
+Native/helper/socket/current device and release qualifications remain separate.

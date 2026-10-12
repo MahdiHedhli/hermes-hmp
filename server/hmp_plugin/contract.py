@@ -17,6 +17,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
+from pathlib import Path
 from typing import Any, Protocol
 
 # --------------------------------------------------------------------------------------------------
@@ -54,6 +55,13 @@ HASH_DOMAIN_TAGS: tuple[bytes, ...] = (TAG_OFFER, TAG_HOST)
 # Not a V-1 wire identifier: it never appears on the wire or in a device-signed transcript, so it
 # is deliberately kept out of TRANSCRIPT_TAGS and HASH_DOMAIN_TAGS.
 TAG_GRACE = b"HMP1-GRACE"
+
+# PN-KEY: push-only domains, never added to the V-1 wire/tag tables above.
+# ROUTE/COLLAPSE are HMAC-only; RELAY is signature-only (future relay client).
+TAG_PUSH_ROUTE = b"HMP1-PUSH-ROUTE"
+TAG_PUSH_COLLAPSE = b"HMP1-PUSH-COLLAPSE"
+TAG_PUSH_RELAY = b"HMP1-PUSH-RELAY"
+
 
 # §2: the single conversation id in v1.
 CONVERSATION_ID = "default"
@@ -900,6 +908,8 @@ class ReadBridge(Protocol):
 
     def served_profiles(self) -> list[str]: ...
 
+    def approval_test_target(self, profile: str) -> ApprovalTestTarget | None: ...
+
     def authz_state(self, user_id: str, profile: str) -> AuthzState:
         """Fails closed to `AuthzState.UNVERIFIABLE`."""
         ...
@@ -996,6 +1006,15 @@ class ReadBridge(Protocol):
     ) -> Mapping[str, object] | None:
         """Validated Hermes write; None means the provider/model pair was refused."""
         ...
+
+
+@dataclass(frozen=True, slots=True, repr=False)
+class ApprovalTestTarget:
+    """AT1 HMP metadata projection; native helper bookkeeping is not claimed pure-read."""
+
+    profile_home: Path
+    root_session_id: str
+    live_tip_session_id: str
 
 
 @dataclass(frozen=True)

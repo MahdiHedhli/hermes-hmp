@@ -47,7 +47,7 @@ from typing import Any, Protocol
 
 from aiohttp import web
 
-from . import gate, wire
+from . import gate, push_config, wire
 from .auth import AuthContext, Authenticator
 from .compat import CompatResult
 from .contract import (
@@ -61,6 +61,12 @@ from .contract import (
     WriteGateState,
 )
 from .logging_policy import log_bridge_exception, log_event
+from .prompts import (
+    DesktopOwnershipPort,
+    MemberState,
+    UnavailableDesktopOwnershipPort,
+)
+from .push_hints import HintMap
 
 # --------------------------------------------------------------------------------------------------
 # Peer address parsing: shared by `server.address_allowed` (TR-4 bind/peer policy) and `peer_key`
@@ -151,6 +157,8 @@ class ServingIdentity(Protocol):
     def private_key(self) -> Any: ...
 
     def k_grace(self) -> bytes: ...
+
+    async def read_k_grace_for_push(self) -> bytes | None: ...
 
     def still_current(self) -> bool: ...
 
@@ -257,8 +265,20 @@ class ServerContext:
     direct_send_flag: Callable[[], bool] = field(default=lambda: False)
     # `direct_send.DirectSendDeps`, only on a supported build (mirrors `reads`/`authorize` above).
     direct_send_deps: Any = None
+    # PN-AV live host settings; default off, no wire/environment fallback.
+    push_settings: Callable[[], object] = field(default=lambda: None)
+    push_hints: HintMap = field(default_factory=HintMap, repr=False)
     # v1.3 prompt rows (process memory). None until a supported listener builds one.
     prompt_store: Any = None
+    # AT1 listener generation. No service exists until successful record/IPC activation.
+    approval_test_service: Any = None
+    approval_test_generation: Any = None
+    approval_test_current: Callable[[], bool] = field(default=lambda: False)
+    # NI-6: the closed Desktop ownership seam. The safe default never does native or
+    # canonical-target observation work; a native provider remains separately gated.
+    desktop_ownership: DesktopOwnershipPort = field(
+        default_factory=UnavailableDesktopOwnershipPort, repr=False
+    )
     # Approval availability (spec 034, owner policy 2026-10-01): the `approvals` and `phone_chat`
     # eligibility members, computed once at listener open from the actual API checks. Both default
     # CLOSED, so a context built without availability information never opens an approval route.
@@ -309,6 +329,48 @@ class ServerContext:
     media_raster_module: Any = None
     media_payload_module: Any = None
     media_fetch_module: Any = None
+
+    # PN-REG-3: volatile delete-failure fence, at most the 64 active route digests.
+    # Unknown/unreadable or over-cap state closes every route for this listener.
+    # Future dispatch and resolve MUST consult push_route_fenced too.
+    push_delete_fence: set[bytes] = field(default_factory=set, repr=False)
+    push_delete_fence_closed: bool = False
+
+    def push_route_fenced(self, route_hash: bytes) -> bool:
+        return self.push_delete_fence_closed or route_hash in self.push_delete_fence
+
+    def fence_push_delete(self, route_hash: bytes | None, *, unreadable: bool = False) -> None:
+        if unreadable:
+            self.push_delete_fence_closed = True
+        elif route_hash is not None:
+            if len(self.push_delete_fence) >= 64 and route_hash not in self.push_delete_fence:
+                self.push_delete_fence_closed = True
+            else:
+                self.push_delete_fence.add(route_hash)
+
+    def prune_push_delete_fence(self) -> None:
+        # Only successful committed retirement may clear a known fence. A global
+        # unreadable-state failure stays closed until listener restart (RES-21).
+        self.push_delete_fence.intersection_update(
+            digest
+            for digest in tuple(self.push_delete_fence)
+            if self.store.active_push_hash(digest)
+        )
+
+    def push_availability(self) -> push_config.PushAvailability:
+        # Adapter supplies only current host config. Neither wire nor environment
+        # values enter this snapshot, and availability never changes approval gates.
+        try:
+            block = self.push_settings()
+            return push_config.evaluate(
+                block,
+                direct_send=self.direct_send_effective(),
+                approvals=self.is_approvals_available(),
+                phone_chat=self.is_phone_chat_available(),
+            )
+        except Exception as exc:
+            log_bridge_exception(exc)
+            return push_config.PushAvailability(False, "relay_unconfigured", None)
 
     def is_approvals_available(self) -> bool:
         """Bot Chat approvals. Only an exact `True` opens it; anything else closes it."""
@@ -381,6 +443,22 @@ class ServerContext:
         except Exception as exc:
             log_bridge_exception(exc)
             return None
+
+    def approval_members_now(self) -> MemberState:
+        """Both approval members as the existing predicates report them now (spec 015 NI-6.2).
+        Call it before entering a prompt-store view, never under `_guard`. Composes the existing
+        checks and adds no authorization; any failure closes that member."""
+        try:
+            bot_chat = self.is_approvals_available() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            bot_chat = False
+        try:
+            phone_chat = self.is_phone_chat_available() is True
+        except Exception as exc:  # fail closed
+            log_bridge_exception(exc)
+            phone_chat = False
+        return MemberState(bot_chat=bot_chat, phone_chat=phone_chat)
 
     def is_owner_device(self, device_id: str) -> bool:
         try:

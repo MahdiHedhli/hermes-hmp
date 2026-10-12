@@ -55,6 +55,9 @@ import pytest
 
 from hmp_plugin import request_ctx as real_request_ctx
 
+from .approved_at1_adapter_witness import reverse_approved_at1_adapter
+from .approved_push_bridge_witness import reverse_approved_push_diagnostics
+from .approved_readiness_composition_witness import reverse_readiness_adapter
 from .media_binding_world import LEGACY_ANCHOR, MEDIA_STEMS, PACKAGE, World
 
 TEST_LATCH = "_m3_test_process_latch"  # used only by the mutant that re-adds a process latch
@@ -1319,7 +1322,45 @@ def _dynamic_media_lookups(source: str) -> list[str]:
 
 @pytest.mark.parametrize("name", ["adapter.py", "bridge.py", "reads.py"])
 def test_adapter_bridge_and_reads_use_no_dynamic_module_lookup(name: str) -> None:
-    assert _dynamic_media_lookups(READ_SRC[name]) == []
+    source = READ_SRC[name]
+    if name == "bridge.py":
+        source = reverse_approved_push_diagnostics(source)
+    elif name == "adapter.py":
+        source = reverse_approved_at1_adapter(reverse_readiness_adapter(source))
+    assert _dynamic_media_lookups(source) == []
+
+
+@pytest.mark.parametrize(
+    "before, after",
+    [
+        ('if "hermes_cli.config" not in sys.modules:', 'if "foreign.config" not in sys.modules:'),
+        (
+            "def read_push_settings_for_diagnostics(home: Path) -> object:\n",
+            "def read_push_settings_for_diagnostics(home: Path) -> object:\n"
+            "    __import__('x')\n",
+        ),
+        ("import sys\n", "import sys as changed\n"),
+        ("import stat\n", "import stat as changed\n"),
+    ],
+)
+def test_exact_push_diagnostics_exception_rejects_each_mutated_byte_delta(
+    before: str, after: str
+) -> None:
+    original = READ_SRC["bridge.py"]
+    assert original.count(before) == 1
+    mutated = original.replace(before, after, 1)
+    assert mutated != original
+    with pytest.raises(AssertionError):
+        reverse_approved_push_diagnostics(mutated)
+
+
+def test_exact_push_exception_does_not_hide_a_media_function_lookup() -> None:
+    original = READ_SRC["bridge.py"]
+    line = "def _local_media_modules() -> tuple[ModuleType, ...]:\n"
+    assert original.count(line) == 1
+    mutated = original.replace(line, line + "    sys.modules.get('forbidden-media')\n", 1)
+    assert mutated != original
+    assert _dynamic_media_lookups(reverse_approved_push_diagnostics(mutated))
 
 
 @pytest.mark.parametrize(
@@ -1481,3 +1522,60 @@ def test_unwrap_guard_mutations_are_detected(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, edit: tuple[str, str]
 ) -> None:
     assert not _property_unwrap_bound(tmp_path, monkeypatch, {"adapter.py": [edit]})
+
+
+def test_exact_adapter_inverse_recovers_pinned_pre_at1_source():
+    import hashlib
+
+    from .approved_at1_adapter_witness import APPROVED_PRE_AT1_ADAPTER_SHA256
+
+    restored = reverse_approved_at1_adapter(reverse_readiness_adapter(READ_SRC["adapter.py"]))
+    assert hashlib.sha256(restored.encode()).hexdigest() == APPROVED_PRE_AT1_ADAPTER_SHA256
+    assert _dynamic_media_lookups(restored) == []
+
+
+@pytest.mark.parametrize("damage", ["owner", "capture", "import", "duplicate", "relocate"])
+def test_exact_adapter_inverse_refuses_changed_ownership_capture(damage):
+    from .approved_at1_adapter_witness import EDIT_1_ACCEPTED
+
+    original = READ_SRC["adapter.py"]
+    if damage == "owner":
+        mutant = original.replace("_AT1_PLUGIN_MODULE = sys.modules[__package__]",
+                                  "_AT1_PLUGIN_MODULE = sys.modules[__name__]", 1)
+    elif damage == "capture":
+        mutant = original.replace("_AT1_ADAPTER_MODULE = sys.modules[__name__]",
+                                  "_AT1_ADAPTER_MODULE = sys.modules.get(__name__)", 1)
+    elif damage == "import":
+        mutant = original.replace("import sys\n", "import sys as changed\n", 1)
+    elif damage == "duplicate":
+        mutant = original.replace(EDIT_1_ACCEPTED, EDIT_1_ACCEPTED + EDIT_1_ACCEPTED, 1)
+    else:
+        mutant = original.replace(EDIT_1_ACCEPTED, "    return ctx\n\n\n", 1) + EDIT_1_ACCEPTED
+    assert mutant != original
+    with pytest.raises(AssertionError):
+        reverse_approved_at1_adapter(reverse_readiness_adapter(mutant))
+
+
+@pytest.mark.parametrize("injection", [
+    "    import importlib\n", "    from importlib import import_module\n", "    __import__('x')\n",
+    "    importlib.import_module('x')\n", "    import sys\n", "    from sys import modules\n",
+    "    sys.modules.get('x')\n", "    spec = importlib.util.find_spec('x')\n",
+])
+def test_adapter_inverse_keeps_every_new_lookup_outside_approved_sites(injection):
+    mutant = (READ_SRC["adapter.py"] + "\n\ndef outside_approved_at1():\n"
+              + injection + "    return 1\n")
+    restored = reverse_approved_at1_adapter(reverse_readiness_adapter(mutant))
+    assert _dynamic_media_lookups(restored)
+
+
+def test_adapter_inverse_does_not_mask_an_ordinary_method_mutation():
+    import hashlib
+
+    from .approved_at1_adapter_witness import APPROVED_PRE_AT1_ADAPTER_SHA256
+
+    original = READ_SRC["adapter.py"]
+    line = "    def _hooks(self) -> prompts.AdapterHooks | None:\n"
+    assert original.count(line) == 1
+    mutant = original.replace(line, line + "        raise RuntimeError('causal mutation')\n", 1)
+    restored = reverse_approved_at1_adapter(reverse_readiness_adapter(mutant))
+    assert hashlib.sha256(restored.encode()).hexdigest() != APPROVED_PRE_AT1_ADAPTER_SHA256

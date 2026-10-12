@@ -23,3 +23,9 @@ Unit tests, lint, the closed plugin surface check, log and privacy scans, and fi
 ## VI. Review security findings
 
 Unresolved authorization, expiry, resource bound, or log-leak findings block a release. Document open findings in the relevant PR and request review before calling a feature ready.
+
+## VII. Closed outbound surface
+
+HMP registers one platform adapter and one operator CLI, and adds no hook, tool, prompt section or dependency beyond those its contract names. Its calls into Hermes's own services stay on loopback literals, as HMP v1 §7a, §7c and §7d specify. One further exception is **proposed** by spec 014 and takes effect only after it is implemented, independently reviewed and accepted: a single outbound HTTPS client module, `push_relay.py`, whose destination comes only from explicit host configuration. A destination never comes from the wire, a phone, a sealed value, a redirect or a built-in default. The client is bound by the frozen relay policies in [`HMP_PUSH_RELAY_V1.md`](../../docs/architecture/contracts/HMP_PUSH_RELAY_V1.md) and HMP v1 §7f.
+
+This is a narrow, source-only exception. It grants no authority to any other socket, client, destination, dependency, hook, tool or registration. It makes no statement about current runtime behavior or scanner coverage, and no scanner rule changes with this text.
