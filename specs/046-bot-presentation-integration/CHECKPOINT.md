@@ -328,3 +328,7 @@ Implemented exclusive nonblocking control pipe with fixed schema2 byte packet, o
 ## October 12: CONTROL-01 prewrite/terminal repair
 
 Independent review held c64f89e: control-owner poison or expiry during pipe callback could still send GO, and caught reentry in final writes could report normal completion. Added owner-aware actual GO write wrapper after pipe callbacks, rechecking current scope, poison and original deadline; final input-ready and post-GO/post-close success fences retain uncertainty. One-use GO/write/close debt is preserved without replay. Five new causal real-pipe cases cover callback poison/expiry/scope loss and final input/GO reentry; 33 real reader/control cases pass. Original HOLD receipt SHA595c656056d0a3a0a215fdc814da87d13b3aed7391d52e5b704edbb81b2bb12c retained. Review closure pending; no live activation/incident.
+
+## October 12: retained-process composition and CONTROL-02
+
+Added actual reader composition through retained launch/wait owner, owned input/GO and result/diagnostic pipes: exact success wait and observed group absence, no second Popen reaper. Review closed original CONTROL-01 cases but held CONTROL-02: new final current callback could replace inode/blocking mode after earlier identity check. Final owned descriptor validation now follows that callback before the final deadline/poison fence and syscall. 34 real-file/control cases pass; independent successor replay pending. No activation.

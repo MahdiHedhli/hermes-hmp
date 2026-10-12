@@ -83,13 +83,14 @@ class OwnedControlPipe:
         # GoHandoff already checked its pipe identity. This owner-aware fence
         # follows those callbacks and precedes the actual one-use syscall.
         current = self._current()
+        held_fd = self._fd()
         now = time.monotonic()
         if (
             current is not True
             or self.uncertain
             or self.closed
             or not self._input_ready
-            or fd != self._identity[0]
+            or fd != held_fd
             or now >= self._deadline
         ):
             raise FrameError("BI1_CONTROL_GO_REFUSED")

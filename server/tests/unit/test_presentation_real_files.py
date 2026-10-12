@@ -763,7 +763,7 @@ def test_schema2_real_child_processing_preserves_projection_and_closes_files(sco
     assert body == b"" and fs.opened == set()
 
 
-@pytest.mark.parametrize("bounded_pipes", [False, True, "control"])
+@pytest.mark.parametrize("bounded_pipes", [False, True, "control", "retained"])
 def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope, bounded_pipes):
     import subprocess
     import sys
@@ -798,18 +798,26 @@ def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope, bou
     if bounded_pipes:
         from hmp_plugin.presentation_pipes import OwnedPresentationPipes
 
-        child = subprocess.Popen(
-            argv,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env={"LANG": "C", "LC_ALL": "C"},
-            close_fds=True,
-            start_new_session=True,
-        )
+        lifetime = None
+        if bounded_pipes == "retained":
+            from hmp_plugin.presentation_process import PresentationProcessOwner
+
+            lifetime = PresentationProcessOwner()
+            lifetime.start()
+            child = lifetime.child
+        else:
+            child = subprocess.Popen(
+                argv,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env={"LANG": "C", "LC_ALL": "C"},
+                close_fds=True,
+                start_new_session=True,
+            )
         try:
             owner = OwnedPresentationPipes(child.stdout, child.stderr)
-            if bounded_pipes == "control":
+            if bounded_pipes in ("control", "retained"):
                 from hmp_plugin.presentation_control_pipe import OwnedControlPipe
 
                 handle = object()
@@ -824,13 +832,25 @@ def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope, bou
                 child.stdin.close()
             while not owner.drained:
                 owner.poll(deadline=bound.deadline)
-            assert child.wait(timeout=1) == 0
+            if lifetime is None:
+                assert child.wait(timeout=1) == 0
+            else:
+                while not lifetime.poll_wait():
+                    assert time.monotonic() < bound.deadline
+                    time.sleep(0.005)
+                assert lifetime.exit_code == 0 and lifetime.signals_retired
+                assert lifetime.probe_group_absence()
             assert owner.diagnostic_bytes == 0
             assert child.stdout.closed and child.stderr.closed
             output = owner.output
         finally:
             # Cleanup only this synthetic test's exact Popen-owned process.
-            if child.poll() is None:
+            if lifetime is not None and lifetime.reaped:
+                pass
+            elif lifetime is not None:
+                # Preserve unknown lifetime debt rather than use another reaper.
+                raise AssertionError("retained synthetic process did not settle")
+            elif child.poll() is None:
                 child.kill()
                 child.wait(timeout=1)
             for stream in (child.stdin, child.stdout, child.stderr):
