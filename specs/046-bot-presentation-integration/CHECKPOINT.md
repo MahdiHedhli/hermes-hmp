@@ -336,3 +336,7 @@ Added actual reader composition through retained launch/wait owner, owned input/
 ## October 12: control security closure
 
 Independent review accepted7ccefeb: CONTROL-01/02 closed,13cases; receipt SHA2cc18801190d53c4e779861099d9452e058bfb38af32542cb7cc4525fa13ada1. Committed repository regressions now reproduce final-current inode replacement and blocking-mode change on real synthetic pipes, proving zero GO output. Control/processfocused25casespass. Prior holds retained. Remaining critical path: parent policy acquisition/accounting and installed code/runtime qualification; hard-deadline termination; native authority/JobOwner/lifecycle routes; exact physical host/app qualification.
+
+## October 12: current CI and parent accounting decision
+
+GitHub CI38205232793 completed success at exactc78e922. Added explicit parent policy/accounting decision: fixed directory-only no-follow acquisition, before-effect shared charges/actual close ownership and required schema3 counter transfer; current schema2 cannot silently fund a fresh child ledger after parent work. This closes an implementation design gap, not runtime readiness. Mobile budgetbinding3881fa2 review remains pending; no host/app deployment.

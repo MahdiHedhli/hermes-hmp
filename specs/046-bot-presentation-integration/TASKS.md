@@ -12,9 +12,13 @@
 - [x] Implement bounded child control/GO and result processing primitives; source review accepted recorded repairs.
 - [x] Implement actual fixed processing-only child bootstrap and schema2 processing; independent bounded source reviews accepted.
 - [ ] Qualify installed interpreter/dependency/code and bytecode-cache provenance before launching from a live listener.
-- [ ] Implement child supervisor/result/wait/group/IPC/signal drain binder.
+- [x] Implement reviewed fixed process launch/exact wait, owned result pipes and one-use input/GO/control-close primitives.
+- [ ] Qualify runtime reaper/source premises and implement hard termination/full JobOwner drain binder.
+- [ ] Review schema3 parent policy/work accounting, then implement actual policy acquisition.
 - [ ] Implement reviewed listener startup/shutdown and authenticated metadata route.
-- [ ] Implement revision-bound avatar binary transport and bounded mobile codec/cache.
+- [x] Implement source-only revision-bound client avatar transport, bounded codec and per-widget image owner; independently reviewed.
+- [ ] Review and qualify stable app-level aggregate avatar budget binding.
+- [ ] Implement authenticated host avatar route and qualify revision/cache behavior physically.
 - [ ] Complete header/details, blobatar v2 and custom static image parity.
 - [ ] Run exact native/transport/UI causal checks and independent security review.
 - [ ] Update host/app candidate, deploy authorized dogfood and qualify physical phones.
