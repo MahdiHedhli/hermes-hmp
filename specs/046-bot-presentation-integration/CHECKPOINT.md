@@ -300,3 +300,7 @@ Exact broader suite at 8af2c6d: 13 failed, 5613 passed, 38 skipped, 190 subtests
 ## October 12: bounded actual pipe collection
 
 Added OwnedPresentationPipes with pre-effect descriptor identity checks, finite selector waits under the original deadline, stdout/diagnostic limits before retention, diagnostic-content discard and actual EOF/one-use close records. Timeout/overflow never manufacture closure or release a reservation; errors retain uncertain ownership. An initial causal test found closed FDs disappearing silently from selectors; polling now verifies all held stream identities before select. Four real-pipe cases plus layout: 241 passed after correction. This is the receive/close part of supervision, not process launch/wait/group/signal or source attestation; independent review pending.
+
+## October 12: actual child/pipe composition
+
+Added a second real isolated-child execution path using OwnedPresentationPipes rather than subprocess capture. It verifies bounded result collection, diagnostic count, actual EOF/stream closure and successful wait while preserving Synthetic/hexagon projection. 23 real-file cases pass. Cleanup in this test targets only its exact synthetic Popen process; no production signal/group custody is inferred. The full suite started at e9c9a23 remains separately observed and must not be claimed to cover this later test delta.

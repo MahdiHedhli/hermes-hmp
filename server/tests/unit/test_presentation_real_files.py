@@ -763,7 +763,8 @@ def test_schema2_real_child_processing_preserves_projection_and_closes_files(sco
     assert body == b"" and fs.opened == set()
 
 
-def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope):
+@pytest.mark.parametrize("bounded_pipes", [False, True])
+def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope, bounded_pipes):
     import subprocess
     import sys
 
@@ -792,18 +793,52 @@ def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope):
         "observed_at": 100,
     }
     script = Path(__file__).parents[2] / "hmp_plugin" / "presentation_child.py"
-    result = subprocess.run(
-        [sys.executable, "-I", "-B", str(script)],
-        input=encode_input_v2(row) + bound.challenge.encode() + b"\n",
-        capture_output=True,
-        timeout=3,
-        check=False,
-        env={"LANG": "C", "LC_ALL": "C"},
-        close_fds=True,
-        start_new_session=True,
-    )
-    assert result.returncode == 0, result.stderr
-    assert result.stderr == b""
-    header, body = decode_output(result.stdout, bound.challenge, 1)
+    argv = [sys.executable, "-I", "-B", str(script)]
+    payload = encode_input_v2(row) + bound.challenge.encode() + b"\n"
+    if bounded_pipes:
+        from hmp_plugin.presentation_pipes import OwnedPresentationPipes
+
+        child = subprocess.Popen(
+            argv,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            env={"LANG": "C", "LC_ALL": "C"},
+            close_fds=True,
+            start_new_session=True,
+        )
+        try:
+            owner = OwnedPresentationPipes(child.stdout, child.stderr)
+            child.stdin.write(payload)
+            child.stdin.close()
+            while not owner.drained:
+                owner.poll(deadline=bound.deadline)
+            assert child.wait(timeout=1) == 0
+            assert owner.diagnostic_bytes == 0
+            assert child.stdout.closed and child.stderr.closed
+            output = owner.output
+        finally:
+            # Cleanup only this synthetic test's exact Popen-owned process.
+            if child.poll() is None:
+                child.kill()
+                child.wait(timeout=1)
+            for stream in (child.stdin, child.stdout, child.stderr):
+                if not stream.closed:
+                    stream.close()
+    else:
+        result = subprocess.run(
+            argv,
+            input=payload,
+            capture_output=True,
+            timeout=3,
+            check=False,
+            env={"LANG": "C", "LC_ALL": "C"},
+            close_fds=True,
+            start_new_session=True,
+        )
+        assert result.returncode == 0, result.stderr
+        assert result.stderr == b""
+        output = result.stdout
+    header, body = decode_output(output, bound.challenge, 1)
     assert header["fields"]["display_name"] == "Synthetic"
     assert header["fields"]["shape"] == "hexagon" and body == b""
