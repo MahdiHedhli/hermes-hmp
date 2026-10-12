@@ -153,8 +153,13 @@ class Cli:
         health: list[tuple[str, str, str, str]] | None = None,
     ) -> None:
         cli.write_listener_record(
-            self.record_path(), host=host, port=port, iid=iid or self.env.iid, profiles=profiles,
-            health_checked_at=health_checked_at, health=health,
+            self.record_path(),
+            host=host,
+            port=port,
+            iid=iid or self.env.iid,
+            profiles=profiles,
+            health_checked_at=health_checked_at,
+            health=health,
         )
 
 
@@ -194,8 +199,11 @@ def test_setup_check_is_read_only_before_first_gateway_start(tmp_path: Path) -> 
     kw = hmp_kit.identity_kwargs(tmp_path)
     out = io.StringIO()
     cli_env = cli.CliEnv(
-        environ=kw["env"], stdout=out, stderr=io.StringIO(),
-        compat=lambda: SUPPORTED, identity_kwargs=kw,
+        environ=kw["env"],
+        stdout=out,
+        stderr=io.StringIO(),
+        compat=lambda: SUPPORTED,
+        identity_kwargs=kw,
     )
     parser = argparse.ArgumentParser(prog="hermes hmp")
     cli.setup_parser(parser)
@@ -264,9 +272,7 @@ def test_health_check_fails_for_one_blocked_bot_without_disclosing_endpoint(c: C
 
 def test_health_check_accepts_disabled_channels_and_rejects_stale_snapshot(c: Cli) -> None:
     rows = [("alpha", "disabled", "disabled", "disabled")]
-    c.write_record(
-        profiles=[("alpha", "Alpha")], health_checked_at=c.env.clock.now, health=rows
-    )
+    c.write_record(profiles=[("alpha", "Alpha")], health_checked_at=c.env.clock.now, health=rows)
     assert c.run("health", "check") == cli.EXIT_OK
     c.write_record(
         profiles=[("alpha", "Alpha")],
@@ -411,7 +417,7 @@ def test_qrcode_declaration_admits_the_hermes_core_pin() -> None:
     `qrcode[pil]>=7.4.2,<9` pass; `packaging.requirements.Requirement.extras` closes that gap."""
     requirements = pytest.importorskip("packaging.requirements")
     declared = [requirements.Requirement(d) for d in _manifest_python_dependencies()]
-    assert [r.name for r in declared] == ["qrcode"]
+    assert [r.name for r in declared] == ["qrcode", "PyYAML"]
     assert declared[0].specifier.contains(HERMES_CORE_QRCODE_PIN)
     assert declared[0].extras == set()  # plugin.yaml: no extras
     # server/pyproject.toml (development and tests) declares the same range as the manifest.
@@ -431,7 +437,11 @@ def test_real_qrcode_library_is_within_the_declared_range() -> None:
     requirements = pytest.importorskip("packaging.requirements")
     from importlib.metadata import version
 
-    (declared,) = [requirements.Requirement(d) for d in _manifest_python_dependencies()]
+    (declared,) = [
+        r
+        for d in _manifest_python_dependencies()
+        if (r := requirements.Requirement(d)).name == "qrcode"
+    ]
     assert declared.specifier.contains(version("qrcode"))
 
 

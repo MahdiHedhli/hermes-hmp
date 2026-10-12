@@ -132,6 +132,24 @@ server/
     server.py                     # aiohttp app, route table (F1 subset), middlewares: peer policy (TR-4),
                                   #   size limits, rate limits (TR-6), error shaping (ERR-1), compat refusal (ERR-2a)
     readiness.py                  # v1.6 AR1: fixed closed readiness DTO mapping only; no authority or I/O
+    presentation.py               # BI1 optional pure bounded projection; no route, authority, or I/O
+    presentation_files.py         # BI1 optional worker-only fixed-name FD reader; no owner, route, or startup I/O
+    presentation_posix.py         # Explicit worker POSIX backend; no implicit activation or authority
+    presentation_native.py        # Explicit owned native-auth observation service; not route-bound
+    presentation_pipeline.py      # Worker-only fixed-read/parser/raster/DTO composition, not authority
+    presentation_budget.py        # Nonresetting worker work counters
+    presentation_worker_control.py # Bounded child input/GO codec; no authority or process owner
+    presentation_go.py            # Exact one-use synchronous write on an owned nonblocking pipe
+    presentation_child_launch.py  # Fixed isolated launch policy; no child/source attestation
+    presentation_worker.py        # Child-only GO/scope/process/result flow; no process owner
+    presentation_input_v2.py      # Closed parent policy/projection input, schema2 only
+    presentation_yaml.py          # BI1 optional pure bounded event reducer; no YAML provider, file I/O, or route
+    presentation_yaml_adapter.py  # Worker-only actual streaming parser; bounded closed projection
+    presentation_jobs.py          # BI1 private frame/owner core; native authority and child supervisor unbound
+    presentation_authority.py     # BI1 private parent-only authority custody; native read-only service unbound
+    presentation_raster.py        # BI1 optional worker-only bounded raster fork; no reader or route import
+    unicode17.py                  # BI1 pure Unicode 17 normalization/grapheme/category provider; no import I/O
+    unicode17_data.py             # BI1 fixed generated Unicode 17 tuple tables; see UNICODE_LICENSE.txt
     controls_requests.py          # AR1 ControlsRequestStore: bounded exact-origin request/CAS SQL only
                                   #   through Store.transaction(); no independent connection or writer;
                                   #   request history is not current Controls authority; no remote decision
@@ -460,3 +478,21 @@ push, native/provider action, source pin, grant or permission change is introduc
 
 Definitions and expected source census require independent review and root execution.
 Native/helper/socket/current device and release qualifications remain separate.
+
+- `presentation_child.py`: fixed isolated processing entry, private own-code namespace; no gateway initializer or native authority. Parent provenance/custody and route activation remain unbound.
+
+- `presentation_pipes.py`: exclusive nonblocking bounded result/diagnostic pipe ownership; actual EOF/close only, no process wait/group/authority claim.
+
+- `presentation_process.py`: fixed launch attempt custody, exact terminal waitpid and one signal-zero group observation. No destructive signal, runtime qualification or native route binding.
+
+- `presentation_control_pipe.py`: owned nonblocking schema2 input/one GO/control closure; binding only, no native authorization or process termination.
+
+- `presentation_input_v3.py`: closed input3 parent-policy/work transfer; no legacy decoder fallback or native authority. Actual entry migration/result2 remain pending.
+
+- `presentation_output_v2.py`: closed result2 eight-total accounting and retained-parent comparison. Counter/cleanup claims do not prove authority, IO or resource custody.
+
+- `presentation_parent_policy.py`: retained directory-only no-follow policy observation and exact precharged success schedule; actual native permission, job reservation/thread join and one-use transfer remain binder obligations.
+
+- `presentation_policy_thread.py`: retained actual directory-policy worker/start/join observations; task completion/cancellation does not settle it. Native job reservation/authority/transfer remain binder obligations.
+
+- `presentation_policy_binding.py`: one retained policy work per existing admitted authority operation, actual join then fresh native PRE_GO observation; no route, transfer, child launch or clean-abort provided yet.

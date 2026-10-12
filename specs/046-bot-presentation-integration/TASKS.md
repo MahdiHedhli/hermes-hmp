@@ -1,0 +1,30 @@
+# BI1 integration tasks
+
+- [x] Compose existing HMP/mobile presentation foundations with current candidate.
+- [x] Implement explicit POSIX backend and actual synthetic kernel transaction tests.
+- [x] Implement native authority observer; independent review accepted0eef repair.
+- [x] Implement actual YAML token/event adapter; independent review accepted51fc fix.
+- [x] Connect file/parser/raster/closed DTO pipeline.
+- [x] Add bounded pinned client read, roster capability and foreground fencing.
+- [x] Connect classic renderer to live roster rows (not deployed capability).
+- [ ] Review complete proposed transport/custody contract and mobile integration.
+- [x] Implement one nonresetting fixed-file/YAML/raster work ledger; bounded source review accepted d1521fd.
+- [x] Implement bounded child control/GO and result processing primitives; source review accepted recorded repairs.
+- [x] Implement actual fixed processing-only child bootstrap and schema2 processing; independent bounded source reviews accepted.
+- [ ] Qualify installed interpreter/dependency/code and bytecode-cache provenance before launching from a live listener.
+- [x] Implement reviewed fixed process launch/exact wait, owned result pipes and one-use input/GO/control-close primitives.
+- [ ] Qualify runtime reaper/source premises and implement hard termination/full JobOwner drain binder.
+- [x] Review schema3 parent policy/work accounting and implement directory-only policy acquisition.
+- [x] Bind actual policy thread/join to native-authorized reserved job; callback closure reviewed a2746c8.
+- [x] Bind result2 job receiver to retained parent identity/work; reviewed7955c06.
+- [x] Transfer private input3 once after native postcheck; reviewed1784355.
+- [x] Close independent review of pre-transfer abort/credential retirement (4ea76f2, twelve cases).
+- [ ] Implement reviewed listener startup/shutdown and authenticated metadata route.
+- [x] Implement source-only revision-bound client avatar transport, bounded codec and per-widget image owner; independently reviewed.
+- [x] Review stable app-level aggregate avatar budget binding (3881fa2); screen regression122cases pass.
+- [ ] Sample aggregate avatar resources on exact signed physical devices.
+- [ ] Implement authenticated host avatar route and qualify revision/cache behavior physically.
+- [ ] Complete header/details, blobatar v2 and custom static image parity.
+- [ ] Run exact native/transport/UI causal checks and independent security review.
+- [ ] Update host/app candidate, deploy authorized dogfood and qualify physical phones.
+- [ ] Reconcile app/plugin feature inventories and upstream Gist with verified scope.

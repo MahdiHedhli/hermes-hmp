@@ -402,6 +402,7 @@ source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
     { name = "cryptography" },
+    { name = "pyyaml" },
     { name = "qrcode" },
 ]
 
@@ -410,7 +411,6 @@ dev = [
     { name = "jsonschema" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
-    { name = "pyyaml" },
     { name = "truststore" },
 ]
 
@@ -421,7 +421,7 @@ requires-dist = [
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4,<5" },
     { name = "pytest", marker = "extra == 'dev'" },
     { name = "pytest-asyncio", marker = "extra == 'dev'" },
-    { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6,<7" },
+    { name = "pyyaml", specifier = ">=6,<7" },
     { name = "qrcode", specifier = ">=7.4.2,<9" },
     { name = "truststore", marker = "extra == 'dev'", specifier = "==0.10.4" },
 ]

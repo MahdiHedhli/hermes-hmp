@@ -7,3 +7,5 @@ description: Hermes Mobile Protocol v1 platform adapter and operator CLI.
 author: Hermes Bot Mobile
 python_dependencies:
   - "qrcode>=7.4.2,<9"
+  # BI1 disposable worker only: bounded token/event parser, no object construction.
+  - "PyYAML>=6,<7"
