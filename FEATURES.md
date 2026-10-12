@@ -1,5 +1,18 @@
 # HMP features
 
+## Bot character integration checkpoint — October 12, 2026
+
+Bot presentation now has a real isolated schema2 reader verified on synthetic
+profile files. Bounded input, exact identity/policy reconstruction and the fixed
+processing-only entry passed independent source review. This is **not available
+on installed phones**: live source/runtime provenance, supervisor custody,
+authenticated routes, image transport and physical qualification remain open.
+The current local-media candidate is implemented and enabled on the dogfood
+host, but fresh end-to-end physical rendering remains unverified; the older
+MEDIA path shown by the user no longer exists. No arbitrary-path serving is
+introduced to compensate.
+
+
 HMP is the Hermes gateway plugin used by the [HermesBot Mobile](https://hermes-bot.app) apps. This page describes the plugin; the mobile UI is tracked in the private app repository.
 
 | Status | Capability | Notes |

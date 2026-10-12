@@ -10,7 +10,8 @@
 - [ ] Review complete proposed transport/custody contract and mobile integration.
 - [x] Implement one nonresetting fixed-file/YAML/raster work ledger; bounded source review accepted d1521fd.
 - [x] Implement bounded child control/GO and result processing primitives; source review accepted recorded repairs.
-- [ ] Implement actual child entry with fixed processing-only package bootstrap and source binding.
+- [x] Implement actual fixed processing-only child bootstrap and schema2 processing; independent bounded source reviews accepted.
+- [ ] Qualify installed interpreter/dependency/code and bytecode-cache provenance before launching from a live listener.
 - [ ] Implement child supervisor/result/wait/group/IPC/signal drain binder.
 - [ ] Implement reviewed listener startup/shutdown and authenticated metadata route.
 - [ ] Implement revision-bound avatar binary transport and bounded mobile codec/cache.

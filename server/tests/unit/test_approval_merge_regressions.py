@@ -150,17 +150,19 @@ def test_h4_the_direct_send_manifest_keeps_its_four_sampled_builds() -> None:
     assert "requalification_required" not in data
 
 
-def test_h5_new_bot_routing_the_yaml_dependency_and_the_config_writer_are_absent() -> None:
+def test_h5_routing_writer_remains_absent_with_reviewed_worker_yaml_dependency() -> None:
     assert not (PACKAGE / "routes.py").exists()
     for manifest in (SERVER / "hmp_plugin" / "plugin.yaml", REPO / "plugin.yaml"):
         text = manifest.read_text(encoding="utf-8")
         deps = re.findall(r'^\s*-\s*"([^"]+)"', text.split("python_dependencies:", 1)[1], re.M)
-        assert deps == ["qrcode>=7.4.2,<9"], manifest
+        assert deps == ["qrcode>=7.4.2,<9", "PyYAML>=6,<7"], manifest
     pyproject = (SERVER / "pyproject.toml").read_text(encoding="utf-8")
     runtime = pyproject.split("dependencies = [", 1)[1].split("]", 1)[0]
-    assert "pyyaml" not in runtime.lower()
+    assert '"PyYAML>=6,<7"' in runtime
     surface = (REPO / "tools" / "ci" / "check_plugin_surface.py").read_text(encoding="utf-8")
-    assert "ROUTES_MODULE" not in surface and '"yaml"' not in surface
+    assert "ROUTES_MODULE" not in surface
+    assert 'THIRD_PARTY_ALLOWED: frozenset[str] = frozenset({"aiohttp", "cryptography"})' in surface
+    assert '"yaml": "presentation_yaml_adapter.py"' in surface
     for name, text in _module_sources().items():
         assert "profile_routes" not in text or name in {"bridge.py", "authorize.py"}, name
         assert "routes add" not in text, name
