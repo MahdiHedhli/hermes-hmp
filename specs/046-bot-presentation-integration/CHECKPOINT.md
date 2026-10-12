@@ -421,3 +421,16 @@ _components for both root/home. Actual2MBallocation regressions and original
 unknown-close identity/no-retry cases pass;37real-file cases total. Parent closure
 review pending. Input3/result2/migration and bounded receiver have separate actual
 acceptance receipts; none authorizes native routes or physical delivery.
+
+## October 12: policy work/native operation binding
+
+Added one policy-work owner per existing opaque authority operation only after
+INITIAL/BEFORE and reserved STARTING admission. Home derives from its observed
+canonical native home; no request path or alternate profile lookup. Actual join
+and fresh PRE_GO observation gate snapshot access. One-use constructor/start
+claims precede callbacks.61real-file/authoritycases+23subtests pass with synthetic
+native service; initial test corrected nonexistent capture API to reserve, and
+postcheck correctly uses STARTING phasePRE_GO (BEFORE belongs QUEUED). No actual
+bearer/native gateway qualification, child/input transfer, clean-abort, retirement
+integration or routes. Full exact361cf69 suite5705passed/53skipped/190subtests.
+Independent binding review pending.

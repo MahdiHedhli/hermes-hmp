@@ -494,3 +494,5 @@ Native/helper/socket/current device and release qualifications remain separate.
 - `presentation_parent_policy.py`: retained directory-only no-follow policy observation and exact precharged success schedule; actual native permission, job reservation/thread join and one-use transfer remain binder obligations.
 
 - `presentation_policy_thread.py`: retained actual directory-policy worker/start/join observations; task completion/cancellation does not settle it. Native job reservation/authority/transfer remain binder obligations.
+
+- `presentation_policy_binding.py`: one retained policy work per existing admitted authority operation, actual join then fresh native PRE_GO observation; no route, transfer, child launch or clean-abort provided yet.

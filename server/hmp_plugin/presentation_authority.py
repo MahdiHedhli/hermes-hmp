@@ -191,6 +191,7 @@ class _Record:
     native_drained: bool = False
     permit: _Permit | None = None
     native_claim: _NativeClaim | None = None
+    policy_work: object | None = None
 
 
 class _OwnerAuthority(AuthorityPort):

@@ -1351,3 +1351,91 @@ def test_parent_constructor_bounds_paths_before_large_allocation(scope):
         finally:
             tracemalloc.stop()
         assert peak < 500_000
+
+
+@pytest.mark.asyncio
+async def test_native_policy_binding_requires_admitted_operation_and_fresh_postcheck(scope):
+    from hmp_plugin.presentation_authority import (
+        AuthorityRefusalError,
+        ListenerFence,
+        NativeObservation,
+        OriginalHeaders,
+        ParentAuthorityAdapter,
+    )
+    from hmp_plugin.presentation_jobs import CapturedLease
+    from hmp_plugin.presentation_policy_binding import NativePolicyWork
+
+    _, bound = scope
+
+    class Headers:
+        def getall(self, key, default):
+            return {"Authorization": ["Bearer " + "A" * 43], "HMP-Instance": ["iid"]}.get(
+                key, default
+            )
+
+    class Request:
+        headers = Headers()
+
+    class NativeFake:
+        def __init__(self):
+            self.allowed = True
+            self.calls = []
+
+        async def observe(self, record, phase):
+            self.calls.append(phase)
+            if not self.allowed:
+                return None
+            lease = record.lease
+            return NativeObservation(
+                lease.iid,
+                lease.device_id,
+                lease.user_id,
+                lease.family_id,
+                lease.profile,
+                bound.home_path,
+                record.listener,
+                record.store,
+                record.bridge,
+                record.identity,
+                record.native_owner,
+                True,
+            )
+
+        async def drain(self, record):
+            return True
+
+    native = NativeFake()
+    authority = ParentAuthorityAdapter("iid", service=native)
+    lease = CapturedLease("iid", "device", "user", "family", "default", "b" * 64, "binding", 1)
+    operation = authority.reserve(
+        lease,
+        "METADATA",
+        OriginalHeaders.from_request(Request()),
+        listener=object(),
+        fence=ListenerFence(1),
+        store=object(),
+        bridge=object(),
+        identity=object(),
+        native_owner=object(),
+    )
+    with pytest.raises(AuthorityRefusalError):
+        NativePolicyWork(authority, operation)
+    assert await authority.initialize(operation)
+    with pytest.raises(AuthorityRefusalError):
+        NativePolicyWork(authority, operation)
+    authority.start(operation)
+    work = NativePolicyWork(authority, operation)
+    with pytest.raises(AuthorityRefusalError):
+        NativePolicyWork(authority, operation)
+    work.start()
+    while not work.poll_join():
+        assert time.monotonic() < bound.deadline
+        await __import__("asyncio").sleep(0.005)
+    with pytest.raises(AuthorityRefusalError):
+        work.observed_snapshot()
+    assert await work.postcheck()
+    assert work.observed_snapshot().counts["opens"] == len(bound.directory_rules)
+    assert native.calls == ["INITIAL", "BEFORE", "PRE_GO"]
+    with pytest.raises(AuthorityRefusalError):
+        await work.postcheck()
+    # Native service is synthetic; no actual bearer/native gateway qualification.
