@@ -207,3 +207,20 @@ the handoff. Entry ownership is now consumed before callbacks; any reentry poiso
 it even if the callback catches the refusal. Two new counterexamples perform zero
 writes after caught reentry;12 GO cases and selected lint pass. Independent
 closure review remains pending. No real worker launch or live route occurred.
+
+## Worker launch policy
+
+The fixed launch recipe selects the current absolute interpreter, isolated/no-
+bytecode flags, one fixed future worker script, a new process session, close_fds
+and no inherited descriptors. The environment contains only LANG/LC_ALL, never
+a copy of provider/bearer/PYTHONPATH/loader variables or a changed HOME. Three
+finite tests pass, including a real isolated interpreter with synthetic secrets
+absent and an explicitly inheritable parent pipe not inherited. The recipe is
+not source attestation: the worker script does not yet exist, and its verification,
+actual launcher/ownership/drain and child code remain required. No live plugin
+process or profile read was started by these tests.
+
+GO-01 repair at54d0df received independent source acceptance with17 separate
+checks, receipt SHA256
+`4a72ac1380265a0e0493ac0fe870a05976129f724fddc47674bc743d87e26c6c`.
+Actual exclusive FD custody/native binding/child supervision remain outside it.
