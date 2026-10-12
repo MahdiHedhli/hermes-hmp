@@ -67,3 +67,20 @@ no live Hermes directory or profile file was opened. Other test environments
 with unsafe ancestors skip these fixtures rather than weaken production policy.
 These cases qualify transaction/backend composition, not request authentication,
 worker process isolation, live routing or physical parity.
+
+## Worker processing pipeline
+
+The fixed-reader result now feeds the actual YAML reducer, bounded raster
+structural inspector and closed presentation DTO. Metadata carries canonical
+instance/profile and separate metadata/image revisions; expected avatar revision
+mismatch or clear refuses. The original clock/deadline is required on the raster
+budget. Raw profile bytes cannot appear in the projection. Six real-file tests
+passed, including actual metadata-only and tiny synthetic PNG result composition.
+Raster structure admission is not a decode proof; the phone codec remains the
+decoder. Shared total job ledger and child supervisor integration remain open.
+
+Independent review accepted exact native repair `0eef794` with its three findings
+closed by four separate inert checks. Receipt SHA256
+`0514c3c5a2e02b7652166a8344303fa1a14142c22b702eada9bfde59e00746e2`.
+This verdict does not cover the later parser, real-file or pipeline additions and
+does not authorize live activation or certify atomic authority over file I/O.

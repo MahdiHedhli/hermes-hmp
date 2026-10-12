@@ -136,6 +136,7 @@ server/
     presentation_files.py         # BI1 optional worker-only fixed-name FD reader; no owner, route, or startup I/O
     presentation_posix.py         # Explicit worker POSIX backend; no implicit activation or authority
     presentation_native.py        # Explicit owned native-auth observation service; not route-bound
+    presentation_pipeline.py      # Worker-only fixed-read/parser/raster/DTO composition, not authority
     presentation_yaml.py          # BI1 optional pure bounded event reducer; no YAML provider, file I/O, or route
     presentation_yaml_adapter.py  # Worker-only actual streaming parser; bounded closed projection
     presentation_jobs.py          # BI1 private frame/owner core; native authority and child supervisor unbound

@@ -17,6 +17,7 @@ from hmp_plugin.presentation_files import (
 )
 from hmp_plugin.presentation_posix import PosixFileOps
 from hmp_plugin.presentation_yaml_adapter import parse_presentation_yaml
+from hmp_plugin.presentation_yaml import PresentationYamlError
 
 
 @pytest.fixture
@@ -95,3 +96,71 @@ def test_actual_metadata_replacement_during_read_is_refused(scope):
     with pytest.raises(PresentationReadError):
         read_fixed_presentation_files(bound, fs=fs, clock=time.monotonic)
     assert fs.replaced and fs.opened == set()
+
+
+class RasterLedger:
+    def __init__(self):
+        self.scans = 0
+        self.hash_bytes = 0
+        self.units = 0
+    def charge_scan(self):
+        assert self.scans == 0
+        self.scans += 1
+    def charge_hash_bytes(self, count):
+        self.hash_bytes += count
+        assert self.hash_bytes <= 2_000_000
+    def charge_unit(self):
+        self.units += 1
+        assert self.units <= 10_000
+
+
+def process(result, bound, expected=None):
+    from hmp_plugin.presentation_pipeline import reduce_fixed_result
+    from hmp_plugin.presentation_raster import RasterBudget
+    ledger = RasterLedger()
+    processed = reduce_fixed_result(
+        result, iid='a'*52, profile='default', canonical_fallback='Hermes',
+        observed_at=100, clock=time.monotonic, deadline=bound.deadline,
+        raster_budget=RasterBudget(deadline=bound.deadline, clock=time.monotonic, ledger=ledger),
+        expected_avatar_revision=expected,
+    )
+    return processed, ledger
+
+
+def test_actual_metadata_pipeline_returns_closed_scoped_character(scope):
+    _, bound = scope
+    result = read_fixed_presentation_files(bound, fs=PosixFileOps(), clock=time.monotonic)
+    output, ledger = process(result, bound)
+    assert output.metadata['iid'] == 'a'*52 and output.metadata['profile'] == 'default'
+    assert output.metadata['character'] == dict(version=1, shape='hexagon', color='#8b5cf6', custom=None)
+    assert output.metadata['display_name'] == 'Synthetic'
+    assert output.avatar_bytes is None and ledger.scans == 0
+    assert 'profile.yaml' not in repr(output)
+
+
+def test_actual_avatar_pipeline_binds_binary_to_content_revision(scope):
+    import struct
+    import zlib
+    import hashlib
+    home, bound = scope
+    def chunk(kind, body):
+        return struct.pack('>I', len(body))+kind+body+struct.pack('>I', zlib.crc32(kind+body))
+    image = b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 6, 0, 0, 0))+chunk(b'IDAT', zlib.compress(b'\x00\x8b\x5c\xf6\xff'))+chunk(b'IEND', b'')
+    (home/'assets').mkdir(mode=0o700)
+    (home/'assets'/'avatar.png').write_bytes(image)
+    (home/'assets'/'avatar.png').chmod(0o600)
+    result = read_fixed_presentation_files(bound, fs=PosixFileOps(), clock=time.monotonic)
+    output, ledger = process(result, bound, hashlib.sha256(image).hexdigest())
+    assert output.avatar_bytes == image
+    assert output.metadata['avatar'] == dict(revision=hashlib.sha256(image).hexdigest(), mime='image/png', bytes=len(image), width=1, height=1)
+    assert ledger.scans == 1 and ledger.hash_bytes == len(image)
+    with pytest.raises(PresentationYamlError, match='AVATAR_CHANGED'):
+        process(result, bound, '0'*64)
+
+
+def test_cleared_avatar_cannot_satisfy_previous_revision(scope):
+    from hmp_plugin.presentation_yaml import PresentationYamlError
+    _, bound = scope
+    result = read_fixed_presentation_files(bound, fs=PosixFileOps(), clock=time.monotonic)
+    with pytest.raises(PresentationYamlError, match='AVATAR_CHANGED'):
+        process(result, bound, '0'*64)
