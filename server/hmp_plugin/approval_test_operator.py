@@ -17,6 +17,7 @@ class OperatorHandler:
         self._admit = admit
         self._active: tuple[HostBeginRequest, str, TargetBinding] | None = None
         self._closing = False
+        self._shutdown_task: asyncio.Task[None] | None = None
 
     async def _join(self, handle: str, target: TargetBinding) -> None:
         while True:
@@ -63,9 +64,22 @@ class OperatorHandler:
         if active is not None and active[0] is request:
             await self._producer.cancel_test(active[1], active[2].device_id)
 
-    async def shutdown(self) -> None:
-        self._closing = True
+    async def _shutdown_owned(self) -> None:
         active = self._active
         if active is not None:
             await self._producer.cancel_test(active[1], active[2].device_id)
             await self._join(active[1], active[2])
+
+    async def shutdown(self) -> None:
+        self._closing = True
+        if self._shutdown_task is None:
+            self._shutdown_task = asyncio.create_task(self._shutdown_owned())
+        cancelled = False
+        while not self._shutdown_task.done():
+            try:
+                await asyncio.shield(self._shutdown_task)
+            except asyncio.CancelledError:
+                cancelled = True
+        self._shutdown_task.result()
+        if cancelled:
+            raise asyncio.CancelledError
