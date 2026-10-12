@@ -55,6 +55,7 @@ CONTRACT_MODULES = {
     "presentation.py",
     "presentation_files.py",
     "presentation_posix.py",
+    "presentation_native.py",
     "presentation_yaml.py",
     "presentation_jobs.py",
     "presentation_authority.py",

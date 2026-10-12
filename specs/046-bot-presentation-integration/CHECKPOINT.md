@@ -19,3 +19,19 @@ binding, shutdown drain, negotiated route, optional roster projection, mobile DT
 and rendering, cache isolation, independent contract review and physical parity.
 An unbound NativeReadOnlyService must continue to refuse. No future route may
 construct a lease or GO marker and treat it as native authorization.
+
+## Native observation implementation
+
+An explicit, currently unregistered native service now binds one listener/store/
+bridge/identity/native owner and owning event loop. It authenticates original
+headers before and after an owned native bot-authority/home lookup; wrong owner,
+listener, retired generation or late/deadline response cannot return an observation.
+Cancellation leaves the real worker under a retained task; per-operation drain or
+close-and-join waits for actual thread termination before releasing it. No config,
+avatar or chat bytes are read in this phase.
+
+Five focused synthetic tests exercise valid bindings, post-read identity mismatch,
+wrong listener/native owner and cancelled observer with a real blocked worker.
+Authenticator behavior is mocked in these five tests; they do not prove native
+credential integration or deployed functionality. Live route and worker-child
+binding remain closed pending focused independent review and real integration.
