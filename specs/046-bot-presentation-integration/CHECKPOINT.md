@@ -35,3 +35,14 @@ wrong listener/native owner and cancelled observer with a real blocked worker.
 Authenticator behavior is mocked in these five tests; they do not prove native
 credential integration or deployed functionality. Live route and worker-child
 binding remain closed pending focused independent review and real integration.
+
+## Independent review findings and repair
+
+Review of `4af2f70` found native grant recheck missing after home resolution and
+task-done incorrectly treated as actual worker drain. Both findings concern inert
+source, not an observed live incident. The repair checks native bot authority and
+routing again inside the worker, retains an explicit thread ledger independently
+of task cancellation, and refuses closure after any ambiguous start exception.
+Eight service tests now include native revocation during lookup, cancellation of
+the owned task itself and ambiguous start. The combined service/parent/layout run
+passed 258 tests plus 23 subtests. Independent re-review remains pending.

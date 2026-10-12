@@ -100,3 +100,67 @@ async def test_wrong_native_owner_refuses_before_authentication():
         assert await service.observe(record, 'INITIAL') is None
         auth.assert_not_called()
     assert await service.close_and_join() is True
+
+
+@pytest.mark.asyncio
+async def test_native_revocation_during_home_lookup_refuses_observation():
+    service, record, _ = fixture()
+    allowed = [True]
+    checks = []
+    def policy(user, profile):
+        checks.append(allowed[0])
+        return AuthzState.AUTHORIZED if allowed[0] else AuthzState.PENDING_OPERATOR
+    record.bridge.authz_state = policy
+    def home(profile):
+        allowed[0] = False
+        return Path('/synthetic/hermes')
+    record.bridge._profile_home = home
+    with patch('hmp_plugin.presentation_native.Authenticator') as auth:
+        auth.return_value.authenticate.return_value = AuthContext('device', 'user', 'family')
+        assert await service.observe(record, 'INITIAL') is None
+    assert checks == [True, False]
+    assert await service.drain(record) is True
+
+
+@pytest.mark.asyncio
+async def test_cancelled_owned_task_does_not_release_running_thread():
+    service, record, _ = fixture()
+    started, release = threading.Event(), threading.Event()
+    def home(profile):
+        started.set()
+        release.wait(2)
+        return Path('/synthetic/hermes')
+    record.bridge._profile_home = home
+    with patch('hmp_plugin.presentation_native.Authenticator') as auth:
+        auth.return_value.authenticate.return_value = AuthContext('device', 'user', 'family')
+        observing = asyncio.create_task(service.observe(record, 'INITIAL'))
+        try:
+            for _ in range(100):
+                if started.is_set(): break
+                await asyncio.sleep(.005)
+            assert started.is_set()
+            owner = service._reads[record.operation]
+            owner.task.cancel()
+            with pytest.raises(asyncio.CancelledError): await observing
+            assert service._reads[record.operation] is owner
+            assert owner.worker.is_alive() and not owner.joined
+            draining = asyncio.create_task(service.drain(record))
+            await asyncio.sleep(.02)
+            assert not draining.done()
+            release.set()
+            assert await draining is True
+            assert owner.joined and not owner.worker.is_alive()
+        finally:
+            release.set()
+            await service.drain(record)
+
+
+@pytest.mark.asyncio
+async def test_ambiguous_thread_start_keeps_undrained_capacity():
+    service, record, _ = fixture()
+    with patch('hmp_plugin.presentation_native.Authenticator') as auth, patch('hmp_plugin.presentation_native.threading.Thread.start', side_effect=RuntimeError('synthetic start uncertainty')):
+        auth.return_value.authenticate.return_value = AuthContext('device', 'user', 'family')
+        assert await service.observe(record, 'INITIAL') is None
+    assert record.operation in service._reads
+    assert await service.drain(record) is False
+    assert await service.close_and_join() is False

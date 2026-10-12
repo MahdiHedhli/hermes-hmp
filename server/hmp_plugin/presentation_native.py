@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,15 @@ from .auth import Authenticator
 from .presentation_authority import NativeObservation
 from .presentation_jobs import MAX_PROCESSES
 from .reads import require_bot_authorized
+
+
+@dataclass
+class _ReadOwner:
+    task: asyncio.Task[Any] | None = None
+    worker: threading.Thread | None = None
+    started: bool = False
+    joined: bool = False
+    uncertain: bool = False
 
 
 class PresentationNativeService:
@@ -30,7 +40,7 @@ class PresentationNativeService:
         self._bridge = ctx.bridge
         self._store = ctx.store
         self._identity = ctx.identity
-        self._reads: dict[object, asyncio.Task[Any]] = {}
+        self._reads: dict[object, _ReadOwner] = {}
         self._retired = False
 
     def _local(self, record: Any) -> bool:
@@ -63,7 +73,7 @@ class PresentationNativeService:
             record.lease.device_id, record.lease.user_id, record.lease.family_id
         )
 
-    async def _owned_read(self, record: Any) -> str | None:
+    async def _owned_read(self, record: Any, owner: _ReadOwner) -> str | None:
         results: list[str] = []
         failures: list[bool] = []
 
@@ -75,21 +85,24 @@ class PresentationNativeService:
                 home = self._bridge._profile_home(record.lease.profile)
                 if not isinstance(home, Path) or not home.is_absolute():
                     raise ValueError('invalid native home')
+                require_bot_authorized(self._bridge, record.lease.user_id, record.lease.profile)
+                if self._bridge._profile_home(record.lease.profile) != home:
+                    raise ValueError("native routing changed")
                 results.append(str(home))
             except BaseException:
                 failures.append(True)
 
         worker = threading.Thread(target=work, name='hmp-bi1-authority', daemon=False)
+        owner.worker = worker
         try:
             worker.start()
+            owner.started = True
         except BaseException:
-            failures.append(True)
-            if worker.ident is None and not worker.is_alive():
-                return None
-        while worker.is_alive():
-            await asyncio.sleep(.005)
-        if worker.ident is not None:
-            worker.join(timeout=0)
+            # An exception cannot prove no delayed launch. Retain the owner and
+            # refuse drain; do not reinterpret task completion as worker closure.
+            owner.uncertain = True
+            return None
+        await self._join_worker(owner)
         if failures or len(results) != 1:
             return None
         return results[0]
@@ -104,8 +117,10 @@ class PresentationNativeService:
                 return None
         except Exception:
             return None
-        task = self._loop.create_task(self._owned_read(record))
-        self._reads[record.operation] = task
+        owner = _ReadOwner()
+        self._reads[record.operation] = owner
+        task = self._loop.create_task(self._owned_read(record, owner))
+        owner.task = task
         try:
             home = await asyncio.shield(task)
             # The actual native read has returned and its thread has joined.
@@ -118,22 +133,40 @@ class PresentationNativeService:
                 self._identity, record.native_owner, True,
             )
         finally:
-            if task.done():
+            if owner.joined and not owner.uncertain:
                 self._reads.pop(record.operation, None)
 
+    async def _join_worker(self, owner: _ReadOwner) -> bool:
+        if owner.uncertain:
+            return False
+        worker = owner.worker
+        if worker is None or not owner.started:
+            return False
+        while worker.is_alive():
+            await asyncio.sleep(.005)
+        worker.join(timeout=0)
+        if worker.is_alive():
+            return False
+        owner.joined = True
+        return True
+
     async def drain(self, record: Any) -> bool:
-        task = self._reads.get(record.operation)
-        if task is None:
+        return await self._drain_operation(record.operation)
+
+    async def _drain_operation(self, operation: object) -> bool:
+        owner = self._reads.get(operation)
+        if owner is None:
             return True
-        try:
-            await asyncio.shield(task)
-        except asyncio.CancelledError:
-            raise
-        except Exception:
+        task = owner.task
+        if task is None:
             return False
         if not task.done():
+            await asyncio.shield(task)
+        # A cancelled owned task is not a joined worker. The retained ledger
+        # provides actual thread custody independently of asyncio task state.
+        if not await self._join_worker(owner):
             return False
-        self._reads.pop(record.operation, None)
+        self._reads.pop(operation, None)
         return True
 
     def retire(self) -> None:
@@ -142,15 +175,8 @@ class PresentationNativeService:
 
     async def close_and_join(self) -> bool:
         self.retire()
-        pending = tuple(self._reads.items())
-        for operation, task in pending:
-            try:
-                await asyncio.shield(task)
-            except asyncio.CancelledError:
-                raise
-            except Exception:
+        pending = tuple(self._reads)
+        for operation in pending:
+            if not await self._drain_operation(operation):
                 return False
-            if not task.done():
-                return False
-            self._reads.pop(operation, None)
         return not self._reads
