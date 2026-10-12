@@ -134,6 +134,7 @@ class _ModuleScanner(ast.NodeVisitor):
         self.violations: list[Violation] = []
         self._func_stack: list[str] = []
         self._depth = 0  # >0 inside a def or class body
+        self._function_depth = 0  # eager class bodies are not lazy imports
         self._type_checking = 0  # >0 inside `if TYPE_CHECKING:`
 
     def _add(self, rule: str, node: ast.AST, message: str) -> None:
@@ -143,7 +144,10 @@ class _ModuleScanner(ast.NodeVisitor):
     def _visit_scope(self, node: ast.AST, name: str) -> None:
         self._func_stack.append(name)
         self._depth += 1
+        is_function = not isinstance(node, ast.ClassDef)
+        self._function_depth += int(is_function)
         self.generic_visit(node)
+        self._function_depth -= int(is_function)
         self._depth -= 1
         self._func_stack.pop()
 
@@ -196,7 +200,7 @@ class _ModuleScanner(ast.NodeVisitor):
                     f"{self.name}",
                 )
                 return
-            if self._depth == 0 and not self._type_checking:
+            if self._function_depth == 0 and not self._type_checking:
                 self._add(
                     "S1",
                     node,
@@ -226,7 +230,7 @@ class _ModuleScanner(ast.NodeVisitor):
             return
         if self.name == COMPAT_MODULE:
             self._add("S3", node, f"{COMPAT_MODULE} must never import bridge")
-        elif self._depth == 0 and not self._type_checking:
+        elif self._function_depth == 0 and not self._type_checking:
             self._add("S3", node, "bridge imported at module level (import it only after the gate)")
 
     def visit_Import(self, node: ast.Import) -> None:

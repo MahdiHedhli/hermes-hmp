@@ -328,3 +328,32 @@ def test_yaml_module_level_import_in_worker_is_rejected(pkg: Path) -> None:
 def test_yaml_worker_from_and_submodule_imports_stay_closed(pkg: Path, statement: str) -> None:
     _append(pkg, "presentation_yaml_adapter.py", f"def forbidden():\n    {statement}\n")
     assert ("S1", "presentation_yaml_adapter.py") in _rules(pkg)
+
+
+@pytest.mark.parametrize(
+    "module, package", [("presentation_yaml_adapter.py", "yaml"), ("cli.py", "qrcode")]
+)
+@pytest.mark.parametrize(
+    "body",
+    [
+        "class Eager:\n    import {package}\n",
+        "class Outer:\n    class Eager:\n        import {package}\n",
+    ],
+)
+def test_module_restricted_imports_reject_eager_class_bodies(
+    pkg: Path, module: str, package: str, body: str
+) -> None:
+    _append(pkg, module, body.format(package=package))
+    assert ("S1", module) in _rules(pkg)
+
+
+def test_worker_function_local_class_import_is_lazy(pkg: Path) -> None:
+    _append(
+        pkg, "presentation_yaml_adapter.py", "def later():\n    class Local:\n        import yaml\n"
+    )
+    assert _rules(pkg) == []
+
+
+def test_bridge_import_in_eager_class_is_not_late_bound(pkg: Path) -> None:
+    _append(pkg, "reads.py", "class Eager:\n    from . import bridge\n")
+    assert ("S3", "reads.py") in _rules(pkg)

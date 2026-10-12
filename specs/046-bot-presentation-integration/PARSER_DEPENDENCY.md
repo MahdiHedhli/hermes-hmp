@@ -19,3 +19,12 @@ server/adapter/reads/bridge/CLI YAML imports remain rejected, and module-level
 worker imports are rejected. Negative scanner cases demonstrate these limits.
 This amendment requires independent review before convergence; no runtime plugin
 update, route activation or provider/permission change is part of it.
+
+## PYAML-S1-01 review repair
+
+Review found the scanner counted eager class bodies as lazy import scope. The
+rule now tracks actual function depth; module/nested eager classes reject both
+YAML and the existing CLI-only QR dependency, while function-local classes remain
+lazy. The same identified classification defect is corrected in late-bound bridge
+imports (S3), with a negative regression case. No current eager product import or
+live exposure was observed. Independent closure review remains required.
