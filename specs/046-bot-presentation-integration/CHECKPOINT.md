@@ -224,3 +224,14 @@ GO-01 repair at54d0df received independent source acceptance with17 separate
 checks, receipt SHA256
 `4a72ac1380265a0e0493ac0fe870a05976129f724fddc47674bc743d87e26c6c`.
 Actual exclusive FD custody/native binding/child supervision remain outside it.
+
+## Controlled worker stream composition
+
+Child-only processing now joins bounded input/GO, exact root/home/profile/UID/GID/
+deadline/challenge/source-manifest scope checks, the one-ledger processing entry
+and bounded result encoding. Output advances only known written prefixes; write
+exceptions are not retried and expiry is checked after flush. A real-file stream
+case passes and wrong GO reaches neither the scope factory nor filesystem opens;
+17 real-file cases pass. Selected lint passes. The scope factory remains a trusted
+parent-policy dependency, not request authority. No child entry script, process
+launcher/reap/group/IPC ownership or live route is supplied by this module.

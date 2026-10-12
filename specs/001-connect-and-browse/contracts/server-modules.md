@@ -141,6 +141,7 @@ server/
     presentation_worker_control.py # Bounded child input/GO codec; no authority or process owner
     presentation_go.py            # Exact one-use synchronous write on an owned nonblocking pipe
     presentation_child_launch.py  # Fixed isolated launch policy; no child/source attestation
+    presentation_worker.py        # Child-only GO/scope/process/result flow; no process owner
     presentation_yaml.py          # BI1 optional pure bounded event reducer; no YAML provider, file I/O, or route
     presentation_yaml_adapter.py  # Worker-only actual streaming parser; bounded closed projection
     presentation_jobs.py          # BI1 private frame/owner core; native authority and child supervisor unbound
