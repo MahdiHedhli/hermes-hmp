@@ -14,8 +14,10 @@ import os
 import re
 import stat
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
+
+from .presentation_budget import PresentationWorkLedger
 
 PROFILE_MAX = 65_536
 AVATAR_MAX = 2_000_000
@@ -202,7 +204,13 @@ def _nine(row: object) -> tuple[int, ...]:
 
 
 class _Budget:
-    def __init__(self, deadline: float, clock: Callable[[], float]):
+    def __init__(
+        self,
+        deadline: float,
+        clock: Callable[[], float],
+        ledger: PresentationWorkLedger | None = None,
+    ):
+        self.ledger = ledger
         self.deadline = deadline
         self.clock = clock
         self.read_bytes = 0
@@ -225,18 +233,24 @@ class _Budget:
         length = len(name.encode("utf-8"))
         if self.name_bytes + length > NAME_CREDIT:
             raise PresentationReadError("NAME_CREDIT")
+        if self.ledger is not None:
+            self.ledger.charge_path_bytes(length)
         self.name_bytes += length
 
     def meta(self) -> None:
         self.tick()
         if self.metadata >= META_CREDIT:
             raise PresentationReadError("META_CREDIT")
+        if self.ledger is not None:
+            self.ledger.charge_metadata()
         self.metadata += 1
 
     def opening(self) -> None:
         self.tick()
         if self.opens >= OPEN_CREDIT or self.live >= FD_CREDIT:
             raise PresentationReadError("OPEN_CREDIT")
+        if self.ledger is not None:
+            self.ledger.charge_open()
         self.opens += 1
 
     def acquired(self) -> None:
@@ -247,6 +261,8 @@ class _Budget:
         self.tick()
         if type(amount) is not int or amount < 1 or self.read_bytes + amount > READ_CREDIT:
             raise PresentationReadError("READ_CREDIT")
+        if self.ledger is not None:
+            self.ledger.charge_read_bytes(amount)
         self.read_bytes += amount
 
     def snapshot(self) -> dict[str, int]:
@@ -545,6 +561,7 @@ class _Transaction:
             directory_nines=tuple((rule.path, row) for _, _, _, row, rule in self.chain),
             budget=self.budget.snapshot(),
             raster_and_yaml_unvalidated=True,
+            work_ledger=self.budget.ledger,
         )
 
 
@@ -560,6 +577,7 @@ class FixedReadResult:
     directory_nines: tuple[tuple[str, tuple[int, ...]], ...]
     budget: dict[str, int]
     raster_and_yaml_unvalidated: bool
+    work_ledger: PresentationWorkLedger | None = field(default=None, repr=False)
 
 
 def read_fixed_presentation_files(
@@ -567,6 +585,7 @@ def read_fixed_presentation_files(
     *,
     fs: FileOps,
     clock: Callable[[], float],
+    ledger: PresentationWorkLedger | None = None,
 ) -> FixedReadResult:
     """Run one entire fixed-name transaction in the owning disposable worker.
 
@@ -577,7 +596,15 @@ def read_fixed_presentation_files(
     """
     if type(scope) is not OwnedWorkerRead or scope._bound is not _BOUND:
         raise PresentationReadError("WORKER_UNBOUND")
-    budget = _Budget(scope.deadline, clock)
+    if ledger is not None:
+        if (
+            type(ledger) is not PresentationWorkLedger
+            or ledger.clock is not clock
+            or ledger.deadline != scope.deadline
+        ):
+            raise PresentationReadError("WORK_SCOPE")
+        ledger.begin_file()
+    budget = _Budget(scope.deadline, clock, ledger)
     tx = _Transaction(fs, budget, scope)
     original: BaseException | None = None
     result: FixedReadResult | None = None

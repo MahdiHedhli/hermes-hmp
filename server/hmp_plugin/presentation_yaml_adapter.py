@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Callable, Iterator
 
+from .presentation_budget import PresentationWorkLedger
 from .presentation_yaml import (
     RAW_LIMIT,
     PresentationYamlError,
@@ -18,7 +19,9 @@ from .presentation_yaml import (
 )
 
 
-def _events(raw: bytes, clock: Callable[[], float], deadline: float) -> Iterator[YamlEvent]:
+def _events(
+    raw: bytes, clock: Callable[[], float], deadline: float, ledger: PresentationWorkLedger | None
+) -> Iterator[YamlEvent]:
     import yaml
 
     kinds = {
@@ -39,6 +42,8 @@ def _events(raw: bytes, clock: Callable[[], float], deadline: float) -> Iterator
         # Inspect actual scanner tokens; text in a quoted/block scalar is not
         # a DirectiveToken and must not be rejected by a textual heuristic.
         for count, token in enumerate(yaml.scan(raw, Loader=yaml.SafeLoader), start=1):
+            if ledger is not None:
+                ledger.charge_yaml_token()
             now = clock()
             if type(now) is not float or not 0 <= now < deadline:
                 raise PresentationYamlError("DEADLINE")
@@ -67,10 +72,26 @@ def _events(raw: bytes, clock: Callable[[], float], deadline: float) -> Iterator
 
 
 def parse_presentation_yaml(
-    raw: bytes, *, clock: Callable[[], float], deadline: float
+    raw: bytes,
+    *,
+    clock: Callable[[], float],
+    deadline: float,
+    ledger: PresentationWorkLedger | None = None,
 ) -> RawPresentationFields:
     if type(raw) is not bytes or not 1 <= len(raw) <= RAW_LIMIT:
         raise PresentationYamlError("RAW_SIZE")
+    if ledger is not None:
+        if (
+            type(ledger) is not PresentationWorkLedger
+            or ledger.clock is not clock
+            or ledger.deadline != deadline
+        ):
+            raise PresentationYamlError("WORK_SCOPE")
+        ledger.begin_yaml()
     return reduce_presentation_events(
-        raw, _events(raw, clock, deadline), clock=clock, deadline=deadline
+        raw,
+        _events(raw, clock, deadline, ledger),
+        clock=clock,
+        deadline=deadline,
+        charge_node=ledger.charge_yaml_node if ledger is not None else None,
     )

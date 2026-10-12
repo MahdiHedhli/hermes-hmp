@@ -63,8 +63,10 @@ def scope():
 class TrackedOS(PosixFileOps):
     def __init__(self):
         self.opened = set()
+        self.open_attempts = 0
 
     def open(self, *args, **kwargs):
+        self.open_attempts += 1
         fd = super().open(*args, **kwargs)
         self.opened.add(fd)
         return fd
@@ -262,3 +264,136 @@ def test_pipeline_rechecks_deadline_after_metadata_projection(scope):
             deadline=2.0,
             raster_budget=RasterBudget(deadline=2.0, clock=clock, ledger=RasterLedger()),
         )
+
+
+def test_shared_ledger_is_charged_by_real_file_and_yaml_pipeline(scope):
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_pipeline import reduce_fixed_result
+    from hmp_plugin.presentation_raster import RasterBudget
+
+    _, bound = scope
+    work = PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline)
+    result = read_fixed_presentation_files(
+        bound, fs=PosixFileOps(), clock=time.monotonic, ledger=work
+    )
+    before = work.snapshot()
+    assert result.work_ledger is work
+    assert before["read_bytes"] == result.budget["readBytesCharged"]
+    assert before["opens"] == result.budget["opensCharged"]
+    assert before["yaml_nodes"] == 0
+    output = reduce_fixed_result(
+        result,
+        iid="a" * 52,
+        profile="default",
+        canonical_fallback="Hermes",
+        observed_at=100,
+        clock=time.monotonic,
+        deadline=bound.deadline,
+        raster_budget=RasterBudget(deadline=bound.deadline, clock=time.monotonic, ledger=work),
+    )
+    after = work.snapshot()
+    assert after["read_bytes"] == before["read_bytes"]
+    assert after["yaml_nodes"] > 0 and after["yaml_tokens"] > 0
+    assert output.metadata["character"]["shape"] == "hexagon"
+
+
+def test_shared_scope_rejects_replacement_processing_ledger(scope):
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_pipeline import reduce_fixed_result
+    from hmp_plugin.presentation_raster import RasterBudget
+
+    _, bound = scope
+    work = PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline)
+    result = read_fixed_presentation_files(
+        bound, fs=PosixFileOps(), clock=time.monotonic, ledger=work
+    )
+    replacement = PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline)
+    with pytest.raises(PresentationYamlError, match="WORK_SCOPE"):
+        reduce_fixed_result(
+            result,
+            iid="a" * 52,
+            profile="default",
+            canonical_fallback="Hermes",
+            observed_at=100,
+            clock=time.monotonic,
+            deadline=bound.deadline,
+            raster_budget=RasterBudget(
+                deadline=bound.deadline, clock=time.monotonic, ledger=replacement
+            ),
+        )
+    assert replacement.snapshot()["yaml_nodes"] == 0
+
+
+def test_one_ledger_covers_real_metadata_and_avatar_processing(scope):
+    import struct
+    import zlib
+
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_pipeline import reduce_fixed_result
+    from hmp_plugin.presentation_raster import RasterBudget
+
+    home, bound = scope
+
+    def chunk(kind, body):
+        return (
+            struct.pack(">I", len(body)) + kind + body + struct.pack(">I", zlib.crc32(kind + body))
+        )
+
+    image = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", 1, 1, 8, 6, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(b"\x00\x8b\x5c\xf6\xff"))
+        + chunk(b"IEND", b"")
+    )
+    (home / "assets").mkdir(mode=0o700)
+    (home / "assets" / "avatar.png").write_bytes(image)
+    (home / "assets" / "avatar.png").chmod(0o600)
+    work = PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline)
+    result = read_fixed_presentation_files(
+        bound, fs=PosixFileOps(), clock=time.monotonic, ledger=work
+    )
+    output = reduce_fixed_result(
+        result,
+        iid="a" * 52,
+        profile="default",
+        canonical_fallback="Hermes",
+        observed_at=100,
+        clock=time.monotonic,
+        deadline=bound.deadline,
+        raster_budget=RasterBudget(deadline=bound.deadline, clock=time.monotonic, ledger=work),
+    )
+    totals = work.snapshot()
+    assert totals["read_bytes"] == result.budget["readBytesCharged"]
+    assert totals["yaml_nodes"] > 0 and totals["raster_units"] > 0
+    assert totals["hash_bytes"] == len(image)
+    assert output.avatar_bytes == image
+
+
+def test_worker_entry_owns_one_ledger_and_refuses_wrong_profile_before_io(scope):
+    from hmp_plugin.presentation_pipeline import run_fixed_worker
+
+    _, bound = scope
+    fs = TrackedOS()
+    with pytest.raises(PresentationYamlError, match="WORK_SCOPE"):
+        run_fixed_worker(
+            bound,
+            fs=fs,
+            iid="a" * 52,
+            profile="other",
+            canonical_fallback="Other",
+            observed_at=100,
+            clock=time.monotonic,
+        )
+    assert fs.opened == set() and fs.open_attempts == 0
+    completed = run_fixed_worker(
+        bound,
+        fs=fs,
+        iid="a" * 52,
+        profile="default",
+        canonical_fallback="Hermes",
+        observed_at=100,
+        clock=time.monotonic,
+    )
+    assert completed.result.metadata["profile"] == "default"
+    assert completed.charges["read_bytes"] > 0 and completed.charges["yaml_nodes"] > 0
+    assert fs.opened == set()

@@ -113,3 +113,18 @@ expired/malformed clock cannot recover by moving back. Snapshot callers receive
 a copy. Six counter tests and layout checks pass; pinned strict lint passes.
 The file/YAML callback bindings and actual child supervisor remain incomplete,
 so the shared-budget task is still open and no route was enabled.
+
+## Shared ledger phase bindings
+
+The fixed reader now debits shared bytes/open/metadata/path credits before I/O,
+retaining the exact ledger in its processing result. Actual YAML scanner tokens
+and reducer nodes debit the same ledger; raster processing must use that identical
+clock/deadline/ledger. The worker processing entry creates the single ledger itself
+and rejects mismatched profile before any file-open attempt. Real-file cases cover
+metadata/avatar cumulative charges, replacement-ledger refusal and whole worker
+entry. Twelve real-file cases pass and selected strict lint passes. Legacy pure
+phase fixtures retain optional unbound counters; the worker entry does not use them.
+This qualifies the processing budget binding, not a spawned process, child frame
+proof, parent authorization, shutdown drain or live route. Independent review of
+this new binding is pending. The shared-budget task awaits that review; supervisor
+and transport remain open.

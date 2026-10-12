@@ -147,6 +147,7 @@ def reduce_presentation_events(
     *,
     clock: Callable[[], float],
     deadline: float,
+    charge_node: Callable[[], None] | None = None,
 ) -> RawPresentationFields:
     """Validate the whole stream before returning any allowlisted fields.
 
@@ -230,6 +231,8 @@ def reduce_presentation_events(
             raise PresentationYamlError("DOCUMENT_GRAMMAR")
 
         if event.kind in ("mapping_start", "sequence_start"):
+            if charge_node is not None:
+                charge_node()
             nodes += 1
             if nodes > NODE_LIMIT or len(frames) >= DEPTH_LIMIT:
                 raise PresentationYamlError("STRUCTURE_LIMIT")
@@ -256,6 +259,8 @@ def reduce_presentation_events(
 
         if event.kind != "scalar" or not frames:
             raise PresentationYamlError("EVENT_GRAMMAR")
+        if charge_node is not None:
+            charge_node()
         nodes += 1
         if nodes > NODE_LIMIT:
             raise PresentationYamlError("NODE_LIMIT")
