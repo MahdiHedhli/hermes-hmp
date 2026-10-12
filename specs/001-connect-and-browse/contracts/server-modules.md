@@ -482,3 +482,5 @@ Native/helper/socket/current device and release qualifications remain separate.
 - `presentation_child.py`: fixed isolated processing entry, private own-code namespace; no gateway initializer or native authority. Parent provenance/custody and route activation remain unbound.
 
 - `presentation_pipes.py`: exclusive nonblocking bounded result/diagnostic pipe ownership; actual EOF/close only, no process wait/group/authority claim.
+
+- `presentation_process.py`: fixed launch attempt custody, exact terminal waitpid and one signal-zero group observation. No destructive signal, runtime qualification or native route binding.

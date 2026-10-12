@@ -316,3 +316,7 @@ The exact e9c9a23 source run (session9372) completed exit0: 5631 passed, 38 skip
 ## October 12: process wait/signal decision
 
 PIPES-01 independent closure accepted6c600de,11cases, receipt SHA739bdb986fc8ce23cd315bca63310ffdb6223cb843ee21480a162ae91ee2376f. Added precise exclusive process lifetime proposal: direct waitpid proof rather than Popen ECHILD compatibility, held unreaped-group signals only, post-reap group absence probe with no further signals, typed failed owner retention and separate pipe/control cleanup. Contract review is required before binding; no new launch/deployment performed. Corrected stale shared-ledger contract prose to reflect implemented source while retaining parent-accounting gate.
+
+## October 12: actual launch/terminal-wait ownership
+
+Implemented retained fixed Popen launch owner, typed uncertain launch failure, nonblocking serialized/sticky reentry checks, stable child PID binding, exact terminal os.waitpid evidence and one post-reap signal-zero group probe. No Popen poll/wait/signal helpers are used. Actual isolated reader with empty input returned its expected refusal/exit1, bounded pipes drained and group absence was observed. 248 initial process/layout cases passed; later bound-PID focused cases pass. Destructive signalling, auto-reap/competing-reaper runtime exclusion, hard termination schedule and JobOwner binding remain unimplemented; no activation. Independent source review pending.
