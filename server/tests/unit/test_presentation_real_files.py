@@ -1070,11 +1070,13 @@ def test_parent_unknown_close_retains_attempt_and_cannot_replay(scope):
     with pytest.raises(FrameError):
         owner.run()
     attempts = tuple(fs.calls)
+    original_failure = owner._failure
     assert owner.uncertain and not owner.descriptors_closed
     assert owner._cleanup_errors and fs.opened == set()
     with pytest.raises(FrameError):
         owner.run()
     assert tuple(fs.calls) == attempts
+    assert owner._failure is original_failure
 
 
 def test_parent_stat_failure_is_closed_and_retains_original_privately(scope):
@@ -1319,3 +1321,33 @@ def test_policy_thread_start_failure_retains_owner_without_replay(scope, monkeyp
     with pytest.raises(FrameError):
         owner.observed_snapshot()
     assert owner._worker.calls == 1 and not owner.joined
+
+
+def test_parent_constructor_bounds_paths_before_large_allocation(scope):
+    import tracemalloc
+
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_jobs import FrameError
+    from hmp_plugin.presentation_parent_policy import ParentPolicyReadOwner
+
+    _, bound = scope
+    work = PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline)
+    huge = "/" + "x" * 2_000_000
+    for root, home in ((huge, bound.home_path), (bound.root_path, huge)):
+        tracemalloc.start()
+        try:
+            with pytest.raises(FrameError):
+                ParentPolicyReadOwner(
+                    root=root,
+                    home=home,
+                    profile="default",
+                    uid=os.geteuid(),
+                    gid=os.getegid(),
+                    ledger=work,
+                    fs=TrackedOS(),
+                    current=lambda: True,
+                )
+            _, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        assert peak < 500_000

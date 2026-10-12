@@ -49,6 +49,8 @@ class ParentPolicyReadOwner:
         fs: FileOps,
         current: Callable[[], bool],
     ):
+        if type(root) is not str or type(home) is not str or len(root) > 4096 or len(home) > 4096:
+            raise FrameError("BI1_PARENT_SCOPE_REFUSED")
         roots, homes = _components(root), _components(home)
         if (
             not roots
@@ -130,7 +132,8 @@ class ParentPolicyReadOwner:
         try:
             return self._run_owned()
         except BaseException as error:
-            self._failure = error
+            if self._failure is None:
+                self._failure = error
             if isinstance(error, FrameError):
                 raise
             raise FrameError("BI1_PARENT_READ_REFUSED") from None

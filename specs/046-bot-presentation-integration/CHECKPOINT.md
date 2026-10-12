@@ -411,3 +411,13 @@ joins with closed descriptors; unknown start cannot manufacture join or retry.
 36real-file cases pass;278initial real-file/layout cases pass. Native admission,
 authorization/current-home postchecks and one-use transfer are still unbound.
 Independent thread-owner review pending; no deployment.
+
+## October 12: parent owner PARENT-01/02 repairs
+
+Independent parent-owner review helddd924f9: replay overwrote the original private
+failure, and constructor paths were split/encoded before the scalar ceiling.
+Run now preserves the first failure; exact-string/4096scalar checks precede
+_components for both root/home. Actual2MBallocation regressions and original
+unknown-close identity/no-retry cases pass;37real-file cases total. Parent closure
+review pending. Input3/result2/migration and bounded receiver have separate actual
+acceptance receipts; none authorizes native routes or physical delivery.
