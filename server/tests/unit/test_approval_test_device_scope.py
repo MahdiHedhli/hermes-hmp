@@ -158,3 +158,20 @@ async def test_native_cleanup_during_answer_preserves_exact_acknowledgement_repl
     assert (await answer()).body == first.body
     assert len(resolver.calls) == 1
     assert not store.list_visible(IID, USER, PROFILE, device_id="synthetic-target-device")
+
+
+@pytest.mark.asyncio
+async def test_withdrawn_pinned_row_is_purged_after_retention_without_lock_loss() -> None:
+    from hmp_plugin.contract import IDEMPOTENCY_RETENTION_S
+
+    store = prompts.PromptStore(clock=lambda: 1)
+    _store_approval(store, target_device_id="synthetic-target-device")
+    key = (IID, USER, PROFILE, REQ)
+    row = store.get(key)
+    assert row is not None
+    async with store.answer_row(key):
+        assert store.withdraw_target_row(row, 2)
+        store.purge(2 + IDEMPOTENCY_RETENTION_S)
+        assert store.get(key) is row
+    store.purge(2 + IDEMPOTENCY_RETENTION_S)
+    assert store.get(key) is None and key not in store._locks
