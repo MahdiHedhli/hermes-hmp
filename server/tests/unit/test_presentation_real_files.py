@@ -952,3 +952,154 @@ def test_input3_processing_carries_parent_credits_into_complete_result2(scope):
     assert header["fields"]["display_name"] == "Synthetic" and body == b""
     assert totals == {key: baseline.charges[key] + counts[key] for key in counts}
     assert totals["yaml_tokens"] > 0
+
+
+def test_parent_policy_is_directory_only_and_charges_exact_success_schedule(scope):
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_parent_policy import ParentPolicyReadOwner
+
+    _, bound = scope
+
+    class DirectoryOnly(TrackedOS):
+        def read(self, fd, size):
+            raise AssertionError("parent must never read a body")
+
+        def open(self, path, flags, **kwargs):
+            assert flags & os.O_DIRECTORY and flags & os.O_NOFOLLOW
+            assert path not in ("profile.yaml", "config.yaml", "assets")
+            return super().open(path, flags, **kwargs)
+
+    fs = DirectoryOnly()
+    ledger = PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline)
+    owner = ParentPolicyReadOwner(
+        root=bound.root_path,
+        home=bound.home_path,
+        profile="default",
+        uid=os.geteuid(),
+        gid=os.getegid(),
+        ledger=ledger,
+        fs=fs,
+        current=lambda: True,
+    )
+    result = owner.run()
+    n = len(bound.directory_rules)
+    s = 1 + sum(len(p.encode()) for p in bound.home_path[1:].split("/"))
+    assert result.rules == bound.directory_rules
+    assert result.counts["opens"] == n
+    assert result.counts["metadata"] == 4 * n
+    assert result.counts["path_bytes"] == 3 * s
+    assert result.counts["read_bytes"] == 0
+    assert owner.descriptors_closed and fs.opened == set()
+    assert len(result.chain) == n
+
+
+def test_parent_current_refusal_has_zero_filesystem_effects(scope):
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_jobs import FrameError
+    from hmp_plugin.presentation_parent_policy import ParentPolicyReadOwner
+
+    _, bound = scope
+    fs = TrackedOS()
+    owner = ParentPolicyReadOwner(
+        root=bound.root_path,
+        home=bound.home_path,
+        profile="default",
+        uid=os.geteuid(),
+        gid=os.getegid(),
+        ledger=PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline),
+        fs=fs,
+        current=lambda: False,
+    )
+    with pytest.raises(FrameError):
+        owner.run()
+    assert fs.open_attempts == 0 and owner.descriptors_closed
+
+
+def test_parent_unsafe_home_refuses_and_closes_prior_ancestors(scope):
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_jobs import FrameError
+    from hmp_plugin.presentation_parent_policy import ParentPolicyReadOwner
+
+    home, bound = scope
+    home.chmod(0o777)
+    fs = TrackedOS()
+    owner = ParentPolicyReadOwner(
+        root=bound.root_path,
+        home=bound.home_path,
+        profile="default",
+        uid=os.geteuid(),
+        gid=os.getegid(),
+        ledger=PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline),
+        fs=fs,
+        current=lambda: True,
+    )
+    with pytest.raises(FrameError):
+        owner.run()
+    assert owner.descriptors_closed and fs.opened == set()
+
+
+def test_parent_unknown_close_retains_attempt_and_cannot_replay(scope):
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_jobs import FrameError
+    from hmp_plugin.presentation_parent_policy import ParentPolicyReadOwner
+
+    _, bound = scope
+
+    class LostClose(TrackedOS):
+        def __init__(self):
+            super().__init__()
+            self.calls = []
+
+        def close(self, fd):
+            self.calls.append(fd)
+            super().close(fd)
+            if len(self.calls) == 1:
+                raise OSError("synthetic lost close acknowledgement")
+
+    fs = LostClose()
+    owner = ParentPolicyReadOwner(
+        root=bound.root_path,
+        home=bound.home_path,
+        profile="default",
+        uid=os.geteuid(),
+        gid=os.getegid(),
+        ledger=PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline),
+        fs=fs,
+        current=lambda: True,
+    )
+    with pytest.raises(FrameError):
+        owner.run()
+    attempts = tuple(fs.calls)
+    assert owner.uncertain and not owner.descriptors_closed
+    assert owner._cleanup_errors and fs.opened == set()
+    with pytest.raises(FrameError):
+        owner.run()
+    assert tuple(fs.calls) == attempts
+
+
+def test_parent_stat_failure_is_closed_and_retains_original_privately(scope):
+    from hmp_plugin.presentation_budget import PresentationWorkLedger
+    from hmp_plugin.presentation_jobs import FrameError
+    from hmp_plugin.presentation_parent_policy import ParentPolicyReadOwner
+
+    _, bound = scope
+
+    class Refused(TrackedOS):
+        def stat(self, *args, **kwargs):
+            raise OSError("synthetic private path must not enter public error")
+
+    owner = ParentPolicyReadOwner(
+        root=bound.root_path,
+        home=bound.home_path,
+        profile="default",
+        uid=os.geteuid(),
+        gid=os.getegid(),
+        ledger=PresentationWorkLedger(clock=time.monotonic, deadline=bound.deadline),
+        fs=Refused(),
+        current=lambda: True,
+    )
+    with pytest.raises(FrameError) as captured:
+        owner.run()
+    assert str(captured.value) == "BI1_PARENT_READ_REFUSED"
+    assert isinstance(owner._failure, OSError)
+    assert owner.descriptors_closed

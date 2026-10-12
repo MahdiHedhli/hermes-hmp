@@ -366,3 +366,16 @@ Added versioned result2 validation/encode/decode retaining prior frame/proof/bod
 ## October 12: active worker input3/result2 migration
 
 Standalone child now invokes strict process_child_stream_v3; owned control writer validates only input3. Processing constructs the sole ledger from copied validated parent credits and emits result2 with all eight totals. Legacy schema1/2 helpers remain fixture-only. Real isolated/retained/control compositions now use input3/result2 and preserve Synthetic metadata. Declared parent counts in these fixtures are not actual parent IO proof. Legacy input refusal before any filesystem effect is tested.371presentation cases plus190subtests pass;51real-file/control/process cases pass. Parent native policy acquisition, retained result comparison/JobOwner migration, hard termination and live qualification remain open. Independent migration review pending.
+
+## October 12: actual directory-only parent policy owner
+
+Added locked, one-attempt parent policy acquisition over the fixed lexical chain:
+named/held no-follow checks, exact service ownership/modes, retained descriptors
+and final identity verification with Nopens/4Nmetadata/3Spath before effects.
+No profile/config/asset/body reads. Pending returned FD is retained before record
+allocation; close attempts run reverse once and unknown outcomes persist. Public
+errors are closed while original/cleanup errors remain private.31real-file cases
+pass, including current refusal with0opens, unsafe home cleanup and lost close
+acknowledgement/no replay. Native admission/authorization and actual thread join
+are NOT proved by run completion; no one-use transfer/native binding yet.
+Independent policy-owner review pending.

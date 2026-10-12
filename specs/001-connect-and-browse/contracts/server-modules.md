@@ -490,3 +490,5 @@ Native/helper/socket/current device and release qualifications remain separate.
 - `presentation_input_v3.py`: closed input3 parent-policy/work transfer; no legacy decoder fallback or native authority. Actual entry migration/result2 remain pending.
 
 - `presentation_output_v2.py`: closed result2 eight-total accounting and retained-parent comparison. Counter/cleanup claims do not prove authority, IO or resource custody.
+
+- `presentation_parent_policy.py`: retained directory-only no-follow policy observation and exact precharged success schedule; actual native permission, job reservation/thread join and one-use transfer remain binder obligations.
