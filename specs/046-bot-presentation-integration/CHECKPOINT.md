@@ -308,3 +308,7 @@ Added a second real isolated-child execution path using OwnedPresentationPipes r
 ## October 12: PIPES-01 ownership repair
 
 Independent review held e9c9a23 because acquisition plus selector-close failure lost the exact selector owner. PipeAcquisitionError now retains the failed owner plus original/cleanup exceptions under a closed diagnostic. Selector construction is inside the owned failure path; close is marked attempted before effects and cannot be retried after uncertainty. Causal creation/double-failure/no-retry tests plus real child/pipes: 29 passed. Review closure remains pending; no activation. The e9c9a23 broad suite is a separate prior-source run, not evidence for this repair.
+
+## October 12: exact broad-suite result
+
+The exact e9c9a23 source run (session9372) completed exit0: 5631 passed, 38 skipped, 18 warnings, 190 subtests in179.52s. It includes the relative-import repair and original pipe reader, but predates ef58812 composition-test and6c600de PIPES-01 repair. Those later deltas have their separately scoped focused results; full-suite success does not close the held acquisition issue or physical gates. Log: /private/tmp/hermes-character-full-suite-e9c9a23-20261012.log.
