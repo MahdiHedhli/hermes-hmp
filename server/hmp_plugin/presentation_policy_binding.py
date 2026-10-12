@@ -49,19 +49,25 @@ class NativePolicyWork:
         self._scope = (root, home, profile, os.geteuid(), os.getegid())
         self._policy = None
         self._thread = None
-        if not self._current():
-            raise AuthorityRefusalError
-        self._policy = ParentPolicyReadOwner(
-            root=root,
-            home=home,
-            profile=profile,
-            uid=os.geteuid(),
-            gid=os.getegid(),
-            ledger=PresentationWorkLedger(clock=authority._clock, deadline=record.deadline),
-            fs=PosixFileOps(),
-            current=self._current,
-        )
-        self._thread = PolicyThreadOwner(self._policy)
+        self._construction_finished = False
+        try:
+            if not self._current():
+                raise AuthorityRefusalError
+            self._policy = ParentPolicyReadOwner(
+                root=root,
+                home=home,
+                profile=profile,
+                uid=os.geteuid(),
+                gid=os.getegid(),
+                ledger=PresentationWorkLedger(clock=authority._clock, deadline=record.deadline),
+                fs=PosixFileOps(),
+                current=self._current,
+            )
+            self._thread = PolicyThreadOwner(self._policy)
+        finally:
+            # Constructors never open files or start threads. A terminal failure
+            # before thread creation is therefore known zero-work, not start debt.
+            self._construction_finished = True
 
     def _local_current(self) -> bool:
         record = self._record
@@ -187,14 +193,26 @@ class NativePolicyWork:
             or self._transfer_attempted
         ):
             return False
+        if not self._construction_finished:
+            return False
         self._invalid = True
-        if self._thread is None or not self._thread.seal_closed():
+        if self._thread is not None and not self._thread.seal_closed():
+            return False
+        if self._policy is not None and (
+            self._policy.uncertain or not self._policy.descriptors_closed
+        ):
             return False
         self._closed_pretransfer = True
         return True
 
     @property
     def resources_closed(self) -> bool:
+        if not self._construction_finished:
+            return False
+        if self._closed_pretransfer and self._thread is None:
+            return self._policy is None or (
+                not self._policy.uncertain and self._policy.descriptors_closed
+            )
         return (
             self._thread is not None
             and (self._thread.joined or self._closed_pretransfer)

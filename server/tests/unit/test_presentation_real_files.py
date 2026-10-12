@@ -1366,6 +1366,7 @@ def test_parent_constructor_bounds_paths_before_large_allocation(scope):
         "abort_after_join",
         "abort_unjoined",
         "abort_uncertain",
+        "construction_retired",
     ],
 )
 async def test_native_policy_binding_requires_admitted_operation_and_fresh_postcheck(scope, attack):
@@ -1438,6 +1439,26 @@ async def test_native_policy_binding_requires_admitted_operation_and_fresh_postc
     with pytest.raises(AuthorityRefusalError):
         NativePolicyWork(authority, operation)
     authority.start(operation)
+    if attack == "construction_retired":
+        original = authority._clock
+        record = authority._record(operation)
+
+        def clock():
+            authority._clock = original
+            # In-flight construction is not an abort receipt.
+            assert not authority.refuse_policy_prelaunch(operation)
+            record.fence.retire()
+            return original()
+
+        authority._clock = clock
+        with pytest.raises(AuthorityRefusalError):
+            NativePolicyWork(authority, operation)
+        work = record.policy_work
+        assert work._thread is None and work._policy is None
+        assert authority.refuse_policy_prelaunch(operation)
+        assert work.resources_closed
+        assert await authority.retire_known(operation)
+        return
     work = NativePolicyWork(authority, operation)
     with pytest.raises(AuthorityRefusalError):
         NativePolicyWork(authority, operation)

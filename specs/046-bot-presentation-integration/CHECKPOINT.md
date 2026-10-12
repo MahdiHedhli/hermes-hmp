@@ -484,3 +484,14 @@ slot. Native credential retirement additionally checks policy resource closure
 before and after its native drain. Start is permanently refused after closure.
 Focused real-file/authority/job causals: 105 passed, 66 subtests; Ruff passes.
 Independent cleanup review is pending. No launch supervisor, route or deployment.
+
+## Constructor refusal cleanup repair — October 12, 2026
+
+Review identified a zero-work reservation leak when the listener retires during
+NativePolicyWork construction, before policy/thread ownership exists. The repair
+records terminal constructor completion separately from in-flight construction;
+only a terminal never-started, known-zero-work owner can close without a thread.
+A callback during construction cannot claim an abort receipt. Actual uncertain
+thread starts still retain debt. The causal regression checks in-flight refusal,
+listener retirement, zero policy/thread and eventual slot/credential retirement.
+106 focused tests plus 66 subtests pass; Ruff passes. Independent closure pending.
