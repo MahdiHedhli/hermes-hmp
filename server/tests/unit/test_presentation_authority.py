@@ -776,3 +776,59 @@ def test_retained_unlaunched_process_requires_explicit_closure_before_drain():
         assert native.drain_calls == 1
 
     asyncio.run(run())
+
+
+def test_clock_reentry_cannot_overwrite_first_retained_process():
+    import pytest
+
+    from hmp_plugin.presentation_process import PresentationProcessOwner
+
+    async def run():
+        scope, _, clock, _, operation, _ = adapter()
+        assert await scope.initialize(operation)
+        scope.start(operation)
+        inner, outer = PresentationProcessOwner(), PresentationProcessOwner()
+        entered = False
+
+        def reenter():
+            nonlocal entered
+            if not entered:
+                entered = True
+                scope.retain_process(operation, inner)
+            return clock.now
+
+        scope._clock = reenter
+        with pytest.raises(AuthorityRefusalError):
+            scope.retain_process(operation, outer)
+        record = scope._record(operation)
+        assert record.process_owner is inner
+        assert inner.owns(record.process_binding)
+        assert outer._binding is None
+
+    asyncio.run(run())
+
+
+def test_cancellation_retires_output_before_termination_request(monkeypatch):
+    from types import SimpleNamespace
+
+    from hmp_plugin import presentation_process as module
+    from hmp_plugin.presentation_process import PresentationProcessOwner
+
+    async def run():
+        scope, _, _, fence, operation, _ = adapter()
+        assert await scope.initialize(operation)
+        scope.start(operation)
+        child = SimpleNamespace(pid=123456, returncode=None)
+        monkeypatch.setattr(module.subprocess, "Popen", lambda *a, **k: child)
+        process = PresentationProcessOwner()
+        scope.retain_process(operation, process)
+        process.start()
+        scope.bind_child(operation, child)
+        monkeypatch.setattr(module.os, "getpgid", lambda pid: pid)
+        observed = []
+        monkeypatch.setattr(module.os, "killpg", lambda *a: observed.append(fence.current))
+        assert scope.terminate_cancelled_reader(operation)
+        assert observed == [False]
+        assert not process.reaped and not process.group_absent
+        assert not await scope.retire_known(operation)
+    asyncio.run(run())

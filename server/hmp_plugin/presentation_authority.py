@@ -624,6 +624,28 @@ class ParentAuthorityAdapter:
         record.permit = None
         record.owner.cancel(record.handle)
 
+    def terminate_cancelled_reader(self, operation: OpaqueOperation) -> bool:
+        """Retire output authority before one termination request, retaining debt."""
+        from .presentation_process import PresentationProcessOwner
+
+        record = self._record(operation)
+        process = record.process_owner
+        if (
+            type(process) is not PresentationProcessOwner
+            or not process.owns(record.process_binding)
+            or record.child is None
+            or process.child is not record.child
+        ):
+            return False
+        record.permit = None
+        record.fence.retire()
+        record.owner.cancel(record.handle)
+        try:
+            return process.terminate_once()
+        except FrameError:
+            self._unknown(record)
+            return False
+
     def refuse_policy_prelaunch(self, operation: OpaqueOperation) -> bool:
         from .presentation_policy_binding import NativePolicyWork
 
