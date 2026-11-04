@@ -40,6 +40,8 @@ class OwnedPresentationPipes:
         self.refused = False
         self._selector_closed = False
         self._selector_close_attempted = False
+        self._cleanup_deadline: float | None = None
+        self._discarded_bytes = 0
         try:
             self._selector = selectors.DefaultSelector()
             fds = [stream.fileno() for stream in self._streams.values()]
@@ -145,3 +147,53 @@ class OwnedPresentationPipes:
         except BaseException:
             self.uncertain = True
             raise FrameError("BI1_PIPE_UNCERTAIN") from None
+
+    def poll_discard(self) -> None:
+        """Bounded cleanup only; caller must establish child/group exit first.
+
+        This never restores result-read authority. The first call permanently
+        refuses output and starts one nonrenewable 250 ms cleanup allowance.
+        Timeout/overflow/descriptor uncertainty retains the exact cleanup debt.
+        """
+        if self.uncertain:
+            raise FrameError("BI1_PIPE_CLEANUP_REFUSED")
+        now = time.monotonic()
+        if self._cleanup_deadline is None:
+            self._cleanup_deadline = now + 0.25
+            self.refused = True
+            self._output[:] = b"\x00" * len(self._output)
+            self._output.clear()
+        if self.drained:
+            return
+        if now >= self._cleanup_deadline:
+            raise FrameError("BI1_PIPE_CLEANUP_DEADLINE")
+        try:
+            for name in self._streams.keys() - self._closed:
+                self._identity(name)
+            for key, _ in self._selector.select(0):
+                if time.monotonic() >= self._cleanup_deadline:
+                    raise FrameError("BI1_PIPE_CLEANUP_DEADLINE")
+                name = key.data
+                fd = self._identity(name)
+                remaining = OUTPUT_LIMIT + DIAGNOSTIC_LIMIT + 2 - self._discarded_bytes
+                try:
+                    chunk = os.read(fd, min(65536, remaining + 1))
+                except BlockingIOError:
+                    continue
+                self._discarded_bytes += len(chunk)
+                if len(chunk) > remaining:
+                    self.uncertain = True
+                    raise FrameError("BI1_PIPE_CLEANUP_LIMIT")
+                if chunk:
+                    continue
+                self._eof.add(name)
+                self._selector.unregister(fd)
+                self._streams[name].close()
+                self._closed.add(name)
+            if self._closed == {"result", "diagnostic"}:
+                self._close_selector()
+        except FrameError:
+            raise
+        except BaseException:
+            self.uncertain = True
+            raise FrameError("BI1_PIPE_CLEANUP_UNCERTAIN") from None

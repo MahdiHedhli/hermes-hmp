@@ -112,3 +112,73 @@ def test_selector_creation_failure_still_returns_explicit_uncertain_owner(monkey
     assert captured.value.failed_owner.uncertain
     assert not captured.value.failed_owner.drained
     assert captured.value._cleanup is None
+
+
+def test_cleanup_discards_expired_result_without_renewing_output_authority(pipes):
+    owner, result_write, diagnostic_write, result, diagnostic = pipes
+    os.write(result_write, b"synthetic-leftover")
+    os.write(diagnostic_write, b"synthetic-diagnostic")
+    with pytest.raises(FrameError, match="BI1_PIPE_DEADLINE"):
+        owner.poll(deadline=time.monotonic() - 1.0)
+    os.close(result_write)
+    os.close(diagnostic_write)
+    while not owner.drained:
+        owner.poll_discard()
+    assert owner.refused and owner.output == b""
+    assert owner._discarded_bytes == len(b"synthetic-leftoversynthetic-diagnostic")
+    assert result.closed and diagnostic.closed
+    with pytest.raises(FrameError):
+        owner.poll(deadline=time.monotonic() + 1.0)
+
+
+def test_cleanup_allowance_is_frozen_and_does_not_invent_eof(pipes, monkeypatch):
+    from hmp_plugin import presentation_pipes
+
+    owner, _, _, result, diagnostic = pipes
+    now = [10.0]
+    monkeypatch.setattr(presentation_pipes.time, "monotonic", lambda: now[0])
+    owner.poll_discard()
+    assert owner._cleanup_deadline == 10.25
+    now[0] = 10.26
+    for _ in range(2):
+        with pytest.raises(FrameError, match="BI1_PIPE_CLEANUP_DEADLINE"):
+            owner.poll_discard()
+    assert owner._cleanup_deadline == 10.25
+    assert not owner.drained and not result.closed and not diagnostic.closed
+
+
+def test_cleanup_closed_descriptor_is_uncertain_and_not_retried(pipes):
+    owner, _, _, result, diagnostic = pipes
+    result.close()
+    with pytest.raises(FrameError, match="BI1_PIPE_CLEANUP_UNCERTAIN"):
+        owner.poll_discard()
+    assert owner.uncertain and not owner.drained and not diagnostic.closed
+    with pytest.raises(FrameError, match="BI1_PIPE_CLEANUP_REFUSED"):
+        owner.poll_discard()
+
+
+def test_already_drained_reader_still_wipes_buffer_and_refuses_output(pipes):
+    owner, result_write, diagnostic_write, _, _ = pipes
+    os.write(result_write, b"synthetic-buffered")
+    os.close(result_write)
+    os.close(diagnostic_write)
+    while not owner.drained:
+        owner.poll(deadline=time.monotonic() + 1.0)
+    assert owner.output == b"synthetic-buffered"
+    owner.poll_discard()
+    assert owner.refused and owner.output == b"" and owner.drained
+
+
+def test_cleanup_overflow_retains_uncertain_debt_without_retry(pipes, monkeypatch):
+    from hmp_plugin import presentation_pipes
+
+    owner, result_write, _, result, diagnostic = pipes
+    monkeypatch.setattr(presentation_pipes, "OUTPUT_LIMIT", 0)
+    monkeypatch.setattr(presentation_pipes, "DIAGNOSTIC_LIMIT", 0)
+    os.write(result_write, b"xxx")
+    with pytest.raises(FrameError, match="BI1_PIPE_CLEANUP_LIMIT"):
+        owner.poll_discard()
+    assert owner.uncertain and not owner.drained
+    assert not result.closed and not diagnostic.closed
+    with pytest.raises(FrameError, match="BI1_PIPE_CLEANUP_REFUSED"):
+        owner.poll_discard()

@@ -6,6 +6,8 @@ import asyncio
 import dataclasses
 import unittest
 
+import pytest
+
 from hmp_plugin.presentation_authority import (
     AuthorityRefusalError,
     ListenerFence,
@@ -936,5 +938,71 @@ def test_collected_large_v2_avatar_reaches_codec_without_oversized_feed(monkeypa
         assert len(chunks) > 1 and max(chunks) <= 65536
         assert buffer.finish(challenge, 1) == (row, avatar)
         assert not scope.collect_reader_closure(operation, pipes, control)
+
+    asyncio.run(run())
+
+
+@pytest.mark.parametrize("post_go_fixture", [False, True])
+def test_actual_expired_reader_drains_only_after_exit_and_never_emits(post_go_fixture):
+    """Actual empty child; post-GO JobOwner state is an inert lifecycle fixture."""
+    import time
+
+    import pytest
+
+    from hmp_plugin.presentation_control_pipe import OwnedControlPipe
+    from hmp_plugin.presentation_jobs import FrameError
+    from hmp_plugin.presentation_pipes import OwnedPresentationPipes
+    from hmp_plugin.presentation_process import PresentationProcessOwner
+
+    async def run():
+        scope, native, _, fence, operation, _ = adapter()
+        assert await scope.initialize(operation)
+        scope.start(operation)
+        process = PresentationProcessOwner()
+        scope.retain_process(operation, process)
+        process.start()
+        child = process.child
+        scope.bind_child(operation, child)
+        pipes = OwnedPresentationPipes(child.stdout, child.stderr)
+        control = OwnedControlPipe(
+            child.stdin, handle=scope.handle(operation), child=child, current=lambda: False
+        )
+        if post_go_fixture:
+            scope.owner.go(
+                scope.handle(operation), child, scope.owner.challenge(scope.handle(operation))
+            )
+        with pytest.raises(FrameError, match="BI1_PIPE_DEADLINE"):
+            pipes.poll(deadline=time.monotonic() - 1.0)
+        assert not scope.drain_cancelled_reader(operation, pipes, control)
+        assert pipes._cleanup_deadline is None and fence.current
+        control.close_for_drain()
+        deadline = time.monotonic() + 2.0
+        while not process.poll_wait():
+            assert time.monotonic() < deadline
+            await asyncio.sleep(0.005)
+        assert not scope.drain_cancelled_reader(operation, pipes, control)
+        assert pipes._cleanup_deadline is None
+        assert process.probe_group_absence()
+        exact_handle = control._handle
+        control._handle = object()
+        assert not scope.drain_cancelled_reader(operation, pipes, control)
+        assert pipes._cleanup_deadline is None
+        control._handle = exact_handle
+        while not scope.drain_cancelled_reader(operation, pipes, control):
+            assert time.monotonic() < deadline
+            await asyncio.sleep(0.005)
+        assert not fence.current and pipes.output == b""
+        collected = scope.collect_reader_closure(operation, pipes, control)
+        if post_go_fixture:
+            assert not collected
+            assert scope.owner.inspect(scope.handle(operation))[0] is State.UNKNOWN
+            assert not await scope.retire_known(operation)
+            assert native.drain_calls == 0
+            return
+        assert collected
+        assert not await scope.reauthorize(operation)
+        assert not scope.emit_inline(operation, lambda *_: pytest.fail("must not emit"))
+        assert await scope.retire_known(operation)
+        assert native.drain_calls == 1
 
     asyncio.run(run())
