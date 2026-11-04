@@ -71,10 +71,10 @@ timeout or HTTP handler completion alone never releases a reservation. Native
 and child drains must finish before Store/listener retirement. No forced cleanup
 of unrelated processes or guessed ownership.
 
-### Refusal-only process abort — reviewed design, not implemented
+### Refusal-only process abort — reviewed source, activation closed
 
-The cleanup-only pipe path in bf24a54 does not renew output authority. A future
-aborted-result marker must be distinct from ordinary RESULT_EOF validation and
+The cleanup-only pipe path in bf24a54 does not renew output authority. The
+aborted-result marker is distinct from ordinary RESULT_EOF validation and is
 accepted once only for DRAINING with irrevocably revoked output. Existing UNKNOWN
 is absorbing: parser, descriptor, native or ownership ambiguity cannot be repaired
 by a later successful process observation. The exact adapter must establish the
@@ -91,8 +91,12 @@ establish that premise or provide stronger containment; no generic subprocess
 or caller-supplied boolean may use this exception. Required causals include actual
 post-GO termination, truncated/malformed output, wrong bindings, missing/reordered
 closure, duplicate marker, unrevoked output, prior UNKNOWN and retained native or
-policy debt. Independent design review accepted these conditions only; the code,
-actual post-GO process tests and complete supervisor still require review.
+policy debt. Independent bounded source review accepted the marker and actual
+parent GO-write/termination/closure test with synthetic native authority. That
+test does not prove child GO acknowledgement, completed source reads or production
+native authorization. Native DRAIN refusal retains credentials/claim and disables
+the scope. Complete supervisor, runtime premise and live integration still
+require qualification.
 
 ## Mobile ownership and freshness
 

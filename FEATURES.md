@@ -1,3 +1,18 @@
+## Character reader abort lifecycle — November 4, 2026
+
+Reviewed source 71b592c adds a dedicated refusal-only aborted-result marker after
+exact retained process/group/pipe/control closure and irreversible output discard.
+It cannot recover prior UNKNOWN, skip ordinary result validation, reauthorize or
+emit. Native/policy resources must still close independently before credential
+retirement. An actual fixed-child test covers input/GO write, termination request,
+wait/group/pipe closure and no display; authority is synthetic and there is no
+child acknowledgement or completed-read claim. Failed native DRAIN retains
+credentials/claim and disables the scope. All 422 presentation tests and 190
+subtests pass on the host Python 3.14 executable in an isolated environment;
+independent bounded review accepted the change. Live activation still requires
+the fixed worker's no-spawn/no-FD-transfer runtime/code premise, full supervisor,
+authenticated routes and physical app verification.
+
 ## Character reader cleanup — November 4, 2026
 
 Reviewed source bf24a54 adds cleanup-only pipe draining after exact retained
@@ -7,9 +22,9 @@ nonrenewable 250 ms cleanup allowance. Actual pipe/empty-child checks cover
 timeout, wrong control identity, overflow and uncertain descriptors. The full
 presentation suite passes 416 tests and 190 subtests on the host's Python 3.14
 executable in an isolated environment. Independent bounded review accepted this
-slice. Post-GO cancellation still retains UNKNOWN when no worker cleanup result
-exists; its refusal-only exit-backed contract and the full supervisor remain
-unfinished. Nothing is activated on phones by this source checkpoint.
+slice. Its initial post-GO UNKNOWN limitation is superseded by the reviewed
+refusal-only marker above; the full supervisor remains unfinished. Nothing is
+activated on phones by this source checkpoint.
 
 ## Character delivery recovery — November 4, 2026
 

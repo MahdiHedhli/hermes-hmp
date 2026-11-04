@@ -563,3 +563,32 @@ Full supervisor and runtime/listener/route/physical qualification remain open.
 Fresh GitHub checks for the preceding pushed 2e02858 checkpoint passed the plugin
 suite and BI1 Unicode jobs on Python 3.12/3.13/3.14 (run 41927367852); these are not
 checks of bf24a54 until that commit is pushed and its own run completes.
+
+## November 4 — refusal-only aborted-result lifecycle
+
+Commit 71b592c implements the independently reviewed RESULT_ABORTED_EOF marker.
+Only a DRAINING job with irrevocably revoked output may accept it; ordinary
+RESULT_EOF parsing is unchanged, duplicate/mixed EOF or prior UNKNOWN cannot
+recover, and an aborted result cannot become COMPLETE/reauthorized/emitted.
+The exact adapter selects this projection only after retained process/child/
+stream/control identity, actual wait/group/EOF/close/signal observations and
+irreversible discard. Native and parent policy closure remain independent gates.
+
+The actual fixed-child test writes input3 and GO through the normal adapter
+handoff, requests termination, observes wait/group/pipe closure and finishes as
+refusal. It uses synthetic native authority and an empty private synthetic tree;
+it is not evidence of child GO acknowledgement, completed processing or production
+native-policy acquisition. Native DRAIN false retains non-null headers/claim and
+disables the scope; true permits retirement. Pure ledger fixtures prove truncated
+abort, no unrevoked acceptance, prior malformed-parser UNKNOWN retention and
+mixed/duplicate/reordered closure failure. Independent review accepted 83 focused
+tests/66 subtests plus both finite native-DRAIN variants. Root full presentation
+suite: 422 tests/190 subtests on host Python 3.14.7 via isolated uv dependencies;
+Ruff 0.16.9 and whitespace checks pass.
+
+This supersedes the earlier post-GO missing-envelope limitation, not the live
+qualification gates. Exit-backed refusal relies on the fixed reviewed worker
+having no spawn or FD delegation; group absence alone is not general descendant
+containment. Runtime/source/dependency/reaper qualification, full supervisor,
+listener lifecycle, authenticated metadata/avatar routes and physical rendering
+remain open. No installed host or mobile artifact changed.
