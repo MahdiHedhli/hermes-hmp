@@ -736,8 +736,8 @@ if __name__ == "__main__":
 
 
 def test_one_process_cannot_be_retained_by_two_authorities():
-    from hmp_plugin.presentation_process import PresentationProcessOwner
     from hmp_plugin.presentation_jobs import FrameError
+    from hmp_plugin.presentation_process import PresentationProcessOwner
 
     async def run():
         first, _, _, _, one, _ = adapter()
@@ -749,10 +749,12 @@ def test_one_process_cannot_be_retained_by_two_authorities():
         process = PresentationProcessOwner()
         first.retain_process(one, process)
         import pytest
+
         with pytest.raises(FrameError):
             second.retain_process(two, process)
         assert first._record(one).process_owner is process
         assert second._record(two).process_owner is None
+
     asyncio.run(run())
 
 
@@ -772,4 +774,5 @@ def test_retained_unlaunched_process_requires_explicit_closure_before_drain():
         process.seal_unlaunched()
         assert await scope.retire_known(operation)
         assert native.drain_calls == 1
+
     asyncio.run(run())

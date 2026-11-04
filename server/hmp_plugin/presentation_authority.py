@@ -465,11 +465,14 @@ class ParentAuthorityAdapter:
         from .presentation_process import PresentationProcessOwner
 
         record = self._record(operation)
-        if (type(process) is not PresentationProcessOwner
-                or record.process_owner is not None or record.child is not None
-                or not record.initial_complete
-                or record.owner.inspect(record.handle)[0] is not State.STARTING
-                or not self._current(record)):
+        if (
+            type(process) is not PresentationProcessOwner
+            or record.process_owner is not None
+            or record.child is not None
+            or not record.initial_complete
+            or record.owner.inspect(record.handle)[0] is not State.STARTING
+            or not self._current(record)
+        ):
             raise AuthorityRefusalError
         binding = object()
         process.claim(binding)
@@ -481,10 +484,11 @@ class ParentAuthorityAdapter:
 
     def bind_child(self, operation: OpaqueOperation, child: object) -> None:
         record = self._record(operation)
-        if record.process_owner is not None:
-            if (not record.process_owner.owns(record.process_binding)
-                    or record.process_owner.child is not child):
-                raise AuthorityRefusalError
+        if record.process_owner is not None and (
+            not record.process_owner.owns(record.process_binding)
+            or record.process_owner.child is not child
+        ):
+            raise AuthorityRefusalError
         record.owner.bind_child(record.handle, child)
         if record.owner.inspect(record.handle)[0] in (State.STARTING, State.DRAINING):
             record.child = child
@@ -622,8 +626,9 @@ class ParentAuthorityAdapter:
             from .presentation_process import PresentationProcessOwner
 
             process = record.process_owner
-            if (type(process) is not PresentationProcessOwner
-                    or not process.owns(record.process_binding)):
+            if type(process) is not PresentationProcessOwner or not process.owns(
+                record.process_binding
+            ):
                 return False
             try:
                 process.seal_unlaunched()
@@ -643,13 +648,21 @@ class ParentAuthorityAdapter:
         process = record.process_owner
         if process is None:
             return True  # legacy inert JobOwner fixtures have no OS process
-        if (type(process) is not PresentationProcessOwner
-                or not process.owns(record.process_binding) or process.uncertain):
+        if (
+            type(process) is not PresentationProcessOwner
+            or not process.owns(record.process_binding)
+            or process.uncertain
+        ):
             return False
         if process.never_launched_closed:
             return record.child is None
-        return (record.child is not None and process.child is record.child
-                and process.reaped and process.group_absent and process.signals_retired)
+        return (
+            record.child is not None
+            and process.child is record.child
+            and process.reaped
+            and process.group_absent
+            and process.signals_retired
+        )
 
     async def retire_known(self, operation: OpaqueOperation) -> bool:
         """Release credentials only after both owner planes report known closure."""

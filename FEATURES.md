@@ -1,3 +1,14 @@
+## Character delivery recovery — November 4, 2026
+
+The recovered character integration branch now retains a presentation process under
+one operation identity and requires explicit never-launched closure or terminal
+process/group closure before credential retirement. Focused Python 3.13 synthetic
+checks pass 42 tests and 23 subtests; changed modules pass Ruff 0.16.9. Independent
+review is pending. Full supervisor, live authenticated metadata/avatar routes,
+exact runtime qualification and signed phone checks are still incomplete. This
+is not a deployed bot-character feature. Host-local images retain their separate
+implementation and physical-verification requirements.
+
 ## Character reader integration — October 12, 2026
 
 Native policy callback findings are closed by independent review. The job receiver

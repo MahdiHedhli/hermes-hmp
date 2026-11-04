@@ -75,9 +75,14 @@ class PresentationProcessOwner:
 
     @property
     def never_launched_closed(self) -> bool:
-        return (self._sealed_unlaunched and not self._launch_attempted
-                and self._child is None and self._pid is None
-                and self.signals_retired and not self.uncertain)
+        return (
+            self._sealed_unlaunched
+            and not self._launch_attempted
+            and self._child is None
+            and self._pid is None
+            and self.signals_retired
+            and not self.uncertain
+        )
 
     def start(self) -> None:
         self._enter()
