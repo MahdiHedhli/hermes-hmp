@@ -1551,7 +1551,9 @@ async def test_native_policy_binding_requires_admitted_operation_and_fresh_postc
         )
         assert row["parent_work_counts"]["opens"] == len(bound.directory_rules)
         assert row["deadline_ns"] == int(authority._record(operation).deadline * 1_000_000_000)
-        assert "Authorization" not in packet.decode()
+        # The length-prefixed envelope is binary, even though its payload is JSON.
+        assert b"Authorization" not in packet
+        assert ("Bearer " + "A" * 43).encode() not in packet
         with pytest.raises(AuthorityRefusalError):
             work.worker_input(
                 source_manifest_sha="b" * 64, canonical_fallback="Hermes", observed_at=1

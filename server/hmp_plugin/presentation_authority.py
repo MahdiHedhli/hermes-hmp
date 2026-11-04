@@ -659,8 +659,9 @@ class ParentAuthorityAdapter:
         if record.reader_collected:
             return False
         record.reader_collected = True
-        if pipes.output:
-            record.owner.feed_result(record.handle, pipes.output, record.child)
+        output = pipes.output
+        for offset in range(0, len(output), 65536):
+            record.owner.feed_result(record.handle, output[offset : offset + 65536], record.child)
         record.owner.diagnostic(record.handle, pipes.diagnostic_bytes)
         for event in (
             "RESULT_EOF",

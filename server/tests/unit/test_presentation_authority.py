@@ -870,3 +870,71 @@ def test_actual_empty_reader_closure_releases_only_after_exact_observations():
         assert await scope.retire_known(operation)
 
     asyncio.run(run())
+
+
+def test_collected_large_v2_avatar_reaches_codec_without_oversized_feed(monkeypatch):
+    """Inert closure projection/codec composition, not OS custody qualification."""
+    import hashlib
+    from types import SimpleNamespace
+
+    from hmp_plugin.presentation_control_pipe import OwnedControlPipe
+    from hmp_plugin.presentation_jobs import decode_output
+    from hmp_plugin.presentation_output_v2 import BoundedResultBufferV2, encode_output_v2
+    from hmp_plugin.presentation_pipes import OwnedPresentationPipes
+    from hmp_plugin.presentation_process import PresentationProcessOwner
+
+    async def run():
+        scope, _, _, _, operation, _ = adapter()
+        assert await scope.initialize(operation)
+        scope.start(operation)
+        process = PresentationProcessOwner()
+        scope.retain_process(operation, process)
+        child = SimpleNamespace(stdout=object(), stderr=object(), stdin=object())
+        process._child = child
+        process._wait_status = 0
+        process.group_absent = process.signals_retired = True
+        scope.bind_child(operation, child)
+        challenge = scope.owner.challenge(scope.handle(operation))
+        row, _ = decode_output(output(scope, operation), challenge, 1)
+        avatar = b"synthetic-avatar-codec-fixture" * 5000
+        digest = hashlib.sha256(avatar).hexdigest()
+        row.update(
+            schema=2,
+            mime="image/png",
+            width=256,
+            height=256,
+            avatar_length=len(avatar),
+            avatar_sha=digest,
+        )
+        row["source_proof"].update(avatar_meta=[1] * 9, avatar_body_sha=digest)
+        row["ledger"].update(hash_bytes=len(avatar), yaml_tokens=0)
+        wire = encode_output_v2(row, avatar)
+        assert len(wire) > 65536
+        pipes = object.__new__(OwnedPresentationPipes)
+        pipes._streams = {"result": child.stdout, "diagnostic": child.stderr}
+        pipes._output = bytearray(wire)
+        pipes._closed = pipes._eof = {"result", "diagnostic"}
+        pipes._selector_closed = True
+        pipes.uncertain = False
+        pipes.diagnostic_bytes = 0
+        control = object.__new__(OwnedControlPipe)
+        control._stream, control._child = child.stdin, child
+        control._handle = scope.handle(operation)
+        control.closed, control.uncertain = True, False
+        buffer = BoundedResultBufferV2()
+        chunks = []
+
+        def feed(handle, chunk, exact_child):
+            assert handle is control._handle and exact_child is child
+            chunks.append(len(chunk))
+            buffer.feed(chunk)
+
+        monkeypatch.setattr(scope.owner, "feed_result", feed)
+        monkeypatch.setattr(scope.owner, "diagnostic", lambda *args: None)
+        monkeypatch.setattr(scope.owner, "custody", lambda *args: None)
+        scope.collect_reader_closure(operation, pipes, control)
+        assert len(chunks) > 1 and max(chunks) <= 65536
+        assert buffer.finish(challenge, 1) == (row, avatar)
+        assert not scope.collect_reader_closure(operation, pipes, control)
+
+    asyncio.run(run())
