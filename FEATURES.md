@@ -18,7 +18,9 @@ temporary-directory cleanup warnings and one unobserved synthetic client-task
 error; the test-only request-observation repair passed independent review and
 its targeted rerun without that orphan warning. These are not physical image
 display evidence. The iPad Pro is connected with Developer Mode; iPhone 15 Pro
-Max is disconnected. An unsigned iOS build check is in progress, not installed.
+Max is disconnected. Unsigned iOS build 2026110401 compiled and passed the release
+artifact scan. The generated native-plugin lock/framework reconciliation passed
+independent review; signing, installation and physical image display remain open.
 
 ## Composed character reader — November 4, 2026
 
