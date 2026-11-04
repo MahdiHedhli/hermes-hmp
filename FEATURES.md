@@ -1,3 +1,16 @@
+## Character reader cleanup — November 4, 2026
+
+Reviewed source bf24a54 adds cleanup-only pipe draining after exact retained
+child exit, process-group absence and control closure. It irreversibly cancels
+output, wipes buffered results (including already-drained readers), and uses one
+nonrenewable 250 ms cleanup allowance. Actual pipe/empty-child checks cover
+timeout, wrong control identity, overflow and uncertain descriptors. The full
+presentation suite passes 416 tests and 190 subtests on the host's Python 3.14
+executable in an isolated environment. Independent bounded review accepted this
+slice. Post-GO cancellation still retains UNKNOWN when no worker cleanup result
+exists; its refusal-only exit-backed contract and the full supervisor remain
+unfinished. Nothing is activated on phones by this source checkpoint.
+
 ## Character delivery recovery — November 4, 2026
 
 The recovered character integration branch now retains a presentation process under

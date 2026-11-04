@@ -535,3 +535,31 @@ authority, exact runtime/code/dependency and exclusive-reaper qualification,
 listener lifecycle and authenticated metadata/avatar routes, then signed-device
 character display. Host-local images remain the next feature priority and their
 physical rendering remains unverified.
+
+## November 4 — expired-reader cleanup slice
+
+Reviewed commit bf24a54 adds cleanup-only discard after the adapter checks exact
+retained process binding, child/stream/control identity, observed terminal wait,
+group absence, signal retirement and known control closure. The job is cancelled
+before discard. The pipe owner never restores normal read authority; it wipes
+retained output even if EOF was already observed, drains under one frozen 250 ms
+allowance and a separate finite discard ceiling, and records only real EOF/close.
+Timeout, overflow or descriptor uncertainty retains debt; no close is retried.
+
+Independent review accepted 42 tests/23 subtests, including actual pipe cleanup,
+buffered wipe, frozen allowance, sticky overflow, wrong control handle and an
+actual empty child. The post-GO fixture changes only inert JobOwner state and
+explicitly proves UNKNOWN/no credential retirement rather than successful
+post-GO cleanup. Root's full presentation run passes 416 tests/190 subtests using
+the host Python 3.14.7 executable via an isolated uv environment. Ruff passes.
+
+Remaining contract decision: a cancelled post-GO child may exit without a valid
+worker cleanup envelope. Current JobOwner deliberately retains UNKNOWN after
+result discard. A refusal-only path based on exact OS closure is under design
+review; success/emission must still require a valid worker result and final
+native reauthorization, and parent/native thread ambiguity cannot be waived.
+Full supervisor and runtime/listener/route/physical qualification remain open.
+
+Fresh GitHub checks for the preceding pushed 2e02858 checkpoint passed the plugin
+suite and BI1 Unicode jobs on Python 3.12/3.13/3.14 (run 41927367852); these are not
+checks of bf24a54 until that commit is pushed and its own run completes.
