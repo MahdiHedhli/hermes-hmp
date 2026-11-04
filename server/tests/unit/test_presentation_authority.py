@@ -831,4 +831,42 @@ def test_cancellation_retires_output_before_termination_request(monkeypatch):
         assert observed == [False]
         assert not process.reaped and not process.group_absent
         assert not await scope.retire_known(operation)
+
+    asyncio.run(run())
+
+
+def test_actual_empty_reader_closure_releases_only_after_exact_observations():
+    import time
+
+    from hmp_plugin.presentation_control_pipe import OwnedControlPipe
+    from hmp_plugin.presentation_pipes import OwnedPresentationPipes
+    from hmp_plugin.presentation_process import PresentationProcessOwner
+
+    async def run():
+        scope, _, _, _, operation, _ = adapter()
+        assert await scope.initialize(operation)
+        scope.start(operation)
+        process = PresentationProcessOwner()
+        scope.retain_process(operation, process)
+        process.start()
+        child = process.child
+        scope.bind_child(operation, child)
+        pipes = OwnedPresentationPipes(child.stdout, child.stderr)
+        control = OwnedControlPipe(
+            child.stdin, handle=scope.handle(operation), child=child, current=lambda: False
+        )
+        scope.cancel(operation)
+        assert not scope.collect_reader_closure(operation, pipes, control)
+        control.close_for_drain()
+        deadline = time.monotonic() + 2.0
+        while not pipes.drained:
+            pipes.poll(deadline=deadline)
+        while not process.poll_wait():
+            assert time.monotonic() < deadline
+            await asyncio.sleep(0.005)
+        assert process.probe_group_absence()
+        assert scope.collect_reader_closure(operation, pipes, control)
+        assert not scope.collect_reader_closure(operation, pipes, control)
+        assert await scope.retire_known(operation)
+
     asyncio.run(run())

@@ -194,6 +194,7 @@ class _Record:
     policy_work: object | None = None
     process_owner: object | None = None
     process_binding: object | None = None
+    reader_collected: bool = False
 
 
 class _OwnerAuthority(AuthorityPort):
@@ -623,6 +624,54 @@ class ParentAuthorityAdapter:
         record.fence.retire()
         record.permit = None
         record.owner.cancel(record.handle)
+
+    def collect_reader_closure(
+        self, operation: OpaqueOperation, pipes: object, control: object
+    ) -> bool:
+        """Project exact retained OS observations once, never a termination request."""
+        from .presentation_control_pipe import OwnedControlPipe
+        from .presentation_pipes import OwnedPresentationPipes
+        from .presentation_process import PresentationProcessOwner
+
+        record = self._record(operation)
+        process = record.process_owner
+        if (
+            type(process) is not PresentationProcessOwner
+            or type(pipes) is not OwnedPresentationPipes
+            or type(control) is not OwnedControlPipe
+            or not process.owns(record.process_binding)
+            or process.uncertain
+            or record.child is None
+            or process.child is not record.child
+            or pipes._streams["result"] is not record.child.stdout
+            or pipes._streams["diagnostic"] is not record.child.stderr
+            or control._stream is not record.child.stdin
+            or control._child is not record.child
+            or control._handle is not record.handle
+            or not pipes.drained
+            or not control.closed
+            or control.uncertain
+            or not process.reaped
+            or not process.group_absent
+            or not process.signals_retired
+        ):
+            return False
+        if record.reader_collected:
+            return False
+        record.reader_collected = True
+        if pipes.output:
+            record.owner.feed_result(record.handle, pipes.output, record.child)
+        record.owner.diagnostic(record.handle, pipes.diagnostic_bytes)
+        for event in (
+            "RESULT_EOF",
+            "DIAGNOSTIC_EOF",
+            "WAIT_OK" if process.exit_code == 0 else "WAIT_FAIL",
+            "GROUP_GONE",
+            "IPC_CLOSED",
+            "SIGNAL_CLOSED",
+        ):
+            record.owner.custody(record.handle, event, record.child)
+        return record.owner.inspect(record.handle)[0] in (State.COMPLETE, State.REFUSED)
 
     def terminate_cancelled_reader(self, operation: OpaqueOperation) -> bool:
         """Retire output authority before one termination request, retaining debt."""
