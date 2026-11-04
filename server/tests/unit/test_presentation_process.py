@@ -137,3 +137,34 @@ def test_post_reap_group_probe_is_zero_only_and_absence_requires_esrch(monkeypat
     with pytest.raises(FrameError):
         owner.probe_group_absence()
     assert calls == [(123456, 0)]
+
+
+def test_process_claim_is_permanent_and_uses_identity():
+    owner = PresentationProcessOwner()
+    first, other = object(), object()
+    owner.claim(first)
+    assert owner.owns(first) and not owner.owns(other)
+    with pytest.raises(FrameError):
+        owner.claim(other)
+    assert owner.owns(first)
+
+
+def test_explicit_never_launch_seal_prevents_later_launch(monkeypatch):
+    owner = PresentationProcessOwner()
+    calls = []
+    monkeypatch.setattr(module.subprocess, "Popen", lambda *a, **k: calls.append(1))
+    assert not owner.never_launched_closed
+    assert owner.seal_unlaunched()
+    assert owner.never_launched_closed
+    with pytest.raises(FrameError):
+        owner.start()
+    assert calls == []
+
+
+def test_started_owner_cannot_claim_or_seal(monkeypatch):
+    owner, child = fake_owner(monkeypatch)
+    with pytest.raises(FrameError):
+        owner.claim(object())
+    with pytest.raises(FrameError):
+        owner.seal_unlaunched()
+    assert not owner.never_launched_closed and owner.child is child

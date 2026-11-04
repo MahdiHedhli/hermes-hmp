@@ -28,6 +28,8 @@ class PresentationProcessOwner:
         self._child: subprocess.Popen[bytes] | None = None
         self._pid: int | None = None
         self._launch_attempted = False
+        self._binding: object | None = None
+        self._sealed_unlaunched = False
         self._wait_status: int | None = None
         self._raw_wait: object = None
         self._group_probe_attempted = False
@@ -44,10 +46,43 @@ class PresentationProcessOwner:
             self._lock.release()
             raise FrameError("BI1_PROCESS_UNCERTAIN")
 
+    def claim(self, binding: object) -> None:
+        """Permanently bind this process owner to one operation before launch."""
+        self._enter()
+        try:
+            if self._binding is not None or self._launch_attempted or self._sealed_unlaunched:
+                raise FrameError("BI1_PROCESS_CLAIM_REFUSED")
+            if binding is None:
+                raise FrameError("BI1_PROCESS_CLAIM_REFUSED")
+            self._binding = binding
+        finally:
+            self._lock.release()
+
+    def owns(self, binding: object) -> bool:
+        return binding is not None and self._binding is binding
+
+    def seal_unlaunched(self) -> bool:
+        """Close an explicitly never-launched owner; absence alone is no receipt."""
+        self._enter()
+        try:
+            if self._launch_attempted or self._child is not None or self._pid is not None:
+                raise FrameError("BI1_PROCESS_SEAL_REFUSED")
+            self._sealed_unlaunched = True
+            self.signals_retired = True
+            return True
+        finally:
+            self._lock.release()
+
+    @property
+    def never_launched_closed(self) -> bool:
+        return (self._sealed_unlaunched and not self._launch_attempted
+                and self._child is None and self._pid is None
+                and self.signals_retired and not self.uncertain)
+
     def start(self) -> None:
         self._enter()
         try:
-            if self._launch_attempted:
+            if self._launch_attempted or self._sealed_unlaunched:
                 raise FrameError("BI1_PROCESS_LAUNCH_REFUSED")
             launch = child_launch()
             if self.uncertain:
