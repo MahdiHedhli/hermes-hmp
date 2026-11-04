@@ -1,3 +1,21 @@
+## Harmless approval-test compatibility — November 4, 2026
+
+Reviewed repair 4ad1344 fixes a real current-native mismatch: native notifications
+add `timeout_s`, which the old strict callback decoder rejected. Only that bounded
+integer metadata is optional; original identity/pattern checks, unknown-field
+refusal and the operator's original deadline remain enforced. The AT1 union
+passes 470 tests on Python 3.14.9; two further probe-admission tests pass. Actual
+exported ed1afb helpers and an independent rerun complete once/deny/cancel/expiry
+with joined cleanup, empty queues and released slots. This is not paired-phone,
+operator-IPC or deployed-runtime qualification. The source registers the scoped
+`hermes hmp approval-test` interface; see the precise
+[native compatibility scope](specs/039-hmp-operator-approval-test/NATIVE_COMPATIBILITY.md).
+
+iPad signing attempt 2026110402 is blocked by Apple's updated Program License
+Agreement and missing device coverage in the existing profile. No agreement was
+accepted and no signed artifact/app installation resulted. The scanned unsigned
+2026110401 candidate remains available. The broader feature work remains active.
+
 ## Runtime integration findings and host-local images — November 4, 2026
 
 Current native source exposes two concrete character-reader integration gaps:
