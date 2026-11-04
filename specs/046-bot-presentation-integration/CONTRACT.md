@@ -71,6 +71,29 @@ timeout or HTTP handler completion alone never releases a reservation. Native
 and child drains must finish before Store/listener retirement. No forced cleanup
 of unrelated processes or guessed ownership.
 
+### Refusal-only process abort — reviewed design, not implemented
+
+The cleanup-only pipe path in bf24a54 does not renew output authority. A future
+aborted-result marker must be distinct from ordinary RESULT_EOF validation and
+accepted once only for DRAINING with irrevocably revoked output. Existing UNKNOWN
+is absorbing: parser, descriptor, native or ownership ambiguity cannot be repaired
+by a later successful process observation. The exact adapter must establish the
+retained process token, child/stream/control identities, terminal wait, group
+absence, actual EOF/known closes and signal retirement before projecting the
+marker. It can lead only to refusal, never success, reauthorization or emission.
+Native threads and parent policy resources must close independently before
+credential retirement.
+
+This rationale depends on the reviewed fixed own-code worker not spawning or
+delegating descriptors. Group absence alone cannot prove an escaped descendant
+is absent, even when stdout reaches EOF. Live runtime/code qualification must
+establish that premise or provide stronger containment; no generic subprocess
+or caller-supplied boolean may use this exception. Required causals include actual
+post-GO termination, truncated/malformed output, wrong bindings, missing/reordered
+closure, duplicate marker, unrevoked output, prior UNKNOWN and retained native or
+policy debt. Independent design review accepted these conditions only; the code,
+actual post-GO process tests and complete supervisor still require review.
+
 ## Mobile ownership and freshness
 
 Use the original instance/profile/foreground epoch and connection generation.
