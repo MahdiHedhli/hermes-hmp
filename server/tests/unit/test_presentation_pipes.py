@@ -182,3 +182,19 @@ def test_cleanup_overflow_retains_uncertain_debt_without_retry(pipes, monkeypatc
     assert not result.closed and not diagnostic.closed
     with pytest.raises(FrameError, match="BI1_PIPE_CLEANUP_REFUSED"):
         owner.poll_discard()
+
+
+def test_outer_cleanup_deadline_can_only_shorten_allowance(pipes, monkeypatch):
+    from hmp_plugin import presentation_pipes
+
+    owner, _, _, result, diagnostic = pipes
+    now = [10.0]
+    monkeypatch.setattr(presentation_pipes.time, "monotonic", lambda: now[0])
+    owner.poll_discard(deadline=10.1)
+    owner.poll_discard(deadline=10.2)
+    assert owner._cleanup_deadline == 10.1
+    now[0] = 10.11
+    with pytest.raises(FrameError, match="BI1_PIPE_CLEANUP_DEADLINE"):
+        owner.poll_discard(deadline=20.0)
+    assert owner._cleanup_deadline == 10.1
+    assert not owner.drained and not result.closed and not diagnostic.closed

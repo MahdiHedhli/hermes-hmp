@@ -592,3 +592,51 @@ having no spawn or FD delegation; group absence alone is not general descendant
 containment. Runtime/source/dependency/reaper qualification, full supervisor,
 listener lifecycle, authenticated metadata/avatar routes and physical rendering
 remain open. No installed host or mobile artifact changed.
+
+## November 4 — retained composed reader supervisor
+
+Source d26db66 binds one ReaderSupervisor to the reserved operation before any
+await or child acquisition. The composed path performs native INITIAL/BEFORE,
+actual policy-thread acquisition/join/postcheck, input3 transfer, fixed process
+launch, exact control input/GO, bounded output collection, exact wait/group/pipe
+closure, result2/parent-work validation, final native authorization and one
+synchronous sink call. Independent source review accepted all 15 then-current
+composed/adversarial cases. Root's full presentation run passed 437 tests/190
+subtests on host Python 3.14.7 through isolated uv dependencies.
+
+The outer task uses the original remaining deadline, synchronously transfers
+ownership to CLEANUP and retires output before cancellation. Every resumed normal
+phase checks current phase/authority; no detached normal path may launch, write,
+read or reap after handoff. One frozen total 250 ms cleanup allowance applies
+across child/control/pipes/policy/native work. Discard can shorten its budget to
+that deadline, never extend it. Partial owners, body/cleanup tasks and ambiguous
+native claims remain attached to the record; no acquisition, GO or close replay
+is attempted. UNKNOWN may discard exact known-exited pipes for FD disposal but
+cannot project abort, recover authority or retire credentials.
+
+Actual composed checks cover successful synthetic metadata emission/retirement,
+late/swallowed native awaits at INITIAL/BEFORE/both PRE_GO observations/PRE_EMIT,
+actual original timeout, partial launch/pipe/control construction, deadline
+exhaustion after termination, duplicate run, late native DRAIN and blocked actual
+policy-thread completion. Tests deliberately retain debt after uncertain partial
+setup or late work. This is not production native authorization or signed phone
+qualification.
+
+Remaining limits are explicit: asyncio timers cannot bound a synchronous syscall
+that blocks the event loop; supported syscall latency or an external watchdog
+must be qualified before a hard wall-clock claim. Input preparation followed by
+failure before launch conservatively retains transfer debt. Fixed no-spawn/no-FD
+transfer code, interpreter/dependency provenance and exclusive reaper remain
+live qualification gates. Listener startup/shutdown and authenticated routes are
+not connected. No installed host plugin/app or permission changed.
+
+GitHub run 41929068669 completed successfully for previous head 8f5bef1, not this
+new supervisor source. The roadmap remains active; characters are still first,
+then host-local images and physical qualification.
+
+Two final test-only causals were independently reviewed and passed: a sink that
+writes then raises produces one write, retained UNKNOWN/credentials and refused
+run replay; a borrowed outer cleanup deadline may only shorten the pipe owner's
+allowance. Root's focused supervisor/pipe run passes 28 cases. These two additions
+follow the 437-case full Python 3.14 run above; no production code changed after
+that full run.

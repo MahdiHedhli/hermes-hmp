@@ -413,3 +413,24 @@ async def test_cancelled_policy_thread_is_retained_until_actual_join(context, mo
     assert work.resources_closed
     assert authority._record(operation).headers is not None
     assert supervisor.cleanup_deadline == deadline and not supervisor.retired
+
+
+@pytest.mark.asyncio
+async def test_sink_failure_after_write_never_replays_or_claims_retirement(context):
+    authority, operation, _ = context
+    supervisor = ReaderSupervisor(authority, operation)
+    writes = []
+
+    def lost_ack(*row):
+        writes.append(row)
+        raise OSError("synthetic lost sink acknowledgement")
+
+    assert not await supervisor.run(
+        source_sha="b" * 64, fallback="Hermes", observed_at=100, sink=lost_ack
+    )
+    assert len(writes) == 1 and supervisor.phase == "DEBT" and not supervisor.retired
+    assert authority._record(operation).headers is not None
+    assert authority.owner.inspect(authority.handle(operation))[0] is State.UNKNOWN
+    with pytest.raises(AuthorityRefusalError):
+        await supervisor.run(source_sha="b" * 64, fallback="Hermes", observed_at=100, sink=lost_ack)
+    assert len(writes) == 1

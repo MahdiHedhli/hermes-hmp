@@ -100,6 +100,20 @@ require qualification.
 
 ## Mobile ownership and freshness
 
+The source-only ReaderSupervisor composes this reader lifecycle and retains its
+normal/cleanup tasks and partial acquisitions on the operation. Timeout first
+retires output and hands off phase ownership; late awaits cannot resume normal
+launch/GO/read/reap work. Cleanup uses one frozen total allowance, and native
+DRAIN cannot race a still-running normal task. Sink failure after a possible
+write retains UNKNOWN rather than retrying or claiming client receipt.
+
+This asynchronous implementation does not bound a synchronous syscall blocking
+the event loop. Live hard-deadline claims require supported syscall-latency or
+external-watchdog qualification in addition to runtime/code/reaper premises.
+Unknown partial construction, input-transfer-before-launch failure and late
+native/policy work conservatively retain debt. No route may infer qualification
+from the existence of this class or from synthetic task completion.
+
 Use the original instance/profile/foreground epoch and connection generation.
 Fresh authenticated roster authorization/capability is required before metadata.
 Recheck current foreground after every asynchronous phase. Saved rows do not fetch.

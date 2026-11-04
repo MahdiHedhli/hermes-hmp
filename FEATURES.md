@@ -1,3 +1,23 @@
+## Composed character reader — November 4, 2026
+
+The source-only supervisor now connects native authorization, actual directory
+policy work/join, fixed child input/GO, result2 validation, process/group/pipe
+closure, final native authorization, single emission and credential retirement.
+Independent review accepted 15 composed/adversarial cases: late native responses,
+original timeout, partial acquisition, cancellation, cleanup-budget exhaustion,
+duplicate run, native DRAIN and blocked policy-thread debt. The full presentation
+suite passes 437 tests and 190 subtests on the host Python 3.14 executable via
+isolated dependencies; two subsequent independently reviewed test-only additions
+cover lost sink acknowledgement and cleanup-budget nonextension. Prior pushed
+checkpoint 8f5bef1 also passed GitHub CI.
+
+This is not installed-phone support. Live runtime/code/dependency and exclusive
+reaper qualification, synchronous syscall latency/watchdog behavior, listener
+lifecycle and authenticated routes remain open. The asynchronous timeout cannot
+bound a synchronous syscall that blocks the event loop. Uncertain partial setup
+or late native/thread work retains debt and credentials rather than claiming
+cleanup. Fixed worker no-spawn/no-FD-transfer remains a required premise.
+
 ## Character reader abort lifecycle — November 4, 2026
 
 Reviewed source 71b592c adds a dedicated refusal-only aborted-result marker after

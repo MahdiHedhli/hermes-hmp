@@ -15,7 +15,8 @@
 - [x] Implement reviewed fixed process launch/exact wait, owned result pipes and one-use input/GO/control-close primitives.
 - [ ] Qualify runtime reaper/source premises and implement hard termination/full JobOwner drain binder.
 - [x] Add retained-owner cancellation/termination and exact stream/control closure projection; bounded review accepted the large-result repair in 017abd6. Synthetic codec composition is separate from live custody qualification.
-- [ ] Compose launch/input/GO/read/wait/group/control phases into the deadline supervisor; define bounded cleanup after deadline without renewing read/output authority, then independently review actual process tests.
+- [x] Compose policy/launch/input/GO/read/wait/group/control/final-native-emission phases into a retained supervisor; independently reviewed actual-process and adversarial tests. No live activation certification.
+- [ ] Qualify runtime/code/dependency/exclusive-reaper premises and synchronous syscall latency or external watchdog before claiming a hard wall-clock bound in a live listener.
 - [x] Add reviewed cleanup-only discard after exact child/group/control closure (bf24a54); frozen cleanup budget, actual EOF, buffered wipe and unknown-debt causals.
 - [x] Review and implement refusal-only post-GO cancellation closure without treating discarded/missing worker output as successful work; keep ambiguous native/policy resources retained. Actual parent GO-write/termination test uses synthetic native authority; runtime containment premise remains unqualified.
 - [x] Review schema3 parent policy/work accounting and implement directory-only policy acquisition.
