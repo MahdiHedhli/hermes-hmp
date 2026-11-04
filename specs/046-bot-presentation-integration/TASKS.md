@@ -17,6 +17,8 @@
 - [x] Add retained-owner cancellation/termination and exact stream/control closure projection; bounded review accepted the large-result repair in 017abd6. Synthetic codec composition is separate from live custody qualification.
 - [x] Compose policy/launch/input/GO/read/wait/group/control/final-native-emission phases into a retained supervisor; independently reviewed actual-process and adversarial tests. No live activation certification.
 - [ ] Qualify runtime/code/dependency/exclusive-reaper premises and synchronous syscall latency or external watchdog before claiming a hard wall-clock bound in a live listener.
+- [ ] Bind a frozen PM dependency-aware worker launch; parent sys.path activation is not inherited by the current -I child. See RUNTIME_FINDINGS.md.
+- [ ] Resolve direct-child native Kanban waitpid(-1) interference through an ownership-aware native contract or a separately reviewed external broker; do not disable Kanban or reinterpret ECHILD as closure.
 - [x] Add reviewed cleanup-only discard after exact child/group/control closure (bf24a54); frozen cleanup budget, actual EOF, buffered wipe and unknown-debt causals.
 - [x] Review and implement refusal-only post-GO cancellation closure without treating discarded/missing worker output as successful work; keep ambiguous native/policy resources retained. Actual parent GO-write/termination test uses synthetic native authority; runtime containment premise remains unqualified.
 - [x] Review schema3 parent policy/work accounting and implement directory-only policy acquisition.

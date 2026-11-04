@@ -1,3 +1,25 @@
+## Runtime integration findings and host-local images — November 4, 2026
+
+Current native source exposes two concrete character-reader integration gaps:
+PM activates dependencies only in the parent's import path, and the embedded
+Kanban reaper can consume another direct child's exit status. See the pinned
+[runtime findings](specs/046-bot-presentation-integration/RUNTIME_FINDINGS.md).
+This is not an exact-version or Linux rejection. Bare Python 3.14.9 lacking yaml
+does not prove the selected PM environment lacks it, and launcher metadata does
+not prove the running gateway's interpreter. The reaper conflict applies when
+that native path runs; active configuration was not inspected or changed.
+Dependency-aware launch and native child ownership or a separately reviewed
+external broker remain implementation work. No missing wait is treated as exit.
+
+Host-local image delivery is independent of that reader. Fresh source checks
+passed 1,359 server media assertions on isolated Python 3.14.9 and 62 Flutter
+loader/card/transcript/Bot Chat tests. The broad server run reported old pytest
+temporary-directory cleanup warnings and one unobserved synthetic client-task
+error; the test-only request-observation repair passed independent review and
+its targeted rerun without that orphan warning. These are not physical image
+display evidence. The iPad Pro is connected with Developer Mode; iPhone 15 Pro
+Max is disconnected. An unsigned iOS build check is in progress, not installed.
+
 ## Composed character reader — November 4, 2026
 
 The source-only supervisor now connects native authorization, actual directory
@@ -100,7 +122,7 @@ HMP is the Hermes gateway plugin used by the [HermesBot Mobile](https://hermes-b
 | Preview, off by default | Bot default model | Owner-gated catalog and validated change within the selected bot's profile. New sessions use the choice. |
 | Draft, under security review | Phone chat approvals and choices | Implemented under the minimum-version policy and not yet independently reviewed or released. Available on Hermes 0.21.5 or later when the Phone helpers HMP calls actually exist (`hermes hmp compat` shows `phone_chat`), for a device the host listed in `owner_device_ids` with the direct-send switch on. No exact build, receipt or restart latch admits it. The mobile integration is draft app PR #48; physical-device behavior is unverified. |
 | Draft, under security review | Bot Chat approvals | Implemented under the minimum-version policy and not yet independently reviewed or released (`approvals` in `hermes hmp compat`). An approval-owner device's guarded send opens the session stream and may answer Hermes's own card through its native route; every other device keeps the synchronous send. Cards exist only where Hermes's session stream emits approval events: inspected on untagged development builds, absent on release `v2026.9.24`, where the send still works and Hermes keeps its own fail-closed behavior. No release is claimed for cards. Earlier exact-build fixture passes are sampled evidence only. |
-| Draft, delivery unimplemented | Host-local generated images | The M2 API-eligibility member, three native session-method probes and offline issue draft passed independent source review. M3 listener-scoped binding also passed independent exact-candidate security review at `f737197`. A compat `available` line means probe eligibility only: no route or descriptor exists, and nothing is enabled or released. The design is a draft contract ([spec 011](specs/011-local-image-serving/spec.md)): an approval-owner device, the host switch `local_media.enabled` (default off) and a Hermes at or above `0.21.5` that provides the three session APIs it reads would show an `image_generate` result on its tool row. No build list, fingerprint or restart latch would admit it, and a disabled direct-send switch would not close it. Assistant `MEDIA:` text stays ordinary text. Delivery security review, complete native binding cost and memory sampling and physical-device acceptance are pending; other producers need a Hermes typed-artifact API that does not exist. |
+| Delivery candidate; physical verification pending | Host-local generated images | Authenticated `/bots/{p}/media/{ref}` delivery and the mobile loader/card/transcript path exist in source. Fresh checks pass 1,359 server assertions and 62 Flutter cases. The host switch, device approval-owner right, per-bot authorization and required native APIs remain enforced. Only validated typed `image_generate` tool results mint references; assistant `MEDIA:` text is not file authority. Actual image display on a signed physical candidate remains unverified. Other producers still require an authenticated typed-artifact contract. |
 | Draft read support | Phone Bot Chat search | A distinct start-of-history page for authorized sessions lets the phone match locally without passing query text to Hermes. The companion app draft handles compaction, incomplete scans, and bounded paging; this is not Hermes-wide search. |
 | Upstream gap | Hermes-wide search | Hermes logs raw query text on a slow search path; HMP cannot safely expose that full-corpus search yet. |
 | Upstream gap | Create and delete bots | The profile-scoped API server lacks a complete profile lifecycle and canonical Bot Chat create-or-get contract. |

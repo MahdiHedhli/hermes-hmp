@@ -193,3 +193,31 @@ def test_lost_custody_remains_refused_after_handle_restored(monkeypatch):
     with pytest.raises(FrameError):
         owner.terminate_once()
     assert calls == [] and owner.uncertain
+
+
+def test_actual_competing_reap_cannot_be_reinterpreted_as_owned_exit():
+    """Model the native global reaper using ONLY this test's exact child PID."""
+    import os
+
+    owner = PresentationProcessOwner()
+    owner.start()
+    child = owner.child
+    child.stdin.close()
+    limit = time.monotonic() + 2.0
+    try:
+        while True:
+            pid, _ = os.waitpid(child.pid, os.WNOHANG)
+            if pid == child.pid:
+                break
+            assert time.monotonic() < limit
+            time.sleep(0.005)
+        with pytest.raises(FrameError, match="BI1_PROCESS_WAIT_UNCERTAIN"):
+            owner.poll_wait()
+        assert owner.uncertain and owner.signals_retired
+        assert not owner.reaped and not owner.group_absent
+        with pytest.raises(FrameError):
+            owner.terminate_once()
+    finally:
+        for stream in (child.stdout, child.stderr):
+            if not stream.closed:
+                stream.close()

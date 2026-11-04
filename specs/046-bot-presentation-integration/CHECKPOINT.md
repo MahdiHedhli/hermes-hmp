@@ -640,3 +640,33 @@ run replay; a borrowed outer cleanup deadline may only shorten the pipe owner's
 allowance. Root's focused supervisor/pipe run passes 28 cases. These two additions
 follow the 437-case full Python 3.14 run above; no production code changed after
 that full run.
+
+## November 4 — actual runtime census changes the next action
+
+RUNTIME_FINDINGS.md and runtime-source-pins-20261104.json pin native ed1afb and
+its current launcher. Bare isolated tools Python 3.14.9 cannot find yaml; native
+PM activation selects dependencies through parent sys.path, not sys.prefix. This
+is not an inspection of selected-environment contents or the running gateway PID.
+The PM venv_command helper is an existing supported dependency-aware primitive,
+but freezing and qualifying the listener's selected generation remains work.
+
+Independent source review confirmed the embedded Kanban path invokes
+waitpid(-1,WNOHANG) in the gateway process. When active, it conflicts with direct
+reader ownership; active configuration was not inspected. A new actual exact-PID
+competing-reap test proves ECHILD retains UNKNOWN/no signal retry and touches no
+other child. Independent reviewer ran all 20 process tests successfully. No
+version allowlist, reaper replacement, Kanban disablement or live setting change
+is introduced. A native ownership contract or separately reviewed external broker
+can resolve the direct-reader issue; the feature is not declared impossible.
+
+Continue host-local images independently. Their existing route does not depend
+on this worker. Fresh 1,359 server media assertions pass in isolated Python3.14.9;
+old shared pytest garbage cleanup warnings and one fixture-task teardown warning
+are recorded rather than treated as a clean run. The latter test-only repair is
+independently accepted and passes its targeted dedicated-basetemp rerun. Flutter
+3.44.2/Dart3.12.2 passes62 host-image loader/card/transcript/BotChat cases at
+unchanged mobile d9b0826 with pinned HMPdbdcdba restored. Registry/credentials,
+model/provider settings and device grants were untouched. Physical image display
+remains unverified. CoreDevice inventory shows the authorized iPad Pro connected
+with Developer Mode and iPhone15ProMax disconnected; source build preparation is
+separate from signing/install/launch and image journeys.

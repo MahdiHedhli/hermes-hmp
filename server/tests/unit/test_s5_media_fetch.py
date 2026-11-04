@@ -2545,6 +2545,7 @@ def test_fixture_releases_and_joins_held_media_worker_when_scenario_raises(
         refs = await fx.mint(client)
         seen["releases"] = _observe_first_fixture_gate_release(fx)
         request = asyncio.create_task(fx.get(client, refs[6]))
+        seen["request"] = request
         await until(lambda: fx.p1_in == 1)
         seen["service"] = fx.service
         seen["future"] = fx.starts[0][2]
@@ -2555,6 +2556,9 @@ def test_fixture_releases_and_joins_held_media_worker_when_scenario_raises(
 
     with pytest.raises(RuntimeError, match=r"^owned fixture scenario failed$"):
         fx.run(scenario)
+    assert seen["request"].done()
+    if not seen["request"].cancelled():
+        seen["request"].exception()  # observe the expected client teardown failure
     assert seen["releases"] == [(True, True)]
     assert fx.p1_gate is not None and fx.p1_gate.is_set()
     assert seen["service"].closed
