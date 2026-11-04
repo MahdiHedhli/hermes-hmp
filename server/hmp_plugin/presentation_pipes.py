@@ -152,7 +152,7 @@ class OwnedPresentationPipes:
             self.uncertain = True
             raise FrameError("BI1_PIPE_UNCERTAIN") from None
 
-    def poll_discard(self) -> None:
+    def poll_discard(self, *, deadline: float | None = None) -> None:
         """Bounded cleanup only; caller must establish child/group exit first.
 
         This never restores result-read authority. The first call permanently
@@ -162,11 +162,19 @@ class OwnedPresentationPipes:
         if self.uncertain:
             raise FrameError("BI1_PIPE_CLEANUP_REFUSED")
         now = time.monotonic()
+        if deadline is not None and (
+            type(deadline) is not float or not now < deadline < float("inf")
+        ):
+            raise FrameError("BI1_PIPE_CLEANUP_DEADLINE")
         if self._cleanup_deadline is None:
-            self._cleanup_deadline = now + 0.25
+            self._cleanup_deadline = (
+                min(now + 0.25, deadline) if deadline is not None else now + 0.25
+            )
             self.refused = True
             self._output[:] = b"\x00" * len(self._output)
             self._output.clear()
+        elif deadline is not None:
+            self._cleanup_deadline = min(self._cleanup_deadline, deadline)
         if self.drained:
             return
         if now >= self._cleanup_deadline:

@@ -195,6 +195,7 @@ class _Record:
     process_owner: object | None = None
     process_binding: object | None = None
     reader_collected: bool = False
+    reader_supervisor: object | None = None
 
 
 class _OwnerAuthority(AuthorityPort):
@@ -626,7 +627,12 @@ class ParentAuthorityAdapter:
         record.owner.cancel(record.handle)
 
     def drain_cancelled_reader(
-        self, operation: OpaqueOperation, pipes: object, control: object
+        self,
+        operation: OpaqueOperation,
+        pipes: object,
+        control: object,
+        *,
+        cleanup_deadline: float | None = None,
     ) -> bool:
         """Discard after exact exit; never extend the original output deadline."""
         from .presentation_control_pipe import OwnedControlPipe
@@ -656,10 +662,10 @@ class ParentAuthorityAdapter:
         ):
             return False
         self.cancel(operation)
-        if record.owner.inspect(record.handle)[0] is not State.DRAINING:
+        if record.owner.inspect(record.handle)[0] not in (State.DRAINING, State.UNKNOWN):
             return False
         try:
-            pipes.poll_discard()
+            pipes.poll_discard(deadline=cleanup_deadline)
         except FrameError:
             return False
         return pipes.drained
