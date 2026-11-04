@@ -495,3 +495,22 @@ A callback during construction cannot claim an abort receipt. Actual uncertain
 thread starts still retain debt. The causal regression checks in-flight refusal,
 listener retirement, zero policy/thread and eventual slot/credential retirement.
 106 focused tests plus 66 subtests pass; Ruff passes. Independent closure pending.
+
+## ColPanicM2 runtime refresh — November 4, 2026
+
+The supported updater advanced installed Hermes from `8afaab37` to
+`ed1afb082eb` (0.22.7), with a full pre-update backup and three profile
+snapshots. The updater verified the relaunched default gateway at `ed1afb08`.
+`hermes hmp health check` observed the expected TLS listener and three served
+bots (default, liteforms-connector, netmin), each reporting send/jobs/model
+ready. These are host readiness checks, not device authorization, actual
+execution, approval settlement, presentation delivery or phone qualification.
+The updater stopped the standalone dashboard and reported its relaunch pending.
+
+The recovered PR head is `3f4618c`; prior temporary checkouts no longer contain
+Git metadata/source. Later local-only process ownership repairs from the dated
+handoff must be recovered or reconstructed and re-reviewed before activation.
+No presentation route exists in this head's server.py. The next implementation
+work remains the supervisor/process custody binding followed by authenticated
+metadata/avatar routes. Mobile PR87 retains the reviewed static renderer at
+`d9b0826`; it has not been installed or physically qualified.
