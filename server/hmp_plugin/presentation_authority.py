@@ -618,6 +618,17 @@ class ParentAuthorityAdapter:
             or record.native_claim is not None
         ):
             return False
+        if record.process_owner is not None:
+            from .presentation_process import PresentationProcessOwner
+
+            process = record.process_owner
+            if (type(process) is not PresentationProcessOwner
+                    or not process.owns(record.process_binding)):
+                return False
+            try:
+                process.seal_unlaunched()
+            except FrameError:
+                return False
         if not work.close_pretransfer():
             return False
         record.permit = None
@@ -625,9 +636,26 @@ class ParentAuthorityAdapter:
         record.owner.refuse_prelaunch(record.handle)
         return True
 
+    @staticmethod
+    def _process_closed(record: _Record) -> bool:
+        from .presentation_process import PresentationProcessOwner
+
+        process = record.process_owner
+        if process is None:
+            return True  # legacy inert JobOwner fixtures have no OS process
+        if (type(process) is not PresentationProcessOwner
+                or not process.owns(record.process_binding) or process.uncertain):
+            return False
+        if process.never_launched_closed:
+            return record.child is None
+        return (record.child is not None and process.child is record.child
+                and process.reaped and process.group_absent and process.signals_retired)
+
     async def retire_known(self, operation: OpaqueOperation) -> bool:
         """Release credentials only after both owner planes report known closure."""
         record = self._record(operation)
+        if not self._process_closed(record):
+            return False
         if record.policy_work is not None:
             from .presentation_policy_binding import NativePolicyWork
 
@@ -670,6 +698,9 @@ class ParentAuthorityAdapter:
             self._unknown(record)
             return False
         if record.policy_work is not None and not record.policy_work.resources_closed:
+            self._unknown(record)
+            return False
+        if not self._process_closed(record):
             self._unknown(record)
             return False
         record.native_drained = True

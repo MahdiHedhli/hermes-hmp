@@ -754,3 +754,22 @@ def test_one_process_cannot_be_retained_by_two_authorities():
         assert first._record(one).process_owner is process
         assert second._record(two).process_owner is None
     asyncio.run(run())
+
+
+def test_retained_unlaunched_process_requires_explicit_closure_before_drain():
+    from hmp_plugin.presentation_process import PresentationProcessOwner
+
+    async def run():
+        scope, native, _, _, operation, _ = adapter()
+        assert await scope.initialize(operation)
+        scope.start(operation)
+        process = PresentationProcessOwner()
+        scope.retain_process(operation, process)
+        scope.owner.refuse_prelaunch(scope.handle(operation))
+        assert not await scope.retire_known(operation)
+        assert native.drain_calls == 0
+        assert scope._record(operation).headers is not None
+        process.seal_unlaunched()
+        assert await scope.retire_known(operation)
+        assert native.drain_calls == 1
+    asyncio.run(run())
