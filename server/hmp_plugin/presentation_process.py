@@ -1,13 +1,14 @@
 """Retained fixed child launch and exact terminal wait observations.
 
 No route calls this. Runtime/code provenance, exclusive reaper qualification and
-hard-deadline termination remain unbound. No destructive signal is provided.
+hard-deadline supervisor remain unbound. Termination requires retained child custody.
 """
 
 from __future__ import annotations
 
 import errno
 import os
+import signal
 import subprocess
 import threading
 
@@ -30,6 +31,7 @@ class PresentationProcessOwner:
         self._launch_attempted = False
         self._binding: object | None = None
         self._sealed_unlaunched = False
+        self._termination_attempted = False
         self._wait_status: int | None = None
         self._raw_wait: object = None
         self._group_probe_attempted = False
@@ -173,6 +175,38 @@ class PresentationProcessOwner:
             child.returncode = os.waitstatus_to_exitcode(status)
             if self.uncertain:
                 raise FrameError("BI1_PROCESS_UNCERTAIN")
+            return True
+        finally:
+            self._lock.release()
+
+    def terminate_once(self) -> bool:
+        """Request termination once; this never proves reap or resource closure."""
+        self._enter()
+        try:
+            if self._termination_attempted or self.signals_retired or self.reaped:
+                raise FrameError("BI1_PROCESS_TERMINATION_REFUSED")
+            child = self.child
+            if child.pid != self._pid or child.returncode is not None:
+                self.uncertain = True
+                self.signals_retired = True
+                self._termination_attempted = True
+                raise FrameError("BI1_PROCESS_CUSTODY_LOST")
+            self._termination_attempted = True
+            try:
+                group = os.getpgid(self._pid)
+                if (
+                    group != self._pid
+                    or self.uncertain
+                    or self.signals_retired
+                    or child.pid != self._pid
+                    or child.returncode is not None
+                ):
+                    raise FrameError("BI1_PROCESS_CUSTODY_LOST")
+                os.killpg(self._pid, signal.SIGKILL)
+            except BaseException:
+                self.uncertain = True
+                self.signals_retired = True
+                raise FrameError("BI1_PROCESS_TERMINATION_UNCERTAIN") from None
             return True
         finally:
             self._lock.release()

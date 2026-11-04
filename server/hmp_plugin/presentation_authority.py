@@ -474,11 +474,26 @@ class ParentAuthorityAdapter:
             or not self._current(record)
         ):
             raise AuthorityRefusalError
+        # _current calls a foreign clock; recheck custody after that callback.
+        if (
+            record.process_owner is not None
+            or record.child is not None
+            or not record.initial_complete
+            or record.owner.inspect(record.handle)[0] is not State.STARTING
+        ):
+            raise AuthorityRefusalError
         binding = object()
         process.claim(binding)
         record.process_owner = process
         record.process_binding = binding
-        if not self._current(record) or not process.owns(binding):
+        if (
+            not self._current(record)
+            or not process.owns(binding)
+            or record.process_owner is not process
+            or record.process_binding is not binding
+            or record.child is not None
+            or record.owner.inspect(record.handle)[0] is not State.STARTING
+        ):
             self._unknown(record)
             raise AuthorityRefusalError
 

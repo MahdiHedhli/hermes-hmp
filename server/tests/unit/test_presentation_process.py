@@ -168,3 +168,28 @@ def test_started_owner_cannot_claim_or_seal(monkeypatch):
     with pytest.raises(FrameError):
         owner.seal_unlaunched()
     assert not owner.never_launched_closed and owner.child is child
+
+
+def test_termination_request_is_once_and_not_a_cleanup_receipt(monkeypatch):
+    owner, _ = fake_owner(monkeypatch)
+    calls = []
+    monkeypatch.setattr(module.os, "getpgid", lambda pid: pid)
+    monkeypatch.setattr(module.os, "killpg", lambda pid, sig: calls.append((pid, sig)))
+    assert owner.terminate_once()
+    assert not owner.reaped and not owner.group_absent
+    with pytest.raises(FrameError):
+        owner.terminate_once()
+    assert len(calls) == 1
+
+
+def test_lost_custody_remains_refused_after_handle_restored(monkeypatch):
+    owner, child = fake_owner(monkeypatch)
+    calls = []
+    monkeypatch.setattr(module.os, "killpg", lambda *args: calls.append(args))
+    child.returncode = 0
+    with pytest.raises(FrameError):
+        owner.terminate_once()
+    child.returncode = None
+    with pytest.raises(FrameError):
+        owner.terminate_once()
+    assert calls == [] and owner.uncertain
