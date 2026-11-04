@@ -14,6 +14,8 @@
 - [ ] Qualify installed interpreter/dependency/code and bytecode-cache provenance before launching from a live listener.
 - [x] Implement reviewed fixed process launch/exact wait, owned result pipes and one-use input/GO/control-close primitives.
 - [ ] Qualify runtime reaper/source premises and implement hard termination/full JobOwner drain binder.
+- [x] Add retained-owner cancellation/termination and exact stream/control closure projection; bounded review accepted the large-result repair in 017abd6. Synthetic codec composition is separate from live custody qualification.
+- [ ] Compose launch/input/GO/read/wait/group/control phases into the deadline supervisor; define bounded cleanup after deadline without renewing read/output authority, then independently review actual process tests.
 - [x] Review schema3 parent policy/work accounting and implement directory-only policy acquisition.
 - [x] Bind actual policy thread/join to native-authorized reserved job; callback closure reviewed a2746c8.
 - [x] Bind result2 job receiver to retained parent identity/work; reviewed7955c06.

@@ -3,8 +3,13 @@
 The recovered character integration branch now retains a presentation process under
 one operation identity and requires explicit never-launched closure or terminal
 process/group closure before credential retirement. Focused Python 3.13 synthetic
-checks pass 42 tests and 23 subtests; changed modules pass Ruff 0.16.9. Independent
-review is pending. Full supervisor, live authenticated metadata/avatar routes,
+checks now pass 409 tests and 190 subtests on Python 3.11, 3.13 and the updated
+host's Python 3.14 interpreter in isolated dependency environments; changed
+modules pass Ruff 0.16.9. Independent bounded review accepted the callback/custody
+repair and ordered result chunking (017abd6). A valid 140 KB synthetic V2 avatar
+now survives collector-to-codec transfer rather than exceeding the 64 KB feed
+limit. This does not qualify live process custody or installed dependencies.
+Full supervisor, live authenticated metadata/avatar routes,
 exact runtime qualification and signed phone checks are still incomplete. This
 is not a deployed bot-character feature. Host-local images retain their separate
 implementation and physical-verification requirements.

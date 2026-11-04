@@ -514,3 +514,24 @@ No presentation route exists in this head's server.py. The next implementation
 work remains the supervisor/process custody binding followed by authenticated
 metadata/avatar routes. Mobile PR87 retains the reviewed static renderer at
 `d9b0826`; it has not been installed or physically qualified.
+
+## November 4 — reviewed result collector repair
+
+Commit 017abd6 fixes a concrete review finding: the pipe owner aggregates up to
+its bounded total, but the result codec admits only 65,536 bytes per feed. The
+closure collector now snapshots the result once and feeds ordered bounded slices.
+A 140 KB synthetic V2 avatar exercises collector-to-real-codec reconstruction
+and one-use refusal. That test explicitly uses inert custody fixtures; the
+separate actual empty-child test covers observed EOF/wait/group closure only.
+Independent reviewer accepted this finite repair and the binary-envelope
+credential absence assertion correction. Reviewer ran 67 tests/23 subtests plus
+10 policy-binding cases. Root ran all presentation tests: 409 tests/190 subtests
+on Python 3.11, 3.13 and the host's Python 3.14.7 executable via isolated uv test
+environments. Ruff 0.16.9 and diff whitespace checks pass.
+
+No route, host deployment or phone installation changed. Remaining work is the
+full deadline supervisor, including cleanup after expiry without fresh output
+authority, exact runtime/code/dependency and exclusive-reaper qualification,
+listener lifecycle and authenticated metadata/avatar routes, then signed-device
+character display. Host-local images remain the next feature priority and their
+physical rendering remains unverified.
