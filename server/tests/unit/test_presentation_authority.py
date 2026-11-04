@@ -733,3 +733,24 @@ class ParentAuthorityTests(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_one_process_cannot_be_retained_by_two_authorities():
+    from hmp_plugin.presentation_process import PresentationProcessOwner
+    from hmp_plugin.presentation_jobs import FrameError
+
+    async def run():
+        first, _, _, _, one, _ = adapter()
+        second, _, _, _, two, _ = adapter()
+        assert await first.initialize(one)
+        assert await second.initialize(two)
+        first.start(one)
+        second.start(two)
+        process = PresentationProcessOwner()
+        first.retain_process(one, process)
+        import pytest
+        with pytest.raises(FrameError):
+            second.retain_process(two, process)
+        assert first._record(one).process_owner is process
+        assert second._record(two).process_owner is None
+    asyncio.run(run())
