@@ -697,13 +697,16 @@ class ParentAuthorityAdapter:
             return False
         if record.reader_collected:
             return False
+        aborted = pipes.output_discarded
+        if aborted and record.owner.inspect(record.handle)[0] is not State.DRAINING:
+            return False
         record.reader_collected = True
         output = pipes.output
         for offset in range(0, len(output), 65536):
             record.owner.feed_result(record.handle, output[offset : offset + 65536], record.child)
         record.owner.diagnostic(record.handle, pipes.diagnostic_bytes)
         for event in (
-            "RESULT_EOF",
+            "RESULT_ABORTED_EOF" if aborted else "RESULT_EOF",
             "DIAGNOSTIC_EOF",
             "WAIT_OK" if process.exit_code == 0 else "WAIT_FAIL",
             "GROUP_GONE",

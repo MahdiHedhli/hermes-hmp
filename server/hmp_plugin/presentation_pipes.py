@@ -83,6 +83,10 @@ class OwnedPresentationPipes:
         return bytes(self._output)
 
     @property
+    def output_discarded(self) -> bool:
+        return self._cleanup_deadline is not None and self.refused and not self._output
+
+    @property
     def drained(self) -> bool:
         return (
             not self.uncertain

@@ -456,6 +456,7 @@ class _Job:
     parent_result_context: tuple[str, object] | None = None
     result: tuple[dict[str, object], bytes] | None = None
     result_eof: bool = False
+    result_aborted: bool = False
     diagnostic_eof: bool = False
     diagnostic_bytes: int = 0
     wait_done: bool = False
@@ -767,6 +768,7 @@ class JobOwner:
             or event
             not in (
                 "RESULT_EOF",
+                "RESULT_ABORTED_EOF",
                 "DIAGNOSTIC_EOF",
                 "WAIT_OK",
                 "WAIT_FAIL",
@@ -779,6 +781,14 @@ class JobOwner:
             self.unknown(handle)
             return
         if job.state not in (State.RUNNING, State.DRAINING):
+            self.unknown(handle)
+            return
+        if event in ("RESULT_EOF", "RESULT_ABORTED_EOF") and job.result_eof:
+            self.unknown(handle)
+            return
+        if event == "RESULT_ABORTED_EOF" and (
+            job.state is not State.DRAINING or not job.emit_revoked
+        ):
             self.unknown(handle)
             return
         if event in ("WAIT_OK", "WAIT_FAIL") and job.wait_done:
@@ -794,7 +804,14 @@ class JobOwner:
             self.unknown(handle)
             return
         job.seen_events.add(event)
-        if event == "RESULT_EOF":
+        if event == "RESULT_ABORTED_EOF":
+            # The exact adapter must have established fixed-worker OS closure.
+            # This is refusal-only, never a fallback after a parser failure.
+            job.result_eof = True
+            job.result_aborted = True
+            job.output_buffer.wipe()
+            job.result = None
+        elif event == "RESULT_EOF":
             job.result_eof = True
             if job.go_sent:
                 try:
@@ -820,7 +837,7 @@ class JobOwner:
         else:
             job.signal_closed = True
         if self._drained(job):
-            if job.go_sent and job.result is None:
+            if job.go_sent and job.result is None and not job.result_aborted:
                 self.unknown(handle)
                 return
             if job.result is not None and job.result[0]["cleanup"] != {
@@ -848,7 +865,8 @@ class JobOwner:
 
     def _complete(self, job: _Job) -> bool:
         return (
-            job.result is not None
+            not job.result_aborted
+            and job.result is not None
             and job.result[0]["outcome"] == "OK"
             and job.result[0]["cleanup"] == {"known_fds_closed": True, "unknown_close": False}
             and job.wait_success

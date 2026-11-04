@@ -915,6 +915,7 @@ def test_collected_large_v2_avatar_reaches_codec_without_oversized_feed(monkeypa
         pipes = object.__new__(OwnedPresentationPipes)
         pipes._streams = {"result": child.stdout, "diagnostic": child.stderr}
         pipes._output = bytearray(wire)
+        pipes._cleanup_deadline = None
         pipes._closed = pipes._eof = {"result", "diagnostic"}
         pipes._selector_closed = True
         pipes.uncertain = False
@@ -993,12 +994,6 @@ def test_actual_expired_reader_drains_only_after_exit_and_never_emits(post_go_fi
             await asyncio.sleep(0.005)
         assert not fence.current and pipes.output == b""
         collected = scope.collect_reader_closure(operation, pipes, control)
-        if post_go_fixture:
-            assert not collected
-            assert scope.owner.inspect(scope.handle(operation))[0] is State.UNKNOWN
-            assert not await scope.retire_known(operation)
-            assert native.drain_calls == 0
-            return
         assert collected
         assert not await scope.reauthorize(operation)
         assert not scope.emit_inline(operation, lambda *_: pytest.fail("must not emit"))
@@ -1006,3 +1001,118 @@ def test_actual_expired_reader_drains_only_after_exit_and_never_emits(post_go_fi
         assert native.drain_calls == 1
 
     asyncio.run(run())
+
+
+@pytest.mark.parametrize("native_closed", [False, True])
+def test_actual_go_write_then_termination_releases_refusal_not_output(native_closed):
+    """Synthetic native authority; actual fixed child, input/GO, kill and cleanup."""
+    import os
+    import stat
+    import tempfile
+    import time
+    from pathlib import Path
+
+    from hmp_plugin.presentation_control_pipe import OwnedControlPipe
+    from hmp_plugin.presentation_input_v2 import prefixes
+    from hmp_plugin.presentation_input_v3 import encode_input_v3
+    from hmp_plugin.presentation_pipes import OwnedPresentationPipes
+    from hmp_plugin.presentation_process import PresentationProcessOwner
+
+    async def run(root):
+        home = root / "profiles" / "alpha"
+        home.mkdir(parents=True, mode=0o700)
+        native = NativeFake()
+        native.home = str(home)
+        iid = "a" * 52
+        scope = ParentAuthorityAdapter(iid, service=native)
+        operation = scope.reserve(
+            dataclasses.replace(lease(), iid=iid),
+            "METADATA",
+            OriginalHeaders.from_request(
+                Request({"Authorization": ["Bearer " + "A" * 43], "HMP-Instance": [iid]})
+            ),
+            listener=object(),
+            fence=ListenerFence(1),
+            store=object(),
+            bridge=object(),
+            identity=object(),
+            native_owner=object(),
+        )
+        assert await scope.initialize(operation)
+        scope.start(operation)
+        process = PresentationProcessOwner()
+        scope.retain_process(operation, process)
+        process.start()
+        child = process.child
+        scope.bind_child(operation, child)
+        pipes = OwnedPresentationPipes(child.stdout, child.stderr)
+        record = scope._record(operation)
+        control = OwnedControlPipe(
+            child.stdin,
+            handle=scope.handle(operation),
+            child=child,
+            current=lambda: scope._current(record),
+        )
+        chain = prefixes(str(home))
+        counts = {
+            "read_bytes": 0,
+            "hash_bytes": 0,
+            "opens": len(chain),
+            "metadata": 4 * len(chain),
+            "path_bytes": 3 * (1 + sum(len(p.encode()) for p in str(home)[1:].split("/"))),
+            "yaml_nodes": 0,
+            "yaml_tokens": 0,
+            "raster_units": 0,
+        }
+        packet = encode_input_v3(
+            {
+                "schema": 3,
+                "challenge": scope.owner.challenge(scope.handle(operation)),
+                "epoch": 1,
+                "profile": "alpha",
+                "root": str(root),
+                "home": str(home),
+                "operation": "METADATA",
+                "expected_avatar_sha": None,
+                "uid": os.geteuid(),
+                "gid": os.getegid(),
+                "dir_modes": [0o700, 0o750, 0o755],
+                "leaf_modes": [0o600, 0o640, 0o644],
+                "source_manifest_sha": "b" * 64,
+                "deadline_ns": int(record.deadline * 1e9),
+                "directory_policy": [
+                    [os.stat(p).st_uid, os.stat(p).st_gid, stat.S_IMODE(os.stat(p).st_mode)]
+                    for p in chain
+                ],
+                "iid": iid,
+                "canonical_fallback": "Hermes",
+                "observed_at": 100,
+                "parent_work_counts": counts,
+            }
+        )
+        control.write_input(packet)
+        assert await scope.go_inline(operation, child, control.send_go)
+        assert control.closed and scope.owner.inspect(scope.handle(operation))[1]
+        assert scope.terminate_cancelled_reader(operation)
+        limit = time.monotonic() + 2.0
+        while not process.poll_wait():
+            assert time.monotonic() < limit
+            await asyncio.sleep(0.005)
+        assert process.probe_group_absence()
+        while not scope.drain_cancelled_reader(operation, pipes, control):
+            assert time.monotonic() < limit
+            await asyncio.sleep(0.005)
+        assert scope.collect_reader_closure(operation, pipes, control)
+        assert scope.owner.inspect(scope.handle(operation)) == (State.REFUSED, True, True)
+        assert not await scope.reauthorize(operation)
+        assert not scope.emit_inline(operation, lambda *_: pytest.fail("aborted output"))
+        native.drain_result = native_closed
+        assert await scope.retire_known(operation) is native_closed
+        assert native.drain_calls == 1
+        if not native_closed:
+            assert scope._record(operation).headers is not None
+            assert scope._record(operation).native_claim is not None
+            assert scope.disabled
+
+    with tempfile.TemporaryDirectory(prefix="hmp-abort-synthetic-", dir=Path.cwd()) as directory:
+        asyncio.run(run(Path(directory)))

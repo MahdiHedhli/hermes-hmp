@@ -873,3 +873,55 @@ class Ownership(unittest.IsolatedAsyncioTestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AbortedResultLifecycle(unittest.IsolatedAsyncioTestCase):
+    """Pure ledger fixtures; actual exit proof belongs to the exact adapter."""
+
+    asyncSetUp = Ownership.asyncSetUp
+    _running = Ownership._running
+
+    async def test_abort_discards_truncated_result_and_releases_only_after_all_closure(self):
+        child = await self._running()
+        self.owner.feed_result(self.job, b"\x00\x00", child)
+        self.owner.cancel(self.job)
+        self.owner.custody(self.job, "RESULT_ABORTED_EOF", child)
+        self.assertIs(self.owner.inspect(self.job)[0], State.DRAINING)
+        for event in ("DIAGNOSTIC_EOF", "WAIT_FAIL", "GROUP_GONE", "IPC_CLOSED"):
+            self.owner.custody(self.job, event, child)
+            self.assertFalse(self.owner.inspect(self.job)[2])
+        self.owner.custody(self.job, "SIGNAL_CLOSED", child)
+        self.assertEqual(self.owner.inspect(self.job), (State.REFUSED, True, True))
+
+    async def test_abort_marker_cannot_accept_unrevoked_output(self):
+        child = await self._running()
+        self.owner.custody(self.job, "RESULT_ABORTED_EOF", child)
+        self.assertIs(self.owner.inspect(self.job)[0], State.UNKNOWN)
+        self.assertFalse(self.owner.inspect(self.job)[2])
+
+    async def test_malformed_parser_unknown_cannot_be_recovered_by_abort(self):
+        child = await self._running()
+        self.owner.feed_result(self.job, b"\xff\xff\xff\xff", child)
+        self.assertIs(self.owner.inspect(self.job)[0], State.UNKNOWN)
+        self.owner.cancel(self.job)
+        for event in (
+            "RESULT_ABORTED_EOF",
+            "DIAGNOSTIC_EOF",
+            "WAIT_FAIL",
+            "GROUP_GONE",
+            "IPC_CLOSED",
+            "SIGNAL_CLOSED",
+        ):
+            self.owner.custody(self.job, event, child)
+        self.assertIs(self.owner.inspect(self.job)[0], State.UNKNOWN)
+        self.assertFalse(self.owner.inspect(self.job)[2])
+
+    async def test_abort_duplicate_and_reordered_closure_retain_unknown(self):
+        for invalid in ("RESULT_ABORTED_EOF", "RESULT_EOF", "GROUP_GONE", "IPC_CLOSED"):
+            await self.asyncSetUp()
+            child = await self._running()
+            self.owner.cancel(self.job)
+            self.owner.custody(self.job, "RESULT_ABORTED_EOF", child)
+            self.owner.custody(self.job, invalid, child)
+            self.assertIs(self.owner.inspect(self.job)[0], State.UNKNOWN)
+            self.assertFalse(self.owner.inspect(self.job)[2])
