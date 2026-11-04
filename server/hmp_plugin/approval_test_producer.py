@@ -1,9 +1,9 @@
 """Isolated, no-operation producer for a synthetic approval test.
 
-This module is intentionally not wired to a CLI, HTTP route, or PromptStore. The caller must be
-admitted separately and supply only its fixed in-memory publish/remove adapter. Native bindings are
-injected after the HMP compatibility gate; importing this module alone is
-inert. The CLI/IPC caller and bridge factory are outside this admitted source slice.
+This module does not register CLI commands, HTTP routes or a PromptStore. The separately admitted
+caller supplies its fixed in-memory publish/remove adapter and native bindings after the HMP
+compatibility gate. Importing this module alone is inert. CLI/IPC, current authority and
+paired-device qualification remain separate from producer/helper compatibility tests.
 """
 
 from __future__ import annotations
@@ -746,14 +746,21 @@ class ApprovalTestProducer:
 
     @staticmethod
     def _callback_shape(op: _Operation, data: object) -> bool:
-        if type(data) is not dict or set(data) != {
+        required = {
             "request_id",
             "synthetic_marker",
             "command",
             "description",
             "pattern_key",
             "pattern_keys",
-        }:
+        }
+        if type(data) is not dict or set(data) not in (required, required | {"timeout_s"}):
+            return False
+        # Newer native waits expose their captured window. It is descriptive
+        # only: the operator's original monotonic deadline remains authoritative.
+        if "timeout_s" in data and (
+            type(data["timeout_s"]) is not int or not 0 <= data["timeout_s"] <= (1 << 31) - 1
+        ):
             return False
         return (
             type(data.get("request_id")) is str
