@@ -1,3 +1,27 @@
+## Typed terminal transcript source — November 5, 2026
+
+HMP `672d4cf` adds selected-v2 framing and sequence rules for bounded
+canonical TERMINAL claims and a 32-byte digest ACK. RESULT remains a private
+candidate until a separate terminal event. Normal and pre/post-RESULT abort
+sequences are explicit; a racing CANCEL advances ACK sequence without changing
+the immutable terminal outcome/digest or reviving a candidate. Wrong roles,
+versions, bindings, digests, ordering, duplicates and metadata drift refuse.
+Legacy v1 is unchanged; v2 STATUS remains closed.
+
+Independent review passed 290 integration cases before the terminal-seal
+addendum, then 192 final codec/lifecycle cases on Python 3.13. Root serial Python
+3.11.15 and standalone 3.14.4 each pass 1,797 tests plus 190 subtests, with one
+Linux-native skip. Lint, surface, privacy and diff checks pass.
+
+This is transcript syntax/data correlation only. No new sender/receiver dispatch,
+ACK permission, accepted producer capability, registry/native release or image
+publication is enabled. The continuous original controller, known non-torn write
+facts, qualified producer/receiver, original budgets, fresh PRE_EMIT and native/
+policy/credential retirement still need joined integration before authenticated
+routes and complete character rendering. Runtime and signed-device qualification
+remain separate. App executable, embedded HMP and installed hosts/devices are
+unchanged. Host-local images follow character delivery. See the [sequence contract](specs/046-bot-presentation-integration/STARTED_TERMINAL.md).
+
 ## Private candidate integrity source — November 5, 2026
 
 HMP `10266e8` binds the original private candidate to its immutable body
