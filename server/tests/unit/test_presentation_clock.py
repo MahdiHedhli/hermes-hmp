@@ -22,6 +22,7 @@ from hmp_plugin import presentation_clock as clock
 from hmp_plugin.presentation_broker_codec import BrokerBinding
 from hmp_plugin.presentation_broker_endpoint import BrokerEndpointOwner
 from hmp_plugin.presentation_broker_service import SocketChannel, StartupEnrollment
+from hmp_plugin.presentation_cancel_budget import CLEANUP_NS, CancellationBudget
 from hmp_plugin.presentation_jobs import FrameError
 
 from .test_presentation_broker_service import local as local
@@ -375,6 +376,7 @@ def test_actual_linux_pidfd_procfs_and_active_namespace_without_foreign_process(
         os.getpid(), os.geteuid(), clock.threading.get_ident())
     owner._refused = owner._closing = owner._closed_known = False
     owner._sampling = owner._close_running = owner._close_reentered = False
+    owner._local_lost = owner._cleanup_started = False
     owner._platform = owner._platform_snapshot = sys.platform
     try:
         try:
@@ -434,11 +436,19 @@ def test_actual_separate_process_peer_and_common_clock_without_work():
             raise
         assert owner._peer_values == (os.geteuid(), child.pid)
         assert owner.sample() >= owner._last_ns
-        assert owner.close_local()
+        budget = CancellationBudget(owner._last_ns + 1_000_000_000)
+        first = budget.local(owner.cleanup_sample())  # retire work before closing transport
         assert not channel._closed_known
         channel.close()
         stdout, stderr = child.communicate(timeout=5)
         assert child.returncode == 0 and stdout == stderr == b""
+        now = owner.cleanup_sample()  # exact original helper is gone; no peer clock call
+        assert budget.local(now) == first
+        assert budget.remaining_ns(now) <= CLEANUP_NS
+        with pytest.raises(FrameError):
+            owner.sample()
+        assert owner.cleanup_sample() >= now
+        assert owner.close_local()
     finally:
         if owner is not None:
             assert owner.close_local()
@@ -455,3 +465,167 @@ def test_actual_separate_process_peer_and_common_clock_without_work():
         if endpoint is not None:
             assert endpoint.close()
         shutil.rmtree(root)
+
+
+@pytest.mark.asyncio
+async def test_cleanup_clock_survives_closed_peer_and_never_revives_work(gateway, monkeypatch):
+    channel, remote, _ = gateway
+    darwin_model(monkeypatch)
+    owner = clock.NativeClockOwner(channel)
+    previous = owner._last_ns
+    remote.close()
+    assert channel.close()
+    def no_peer():
+        pytest.fail("local cleanup time must not consult a closed peer")
+    monkeypatch.setattr(channel, "_check", no_peer)
+    assert owner.cleanup_sample() >= previous
+    assert owner._cleanup_started and owner._refused and not owner._local_lost
+    with pytest.raises(FrameError):
+        owner.sample()
+    assert owner.cleanup_sample() >= owner._last_ns
+    assert owner.close_local()
+
+
+@pytest.mark.asyncio
+async def test_generic_channel_refusal_cannot_be_reclassified_peer_only(gateway, monkeypatch):
+    channel, _, _ = gateway
+    darwin_model(monkeypatch)
+    owner = clock.NativeClockOwner(channel)
+    def refused():
+        raise FrameError("synthetic peer unavailable")
+    monkeypatch.setattr(channel, "_check", refused)
+    with pytest.raises(FrameError):
+        owner.sample()
+    assert owner._refused and owner._local_lost
+    with pytest.raises(FrameError):
+        owner.cleanup_sample()
+    assert owner.close_local()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["boot", "provider", "backward", "context", "reentry",
+                                     "ambiguous_peer_exception", "local_fd", "domain_values"])
+async def test_local_failures_cannot_requalify_for_cleanup(gateway, monkeypatch, failure):
+    channel, _, _ = gateway
+    model = LinuxModel(channel, monkeypatch)
+    owner = clock.NativeClockOwner(channel)
+    original_clock = clock._MONOTONIC_NS
+    original_boot = model.boot
+    if failure == "boot":
+        model.boot = b"0" * 37
+    elif failure == "provider":
+        def wrong_provider(self):
+            raise FrameError("synthetic provider changed")
+        monkeypatch.setattr(clock.NativeClockOwner, "_implementation", wrong_provider)
+    elif failure == "backward":
+        monkeypatch.setattr(clock, "_MONOTONIC_NS", lambda: owner._last_ns - 1)
+    elif failure == "context":
+        owner._context = (0, 0, 0)
+    elif failure == "reentry":
+        def recursive():
+            with contextlib.suppress(FrameError):
+                owner.cleanup_sample()
+            return owner._last_ns + 1
+        monkeypatch.setattr(clock, "_MONOTONIC_NS", recursive)
+    elif failure == "ambiguous_peer_exception":
+        def uncertain():
+            raise RuntimeError("synthetic unexpected native boundary")
+        monkeypatch.setattr(channel, "_check", uncertain)
+    elif failure == "local_fd":
+        model.closed.append(owner._ownns.fd)
+    else:
+        object.__setattr__(owner._domain, "boot", bytes(bytearray(BOOT)))
+    with pytest.raises(FrameError):
+        owner.sample()
+    assert owner._local_lost and owner._refused
+    # Restoration of native observations is not a new qualification.
+    model.boot = original_boot
+    owner._context = owner._context_snapshot
+    monkeypatch.setattr(clock, "_MONOTONIC_NS", original_clock)
+    with pytest.raises(FrameError):
+        owner.cleanup_sample()
+
+
+@pytest.mark.asyncio
+async def test_cleanup_uses_original_own_namespace_without_peer_lookup(gateway, monkeypatch):
+    channel, _, _ = gateway
+    model = LinuxModel(channel, monkeypatch)
+    owner = clock.NativeClockOwner(channel)
+    own_stat = model.stat
+    paths = []
+    def only_local(path, **kwargs):
+        paths.append(path)
+        assert path == "self/ns/time"
+        return own_stat(path, **kwargs)
+    monkeypatch.setattr(clock.os, "stat", only_local)
+    monkeypatch.setattr(owner, "_live", lambda: pytest.fail("no peer liveness for local time"))
+    assert owner.cleanup_sample() >= owner._last_ns
+    assert paths == ["self/ns/time"]
+    model.namespace_drift = True
+    with pytest.raises(FrameError):
+        owner.cleanup_sample()
+    assert owner._local_lost
+    model.namespace_drift = False
+    with pytest.raises(FrameError):
+        owner.cleanup_sample()
+    assert owner.close_local()
+
+
+@pytest.mark.asyncio
+async def test_partial_initialization_never_qualifies_cleanup(gateway, monkeypatch):
+    channel, _, _ = gateway
+    darwin_model(monkeypatch)
+    monkeypatch.setattr(clock, "_darwin_boot", lambda: b"bad")
+    # Domain is frozen, but bootstrap peer failure must still prevent qualification.
+    def refuse():
+        raise FrameError("synthetic initialization peer refusal")
+    monkeypatch.setattr(channel, "_check", refuse)
+    with pytest.raises(clock.ClockAcquisitionError) as error:
+        clock.NativeClockOwner(channel)
+    owner = error.value.failed_owner
+    assert owner._qualification is None
+    with pytest.raises(FrameError):
+        owner.cleanup_sample()
+    assert owner.close_local()
+
+
+@pytest.mark.asyncio
+async def test_typed_dead_peer_keeps_only_original_local_cleanup_clock(gateway, monkeypatch):
+    channel, _, _ = gateway
+    model = LinuxModel(channel, monkeypatch)
+    owner = clock.NativeClockOwner(channel)
+    model.dead_on = model.live_calls + 1
+    with pytest.raises(FrameError):
+        owner.sample()
+    assert owner._refused and not owner._local_lost
+    calls = model.live_calls
+    assert owner.cleanup_sample() >= owner._last_ns
+    assert model.live_calls == calls  # no peer liveness/namespace path in local cleanup
+    assert owner.close_local()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["context", "socket", "unexpected"])
+async def test_actual_channel_local_or_wrapped_unknown_failure_poison_cleanup(
+    gateway, monkeypatch, failure
+):
+    channel, _, _ = gateway
+    darwin_model(monkeypatch)
+    owner = clock.NativeClockOwner(channel)
+    if failure == "context":
+        channel._context = (0, 0)
+    elif failure == "socket":
+        channel._socket = object()
+    else:
+        def unexpected():
+            raise RuntimeError("synthetic underlying channel failure")
+        monkeypatch.setattr(channel._endpoint, "validates", lambda *args: unexpected())
+    with pytest.raises(FrameError):
+        owner.sample()  # actual SocketChannel._check wraps the cause
+    assert owner._local_lost
+    with pytest.raises(FrameError):
+        owner.cleanup_sample()
+    # Restore test metadata so the fixture can retire its original owned socket.
+    channel._context = channel._context_snapshot
+    channel._socket = channel._socket_snapshot
+    assert owner.close_local()

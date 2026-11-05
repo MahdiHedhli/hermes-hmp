@@ -41,8 +41,9 @@ These sources describe clocks, not qualification of this runtime.
 
 Bind the qualified domain and explicit protocol selection to retained enrollment,
 channel and original operation. Both local cleanup and received CANCEL must
-adopt the same minimum before cleanup effects. A dedicated retained cleanup
-owner must survive work-task cancellation without bypassing authority for GO or
+adopt the same minimum before cleanup effects. The native observer now has a reviewed irreversible local-only cleanup-clock
+mode after successful initialization; it does not authenticate new frames. A
+dedicated retained async cleanup owner must still survive work-task cancellation without bypassing authority for GO or
 result delivery. Disconnect/lost cancellation retains unknown debt; a later
 broker-local deadline cannot certify the gateway's earlier cleanup bound.
 

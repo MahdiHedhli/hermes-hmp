@@ -39,7 +39,7 @@ original process exit and numeric PID reuse. The original socket's process
 reference anchors the proc lookup. Unsupported kernel/API/permissions refuse.
 No pidfd signal, wait/reap, namespace entry or process scan exists here.
 
-Each sample rechecks context/provider/channel/domain and nondecreasing exact
+Each work sample rechecks context/provider/channel/domain and nondecreasing exact
 integer nanoseconds, then rechecks integrity after native boundaries. Refusal is
 sticky, recursive sampling poisons, and a swallowed close/refusal cannot publish
 a sample. Metadata shape/ref checks precede operations that could invoke foreign
@@ -94,3 +94,28 @@ Read-only public source pin `36b29e812a2ca5edbae3172508a41f04efbe68be`
 proof of a bounded HMP presentation route or per-device profile authorization.
 It does not replace the existing bounded-reader contract. No upstream source,
 installed Hermes or private profile was changed or read in this check.
+
+## Irreversible cleanup-only local clock
+
+`cleanup_sample()` now requires the same owner's successful initial qualification
+identity and exact immutable domain-value seals. It retires work before native
+calls, keeps the original monotonic history and observes only the original local
+clock/provider/boot/own namespace and retained FDs. It never consults a departed
+peer or claims continued remote clock agreement. Work sampling stays refused;
+this mode cannot send frames, read results, authorize GO or release a reservation.
+
+Failure planes are prospective. Local context/provider/boot/own-namespace/FD,
+backward-time, reentry and ambiguous exceptions permanently poison local time.
+Only explicitly typed kernel peer exit or isolated peer namespace unavailability /
+mismatch may refuse work while retaining local cleanup eligibility. A generic
+SocketChannel refusal deliberately masks multiple causes and therefore poisons
+local clock eligibility; it is never retrospectively declared peer-only. A
+transport EOF can go directly to cleanup on the previously qualified owner,
+without retrying the work sampler on a known failed connection.
+
+The actual owned-helper test now retires work and freezes the existing
+CancellationBudget before closing transport, observes the exact helper's exit,
+then samples the original local clock and verifies that the first cleanup end is
+unchanged. Independent convergence passes 62 cases with one Linux-native skip on
+Python 3.13. These facts do not implement the retained async cleanup task, bind
+its original native operation, switch transport to v2 or prove terminal drain.

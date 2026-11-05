@@ -104,6 +104,10 @@ class ClockAcquisitionError(FrameError):
         self.failed_owner = owner
 
 
+class _PeerClockRefusedError(FrameError):
+    """Known peer-only refusal; never a local-clock qualification failure."""
+
+
 class NativeClockOwner:
     """Synchronous retained observer bound to an existing authenticated channel.
 
@@ -124,6 +128,9 @@ class NativeClockOwner:
         self._refused = self._closing = False
         self._closed_known = False
         self._sampling = self._close_running = self._close_reentered = False
+        self._local_lost = self._cleanup_started = False
+        self._qualification = self._qualification_snapshot = None
+        self._domain_values = None
         self._domain: ClockDomain | None = None
         self._peer = self._peer_values = self._channel_values = self._channel_identity = None
         self._proc = self._pidfd = self._bootfd = self._ownns = self._peerns = None
@@ -143,7 +150,10 @@ class NativeClockOwner:
                 domain = ClockDomain(self._platform, implementation, self._linux_boot(),
                                      self._ownns.identity[:2])
             self._domain = self._domain_snapshot = domain
+            self._domain_values = (domain.platform, domain.implementation,
+                                   domain.boot, domain.namespace)
             self.sample()
+            self._qualification = self._qualification_snapshot = object()
         except BaseException:
             self._refused = True
             raise ClockAcquisitionError(self) from None
@@ -185,7 +195,14 @@ class NativeClockOwner:
         _require(self._pidfd is not None)
         poll = select.poll()
         poll.register(self._pidfd.fd, select.POLLIN | select.POLLHUP | select.POLLERR)
-        _require(poll.poll(0) == [])
+        events = poll.poll(0)
+        _require(type(events) is list)
+        if not events:
+            return
+        for event in events:
+            _require(_ints(event, 2) and event[0] == self._pidfd.fd
+                     and event[1] > 0 and event[1] & ~(select.POLLIN | select.POLLHUP) == 0)
+        raise _PeerClockRefusedError("BI1_NATIVE_CLOCK_UNAVAILABLE")
 
     def _linux_initialize(self) -> None:
         _require(os.uname().machine in ("x86_64", "aarch64"))
@@ -237,7 +254,8 @@ class NativeClockOwner:
 
     def _local_ownership(self) -> None:
         _require(all(type(v) is bool for v in (self._refused, self._closing,
-                 self._closed_known, self._sampling, self._close_running, self._close_reentered)))
+                 self._closed_known, self._sampling, self._close_running, self._close_reentered,
+                 self._local_lost, self._cleanup_started)))
         _require(_ints(self._context_snapshot, 3) and self._context is self._context_snapshot
                  and (os.getpid(), os.geteuid(), threading.get_ident()) == self._context
                  and type(self._platform_snapshot) is str
@@ -267,6 +285,7 @@ class NativeClockOwner:
             _require(record.fd == fd == record.original_fd and record.identity is identity)
 
     def _bindings(self) -> None:
+        """Only retained local facts; peer agreement is checked separately."""
         self._local_ownership()
         _require(len(self._records) == len(self._seals))
         for record, fd, identity in self._seals:
@@ -275,7 +294,7 @@ class NativeClockOwner:
             observed = _identity(fd)
             _require(_ints(observed, 3) and observed == identity)
         self._local_ownership()
-        _require(not self._refused and not self._closing and not self._closed_known
+        _require(not self._local_lost and not self._closing and not self._closed_known
                  and self._channel is self._channel_snapshot
                  and type(self._channel) is SocketChannel
                  and type(self._channel_values) is tuple and len(self._channel_values) == 8
@@ -294,6 +313,10 @@ class NativeClockOwner:
         _require(type(domain.platform) is str and type(domain.implementation) is str
                  and type(domain.boot) is bytes
                  and (domain.namespace is None or _ints(domain.namespace, 2)))
+        values = self._domain_values
+        _require(type(values) is tuple and len(values) == 4
+                 and domain.platform is values[0] and domain.implementation is values[1]
+                 and domain.boot is values[2] and domain.namespace is values[3])
         _require(len(self._records) == len(self._seals))
         if self._platform == "linux":
             _require(len(self._record_refs) == 5
@@ -307,38 +330,114 @@ class NativeClockOwner:
         _require(type(peer) is PeerObservation and type(peer.uid) is int
                  and type(peer.pid) is int and (peer.uid, peer.pid) == self._peer_values)
 
-    def sample(self) -> int:
+    def _clock_guard(self) -> None:
         try:
-            _require(type(self._sampling) is bool and self._sampling is False)
-            self._sampling = True
             self._bindings()
-            implementation = self._implementation()
-            self._bindings()
-            _require(type(implementation) is str and implementation == self._domain.implementation)
+        except BaseException:
+            self._local_lost = self._refused = True
+            raise FrameError("BI1_NATIVE_CLOCK_UNAVAILABLE") from None
+
+    def _peer_current(self) -> None:
+        """Only isolated known peer refusals leave local cleanup eligible."""
+        try:
+            # SocketChannel deliberately masks several failure planes. Its
+            # generic refusal is NOT evidence that only the peer failed.
             peer = self._channel._check()
-            self._bindings()
+            self._clock_guard()
             self._peer_matches(peer)
             if self._platform == "linux":
-                self._linux_current()
+                self._live()
+                try:
+                    row = os.stat(f"{self._peer.pid}/ns/time", dir_fd=self._proc.fd,
+                                  follow_symlinks=True)
+                except OSError:
+                    raise _PeerClockRefusedError("BI1_NATIVE_CLOCK_UNAVAILABLE") from None
+                observed = (row.st_dev, row.st_ino, row.st_mode)
+                _require(_ints(observed, 3))
+                if observed != self._peerns.identity:
+                    raise _PeerClockRefusedError("BI1_NATIVE_CLOCK_UNAVAILABLE")
+                self._live()
+            self._clock_guard()
+        except _PeerClockRefusedError:
+            self._clock_guard()  # a peer refusal cannot conceal local drift
+            self._refused = True
+            raise
+        except BaseException:
+            self._local_lost = self._refused = True
+            raise FrameError("BI1_NATIVE_CLOCK_UNAVAILABLE") from None
+
+    def _local_time(self) -> int:
+        """Qualified original own-domain time, not current peer agreement."""
+        try:
+            self._clock_guard()
+            implementation = self._implementation()
+            self._clock_guard()
+            _require(type(implementation) is str and implementation == self._domain.implementation)
+            if self._platform == "linux":
+                _require(_filesystem(self._proc.fd) == _PROCFS
+                         and _filesystem(self._bootfd.fd) == _PROCFS
+                         and _filesystem(self._pidfd.fd) in _PIDFD_FS
+                         and _filesystem(self._ownns.fd) == _NSFS
+                         and _filesystem(self._peerns.fd) == _NSFS)
+                row = os.stat("self/ns/time", dir_fd=self._proc.fd, follow_symlinks=True)
+                observed = (row.st_dev, row.st_ino, row.st_mode)
+                _require(_ints(observed, 3) and observed == self._ownns.identity
+                         and self._ownns.identity[:2] == self._domain.namespace)
                 boot = self._linux_boot()
             else:
                 boot = _darwin_boot()
-            self._bindings()
+            self._clock_guard()
             _require(type(boot) is bytes and boot == self._domain.boot)
-            # Recheck the original channel/context after native boundaries.
-            peer = self._channel._check()
-            self._bindings()
-            self._peer_matches(peer)
             value = _MONOTONIC_NS()
-            # Native boundaries can be instrumented and reenter. A swallowed
-            # refusal/close cannot be followed by publication of a clock sample.
-            self._bindings()
+            self._clock_guard()
             _require(type(value) is int and 0 <= value <= MAX_NS
                      and (self._last_ns is None or value >= self._last_ns))
             self._last_ns = value
             return value
         except BaseException:
+            self._local_lost = self._refused = True
+            raise FrameError("BI1_NATIVE_CLOCK_UNAVAILABLE") from None
+
+    def _enter_sample(self) -> None:
+        if type(self._sampling) is not bool or self._sampling:
+            self._local_lost = self._refused = True
+            raise FrameError("BI1_NATIVE_CLOCK_UNAVAILABLE")
+        self._sampling = True
+
+    def sample(self) -> int:
+        try:
+            self._enter_sample()
+            self._clock_guard()
+            _require(self._refused is False and self._cleanup_started is False)
+            self._peer_current()
+            value = self._local_time()
+            self._peer_current()
+            self._clock_guard()
+            _require(self._refused is False and self._cleanup_started is False)
+            return value
+        except BaseException:
             self._refused = True
+            raise FrameError("BI1_NATIVE_CLOCK_UNAVAILABLE") from None
+        finally:
+            self._sampling = False
+
+    def cleanup_sample(self) -> int:
+        """Irreversibly retire work, then return only original local cleanup time.
+
+        Successful initialization is mandatory. A dead/refused peer need not
+        remain alive; local clock uncertainty is never cleared or requalified.
+        """
+        try:
+            self._enter_sample()
+            _require(type(self._qualification) is object
+                     and self._qualification is self._qualification_snapshot)
+            self._cleanup_started = self._refused = True  # before native boundaries
+            value = self._local_time()
+            self._clock_guard()
+            _require(self._cleanup_started is True and self._refused is True)
+            return value
+        except BaseException:
+            self._local_lost = self._refused = True
             raise FrameError("BI1_NATIVE_CLOCK_UNAVAILABLE") from None
         finally:
             self._sampling = False
