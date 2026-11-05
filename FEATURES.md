@@ -1,3 +1,28 @@
+## Private result2 candidate source — November 5, 2026
+
+HMP `ab87b44` transports the owned reader's result on the original service/work
+tasks and independently validates it at the gateway against the original
+challenge, epoch, parent chain/totals and avatar hash/revision. Bounded headers
+and chunks reuse the existing credited accumulator. Original bytearray custody
+and a fixed transferred payload reference prevent cross-operation feed/wipe or
+write retargeting. Cancellation stops in-flight writer I/O under the frozen
+original budget; notification forgery cannot manufacture validation.
+
+Validation retains only a private job candidate/token in RUNNING. It returns no
+image/header data, fabricates no local custody event, and releases no headers or
+credits. Independent review passes 24 result cases on Python 3.13. Final root
+serial Python 3.11.15 and standalone 3.14.4 each pass 1,712 tests plus 190 subtests,
+with one Linux-native skip. Lint, surface, privacy and exact module/import checks
+pass. Prior GO head `ae55665` CI42044438948 succeeded with 6,819 tests / 21 skips
+plus 190 subtests; this source has separate CI evidence.
+
+Remaining: fresh PRE_EMIT, typed started-terminal proof and native/policy/
+credential retirement, production runtime qualification, authenticated whitelisted
+metadata/image routes and complete character rendering/physical checks. Tests
+use synthetic roots and mocked peer/Darwin clock facts. No app executable,
+embedded HMP, installed host or device changed. Host-local images follow character
+delivery. See [result ownership](specs/046-bot-presentation-integration/RESULT_TRANSPORT.md).
+
 ## Fresh native GO control source — November 5, 2026
 
 HMP `2854edb` joins the original public request, retained operation task and fresh
