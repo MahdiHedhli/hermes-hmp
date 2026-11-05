@@ -1,3 +1,17 @@
+## Character request retention — November 4, 2026
+
+A separately reviewed broker registry now retains reader owners before launch,
+enforces total/type/profile/queue/journal limits across connections, and preserves
+replay history after refusal or acknowledgement. Original-deadline checks prevent
+late normal starts; ambiguous/late starts keep their exact owner and reservation.
+Only an explicitly sealed never-started owner can take the current global ACK
+path. Started reap and pipe EOF alone remain PENDING and cannot release a slot.
+
+Independent87 registry/child cases and root composed548 on Python3.11/3.14.9 pass,
+plus lint/import scanner. No runtime imports this registry. Started-resource
+closure binding, service/runtime qualification, authenticated routes and physical
+character delivery remain open; no phone capability is activated. See [registry](specs/046-bot-presentation-integration/BROKER_REGISTRY.md).
+
 ## Character broker child ownership — November 4, 2026
 
 The separate shared-group reader owner is now implemented and independently

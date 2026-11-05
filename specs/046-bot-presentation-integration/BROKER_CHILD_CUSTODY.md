@@ -125,3 +125,18 @@ This does not complete BR5. The future registry must strongly retain every owner
 before launch, including failed/uncertain owners. Broker-only pipe/control/native
 closure composition, bounded transport/service, endpoint/runtime provenance and
 physical character delivery remain open. Nothing imports this owner at runtime.
+
+## Original-deadline registry amendment
+
+The admission registry now always constructs each child owner with its captured
+original exact deadline_ns. The owner freezes that reference, rejects malformed
+or rebound values and checks the same monotonic deadline immediately before
+Popen. Registry additionally checks after ownership validation and after spawn.
+A late return retains unknown ownership; it does not refresh the deadline, release
+capacity or authorize GO. Standalone source fixtures may omit this deadline;
+the registry path cannot. Its readonly startup_recipe exposes only already fixed
+configuration for comparison, never a Popen or code-attestation claim.
+
+The amended owner has59 focused cases; independent registry/child union87 passes.
+Full root source union548 passes on Python3.11/3.14.9, plus lint/import scanner.
+All existing activation limits remain. Broker resource closure is still unbound.

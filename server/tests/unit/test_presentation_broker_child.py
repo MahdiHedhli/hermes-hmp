@@ -460,3 +460,19 @@ def test_context_read_failure_retires_signals_stickily(monkeypatch):
     with pytest.raises(FrameError):
         owner.poll_wait()
     assert owner.uncertain and owner.signals_retired
+
+
+def test_original_deadline_checked_inside_owner_before_popen(monkeypatch):
+    deadline = time.monotonic_ns() + 1_000_000_000
+    owner = BrokerChildOwner(object(), deadline_ns=deadline)
+    monkeypatch.setattr(module.time, "monotonic_ns", lambda: deadline)
+    monkeypatch.setattr(module.subprocess, "Popen", lambda *a, **k: pytest.fail("late spawn"))
+    with pytest.raises(BrokerChildLaunchError):
+        owner.start()
+    assert owner.uncertain and owner.signals_retired
+
+
+@pytest.mark.parametrize("deadline", [True, 0, -1, float("inf"), 1 << 63])
+def test_original_deadline_requires_exact_bounded_integer(deadline):
+    with pytest.raises(FrameError):
+        BrokerChildOwner(object(), deadline_ns=deadline)

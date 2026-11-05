@@ -11,6 +11,7 @@ import os
 import signal
 import subprocess
 import threading
+import time
 from dataclasses import dataclass, replace
 from typing import BinaryIO
 
@@ -41,9 +42,16 @@ class BrokerChildLaunchError(FrameError):
 class BrokerChildOwner:
     """One exact direct child; no route, Popen exposure or group signal API."""
 
-    def __init__(self, binding: object, *, parser_package: str | None = None):
+    def __init__(
+        self, binding: object, *, parser_package: str | None = None, deadline_ns: int | None = None
+    ):
         if binding is None:
             raise FrameError("BI1_BROKER_CHILD_BINDING_REFUSED")
+        if deadline_ns is not None and (
+            type(deadline_ns) is not int or not 0 < deadline_ns < (1 << 63)
+        ):
+            raise FrameError("BI1_BROKER_CHILD_DEADLINE_REFUSED")
+        self._deadline_ns = self._deadline_snapshot = deadline_ns
         self._binding = binding
         self._binding_snapshot = binding
         self._context = (os.getpid(), os.getpgrp())
@@ -117,6 +125,8 @@ class BrokerChildOwner:
             or any(type(value) is not int for value in self._context_snapshot)
             or self._context is not self._context_snapshot
             or (os.getpid(), os.getpgrp()) != self._context_snapshot
+            or self._deadline_ns is not self._deadline_snapshot
+            or (self._deadline_ns is not None and type(self._deadline_ns) is not int)
             or self._binding is not self._binding_snapshot
             or type(self._launch) is not ChildLaunch
             or self._launch is not self._launch_snapshot
@@ -213,6 +223,15 @@ class BrokerChildOwner:
             self._lock.release()
             raise
 
+    @property
+    def startup_recipe(self) -> ChildLaunch:
+        """Frozen configuration for startup comparison, never code attestation."""
+        self._enter()
+        try:
+            return self._launch_snapshot
+        finally:
+            self._lock.release()
+
     def owns(self, binding: object) -> bool:
         self._enter()
         try:
@@ -245,6 +264,8 @@ class BrokerChildOwner:
                 raise FrameError("BI1_BROKER_CHILD_START_REFUSED")
             self._launch_attempted = True
             try:
+                if self._deadline_ns is not None and time.monotonic_ns() >= self._deadline_ns:
+                    self._poison("BI1_BROKER_CHILD_START_DEADLINE")
                 child = subprocess.Popen(  # noqa: S603 — captured fixed own-code recipe
                     self._launch.argv,
                     env=dict(self._launch.environment),

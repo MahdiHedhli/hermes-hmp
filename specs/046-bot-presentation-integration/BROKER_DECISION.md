@@ -116,6 +116,7 @@ handling must be qualified before runtime activation.
   land source-only first; all service/authority/activation gates stay explicit.
 - [x] BR2: implement closed pure codec + causal malformed/boundary/isolation tests.
 - [x] BR3a: freeze and implement source-only per-direction grammar and bounded serial replay window; see BROKER_LIFECYCLE.md.
+- [x] BR3b: retained source admission, original deadline and sealed-never-launched global ACK; see [registry contract](BROKER_REGISTRY.md). No started-owner release.
 - [ ] BR3: complete exact global atomic ACK/tombstone integration and typed remote custody authority, plus client/server lifecycle, sequencing/cancellation race,
   capacity/tombstone/ACK/status and typed remote closure authority contract.
 - [x] BR4a: implement/review kernel UID/PID snapshot helper and actual Darwin cross-process fixture; endpoint/code/liveness/custody remain separate.
