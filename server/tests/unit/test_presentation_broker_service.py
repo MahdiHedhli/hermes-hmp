@@ -7,6 +7,8 @@ import asyncio
 import os
 import shutil
 import socket
+import stat
+import sys
 import tempfile
 import time
 from dataclasses import replace
@@ -41,8 +43,13 @@ def binding(serial=1, *, boot="c" * 64):
 
 @pytest.fixture
 def local(monkeypatch):
-    root = Path(tempfile.mkdtemp(prefix="hs-", dir="/private/tmp")).resolve()
-    home = Path(tempfile.mkdtemp(prefix="hmp-service-synthetic-", dir=Path.cwd())).resolve()
+    parent = Path.cwd().resolve()
+    if any(stat.S_IMODE(p.stat().st_mode) not in (0o700, 0o750, 0o755)
+           for p in (parent, *parent.parents)):
+        pytest.skip("synthetic reader roots require safe ancestors")
+    temporary = Path("/private/tmp") if sys.platform == "darwin" else Path(tempfile.gettempdir())
+    root = Path(tempfile.mkdtemp(prefix="hs-", dir=temporary)).resolve()
+    home = Path(tempfile.mkdtemp(prefix="hmp-service-synthetic-", dir=parent)).resolve()
     (home / "profile.yaml").write_text("display_name: SYNTHETIC_SERVICE_ONLY\n")
     (home / "profile.yaml").chmod(0o600)
     path = str(root / "presentation.sock")
