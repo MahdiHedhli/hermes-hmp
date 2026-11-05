@@ -1,28 +1,29 @@
-## Original broker controller retained after cancellation — November 5, 2026
+## Original broker controller cancellation lifecycle — November 5, 2026
 
-The broker now publishes a typed cancellation-adoption notice while retaining its
-original controller, read claim and cumulative cursor. The service consumes that
-notice before cleanup; it still has to stop and join the original Task before
-local socket/clock closure. The controller parks under the same earliest cleanup
-end. Queued early ACK bytes remain unread, and expiry or an uncertain wake retains
-unknown debt. Observed drift stays refused after metadata restoration.
-No ACK permission or native/resource release is inferred.
+HMP source `935eca3` is integrated into the feature branch through
+[PR112](https://github.com/MahdiHedhli/hermes-hmp/pull/112). A typed cancellation
+notice now lets service cleanup proceed while the same original controller,
+read claim and cumulative cursor remain retained. Local socket/clock closure
+still requires its exact stop and join. The park uses the original earliest
+cleanup end; early ACK bytes stay unread. Observed receipt, timer or method
+drift stays refused after restoration and cannot affect another operation.
 
-Independent source review accepted the bounded coupling and callback-safety
-repairs. Six no-child/pure modules pass **347 tests on Python 3.11.15** and
-**347 on Python 3.14.4**. This includes 25 new causals for retained cursor/stop
-ownership, partial initialization, receipt substitution, deadline renewal,
-foreign method/equality callbacks, cancellation and expiry. Earlier skipped,
-fixture-metadata and test-migration failures are preserved. The first 3.14 run
-also exposed a native bound-method type difference; the repaired check binds to
-the exact native descriptor, with both runtime regressions passing.
+Independent bounded source review accepted the coupling and its corrections.
+Six no-child/pure modules pass **347 cases on Python 3.11.15** and **347 on
+Python 3.14.4**, including 25 new causals. A separate coupled sender/receiver
+case passes on each runtime. Exact-head
+[CI42115062159](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42115062159)
+passes all jobs and required checks: **7,118 passed, 21 skipped, 190 subtests**,
+plus the separate Unicode 17 jobs. Counts overlap and are not additive.
+The initial full run's one legacy Task-return fixture failure remains recorded;
+its reviewed notice migration preserved the original deadline and assertions.
 
-This is source progress toward the existing joined terminal contract. Qualified
-terminal producer/receiver admission, actual ACK transport, gateway pre-READY
-cleanup, native PRE_EMIT/DRAIN, authenticated image routes and runtime/device
-qualification remain open. Full desktop bot characters and host-local images
-are still unfinished. No host, app executable, device grant or release changed.
-See [controller continuation](specs/046-bot-presentation-integration/BROKER_CONTINUATION.md).
+This is source progress, not installed image support. Qualified terminal
+producer/receiver admission, ACK transport, gateway pre-READY cleanup, native
+PRE_EMIT/DRAIN, authenticated routes and runtime/physical qualification remain
+open. Full desktop bot characters and host-local images are still unfinished.
+App executable, embedded HMP, installed hosts/devices and grants are unchanged
+by this slice. See [controller continuation](specs/046-bot-presentation-integration/BROKER_CONTINUATION.md).
 
 ## Cross-platform development candidate — November 5, 2026
 
