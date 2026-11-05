@@ -1,3 +1,21 @@
+## Cancellation budget source — November 5, 2026
+
+HMP `1a02abe` adds one nonrenewing cleanup budget: cancellation, EOF, timeout
+and duplicates can only shorten the original end. Future/overflow/backward
+samples refuse; expired windows gain no new allowance. Explicit codec v2 carries
+the fixed start/end pair and refuses version mismatch without fallback.
+
+Independent review passes 384 focused cases on Python 3.13. Serial root Python
+3.11 and 3.14.9 regressions each pass 1,422 tests plus 190 subtests; lint,
+plugin-surface and privacy scans pass. Prior remote-owner CI `60b4e29` is green.
+
+This is arithmetic/framing source, not clock attestation or enabled transport.
+The service stays v1. Native same-clock startup qualification and both-end
+budget adoption are next, followed by GO/result/terminal release, authenticated
+routes and full character rendering/device qualification. Host-local images
+follow. No installed app, host, grants or providers changed. See the
+[cancellation contract](specs/046-bot-presentation-integration/CANCELLATION_CLOCK.md).
+
 ## Native-owned remote BEGIN/READY source — November 5, 2026
 
 HMP `0a4fbeb` binds a remote operation to the existing admission/native-policy
@@ -19,7 +37,7 @@ socket-mode causals. Root serial Python 3.11 and 3.14.9 regressions each pass
 These use synthetic native/peer observations with actual directory-policy threads
 and Unix sockets; they do not qualify a new external service or installed phone.
 Prior no-GO runtime evidence belongs to product `89734eb`; its CI head `6c69e21`
-is green. New-source CI is tracked separately.
+is green. Exact remote-owner CI head `60b4e29` also passes all jobs.
 
 GO/RESULT, typed remote terminal release, the nonrenewing cancellation-clock
 contract, runtime admission, routes, full rendering and signed physical character
