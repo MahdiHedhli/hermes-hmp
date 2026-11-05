@@ -132,6 +132,7 @@ class SocketChannel:
         self._reading = self._writing = self._closing = False
         self._close_fact = self._close_fact_snapshot = None
         self._terminal_owner = self._terminal_owner_snapshot = None
+        self._remote_owner = self._remote_owner_snapshot = None
         try:
             _require(type(sock) is socket.socket and type(enrollment) is StartupEnrollment
                      and type(role) is str and role in ("gateway", "broker")
@@ -177,6 +178,12 @@ class SocketChannel:
         _require(self._terminal_owner is self._terminal_owner_snapshot
                  and (self._terminal_owner is None
                       or type(self._terminal_owner) is TerminalStatusExchange))
+        _require(self._remote_owner is self._remote_owner_snapshot)
+        if self._remote_owner is not None:
+            from .presentation_remote import RemoteOperationOwner
+
+            _require(type(self._remote_owner) is RemoteOperationOwner
+                     and self._terminal_owner is None)
         if self._closed_known:
             _require(self._close_attempted and type(self._close_fact) is object
                      and self._close_fact is self._close_fact_snapshot)
@@ -211,6 +218,9 @@ class SocketChannel:
                      and self._endpoint is self._endpoint_snapshot
                      and self._observation is self._observation_snapshot
                      and self._descriptor() == self._identity)
+            _require(os.get_blocking(self._fd) is False)
+            timeout = _SOCKET_TIMEOUT(self._socket)
+            _require(type(timeout) is float and timeout == 0.0)
             e = self._enrollment
             own = ((e.gateway_uid, e.gateway_pid) if self._role == "gateway"
                    else (e.service_uid, e.service_pid))
@@ -247,11 +257,32 @@ class SocketChannel:
             data.extend(part)
         return bytes(data)
 
-    async def receive(self, end_ns: int, *, expected: BrokerBinding | None = None) -> BrokerFrame:
+    def claim_remote(self, owner) -> None:
+        from .presentation_remote import RemoteOperationOwner
+
+        self._bindings()
+        _require(type(owner) is RemoteOperationOwner and self._role == "gateway"
+                 and self._remote_owner is None and self._terminal_owner is None
+                 and not self._reading and not self._writing)
+        self._remote_owner = self._remote_owner_snapshot = owner
+        self._check()  # failed authentication leaves the same allocation retained
+
+    def _authorize_io(self, owner, direction, binding, end_ns, frame=None):
+        if self._remote_owner is None:
+            _require(owner is None)
+            return
+        from .presentation_remote import RemoteOperationOwner
+
+        _require(owner is self._remote_owner and type(owner) is RemoteOperationOwner)
+        RemoteOperationOwner._authorize_channel(owner, self, direction, binding, end_ns, frame)
+
+    async def receive(self, end_ns: int, *, expected: BrokerBinding | None = None,
+                      owner=None) -> BrokerFrame:
         self._bindings()
         if self._terminal_owner is not None:
             self._refused = True
             raise FrameError("BI1_BROKER_TERMINAL_CHANNEL_ADOPTED")
+        self._authorize_io(owner, "receive", expected, end_ns)
         _require(not self._reading and (self._role == "broker" or expected is not None))
         self._reading = True
         try:
@@ -269,7 +300,7 @@ class SocketChannel:
         finally:
             self._reading = False
 
-    async def send(self, frame: BrokerFrame, end_ns: int) -> None:
+    async def send(self, frame: BrokerFrame, end_ns: int, *, owner=None) -> None:
         self._bindings()
         if self._terminal_owner is not None:
             self._refused = True
@@ -277,6 +308,7 @@ class SocketChannel:
         _require(not self._writing and type(frame) is BrokerFrame
                  and type(frame.header) is BrokerHeader and type(frame.header.kind) is str
                  and frame.header.kind != "RESULT")
+        self._authorize_io(owner, "send", frame.header.binding, end_ns, frame)
         self._writing = True  # intent before any possibly partial write; no rollback/retry
         try:
             _binding(frame.header.binding)
@@ -359,8 +391,8 @@ class TerminalStatusExchange:
         try:
             _require(type(channel) is SocketChannel and type(binding) is BrokerBinding)
             _binding(binding)
-            _require(channel._terminal_owner is None and not channel._reading
-                     and not channel._writing)
+            _require(channel._terminal_owner is None and channel._remote_owner is None
+                     and not channel._reading and not channel._writing)
             channel._terminal_owner = channel._terminal_owner_snapshot = self
             self._authentication = self._authentication_snapshot = channel._check()
             # Initial auth is sealed below; failed partial owner is already retained.

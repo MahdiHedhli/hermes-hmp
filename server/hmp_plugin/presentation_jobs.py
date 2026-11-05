@@ -439,6 +439,35 @@ class JobHandle:
     __slots__ = ()
 
 
+class RemotePhase(Enum):
+    BOUND = "BOUND"
+    BEGIN_INTENT = "BEGIN_INTENT"
+    READY = "READY"
+    DRAINING = "DRAINING"
+    UNKNOWN = "UNKNOWN"
+
+
+class RemoteSlot:
+    """Shared one-use retained owner cell, not authority or a second ledger."""
+    __slots__ = ("_bound", "_owner", "_owner_snapshot")
+
+    def __init__(self):
+        self._owner = self._owner_snapshot = None
+        self._bound = False
+
+    def read(self):
+        if (type(self._bound) is not bool or self._owner is not self._owner_snapshot
+                or (self._owner is None) is self._bound):
+            _fail()
+        return self._owner
+
+    def install(self, owner):
+        if self.read() is not None or owner is None:
+            _fail()
+        self._owner = self._owner_snapshot = owner
+        self._bound = True  # no callback/await; this slot is never reset or cleared
+
+
 @dataclass
 class _Job:
     number: int
@@ -451,6 +480,9 @@ class _Job:
     last_clock: float | int
     state: State = State.QUEUED
     child: object | None = None
+    remote_slot: RemoteSlot = field(default_factory=RemoteSlot)
+    _remote_slot_snapshot: RemoteSlot = field(init=False, repr=False)
+    remote_phase: RemotePhase | None = None
     go_sent: bool = False
     output_buffer: BoundedResultBuffer = field(default_factory=BoundedResultBuffer)
     parent_result_context: tuple[str, object] | None = None
@@ -467,6 +499,10 @@ class _Job:
     emit_revoked: bool = False
     credit_released: bool = False
     seen_events: set[str] = field(default_factory=set)
+
+
+    def __post_init__(self):
+        self._remote_slot_snapshot = self.remote_slot
 
 
 @dataclass(frozen=True)
@@ -593,11 +629,64 @@ class JobOwner:
             _fail()
         return summary.state, summary.go_sent, summary.credit_released
 
+    @staticmethod
+    def _remote(job: _Job):
+        if (type(job.remote_slot) is not RemoteSlot
+                or job.remote_slot is not job._remote_slot_snapshot):
+            _fail()
+        remote = RemoteSlot.read(job.remote_slot)
+        if ((remote is None) != (job.remote_phase is None)
+                or (remote is not None and type(job.remote_phase) is not RemotePhase)):
+            _fail()
+        return remote
+
+    def remote_slot(self, handle: JobHandle) -> RemoteSlot:
+        job = self._resolve(handle)
+        self._remote(job)
+        return job.remote_slot
+
+    def bind_remote(self, handle: JobHandle, remote: object) -> None:
+        from .presentation_remote import RemoteOperationOwner
+
+        job = self._resolve(handle)
+        self._require(job, State.STARTING)
+        if (type(remote) is not RemoteOperationOwner or self._remote(job) is not None
+                or job.child is not None or job.parent_result_context is None
+                or job.go_sent or self._disabled):
+            _fail()
+        # One shared cell is retained by both ledgers before initialization.
+        # No foreign clock, callback or await follows installation here.
+        RemoteSlot.install(job.remote_slot, remote)
+        job.remote_phase = RemotePhase.BOUND
+
+    def inspect_remote(self, handle: JobHandle) -> RemotePhase | None:
+        job = self._resolve(handle)
+        self._remote(job)
+        return job.remote_phase
+
+    def remote_transition(self, handle: JobHandle, remote: object, phase: RemotePhase) -> None:
+        job = self._resolve(handle)
+        if type(phase) is not RemotePhase:
+            _fail()
+        expected = {RemotePhase.BEGIN_INTENT: RemotePhase.BOUND,
+                    RemotePhase.READY: RemotePhase.BEGIN_INTENT}.get(phase)
+        if (expected is None or self._remote(job) is not remote
+                or job.remote_phase is not expected or job.state is not State.STARTING
+                or job.child is not None or not self._current(job)):
+            _fail()
+        # The shared clock can reenter; recheck exact ownership after it returns.
+        if (self._jobs.get(handle) is not job or self._remote(job) is not remote
+                or job.remote_phase is not expected or job.state is not State.STARTING
+                or job.child is not None or job.emit_revoked or self._disabled):
+            _fail()
+        job.remote_phase = phase
+
     def _retire(self, handle: JobHandle) -> None:
         job = self._resolve(handle)
         if (
             job.state not in (State.REFUSED, State.EMIT)
             or not job.credit_released
+            or self._remote(job) is not None
             or (job.child is not None and not self._drained(job))
         ):
             _fail()
@@ -612,6 +701,9 @@ class JobOwner:
 
     async def authorize(self, handle: JobHandle) -> None:
         job = self._resolve(handle)
+        if self._remote(job) is not None:
+            self.unknown(handle)
+            return
         self._require(job, State.QUEUED)
         if not self._current(job):
             self.cancel(handle)
@@ -658,6 +750,9 @@ class JobOwner:
 
     def start(self, handle: JobHandle) -> None:
         job = self._resolve(handle)
+        if self._remote(job) is not None:
+            self.unknown(handle)
+            return
         self._require(job, State.AUTHORIZED)
         if not self._current(job):
             self.cancel(handle)
@@ -682,7 +777,8 @@ class JobOwner:
 
         job = self._resolve(handle)
         self._require(job, State.STARTING)
-        if job.child is not None or job.parent_result_context is not None:
+        if (self._remote(job) is not None or job.child is not None
+                or job.parent_result_context is not None):
             _fail()
         if type(snapshot) is not ParentPolicySnapshot:
             _fail()
@@ -717,6 +813,9 @@ class JobOwner:
 
     def bind_child(self, handle: JobHandle, child: object) -> None:
         job = self._resolve(handle)
+        if self._remote(job) is not None:
+            self.unknown(handle)
+            return
         if job.state not in (State.STARTING, State.DRAINING):
             _fail()
         if job.child is not None or child is None:
@@ -730,6 +829,9 @@ class JobOwner:
 
     def go(self, handle: JobHandle, child: object, challenge: str) -> None:
         job = self._resolve(handle)
+        if self._remote(job) is not None:
+            self.unknown(handle)
+            return
         self._require(job, State.STARTING)
         if job.child is not child or challenge != job.challenge or not self._current(job):
             self.unknown(handle)
@@ -739,6 +841,9 @@ class JobOwner:
 
     def feed_result(self, handle: JobHandle, chunk: bytes, child: object) -> None:
         job = self._resolve(handle)
+        if self._remote(job) is not None:
+            self.unknown(handle)
+            return
         if job.state not in (State.RUNNING, State.DRAINING):
             self.unknown(handle)
             return
@@ -761,6 +866,9 @@ class JobOwner:
 
     def custody(self, handle: JobHandle, event: str, child: object) -> None:
         job = self._resolve(handle)
+        if self._remote(job) is not None:
+            self.unknown(handle)
+            return
         if (
             job.child is None
             or child is None
@@ -855,7 +963,8 @@ class JobOwner:
 
     def _drained(self, job: _Job) -> bool:
         return (
-            job.result_eof
+            self._remote(job) is None
+            and job.result_eof
             and job.diagnostic_eof
             and job.wait_done
             and job.group_gone
@@ -865,7 +974,8 @@ class JobOwner:
 
     def _complete(self, job: _Job) -> bool:
         return (
-            not job.result_aborted
+            self._remote(job) is None
+            and not job.result_aborted
             and job.result is not None
             and job.result[0]["outcome"] == "OK"
             and job.result[0]["cleanup"] == {"known_fds_closed": True, "unknown_close": False}
@@ -874,6 +984,9 @@ class JobOwner:
 
     async def reauthorize(self, handle: JobHandle) -> None:
         job = self._resolve(handle)
+        if self._remote(job) is not None:
+            self.unknown(handle)
+            return
         self._require(job, State.COMPLETE)
         if not self._current(job):
             self.cancel(handle)
@@ -897,6 +1010,9 @@ class JobOwner:
         sink: Callable[[dict[str, object], bytes], None],
     ) -> None:
         job = self._resolve(handle)
+        if self._remote(job) is not None:
+            self.unknown(handle)
+            return
         self._require(job, State.REAUTHORIZED)
         try:
             current = still_current(job.lease)
@@ -939,6 +1055,11 @@ class JobOwner:
             return
         job = self._resolve(handle)
         job.emit_revoked = True
+        if self._remote(job) is not None:
+            if job.state is not State.UNKNOWN:
+                job.state = State.DRAINING
+                job.remote_phase = RemotePhase.DRAINING
+            return  # remote credits require a separately reviewed terminal proof
         if job.state in (State.QUEUED, State.AUTHORIZED, State.COMPLETE, State.REAUTHORIZED):
             if handle in self._waiting:
                 self._waiting.remove(handle)
@@ -947,6 +1068,8 @@ class JobOwner:
             self._retire(handle)
         elif job.state not in (State.REFUSED, State.UNKNOWN, State.EMIT):
             job.state = State.DRAINING
+            if job.remote_phase is not None:
+                job.remote_phase = RemotePhase.DRAINING
 
     def refuse_prelaunch(self, handle: JobHandle) -> None:
         """Caller must first establish policy closure and no launch/input attempt."""
@@ -954,6 +1077,7 @@ class JobOwner:
         if (
             job.state not in (State.STARTING, State.DRAINING)
             or job.child is not None
+            or self._remote(job) is not None
             or job.go_sent
             or job.parent_result_context is not None
             or self._disabled
@@ -974,6 +1098,8 @@ class JobOwner:
         job = self._resolve(handle)
         job.emit_revoked = True
         job.state = State.UNKNOWN
+        if job.remote_phase is not None:
+            job.remote_phase = RemotePhase.UNKNOWN
         job.output_buffer.wipe()
         job.result = None
         self._disabled = True

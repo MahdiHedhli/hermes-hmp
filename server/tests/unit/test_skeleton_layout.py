@@ -71,6 +71,7 @@ CONTRACT_MODULES = {
     "presentation_broker_registry.py",
     "presentation_broker_resources.py",
     "presentation_broker_service.py",
+    "presentation_remote.py",
     # BR3 grammar/replay control only, never native/remote custody authority.
     "presentation_broker_lifecycle.py",
     "presentation_child.py",

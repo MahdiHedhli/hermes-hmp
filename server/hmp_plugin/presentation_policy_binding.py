@@ -45,6 +45,7 @@ class NativePolicyWork:
         self._postcheck_attempted = False
         self._postchecked = False
         self._transfer_attempted = False
+        self._packet = self._packet_snapshot = None
         self._closed_pretransfer = False
         self._scope = (root, home, profile, os.geteuid(), os.getegid())
         self._policy = None
@@ -180,6 +181,7 @@ class NativePolicyWork:
         if not self._current():
             self._invalid = True
             raise AuthorityRefusalError
+        self._packet = self._packet_snapshot = packet
         return packet
 
     def close_pretransfer(self) -> bool:

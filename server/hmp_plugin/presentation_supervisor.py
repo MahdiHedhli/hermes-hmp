@@ -35,6 +35,7 @@ class ReaderSupervisor:
         record = authority._record(operation)
         if (
             record.reader_supervisor is not None
+            or record.remote_operation is not None
             or record.owner.inspect(record.handle)[0] is not State.QUEUED
         ):
             raise AuthorityRefusalError

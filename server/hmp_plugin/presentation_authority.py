@@ -25,6 +25,7 @@ from .presentation_jobs import (
     FrameError,
     JobHandle,
     JobOwner,
+    RemoteSlot,
     State,
 )
 
@@ -196,6 +197,23 @@ class _Record:
     process_binding: object | None = None
     reader_collected: bool = False
     reader_supervisor: object | None = None
+    remote_slot: RemoteSlot | None = None
+    remote_slot_snapshot: RemoteSlot | None = None
+    _custody_snapshot: tuple | None = None
+
+    @property
+    def remote_operation(self):
+        if (type(self.owner) is not JobOwner or type(self.handle) is not JobHandle
+                or type(self.remote_slot) is not RemoteSlot
+                or self.remote_slot is not self.remote_slot_snapshot):
+            raise AuthorityRefusalError
+        remote = RemoteSlot.read(self.remote_slot)
+        if self.handle in self.owner._jobs:
+            if self.owner.remote_slot(self.handle) is not self.remote_slot:
+                raise AuthorityRefusalError
+        elif remote is not None or self.handle not in self.owner._terminal:
+            raise AuthorityRefusalError  # only local terminal summaries can outlive their job
+        return remote
 
 
 class _OwnerAuthority(AuthorityPort):
@@ -319,6 +337,8 @@ class ParentAuthorityAdapter:
             self.owner,
             now + JOB_SECONDS,
         )
+        record.remote_slot = record.remote_slot_snapshot = self.owner.remote_slot(handle)
+        record._custody_snapshot = (self.owner, handle, fence)
         self._by_operation[opaque] = record
         self._by_lease[id(lease)] = record
         return opaque
@@ -438,9 +458,15 @@ class ParentAuthorityAdapter:
     def _unknown(self, record: _Record) -> None:
         self._disabled = True
         record.permit = None
-        record.fence.retire()
+        snapshot = record._custody_snapshot
+        if (type(snapshot) is not tuple or len(snapshot) != 3
+                or type(snapshot[0]) is not JobOwner or type(snapshot[1]) is not JobHandle
+                or type(snapshot[2]) is not ListenerFence):
+            return  # disabled and retained; never invoke drifted metadata callbacks
+        owner, handle, fence = snapshot
+        ListenerFence.retire(fence)
         with suppress(FrameError):
-            record.owner.unknown(record.handle)
+            JobOwner.unknown(owner, handle)
 
     async def initialize(self, operation: OpaqueOperation) -> bool:
         record = self._record(operation)
@@ -463,12 +489,41 @@ class ParentAuthorityAdapter:
             return
         record.owner.start(record.handle)
 
+    def bind_remote(self, operation: OpaqueOperation, channel, binding, packet):
+        """Retain one remote allocation in the existing native/job shared slot."""
+        from .presentation_policy_binding import NativePolicyWork
+        from .presentation_remote import RemoteOperationOwner
+
+        record = self._record(operation)
+        if record.remote_operation is not None:
+            self._unknown(record)  # duplicate adoption cannot revive or replace the retained owner
+            raise AuthorityRefusalError
+        if (self._clock is not time.monotonic or self.owner._clock is not self._clock
+                or record.child is not None
+                or record.process_owner is not None or record.reader_supervisor is not None
+                or not record.initial_complete or type(record.policy_work) is not NativePolicyWork
+                or record.owner.inspect(record.handle)[0] is not State.STARTING
+                or record.owner._resolve(record.handle).parent_result_context is None):
+            raise AuthorityRefusalError
+        remote = RemoteOperationOwner.__new__(RemoteOperationOwner)
+        try:
+            record.owner.bind_remote(record.handle, remote)
+            remote.__init__(self, operation, channel, binding, packet)
+        except Exception:
+            self._unknown(record)  # do not clear/replace the partially initialized owner
+            raise AuthorityRefusalError from None
+        except BaseException:
+            self._unknown(record)
+            raise
+        return remote
+
     def retain_process(self, operation: OpaqueOperation, process: object) -> None:
         from .presentation_process import PresentationProcessOwner
 
         record = self._record(operation)
         if (
             type(process) is not PresentationProcessOwner
+            or record.remote_operation is not None
             or record.process_owner is not None
             or record.child is not None
             or not record.initial_complete
@@ -501,6 +556,9 @@ class ParentAuthorityAdapter:
 
     def bind_child(self, operation: OpaqueOperation, child: object) -> None:
         record = self._record(operation)
+        if record.remote_operation is not None:
+            self._unknown(record)
+            raise AuthorityRefusalError
         if record.process_owner is not None and (
             not record.process_owner.owns(record.process_binding)
             or record.process_owner.child is not child
@@ -535,7 +593,8 @@ class ParentAuthorityAdapter:
     ) -> bool:
         record = self._record(operation)
         if (
-            child is None
+            record.remote_operation is not None
+            or child is None
             or child is not record.child
             or record.owner.inspect(record.handle)[0] is not State.STARTING
             or not self._current(record)
@@ -751,6 +810,7 @@ class ParentAuthorityAdapter:
         work = record.policy_work
         if (
             type(work) is not NativePolicyWork
+            or record.remote_operation is not None
             or work._authority is not self
             or work._record is not record
             or record.child is not None
@@ -780,6 +840,8 @@ class ParentAuthorityAdapter:
     def _process_closed(record: _Record) -> bool:
         from .presentation_process import PresentationProcessOwner
 
+        if record.remote_operation is not None:
+            return False  # no local/no-child shortcut for remote terminal custody
         process = record.process_owner
         if process is None:
             return True  # legacy inert JobOwner fixtures have no OS process
