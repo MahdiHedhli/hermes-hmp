@@ -1,3 +1,30 @@
+## Character broker synthetic bootstrap — November 4, 2026
+
+The reviewed source now composes fixed-install verification with an isolated,
+namespace-only broker harness. An externally supplied expected manifest digest
+is checked against bounded complete source/parser/runtime inventories, actual
+interpreter/import configuration and original generation. The candidate inventory
+tool treats candidate source as data and refuses trusted-verifier aliases into it.
+The real registry retains one fixed reader without input or GO; cancellation
+observes local drain while the started reservation stays PENDING.
+
+Independent qualification passes the 34-case composed suite plus two additional
+same-source/symlink alias cases. Root Python 3.11 passes 846 combined tests plus
+66 subtests and the two focused alias cases; Python 3.14.9 passes the final 848
+combined tests plus 66 subtests. Lint and closed-import scanner pass. Earlier
+endpoint guard source `452aa6f` also passed hosted CI41965483104; bootstrap CI
+must be bound to its own published commit separately.
+
+This is a synthetic source harness, not a production runtime-ready token.
+Verifier/interpreter and pre-verification dependency origin, the named OS-loader
+trust policy and no concurrent installation mutation are explicit premises.
+Loaded native-library origins are not measured/enforced by this harness. Complete
+worker/runtime audit, broker crash/partial-startup qualification, production
+service/endpoint/transport, native original authorization, started terminal release,
+authenticated routes and signed physical parity remain open. No live service,
+phone capability, grant, provider or app installation changed. Full desktop
+character scope and host-local images remain in the goal. See [bootstrap contract](specs/046-bot-presentation-integration/BROKER_BOOTSTRAP.md).
+
 ## Character broker private endpoint — November 4, 2026
 
 The reviewed source can now retain a private socket directory through an
