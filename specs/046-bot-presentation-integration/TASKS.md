@@ -29,6 +29,7 @@
 - [x] Implement/review retained partial control acquisition, native close observations and bounded local-FD-only discard; no descendant/native/registry closure inferred. Resource binding is tracked separately below.
 - [x] Bind retained metadata/avatar resources before launch; enforce original scope/deadline, one-use candidate transfer, cancellation, exact local drain and cross-operation isolation. Source-only; 38 resource cases and 746 plus 66 subtests on each Python 3.11/3.14.9.
 - [x] Implement/review held private endpoint snapshots with FD-relative ancestry, exact private owner/modes, replacement refusal and one-use local close; 56 focused cases independently pass. No connection/service authority.
+- [ ] Implement the independently reviewed [fixed-install verifier plus namespace-only synthetic bootstrap](BROKER_BOOTSTRAP.md); external expected manifest trust, complete runtime/bytecode closure, original generation and exclusive reap required.
 - [ ] Qualify broker service/runtime and authenticated transport, integrate native gateway routes and bind started terminal release; local observations alone retain PENDING.
 - [ ] Resolve direct-child native Kanban waitpid(-1) interference through an ownership-aware native contract or a separately reviewed external broker; do not disable Kanban or reinterpret ECHILD as closure.
 - [x] Add reviewed cleanup-only discard after exact child/group/control closure (bf24a54); frozen cleanup budget, actual EOF, buffered wipe and unknown-debt causals.
