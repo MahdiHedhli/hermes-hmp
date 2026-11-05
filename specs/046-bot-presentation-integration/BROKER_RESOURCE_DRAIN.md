@@ -182,3 +182,7 @@ backend; it demonstrates bounded descriptor behavior, not real child/service or
 all-descendant qualification. Full retained BrokerReaderResources acquisition,
 input/GO/result lifecycle, owner-minted aggregate local drain and typed startup/
 terminal/native binding are still required. No live route/capability is enabled.
+
+Hosted CI41958240003 completed success on exact implementationb000ca9. The
+Ubuntu unit job includes the new local native-FD cases; Python3.12–3.14 Unicode
+jobs pass. This is source/owned-FD evidence, not service/runtime/physical approval.

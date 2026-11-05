@@ -10,7 +10,9 @@ It cannot renew cleanup, restore output, claim descendants gone or free a starte
 registry/native reservation. The direct process-group cleanup contract is preserved.
 
 Independent56 focused cases pass. Complete serial Python3.11/3.14.9 runs each pass
-707 tests plus66 subtests, with lint/import scanner. Actual fixed-reader EOF stays
+707 tests plus66 subtests, with lint/import scanner. Hosted CI41958240003 also
+passes the Ubuntu plugin and Python3.12–3.14 Unicode jobs on exact sourceb000ca9.
+Later documentation does not change that executable. Actual fixed-reader EOF stays
 registry PENDING. Full resource binding, service/runtime provenance, transport/
 routes and physical character delivery remain open; no phone feature is activated.
 See [resource-drain contract](specs/046-bot-presentation-integration/BROKER_RESOURCE_DRAIN.md).
