@@ -62,6 +62,7 @@ class BrokerHeader:
     kind: str
     sequence: int
     body_length: int
+    version: int = 1
 
 
 @dataclass(frozen=True)
@@ -76,7 +77,13 @@ def _binding(value: BrokerBinding) -> None:
     value.__post_init__()
 
 
-def _shape(kind: str, sequence: int, body_length: int) -> None:
+def _version(value: int) -> None:
+    if type(value) is not int or value not in (1, 2):
+        _fail()
+
+
+def _shape(kind: str, sequence: int, body_length: int, version: int) -> None:
+    _version(version)
     if (
         type(kind) is not str
         or kind not in _KINDS
@@ -87,6 +94,8 @@ def _shape(kind: str, sequence: int, body_length: int) -> None:
         _fail()
     if kind == "BEGIN":
         valid = 4 <= body_length <= INPUT_LIMIT + 4
+    elif kind == "CANCEL" and version == 2:
+        valid = body_length == 16
     elif kind == "RESULT":
         valid = 4 <= body_length <= OUTPUT_LIMIT
     else:
@@ -99,10 +108,10 @@ def _row(header: BrokerHeader) -> dict[str, object]:
     if type(header) is not BrokerHeader:
         _fail()
     _binding(header.binding)
-    _shape(header.kind, header.sequence, header.body_length)
+    _shape(header.kind, header.sequence, header.body_length, header.version)
     binding = header.binding
     return {
-        "v": 1,
+        "v": header.version,
         "kind": header.kind,
         "iid": binding.iid,
         "listener": binding.listener,
@@ -120,10 +129,12 @@ def _canonical(row: dict[str, object]) -> bytes:
     ).encode("ascii")
 
 
-def encode_frame(binding: BrokerBinding, kind: str, sequence: int, body: bytes = b"") -> bytes:
+def encode_frame(
+    binding: BrokerBinding, kind: str, sequence: int, body: bytes = b"", *, version: int = 1
+) -> bytes:
     if type(body) is not bytes:
         _fail()
-    header = BrokerHeader(binding, kind, sequence, len(body))
+    header = BrokerHeader(binding, kind, sequence, len(body), version)
     raw = _canonical(_row(header))
     if not 1 <= len(raw) <= HEADER_LIMIT:
         _fail()
@@ -153,27 +164,38 @@ def _constant(value: str) -> None:
     _fail()
 
 
-def decode_header(data: bytes, *, expected: BrokerBinding) -> BrokerHeader:
+def decode_header(
+    data: bytes, *, expected: BrokerBinding, expected_version: int = 1
+) -> BrokerHeader:
     """Match one closed canonical header to exact operation correlation."""
-    return _decode_header(data, expected=expected, scope_only=False)
+    return _decode_header(
+        data, expected=expected, scope_only=False, expected_version=expected_version
+    )
 
 
-def decode_scope_header(data: bytes, *, expected_scope: BrokerBinding) -> BrokerHeader:
+def decode_scope_header(
+    data: bytes, *, expected_scope: BrokerBinding, expected_version: int = 1
+) -> BrokerHeader:
     """Server header only: match enrolled iid/listener/boot before body receive.
 
     Channel/operation remain untrusted correlation, subject to grammar and the
     one shared registry's replay/capacity admission. No enrollment from frames.
     """
-    return _decode_header(data, expected=expected_scope, scope_only=True)
+    return _decode_header(
+        data, expected=expected_scope, scope_only=True, expected_version=expected_version
+    )
 
 
-def _decode_header(data: bytes, *, expected: BrokerBinding, scope_only: bool) -> BrokerHeader:
+def _decode_header(
+    data: bytes, *, expected: BrokerBinding, scope_only: bool, expected_version: int
+) -> BrokerHeader:
     """Validate correlation and body bounds BEFORE a transport receives that body.
 
     Requires exactly prefix+header, not body bytes. It does not authenticate a
     peer, validate input3/output2, or establish correct lifecycle sequencing.
     """
     _binding(expected)
+    _version(expected_version)
     if type(data) is not bytes or len(data) < 8:
         _fail()
     length = header_size(data[:8])
@@ -184,7 +206,10 @@ def _decode_header(data: bytes, *, expected: BrokerBinding, scope_only: bool) ->
         row = json.loads(raw.decode("ascii"), object_pairs_hook=_pairs, parse_constant=_constant)
     except (ValueError, UnicodeError, RecursionError):
         raise FrameError("BI1_BROKER_FRAME_REFUSED") from None
-    if type(row) is not dict or row.keys() != _KEYS or type(row["v"]) is not int or row["v"] != 1:
+    if (
+        type(row) is not dict or row.keys() != _KEYS
+        or type(row["v"]) is not int or row["v"] != expected_version
+    ):
         _fail()
     binding = BrokerBinding(
         row["iid"], row["listener"], row["broker"], row["channel"], row["operation"]
@@ -196,19 +221,21 @@ def _decode_header(data: bytes, *, expected: BrokerBinding, scope_only: bool) ->
             _fail()
     elif binding != expected:
         _fail()
-    header = BrokerHeader(binding, row["kind"], row["sequence"], row["body_length"])
+    header = BrokerHeader(binding, row["kind"], row["sequence"], row["body_length"], row["v"])
     if raw != _canonical(_row(header)):
         _fail()
     return header
 
 
-def decode_frame(data: bytes, *, expected: BrokerBinding) -> BrokerFrame:
+def decode_frame(
+    data: bytes, *, expected: BrokerBinding, expected_version: int = 1
+) -> BrokerFrame:
     """Whole-buffer fixture codec; no streaming/allocation-bound claim."""
     if type(data) is not bytes or not 8 <= len(data) <= FRAME_LIMIT:
         _fail()
     length = header_size(data[:8])
     end = 8 + length
-    header = decode_header(data[:end], expected=expected)
+    header = decode_header(data[:end], expected=expected, expected_version=expected_version)
     if len(data) != end + header.body_length:
         _fail()
     return BrokerFrame(header, data[end:])

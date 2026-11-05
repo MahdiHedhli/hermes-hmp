@@ -207,3 +207,38 @@ def test_truncated_or_trailing_header_and_body_are_refused(binding):
 def test_mutable_or_coerced_body_is_not_accepted(binding, value):
     with pytest.raises(FrameError):
         encode_frame(binding, "BEGIN", 0, value)
+
+
+def test_v2_cancel_requires_explicit_selection_and_exact_fixed_body(binding):
+    body = struct.pack(">QQ", 10, 250_000_010)
+    packet = encode_frame(binding, "CANCEL", 2, body, version=2)
+    parsed = decode_frame(packet, expected=binding, expected_version=2)
+    assert parsed.body == body and parsed.header.version == 2
+    with pytest.raises(FrameError):
+        decode_frame(packet, expected=binding)  # no auto-upgrade
+    legacy = encode_frame(binding, "CANCEL", 2)
+    with pytest.raises(FrameError):
+        decode_frame(legacy, expected=binding, expected_version=2)  # no downgrade
+    for size in (0, 15, 17, 32):
+        with pytest.raises(FrameError):
+            encode_frame(binding, "CANCEL", 2, b"x" * size, version=2)
+        with pytest.raises(FrameError):
+            decode_header(header(row(binding, v=2, kind="CANCEL", body_length=size)),
+                          expected=binding, expected_version=2)
+
+
+@pytest.mark.parametrize("version", [True, 0, 3, 1.0, "2", None])
+def test_protocol_selection_is_exact_and_closed(binding, version):
+    with pytest.raises(FrameError):
+        encode_frame(binding, "GO", 1, version=version)
+    with pytest.raises(FrameError):
+        decode_frame(encode_frame(binding, "GO", 1), expected=binding,
+                     expected_version=version)
+
+
+@pytest.mark.parametrize("kind", ["GO", "READY", "STATUS", "PENDING", "UNKNOWN", "CLOSED", "ACK"])
+def test_v2_other_control_frames_remain_bodyless(binding, kind):
+    packet = encode_frame(binding, kind, 1, version=2)
+    assert decode_frame(packet, expected=binding, expected_version=2).body == b""
+    with pytest.raises(FrameError):
+        encode_frame(binding, kind, 1, b"x" * 16, version=2)
