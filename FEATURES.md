@@ -1,3 +1,29 @@
+## Character manager group control — November 5, 2026
+
+Source `dfa2858` adds a separately instrumented Darwin manager-control experiment.
+One reviewed new-session/shared-group pair passed. The reader ignores stdin and
+waits on a controller-owned socket with an independent timeout. The new-session
+case had no reader exit observed through 2.002s; the shared-group case had kernel
+exit observed about 2.11ms after broker self-crash. Both windows ended about 9.99s
+before reader timeout. Outcome froze before voluntary stop/connection cleanup.
+Both exact temporary jobs, both kernel exits and all monitors cleaned up; no
+fixture lock/debt remains.
+
+Independent review passes 10 model cases and verifies the six generated artifact
+hashes/literal sources and private modes. Serial Python 3.11 and 3.14.9 suites each
+pass 928 tests plus 66 subtests; lint, plugin surface and privacy scans pass. Prior
+actual-reader source `d86d9d4` now passes all jobs in CI41977281821; new control CI
+is tracked separately. Controller/observer execution uses trusted coordinator
+provenance, not process-image attestation.
+
+This supports the inspected Darwin group-policy contrast. It supplies no exit
+status/reap, arbitrary descendant absence, Linux qualification, restart policy or
+production admission. Production runtime/service lifecycle, peer/boot transport,
+native authorization, started release, routes and signed physical character parity
+remain open. No existing Hermes service, grant/provider or phone installation
+changed. Full desktop metadata/classic/blobatar/custom-image delivery and host-local
+images remain required outcomes. See [manager control](specs/046-bot-presentation-integration/MANAGER_CONTROL.md).
+
 ## Actual character-reader crash integration — November 5, 2026
 
 Source `d86d9d4` composes a private verified installation, actual retained registry

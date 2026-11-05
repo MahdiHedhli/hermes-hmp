@@ -42,3 +42,15 @@ status, reap, arbitrary descendant absence, Linux/systemd qualification, restart
 policy, production service/code/boot admission, authorization or phone parity.
 Controller/observer code origin remains an explicit trusted-execution premise,
 not a loaded process-image attestation.
+
+## Observed candidate result — November 5, 2026
+
+One explicit paired invocation on `dfa2858` passed. Independent review matched
+all six generated artifact hashes and the literal broker/reader source, and
+confirmed private file modes. New-session reader exit was not observed during
+2.002s; its exit was read during cleanup after the explicit stop. Shared-group
+reader exit was read at 2.11ms after crash request. Both observation windows ended
+about 9.99s before the reported independent reader timeout. Exact own-job removal,
+both kernel exits and all local monitor closes were recorded known in both cases.
+No rerun or production activation occurred. These observed-at values are not
+kernel exit timestamps or parent reap/exit-status observations.

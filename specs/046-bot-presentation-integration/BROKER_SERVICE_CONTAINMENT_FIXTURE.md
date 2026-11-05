@@ -3,8 +3,9 @@
 Status: independently reviewed sequence; the fixture-only Darwin observer is
 implemented under its [exact contract](DARWIN_PROCESS_EXIT_OBSERVER.md). The
 authenticated fixture control and one actual-reader crash experiment are now
-implemented and independently reviewed (`d86d9d4`). Instrumented manager-causality
-and production service qualification remain open. No job/service is installed or
+implemented and independently reviewed (`d86d9d4`). A separately instrumented
+new/shared-group control now passes on `dfa2858`; production service qualification
+remains open. No job/service is installed or
 activated by this document.
 Preserve full desktop presentation scope; this is qualification work, not a manual
 snapshot replacement or a production closure certificate.
@@ -62,7 +63,11 @@ Darwin evidence never qualifies systemd or a Linux production service.
 - [x] Actual fixed-reader broker-crash integration: both kernel exits and broker-control
   EOF observed; reader-output EOF explicitly unobserved. One own-label run passed
   cleanup on `d86d9d4`, with independent artifact/receipt review.
-- [ ] Separate instrumented manager-causality control, bounded independent self-exit.
+- [x] Separate instrumented Darwin group-policy control with bounded independent
+  reader timeout: one new/shared pair passes on `dfa2858`. New-group exit not
+  observed through 2.002s; shared exit observed at 2.11ms; both cleaned afterward.
+  This is a bounded contrast, not exit status or arbitrary-descendant proof.
+  See [manager control](MANAGER_CONTROL.md).
 - [ ] Causal refusals: wrong job/peer, preexisting exit, observer-registration failure,
   ambiguous bootstrap, deadline-confounded observation and lost crash acknowledgement.
 - [ ] Unrelated process isolation and exact owned-label cleanup.
