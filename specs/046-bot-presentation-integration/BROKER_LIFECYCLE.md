@@ -143,3 +143,9 @@ Before custody implementation/activation, qualify service-manager crash/orphan
 containment: the current direct reader starts a new session, so broker exit or
 broker process-group termination cannot simply be assumed to close its readers.
 Do not erase unknown debt or claim an OS hard bound from this source model.
+
+
+Hosted CI41947357398 is terminal success on b4a97e5465c36c738d7698e86b1ed262cd50a1f1:
+Ubuntu plugin job and Python3.12/3.13/3.14 Unicode jobs all pass. This broadens
+source regression evidence without certifying service-manager containment,
+qualified endpoints, installed listener code or physical parity.

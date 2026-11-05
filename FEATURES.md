@@ -15,7 +15,9 @@ or resource is released by this model.
 
 Root lifecycle/codec/peer/source-inventory419 cases pass on Python3.11/3.14.9 on
 this Mac; independent lifecycle/codec132 pass, plus lint and the closed-import
-scanner. No service is active and no character availability is advertised.
+scanner. Hosted HMP CI41947357398 also passes the Ubuntu plugin suite and
+Python3.12–3.14 Unicode jobs on exact source b4a97e5; this is source CI, not
+service/endpoint or signed-device qualification. No service is active and no character availability is advertised.
 Actual registry, native/transport integration, runtime/endpoint provenance and
 service-manager orphan containment remain open. In particular, existing readers
 start new sessions: broker exit/group termination is not assumed to close them.
