@@ -1,3 +1,28 @@
+## Original-work write-quiescence source — November 5, 2026
+
+HMP `9e2697e` retains its ownership barrier before initialization and an immutable
+fact binding the original work Task, channel, actual BEGIN/GO write facts, native
+clock and cancellation budget. A separate irreversible latch stops further
+ordinary client writes while preserving result reads. Only the original work
+Task may mint it; failed or partial minting cannot retry in finally. CANCEL
+consumes the exact fact once before encoding/IO. Forged notifications, wrong
+actors and foreign scope substitution refuse.
+
+Independent review passes 332 focused tests on Python 3.13. Root serial Python
+3.11.15 and standalone 3.14.4 each pass 1,834 tests plus 190 subtests, with one
+Linux-native skip. Lint, surface, privacy and diff checks pass. The previous
+envelope head `4bf20fe` CI42065921778 succeeded with 6,955 passed / 21 skips plus
+190 subtests; this candidate has separate CI evidence.
+
+Quiescence is not a Task join, reader retirement, closure proof or clock allowance.
+The existing whole-work-task join and reading=False gates remain mandatory.
+Cleanup-reader mode, retained partial cursor/timeout ownership, continued broker
+CANCEL/ACK cursor, qualified terminal acceptance, native PRE_EMIT/DRAIN and
+credential retirement remain unfinished before image routes and full character
+delivery. No terminal transport/release or installed host/device change is
+claimed. App executable and embedded HMP remain unchanged. Host-local images
+follow character delivery. See [write ownership](specs/046-bot-presentation-integration/WRITE_QUIESCENCE.md).
+
 ## Terminal cleanup-stamp envelope source — November 5, 2026
 
 HMP `a50158a` separates the immutable reader outcome from the sender's
