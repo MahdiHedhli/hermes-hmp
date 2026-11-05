@@ -116,8 +116,9 @@ not grant worker GO. Shared RemotePhase transitions are BOUND/BEGIN_INTENT/READY
 then DRAINING or UNKNOWN without credit release. No local process is fabricated.
 
 Independent convergence passed100 cases on Python3.13 (42 remote,31 channel/service,
-27 terminal) and the subsequent two changed-mode causals separately. Root serial
-regression evidence is recorded in FEATURES.md. Peer identity and native service
+27 terminal) and the subsequent two changed-mode causals separately. Source `0a4fbeb` passes root serial Python3.11/3.14.9 regressions with1,379 tests
+plus190 subtests each. Lint, plugin-surface and privacy scans pass. Further
+regression/CI evidence is recorded in FEATURES.md. Peer identity and native service
 are explicitly synthetic in these local tests; actual directory policy threads
 and Unix sockets are used. No new external-manager, production, file-read/GO,
 result-release or physical-device qualification follows from this source slice.

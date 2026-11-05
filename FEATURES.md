@@ -1,3 +1,32 @@
+## Native-owned remote BEGIN/READY source — November 5, 2026
+
+HMP `0a4fbeb` binds a remote operation to the existing admission/native-policy
+ledger. One shared slot retains the same allocation before initialization. It
+accepts only the exact joined/postchecked input3 packet, exclusively claims its
+channel, and freshly checks original native authority around one BEGIN/READY
+exchange. Ordinary I/O and competing adoption cannot reuse that connection.
+Post-peer checks preserve the original deadline, cancellation and scope.
+
+Remote custody never fabricates a local child, wait, process-group or signal
+observation. Local cancellation, prelaunch refusal, reauthorization and emission
+cannot release its credit or original credentials. Native/context drift poisons
+the original retained reservation without invoking drifted metadata callbacks.
+Kernel nonblocking mode and native Python timeout 0.0 are required before I/O.
+
+Independent convergence passes 100 cases on Python 3.13, followed by two native
+socket-mode causals. Root serial Python 3.11 and 3.14.9 regressions each pass
+1,379 tests plus 190 subtests. Lint, plugin-surface and privacy scans pass.
+These use synthetic native/peer observations with actual directory-policy threads
+and Unix sockets; they do not qualify a new external service or installed phone.
+Prior no-GO runtime evidence belongs to product `89734eb`; its CI head `6c69e21`
+is green. New-source CI is tracked separately.
+
+GO/RESULT, typed remote terminal release, the nonrenewing cancellation-clock
+contract, runtime admission, routes, full rendering and signed physical character
+parity remain open. Host-local images remain next. No host, permission, provider
+or app installation changed. See the
+[remote backend contract](specs/046-bot-presentation-integration/REMOTE_OPERATION.md).
+
 ## Actual no-GO character service pass — November 5, 2026
 
 One reviewed fresh Darwin invocation at source head `0bea1c8` / product `89734eb`
