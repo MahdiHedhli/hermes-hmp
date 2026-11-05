@@ -16,7 +16,24 @@ from hmp_plugin.presentation_authority import (
     OriginalHeaders,
     ParentAuthorityAdapter,
 )
-from hmp_plugin.presentation_jobs import CapturedLease, State, encode_output
+from hmp_plugin.presentation_cancel_budget import CancellationBudget
+from hmp_plugin.presentation_jobs import JOB_SECONDS, CapturedLease, State, encode_output
+
+
+@pytest.mark.parametrize("first,second", [(1.0, 1.1), (1.1, 1.0)])
+def test_original_budget_binds_earliest_ceiling_before_native_observation(first, second):
+    samples = iter((first, second))
+    native = NativeFake()
+    scope = ParentAuthorityAdapter("iid", service=native, clock=lambda: next(samples))
+    operation = scope.reserve(lease(), "METADATA", headers(), listener=object(),
+        fence=ListenerFence(1), store=object(), bridge=object(), identity=object(),
+        native_owner=object())
+    record = scope._record(operation)
+    assert record.deadline == min(first, second) + JOB_SECONDS
+    assert record.cleanup_budget is record.cleanup_budget_snapshot
+    assert CancellationBudget.inspect(record.cleanup_budget) == (
+        int(record.deadline * 1_000_000_000), None, None, False)
+    assert native.calls == []
 
 
 class Clock:
@@ -1116,3 +1133,29 @@ def test_actual_go_write_then_termination_releases_refusal_not_output(native_clo
 
     with tempfile.TemporaryDirectory(prefix="hmp-abort-synthetic-", dir=Path.cwd()) as directory:
         asyncio.run(run(Path(directory)))
+
+
+@pytest.mark.parametrize("late", [False, True])
+def test_cancel_freezes_original_budget_at_first_cause(late):
+    scope, native, clock, fence, operation, _ = adapter()
+    record = scope._record(operation)
+    clock.now = record.deadline + 1 if late else 1.1
+    scope.cancel(operation)
+    end = min(int(clock.now * 1_000_000_000), int(record.deadline * 1_000_000_000)) + 250_000_000
+    assert CancellationBudget.inspect(record.cleanup_budget)[2:] == (end, False)
+    clock.now += 0.1
+    scope.cancel(operation)
+    assert CancellationBudget.inspect(record.cleanup_budget)[2:] == (end, False)
+    assert native.calls == [] and not fence.current
+
+
+def test_cancel_clock_reentry_cannot_create_fresh_allowance():
+    scope, native, clock, fence, operation, _ = adapter()
+    record = scope._record(operation)
+    def reenter():
+        scope.cancel(operation)
+        return clock.now
+    scope._clock = reenter
+    scope.cancel(operation)
+    assert CancellationBudget.inspect(record.cleanup_budget)[2:] == (None, True)
+    assert scope.disabled and native.calls == [] and not fence.current

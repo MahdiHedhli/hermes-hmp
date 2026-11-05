@@ -1,8 +1,8 @@
 """Retained reader resources and candidate bytes; no native/remote authority.
 
-The future qualified broker service alone may stage input/relay GO after current
-peer/grammar and original gateway native gates. No service imports this source
-slice. Local observations never release started registry/native reservations.
+The private broker spine composes retained resources, but production admission
+and native GO still require their own gates. Local observations never release
+started registry/native reservations.
 """
 
 from __future__ import annotations
@@ -14,6 +14,7 @@ from dataclasses import dataclass
 
 from .presentation_broker_child import BrokerChildOwner, ChildWaitObservation
 from .presentation_broker_codec import BrokerBinding, _binding
+from .presentation_cancel_budget import CancellationBudget
 from .presentation_control_pipe import ControlAcquisitionError, OwnedControlPipe
 from .presentation_input_v3 import decode_input_v3
 from .presentation_jobs import _PROFILE, INPUT_LIMIT, OUTPUT_LIMIT, FrameError
@@ -37,10 +38,13 @@ class BrokerReaderResources:
         profile: str,
         kind: str,
         deadline_ns: int,
+        cleanup_budget: CancellationBudget,
     ):
+        from .presentation_broker_registry import _Record
+
         _binding(binding)
         if (
-            operation is None
+            type(operation) is not _Record
             or type(process) is not BrokerChildOwner
             or type(profile) is not str
             or _PROFILE.fullmatch(profile) is None
@@ -50,6 +54,14 @@ class BrokerReaderResources:
             or not 0 < deadline_ns < 1 << 63
         ):
             raise FrameError("BI1_BROKER_RESOURCES_BINDING_REFUSED")
+        if (type(cleanup_budget) is not CancellationBudget
+                or cleanup_budget is not operation.cleanup_budget
+                or cleanup_budget is not operation.cleanup_budget_snapshot
+                or deadline_ns != operation.deadline_ns
+                or CancellationBudget.inspect(cleanup_budget) != (deadline_ns, None, None, False)):
+            raise FrameError("BI1_BROKER_RESOURCES_BINDING_REFUSED")
+        self._cleanup_budget = self._cleanup_budget_snapshot = cleanup_budget
+        self._cleanup_sampling = False
         self._operation = self._operation_snapshot = operation
         self._process = self._process_snapshot = process
         self._scope = self._scope_snapshot = (
@@ -102,10 +114,31 @@ class BrokerReaderResources:
             self._pipe_buffer_snapshot[:] = b"\x00" * len(self._pipe_buffer_snapshot)
             self._pipe_buffer_snapshot.clear()
             self._pipes.refused = True
-        if self._cleanup_end_ns is None:
-            self._cleanup_end_ns = self._cleanup_end_snapshot = time.monotonic_ns() + 250_000_000
+        self._freeze_cleanup()
         if self._phase != "LOCAL_DRAINED":
             self._phase = "CLEANUP"
+
+    def _freeze_cleanup(self) -> None:
+        if self._cleanup_sampling is not False:
+            self._poison()
+        self._cleanup_sampling = True
+        try:
+            budget = self._cleanup_budget_snapshot
+            if type(budget) is not CancellationBudget or self._cleanup_budget is not budget:
+                self._poison()
+            now = time.monotonic_ns()
+            if (self._cleanup_budget is not budget or self._cleanup_budget_snapshot is not budget
+                    or self._poisoned is not False or self._cleanup_sampling is not True
+                    or self._cleanup_end_ns is not self._cleanup_end_snapshot
+                    or (self._cleanup_end_ns is not None
+                        and type(self._cleanup_end_ns) is not int)):
+                self._poison()
+            window = CancellationBudget.local(budget, now)
+            end = window.end_ns if self._cleanup_end_ns is None else min(
+                self._cleanup_end_ns, window.end_ns)
+            self._cleanup_end_ns = self._cleanup_end_snapshot = end
+        finally:
+            self._cleanup_sampling = False
 
     def _poison(self) -> None:
         self._poisoned = True
@@ -120,11 +153,14 @@ class BrokerReaderResources:
         raise FrameError("BI1_BROKER_RESOURCES_UNCERTAIN")
 
     def _check(self) -> None:
+        from .presentation_broker_registry import _Record
+
         try:
             if (
                 type(self._poisoned) is not bool
                 or self._poisoned
                 or self._operation is not self._operation_snapshot
+                or type(self._operation) is not _Record
                 or self._process is not self._process_snapshot
                 or type(self._process) is not BrokerChildOwner
                 or self._scope is not self._scope_snapshot
@@ -134,6 +170,11 @@ class BrokerReaderResources:
                 or type(self._scope[7]) is not int
                 or self._deadline_ns is not self._deadline_snapshot
                 or self._deadline_ns != self._scope[7]
+                or type(self._cleanup_budget) is not CancellationBudget
+                or self._cleanup_budget is not self._cleanup_budget_snapshot
+                or CancellationBudget.inspect(self._cleanup_budget)[0] != self._deadline_ns
+                or self._operation.cleanup_budget is not self._cleanup_budget
+                or self._operation.cleanup_budget_snapshot is not self._cleanup_budget
                 or self._context is not self._context_snapshot
                 or type(self._context) is not tuple
                 or len(self._context) != 2
@@ -144,6 +185,7 @@ class BrokerReaderResources:
                 or any(
                     type(v) is not bool
                     for v in (
+                        self._cleanup_sampling,
                         self._invalidated,
                         self._start_attempted,
                         self._input_attempted,
@@ -213,10 +255,7 @@ class BrokerReaderResources:
     def _enter(self) -> None:
         if not self._lock.acquire(blocking=False):
             self._invalidated = True
-            if self._cleanup_end_ns is None:
-                self._cleanup_end_ns = self._cleanup_end_snapshot = (
-                    time.monotonic_ns() + 250_000_000
-                )
+            self._freeze_cleanup()
             raise FrameError("BI1_BROKER_RESOURCES_REENTRY")
         try:
             self._check()
@@ -226,7 +265,13 @@ class BrokerReaderResources:
 
     def _fresh(self) -> bool:
         self._check()
-        return not self._invalidated and time.monotonic_ns() < self._deadline_ns
+        _, _, end, failed = CancellationBudget.inspect(self._cleanup_budget)
+        if end is not None or failed:
+            return False
+        now = time.monotonic_ns()
+        self._check()
+        _, _, end, failed = CancellationBudget.inspect(self._cleanup_budget)
+        return not self._invalidated and end is None and not failed and now < self._deadline_ns
 
     def _work_current(self) -> bool:
         return self._phase == "RUNNING" and self._fresh()
@@ -428,11 +473,29 @@ class BrokerReaderResources:
             self._lock.release()
 
     def _cleanup_live(self) -> bool:
-        return (
-            type(self._cleanup_end_ns) is int
-            and self._cleanup_end_ns is self._cleanup_end_snapshot
-            and time.monotonic_ns() < self._cleanup_end_ns
-        )
+        if (type(self._cleanup_end_ns) is not int
+                or self._cleanup_end_ns is not self._cleanup_end_snapshot):
+            return False
+        if self._cleanup_sampling is not False:
+            self._poison()
+        self._cleanup_sampling = True
+        try:
+            budget = self._cleanup_budget_snapshot
+            cached = self._cleanup_end_snapshot
+            if type(budget) is not CancellationBudget or self._cleanup_budget is not budget:
+                self._poison()
+            now = time.monotonic_ns()
+            if (self._cleanup_sampling is not True or self._poisoned is not False
+                    or self._cleanup_budget is not budget
+                    or self._cleanup_budget_snapshot is not budget
+                    or self._cleanup_end_ns is not cached
+                    or self._cleanup_end_snapshot is not cached):
+                self._poison()
+            return CancellationBudget.remaining_ns(budget, now) > 0 and now < cached
+        except FrameError:
+            return False
+        finally:
+            self._cleanup_sampling = False
 
     def poll_cleanup(self) -> bool:
         self._enter()

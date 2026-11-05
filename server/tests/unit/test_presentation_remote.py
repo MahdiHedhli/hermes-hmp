@@ -5,6 +5,7 @@ explicitly mocked by the local gateway fixture. No child, GO or result dispatch.
 """
 import asyncio
 import os
+import time
 from dataclasses import replace
 
 import pytest
@@ -19,6 +20,7 @@ from hmp_plugin.presentation_authority import (
 )
 from hmp_plugin.presentation_broker_codec import BrokerFrame, BrokerHeader, encode_frame
 from hmp_plugin.presentation_broker_service import TerminalStatusExchange
+from hmp_plugin.presentation_cancel_budget import CancellationBudget
 from hmp_plugin.presentation_input_v3 import decode_input_v3
 from hmp_plugin.presentation_jobs import FrameError, RemotePhase, State
 from hmp_plugin.presentation_policy_binding import NativePolicyWork
@@ -76,6 +78,8 @@ async def test_native_policy_and_shared_slot_join_one_begin_ready_without_creden
     job = a.owner._resolve(record.handle)
     assert record.remote_operation is job.remote_slot.read() is remote
     assert record.remote_slot is job.remote_slot
+    assert remote._cleanup_budget is record.cleanup_budget is record.cleanup_budget_snapshot
+    assert CancellationBudget.inspect(record.cleanup_budget)[0] == int(record.deadline * 1e9)
     assert job.child is None and job.go_sent is False
     assert a.owner.inspect_remote(record.handle) is RemotePhase.BOUND
     assert work._thread.joined and work.resources_closed
@@ -88,6 +92,23 @@ async def test_native_policy_and_shared_slot_join_one_begin_ready_without_creden
     assert a.owner.inspect_remote(record.handle) is RemotePhase.READY
     assert record.headers is not None and not await a.retire_known(op)
     assert not hasattr(remote, "go") and not hasattr(remote, "release")
+
+
+@pytest.mark.asyncio
+async def test_original_cleanup_cause_blocks_remote_work_without_releasing_native_debt(prepared):
+    authority, operation, native, _, _, _, _, _ = prepared
+    remote = adopt(prepared)
+    record = authority._record(operation)
+    budget = record.cleanup_budget
+    window = CancellationBudget.local(budget, time.monotonic_ns())
+    calls = dict(native.calls)
+    with pytest.raises(AuthorityRefusalError):
+        await remote.begin_ready()
+    assert native.calls == calls
+    assert record.cleanup_budget is budget and remote._cleanup_budget is budget
+    assert CancellationBudget.inspect(budget)[2] == window.end_ns
+    assert authority.owner.inspect(record.handle)[2] is False
+    assert record.headers is not None
 
 
 @pytest.mark.asyncio

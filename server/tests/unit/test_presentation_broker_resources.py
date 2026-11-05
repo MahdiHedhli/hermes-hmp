@@ -18,6 +18,7 @@ from hmp_plugin.presentation_broker_lifecycle import operation_id
 from hmp_plugin.presentation_broker_registry import BrokerRegistry, RegistryStatus
 from hmp_plugin.presentation_broker_resources import BrokerLocalDrainObservation
 from hmp_plugin.presentation_budget import PresentationWorkLedger
+from hmp_plugin.presentation_cancel_budget import CLEANUP_NS, CancellationBudget, CancellationWindow
 from hmp_plugin.presentation_input_v3 import encode_input_v3
 from hmp_plugin.presentation_jobs import FrameError
 from hmp_plugin.presentation_output_v2 import decode_output_v2
@@ -516,8 +517,59 @@ def test_resource_cannot_rebind_a_different_original_child_deadline(synthetic):
             profile="default",
             kind="METADATA",
             deadline_ns=row["deadline_ns"] + 1,
+            cleanup_budget=record.cleanup_budget,
         )
     assert not record.owner._launch_attempted
+
+
+def test_registry_and_resources_share_original_budget_and_shortening(synthetic):
+    registry, ticket, _, row = synthetic()
+    record = registry._records[ticket]
+    budget = record.cleanup_budget
+    assert budget is record.cleanup_budget_snapshot
+    assert CancellationBudget.inspect(budget) == (row["deadline_ns"], None, None, False)
+    registry.start_resources(ticket)
+    resources = record.resources
+    assert resources._cleanup_budget is resources._cleanup_budget_snapshot is budget
+    first = CancellationBudget.local(budget, time.monotonic_ns())
+    registry.abort_resources(ticket)
+    assert resources._cleanup_end_ns == first.end_ns
+    earlier = CancellationWindow(first.start_ns - 1_000_000, first.end_ns - 1_000_000)
+    CancellationBudget.inherit(budget, earlier, time.monotonic_ns())
+    registry.abort_resources(ticket)
+    assert resources._cleanup_end_ns == earlier.end_ns
+    assert cleanup(registry, ticket)
+    assert resources._cleanup_end_ns == earlier.end_ns
+
+
+def test_original_cleanup_before_resource_start_prevents_launch(synthetic):
+    registry, ticket, _, _ = synthetic()
+    record = registry._records[ticket]
+    CancellationBudget.local(record.cleanup_budget, time.monotonic_ns())
+    with pytest.raises(FrameError):
+        registry.start_resources(ticket)
+    assert not record.owner._launch_attempted
+
+
+def test_different_budget_cannot_attach_even_with_identical_deadline(synthetic):
+    registry, ticket, b, row = synthetic()
+    record = registry._records[ticket]
+    with pytest.raises(FrameError):
+        module.BrokerReaderResources(record, record.owner, binding=b, profile="default",
+            kind="METADATA", deadline_ns=row["deadline_ns"],
+            cleanup_budget=CancellationBudget(row["deadline_ns"]))
+    assert not record.owner._launch_attempted
+
+
+def test_late_abort_is_capped_by_original_end_not_a_fresh_interval(synthetic, monkeypatch):
+    registry, ticket, _, row = synthetic()
+    registry.start_resources(ticket)
+    resources = registry._records[ticket].resources
+    monkeypatch.setattr(module.time, "monotonic_ns", lambda: row["deadline_ns"] + 1_000_000_000)
+    registry.abort_resources(ticket)
+    assert resources._cleanup_end_ns == row["deadline_ns"] + CLEANUP_NS
+    monkeypatch.setattr(resources._process, "terminate_once", lambda: pytest.fail("late signal"))
+    assert not registry.poll_resource_cleanup(ticket)
 
 
 @pytest.mark.parametrize("action", ["duplicate_input", "duplicate_go", "go_before_input"])

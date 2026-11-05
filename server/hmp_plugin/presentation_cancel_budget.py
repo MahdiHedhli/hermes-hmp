@@ -7,7 +7,9 @@ wire values. The current v1 service does neither and cannot use this as admissio
 from __future__ import annotations
 
 import struct
+import threading
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from .presentation_jobs import FrameError
 
@@ -46,61 +48,162 @@ class CancellationWindow:
         return cls(*struct.unpack(">QQ", body))
 
 
-class CancellationBudget:
-    """One owner per operation; every cause shortens the same frozen deadline.
+class BudgetBusyError(FrameError):
+    """A read raced publication; no state/provenance failure is established."""
 
-    Explicit clock samples make this arithmetic testable, not authenticated. No
-    tolerance accepts future starts. A late local cause is capped at the original
-    work deadline. Failure is sticky; retained end remains diagnostic, not proof.
-    This owner is confined to its event-loop thread; it is not a shared lock.
+
+class _BudgetState(NamedTuple):
+    mint: object
+    generation: int
+    last: int | None
+    end: int | None
+
+
+class CancellationBudget:
+    """One event-loop owner; immutable snapshots permit policy-thread reads.
+
+    Exact samples are arithmetic, not clock attestation. All mutations stay on
+    the creating thread. Minted generations prevent torn or replaced snapshots.
+    Failure is sticky; diagnostic deadlines are never authority or drain proof.
     """
+
+    __slots__ = (
+        "_generation", "_integrity_lost", "_mint", "_owner_thread", "_publishing", "_state",
+        "_state_snapshot",
+        "_work_end_ns", "_work_end_snapshot",
+    )
 
     def __init__(self, work_end_ns: int):
         _ns(work_end_ns)
         if work_end_ns == 0 or work_end_ns > MAX_NS - CLEANUP_NS:
             _refuse()
-        self._work_end_ns = work_end_ns
-        self._last_ns: int | None = None
-        self._end_ns: int | None = None
-        self._failed = False
+        self._work_end_ns = self._work_end_snapshot = work_end_ns
+        self._mint = object()
+        self._generation = 0
+        self._publishing = False
+        self._state = self._state_snapshot = _BudgetState(self._mint, 0, None, None)
+        self._owner_thread = threading.get_ident()
+        self._integrity_lost = False
 
-    def _sample(self, now_ns: int) -> None:
+    def inspect(self) -> tuple[int, int | None, int | None, bool]:
+        """Consistent minted generation; racing readers refuse without poisoning."""
         try:
-            _ns(now_ns)
-            if self._failed or (self._last_ns is not None and now_ns < self._last_ns):
+            work_end = self._work_end_ns
+            _ns(work_end)
+            if (work_end is not self._work_end_snapshot
+                    or not 0 < work_end <= MAX_NS - CLEANUP_NS
+                    or type(self._owner_thread) is not int or type(self._mint) is not object
+                    or type(self._integrity_lost) is not bool):
                 _refuse()
-        except FrameError:
-            self._failed = True
+            for _ in range(3):
+                if type(self._publishing) is not bool:
+                    _refuse()
+                if self._publishing:
+                    raise BudgetBusyError("BI1_CANCELLATION_BUDGET_BUSY")
+                state, snapshot, generation = self._state, self._state_snapshot, self._generation
+                valid = (type(state) is _BudgetState and type(generation) is int
+                         and state is snapshot
+                         and 0 <= generation < 1 << 63 and state.mint is self._mint
+                         and type(state.generation) is int and state.generation == generation
+                         and (state.last is None or type(state.last) is int)
+                         and (state.end is None or type(state.end) is int))
+                if (self._publishing is not False or self._state is not state
+                        or self._state_snapshot is not snapshot
+                        or self._generation is not generation):
+                    continue
+                if not valid:
+                    _refuse()
+                last, end = state.last, state.end
+                if last is not None:
+                    _ns(last)
+                if end is not None:
+                    _ns(end)
+                    if not CLEANUP_NS <= end <= work_end + CLEANUP_NS:
+                        _refuse()
+                return work_end, last, end, self._integrity_lost is not False
+            raise BudgetBusyError("BI1_CANCELLATION_BUDGET_BUSY")
+        except BudgetBusyError:
             raise
-        self._last_ns = now_ns
+        except BaseException:
+            self._integrity_lost = True
+            raise FrameError("BI1_CANCELLATION_BUDGET_REFUSED") from None
+
+    def refuse(self) -> None:
+        """Only an irreversible failure latch; never a new time allowance."""
+        self._integrity_lost = True
+
+    def _publish(self, now_ns: int, end_ns: int) -> None:
+        if self._publishing is not False or type(self._generation) is not int:
+            self._integrity_lost = True
+            _refuse()
+        self._publishing = True
+        try:
+            generation = self._generation + 1
+            if generation >= 1 << 63:
+                _refuse()
+            state = _BudgetState(self._mint, generation, now_ns, end_ns)
+            self._generation = generation
+            self._state = state
+            self._state_snapshot = state
+        except BaseException:
+            self._integrity_lost = True
+            raise FrameError("BI1_CANCELLATION_BUDGET_REFUSED") from None
+        finally:
+            self._publishing = False
+
+    @property
+    def _last_ns(self):
+        return CancellationBudget.inspect(self)[1]
+
+    @property
+    def _end_ns(self):
+        return CancellationBudget.inspect(self)[2]
+
+    @property
+    def _failed(self):
+        return CancellationBudget.inspect(self)[3]
+
+    def _sample(self, now_ns: int) -> tuple[int, int | None]:
+        try:
+            work_end, last, end, failed = CancellationBudget.inspect(self)
+            owner = self._owner_thread
+            if type(owner) is not int or threading.get_ident() != owner or failed:
+                _refuse()
+            _ns(now_ns)
+            if last is not None and now_ns < last:
+                _refuse()
+            return work_end, end
+        except BaseException:
+            self._integrity_lost = True
+            raise FrameError("BI1_CANCELLATION_BUDGET_REFUSED") from None
 
     def local(self, now_ns: int) -> CancellationWindow:
-        """EOF, timeout and revocation all use this same first-cause owner."""
-        self._sample(now_ns)
-        start = min(now_ns, self._work_end_ns)
-        window = CancellationWindow(start, start + CLEANUP_NS)
-        self._shorten(window.end_ns)
-        return CancellationWindow(self._end_ns - CLEANUP_NS, self._end_ns)
+        """EOF, timeout and revocation shorten the same original first cause."""
+        work_end, old_end = CancellationBudget._sample(self, now_ns)
+        end = min(now_ns, work_end) + CLEANUP_NS
+        if old_end is not None:
+            end = min(old_end, end)
+        CancellationBudget._publish(self, now_ns, end)
+        return CancellationWindow(end - CLEANUP_NS, end)
 
     def inherit(self, window: CancellationWindow, now_ns: int) -> None:
-        self._sample(now_ns)
+        work_end, old_end = CancellationBudget._sample(self, now_ns)
         try:
             if type(window) is not CancellationWindow:
                 _refuse()
-            window.__post_init__()
-            if window.start_ns > now_ns or window.start_ns > self._work_end_ns:
+            CancellationWindow.__post_init__(window)
+            if window.start_ns > now_ns or window.start_ns > work_end:
                 _refuse()
-        except FrameError:
-            self._failed = True
-            raise
-        self._shorten(window.end_ns)
-
-    def _shorten(self, end_ns: int) -> None:
-        self._end_ns = end_ns if self._end_ns is None else min(self._end_ns, end_ns)
+            end = window.end_ns if old_end is None else min(old_end, window.end_ns)
+            CancellationBudget._publish(self, now_ns, end)
+        except BaseException:
+            self._integrity_lost = True
+            raise FrameError("BI1_CANCELLATION_BUDGET_REFUSED") from None
 
     def remaining_ns(self, now_ns: int) -> int:
-        self._sample(now_ns)
-        if self._end_ns is None:
-            self._failed = True
+        _, end = CancellationBudget._sample(self, now_ns)
+        if end is None:
+            self._integrity_lost = True
             _refuse()
-        return max(0, self._end_ns - now_ns)
+        CancellationBudget._publish(self, now_ns, end)
+        return max(0, end - now_ns)

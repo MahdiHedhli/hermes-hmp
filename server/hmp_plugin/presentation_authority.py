@@ -10,12 +10,14 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import math
 import time
 from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass
 from typing import Protocol
 
+from .presentation_cancel_budget import CLEANUP_NS, MAX_NS, CancellationBudget
 from .presentation_jobs import (
     JOB_SECONDS,
     MAX_PROCESSES,
@@ -186,6 +188,9 @@ class _Record:
     native_owner: object
     owner: JobOwner
     deadline: float
+    cleanup_budget: CancellationBudget
+    cleanup_budget_snapshot: CancellationBudget
+    cleanup_sampling: bool = False
     child: object | None = None
     initial_home: str | None = None
     initial_complete: bool = False
@@ -317,10 +322,25 @@ class ParentAuthorityAdapter:
             or not now + JOB_SECONDS < float("inf")
         ):
             raise AuthorityRefusalError
+        original_deadline = now + JOB_SECONDS
+        try:
+            original_end = int(original_deadline * 1_000_000_000)
+            if not 0 < original_end <= MAX_NS - CLEANUP_NS:
+                raise AuthorityRefusalError
+        except (OverflowError, ValueError):
+            raise AuthorityRefusalError from None
         try:
             handle = self.owner.queue(lease, operation)
         except FrameError:
             raise AuthorityRefusalError from None
+        # Resolve the earliest original ceiling once, before native observation
+        # or parent policy work. JobOwner's later sample cannot extend it.
+        job_deadline = self.owner._resolve(handle).deadline
+        if type(job_deadline) not in (int, float) or not 0 < job_deadline < float("inf"):
+            self.owner.unknown(handle)
+            raise AuthorityRefusalError
+        deadline = min(original_deadline, job_deadline)
+        budget = CancellationBudget(int(deadline * 1_000_000_000))
         opaque = OpaqueOperation()
         record = _Record(
             opaque,
@@ -335,7 +355,9 @@ class ParentAuthorityAdapter:
             identity,
             native_owner,
             self.owner,
-            now + JOB_SECONDS,
+            deadline,
+            budget,
+            budget,
         )
         record.remote_slot = record.remote_slot_snapshot = self.owner.remote_slot(handle)
         record._custody_snapshot = (self.owner, handle, fence)
@@ -346,7 +368,24 @@ class ParentAuthorityAdapter:
     def handle(self, operation: OpaqueOperation) -> JobHandle:
         return self._record(operation).handle
 
+    def _budget_current(self, record: _Record) -> bool:
+        try:
+            if (type(record) is not _Record
+                    or type(record.deadline) not in (float, int)
+                    or not 0 < record.deadline < float("inf")
+                    or type(record.cleanup_budget) is not CancellationBudget
+                    or record.cleanup_budget is not record.cleanup_budget_snapshot):
+                return False
+            end, _, cleanup_end, failed = CancellationBudget.inspect(record.cleanup_budget)
+            if end != int(record.deadline * 1_000_000_000) or cleanup_end is not None or failed:
+                return False
+        except (FrameError, OverflowError, TypeError, ValueError):
+            return False
+        return True
+
     def _current(self, record: _Record) -> bool:
+        if not ParentAuthorityAdapter._budget_current(self, record):
+            return False
         if self.disabled or self._by_operation.get(record.operation) is not record:
             return False
         if not record.fence.current or record.fence.epoch != record.fence_epoch:
@@ -360,6 +399,7 @@ class ParentAuthorityAdapter:
         # The clock is foreign code: revalidate local authority after it returns.
         return (
             type(now) in (float, int)
+            and ParentAuthorityAdapter._budget_current(self, record)
             and 0 <= now < record.deadline
             and not self.disabled
             and self._by_operation.get(record.operation) is record
@@ -677,13 +717,47 @@ class ParentAuthorityAdapter:
 
     def cancel(self, operation: OpaqueOperation) -> None:
         record = self._record(operation)
+        snapshot = record._custody_snapshot
+        budget = record.cleanup_budget_snapshot
+        if (type(snapshot) is not tuple or len(snapshot) != 3
+                or type(snapshot[0]) is not JobOwner or type(snapshot[1]) is not JobHandle
+                or type(snapshot[2]) is not ListenerFence
+                or type(budget) is not CancellationBudget):
+            self._unknown(record)
+            return
+        owner, handle, fence = snapshot
+        ListenerFence.retire(fence)  # revoke work before the foreign clock boundary
+        record.permit = None
+        if record.cleanup_sampling is not False:
+            CancellationBudget.refuse(budget)
+            self._unknown(record)
+            return
+        record.cleanup_sampling = True
+        try:
+            original, _, _, failed = CancellationBudget.inspect(budget)
+            if (record.cleanup_budget is not budget or failed
+                    or type(record.deadline) not in (int, float)
+                    or not math.isfinite(record.deadline)
+                    or original != int(record.deadline * 1_000_000_000)):
+                raise AuthorityRefusalError
+            now = self._clock()
+            if (type(now) not in (int, float) or not math.isfinite(now)
+                    or record.cleanup_budget is not budget
+                    or record.cleanup_budget_snapshot is not budget
+                    or record.cleanup_sampling is not True):
+                raise AuthorityRefusalError
+            CancellationBudget.local(budget, int(now * 1_000_000_000))
+        except BaseException:
+            CancellationBudget.refuse(budget)
+            self._unknown(record)
+            return
+        finally:
+            record.cleanup_sampling = False
         if record.native_claim is not None:
             # Native completion is not established by cancellation of the awaiter.
             self._unknown(record)
             return
-        record.fence.retire()
-        record.permit = None
-        record.owner.cancel(record.handle)
+        JobOwner.cancel(owner, handle)
 
     def drain_cancelled_reader(
         self,

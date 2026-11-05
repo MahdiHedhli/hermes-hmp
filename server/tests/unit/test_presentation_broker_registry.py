@@ -440,3 +440,25 @@ def test_deadline_crossing_inside_spawn_keeps_owner_and_refuses_normal_return(
     assert record.owner._child_snapshot is fake_children[0]
     assert registry.counts.active == 1 and registry.counts.unknown == 1
     assert registry.status(b) is RegistryStatus.PENDING
+
+
+@pytest.mark.parametrize("method", ["start", "resources_startable", "start_resources"])
+@pytest.mark.parametrize("during_clock", [False, True])
+def test_cancelled_budget_never_admits_launch_or_capacity(
+    monkeypatch, fake_children, method, during_clock
+):
+    from hmp_plugin.presentation_cancel_budget import CancellationBudget
+    registry = BrokerRegistry(binding())
+    _, ticket = reserve(registry)
+    record = registry._records[ticket]
+    now = time.monotonic_ns()
+    if during_clock:
+        def cause():
+            CancellationBudget.local(record.cleanup_budget, now)
+            return now
+        monkeypatch.setattr(module.time, "monotonic_ns", cause)
+    else:
+        CancellationBudget.local(record.cleanup_budget, now)
+    with pytest.raises(FrameError):
+        getattr(registry, method)(ticket)
+    assert fake_children == []

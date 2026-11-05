@@ -13,6 +13,7 @@ from contextlib import suppress
 from .presentation_authority import AuthorityRefusalError, OpaqueOperation, ParentAuthorityAdapter
 from .presentation_broker_codec import BrokerBinding, BrokerFrame, BrokerHeader, _binding
 from .presentation_broker_service import SocketChannel, _task_allows_work
+from .presentation_cancel_budget import CancellationBudget
 from .presentation_input_v3 import decode_input_v3
 from .presentation_jobs import CapturedLease, JobHandle, JobOwner, RemotePhase, State
 from .presentation_parent_policy import ParentPolicyReadOwner
@@ -41,6 +42,7 @@ class RemoteOperationOwner:
         self._seal = self._seal_snapshot = None
         self._loop = self._loop_snapshot = None
         self._context = self._context_snapshot = None
+        self._cleanup_budget = self._cleanup_budget_snapshot = None
         try:
             self._loop = self._loop_snapshot = asyncio.get_running_loop()
             self._context = self._context_snapshot = (os.getpid(), os.geteuid())
@@ -78,6 +80,12 @@ class RemoteOperationOwner:
             self._values = self._values_snapshot = (
                 binding.iid, binding.listener, binding.broker, binding.channel, binding.operation)
             self._end = self._end_snapshot = int(record.deadline * 1_000_000_000)
+            budget = record.cleanup_budget
+            if (type(budget) is not CancellationBudget
+                    or budget is not record.cleanup_budget_snapshot
+                    or CancellationBudget.inspect(budget) != (self._end, None, None, False)):
+                raise AuthorityRefusalError
+            self._cleanup_budget = self._cleanup_budget_snapshot = budget
             root, native_home, profile, uid, gid = work._scope
             if (row["iid"] != record.lease.iid or binding.iid != record.lease.iid
                     or row["profile"] != record.lease.profile or profile != record.lease.profile
@@ -115,7 +123,7 @@ class RemoteOperationOwner:
                 c._values, c._socket, c._identity, c._endpoint, c._observation,
                 work._thread, work._policy, work._scope, r.listener, r.fence,
                 r.fence_epoch, r.store, r.bridge, r.identity, r.native_owner, r.headers,
-                r._custody_snapshot)
+                r._custody_snapshot, r.cleanup_budget)
 
     def __repr__(self):
         return "<RemoteOperationOwner redacted>"
@@ -158,7 +166,11 @@ class RemoteOperationOwner:
                     or self._values is not self._values_snapshot or type(self._values) is not tuple
                     or len(self._values) != 5 or any(type(v) is not str for v in self._values)
                     or self._seal is not self._seal_snapshot or type(self._seal) is not tuple
-                    or len(self._seal) != 25
+                    or len(self._seal) != 26
+                    or type(self._cleanup_budget) is not CancellationBudget
+                    or self._cleanup_budget is not self._cleanup_budget_snapshot
+                    or r.cleanup_budget is not self._cleanup_budget
+                    or r.cleanup_budget is not r.cleanup_budget_snapshot
                     or self._lease_values is not self._lease_values_snapshot
                     or type(self._lease_values) is not tuple or len(self._lease_values) != 8
                     or self._end is not self._end_snapshot or type(self._end) is not int

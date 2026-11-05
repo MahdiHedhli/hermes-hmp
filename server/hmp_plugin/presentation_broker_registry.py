@@ -19,6 +19,7 @@ from .presentation_broker_child import BrokerChildOwner, BrokerReaderStreams
 from .presentation_broker_codec import BrokerBinding, _binding
 from .presentation_broker_lifecycle import ReplayWindow
 from .presentation_broker_resources import BrokerReaderResources
+from .presentation_cancel_budget import CancellationBudget
 from .presentation_child_launch import ChildLaunch, child_launch, parser_package_path
 from .presentation_jobs import (
     _PROFILE,
@@ -64,6 +65,8 @@ class _Record:
     kind: str
     deadline_ns: int
     snapshot: tuple[str | int, ...]
+    cleanup_budget: CancellationBudget
+    cleanup_budget_snapshot: CancellationBudget
     owner: BrokerChildOwner | None = None
     owner_snapshot: BrokerChildOwner | None = None
     state: _State = _State.QUEUED
@@ -238,6 +241,9 @@ class BrokerRegistry:
                 or _values(record.binding, record.profile, record.kind, record.deadline_ns)
                 != record.snapshot
                 or record.snapshot[:3] != self._scope
+                or type(record.cleanup_budget) is not CancellationBudget
+                or record.cleanup_budget is not record.cleanup_budget_snapshot
+                or CancellationBudget.inspect(record.cleanup_budget)[0] != record.deadline_ns
                 or self._operations.get(record.binding.operation) is not ticket
                 or type(record.state) is not _State
                 or type(record.start_attempted) is not bool
@@ -250,6 +256,9 @@ class BrokerRegistry:
                     and type(record.resources) is not BrokerReaderResources
                 )
                 or (record.resources_ready and (not record.managed or record.resources is None))
+                or (record.resources_ready and
+                    (record.resources._cleanup_budget is not record.cleanup_budget
+                     or record.resources._cleanup_budget_snapshot is not record.cleanup_budget))
                 or (record.resources is not None and not record.managed)
                 or record.owner is not record.owner_snapshot
                 or (record.owner is not None and type(record.owner) is not BrokerChildOwner)
@@ -330,7 +339,9 @@ class BrokerRegistry:
                 raise FrameError("BI1_BROKER_REGISTRY_ADMISSION_REFUSED")
             copied = BrokerBinding(*values[:5])
             ticket = BrokerTicket()
-            record = _Record(copied, profile, kind, deadline_ns, values, unknown=True)
+            budget = CancellationBudget(deadline_ns)
+            record = _Record(
+                copied, profile, kind, deadline_ns, values, budget, budget, unknown=True)
             self._records[ticket] = record
             self._operations[copied.operation] = ticket
             try:
@@ -354,6 +365,11 @@ class BrokerRegistry:
             raise FrameError("BI1_BROKER_REGISTRY_TICKET_REFUSED")
         return self._records[ticket]
 
+    @staticmethod
+    def _work_budget(record: _Record) -> bool:
+        end, _, cause, failed = CancellationBudget.inspect(record.cleanup_budget)
+        return end == record.deadline_ns and cause is None and not failed
+
     def start(self, ticket: BrokerTicket) -> BrokerReaderStreams:
         self._enter()
         try:
@@ -365,6 +381,7 @@ class BrokerRegistry:
                 or record.unknown
                 or record.owner is None
                 or record.start_attempted
+                or not BrokerRegistry._work_budget(record)
                 or time.monotonic_ns() >= record.deadline_ns
                 or counts.active >= MAX_PROCESSES
                 or (record.kind == "METADATA" and counts.metadata >= MAX_METADATA)
@@ -383,10 +400,14 @@ class BrokerRegistry:
                 self._check()
                 if time.monotonic_ns() >= record.deadline_ns:
                     raise FrameError("BI1_BROKER_REGISTRY_START_DEADLINE")
+                if not BrokerRegistry._work_budget(record):
+                    raise FrameError("BI1_BROKER_REGISTRY_START_REFUSED")
                 record.owner.start()
                 self._check()
                 if time.monotonic_ns() >= record.deadline_ns:
                     raise FrameError("BI1_BROKER_REGISTRY_START_DEADLINE")
+                if not BrokerRegistry._work_budget(record):
+                    raise FrameError("BI1_BROKER_REGISTRY_START_REFUSED")
                 return record.owner.streams
             except BaseException:
                 record.unknown = True
@@ -401,9 +422,12 @@ class BrokerRegistry:
             record = self._record(ticket)
             if (record.state is not _State.QUEUED or record.unknown or record.managed
                     or record.start_attempted or record.owner is None
+                    or not BrokerRegistry._work_budget(record)
                     or time.monotonic_ns() >= record.deadline_ns):
                 raise FrameError("BI1_BROKER_REGISTRY_START_REFUSED")
             counts = self._counts()
+            if not BrokerRegistry._work_budget(record):
+                raise FrameError("BI1_BROKER_REGISTRY_START_REFUSED")
             return (counts.active < MAX_PROCESSES
                     and (record.kind != "METADATA" or counts.metadata < MAX_METADATA)
                     and (record.kind != "AVATAR" or counts.avatar < MAX_AVATAR)
@@ -423,6 +447,7 @@ class BrokerRegistry:
                 or record.managed
                 or record.owner is None
                 or record.start_attempted
+                or not BrokerRegistry._work_budget(record)
                 or time.monotonic_ns() >= record.deadline_ns
                 or counts.active >= MAX_PROCESSES
                 or (record.kind == "METADATA" and counts.metadata >= MAX_METADATA)
@@ -444,6 +469,7 @@ class BrokerRegistry:
                     profile=record.profile,
                     kind=record.kind,
                     deadline_ns=record.deadline_ns,
+                    cleanup_budget=record.cleanup_budget,
                 )
                 record.resources_ready = True
                 self._check()
@@ -451,11 +477,16 @@ class BrokerRegistry:
                 record.start_attempted = True
                 if time.monotonic_ns() >= record.deadline_ns:
                     raise FrameError("BI1_BROKER_REGISTRY_START_DEADLINE")
+                if not BrokerRegistry._work_budget(record):
+                    raise FrameError("BI1_BROKER_REGISTRY_START_REFUSED")
                 resources.start()
                 self._check()
                 if time.monotonic_ns() >= record.deadline_ns:
                     resources.abort()
                     raise FrameError("BI1_BROKER_REGISTRY_START_DEADLINE")
+                if not BrokerRegistry._work_budget(record):
+                    resources.abort()
+                    raise FrameError("BI1_BROKER_REGISTRY_START_REFUSED")
             except BaseException:
                 record.unknown = True
                 raise FrameError("BI1_BROKER_REGISTRY_START_UNCERTAIN") from None

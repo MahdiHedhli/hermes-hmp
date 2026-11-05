@@ -3,7 +3,8 @@
 ## Implemented boundary
 
 `presentation_cancel_budget.py` defines a fixed 250 ms cancellation window and
-one event-loop-confined minimum owner per operation. Values use exact integers
+one creating-thread-confined minimum owner per operation, with consistent
+read-only policy-thread inspection. Values use exact integers
 in the existing signed-63-bit monotonic domain. The work deadline reserves room
 for the cleanup interval; overflow, coercion, wrong length, future inherited
 starts and starts beyond the original work deadline refuse. Sampling tolerance
@@ -25,6 +26,33 @@ Explicit startup enrollment can now select v2 framing with a retained native
 clock; the [selected-protocol boundary](SELECTED_PROTOCOL.md) still refuses v2
 CANCEL and broker work. Existing service paths default to v1. Both-end budget
 adoption is required before cancellation transport can be enabled.
+
+## Original owner binding (source only)
+
+Parent reservation now retains one budget at the earliest original parent/job
+ceiling, before native observation or policy work. The remote owner retains that
+same object and seals its reference. Explicit parent cancellation retires the
+original listener fence before sampling its existing clock and freezes the first
+cause immediately; duplicate or late cancellation cannot renew it. Clock failure,
+reentry or drift retains unknown debt and irreversibly refuses the budget.
+
+Broker reservation likewise retains its budget before child/resource effects.
+Managed resources must adopt exactly that owner and original deadline. Resource
+abort/reentry and cleanup polls shorten or consume the same window, capped at the
+original work end plus 250 ms. Both launch paths and capacity observation refuse
+a caused/failed budget, including after foreign clock callbacks.
+
+Each publication has an immutable named-tuple payload, private mint, increasing
+generation and retained reference. Shape-compatible replacement, old-generation
+rollback and in-place field changes cannot clear the first cause. A policy read
+racing a publication refuses transiently without poisoning; malformed stable
+state and foreign-thread writes irreversibly refuse. This protects the declared
+local reference boundary, not arbitrary hostile Python-memory modification.
+
+This is local custody plumbing, not cross-process clock attestation or a joined
+async cleanup task. Version 2 cancellation transport and broker dispatch remain
+closed. Parent native-policy failures and other future transport causes still
+need the retained cleanup-owner integration; no wire deadline alone is authority.
 
 ## Required transport integration (not implemented or qualified)
 
