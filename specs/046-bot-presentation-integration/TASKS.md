@@ -1,5 +1,10 @@
 # BI1 integration tasks
 
+- [ ] Review and implement the actual trusted startup/runtime issuer, separate
+      from synthetic_no_go inventories and enrollment DATA, together with one
+      actual original-task terminal transcript. See [issuer contract](RUNTIME_ISSUER.md).
+      No new permit or dispatch is admitted by this planning item.
+
 - [x] Independently accept bounded cooperative post-GO cleanup reader, owned minimum-deadline wake and adversarial coupling matrix (467 focused cases on Python 3.13); exact source/test scope is in [CLEANUP_READER.md](CLEANUP_READER.md). No image route or terminal authority is enabled.
 
 - [x] Compose existing HMP/mobile presentation foundations with current candidate.
