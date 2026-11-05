@@ -1,5 +1,21 @@
 # Enrolled private service spine — bounded source acceptance
 
+## Actual no-GO service observation — November 5, 2026
+
+One externally supervised Darwin fixture on source head `0bea1c8` / product
+`89734eb` completed real peer/startup enrollment, negative peer/boot checks before
+work, BEGIN/READY, CANCEL/local drain/reader kernel exit, bodyless STATUS PENDING
+with known half-close plus clean EOF, and local shutdown. Registry active PENDING
+ownership remained retained. Exact own-job removal, broker exit, helper wait and
+local cleanup were known; the fixture lock was removed by successful completion.
+Independent artifact review matched all sources and118 private files.
+
+This closes only this bounded no-GO experiment. Original failed-run attribution,
+production startup/runtime, native authority, GO/RESULT/started release, global
+cleanup timing, Linux and physical device qualification remain separate. See
+[observed fixture](SERVICE_PROCESS_FIXTURE.md).
+
+
 ## Terminal STATUS transport repair — November 5, 2026
 
 The dedicated `TerminalStatusExchange` now seals the actual initial peer

@@ -1,3 +1,27 @@
+## Actual no-GO character service pass — November 5, 2026
+
+One reviewed fresh Darwin invocation at source head `0bea1c8` / product `89734eb`
+completed the no-GO transport path: real mutual peer/startup enrollment; wrong-
+process and wrong-boot refusal before work; BEGIN/READY; CANCEL, local drain and
+independent reader kernel exit while registry stayed PENDING. Fresh bodyless
+STATUS PENDING completed through known half-close plus clean EOF. Shutdown closed
+local sockets while retaining active PENDING ownership. Exact temporary job,
+broker/helper and local cleanup were known; no fixture lock remains.
+
+Independent artifact review matched controller/oracle/helper, 93 plugin files and
+17 parser files; all 118 regular evidence files are 0600. This does not establish
+production/runtime admission, native GO/RESULT, started release, global cleanup
+timing, Linux or device qualification. The original failed-run cause stays
+unproven. No live Hermes, grants/providers, real messages or app installs changed.
+
+Hosted CI41996029329 found two Linux test-causal errors (unread reply on close
+causes reset). Reviewed test-only correction `0141adc` consumes the reply before
+clean close and explicitly tests reset refusal; 27 terminal cases pass on both
+Python 3.11/3.14.9. Product code is unchanged from the observed fixture. Corrected
+Linux CI remains separately tracked. Full character rendering/routes/authority
+and host-local images remain required. See the
+[observed fixture](specs/046-bot-presentation-integration/SERVICE_PROCESS_FIXTURE.md).
+
 ## Terminal STATUS repair — November 5, 2026
 
 HMP source `89734eb` adds a dedicated one-use terminal STATUS exchange. It seals

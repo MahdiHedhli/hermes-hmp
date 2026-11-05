@@ -1,4 +1,4 @@
-# Real separate-process no-GO service fixture — candidate
+# Real separate-process no-GO service fixture — bounded Darwin observation
 
 `presentation_service_fixture.py` and `presentation_service_oracle.py` are explicit
 compatibility tools, not production startup or an installed control API. Review
@@ -123,3 +123,32 @@ uses that owner only for bodyless PENDING/UNKNOWN; CLOSED/ACK retains its origin
 authentication requirements.83 focused source cases independently pass, including
 26 terminal cases; no new OS fixture invocation was performed for this change.
 The older retained lock/partial result must not be presented as a pass for it.
+
+## Successful observed invocation — November 5, 2026
+
+One independently reviewed fresh invocation at source head `0bea1c8` (product
+`89734eb`) on selected Python3.14.9/PyYAML6.0.3 completed the full bounded no-GO
+path: actual mutual peer/startup enrollment, wrong-process and wrong-boot refusal
+before work, BEGIN/READY, retained no-GO reader, CANCEL/communication EOF, local
+drain and independent reader kernel exit while registry stayed PENDING.
+
+Fresh bodyless STATUS returned PENDING through known SHUT_WR plus clean EOF; its
+service task completed. Shutdown closed local sockets but retained the active
+PENDING record. Exact owned-job removal, broker kernel exit, helper terminal wait
+and independent local cleanup were known with no errors. The success path removed
+the fixture lock. No GO, native profile read, real bot message, host change or
+phone install occurred. The original failed receipt/homes remain preserved and
+its exact failure cause is still unproven.
+
+Independent artifact review matched controller/oracle/helper to the exact head,
+93 plugin sources to head/product+manifest and17 parser sources to manifest and
+inspected6.0.3. All118 regular evidence files have mode0600. Trusted coordinator
+execution provenance is not loaded-process-image attestation. This bounded result
+does not qualify production startup/runtime, native original authorization,
+GO/RESULT, started release, global250ms cleanup, Linux or signed physical devices.
+
+Hosted CI41996029329 separately reported two Linux test-causal failures: closing
+a client with unread response bytes produces reset instead of clean EOF. The
+reviewed test correction drains the reply before the simulated legitimate close;
+reset remains refusal. That is not a product reset-to-EOF fallback or Linux
+service-manager qualification. Exact corrected-source CI is tracked separately.
