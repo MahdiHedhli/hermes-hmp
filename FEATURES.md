@@ -1,3 +1,15 @@
+## Character reader crash experiment — November 4, 2026
+
+A reviewed temporary launchd fixture now demonstrates why the current new-session
+reader cannot rely on its broker's process-group cleanup: its connection stayed
+open for the two-second observation window after broker death. The shared-group
+fixture reached EOF within0.644ms. Both temporary jobs were removed and separate
+reader connection cleanup was verified.19 focused safety tests and190 composed
+broker cases pass. This is communication evidence, not production process/group
+closure. A reviewed shared-group custody contract and runtime/service qualification
+remain prerequisites; no bot character route or capability has been activated.
+See [experiment and limits](specs/046-bot-presentation-integration/BROKER_CONTAINMENT_PROBE.md).
+
 ## Broker lifecycle and replay controls — November 4, 2026
 
 The reviewed source model now enforces per-direction one-use BEGIN/GO/CANCEL/ACK,

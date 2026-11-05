@@ -22,6 +22,7 @@
 - [x] Review external OS-supervised custodian architecture and implement bounded source-only frame codec (BR1/BR2); no service or remote closure authority.
 - [x] Implement/review read-only broker kernel peer observation with actual Darwin separate-process identity checks (BR4a); no service or endpoint attestation.
 - [x] Implement/review BR3a message grammar and retained64-serial replay window, including sticky scope/role/mode guards; not native/remote custody authority.
+- [x] Implement/review and run bounded BR8a temporary launchd crash fixture; new-session reader socket remains open, shared-group socket EOF observed, own-job/communication cleanup verified. This is not production process closure.
 - [ ] Qualify service-manager crash/orphan containment before broker activation; current direct reader starts a new session, so broker process-group exit is not assumed child closure.
 - [ ] Resolve direct-child native Kanban waitpid(-1) interference through an ownership-aware native contract or a separately reviewed external broker; do not disable Kanban or reinterpret ECHILD as closure.
 - [x] Add reviewed cleanup-only discard after exact child/group/control closure (bf24a54); frozen cleanup budget, actual EOF, buffered wipe and unknown-debt causals.
