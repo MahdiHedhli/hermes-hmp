@@ -1,7 +1,8 @@
 # Next bounded service-containment fixture — November 5, 2026
 
-Status: independently reviewed sequence; implementation and exact observer API/error
-semantics remain open. No job/service is installed or activated by this document.
+Status: independently reviewed sequence; the fixture-only Darwin observer is
+implemented under its [exact contract](DARWIN_PROCESS_EXIT_OBSERVER.md). Full
+service experiment and authenticated control implementation remain open. No job/service is installed or activated by this document.
 Preserve full desktop presentation scope; this is qualification work, not a manual
 snapshot replacement or a production closure certificate.
 
@@ -42,8 +43,8 @@ remote closure, native-resource drain or authorization.
 ## Observer/platform boundaries
 
 Darwin uses a retained kqueue EVFILT_PROC/NOTE_EXIT registration established before
-the stimulus. Freeze exact supported flags/error/registration and ownership
-semantics against current APIs before code. An observed event concerns that
+the stimulus. Its exact flags, receipt/error handling and ownership semantics are
+documented in the observer contract; service identity/control integration remains open. An observed event concerns that
 registration; it is not an owned reap or proof of every descendant's exit.
 
 Linux requires its own reviewed transient user-unit containment/restart policy
