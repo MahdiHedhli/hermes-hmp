@@ -1,8 +1,11 @@
 # Next bounded service-containment fixture — November 5, 2026
 
 Status: independently reviewed sequence; the fixture-only Darwin observer is
-implemented under its [exact contract](DARWIN_PROCESS_EXIT_OBSERVER.md). Full
-service experiment and authenticated control implementation remain open. No job/service is installed or activated by this document.
+implemented under its [exact contract](DARWIN_PROCESS_EXIT_OBSERVER.md). The
+authenticated fixture control and one actual-reader crash experiment are now
+implemented and independently reviewed (`d86d9d4`). Instrumented manager-causality
+and production service qualification remain open. No job/service is installed or
+activated by this document.
 Preserve full desktop presentation scope; this is qualification work, not a manual
 snapshot replacement or a production closure certificate.
 
@@ -55,15 +58,19 @@ Darwin evidence never qualifies systemd or a Linux production service.
 
 ## Acceptance and cleanup
 
-- [ ] Freeze exact observer and authenticated fixture-control contracts.
-- [ ] Actual fixed-reader broker-crash integration, kernel exit versus EOF recorded.
+- [x] Freeze fixture observer and authenticated control contracts; see [crash control](BROKER_CRASH_CONTROL.md).
+- [x] Actual fixed-reader broker-crash integration: both kernel exits and broker-control
+  EOF observed; reader-output EOF explicitly unobserved. One own-label run passed
+  cleanup on `d86d9d4`, with independent artifact/receipt review.
 - [ ] Separate instrumented manager-causality control, bounded independent self-exit.
 - [ ] Causal refusals: wrong job/peer, preexisting exit, observer-registration failure,
   ambiguous bootstrap, deadline-confounded observation and lost crash acknowledgement.
 - [ ] Unrelated process isolation and exact owned-label cleanup.
-- [ ] Kernel exit required for cleanup completion; EOF/job absence alone insufficient.
-  Preserve lock/debt and stop subsequent cases if cleanup is unknown.
-- [ ] Independent review, actual bounded observations, private evidence and source pins.
+- [x] Actual-reader fixture requires both kernel exits and local monitor closure,
+  plus exact owned-job absence, for cleanup; unknown/refusal preserves lock/debt.
+- [x] Independent actual-reader source/receipt/artifact review and private evidence.
+  Oracle/plugin/parser source hashes verified. Controller/observer process-image
+  attestation is not claimed; executing-tool association uses coordinator provenance.
 
 Service production admission, complete runtime/native-library qualification,
 peer/boot binding, original phone/native authorization, started terminal release,

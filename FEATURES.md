@@ -1,3 +1,31 @@
+## Actual character-reader crash integration — November 5, 2026
+
+Source `d86d9d4` composes a private verified installation, actual retained registry
+and fixed reader with authenticated fixture crash control. One explicitly invoked
+new-label Darwin experiment passed: broker self-crash was acknowledged, broker-
+control EOF observed, and kernel broker/reader exits read about 7.56/9.20 ms after
+the request. Exact temporary job removal, both kernel exits and both monitor
+closures were independently recorded; no fixture lock/debt remains.
+
+Independent source/model review passes 17 causal cases, including absolute
+protocol deadlines, diagnostic failure, partial observer acquisition and independent
+cleanup failures. Complete serial Python 3.11 and 3.14.9 regression runs each pass
+918 tests plus 66 subtests; lint, plugin surface and privacy scans pass. Independent
+artifact review matched oracle and 92 plugin files to the commit and 17 parser
+files to the manifest. Executing controller/observer association relies on the
+coordinator run provenance, not process-image attestation. Prior observer source
+`1996c03` now passes all jobs in hosted CI41976012240. New source CI is separate.
+
+The reader may exit voluntarily when broker death closes stdin: manager kill
+causality remains unproven. Reader-output EOF is explicitly unobserved; its pipe
+ends belonged to the broker. The next control must separately test the manager
+with a bounded reader that cannot exit from stdin EOF during the window. This
+result is neither production containment nor Linux qualification. Runtime/native
+library admission, transport/native authorization, started release, routes and
+signed physical parity remain open. No existing Hermes host, provider, grant,
+phone installation or actual bot data was touched. Full desktop character scope
+and host-local images remain in the active goal. See [crash control](specs/046-bot-presentation-integration/BROKER_CRASH_CONTROL.md).
+
 ## Character containment observer — November 5, 2026
 
 Fixture source `1996c03` adds a retained Darwin kernel process-exit observer.
