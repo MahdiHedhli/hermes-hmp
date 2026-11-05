@@ -1,7 +1,8 @@
 """Bounded broker frame correlation, not peer authentication or custody proof.
 
-No service imports this. Lifecycle sequencing, original native authority, actual
-bounded transport reads and broker runtime/endpoint integrity remain unbound.
+The private service spine composes bounded reads and lifecycle sequencing.
+Production startup/runtime, original native authority and terminal remote custody
+remain unqualified; frame correlation alone cannot activate a capability.
 """
 
 from __future__ import annotations
@@ -153,6 +154,20 @@ def _constant(value: str) -> None:
 
 
 def decode_header(data: bytes, *, expected: BrokerBinding) -> BrokerHeader:
+    """Match one closed canonical header to exact operation correlation."""
+    return _decode_header(data, expected=expected, scope_only=False)
+
+
+def decode_scope_header(data: bytes, *, expected_scope: BrokerBinding) -> BrokerHeader:
+    """Server header only: match enrolled iid/listener/boot before body receive.
+
+    Channel/operation remain untrusted correlation, subject to grammar and the
+    one shared registry's replay/capacity admission. No enrollment from frames.
+    """
+    return _decode_header(data, expected=expected_scope, scope_only=True)
+
+
+def _decode_header(data: bytes, *, expected: BrokerBinding, scope_only: bool) -> BrokerHeader:
     """Validate correlation and body bounds BEFORE a transport receives that body.
 
     Requires exactly prefix+header, not body bytes. It does not authenticate a
@@ -174,7 +189,12 @@ def decode_header(data: bytes, *, expected: BrokerBinding) -> BrokerHeader:
     binding = BrokerBinding(
         row["iid"], row["listener"], row["broker"], row["channel"], row["operation"]
     )
-    if binding != expected:
+    if scope_only:
+        if (binding.iid, binding.listener, binding.broker) != (
+            expected.iid, expected.listener, expected.broker
+        ):
+            _fail()
+    elif binding != expected:
         _fail()
     header = BrokerHeader(binding, row["kind"], row["sequence"], row["body_length"])
     if raw != _canonical(_row(header)):

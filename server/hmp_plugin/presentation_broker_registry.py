@@ -1,8 +1,9 @@
 """Source-only broker admission/retention, never phone rights or remote closure.
 
-No service imports this. Outer authenticated original/STATUS grammar is mandatory
-before lookup/ACK. Started owners have deliberately NO terminal-release API until
-the separately reviewed actual resource binder exists. Keep this registry alive.
+The private service spine composes this with authenticated original/STATUS grammar.
+Started owners have deliberately NO terminal-release API until local resource
+observations join qualified boot/runtime/native custody. Keep this registry alive;
+the source-only spine does not establish production admission.
 """
 
 from __future__ import annotations
@@ -390,6 +391,24 @@ class BrokerRegistry:
             except BaseException:
                 record.unknown = True
                 raise FrameError("BI1_BROKER_REGISTRY_START_UNCERTAIN") from None
+        finally:
+            self._lock.release()
+
+    def resources_startable(self, ticket: BrokerTicket) -> bool:
+        """Capacity-only queue observation; no launch, new budget or authority."""
+        self._enter()
+        try:
+            record = self._record(ticket)
+            if (record.state is not _State.QUEUED or record.unknown or record.managed
+                    or record.start_attempted or record.owner is None
+                    or time.monotonic_ns() >= record.deadline_ns):
+                raise FrameError("BI1_BROKER_REGISTRY_START_REFUSED")
+            counts = self._counts()
+            return (counts.active < MAX_PROCESSES
+                    and (record.kind != "METADATA" or counts.metadata < MAX_METADATA)
+                    and (record.kind != "AVATAR" or counts.avatar < MAX_AVATAR)
+                    and not any(r.state is _State.ACTIVE and r.profile == record.profile
+                                for r in self._records.values()))
         finally:
             self._lock.release()
 
