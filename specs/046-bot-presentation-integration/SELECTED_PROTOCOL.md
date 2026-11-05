@@ -22,6 +22,12 @@ STATUS/ACK lifecycle and broker work dispatch remain explicitly refused until
 the original-budget and cleanup-owner integration below is complete. This is
 not a deployed capability or an alternative to the complete character feature.
 
+The subsequent [exclusive CANCEL receiver](INHERITED_CANCEL.md) now has selected
+version2 grammar and bounded semantic budget adoption. Ordinary channel CANCEL
+and service v2 dispatch remain refused until its gateway sender and service
+retirement are joined. No competing general reader or terminal owner may reuse
+an adopted receiver channel.
+
 ## Separate local closure facts
 
 SocketChannel.close still observes socket closure only. close_clock separately

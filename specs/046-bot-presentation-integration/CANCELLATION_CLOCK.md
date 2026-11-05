@@ -25,7 +25,9 @@ the default; a selected receiver refuses a different version without fallback.
 Explicit startup enrollment can now select v2 framing with a retained native
 clock; the [selected-protocol boundary](SELECTED_PROTOCOL.md) still refuses v2
 CANCEL and broker work. Existing service paths default to v1. Both-end budget
-adoption is required before cancellation transport can be enabled.
+adoption is required before cancellation transport can be enabled. The
+[exclusive broker receiver source](INHERITED_CANCEL.md) now adopts the inherited
+minimum on its existing budget, but gateway send/service dispatch remain closed.
 
 ## Original owner binding (source only)
 

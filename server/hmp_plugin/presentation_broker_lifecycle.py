@@ -104,12 +104,17 @@ class OperationGrammar:
     native freshness, body validation, global ACK and actual cleanup live outside.
     """
 
-    def __init__(self, binding: BrokerBinding, *, role: str, mode: str = "operation"):
+    def __init__(self, binding: BrokerBinding, *, role: str, mode: str = "operation",
+                 protocol_version: int = 1):
         _binding(binding)
         if type(role) is not str or role not in ("gateway", "broker"):
             _fail()
         if type(mode) is not str or mode not in ("operation", "status"):
             _fail()
+        if (type(protocol_version) is not int or protocol_version not in (1, 2)
+                or (protocol_version == 2 and mode != "operation")):
+            _fail()
+        self._version = self._version_snapshot = protocol_version
         _serial(binding.operation)
         self._binding = binding
         self._role = role
@@ -150,10 +155,23 @@ class OperationGrammar:
             return False
         return (
             all(type(value) is str for value in values)
+            and type(self._role) is str and type(self._mode) is str
+            and type(self._binding_values) is tuple and len(self._binding_values) == 5
+            and all(type(value) is str for value in self._binding_values)
+            and type(self._role_snapshot) is str and type(self._mode_snapshot) is str
+            and type(self._client_next) is int and 0 <= self._client_next <= _SERIAL_MAX + 1
+            and type(self._broker_next) is int and 0 <= self._broker_next <= _SERIAL_MAX + 1
+            and all(type(v) is bool for v in (self._begun, self._ready, self._go, self._cancel,
+                                             self._acked_message, self._invalidated, self._failed))
+            and (self._terminal_message is None or (type(self._terminal_message) is str
+                 and self._terminal_message in ("RESULT", "CLOSED", "PENDING", "UNKNOWN")))
+            and type(self._version) is int and self._version in (1, 2)
+            and self._version is self._version_snapshot
+            and (self._version != 2 or self._mode == "operation")
             and values == self._binding_values
-            and type(self._role) is str
+            and type(self._role) is str and self._role in ("gateway", "broker")
             and self._role == self._role_snapshot
-            and type(self._mode) is str
+            and type(self._mode) is str and self._mode in ("operation", "status")
             and self._mode == self._mode_snapshot
         )
 
@@ -179,7 +197,7 @@ class OperationGrammar:
             self._failed = True
             _fail()
         try:
-            if self._failed or self._acked_message or not self._configured():
+            if not self._configured() or self._failed or self._acked_message:
                 _fail()
             if type(frame) is not BrokerFrame or type(frame.header) is not BrokerHeader:
                 _fail()
@@ -187,6 +205,9 @@ class OperationGrammar:
             if (
                 type(frame.body) is not bytes
                 or len(frame.body) != frame.header.body_length
+                or type(frame.header.version) is not int
+                or frame.header.version != self._version
+                or (self._version == 2 and frame.header.kind not in ("BEGIN", "READY", "CANCEL"))
                 or frame.header.binding != self._binding
                 or type(sender) is not str
                 or sender not in ("client", "broker")

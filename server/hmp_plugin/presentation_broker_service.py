@@ -137,6 +137,7 @@ class SocketChannel:
         self._close_fact = self._close_fact_snapshot = None
         self._terminal_owner = self._terminal_owner_snapshot = None
         self._remote_owner = self._remote_owner_snapshot = None
+        self._cancel_receiver = self._cancel_receiver_snapshot = None
         self._clock_owner = self._clock_owner_snapshot = None
         self._clock_closed_known = False
         try:
@@ -193,6 +194,13 @@ class SocketChannel:
                  and (self._terminal_owner is None
                       or type(self._terminal_owner) is TerminalStatusExchange))
         _require(self._remote_owner is self._remote_owner_snapshot)
+        _require(self._cancel_receiver is self._cancel_receiver_snapshot)
+        if self._cancel_receiver is not None:
+            from .presentation_broker_cancel import BrokerCancellationOwner
+
+            _require(type(self._cancel_receiver) is BrokerCancellationOwner
+                     and self._role == "broker" and self._enrollment.protocol_version == 2
+                     and self._remote_owner is None and self._terminal_owner is None)
         _require(self._clock_owner is self._clock_owner_snapshot)
         if self._clock_owner is not None:
             from .presentation_clock import NativeClockOwner
@@ -339,6 +347,7 @@ class SocketChannel:
     async def receive(self, end_ns: int, *, expected: BrokerBinding | None = None,
                       owner=None) -> BrokerFrame:
         self._bindings()
+        _require(self._cancel_receiver is None)  # exclusive retained cancellation reader
         if self._terminal_owner is not None:
             self._refused = True
             raise FrameError("BI1_BROKER_TERMINAL_CHANNEL_ADOPTED")

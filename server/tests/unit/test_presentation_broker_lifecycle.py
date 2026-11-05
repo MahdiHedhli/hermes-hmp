@@ -321,3 +321,53 @@ def test_window_scope_rebinding_is_sticky_and_cannot_erase_history():
     window._scope = original
     with pytest.raises(FrameError):
         window.consume(binding(2))
+
+
+@pytest.mark.parametrize("version", [True, False, 0, 3, 2.0, "2", None])
+def test_selected_grammar_rejects_unknown_or_coerced_versions(version):
+    with pytest.raises(FrameError):
+        OperationGrammar(binding(), role="broker", protocol_version=version)
+
+
+def test_selected_v2_invalidation_accepts_only_cleanup_cancel_without_candidate():
+    from hmp_plugin.presentation_broker_codec import BrokerFrame, BrokerHeader
+    from hmp_plugin.presentation_cancel_budget import CancellationWindow
+
+    b = binding()
+    grammar = OperationGrammar(b, role="broker", protocol_version=2)
+    grammar.observe(BrokerFrame(BrokerHeader(b, "BEGIN", 0, 4, 2), b"data"), sender="client")
+    grammar.invalidate()
+    body = CancellationWindow(0, 250_000_000).encode()
+    grammar.observe(BrokerFrame(BrokerHeader(b, "CANCEL", 1, 16, 2), body), sender="client")
+    assert grammar._cancel and grammar._invalidated and not grammar.candidate_message
+    with pytest.raises(FrameError):
+        grammar.observe(BrokerFrame(BrokerHeader(b, "CANCEL", 2, 16, 2), body), sender="client")
+
+
+@pytest.mark.parametrize("kind", ["GO", "RESULT", "STATUS", "ACK", "CLOSED", "PENDING", "UNKNOWN"])
+def test_selected_v2_grammar_does_not_activate_unjoined_lifecycle(kind):
+    from hmp_plugin.presentation_broker_codec import BrokerFrame, BrokerHeader
+
+    b = binding()
+    grammar = OperationGrammar(b, role="broker", protocol_version=2)
+    grammar.observe(BrokerFrame(BrokerHeader(b, "BEGIN", 0, 4, 2), b"data"), sender="client")
+    body = b"data" if kind == "RESULT" else b""
+    with pytest.raises(FrameError):
+        grammar.observe(BrokerFrame(BrokerHeader(b, kind, 1, len(body), 2), body), sender="client")
+
+
+@pytest.mark.parametrize("version", [1, 2])
+def test_explicit_grammar_never_downgrades_or_upgrades_frames(version):
+    from hmp_plugin.presentation_broker_codec import BrokerFrame, BrokerHeader
+
+    b = binding()
+    grammar = OperationGrammar(b, role="broker", protocol_version=version)
+    with pytest.raises(FrameError):
+        grammar.observe(BrokerFrame(BrokerHeader(b, "BEGIN", 0, 4, 3 - version), b"data"),
+                        sender="client")
+    assert grammar._failed and not grammar._begun
+
+
+def test_selected_v2_status_construction_stays_closed():
+    with pytest.raises(FrameError):
+        OperationGrammar(binding(), role="gateway", mode="status", protocol_version=2)
