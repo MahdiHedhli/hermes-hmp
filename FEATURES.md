@@ -12,8 +12,9 @@ Independent qualification passes the 34-case composed suite plus two additional
 same-source/symlink alias cases. Root Python 3.11 passes 846 combined tests plus
 66 subtests and the two focused alias cases; Python 3.14.9 passes the final 848
 combined tests plus 66 subtests. Lint and closed-import scanner pass. Earlier
-endpoint guard source `452aa6f` also passed hosted CI41965483104; bootstrap CI
-must be bound to its own published commit separately.
+endpoint guard source `452aa6f` passed hosted CI41965483104. Bootstrap hosted
+CI41968921451 now passes all jobs on exact source `9ef3bf4`, including Ubuntu
+plugin/unit/privacy checks and Python 3.12–3.14 Unicode qualification.
 
 This is a synthetic source harness, not a production runtime-ready token.
 Verifier/interpreter and pre-verification dependency origin, the named OS-loader

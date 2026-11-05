@@ -30,6 +30,8 @@
 - [x] Bind retained metadata/avatar resources before launch; enforce original scope/deadline, one-use candidate transfer, cancellation, exact local drain and cross-operation isolation. Source-only; 38 resource cases and 746 plus 66 subtests on each Python 3.11/3.14.9.
 - [x] Implement/review held private endpoint snapshots with FD-relative ancestry, exact private owner/modes, replacement refusal and one-use local close; 56 focused cases independently pass. No connection/service authority.
 - [x] Implement/review the [fixed-install verifier plus namespace-only synthetic bootstrap](BROKER_BOOTSTRAP.md); external expected manifest trust and explicit runtime/bytecode/OS-loader premises; actual retained no-GO child and generation/deadline refusal tested. Production audit/service/crash gates remain separate.
+- [x] Independently audit the fixed own-code worker and PyYAML 6.0.3 token/event path for process/group/FD-transfer calls; source-path evidence only, not OS confinement. See [audit](BROKER_WORKER_SOURCE_AUDIT.md).
+- [ ] Qualify partial-Popen retention/alternate stdlib cleanup before a multi-operation service; no unscoped reaper changes or ECHILD-to-success conversion.
 - [ ] Qualify broker service/runtime and authenticated transport, integrate native gateway routes and bind started terminal release; local observations alone retain PENDING.
 - [ ] Resolve direct-child native Kanban waitpid(-1) interference through an ownership-aware native contract or a separately reviewed external broker; do not disable Kanban or reinterpret ECHILD as closure.
 - [x] Add reviewed cleanup-only discard after exact child/group/control closure (bf24a54); frozen cleanup budget, actual EOF, buffered wipe and unknown-debt causals.
