@@ -110,9 +110,12 @@ Do not enable only the exporter, decoder or grammar as completion authority.
 
 ## Reviewed selected-v2 transcript syntax
 
-TERMINAL is v2-only with 1..4096 bytes of canonical closed claim data; the
-framing and claim decoder share one limit. ACK v2 carries exactly 32 raw bytes,
-SHA-256 of the exact terminal body. V1 framing and bodyless ACK are unchanged;
+TERMINAL is v2-only with 1..4096 bytes of canonical closed handoff data; the
+framing, inner claim and outer envelope share one limit. The inner historical
+STARTED_READER_TERMINAL claim remains separate from the outer schema1
+STARTED_READER_HANDOFF envelope. Its exact keys are schema/kind/claim/cleanup;
+cleanup is null or start_ns/end_ns. ACK v2 carries exactly 32 raw bytes,
+SHA-256 of the exact entire envelope, not merely its inner claim. V1 framing and bodyless ACK are unchanged;
 no version fallback or v2 STATUS construction is added.
 
 | Path | Broker sequence | Client ACK sequence |
@@ -129,6 +132,15 @@ for ACK. OK terminal syntax requires GO and RESULT. Broker ABORTED syntax needs
 sticky local invalidation; this is not real cancellation-budget/resource proof.
 A gateway may learn ABORTED from terminal data, which permanently invalidates its
 candidate. Header and claim must name the exact same original operation binding.
+ABORTED requires a sender cleanup stamp. A broker whose grammar is already
+invalidated must include a stamp even for historical OK; sticky invalidation is
+only a syntax check, not proof that it used the actual original budget. Stamps
+are immutable exact integers, end=start+250ms, within signed63 bounds and with
+start no later than the original deadline. The codec does not sample a clock,
+adopt a budget or prove the stamp is not future-dated at the receiving endpoint.
+An expired stamp remains the same expired data, never a renewed interval. Null
+means no sender cause at envelope capture, not permission for a fresh interval
+or proof that no later cause occurred. Raw-claim fallback is refused.
 The grammar does not validate challenge/input/source/domain/producer authority;
 the joined receiver must still bind all of them before accepting closure.
 
@@ -145,6 +157,9 @@ sticky refusal. It retains no claim-body or candidate aliases. This guards
 ordinary ownership drift under trusted installed-memory premises, not arbitrary
 Python-memory tampering. Digest equality and ACK_REQUEST are syntactic
 correlation only, not permission to send ACK or retire any journal/native credit.
+
+See [joined transport prerequisites](TERMINAL_TRANSPORT.md) for the retained-work
+cleanup-reader and original-controller continuation contract.
 
 Actual send/receive dispatch remains closed: the continuous original controller,
 known non-torn write facts, qualified producer/receiver custody, original work or

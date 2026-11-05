@@ -153,8 +153,8 @@ def encode_claim(claim):
     return raw
 
 
-def decode_claim(raw):
-    row = _json(raw, CLAIM_LIMIT)
+def _claim_from_row(row):
+    _require(type(row) is dict)
     keys = {"schema", "kind", "iid", "listener", "broker", "channel", "operation", "profile",
             "operation_kind", "deadline_ns", "challenge", "epoch", "input_sha256",
             "worker_source_sha256", "installation_generation", "clock_domain_sha256",
@@ -168,8 +168,64 @@ def decode_claim(raw):
         row["installation_generation"], row["clock_domain_sha256"], row["outcome"],
         row["exit_code"],
         row["result_sha256"])
+    _values(claim)
+    return claim
+
+
+def decode_claim(raw):
+    claim = _claim_from_row(_json(raw, CLAIM_LIMIT))
     _require(encode_claim(claim) == raw)
     return claim
+
+
+class CleanupStamp(NamedTuple):
+    start_ns: int
+    end_ns: int
+
+
+class TerminalHandoff(NamedTuple):
+    claim: StartedClaim
+    cleanup: CleanupStamp | None
+
+    def __repr__(self):
+        return "<TerminalHandoff data-only redacted>"
+
+
+def _cleanup_stamp(stamp, deadline):
+    if stamp is None:
+        return
+    _require(type(stamp) is CleanupStamp and type(stamp.start_ns) is int
+             and type(stamp.end_ns) is int and 0 <= stamp.start_ns <= deadline
+             and stamp.end_ns == stamp.start_ns + CLEANUP_NS
+             and stamp.end_ns <= MAX_NS)
+
+
+def encode_handoff(claim, cleanup=None):
+    """Freeze claim and sender budget DATA; neither supplies clock/producer authority."""
+    row = _values(claim)
+    _cleanup_stamp(cleanup, claim.deadline_ns)
+    _require(claim.outcome != "ABORTED" or cleanup is not None)
+    envelope = {"schema": 1, "kind": "STARTED_READER_HANDOFF", "claim": row,
+                "cleanup": (None if cleanup is None else
+                            {"start_ns": cleanup.start_ns, "end_ns": cleanup.end_ns})}
+    raw = json.dumps(envelope, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+                     allow_nan=False).encode("ascii")
+    _require(len(raw) <= CLAIM_LIMIT)
+    return raw
+
+
+def decode_handoff(raw):
+    row = _json(raw, CLAIM_LIMIT)
+    _require(row.keys() == {"schema", "kind", "claim", "cleanup"}
+             and type(row["schema"]) is int and row["schema"] == 1
+             and type(row["kind"]) is str and row["kind"] == "STARTED_READER_HANDOFF")
+    claim = _claim_from_row(row["claim"])
+    window = row["cleanup"]
+    if window is not None:
+        _require(type(window) is dict and window.keys() == {"start_ns", "end_ns"})
+        window = CleanupStamp(window["start_ns"], window["end_ns"])
+    _require(encode_handoff(claim, window) == raw)
+    return TerminalHandoff(claim, window)
 
 
 class _ProducerScope(NamedTuple):

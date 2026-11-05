@@ -322,3 +322,80 @@ async def test_decoded_claim_never_acknowledges_started_registry_debt(coupled_re
     assert remote._job_origin_snapshot.state is State.RUNNING
     assert not remote._job_origin_snapshot.credit_released
     assert row[0]._record(row[1]).headers is not None
+
+
+@pytest.mark.parametrize("outcome,caused", [("OK", False), ("OK", True), ("ABORTED", True)])
+def test_handoff_separates_immutable_historical_claim_from_sender_stamp(claim, outcome, caused):
+    value = claim._replace(outcome=outcome, result_sha256=("e" * 64 if outcome == "OK" else None))
+    stamp = terminal.CleanupStamp(1, 250_000_001) if caused else None
+    raw = terminal.encode_handoff(value, stamp)
+    decoded = terminal.decode_handoff(raw)
+    assert decoded.claim == value and decoded.cleanup == stamp
+    assert len(raw) <= terminal.CLAIM_LIMIT and b"STARTED_READER_HANDOFF" in raw
+    assert "data-only" in repr(decoded) and not hasattr(decoded, "inherit")
+    assert not hasattr(decoded, "release") and not hasattr(decoded, "acknowledge")
+    with pytest.raises(AttributeError):
+        object.__setattr__(decoded, "cleanup", None)
+    if decoded.cleanup is not None:
+        with pytest.raises(AttributeError):
+            object.__setattr__(decoded.cleanup, "end_ns", 1)
+
+
+@pytest.mark.parametrize("stamp", [
+    terminal.CleanupStamp(True, 250_000_001), terminal.CleanupStamp(0, True),
+    terminal.CleanupStamp(-1, 249_999_999), terminal.CleanupStamp(0, 250_000_001),
+    terminal.CleanupStamp(2_000_000_001, 2_250_000_001),
+    terminal.CleanupStamp(1 << 63, (1 << 63) + 250_000_000),
+    (0, 250_000_000), {"start_ns": 0, "end_ns": 250_000_000},
+])
+def test_handoff_rejects_coerced_unbounded_or_nonexact_stamps(claim, stamp):
+    with pytest.raises(FrameError):
+        terminal.encode_handoff(claim, stamp)
+
+
+def test_aborted_handoff_cannot_omit_sender_window_or_downgrade_to_raw_claim(claim):
+    value = claim._replace(outcome="ABORTED", result_sha256=None)
+    with pytest.raises(FrameError):
+        terminal.encode_handoff(value)
+    with pytest.raises(FrameError):
+        terminal.decode_handoff(terminal.encode_claim(value))
+    # A well-shaped but already-expired stamp stays original data, never renewed.
+    raw = terminal.encode_handoff(value, terminal.CleanupStamp(0, 250_000_000))
+    assert terminal.decode_handoff(raw).cleanup == (0, 250_000_000)
+
+
+@pytest.mark.parametrize("fault", ["extra", "missing", "kind", "schema_bool", "cleanup_extra",
+                                  "cleanup_missing", "claim_extra", "duplicate", "noncanonical"])
+def test_handoff_decode_is_closed_and_canonical(claim, fault):
+    raw = terminal.encode_handoff(claim, terminal.CleanupStamp(1, 250_000_001))
+    row = json.loads(raw)
+    if fault == "extra":
+        row["qualified_producer"] = True
+    elif fault == "missing":
+        del row["cleanup"]
+    elif fault == "kind":
+        row["kind"] = "STARTED_READER_TERMINAL"
+    elif fault == "schema_bool":
+        row["schema"] = True
+    elif fault == "cleanup_extra":
+        row["cleanup"]["fresh_duration"] = 250_000_000
+    elif fault == "cleanup_missing":
+        del row["cleanup"]["start_ns"]
+    elif fault == "claim_extra":
+        row["claim"]["trusted"] = True
+    elif fault == "duplicate":
+        raw = b'{"schema":1,' + raw[1:]
+    else:
+        raw += b" "
+    if fault not in ("duplicate", "noncanonical"):
+        raw = json.dumps(row, sort_keys=True, separators=(",", ":")).encode()
+    with pytest.raises(FrameError):
+        terminal.decode_handoff(raw)
+
+
+def test_oversized_handoff_refuses_before_json_parser(claim, monkeypatch):
+    calls = []
+    monkeypatch.setattr(json, "loads", lambda *a, **k: calls.append(True))
+    with pytest.raises(FrameError):
+        terminal.decode_handoff(b" " * (terminal.CLAIM_LIMIT + 1))
+    assert calls == []

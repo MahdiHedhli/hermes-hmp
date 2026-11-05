@@ -385,12 +385,20 @@ def v2_step(model, sender, kind, sequence, body=None):
 
 
 def terminal_body(model, outcome="OK", **changes):
-    from hmp_plugin.presentation_terminal_claim import StartedClaim, claim_binding, encode_claim
+    from hmp_plugin.presentation_terminal_claim import (
+        CleanupStamp,
+        StartedClaim,
+        claim_binding,
+        encode_handoff,
+    )
 
     claim = StartedClaim(claim_binding(model._binding), "alpha", "METADATA", 2_000_000_000,
                          "f" * 64, 1, "a" * 64, "b" * 64, "c" * 64, "d" * 64,
                          outcome, 0, "e" * 64 if outcome == "OK" else None)
-    return encode_claim(claim._replace(**changes))
+    cleanup = changes.pop("cleanup", None)
+    if outcome == "ABORTED" or (model._role == "broker" and model._invalidated):
+        cleanup = CleanupStamp(0, 250_000_000) if cleanup is None else cleanup
+    return encode_handoff(claim._replace(**changes), cleanup)
 
 
 def v2_result(model):
@@ -450,6 +458,7 @@ def test_v2_cancel_racing_frozen_ok_never_remints_or_revives(role, cancel_first)
     cancel = CancellationWindow(0, 250_000_000).encode()
     if cancel_first:
         v2_step(model, "client", "CANCEL", 2, cancel)
+        body = terminal_body(model)  # historical claim unchanged; sender stamp is separate
     outcome = v2_step(model, "broker", "TERMINAL", 2, body)
     assert outcome is (D.TERMINAL_DISCARDED if cancel_first else D.TERMINAL_CLAIM)
     digest = model._terminal_digest
@@ -542,3 +551,32 @@ def test_terminal_syntax_seal_refuses_valid_shaped_scalar_or_reference_drift(fau
     model._terminal_outcome = original.outcome
     model._terminal_syntax = model._terminal_syntax_snapshot = original
     assert not model.candidate_message  # detected drift is sticky, not recoverable permission
+
+
+
+def test_already_invalidated_broker_cannot_hide_sender_window_in_ok_handoff():
+    from hmp_plugin.presentation_terminal_claim import decode_handoff, encode_handoff
+
+    model = OperationGrammar(binding(), role="broker", protocol_version=2)
+    v2_result(model)
+    historical = decode_handoff(terminal_body(model)).claim
+    model.invalidate()
+    with pytest.raises(FrameError):
+        v2_step(model, "broker", "TERMINAL", 2, encode_handoff(historical))
+    assert model._failed and model._terminal_syntax_snapshot is None
+
+
+def test_ack_hash_covers_sender_stamp_and_wrapper_not_only_historical_claim():
+    import hashlib
+
+    from hmp_plugin.presentation_terminal_claim import decode_handoff, encode_claim
+
+    model = OperationGrammar(binding(), role="gateway", protocol_version=2)
+    v2_result(model)
+    body = terminal_body(model)
+    v2_step(model, "broker", "TERMINAL", 2, body)
+    inner = encode_claim(decode_handoff(body).claim)
+    assert hashlib.sha256(inner).digest() != model._terminal_digest
+    with pytest.raises(FrameError):
+        v2_step(model, "client", "ACK", 2, hashlib.sha256(inner).digest())
+    assert model._failed

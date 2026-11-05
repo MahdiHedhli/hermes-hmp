@@ -371,9 +371,12 @@ class OperationGrammar:
             return (MessageDisposition.RESULT_DISCARDED if self._invalidated
                     else MessageDisposition.RESULT_CANDIDATE)
         if kind == "TERMINAL":
-            from .presentation_terminal_claim import decode_claim
+            from .presentation_terminal_claim import decode_handoff
 
-            claim = decode_claim(frame.body)
+            handoff = decode_handoff(frame.body)
+            claim = handoff.claim
+            if self._role == "broker" and self._invalidated and handoff.cleanup is None:
+                _fail()  # already-caused sender must expose its frozen stamp, not fresh time
             if tuple(claim.binding) != self._binding_values:
                 _fail()
             if claim.outcome == "OK":
