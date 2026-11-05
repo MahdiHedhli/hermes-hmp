@@ -64,6 +64,7 @@ def local(monkeypatch):
     checks = []
     def peer(sock, *, expected_uid, expected_pid):
         checks.append((expected_uid, expected_pid))
+        return service.PeerObservation(expected_uid, expected_pid)
     monkeypatch.setattr(service, "observe_peer", peer)
     spine = service.BrokerServiceSpine(listener, e, endpoint=endpoint, observation=observation,
         parser_package=str(Path(yaml.__file__).resolve().parent))
@@ -142,6 +143,8 @@ async def test_actual_ready_cancel_cleanup_stays_pending_and_status_has_no_body(
         status_sock, encode_frame(status_binding, "STATUS", 0))
     result = await read_frame(status_sock, status_binding)
     assert result.header.kind == "PENDING" and result.body == b""
+    status_sock.shutdown(socket.SHUT_WR)
+    assert await asyncio.get_running_loop().sock_recv(status_sock, 1) == b""
     await status_task
     assert await spine.stop_local_sockets()
 

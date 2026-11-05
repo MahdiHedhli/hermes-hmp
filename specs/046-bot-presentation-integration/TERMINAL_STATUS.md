@@ -1,7 +1,8 @@
 # Terminal bodyless STATUS exchange — reviewed repair boundary
 
-This is the next source implementation contract, not accepted implementation or
-production admission. A native Darwin socketpair reproduces credential-API refusal
+Independent bounded review accepts the source/causal implementation with83
+focused cases (26 terminal,31 service and26 oracle/controller). This is not
+actual-process qualification or production admission. A native Darwin socketpair reproduces credential-API refusal
 after peer close while buffered terminal bytes remain readable. The earlier actual
 service FrameError's precise cause remains unproven.
 
@@ -24,6 +25,15 @@ Only canonical bodyless STATUS/PENDING/UNKNOWN framing uses this terminal contra
 CLOSED retains its existing distinct ACK obligations and must not acquire implicit
 ACK/release from EOF. Header/body bounds, exact operation/channel/boot correlation,
 sequence, cancellation and the unchanged original deadline remain enforced.
+
+Gateway completion requires either already-queued clean EOF, or one known SHUT_WR
+followed by clean EOF. A captured native nonblocking recv(1, MSG_PEEK), surrounded
+by sealed local/generation/deadline checks, distinguishes those cases. Nonempty
+peek refuses; only exact EAGAIN/EWOULDBLOCK permits the shutdown attempt. Record
+intent before shutdown. A racing ENOTCONN or any ambiguous return refuses without
+retry; queued EOF must never be labeled successful half-close. Native kernel
+nonblocking mode and captured native gettimeout()==0.0 are rechecked so neither
+a kernel flag change nor Python timeout/select wait can block the peek/read.
 
 Server retains the transport while waiting for gateway EOF under that same deadline;
 already queued EOF is valid transport termination. Nonempty trailing data refuses.
@@ -50,3 +60,17 @@ EOF retires only known local transport ownership. Registry/native debt persists.
 Full renderer, authenticated routes, native original authority and signed physical
 character delivery remain separate open requirements. Host-local media has its own
 authority contract and must never use a raw assistant path as permission to read.
+
+## Bounded source API
+
+`TerminalStatusExchange` is retained on its exact SocketChannel before initial
+authentication. It seals the actual returned PeerObservation, native socket/FD,
+context, endpoint observation, startup enrollment, binding, loop and unchanged
+admission deadline. Failed construction remains retained and unusable. Ordinary
+channel send/receive cannot be used after adoption. The candidate exposes only
+`request`, `receive_reply`, `reply_and_drain` and the existing-peer-checked
+`acknowledge_closed` path. Shared channel read/write/close guards stay active.
+
+Source and causal review is accepted for this boundary; this API description
+is not an actual-process pass or activation receipt. The old actual-run lock is
+retained; changing this source does not authorize an automatic rerun.

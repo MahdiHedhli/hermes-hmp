@@ -445,16 +445,18 @@ async def _run(case, boot, home, record, receipt, state):
         record["reader_kernel_exit_observed_ns"] = fact.observed_at_ns
         record["phase"] = "status_serve"
         status = replace(scope, channel=secrets.token_hex(32))
-        await control.command("serve", deadline_ns=time.monotonic_ns() + 1_000_000_000)
+        status_end = time.monotonic_ns() + 1_000_000_000
+        await control.command("serve", deadline_ns=status_end)
         record["phase"] = "status_connect"
         status_channel = await connect()
+        terminal = service.TerminalStatusExchange.__new__(service.TerminalStatusExchange)
+        _RETAINED.append(terminal)
+        terminal.__init__(status_channel, status, status_end)
         record["phase"] = "status_write"
-        await status_channel.send(
-            codec.BrokerFrame(codec.BrokerHeader(status, "STATUS", 0, 0), b""),
-            record["observe_end_ns"],
-        )
+        await terminal.request()
         record["phase"] = "status_receive"
-        pending = await status_channel.receive(record["observe_end_ns"], expected=status)
+        pending = await terminal.receive_reply()
+        record["status_transport_completion"] = terminal._completion
         base._require(
             pending.header.kind == "PENDING" and pending.body == b"", "status_replayed_body"
         )

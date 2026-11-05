@@ -113,3 +113,13 @@ deadline. The bounded polling/sequence-diagnostic repair closes that inconsisten
 causal tests and future observed evidence must remain distinct from attribution
 of this original failure. No production GO/RESULT, host route or phone delivery
 was exercised.
+
+## Reviewed terminal transport source follow-up
+
+The controller's STATUS phase now retains and adopts the dedicated terminal
+exchange under the exact same one-second status admission deadline given to the
+service. It records only the fixed transport-completion category. The service
+uses that owner only for bodyless PENDING/UNKNOWN; CLOSED/ACK retains its original
+authentication requirements.83 focused source cases independently pass, including
+26 terminal cases; no new OS fixture invocation was performed for this change.
+The older retained lock/partial result must not be presented as a pass for it.

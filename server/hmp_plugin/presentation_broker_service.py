@@ -28,7 +28,7 @@ from .presentation_broker_codec import (
 )
 from .presentation_broker_endpoint import BrokerEndpointOwner, EndpointObservation
 from .presentation_broker_lifecycle import OperationGrammar
-from .presentation_broker_peer import observe_peer
+from .presentation_broker_peer import PeerObservation, observe_peer
 from .presentation_broker_registry import BrokerRegistry, RegistryStatus
 from .presentation_input_v3 import decode_input_v3
 from .presentation_jobs import INPUT_LIMIT, MAX_PROCESSES, MAX_WAITING, FrameError
@@ -38,6 +38,9 @@ _MAX_WIRE = 8 + 1024 + INPUT_LIMIT + 4
 _SOCKET_CLOSE = socket.socket.close
 _SOCKET_FILENO = socket.socket.fileno
 _SOCKET_ACCEPT = socket.socket.accept
+_SOCKET_SHUTDOWN = socket.socket.shutdown
+_SOCKET_RECV = socket.socket.recv
+_SOCKET_TIMEOUT = socket.socket.gettimeout
 
 
 def _require(value: bool) -> None:
@@ -128,6 +131,7 @@ class SocketChannel:
         self._refused = self._close_attempted = self._closed_known = False
         self._reading = self._writing = self._closing = False
         self._close_fact = self._close_fact_snapshot = None
+        self._terminal_owner = self._terminal_owner_snapshot = None
         try:
             _require(type(sock) is socket.socket and type(enrollment) is StartupEnrollment
                      and type(role) is str and role in ("gateway", "broker")
@@ -170,6 +174,9 @@ class SocketChannel:
                  and type(self._endpoint) is BrokerEndpointOwner
                  and self._observation is self._observation_snapshot
                  and type(self._observation) is EndpointObservation)
+        _require(self._terminal_owner is self._terminal_owner_snapshot
+                 and (self._terminal_owner is None
+                      or type(self._terminal_owner) is TerminalStatusExchange))
         if self._closed_known:
             _require(self._close_attempted and type(self._close_fact) is object
                      and self._close_fact is self._close_fact_snapshot)
@@ -191,7 +198,7 @@ class SocketChannel:
             self._refused = True
             raise FrameError("BI1_BROKER_CHANNEL_INTEGRITY_LOST") from None
 
-    def _check(self) -> None:
+    def _check(self) -> PeerObservation:
         try:
             self._local_integrity()
             _require(not self._refused and not self._close_attempted
@@ -215,7 +222,7 @@ class SocketChannel:
             _require(actual_path == expected_path)
             peer = ((e.service_uid, e.service_pid) if self._role == "gateway"
                     else (e.gateway_uid, e.gateway_pid))
-            observe_peer(self._socket, expected_uid=peer[0], expected_pid=peer[1])
+            return observe_peer(self._socket, expected_uid=peer[0], expected_pid=peer[1])
         except BaseException:
             self._refused = True
             raise FrameError("BI1_BROKER_CHANNEL_REFUSED") from None
@@ -242,6 +249,9 @@ class SocketChannel:
 
     async def receive(self, end_ns: int, *, expected: BrokerBinding | None = None) -> BrokerFrame:
         self._bindings()
+        if self._terminal_owner is not None:
+            self._refused = True
+            raise FrameError("BI1_BROKER_TERMINAL_CHANNEL_ADOPTED")
         _require(not self._reading and (self._role == "broker" or expected is not None))
         self._reading = True
         try:
@@ -261,6 +271,9 @@ class SocketChannel:
 
     async def send(self, frame: BrokerFrame, end_ns: int) -> None:
         self._bindings()
+        if self._terminal_owner is not None:
+            self._refused = True
+            raise FrameError("BI1_BROKER_TERMINAL_CHANNEL_ADOPTED")
         _require(not self._writing and type(frame) is BrokerFrame
                  and type(frame.header) is BrokerHeader and type(frame.header.kind) is str
                  and frame.header.kind != "RESULT")
@@ -321,6 +334,250 @@ class SocketChannel:
             self._closing = False
 
 
+class TerminalStatusExchange:
+    """One sealed bodyless STATUS exchange, never a generic peer-check fallback.
+
+    Initial authentication is mandatory. Once adopted, this channel cannot carry
+    ordinary frames. Terminal IO checks current local/generation integrity while
+    allowing the authenticated peer to close. EOF is transport-only evidence.
+    Caller retains this allocation before initializing; the channel retains it
+    before any exchange IO. No native/registry/result authority is supplied.
+    """
+    def __init__(self, channel: SocketChannel, binding: BrokerBinding, end_ns: int):
+        self._channel = self._channel_snapshot = channel
+        self._binding = self._binding_snapshot = binding
+        self._end = self._end_snapshot = end_ns
+        self._failed = False
+        self._phase = "initializing"
+        self._completion = None
+        self._shutdown_intent = self._shutdown_returned = False
+        self._seal = self._seal_snapshot = None
+        self._authentication = self._authentication_snapshot = None
+        self._shutdown = self._shutdown_snapshot = _SOCKET_SHUTDOWN
+        self._peek = self._peek_snapshot = _SOCKET_RECV
+        self._timeout = self._timeout_snapshot = _SOCKET_TIMEOUT
+        try:
+            _require(type(channel) is SocketChannel and type(binding) is BrokerBinding)
+            _binding(binding)
+            _require(channel._terminal_owner is None and not channel._reading
+                     and not channel._writing)
+            channel._terminal_owner = channel._terminal_owner_snapshot = self
+            self._authentication = self._authentication_snapshot = channel._check()
+            # Initial auth is sealed below; failed partial owner is already retained.
+            _require(type(end_ns) is int
+                     and time.monotonic_ns() < end_ns <= time.monotonic_ns() + 2_000_000_000)
+            scope = channel._enrollment.scope
+            _require((binding.iid, binding.listener, binding.broker)
+                     == (scope.iid, scope.listener, scope.broker))
+            self._values = self._values_snapshot = (
+                binding.iid, binding.listener, binding.broker, binding.channel, binding.operation)
+            self._loop = self._loop_snapshot = asyncio.get_running_loop()
+            self._seal = self._seal_snapshot = (
+                channel._socket, channel._fd, channel._identity, channel._context,
+                channel._endpoint, channel._observation, channel._enrollment, channel._values)
+            self._phase = "gateway_new" if channel._role == "gateway" else "broker_new"
+            self._remaining()
+        except BaseException:
+            self._failed = True
+            if type(channel) is SocketChannel:
+                channel._refused = True
+            raise
+
+    def _poison(self) -> None:
+        self._failed = True
+        if type(self._channel) is SocketChannel:
+            self._channel._refused = True
+
+    def _remaining(self) -> float:
+        try:
+            _task_allows_work()
+            c = self._channel
+            _require(self._failed is False
+                     and self._authentication is self._authentication_snapshot
+                     and type(self._authentication) is PeerObservation
+                     and type(self._authentication.uid) is int
+                     and type(self._authentication.pid) is int
+                     and type(self._shutdown_intent) is bool
+                     and type(self._shutdown_returned) is bool
+                     and (self._completion is None or (type(self._completion) is str
+                          and self._completion in ("queued_eof", "halfclose_eof", "gateway_eof")))
+                     and c is self._channel_snapshot
+                     and type(c) is SocketChannel and self._binding is self._binding_snapshot
+                     and type(self._binding) is BrokerBinding
+                     and self._seal is self._seal_snapshot and type(self._seal) is tuple
+                     and len(self._seal) == 8 and self._values is self._values_snapshot
+                     and type(self._values) is tuple and len(self._values) == 5
+                     and all(type(v) is str for v in self._values)
+                     and type(self._phase) is str
+                     and self._phase in ("gateway_new", "broker_new", "request_write",
+                         "gateway_reply", "reply_read", "gateway_closed_ack",
+                         "gateway_halfclose", "closed_ack_write", "reply_write",
+                         "broker_eof", "complete")
+                     and self._end is self._end_snapshot and type(self._end) is int
+                     and self._shutdown is self._shutdown_snapshot
+                     and self._shutdown is _SOCKET_SHUTDOWN
+                     and self._peek is self._peek_snapshot and self._peek is _SOCKET_RECV
+                     and self._timeout is self._timeout_snapshot
+                     and self._timeout is _SOCKET_TIMEOUT
+                     and self._loop is self._loop_snapshot
+                     and asyncio.get_running_loop() is self._loop
+                     and c._terminal_owner is self and c._terminal_owner_snapshot is self
+                     and not c._refused and not c._close_attempted)
+            _binding(self._binding)
+            b = self._binding
+            _require((b.iid, b.listener, b.broker, b.channel, b.operation) == self._values)
+            c._local_integrity()
+            expected_peer = ((c._enrollment.service_uid, c._enrollment.service_pid)
+                             if c._role == "gateway"
+                             else (c._enrollment.gateway_uid, c._enrollment.gateway_pid))
+            _require((self._authentication.uid, self._authentication.pid) == expected_peer)
+            _require(os.get_blocking(c._fd) is False)  # kernel mode alone is insufficient
+            timeout = self._timeout(c._socket)
+            _require(type(timeout) is float and timeout == 0.0)  # no Python select wait
+            # Reference seals prevent adopting another descriptor, context or
+            # endpoint even when its primitive values happen to compare equal.
+            current = (c._socket, c._fd, c._identity, c._context,
+                       c._endpoint, c._observation, c._enrollment, c._values)
+            _require(all(a is b for a, b in zip(current, self._seal, strict=True)))
+            c._endpoint.validates(c._observation)
+            now = time.monotonic_ns()
+            _require(now < self._end)
+            return (self._end - now) / 1_000_000_000
+        except BaseException:
+            self._poison()
+            raise
+
+    def _phase_is(self, phase: str) -> None:
+        self._remaining()
+        if self._phase != phase:
+            self._poison()
+            raise FrameError("BI1_BROKER_TERMINAL_SEQUENCE_REFUSED")
+
+    async def _write(self, kind: str, sequence: int, *, live_peer=False) -> None:
+        c = self._channel
+        self._remaining()
+        expected = {"request_write": ("gateway", ("STATUS",), 0, False),
+                    "reply_write": ("broker", ("PENDING", "UNKNOWN"), 0, False),
+                    "closed_ack_write": ("gateway", ("ACK",), 1, True)}
+        rule = expected.get(self._phase)
+        _require(rule is not None and c._role == rule[0] and type(kind) is str
+                 and kind in rule[1] and type(sequence) is int and sequence == rule[2]
+                 and type(live_peer) is bool and live_peer is rule[3]
+                 and not c._writing and not c._reading)
+        c._writing = True
+        try:
+            data = encode_frame(self._binding, kind, sequence)
+            remaining = self._remaining()
+            if live_peer:
+                c._remaining(self._end)  # existing CLOSED ACK boundary, no relaxation
+            await asyncio.wait_for(self._loop.sock_sendall(c._socket, data), remaining)
+            self._remaining()
+            if live_peer:
+                c._remaining(self._end)
+        except BaseException:
+            self._poison()
+            raise
+        finally:
+            c._writing = False
+
+    async def _exact(self, count: int) -> bytes:
+        _require(type(count) is int and 0 <= count <= 1032)
+        data = bytearray()
+        while len(data) < count:
+            remaining = self._remaining()
+            part = await asyncio.wait_for(
+                self._loop.sock_recv(self._channel._socket, count - len(data)), remaining)
+            self._remaining()
+            _require(type(part) is bytes and 0 < len(part) <= count - len(data))
+            data.extend(part)
+        return bytes(data)
+
+    async def _eof(self) -> None:
+        remaining = self._remaining()
+        part = await asyncio.wait_for(self._loop.sock_recv(self._channel._socket, 1), remaining)
+        self._remaining()
+        _require(type(part) is bytes and part == b"")
+
+    async def request(self) -> None:
+        self._phase_is("gateway_new")
+        self._phase = "request_write"  # intent precedes possibly partial write
+        await self._write("STATUS", 0)
+        self._phase = "gateway_reply"
+
+    async def receive_reply(self) -> BrokerFrame:
+        self._phase_is("gateway_reply")
+        c = self._channel
+        self._phase = "reply_read"
+        _require(not c._reading and not c._writing)
+        c._reading = True
+        try:
+            prefix = await self._exact(8)
+            raw = prefix + await self._exact(header_size(prefix))
+            header = decode_header(raw, expected=self._binding)
+            _require(header.sequence == 0 and header.body_length == 0
+                     and header.kind in ("PENDING", "UNKNOWN", "CLOSED"))
+            if header.kind == "CLOSED":
+                c._remaining(self._end)  # retains existing peer/ACK requirements
+                self._phase = "gateway_closed_ack"
+            else:
+                self._remaining()
+                try:
+                    queued = self._peek(c._socket, 1, socket.MSG_PEEK)
+                except BlockingIOError as error:
+                    _require(type(error) is BlockingIOError and type(error.errno) is int
+                             and error.errno in (errno.EAGAIN, errno.EWOULDBLOCK))
+                    queued = None
+                self._remaining()
+                _require(queued is None or (type(queued) is bytes and queued == b""))
+                if queued is None:
+                    self._phase = "gateway_halfclose"  # intent before one fallible effect
+                    self._remaining()
+                    self._shutdown_intent = True
+                    self._shutdown(c._socket, socket.SHUT_WR)
+                    self._remaining()
+                    self._shutdown_returned = True
+                    await self._eof()  # trailing data cannot become a valid terminal reply
+                    self._completion = "halfclose_eof"
+                else:
+                    self._completion = "queued_eof"
+                # Already-queued clean EOF needs no shutdown of a disconnected
+                # socket. A failed/ambiguous shutdown above never takes this path.
+                self._phase = "complete"
+            return BrokerFrame(header, b"")
+        except BaseException:
+            self._poison()
+            raise
+        finally:
+            c._reading = False
+
+    async def acknowledge_closed(self) -> None:
+        self._phase_is("gateway_closed_ack")
+        self._phase = "closed_ack_write"
+        await self._write("ACK", 1, live_peer=True)
+        self._phase = "complete"
+
+    async def reply_and_drain(self, kind: str) -> None:
+        self._phase_is("broker_new")
+        if type(kind) is not str or kind not in ("PENDING", "UNKNOWN"):
+            self._poison()
+            raise FrameError("BI1_BROKER_TERMINAL_KIND_REFUSED")
+        self._phase = "reply_write"
+        await self._write(kind, 0)
+        self._phase = "broker_eof"
+        c = self._channel
+        _require(not c._reading and not c._writing)
+        c._reading = True
+        try:
+            await self._eof()
+            self._completion = "gateway_eof"
+            self._phase = "complete"
+        except BaseException:
+            self._poison()
+            raise
+        finally:
+            c._reading = False
+
+
 class _Connection:
     def __init__(self, sock):
         self.socket = sock  # retain accepted socket before authentication/initialization
@@ -331,6 +588,7 @@ class _Connection:
         self.local_closed = False
         self.control_task = None
         self.accept_unknown = False
+        self.terminal = None
 
 
 class ServiceAcquisitionError(FrameError):
@@ -543,6 +801,13 @@ class BrokerServiceSpine:
             status = self._registry.status(binding)
             response = {RegistryStatus.PENDING: "PENDING", RegistryStatus.UNKNOWN: "UNKNOWN",
                         RegistryStatus.CLOSED: "CLOSED"}[status]
+            if status is not RegistryStatus.CLOSED:
+                record.terminal = TerminalStatusExchange.__new__(TerminalStatusExchange)
+                record.terminal.__init__(channel, binding, admission_end_ns)
+                frame = BrokerFrame(BrokerHeader(binding, response, 0, 0), b"")
+                record.grammar.observe(frame, sender="broker")
+                await record.terminal.reply_and_drain(response)
+                return  # transport EOF cannot acknowledge or release registry debt
             await self._write(record, binding, response, 0, admission_end_ns)
             if status is RegistryStatus.CLOSED:
                 ack = await channel.receive(admission_end_ns, expected=binding)

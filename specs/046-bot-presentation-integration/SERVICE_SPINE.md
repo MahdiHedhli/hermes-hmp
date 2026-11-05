@@ -1,11 +1,38 @@
 # Enrolled private service spine — bounded source acceptance
 
+## Terminal STATUS transport repair — November 5, 2026
+
+The dedicated `TerminalStatusExchange` now seals the actual initial peer
+observation to its original channel/socket/FD/context, endpoint, enrollment,
+binding, loop and unchanged admission deadline. Ordinary channel I/O cannot be
+reused after adoption. Only PENDING/UNKNOWN uses terminal connection identity;
+current local/generation checks remain mandatory after each await. Both kernel
+nonblocking and native Python timeout0.0 are checked before I/O creation.
+
+The gateway requires canonical bodyless response plus known queued EOF, or one
+known SHUT_WR followed by clean EOF. Those completion paths stay distinct; a
+failed/ambiguous shutdown cannot become success or be retried. The broker waits
+for gateway EOF and rejects trailing data. EOF never releases registry/native
+debt. CLOSED retains current-peer checks and its existing ACK requirement; an ACK
+completion race may remain ambiguous rather than claiming success.
+
+Independent review passes83 focused cases. These include buffered close, queued
+EOF, half-close ambiguity, trailing/truncated/nonstatus data, scope drift,
+cancellation, deadline, duplicate adoption, in-flight close and timeout-mode
+changes. Kernel peer identity remains explicitly mocked in these local models;
+the separate actual Darwin socketpair test supplies the platform observation.
+The old actual-service FrameError is still unattributed, and no new separate-
+process invocation or runtime/phone feature qualification follows. See
+[terminal boundary](TERMINAL_STATUS.md).
+
+
 This joins real private socket IO, HBR1, lifecycle grammar, shared replay/registry
 and actual reader resources. It is the first stage of the full external broker,
 not a replacement for metadata/classic/blobatar/custom static image delivery.
 No production CLI, service installation, character capability or route is added.
-Independent source/model review accepts the29-case local slice. Kernel peer is
-explicitly mocked in those tests; real separate-process qualification remains open.
+Independent source/model review accepts31 service cases and26 terminal cases.
+Kernel peer is explicitly mocked in those tests; full separate-process
+qualification remains open despite the separately recorded partial actual run.
 
 ## Fixed startup enrollment and socket ownership
 
