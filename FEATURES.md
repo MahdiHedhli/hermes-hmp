@@ -1,3 +1,24 @@
+## Cancellation-safe image reader prerequisite — November 5, 2026
+
+HMP `5d3a5a4` adds an owned readiness-only socket notification. A synthetic
+probe confirmed that cancellation of the old asynchronous receive could consume
+bytes before the original reader received them. The new callback carries no
+image bytes: the original reader will receive and record progress synchronously.
+Registration ownership, scheduler dispatch and failure cleanup refuse foreign
+or uncertain state without closing a borrowed socket.
+
+Independent review passes 46 focused tests on Python 3.13. The Python 3.11.15
+regression passes 1,881 tests plus 190 subtests, with one Linux-native skip.
+The standalone Python 3.14.4 regression also passes the same matrix.
+Lint, plugin surface, privacy and diff checks pass.
+
+This is a standalone prerequisite, not active image transport. Retained frame
+cursor integration, cleanup-reader lifecycle and qualified native completion
+remain before authenticated character image routes. Bot characters and host-local
+chat images are still unfinished on phones; app executable, embedded HMP and
+installed devices remain unchanged. Host-local images follow character delivery.
+See [reader integration](specs/046-bot-presentation-integration/READINESS_CURSOR.md).
+
 ## Original-work write-quiescence source — November 5, 2026
 
 HMP `9e2697e` retains its ownership barrier before initialization and an immutable
