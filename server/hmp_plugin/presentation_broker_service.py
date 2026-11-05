@@ -15,6 +15,7 @@ import socket
 import stat
 import time
 from dataclasses import dataclass
+from typing import NamedTuple
 
 from .presentation_broker_codec import (
     BrokerBinding,
@@ -113,6 +114,33 @@ class ChannelAcquisitionError(FrameError):
         self.failed_owner = owner
 
 
+_BEGIN_WRITE_MINT = object()
+
+
+class _BeginWriteIntent(NamedTuple):
+    remote: object
+    channel: object
+    socket: object
+    values: tuple
+    identity: tuple
+    binding: BrokerBinding
+    packet: bytes
+    end_ns: int
+    version: int
+    token: object
+
+    def __repr__(self):
+        return "<BeginWriteIntent redacted>"
+
+
+class _BeginWriteFact(NamedTuple):
+    mint: object
+    intent: _BeginWriteIntent
+
+    def __repr__(self):
+        return "<BeginWriteFact redacted>"
+
+
 class SocketChannel:
     """Exclusive exact native socket, bounded no-GO spine frames, no retry.
 
@@ -138,6 +166,8 @@ class SocketChannel:
         self._terminal_owner = self._terminal_owner_snapshot = None
         self._remote_owner = self._remote_owner_snapshot = None
         self._cancel_receiver = self._cancel_receiver_snapshot = None
+        self._begin_write_intent = self._begin_write_intent_snapshot = None
+        self._begin_write_fact = self._begin_write_fact_snapshot = None
         self._clock_owner = self._clock_owner_snapshot = None
         self._clock_closed_known = False
         try:
@@ -194,6 +224,14 @@ class SocketChannel:
                  and (self._terminal_owner is None
                       or type(self._terminal_owner) is TerminalStatusExchange))
         _require(self._remote_owner is self._remote_owner_snapshot)
+        _require(self._begin_write_intent is self._begin_write_intent_snapshot
+                 and (self._begin_write_intent is None
+                      or type(self._begin_write_intent) is _BeginWriteIntent)
+                 and self._begin_write_fact is self._begin_write_fact_snapshot
+                 and (self._begin_write_fact is None
+                      or (type(self._begin_write_fact) is _BeginWriteFact
+                          and self._begin_write_fact.mint is _BEGIN_WRITE_MINT
+                          and self._begin_write_fact.intent is self._begin_write_intent)))
         _require(self._cancel_receiver is self._cancel_receiver_snapshot)
         if self._cancel_receiver is not None:
             from .presentation_broker_cancel import BrokerCancellationOwner
@@ -384,6 +422,11 @@ class SocketChannel:
                  and type(frame.header) is BrokerHeader and type(frame.header.kind) is str
                  and frame.header.kind != "RESULT")
         self._authorize_io(owner, "send", frame.header.binding, end_ns, frame)
+        if owner is not None and self._enrollment.protocol_version == 2:
+            _require(self._begin_write_intent is None and self._begin_write_fact is None)
+            self._begin_write_intent = self._begin_write_intent_snapshot = _BeginWriteIntent(
+                owner, self, self._socket_snapshot, self._values_snapshot, self._identity_snapshot,
+                frame.header.binding, frame.body, end_ns, 2, object())
         self._writing = True  # intent before any possibly partial write; no rollback/retry
         try:
             _binding(frame.header.binding)
@@ -400,7 +443,48 @@ class SocketChannel:
             await asyncio.wait_for(asyncio.get_running_loop().sock_sendall(self._socket, data),
                                    remaining)
             self._remaining(end_ns)
+            if owner is not None and version == 2:
+                from .presentation_remote import RemoteOperationOwner
+
+                RemoteOperationOwner._authorize_send_completion(owner, self, frame, end_ns)
+                intent = self._begin_write_intent_snapshot
+                _require(type(intent) is _BeginWriteIntent and self._begin_write_intent is intent
+                         and intent.remote is owner and intent.channel is self
+                         and intent.socket is self._socket_snapshot
+                         and intent.values is self._values_snapshot
+                         and intent.identity is self._identity_snapshot
+                         and intent.binding is frame.header.binding and intent.packet is frame.body
+                         and type(intent.end_ns) is int and intent.end_ns == end_ns
+                         and intent.version == 2 and type(intent.token) is object)
+                self._begin_write_fact = self._begin_write_fact_snapshot = _BeginWriteFact(
+                    _BEGIN_WRITE_MINT, intent)
         except BaseException:
+            self._refused = True
+            raise
+        finally:
+            self._writing = False
+
+    async def send_cancel(self, owner) -> None:
+        """One cleanup-only CANCEL; ordinary retired work IO stays refused."""
+        from .presentation_remote_cleanup import _LOOP, RemoteCleanupOwner
+
+        _require(type(owner) is RemoteCleanupOwner)
+        data = RemoteCleanupOwner._prepare_cancel(owner, self)
+        self._writing = True
+        try:
+            RemoteCleanupOwner._cancel_remaining(owner, self)
+            _require(data is owner._cancel_wire_snapshot and owner._cancel_wire is data)
+            owner._cancel_timeout = owner._cancel_timeout_snapshot = asyncio.timeout_at(
+                owner._cancel_end_snapshot / 1_000_000_000)
+            async with owner._cancel_timeout:
+                RemoteCleanupOwner._cancel_remaining(owner, self)
+                _require(data is owner._cancel_wire_snapshot and owner._cancel_wire is data)
+                await _LOOP.sock_sendall(owner._loop_snapshot, self._socket, data)
+            RemoteCleanupOwner._cancel_remaining(owner, self)
+            _require(data is owner._cancel_wire_snapshot and owner._cancel_wire is data)
+            owner._cancel_write_completed = True
+        except BaseException:
+            owner._unknown = True
             self._refused = True
             raise
         finally:
@@ -693,7 +777,8 @@ class TerminalStatusExchange:
 class _Connection:
     def __init__(self, sock):
         self.socket = sock  # retain accepted socket before authentication/initialization
-        self.channel = None
+        self.channel = self.channel_snapshot = None
+        self.cancel_owner = None
         self.ticket = None
         self.grammar = None
         self.task = None
@@ -880,8 +965,9 @@ class BrokerServiceSpine:
                 record.channel = SocketChannel(record.socket, self._enrollment, role="broker",
                     endpoint=self._endpoint, observation=self._observation)
             except ChannelAcquisitionError as error:
-                record.channel = error.failed_owner
+                record.channel = record.channel_snapshot = error.failed_owner
                 raise
+            record.channel_snapshot = record.channel
             self._current()
             self._accepting = False
             self._accept_task = None
@@ -897,13 +983,16 @@ class BrokerServiceSpine:
     async def _write(self, record: _Connection, binding: BrokerBinding, kind: str,
                      sequence: int, end_ns: int) -> None:
         # Grammar captures outgoing intent before a possibly partial send.
-        frame = BrokerFrame(BrokerHeader(binding, kind, sequence, 0), b"")
+        frame = BrokerFrame(BrokerHeader(binding, kind, sequence, 0,
+                                        self._enrollment.protocol_version), b"")
         record.grammar.observe(frame, sender="broker")
         await record.channel.send(frame, end_ns)
 
     async def _dispatch(self, record: _Connection, admission_end_ns: int) -> None:
         channel = record.channel
-        # Selected framing is not permission to renew cleanup or start work.
+        if self._enrollment.protocol_version == 2:
+            await BrokerServiceSpine._dispatch_v2(self, record, admission_end_ns)
+            return
         _require(self._enrollment.protocol_version == 1)
         first = await channel.receive(admission_end_ns)
         binding, kind = first.header.binding, first.header.kind
@@ -972,7 +1061,145 @@ class BrokerServiceSpine:
         # Started ownership remains PENDING even after exact local drain. No
         # CLOSED/ACK is manufactured; EOF tells the caller to reconcile STATUS.
 
+    async def _v2_control(self, owner):
+        from .presentation_broker_cancel import BrokerCancellationOwner
+
+        _require(type(owner) is BrokerCancellationOwner)
+        BrokerCancellationOwner._guard(owner)
+        frame = await asyncio.shield(owner._allocation_snapshot.task)
+        BrokerCancellationOwner._guard(owner)
+        _require(owner._adopted is True and frame is owner._frame_snapshot)
+        return frame
+
+    def _v2_work_current(self, owner):
+        from .presentation_broker_cancel import BrokerCancellationOwner
+        from .presentation_cancel_budget import CancellationBudget
+
+        BrokerCancellationOwner._guard(owner)
+        self._current()
+        BrokerCancellationOwner._guard(owner)
+        _, _, end, failed = CancellationBudget.inspect(owner._scope_snapshot[3])
+        _require(owner._retired is False and end is None and not failed)
+        _task_allows_work()
+
+    async def _dispatch_v2(self, record, admission_end_ns):
+        from .presentation_broker_cancel import BrokerCancellationOwner
+        from .presentation_clock import NativeClockOwner
+        from .presentation_remote_cleanup import _LOOP, _TASK
+
+        loop = asyncio.get_running_loop()
+        _require(type(loop) is _LOOP and type(asyncio.current_task()) is _TASK
+                 and asyncio.BaseEventLoop.get_task_factory(loop) is None)
+        channel = record.channel_snapshot
+        _require(type(channel) is SocketChannel and record.channel is channel)
+        first = await SocketChannel.receive(channel, admission_end_ns)
+        _require(first.header.kind == "BEGIN")  # v2 STATUS/GO/result/release remain closed
+        binding = first.header.binding
+        record.grammar = OperationGrammar(binding, role="broker", protocol_version=2)
+        OperationGrammar.observe(record.grammar, first, sender="client")
+        row = decode_input_v3(first.body)
+        clock = SocketChannel._qualified_clock(channel)
+        now = NativeClockOwner.sample(clock)
+        _require(SocketChannel._qualified_clock(channel) is clock
+                 and row["iid"] == binding.iid and type(now) is int
+                 and now < row["deadline_ns"] <= admission_end_ns)
+        self._current()
+        record.ticket = self._registry.reserve(binding, row["profile"], row["operation"],
+                                              row["deadline_ns"])
+        try:
+            owner = BrokerCancellationOwner.retain(channel, self._registry, record.ticket,
+                                                   record.grammar)
+        finally:
+            record.cancel_owner = channel._cancel_receiver_snapshot  # includes partial initializer
+        while True:
+            BrokerCancellationOwner._guard(owner)
+            if owner._retired is True or _TASK.done(owner._allocation_snapshot.task):
+                await BrokerServiceSpine._v2_control(self, owner)
+                self._registry.seal_unlaunched(record.ticket)
+                return
+            BrokerServiceSpine._v2_work_current(self, owner)
+            if self._registry.resources_startable(record.ticket):
+                break
+            await asyncio.sleep(0.001)
+        await asyncio.sleep(0)  # delivered CANCEL header gets first chance to retire work
+        BrokerCancellationOwner._guard(owner)
+        if owner._retired is True or _TASK.done(owner._allocation_snapshot.task):
+            await BrokerServiceSpine._v2_control(self, owner)
+            self._registry.seal_unlaunched(record.ticket)
+            return
+        BrokerServiceSpine._v2_work_current(self, owner)
+        self._registry.start_resources(record.ticket)
+        BrokerServiceSpine._v2_work_current(self, owner)
+        self._registry.stage_resource_input(record.ticket, first.body)
+        BrokerServiceSpine._v2_work_current(self, owner)
+        try:
+            await BrokerServiceSpine._write(self, record, binding, "READY", 0, row["deadline_ns"])
+        except FrameError:
+            # A newly arrived CANCEL header may retire the work clock during a
+            # READY write. Finish that same receiver under its frozen interval;
+            # no second read, READY retry or early resource effect is permitted.
+            BrokerCancellationOwner._guard(owner)
+            _require(owner._retired is True and not _TASK.cancelling(asyncio.current_task()))
+        await BrokerServiceSpine._v2_control(self, owner)
+        self._registry.abort_resources(record.ticket)  # inherited minimum already adopted
+
+    async def _retire_v2(self, record):
+        from .presentation_broker_cancel import BrokerCancellationOwner
+        from .presentation_remote_cleanup import _TASK
+
+        channel = record.channel_snapshot
+        if type(channel) is not SocketChannel or record.channel is not channel:
+            self._refused = True
+            return
+        owner = channel._cancel_receiver_snapshot
+        if owner is None:
+            if record.ticket is not None:
+                self._refused = True
+                return  # reservation without a qualified receiver retains unknown debt
+            # No operation/resource exists; first-frame IO has returned to its
+            # own finally before local connection/clock retirement.
+            record.local_closed = SocketChannel.close(channel)
+            if record.local_closed:
+                record.clock_closed = SocketChannel.close_clock(channel)
+        else:
+            if type(owner) is not BrokerCancellationOwner or record.cancel_owner is not owner:
+                self._refused = True
+                return
+            BrokerCancellationOwner.abort(owner)  # original budget BEFORE native Task.cancel
+            if not await BrokerCancellationOwner.join(owner):
+                self._refused = True
+                return  # partial/unjoined reader cannot lose its channel
+            with contextlib.suppress(BaseException):
+                _TASK.result(owner._allocation_snapshot.task)
+            try:
+                self._metadata()
+                held = self._registry._record(record.ticket)
+                _require(held is owner._scope_snapshot[0]
+                         and held.cleanup_budget is owner._scope_snapshot[3])
+                if held.resources is None:
+                    if self._registry.status(held.binding) is not RegistryStatus.CLOSED:
+                        self._registry.seal_unlaunched(record.ticket)
+                else:
+                    self._registry.abort_resources(record.ticket)  # memory revoke, no IO
+                    while BrokerCancellationOwner.cleanup_remaining(owner) > 0:
+                        if self._registry.poll_resource_cleanup(record.ticket):
+                            break
+                        await asyncio.sleep(0.001)
+                if BrokerCancellationOwner.cleanup_remaining(owner) <= 0:
+                    return  # no late socket/clock action and no renewed shutdown allowance
+                record.local_closed = SocketChannel.close(channel)
+                if record.local_closed and BrokerCancellationOwner.cleanup_remaining(owner) > 0:
+                    record.clock_closed = SocketChannel.close_clock(channel)
+            except BaseException:
+                self._refused = True
+                return
+        if record.local_closed and record.clock_closed:
+            self._records.remove(record)  # registry/native debt remains separate
+
     async def _retire_connection(self, record: _Connection) -> None:
+        if (_values_shape(self._values_snapshot) and self._values_snapshot[8] == 2):
+            await BrokerServiceSpine._retire_v2(self, record)
+            return
         if record.grammar is not None:
             record.grammar.invalidate()  # before cleanup await; publication never revives
         if record.control_task is not None:

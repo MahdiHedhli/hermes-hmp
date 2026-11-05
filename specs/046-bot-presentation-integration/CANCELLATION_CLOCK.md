@@ -22,12 +22,11 @@ then requires `end = start + 250000000`, signed-domain bounds and the original
 operation ceiling. Framing alone intentionally cannot validate clock, deadline,
 authority or lifecycle. Every other control body remains empty. Version 1 stays
 the default; a selected receiver refuses a different version without fallback.
-Explicit startup enrollment can now select v2 framing with a retained native
-clock; the [selected-protocol boundary](SELECTED_PROTOCOL.md) still refuses v2
-CANCEL and broker work. Existing service paths default to v1. Both-end budget
-adoption is required before cancellation transport can be enabled. The
-[exclusive broker receiver source](INHERITED_CANCEL.md) now adopts the inherited
-minimum on its existing budget, but gateway send/service dispatch remain closed.
+Explicit startup enrollment can select v2 framing with a retained native clock.
+The [coupled transport source](INHERITED_CANCEL.md) joins a one-use gateway
+cleanup sender to the broker receiver and private BEGIN/READY/CANCEL dispatch.
+Both ends use their original budgets and the receiver adopts only the earlier
+cutoff. Existing service paths default to v1; GO/result/status/release remain closed.
 
 ## Original owner binding (source only)
 
@@ -53,12 +52,11 @@ local reference boundary, not arbitrary hostile Python-memory modification.
 
 This local budget binding alone is not cross-process clock attestation. The
 subsequent [retained task source](REMOTE_CLEANUP.md) joins selected-v2 work before
-local socket/clock closure; stalled work retains debt. Version2 cancellation
-transport and broker dispatch remain closed. Parent native-policy DRAIN and
-future inherited transport causes still require their own integration; no wire
-deadline or local close alone is authority.
+local socket/clock closure; stalled work retains debt. Coupled version2
+cancellation is source-tested, not production-qualified. Parent native-policy
+DRAIN still requires integration; no wire deadline or local close alone is authority.
 
-## Required transport integration (not implemented or qualified)
+## Transport premises and remaining qualification
 
 Before either transport end selects v2, trusted startup must independently
 qualify the exact kernel-authenticated peer's native monotonic clock domain.
@@ -79,12 +77,12 @@ channel and original operation. Both local cleanup and received CANCEL must
 adopt the same minimum before cleanup effects. The native observer now has a reviewed irreversible local-only cleanup-clock
 mode after successful initialization; it does not authenticate new frames. A
 dedicated retained async cleanup owner now survives caller cancellation in the
-selected-v2 no-frame source without bypassing authority for GO or result delivery.
+selected-v2 transport source without bypassing authority for GO or result delivery.
 Inherited transport and runtime qualification remain separate. Disconnect/lost cancellation retains unknown debt; a later
 broker-local deadline cannot certify the gateway's earlier cleanup bound.
 
 The [native observer source](NATIVE_CLOCK.md) now exists separately; it does not
-select startup enrollment or activate both-end transport adoption. Remaining:
+itself activate production transport. Remaining:
 async GO intent, typed started-terminal proof, result validation, credential
 retirement, manager/runtime latency and physical rendering remain open. This
 source slice changes no service, route, live host, app artifact or device.

@@ -36,7 +36,9 @@ expiry leaves uncertainty. An owned timeout is a clock checkpoint, not a new
 window. EOF, partial data and cancelled receiver similarly retire the original
 work before cleanup sampling.
 
-On complete valid CANCEL, invalidate grammar/work before native cleanup sampling
+A fully validated CANCEL header retires work and freezes its local cause before
+waiting for the body. It does not certify semantic adoption or authorize a resource
+abort. On complete valid CANCEL, invalidate grammar/work before native cleanup sampling
 and adopt the received minimum on the registry's exact existing budget BEFORE
 any resource abort, signal or closure. That same object is already retained by
 managed resources, so launch/work freshness refuses and later local abort/polls
@@ -49,7 +51,7 @@ budget precede local socket/clock closure; stalled/partial tasks stay reachable.
 Version2 STATUS/ACK, GO/RESULT and started terminal release remain closed until
 their own lifecycle and proof integration. Native DRAIN/credentials are separate.
 
-## Reviewed receiver source (service activation still closed)
+## Receiver source and coupled transport
 
 BrokerCancellationOwner now retains one exclusive native task/coroutine before
 initialization with a separate immutable allocation seal and successful-init
@@ -64,20 +66,26 @@ expiry switches to original cleanup time; generic clock faults poison the budget
 CANCEL1 semantic adoption changes the exact existing budget before any resource
 abort. Local and remote causes only shorten; already-expired windows get no time.
 
-Independent focused convergence passes 94 cases on Python 3.13. The actual local
-Unix model explicitly mocks peer identity and Darwin clock facts; it launches no
-reader and activates no service. General SocketChannel CANCEL, service version 2
-dispatch, gateway cleanup send, GO/result/status/release remain closed. This is
-step 1 below; the full final transport above is still required.
+The prior receiver-only focused review passed 94 cases on Python 3.13. The
+coupled source now joins its exact gateway sender and service retirement. Service
+version2 admits only BEGIN/READY/CANCEL. Queue and READY boundaries recheck
+retirement; a pending header revokes launch before body adoption. The receiver
+is shielded from service cancellation until the same original cause is frozen;
+partial initialization or unjoined work retains the original channel. Actual
+join precedes resource abort/poll and separate local socket/clock closure under
+the original cutoff. Registry/native debt is never released by these facts.
+
+Local Unix tests explicitly mock peer identity and Darwin clock facts. Synthetic
+owned-reader causals are not production manager/runtime or device qualification.
+General SocketChannel CANCEL, GO/result/status/release remain closed.
 
 ## Source sequencing, not a reduced final feature
 
-1. Implement selected grammar and the exact retained broker receiver/adoption
-   with real local Unix causals. Keep general channel CANCEL and service v2
-   dispatch CLOSED until gateway sender and service retirement join this contract.
-2. Implement the exact gateway cleanup send path and join service receiver,
-   original-budget abort/poll and partial-task retirement. Review both ends
-   together before opening only v2 BEGIN/READY/CANCEL private dispatch.
+1. Selected grammar and exact retained broker receiver/adoption are implemented
+   with local Unix causals. General channel CANCEL remains closed.
+2. The coupled source adds the exact gateway cleanup send path and service
+   receiver, original-budget abort/poll and partial-task retirement. Independent
+   implementation review and runtime-specific evidence remain distinct.
 3. Keep production runtime/manager/latency and signed physical image qualification
    distinct; finish native GO/result/terminal proof, routes and full rendering.
 

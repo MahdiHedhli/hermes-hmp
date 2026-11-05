@@ -179,14 +179,13 @@ async def test_partial_clock_is_retained_before_initialization_and_admits_no_fra
 
 
 @pytest.mark.asyncio
-async def test_selected_service_refuses_v2_work_before_registry_effect(local, monkeypatch):
-    old, e, client, _, _, _ = local
+@pytest.mark.parametrize("local", [2], indirect=True)
+async def test_selected_service_refuses_v2_status_before_registry_effect(local, monkeypatch):
+    spine, _, client, _, _, _ = local
     darwin_model(monkeypatch)
-    # Reuse the fixture listener/endpoint only after retiring no work; no second
-    # live service processes or real profile data exist in this local model.
-    spine = service.BrokerServiceSpine(old._listener, replace(e, protocol_version=2),
-        endpoint=old._endpoint, observation=old._observation, parser_package=old._registry._parser)
-    client()
+    sock = client()
+    await asyncio.get_running_loop().sock_sendall(
+        sock, encode_frame(binding(), "STATUS", 0, version=2))
     with pytest.raises(FrameError):
         await spine.serve_once(time.monotonic_ns() + 1_000_000_000)
     assert spine._registry.counts.active == 0 and not spine._records

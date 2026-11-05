@@ -1,4 +1,4 @@
-"""Retained selected-v2 work/local cleanup; no frame, native or remote release.
+"""Retained selected-v2 work/cleanup and one CANCEL; no native or remote release.
 
 Default native selector/task runtime only. Local close observations never prove
 broker/child/native closure or a production synchronous-syscall deadline.
@@ -19,8 +19,16 @@ from .presentation_authority import (
     ParentAuthorityAdapter,
     _Record,
 )
-from .presentation_broker_service import SocketChannel, _task_allows_work
-from .presentation_cancel_budget import CancellationBudget
+from .presentation_broker_codec import BrokerBinding, _binding, encode_frame
+from .presentation_broker_service import (
+    _BEGIN_WRITE_MINT,
+    _SOCKET_TIMEOUT,
+    SocketChannel,
+    _BeginWriteFact,
+    _BeginWriteIntent,
+    _task_allows_work,
+)
+from .presentation_cancel_budget import CLEANUP_NS, CancellationBudget, CancellationWindow
 from .presentation_clock import NativeClockOwner
 
 _TASK = asyncio.Task
@@ -69,6 +77,11 @@ class RemoteCleanupOwner:
         self._initialized = self._run_attempted = self._intent = False
         self._unknown = self._work_joined = self._socket_closed = self._clock_closed = False
         self._cancel_attempted = self._sampling = False
+        self._cancel_write_attempted = self._cancel_write_completed = False
+        self._cancel_scope = self._cancel_scope_snapshot = None
+        self._cancel_wire = self._cancel_wire_snapshot = None
+        self._cancel_end = self._cancel_end_snapshot = None
+        self._cancel_timeout = self._cancel_timeout_snapshot = None
         self._loop = self._loop_snapshot = None
         self._context = self._context_snapshot = None
         self._caller = self._caller_snapshot = None
@@ -93,6 +106,8 @@ class RemoteCleanupOwner:
             if remote._cleanup_owner is not self or remote._cleanup_owner_snapshot is not self:
                 raise AuthorityRefusalError
             self._refs = self._refs_snapshot = RemoteCleanupOwner._references(self)
+            self._cancel_scope = self._cancel_scope_snapshot = (
+                remote._binding_snapshot, remote._values_snapshot)
             self._start = self._start_snapshot = _FUTURE.__new__(_FUTURE)
             self._barriers = self._barriers_snapshot = _BarrierAllocation(self._start, None)
             _initialize_future(self._start, self._loop)
@@ -170,7 +185,7 @@ class RemoteCleanupOwner:
                 or any(type(v) is not bool for v in (
                     self._run_attempted, self._intent, self._unknown, self._work_joined,
                     self._socket_closed, self._clock_closed, self._cancel_attempted,
-                    self._sampling))
+                    self._sampling, self._cancel_write_attempted, self._cancel_write_completed))
                 or asyncio.BaseEventLoop.get_task_factory(self._loop) is not None
                 or r._cleanup_owner is not self or r._cleanup_owner_snapshot is not self
                 or type(r._record) is not _Record or r._record is not self._refs[2]
@@ -200,6 +215,24 @@ class RemoteCleanupOwner:
                     or slot.attempted is not True or slot.initialized is not True
                     or _TASK.get_coro(slot.task) is not slot.coroutine):
                 raise AuthorityRefusalError
+        scope = self._cancel_scope
+        if (type(scope) is not tuple or len(scope) != 2 or scope is not self._cancel_scope_snapshot
+                or type(scope[0]) is not BrokerBinding or type(scope[1]) is not tuple
+                or len(scope[1]) != 5 or any(type(v) is not str for v in scope[1])
+                or r._binding is not scope[0] or r._binding_snapshot is not scope[0]
+                or r._values is not scope[1] or r._values_snapshot is not scope[1]
+                or self._cancel_wire is not self._cancel_wire_snapshot
+                or (self._cancel_wire is not None and type(self._cancel_wire) is not bytes)
+                or self._cancel_end is not self._cancel_end_snapshot
+                or (self._cancel_end is not None and type(self._cancel_end) is not int)
+                or self._cancel_timeout is not self._cancel_timeout_snapshot
+                or (self._cancel_timeout is not None
+                    and type(self._cancel_timeout) is not asyncio.Timeout)):
+            raise AuthorityRefusalError
+        _binding(scope[0])
+        b = scope[0]
+        if (b.iid, b.listener, b.broker, b.channel, b.operation) != scope[1]:
+            raise AuthorityRefusalError
         original, _, _, failed = CancellationBudget.inspect(self._refs[8])
         if original != self._refs[9] or failed:
             raise AuthorityRefusalError
@@ -275,6 +308,86 @@ class RemoteCleanupOwner:
         finally:
             self._sampling = False
 
+    def _can_cancel(self):
+        RemoteCleanupOwner._guard(self)
+        c, r = self._refs[3], self._remote_snapshot
+        fact = c._begin_write_fact_snapshot
+        if fact is None:
+            if r._send_completed is True:
+                self._unknown = True  # a mutable completion flag is not native write evidence
+            return False
+        if (type(fact) is not _BeginWriteFact or c._begin_write_fact is not fact
+                or fact.mint is not _BEGIN_WRITE_MINT
+                or type(fact.intent) is not _BeginWriteIntent
+                or fact.intent is not c._begin_write_intent_snapshot
+                or c._begin_write_intent is not fact.intent):
+            raise AuthorityRefusalError
+        intent = fact.intent
+        if (intent.remote is not r or intent.channel is not c
+                or intent.socket is not c._socket_snapshot
+                or intent.values is not c._values_snapshot
+                or intent.identity is not c._identity_snapshot
+                or intent.binding is not self._cancel_scope[0]
+                or intent.packet is not r._packet_snapshot
+                or type(intent.end_ns) is not int or intent.end_ns != self._refs[9]
+                or type(intent.version) is not int or intent.version != 2
+                or type(intent.token) is not object):
+            raise AuthorityRefusalError
+        return r._send_completed is True
+
+    def _cancel_actor(self, channel):
+        RemoteCleanupOwner._guard(self)
+        if (channel is not self._refs[3] or type(channel) is not SocketChannel
+                or channel._role != "gateway" or channel._remote_owner is not self._remote_snapshot
+                or channel._remote_owner_snapshot is not self._remote_snapshot
+                or channel._terminal_owner is not None or channel._cancel_receiver is not None
+                or self._intent is not True or self._unknown is not False
+                or self._work_joined is not True
+                or asyncio.current_task() is not self._allocations_snapshot[0].task
+                or _TASK.cancelling(self._allocations_snapshot[0].task)
+                or not _TASK.done(self._allocations_snapshot[1].task)
+                or channel._reading is not False
+                or not RemoteCleanupOwner._can_cancel(self)):
+            raise AuthorityRefusalError
+        SocketChannel._local_integrity(channel)
+        timeout = _SOCKET_TIMEOUT(channel._socket)
+        if (os.get_blocking(channel._fd) is not False
+                or type(timeout) is not float or timeout != 0.0):
+            raise AuthorityRefusalError
+
+    def _prepare_cancel(self, channel):
+        RemoteCleanupOwner._cancel_actor(self, channel)
+        if (self._cancel_write_attempted is not False or self._cancel_wire is not None
+                or channel._writing is not False):
+            raise AuthorityRefusalError
+        if RemoteCleanupOwner._remaining(self) <= 0:
+            raise AuthorityRefusalError
+        RemoteCleanupOwner._cancel_actor(self, channel)
+        if (self._cancel_write_attempted is not False or channel._writing is not False
+                or self._cancel_wire is not None):
+            raise AuthorityRefusalError
+        _, _, end, failed = CancellationBudget.inspect(self._refs[8])
+        if failed or type(end) is not int:
+            raise AuthorityRefusalError
+        self._cancel_write_attempted = True  # intent before any encoding/timeout/IO attempt
+        self._cancel_end = self._cancel_end_snapshot = end
+        window = CancellationWindow(end - CLEANUP_NS, end)
+        self._cancel_wire = self._cancel_wire_snapshot = encode_frame(
+            self._cancel_scope[0], "CANCEL", 1, window.encode(), version=2)
+        return self._cancel_wire
+
+    def _cancel_remaining(self, channel):
+        RemoteCleanupOwner._cancel_actor(self, channel)
+        if (self._cancel_write_attempted is not True or self._cancel_write_completed is not False
+                or channel._writing is not True or type(self._cancel_wire) is not bytes):
+            raise AuthorityRefusalError
+        remaining = RemoteCleanupOwner._remaining(self)
+        RemoteCleanupOwner._cancel_actor(self, channel)
+        if (channel._writing is not True or remaining <= 0
+                or CancellationBudget.inspect(self._refs[8])[2] != self._cancel_end):
+            raise AuthorityRefusalError
+        return remaining
+
     async def _work(self):
         from .presentation_remote import RemoteOperationOwner
 
@@ -329,6 +442,12 @@ class RemoteCleanupOwner:
                     or channel._writing is not False):
                 self._unknown = True
                 return False
+            if RemoteCleanupOwner._can_cancel(self):
+                await SocketChannel.send_cancel(channel, self)
+                RemoteCleanupOwner._guard(self)
+                if RemoteCleanupOwner._remaining(self) <= 0:
+                    self._unknown = True
+                    return False
             self._socket_closed = SocketChannel.close(channel) is True
             if not self._socket_closed or RemoteCleanupOwner._remaining(self) <= 0:
                 self._unknown = True

@@ -20,7 +20,7 @@ from .presentation_broker_codec import (
 )
 from .presentation_broker_lifecycle import OperationGrammar
 from .presentation_broker_registry import BrokerRegistry, BrokerTicket, _Record
-from .presentation_broker_service import _SOCKET_TIMEOUT, SocketChannel
+from .presentation_broker_service import _SOCKET_FILENO, _SOCKET_TIMEOUT, SocketChannel
 from .presentation_cancel_budget import MAX_NS, CancellationBudget, CancellationWindow
 from .presentation_clock import NativeClockOwner, _PeerClockRefusedError
 from .presentation_jobs import FrameError
@@ -125,13 +125,14 @@ class BrokerCancellationOwner:
     def __repr__(self):
         return "<BrokerCancellationOwner redacted>"
 
-    def _guard(self, *, reader=False):
+    def _guard(self, *, reader=False, cleanup=False):
         c, reg, ticket = self._channel, self._registry, self._ticket
         g, scope = self._grammar, self._scope
         if type(c) is not SocketChannel:
             _refuse()
         SocketChannel._bindings(c)  # exact enrollment types before any field/property reads
-        if (self._initialized is not True or self._failed is not False
+        if (self._initialized is not True
+                or (self._failed is not False and not (cleanup and self._failed is True))
                 or type(c) is not SocketChannel or c is not self._channel_snapshot
                 or type(reg) is not BrokerRegistry or reg is not self._registry_snapshot
                 or type(ticket) is not BrokerTicket or ticket is not self._ticket_snapshot
@@ -206,10 +207,18 @@ class BrokerCancellationOwner:
             if (h.binding != scope[1] or h.kind != "CANCEL" or h.sequence != 1
                     or h.version != 2 or h.body_length != 16 or len(self._frame.body) != 16):
                 _refuse()
-        SocketChannel._local_integrity(c)
-        timeout = _SOCKET_TIMEOUT(c._socket)
-        if (os.get_blocking(c._fd) is not False or type(timeout) is not float or timeout != 0.0):
-            _refuse()
+        if cleanup and c._closed_known is True:
+            # Concrete SocketChannel.close already proved this exact local
+            # socket closed. Sampling retained clock FDs between the two close
+            # primitives must not inspect a socket FD that is now closed.
+            if reader or _SOCKET_FILENO(c._socket_snapshot) != -1:
+                _refuse()
+        else:
+            SocketChannel._local_integrity(c)
+            timeout = _SOCKET_TIMEOUT(c._socket)
+            if (os.get_blocking(c._fd) is not False
+                    or type(timeout) is not float or timeout != 0.0):
+                _refuse()
         if SocketChannel._qualified_clock(c) is not scope[6]:
             _refuse()
 
@@ -223,12 +232,12 @@ class BrokerCancellationOwner:
         if type(self._grammar_snapshot) is OperationGrammar:
             OperationGrammar.invalidate(self._grammar_snapshot)
         try:
-            BrokerCancellationOwner._guard(self)
+            BrokerCancellationOwner._guard(self, cleanup=True)
             if self._sampling:
                 _refuse()
             self._sampling = True
             now = NativeClockOwner.cleanup_sample(scope[6])
-            BrokerCancellationOwner._guard(self)
+            BrokerCancellationOwner._guard(self, cleanup=True)
             CancellationBudget.local(scope[3], now)
         except BaseException:
             self._failed = True
@@ -285,8 +294,10 @@ class BrokerCancellationOwner:
         if target > 8 + 1024 + 16:
             _refuse()
         while len(self._buffer) < target:
-            remaining = BrokerCancellationOwner._remaining(self)
-            self._timeout = self._timeout_snapshot = asyncio.timeout(remaining)
+            BrokerCancellationOwner._remaining(self)
+            end = CancellationBudget.inspect(self._scope[3])[2]
+            cutoff = self._scope[2] if end is None else end
+            self._timeout = self._timeout_snapshot = asyncio.timeout_at(cutoff / 1_000_000_000)
             try:
                 async with self._timeout:
                     part = await _LOOP.sock_recv(
@@ -314,6 +325,11 @@ class BrokerCancellationOwner:
             header = decode_header(raw, expected=self._scope[1], expected_version=2)
             if header.kind != "CANCEL" or header.sequence != 1 or header.body_length != 16:
                 _refuse()
+            # A validated CANCEL header is a local revocation hint. Retire work
+            # before waiting for its body, but adopt nothing or abort resources
+            # until the complete original window is semantically validated.
+            BrokerCancellationOwner._local_cause(self)
+            BrokerCancellationOwner._guard(self, reader=True)
             body = await BrokerCancellationOwner._exact(self, 16)
             self._frame = self._frame_snapshot = BrokerFrame(header, body)
             self._frame_seal = self._frame_seal_snapshot = (self._frame, header, body)
@@ -346,6 +362,19 @@ class BrokerCancellationOwner:
             self._cancel_attempted = True
             _TASK.cancel(allocation.task)
 
+    def cleanup_remaining(self):
+        """Original local cleanup time after a failed/completed read; no new IO grant."""
+        BrokerCancellationOwner._guard(self, cleanup=True)
+        if self._retired is not True or self._sampling is not False:
+            _refuse()
+        self._sampling = True
+        try:
+            now = NativeClockOwner.cleanup_sample(self._scope[6])
+            BrokerCancellationOwner._guard(self, cleanup=True)
+            return CancellationBudget.remaining_ns(self._scope[3], now) / 1_000_000_000
+        finally:
+            self._sampling = False
+
     async def join(self):
         """Actual task join only, never socket/native/registry closure."""
         allocation = self._allocation_snapshot
@@ -358,12 +387,9 @@ class BrokerCancellationOwner:
             return True
         BrokerCancellationOwner.abort(self)
         try:
-            BrokerCancellationOwner._guard(self)
-            now = NativeClockOwner.cleanup_sample(self._scope[6])
-            BrokerCancellationOwner._guard(self)
-            remaining = CancellationBudget.remaining_ns(self._scope[3], now)
+            remaining = BrokerCancellationOwner.cleanup_remaining(self)
             if remaining:
-                await asyncio.wait((allocation.task,), timeout=remaining / 1_000_000_000)
+                await asyncio.wait((allocation.task,), timeout=remaining)
             self._joined = _TASK.done(allocation.task)
             return self._joined
         except BaseException:

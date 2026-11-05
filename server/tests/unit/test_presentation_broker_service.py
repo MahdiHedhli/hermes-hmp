@@ -42,7 +42,7 @@ def binding(serial=1, *, boot="c" * 64):
 
 
 @pytest.fixture
-def local(monkeypatch):
+def local(monkeypatch, request):
     parent = Path.cwd().resolve()
     if any(stat.S_IMODE(p.stat().st_mode) not in (0o700, 0o750, 0o755)
            for p in (parent, *parent.parents)):
@@ -60,7 +60,8 @@ def local(monkeypatch):
     endpoint = BrokerEndpointOwner(str(root), expected_uid=os.geteuid())
     observation = endpoint.observe()
     e = service.StartupEnrollment(binding(), os.geteuid(), os.getpid() + 1,
-                                  os.geteuid(), os.getpid(), "e" * 64)
+                                  os.geteuid(), os.getpid(), "e" * 64,
+                                  getattr(request, "param", 1))
     checks = []
     def peer(sock, *, expected_uid, expected_pid):
         checks.append((expected_uid, expected_pid))

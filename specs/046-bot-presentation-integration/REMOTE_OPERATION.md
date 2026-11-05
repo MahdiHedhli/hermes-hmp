@@ -82,8 +82,9 @@ revive work. Selected BEGIN headers and READY validation use the original exact
 version, refusing downgrade. These changes still authorize only BEGIN/READY.
 
 The subsequent [retained cleanup source](REMOTE_CLEANUP.md) now owns selected-v2
-work/cleanup tasks and local closure under the same original budget. It sends no
-CANCEL, adopts no inherited window and activates no v2 broker dispatch. Local Unix
+work/cleanup tasks, a one-use CANCEL sender and local closure under the same
+original budget. The coupled private service dispatch adopts inherited windows
+without opening GO/result/status/release. Local Unix
 tests explicitly mock peer and Darwin clock facts; actual host/runtime/device
 qualification remains separate.
 

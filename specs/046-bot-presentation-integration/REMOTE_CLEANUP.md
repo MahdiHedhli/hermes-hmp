@@ -4,8 +4,9 @@
 
 This joins the selected-v2 remote BEGIN/READY handoff to retained work/cleanup
 ownership. It is part of complete desktop character delivery, not a substitute
-feature. Version1 behavior stays unchanged. CANCEL transport, broker v2 dispatch,
-GO, RESULT, started terminal release and credential/native DRAIN remain closed.
+feature. Version1 behavior stays unchanged. The coupled source adds only selected-v2
+BEGIN/READY/CANCEL dispatch. GO, RESULT, STATUS/ACK, started terminal release
+and credential/native DRAIN remain closed.
 
 Allocate and retain one exact owner on RemoteOperationOwner before initializing
 it. It captures the original remote/record, channel, qualified clock/domain,
@@ -43,15 +44,22 @@ the frozen original budget. A still-running task/native claim remains debt. No
 new native observation, work clock, GO, result or publication is allowed after
 retirement. No socket close occurs while retained work I/O may still run.
 
-For this slice cleanup sends NO frame, even when BEGIN completed. If BEGIN write
-completion is unknown, never append CANCEL to a potentially torn frame. After
-actual work-task join and no live read/write flags, observe only concrete local
+Cleanup may send exactly one CANCEL only after actual work-task join and no live
+read/write flags. A channel-owned immutable intent and completion fact bind the
+concrete BEGIN write to the original remote/channel/socket/scope/packet/deadline;
+a mutable remote completion flag alone is insufficient. Partial or uncertain
+BEGIN never receives an appended frame. The dedicated send accepts only the
+original retained cleanup owner on its own exact task. It freezes write intent
+before encoding and uses the existing cleanup cutoff as its absolute timeout,
+checking original clock/budget and data identity before and after native I/O.
+Partial write, cancellation or timeout is UNKNOWN and never retried.
+
+After the write (or where no completed BEGIN exists), observe only concrete local
 socket close and distinct clock-FD close under the remaining original budget.
-Expired or ambiguous cleanup retains debt; local close does not mean broker,
-child, registry, policy/native DRAIN or credential closure. Later inherited-window
-transport must reuse this owner and its frozen interval, never add a second task
-or timer. An observed cleanup-task completion or its local-close boolean is not
-release authority or certification that the last synchronous primitive finished on time.
+Expired or ambiguous cleanup retains debt; local write/close does not mean broker,
+child, registry, policy/native DRAIN or credential closure. An observed cleanup-task
+completion or its local-close boolean is not release authority or certification
+that the last synchronous primitive finished on time.
 
 Runtime shutdown, blocking syscall latency/external watchdog, trusted installed
 code/exclusive native ownership and real Linux/device qualification remain
@@ -68,6 +76,8 @@ separate. Synthetic tests cannot certify a production hard wall-clock bound.
   ambiguous BEGIN never gets a following CANCEL and no state releases credit.
 - Default runtime success and refusal before effects for foreign loop/factory,
   partial first/second task initialization, stale owner/domain/budget/context.
+- Immutable completed-BEGIN fact versus mutable flag substitution; one CANCEL
+  under the same cutoff, partial-write ambiguity and no retry.
 - Separate socket/clock closure facts, expiry/refusal and cleanup-task cancellation;
   native claims/headers stay retained. No private host or user content fixtures.
 

@@ -16,17 +16,13 @@ concrete NativeClockOwner.sample implementation, then rechecks the same owner.
 A partially initialized or poisoned clock cannot admit frames; mutable instance
 sample overrides are not qualification.
 
-Encoding and header-first decoding require the selected version. The bounded
-v2 channel model supports BEGIN/READY framing only. v2 CANCEL, GO, RESULT,
-STATUS/ACK lifecycle and broker work dispatch remain explicitly refused until
-the original-budget and cleanup-owner integration below is complete. This is
-not a deployed capability or an alternative to the complete character feature.
-
-The subsequent [exclusive CANCEL receiver](INHERITED_CANCEL.md) now has selected
-version2 grammar and bounded semantic budget adoption. Ordinary channel CANCEL
-and service v2 dispatch remain refused until its gateway sender and service
-retirement are joined. No competing general reader or terminal owner may reuse
-an adopted receiver channel.
+Encoding and header-first decoding require the selected version. Ordinary v2
+channel framing supports BEGIN/READY only. The dedicated retained cleanup sender
+and exclusive broker receiver now join private service BEGIN/READY/CANCEL
+source; neither is a general CANCEL reader/writer. No competing reader or
+terminal owner may reuse the adopted receiver channel. GO, RESULT, STATUS/ACK
+and started release remain refused. This is not a deployed capability or an
+alternative to complete character delivery. See [coupled transport](INHERITED_CANCEL.md).
 
 ## Separate local closure facts
 
@@ -57,17 +53,16 @@ native case status must be assessed from exact-run evidence, not green totals.
 1. Local original CancellationBudget binding is implemented before native and
    broker resource effects. The remote owner now seals exact selected clock,
    immutable domain values and qualification with the operation and original work
-   end. Inherited transport adoption remains open; no new budget at cancel time.
+   end. Inherited transport uses that same budget; no new budget at cancel time.
 2. Route every local EOF/timeout/revocation and authenticated inherited window
    through the same minimum. Registry/resource adoption can only shorten the
    earlier frozen end. Unknown clock or delivery retains unknown debt.
-3. The [retained no-frame cleanup source](REMOTE_CLEANUP.md) now owns work/cleanup
-   tasks before effects, retires work, joins its I/O and uses the original frozen
-   cleanup end. Remaining: record scoped CANCEL-write intent and transmit only
-   after both-end inherited-window integration. No replay after ambiguity.
-4. Join v2 grammar, status lifecycle and both transport ends before allowing v2
-   broker dispatch. Preserve raw-auth versus qualified work separation and
-   retain clock resources until their ownership facts can actually be retired.
+3. The [retained cleanup source](REMOTE_CLEANUP.md) now owns work/cleanup tasks,
+   a scoped completed-BEGIN fact and one-use CANCEL intent. It transmits only
+   after work join under the original frozen cutoff; no replay after ambiguity.
+4. Private v2 BEGIN/READY/CANCEL service dispatch now joins both ends. Queue and
+   READY checks, original-budget abort/poll and partial-task retention preserve
+   raw-auth versus qualified work separation. STATUS/ACK remains closed.
 5. Complete async native GO intent, independently validated RESULT, typed started
    terminal proof, credential retirement, runtime admission, authenticated routes,
    full character rendering and signed physical qualification. Host-local images

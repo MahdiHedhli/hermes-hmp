@@ -372,6 +372,22 @@ class RemoteOperationOwner:
             self._poison()
             raise
 
+    def _authorize_send_completion(self, channel, frame, end_ns):
+        RemoteOperationOwner._check(self, RemotePhase.BEGIN_INTENT)
+        if (channel is not self._channel_snapshot or self._send_claimed is not True
+                or self._send_completed is not False or self._receive_claimed is not False
+                or type(frame) is not BrokerFrame or type(frame.header) is not BrokerHeader
+                or frame.header.binding is not self._binding_snapshot
+                or frame.body is not self._packet_snapshot
+                or type(frame.header.kind) is not str or frame.header.kind != "BEGIN"
+                or type(frame.header.version) is not int or frame.header.version != self._protocol
+                or type(frame.header.sequence) is not int or frame.header.sequence != 0
+                or type(frame.header.body_length) is not int
+                or frame.header.body_length != len(self._packet_snapshot)
+                or type(end_ns) is not int or end_ns != self._end_snapshot):
+            self._poison()
+            raise AuthorityRefusalError
+
     async def begin_ready(self) -> bool:
         """Selected v2 retains independent cleanup before any exchange effect."""
         if self._protocol == 1:
@@ -409,10 +425,11 @@ class RemoteOperationOwner:
             frame = BrokerFrame(BrokerHeader(self._binding, "BEGIN", 0, len(self._packet),
                                             self._protocol),
                                 self._packet)
-            await self._channel.send(frame, self._end, owner=self)
+            await SocketChannel.send(self._channel, frame, self._end, owner=self)
             self._send_completed = True
             self._check(RemotePhase.BEGIN_INTENT)
-            ready = await self._channel.receive(self._end, expected=self._binding, owner=self)
+            ready = await SocketChannel.receive(
+                self._channel, self._end, expected=self._binding, owner=self)
             self._check(RemotePhase.BEGIN_INTENT)
             if (type(ready.header.version) is not int or ready.header.version != self._protocol
                     or ready.header.kind != "READY" or ready.header.sequence != 0

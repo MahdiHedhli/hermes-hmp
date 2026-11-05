@@ -1,6 +1,6 @@
 """Actual owned async tasks/sockets, synthetic authority and mocked native peers.
 
-No host content, CANCEL frame, GO, result, server deployment or remote release.
+No host content, GO, result, server deployment or remote release.
 """
 import asyncio
 from contextlib import suppress
@@ -35,7 +35,7 @@ async def joined_cleanup(owner, seconds=1):
 
 
 @pytest.mark.asyncio
-async def test_caller_cancel_retains_cleanup_and_no_following_cancel_frame(prepared_v2):
+async def test_caller_cancel_retains_cleanup_and_sends_one_frozen_cancel(prepared_v2):
     a, op, _, channel, peer, _, _, _ = prepared_v2
     remote, public, owner = await start_waiting(prepared_v2)
     record = a._record(op)
@@ -50,6 +50,11 @@ async def test_caller_cancel_retains_cleanup_and_no_following_cancel_frame(prepa
     assert await joined_cleanup(owner)
     assert owner._work_joined and owner._socket_closed and owner._clock_closed
     assert work.done() and channel._closed_known and channel._clock_closed_known
+    frame = await read_selected(peer, prepared_v2[7])
+    assert frame.header.kind == "CANCEL" and frame.header.sequence == 1
+    from hmp_plugin.presentation_cancel_budget import CancellationWindow
+    assert CancellationWindow.decode(frame.body).end_ns == end
+    assert owner._cancel_write_attempted and owner._cancel_write_completed
     assert await asyncio.wait_for(asyncio.get_running_loop().sock_recv(peer, 1), 1) == b""
     assert record.headers is not None
     assert a.owner.inspect(record.handle) == (State.UNKNOWN, False, False)
@@ -363,3 +368,152 @@ async def test_cancel_before_barrier_open_still_joins_and_uses_cleanup_clock(
     assert await joined_cleanup(owner)
     assert owner._work_joined and not remote._begin_attempted and native.calls == before
     assert await asyncio.wait_for(asyncio.get_running_loop().sock_recv(peer, 1), 1) == b""
+
+
+@pytest.mark.asyncio
+async def test_mutable_begin_completion_flag_cannot_authorize_appended_cancel(
+    prepared_v2, monkeypatch
+):
+    from hmp_plugin.presentation_broker_service import SocketChannel
+    from hmp_plugin.presentation_jobs import FrameError
+
+    _, _, _, channel, peer, _, _, _ = prepared_v2
+    remote = adopt(prepared_v2)
+    async def partial(channel, frame, end, *, owner):
+        await asyncio.get_running_loop().sock_sendall(channel._socket, b"torn-BEGIN")
+        owner._send_completed = True  # tainted metadata cannot mint native write evidence
+        raise FrameError("synthetic incomplete send")
+    monkeypatch.setattr(SocketChannel, "send", partial)
+    with pytest.raises(AuthorityRefusalError):
+        await remote.begin_ready()
+    owner = remote._cleanup_owner_snapshot
+    assert await joined_cleanup(owner)
+    assert owner._unknown and channel._begin_write_fact is None
+    assert not owner._cancel_write_attempted
+    data = bytearray()
+    while True:
+        part = await asyncio.wait_for(asyncio.get_running_loop().sock_recv(peer, 128), 1)
+        if not part:
+            break
+        data.extend(part)
+    assert bytes(data) == b"torn-BEGIN"
+
+
+@pytest.mark.asyncio
+async def test_partial_cancel_write_retains_intent_without_retry(prepared_v2, monkeypatch):
+    from hmp_plugin.presentation_broker_service import SocketChannel
+
+    a, op, _, channel, peer, _, _, _ = prepared_v2
+    _, public, owner = await start_waiting(prepared_v2)
+    original = cleanup._LOOP.sock_sendall
+    calls = []
+    async def partial(loop, sock, data):
+        calls.append(data)
+        await original(loop, sock, data[:11])
+        raise OSError("synthetic cancellation write ambiguity")
+    monkeypatch.setattr(cleanup._LOOP, "sock_sendall", partial)
+    public.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await public
+    assert not await joined_cleanup(owner)
+    assert len(calls) == 1 and owner._cancel_write_attempted and not owner._cancel_write_completed
+    assert owner._unknown and not owner._socket_closed and not channel._writing
+    partial_data = await asyncio.wait_for(asyncio.get_running_loop().sock_recv(peer, 11), 1)
+    assert partial_data == calls[0][:11]
+    with pytest.raises(AuthorityRefusalError):
+        await SocketChannel.send_cancel(channel, owner)
+    assert len(calls) == 1 and a._record(op).headers is not None
+
+
+@pytest.mark.asyncio
+async def test_actual_local_sender_receiver_adopt_same_original_window(prepared_v2):
+    import os
+    from dataclasses import replace
+
+    from hmp_plugin.presentation_broker_cancel import BrokerCancellationOwner
+    from hmp_plugin.presentation_broker_codec import BrokerFrame, BrokerHeader
+    from hmp_plugin.presentation_broker_lifecycle import OperationGrammar
+    from hmp_plugin.presentation_broker_registry import RegistryStatus
+    from hmp_plugin.presentation_broker_service import SocketChannel
+    from hmp_plugin.presentation_input_v3 import decode_input_v3
+
+    a, op, _, gateway_channel, peer, _, packet, b = prepared_v2
+    remote = adopt(prepared_v2)
+    enrollment = replace(gateway_channel._enrollment,
+                         gateway_pid=os.getpid() + 1, service_pid=os.getpid())
+    broker = SocketChannel(peer, enrollment, role="broker", endpoint=gateway_channel._endpoint,
+                           observation=gateway_channel._observation)
+    from hmp_plugin.presentation_broker_registry import BrokerRegistry
+    registry = BrokerRegistry(b)
+    public = asyncio.create_task(remote.begin_ready())
+    first = await SocketChannel.receive(broker, remote._end, expected=b)
+    assert first.body == packet
+    grammar = OperationGrammar(b, role="broker", protocol_version=2)
+    grammar.observe(first, sender="client")
+    row = decode_input_v3(packet)
+    ticket = registry.reserve(b, row["profile"], row["operation"], row["deadline_ns"])
+    receiver = BrokerCancellationOwner.retain(broker, registry, ticket, grammar)
+    try:
+        ready = BrokerFrame(BrokerHeader(b, "READY", 0, 0, 2), b"")
+        grammar.observe(ready, sender="broker")
+        await SocketChannel.send(broker, ready, remote._end)
+        assert await public
+        owner = remote._cleanup_owner_snapshot
+        owner.request()
+        assert await joined_cleanup(owner)
+        frame = await receiver._allocation_snapshot.task
+        assert frame.header.kind == "CANCEL" and receiver._adopted
+        assert CancellationBudget.inspect(registry._record(ticket).cleanup_budget)[2] == (
+            CancellationBudget.inspect(a._record(op).cleanup_budget)[2])
+        assert registry.status(b) is RegistryStatus.PENDING
+        assert registry._record(ticket).resources is None and a._record(op).headers is not None
+    finally:
+        if not receiver._allocation_snapshot.task.done():
+            receiver.abort()
+        with suppress(BaseException):
+            await asyncio.wait_for(asyncio.shield(receiver._allocation_snapshot.task), 1)
+        assert SocketChannel.close(broker) and SocketChannel.close_clock(broker)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["wire", "writing"])
+async def test_cancel_post_native_drift_cannot_supply_bytes_or_clear_write_intent(
+    prepared_v2, monkeypatch, field
+):
+    _, public, owner = await start_waiting(prepared_v2)
+    channel, peer = prepared_v2[3:5]
+    original = cleanup.NativeClockOwner.cleanup_sample
+    changed = []
+    def sample(clock):
+        now = original(clock)
+        if owner._cancel_write_attempted and channel._writing and not changed:
+            changed.append(True)
+            if field == "wire":
+                owner._cancel_wire = owner._cancel_wire_snapshot = b"forged-wire"
+            else:
+                channel._writing = False
+        return now
+    monkeypatch.setattr(cleanup.NativeClockOwner, "cleanup_sample", sample)
+    public.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await public
+    assert not await joined_cleanup(owner)
+    assert changed and owner._unknown and not owner._cancel_write_completed
+    with pytest.raises(BlockingIOError):
+        peer.recv(1)
+    assert not channel._writing
+
+
+@pytest.mark.asyncio
+async def test_begin_write_fact_is_immutable_and_redacted(prepared_v2):
+    _, public, owner = await start_waiting(prepared_v2)
+    channel = prepared_v2[3]
+    fact = channel._begin_write_fact_snapshot
+    assert repr(fact) == "<BeginWriteFact redacted>"
+    assert repr(fact.intent) == "<BeginWriteIntent redacted>"
+    with pytest.raises(AttributeError):
+        object.__setattr__(fact.intent, "packet", b"forged")
+    public.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await public
+    assert await joined_cleanup(owner)
