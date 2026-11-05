@@ -1,3 +1,24 @@
+## Character containment observer — November 5, 2026
+
+Fixture source `1996c03` adds a retained Darwin kernel process-exit observer.
+Registration receipts are distinct from exits, and observed exit is distinct
+from parent reap, pipe closure, descendant absence and manager causality. Native
+boundary/reentry failures remain sticky; ambiguous local monitor close cannot
+produce a success fact or trigger a retry.
+
+Independent focused qualification passes 41 cases. Complete serial Python 3.11
+and 3.14.9 runs each pass 901 tests plus 66 subtests; lint, plugin surface and
+privacy scans pass. The native fixture uses only two short controller-owned
+children; no service or real profile is launched. Hosted CI is tracked separately.
+
+The actual broker-crash integration and instrumented manager-causality control
+remain open. In particular, an unmodified reader can exit voluntarily on stdin
+EOF; that is not proof a manager killed it. Full desktop character metadata,
+classic/blobatar/custom images, authenticated routes, original authorization,
+started release and signed physical parity remain in scope and incomplete.
+No app installation, host capability or host-local image delivery changed.
+See the [observer contract](specs/046-bot-presentation-integration/DARWIN_PROCESS_EXIT_OBSERVER.md).
+
 ## Character broker partial-start retention — November 5, 2026
 
 The reviewed child owner now retains the exact native Popen allocation before
