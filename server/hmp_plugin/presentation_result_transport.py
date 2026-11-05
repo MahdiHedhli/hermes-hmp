@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import os
+import struct
 from contextlib import suppress
 from typing import NamedTuple
 
@@ -32,8 +34,12 @@ from .presentation_broker_service import (
 )
 from .presentation_cancel_budget import CancellationBudget
 from .presentation_input_v3 import decode_input_v3
-from .presentation_jobs import OUTPUT_LIMIT, RemotePhase, State, _Job
-from .presentation_output_v2 import BoundedResultBufferV2, compare_parent_snapshot
+from .presentation_jobs import HEADER_LIMIT, OUTPUT_LIMIT, RemotePhase, State, _Job
+from .presentation_output_v2 import (
+    BoundedResultBufferV2,
+    compare_parent_snapshot,
+    validate_header_v2,
+)
 from .presentation_remote import RemoteOperationOwner
 from .presentation_remote_cleanup import _LOOP, _TASK, RemoteCleanupOwner, _TaskAllocation
 
@@ -216,10 +222,11 @@ class BrokerResultWriter:
 
     async def send(self):
         frame = held = chunk = None
-        origin = self._scope_snapshot
+        origin = None
+        writing = False
         try:
             BrokerResultWriter._current(self)
-            s = self._scope_snapshot
+            s = origin = self._scope_snapshot
             _require(self._take_attempted is False and self._write_attempted is False)
             self._take_attempted = True
             held = BrokerRegistry.take_resource_candidate(s.registry, s.ticket)
@@ -236,6 +243,7 @@ class BrokerResultWriter:
             prefix = encode_header(header)
             _require(s.channel._writing is False)
             s.channel._writing = True
+            writing = True
             self._timeout = self._timeout_snapshot = asyncio.timeout_at(
                 s.control_scope[2] / 1_000_000_000)
             async with self._timeout:
@@ -272,9 +280,10 @@ class BrokerResultWriter:
         finally:
             frame = held = chunk = None
             self._payload = self._payload_snapshot = None
-            s = self._scope_snapshot
-            if type(s) is _WriterScope and type(s.channel) is SocketChannel:
-                s.channel._writing = False
+            if (writing and type(origin) is _WriterScope
+                    and type(origin.channel) is SocketChannel
+                    and origin.channel._result_writer_snapshot is self):
+                origin.channel._writing = False
 
 
 class _ReaderScope(NamedTuple):
@@ -295,6 +304,61 @@ class _ReaderScope(NamedTuple):
     epoch: int
 
 
+def _candidate_header_wire(header):
+    """Bound mutable-header traversal before validation/JSON; no foreign callbacks."""
+    remaining = [HEADER_LIMIT, HEADER_LIMIT]
+
+    def visit(value, depth):
+        _require(depth <= 4 and remaining[0] > 0)
+        remaining[0] -= 1
+        if type(value) is str:
+            _require(len(value) <= HEADER_LIMIT)
+            try:
+                remaining[1] -= len(value.encode("utf-8"))
+            except UnicodeError:
+                raise AuthorityRefusalError from None
+            _require(remaining[1] >= 0)
+        elif type(value) is int:
+            _require(0 <= value < 1 << 63)
+        elif value is None or type(value) is bool:
+            pass
+        elif type(value) is list:
+            _require(len(value) <= remaining[0])
+            for item in value:
+                visit(item, depth + 1)
+        elif type(value) is dict:
+            _require(len(value) <= remaining[0] // 2)
+            for key, item in value.items():
+                _require(type(key) is str)
+                visit(key, depth + 1)
+                visit(item, depth + 1)
+        else:
+            _require(False)
+
+    _require(type(header) is dict)
+    visit(header, 0)
+    validate_header_v2(header)
+    raw = json.dumps(header, sort_keys=True, ensure_ascii=False, separators=(",", ":"),
+                     allow_nan=False).encode("utf-8")
+    _require(len(raw) <= HEADER_LIMIT)
+    return struct.pack(">I", len(raw)) + raw
+
+
+class _CandidateFact(NamedTuple):
+    owner: object
+    scope: _ReaderScope
+    token: object
+    candidate_id: int
+    header_id: int
+    body_id: int
+    header_wire: bytes
+    wire_sha256: str
+    wire_length: int
+
+    def __repr__(self):
+        return "<CandidateFact metadata-only redacted>"
+
+
 class RemoteResultOwner:
     @classmethod
     def retain(cls, remote):
@@ -303,7 +367,16 @@ class RemoteResultOwner:
         channel = remote._channel_snapshot
         _require(remote._result_owner is None and remote._result_owner_snapshot is None
                  and channel._result_receiver is None)
+        job = remote._job_origin_snapshot
+        _require(type(job) is _Job and job._remote_candidate_custody_origin is None
+                 and job._remote_candidate_custody_snapshot is None)
         owner = RemoteResultOwner.__new__(RemoteResultOwner)
+        owner._candidate_job_origin = job
+        owner._failure_cleanup_origin = remote._cleanup_owner_snapshot
+        owner._io_channel_origin = channel
+        owner._wipe_custody_origin = remote._output_custody_snapshot
+        job._remote_candidate_custody_origin = job._remote_candidate_custody_snapshot = (
+            owner, job)  # metadata only, before init effects
         remote._result_owner = remote._result_owner_snapshot = owner
         channel._result_receiver = channel._result_receiver_snapshot = owner
         RemoteResultOwner.__init__(owner, remote)
@@ -313,6 +386,9 @@ class RemoteResultOwner:
         self._scope = self._scope_snapshot = None
         self._initialized = self._attempted = self._validated = self._failed = False
         self._token = self._token_snapshot = None
+        self._candidate = self._candidate_snapshot = None
+        self._candidate_fact = self._candidate_fact_snapshot = None
+        self._discarded = False
         self._timeout = self._timeout_snapshot = None
         self._header = self._header_snapshot = None
         RemoteOperationOwner._check(remote, RemotePhase.GO_SENT)
@@ -364,7 +440,20 @@ class RemoteResultOwner:
                  and s.job.lease is s.record.lease
                  and s.job.state is State.RUNNING
                  and all(type(v) is bool for v in (self._attempted, self._validated, self._failed))
-                 and self._failed is False and self._token is self._token_snapshot
+                 and self._failed is False and self._discarded is False
+                 and self._token is self._token_snapshot
+                 and self._candidate is self._candidate_snapshot
+                 and self._candidate_fact is self._candidate_fact_snapshot
+                 and type(s.job._remote_candidate_custody_origin) is tuple
+                 and len(s.job._remote_candidate_custody_origin) == 2
+                 and (s.job._remote_candidate_custody_origin
+                      is s.job._remote_candidate_custody_snapshot)
+                 and self._candidate_job_origin is s.job
+                 and self._failure_cleanup_origin is s.cleanup
+                 and self._io_channel_origin is s.channel
+                 and self._wipe_custody_origin is s.remote._output_custody_snapshot
+                 and s.job._remote_candidate_custody_origin[0] is self
+                 and s.job._remote_candidate_custody_origin[1] is s.job
                  and self._timeout is self._timeout_snapshot
                  and (self._timeout is None or type(self._timeout) is asyncio.Timeout)
                  and self._header is self._header_snapshot)
@@ -381,12 +470,27 @@ class RemoteResultOwner:
                      and 4 <= self._header.body_length <= OUTPUT_LIMIT)
         _require(self._validated is True or self._attempted is False or s.channel._reading is True)
         if self._validated:
-            _require(type(self._token) is object and s.job.remote_result_token is self._token
-                     and type(s.job.result) is tuple and len(s.job.result) == 2
-                     and type(s.job.result[0]) is dict and type(s.job.result[1]) is bytes
+            fact, candidate = self._candidate_fact_snapshot, self._candidate_snapshot
+            _require(type(fact) is _CandidateFact and fact.owner is self and fact.scope is s
+                     and type(self._token) is object and fact.token is self._token
+                     and s.job.remote_result_token is self._token
+                     and type(candidate) is tuple and len(candidate) == 2
+                     and s.job.result is candidate
+                     and type(candidate[0]) is dict and type(candidate[1]) is bytes
+                     and all(type(v) is int for v in (
+                         fact.candidate_id, fact.header_id, fact.body_id))
+                     and id(candidate) == fact.candidate_id
+                     and id(candidate[0]) == fact.header_id and id(candidate[1]) == fact.body_id
+                     and type(fact.header_wire) is bytes
+                     and len(fact.header_wire) <= HEADER_LIMIT + 4
+                     and type(fact.wire_sha256) is str and len(fact.wire_sha256) == 64
+                     and type(fact.wire_length) is int
+                     and 4 <= fact.wire_length <= OUTPUT_LIMIT
                      and s.job.remote_phase is RemotePhase.RESULT_VALIDATED)
+            _require(_candidate_header_wire(candidate[0]) == fact.header_wire)
         else:
-            _require(self._token is None and s.job.remote_result_token is None
+            _require(self._token is None and self._candidate is None
+                     and self._candidate_fact is None and s.job.remote_result_token is None
                      and s.job.result is None and s.job.remote_phase is RemotePhase.GO_SENT)
 
     def _current(self):
@@ -416,27 +520,38 @@ class RemoteResultOwner:
             data.extend(await RemoteResultOwner._read(self, count - len(data)))
         return bytes(data)
 
-    def wipe(self):
-        s = self._scope_snapshot
-        if type(s) is _ReaderScope:
-            if type(s.accumulator) is bytearray:
-                s.accumulator[:] = b"\x00" * len(s.accumulator)
-                s.accumulator.clear()
-            if type(s.buffer) is BoundedResultBufferV2:
-                s.buffer._done = True
-            if type(s.job) is _Job:
-                s.job.result = None
-                s.job.remote_result_token = None
+    def discard(self):
+        """Drop only this owner's references; no native permission or foreign traversal."""
+        _require(type(self) is RemoteResultOwner)
+        self._candidate = self._candidate_snapshot = None
+        self._candidate_fact = self._candidate_fact_snapshot = None
         self._token = self._token_snapshot = None
+        self._discarded = True
+
+    def wipe(self):
+        # Separately retained original custody; never follow a substituted reader scope.
+        origin = self._wipe_custody_origin
+        if (type(origin) is tuple and len(origin) == 3
+                and type(origin[0]) is _Job and origin[0] is self._candidate_job_origin
+                and type(origin[1]) is BoundedResultBufferV2 and type(origin[2]) is bytearray):
+            origin[2][:] = b"\x00" * len(origin[2])
+            origin[2].clear()
+            origin[1]._done = True
+            origin[0].result = None
+            origin[0].remote_result_token = None
+        RemoteResultOwner.discard(self)
 
     async def receive(self):
-        candidate = part = None
+        candidate = part = digest = None
+        cleanup, channel = self._failure_cleanup_origin, self._io_channel_origin
+        reading = False
         try:
             RemoteResultOwner._current(self)
             s = self._scope_snapshot
             _require(self._attempted is False and s.channel._reading is False)
             self._attempted = True
             s.channel._reading = True
+            reading = True
             prefix = await RemoteResultOwner._small(self, 8)
             raw = prefix + await RemoteResultOwner._small(self, header_size(prefix))
             header = decode_header(raw, expected=s.remote._binding_snapshot, expected_version=2)
@@ -444,9 +559,11 @@ class RemoteResultOwner:
                      and 4 <= header.body_length <= OUTPUT_LIMIT)
             self._header = self._header_snapshot = header
             remaining = header.body_length
+            digest = hashlib.sha256()
             while remaining:
                 part = await RemoteResultOwner._read(self, min(65536, remaining))
                 BoundedResultBufferV2.feed(s.buffer, part)
+                digest.update(part)
                 remaining -= len(part)
                 part = None
                 RemoteResultOwner._current(self)
@@ -456,11 +573,17 @@ class RemoteResultOwner:
                      and candidate[0]["cleanup"] == {
                          "known_fds_closed": True, "unknown_close": False}
                      and (s.expected is None or candidate[0]["avatar_sha"] == s.expected))
+            header_wire = _candidate_header_wire(candidate[0])
+            wire_sha = digest.hexdigest()
             RemoteResultOwner._current(self)
-            # No native callback follows this final original-owner fence.
+            # One original immutable tuple/body, in the clearable receiver ownership cell.
+            self._candidate = self._candidate_snapshot = candidate
             s.job.result = candidate
-            candidate = None  # transfer, never a second retained payload alias
+            candidate = None
             self._token = self._token_snapshot = object()
+            self._candidate_fact = self._candidate_fact_snapshot = _CandidateFact(
+                self, s, self._token, id(self._candidate), id(self._candidate[0]),
+                id(self._candidate[1]), header_wire, wire_sha, header.body_length)
             s.job.remote_result_token = self._token
             s.job.remote_phase = RemotePhase.RESULT_VALIDATED  # still RUNNING, no custody fact
             self._validated = True
@@ -470,12 +593,16 @@ class RemoteResultOwner:
         except BaseException:
             self._failed = True
             RemoteResultOwner.wipe(self)
-            s = self._scope_snapshot
-            if type(s) is _ReaderScope:
-                RemoteCleanupOwner.request(s.cleanup)
+            if (type(cleanup) is RemoteCleanupOwner and type(channel) is SocketChannel
+                    and type(cleanup._refs_snapshot) is tuple and len(cleanup._refs_snapshot) == 12
+                    and cleanup._refs_snapshot[3] is channel
+                    and type(cleanup._remote_snapshot) is RemoteOperationOwner
+                    and (cleanup._remote_snapshot._job_origin_snapshot
+                         is self._candidate_job_origin)):
+                RemoteCleanupOwner.request(cleanup)
             return False  # no decoder traceback/body retained by the work Task
         finally:
-            candidate = part = None
-            s = self._scope_snapshot
-            if type(s) is _ReaderScope and type(s.channel) is SocketChannel:
-                s.channel._reading = False
+            candidate = part = digest = None
+            if (reading and type(channel) is SocketChannel
+                    and channel._result_receiver_snapshot is self):
+                channel._reading = False

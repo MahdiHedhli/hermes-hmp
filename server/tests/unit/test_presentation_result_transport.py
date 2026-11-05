@@ -458,3 +458,237 @@ async def test_cancel_during_blocked_body_stops_original_writer_before_work_dead
             public.cancel()
         with suppress(BaseException):
             await public
+
+
+async def test_candidate_fact_tracks_original_wire_without_retaining_payload(coupled_result):
+    remote, _, _, _ = coupled_result
+    assert await remote.begin_ready() and await remote.go() and await remote.result_ready()
+    receiver = remote._result_owner_snapshot
+    job = remote._job_origin_snapshot
+    fact = receiver._candidate_fact_snapshot
+    assert fact.header_wire == result._candidate_header_wire(job.result[0])
+    wire = encode_output_v2(*job.result)
+    assert fact.wire_sha256 == hashlib.sha256(wire).hexdigest()
+    assert fact.wire_length == len(wire)
+    assert receiver._candidate_snapshot is job.result
+    assert fact.owner is receiver and fact.token is job.remote_result_token
+    assert not any(value is job.result or value is job.result[0] or value is job.result[1]
+                   for value in fact)
+
+
+@pytest.mark.parametrize("fault", [
+    "fields", "ledger", "chain", "tuple", "body", "token", "paired_candidate",
+])
+async def test_changed_private_candidate_refuses_readiness_and_drops_owned_refs(
+    coupled_result, monkeypatch, fault
+):
+    remote, row, _, _ = coupled_result
+    original = result.RemoteResultOwner.receive
+    changed = []
+    async def receive(receiver):
+        accepted = await original(receiver)
+        if accepted:
+            job = receiver._scope_snapshot.job
+            header, body = job.result
+            if fault == "fields":
+                header["fields"]["display_name"] = "substituted"
+            elif fault == "ledger":
+                header["ledger"]["opens"] += 1
+            elif fault == "chain":
+                header["chain"][0][0] += 1
+            elif fault == "tuple":
+                job.result = (header, body)
+            elif fault == "body":
+                job.result = (header, b"foreign")
+            elif fault == "token":
+                job.remote_result_token = object()
+            else:
+                receiver._candidate = receiver._candidate_snapshot = (header, b"foreign")
+                job.result = receiver._candidate
+            changed.append(True)
+        return accepted
+    monkeypatch.setattr(result.RemoteResultOwner, "receive", receive)
+    assert await remote.begin_ready()
+    with pytest.raises(AuthorityRefusalError):
+        assert await remote.go()
+        await remote.result_ready()
+    receiver = remote._result_owner_snapshot
+    job = remote._job_origin_snapshot
+    assert changed and job.result is None and job.remote_result_token is None
+    assert receiver._candidate is None and receiver._candidate_snapshot is None
+    assert receiver._candidate_fact is None and receiver._candidate_fact_snapshot is None
+    assert receiver._discarded and not job.credit_released
+    assert row[0]._record(row[1]).headers is not None
+
+
+@pytest.mark.parametrize("fault", [
+    "object", "key", "depth", "wide", "text", "surrogate", "integer", "cycle",
+])
+async def test_bounded_header_integrity_refuses_foreign_or_unbounded_shapes(local, fault):
+    callbacks = []
+    class Foreign:
+        def __eq__(self, other):
+            callbacks.append("eq")
+            raise AssertionError("foreign equality")
+        def __str__(self):
+            callbacks.append("str")
+            raise AssertionError("foreign text")
+    if fault == "object":
+        value = {"fields": Foreign()}
+    elif fault == "key":
+        value = {object(): "x"}
+    elif fault == "depth":
+        value = {"x": [[[[[1]]]]]}
+    elif fault == "wide":
+        value = {"x": [0] * (result.HEADER_LIMIT + 1)}
+    elif fault == "text":
+        value = {"x": "x" * (result.HEADER_LIMIT + 1)}
+    elif fault == "surrogate":
+        value = {"x": chr(0xD800)}
+    elif fault == "integer":
+        value = {"x": 1 << 10000}
+    else:
+        value = {"x": []}
+        value["x"].append(value)
+    with pytest.raises(AuthorityRefusalError):
+        result._candidate_header_wire(value)
+    assert callbacks == []
+
+
+async def test_central_wipe_discards_original_owner_even_when_current_result_owner_drifts(
+    coupled_result
+):
+    from hmp_plugin.presentation_jobs import JobOwner
+
+    remote, _, _, _ = coupled_result
+    assert await remote.begin_ready() and await remote.go() and await remote.result_ready()
+    job = remote._job_origin_snapshot
+    receiver = remote._result_owner_snapshot
+    callbacks = []
+    class Foreign:
+        def __getattribute__(self, name):
+            callbacks.append(name)
+            raise AssertionError("foreign owner must not be followed")
+    foreign = Foreign()
+    remote._result_owner = remote._result_owner_snapshot = foreign
+    job.result = foreign
+    JobOwner._wipe_remote_candidate(job)
+    assert callbacks == [] and job.result is None and job.remote_result_token is None
+    assert receiver._candidate is None and receiver._candidate_snapshot is None
+    assert receiver._candidate_fact is None and receiver._token_snapshot is None
+    assert receiver._discarded
+
+
+async def test_candidate_custody_retarget_cannot_discard_other_owner(coupled_result):
+    from hmp_plugin.presentation_jobs import JobOwner
+
+    remote, _, _, _ = coupled_result
+    assert await remote.begin_ready() and await remote.go() and await remote.result_ready()
+    job = remote._job_origin_snapshot
+    receiver = remote._result_owner_snapshot
+    other = result.RemoteResultOwner.__new__(result.RemoteResultOwner)
+    other._candidate_job_origin = object()  # distinct synthetic operation owner
+    other._candidate = other._candidate_snapshot = ({}, b"OTHER_PRIVATE_SYNTHETIC")
+    held = other._candidate
+    other._discarded = False
+    origin = job._remote_candidate_custody_snapshot
+    job._remote_candidate_custody_origin = (other, job)
+    JobOwner._wipe_remote_candidate(job)
+    assert job._remote_candidate_custody_snapshot is origin
+    assert receiver._discarded and receiver._candidate_snapshot is None
+    assert other._candidate is held and other._candidate_snapshot is held
+    assert not other._discarded
+    # Even a separately corrupted snapshot cannot use same-job tuple text as authority.
+    job._remote_candidate_custody_snapshot = (other, job)
+    JobOwner._wipe_remote_candidate(job)
+    assert other._candidate is held and not other._discarded
+    job._remote_candidate_custody_snapshot = origin  # fixture disposal only
+
+
+async def test_receiver_wipe_uses_original_custody_not_replaced_scope(coupled_result):
+    from hmp_plugin.presentation_output_v2 import BoundedResultBufferV2
+
+    remote, _, _, _ = coupled_result
+    assert await remote.begin_ready() and await remote.go() and await remote.result_ready()
+    receiver = remote._result_owner_snapshot
+    original = receiver._scope_snapshot
+    other = BoundedResultBufferV2()
+    other._buffer.extend(b"OTHER_OPERATION_SYNTHETIC")
+    held = bytes(other._buffer)
+    receiver._scope = receiver._scope_snapshot = original._replace(
+        accumulator=other._buffer, buffer=other)
+    result.RemoteResultOwner.wipe(receiver)
+    assert bytes(other._buffer) == held and not other._done
+    assert original.job.result is None and original.job.remote_result_token is None
+    assert receiver._candidate_snapshot is None and receiver._candidate_fact_snapshot is None
+    receiver._scope = receiver._scope_snapshot = original  # fixture disposal only
+
+
+async def test_inflight_reader_scope_retarget_cannot_cancel_or_reset_other_operation(
+    coupled_result, monkeypatch
+):
+    remote, row, _, _ = coupled_result
+    foreign_channel = SocketChannel.__new__(SocketChannel)
+    foreign_channel._reading = True
+    foreign_cleanup = RemoteCleanupOwner.__new__(RemoteCleanupOwner)
+    original_recv, original_request = result._LOOP.sock_recv, RemoteCleanupOwner.request
+    changed, foreign_requests = [], []
+    def request(owner):
+        if owner is foreign_cleanup:
+            foreign_requests.append(True)
+            return
+        return original_request(owner)
+    async def recv(loop, sock, count):
+        data = await original_recv(loop, sock, count)
+        receiver = remote._result_owner_snapshot
+        if sock is row[3]._socket_snapshot and receiver is not None and not changed:
+            original = receiver._scope_snapshot
+            foreign_channel._result_receiver_snapshot = receiver
+            receiver._scope = receiver._scope_snapshot = original._replace(
+                cleanup=foreign_cleanup, channel=foreign_channel)
+            changed.append((receiver, original))
+        return data
+    monkeypatch.setattr(RemoteCleanupOwner, "request", request)
+    monkeypatch.setattr(result._LOOP, "sock_recv", recv)
+    try:
+        assert await remote.begin_ready()
+        with pytest.raises(AuthorityRefusalError):
+            assert await remote.go()
+            await remote.result_ready()
+        assert changed and foreign_requests == [] and foreign_channel._reading is True
+        assert row[3]._reading is False
+        assert remote._job_origin_snapshot.result is None
+    finally:
+        for receiver, original in changed:
+            receiver._scope = receiver._scope_snapshot = original
+
+
+async def test_inflight_writer_scope_retarget_cannot_reset_other_channel(
+    coupled_result, monkeypatch
+):
+    remote, _, spine, _ = coupled_result
+    original_send = result._LOOP.sock_sendall
+    foreign = SocketChannel.__new__(SocketChannel)
+    foreign._writing = True
+    changed = []
+    async def send(loop, sock, data):
+        await original_send(loop, sock, data)
+        records = spine._records
+        writer = records[0].result_writer_snapshot if records else None
+        if (writer is not None and writer._write_attempted and not changed
+                and sock is writer._scope_snapshot.channel._socket_snapshot):
+            original = writer._scope_snapshot
+            foreign._result_writer_snapshot = writer
+            writer._scope = writer._scope_snapshot = original._replace(channel=foreign)
+            changed.append((writer, original))
+    monkeypatch.setattr(result._LOOP, "sock_sendall", send)
+    try:
+        assert await remote.begin_ready()
+        with pytest.raises(AuthorityRefusalError):
+            assert await remote.go()
+            await remote.result_ready()
+        assert changed and foreign._writing is True
+        assert changed[0][1].channel._writing is False
+    finally:
+        for writer, original in changed:
+            writer._scope = writer._scope_snapshot = original

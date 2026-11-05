@@ -88,11 +88,39 @@ field and its claims cannot independently attest those facts. Do not invent such
 a field or treat broker-side validation as gateway validation. No new filesystem
 read, parser, hash-only bypass or original credential enters wire/result data.
 
-Store only the independently validated tuple in the original job's private
-candidate slot and wipe its encoded accumulator. A minted metadata-only fact
-binds the original owner/job and a fresh result token, not an extra retained
-avatar/header alias. Cancellation/unknown wipes the job candidate and token;
-retained facts must not keep body bytes alive after that wipe. Shared remote
+Store the independently validated tuple in the original job's private candidate
+slot and a clearable original receiver ownership cell; both references name the
+same tuple/body, never a second payload copy. Wipe the encoded accumulator. A
+minted immutable metadata-only fact binds original owner/scope, token, original
+tuple/header/body identities, bounded canonical-header bytes and actual streaming
+wire SHA-256/length. Canonical header integrity and original wire digest are
+separate facts; noncanonical but valid result bytes cannot be silently relabeled
+as canonical wire. No body/header dictionary reference enters that fact.
+
+Bound header traversal by exact builtin types, depth/node/text ceilings before
+closed result2 validation and canonical serialization; no foreign key/value
+callbacks. Recheck canonical header and original immutable-body identity on every
+later guard, including after native boundaries. The original avatar hash is
+already validated; do not repeatedly hash/copy the full avatar on each guard.
+The sole receiver owns clearable payload references. Original job custody retains
+only its exact candidate owner/job identity before initialization, independently
+sealed from the current custody field and checked against the receiver's original
+job binding before discard; not a payload
+or a payload-containing immutable cell. Cancellation/unknown centrally clears
+job.result/token and concretely discards the original receiver's own candidate,
+fact and token references even if current result/remote-owner fields drift.
+Discard needs no work/native authority, does not follow changed scope/result
+contents and never wipes a foreign candidate. Receiver-local wipe likewise uses
+its separately retained original credited accumulator custody, not a replaceable
+current reader scope. Failure cleanup and final I/O-claim reset also use only
+original references captured before the first await, with reciprocal owner/job/
+channel checks; substituted scopes cannot cancel or reset another operation.
+Retained metadata/custody facts must
+not keep body bytes alive after that wipe. Local Python object identities are
+correlation within this trusted installed process, never an executable-origin or
+producer qualification. This is not a sandbox against arbitrary Python-memory
+mutation or deliberate allocator manipulation; runtime qualification remains a
+separate requirement. Shared remote
 phase RESULT_VALIDATED remains State.RUNNING with original credit/headers held.
 It cannot enter local COMPLETE/reauthorize/emit/custody paths.
 

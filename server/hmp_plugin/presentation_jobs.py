@@ -491,6 +491,8 @@ class _Job:
     parent_result_context: tuple[str, object] | None = None
     result: tuple[dict[str, object], bytes] | None = None
     remote_result_token: object | None = None
+    _remote_candidate_custody_origin: tuple | None = None
+    _remote_candidate_custody_snapshot: tuple | None = None
     remote_output_origin: object | None = None
     remote_output_custody: tuple | None = None
     _remote_output_custody_snapshot: tuple | None = None
@@ -1139,6 +1141,13 @@ class JobOwner:
             origin[2][:] = b"\x00" * len(origin[2])
             origin[2].clear()
             origin[1]._done = True
+        custody = job._remote_candidate_custody_snapshot
+        from .presentation_result_transport import RemoteResultOwner
+
+        if (type(custody) is tuple and len(custody) == 2 and custody[1] is job
+                and type(custody[0]) is RemoteResultOwner
+                and custody[0]._candidate_job_origin is job):
+            RemoteResultOwner.discard(custody[0])  # original owner only, no current work permission
         job.result = None
         job.remote_result_token = None
 
