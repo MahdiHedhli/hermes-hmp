@@ -1,3 +1,26 @@
+## Broker lifecycle and replay controls — November 4, 2026
+
+The reviewed source model now enforces per-direction one-use BEGIN/GO/CANCEL/ACK,
+terminal/cancellation races and status-only reconnect responses. Local invalidation
+and observed binding/role/mode drift cannot revive old work. A gateway discards a
+result racing with cancellation; the broker accepts in-flight late cancellation
+for cleanup without sending another terminal frame.
+
+Operation IDs carry a monotonic serial and192-bit random suffix. A retained64-bit
+window per exact instance/listener/broker boot refuses replay even after terminal
+ACK, random-suffix/channel changes, out-of-order arrivals or history age-out.
+This is bounded grammar/admission state, not a grant or execution/custody receipt.
+ACK_REQUEST still requires one atomic global tombstone acknowledgement; no counter
+or resource is released by this model.
+
+Root lifecycle/codec/peer/source-inventory419 cases pass on Python3.11/3.14.9 on
+this Mac; independent lifecycle/codec132 pass, plus lint and the closed-import
+scanner. No service is active and no character availability is advertised.
+Actual registry, native/transport integration, runtime/endpoint provenance and
+service-manager orphan containment remain open. In particular, existing readers
+start new sessions: broker exit/group termination is not assumed to close them.
+See [lifecycle contract](specs/046-bot-presentation-integration/BROKER_LIFECYCLE.md).
+
 ## Local broker peer observation — November 4, 2026
 
 The next reviewed broker prerequisite can now match a connected local stream's

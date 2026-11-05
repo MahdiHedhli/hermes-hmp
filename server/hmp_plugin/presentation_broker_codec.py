@@ -17,7 +17,9 @@ from .presentation_jobs import INPUT_LIMIT, OUTPUT_LIMIT, FrameError
 MAGIC = b"HBR1"
 HEADER_LIMIT = 1024
 FRAME_LIMIT = 8 + HEADER_LIMIT + OUTPUT_LIMIT
-_KINDS = frozenset({"BEGIN", "READY", "GO", "CANCEL", "CLOSED", "ACK", "STATUS", "RESULT"})
+_KINDS = frozenset(
+    {"BEGIN", "READY", "GO", "CANCEL", "CLOSED", "ACK", "STATUS", "RESULT", "PENDING", "UNKNOWN"}
+)
 _KEYS = frozenset(
     {"v", "kind", "iid", "listener", "broker", "channel", "operation", "sequence", "body_length"}
 )

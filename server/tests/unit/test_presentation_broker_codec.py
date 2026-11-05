@@ -69,7 +69,9 @@ def test_golden_canonical_go_is_fixed_and_immutable(binding):
         decoded.header.binding.channel = "5" * 64
 
 
-@pytest.mark.parametrize("kind", ["READY", "GO", "CANCEL", "CLOSED", "ACK", "STATUS"])
+@pytest.mark.parametrize(
+    "kind", ["READY", "GO", "CANCEL", "CLOSED", "ACK", "STATUS", "PENDING", "UNKNOWN"]
+)
 @pytest.mark.parametrize("sequence", [0, 3])
 def test_control_frames_have_no_body_but_do_not_imply_lifecycle(binding, kind, sequence):
     encoded = encode_frame(binding, kind, sequence)

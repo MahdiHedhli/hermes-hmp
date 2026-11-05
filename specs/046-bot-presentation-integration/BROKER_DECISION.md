@@ -64,9 +64,14 @@ operation correlation only and confer no authorization.
 Frame kinds and body limits:
 - BEGIN: existing input3 frame, 4..8196 bytes (8192-byte JSON plus its four-byte prefix); input's identity/challenge/original
   deadline must be joined to the retained operation by the eventual broker owner.
-- READY/GO/CANCEL/CLOSED/ACK/STATUS: no body.
+- READY/GO/CANCEL/CLOSED/ACK/STATUS/PENDING/UNKNOWN: no body.
 - RESULT: existing output2 bytes, 4..OUTPUT_LIMIT; separately validate its content,
   work/source proof and terminal ownership before any gateway native pre-emit.
+
+The [BR3 lifecycle amendment](BROKER_LIFECYCLE.md) structures the operation field
+as monotonic serial plus192-bit entropy and defines per-direction sequences,
+status-only PENDING/UNKNOWN and terminal/CANCEL races. The old random-only/sequence
+placeholder is superseded for future service integration; no live protocol exists.
 
 No generic error text, paths, headers, prompts or arbitrary metadata in transport
 headers. Duplicate/unknown keys, invalid constants/UTF8/magic/types, overlong or
@@ -108,7 +113,8 @@ handling must be qualified before runtime activation.
 - [x] BR1: independently review architecture and freeze bounded frame codec. Codec may
   land source-only first; all service/authority/activation gates stay explicit.
 - [x] BR2: implement closed pure codec + causal malformed/boundary/isolation tests.
-- [ ] BR3: freeze precise client/server lifecycle, sequencing/cancellation race,
+- [x] BR3a: freeze and implement source-only per-direction grammar and bounded serial replay window; see BROKER_LIFECYCLE.md.
+- [ ] BR3: complete exact global atomic ACK/tombstone integration and typed remote custody authority, plus client/server lifecycle, sequencing/cancellation race,
   capacity/tombstone/ACK/status and typed remote closure authority contract.
 - [x] BR4a: implement/review kernel UID/PID snapshot helper and actual Darwin cross-process fixture; endpoint/code/liveness/custody remain separate.
 - [ ] BR4: qualify platform UID/endpoint identity and private socket acquisition,
