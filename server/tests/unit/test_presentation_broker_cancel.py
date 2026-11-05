@@ -89,7 +89,7 @@ async def test_exact_cancel_adopts_existing_budget_before_any_resource_effect(re
     window = CancellationWindow(now, now + CLEANUP_NS)
     await asyncio.get_running_loop().sock_sendall(
         peer, encode_frame(b, "CANCEL", 1, window.encode(), version=2))
-    frame = await owner._allocation_snapshot.task
+    frame = await service.BrokerServiceSpine._v2_control(None, owner)
     assert frame.header.kind == "CANCEL" and owner._adopted and owner._retired
     assert record.cleanup_budget is original is record.cleanup_budget_snapshot
     assert CancellationBudget.inspect(original)[2] == window.end_ns
@@ -98,6 +98,7 @@ async def test_exact_cancel_adopts_existing_budget_before_any_resource_effect(re
         registry.start_resources(ticket)
     assert registry.status(b) is RegistryStatus.PENDING
     assert channel._closed_known is False and owner.join is not None
+    assert not owner._allocation_snapshot.task.done() and channel._reading
 
 
 @pytest.mark.asyncio
@@ -112,7 +113,7 @@ async def test_local_and_received_causes_only_shorten_original_end(receiver, loc
         CancellationBudget.local(budget, now)
     await asyncio.get_running_loop().sock_sendall(
         peer, encode_frame(b, "CANCEL", 1, earlier.encode(), version=2))
-    await owner._allocation_snapshot.task
+    await service.BrokerServiceSpine._v2_control(None, owner)
     assert CancellationBudget.inspect(budget)[2] == earlier.end_ns
     owner._local_cause()
     assert CancellationBudget.inspect(budget)[2] == min(local.end_ns, earlier.end_ns)
@@ -125,8 +126,10 @@ async def test_already_expired_received_window_never_gets_new_time(receiver):
     window = CancellationWindow(now - CLEANUP_NS - 1000, now - 1000)
     await asyncio.get_running_loop().sock_sendall(
         peer, encode_frame(b, "CANCEL", 1, window.encode(), version=2))
-    await owner._allocation_snapshot.task
+    with pytest.raises(FrameError):
+        await owner._allocation_snapshot.task
     assert owner._adopted
+    assert not owner._notice_completed and owner._cancel_receipt_snapshot is None
     budget = registry._record(ticket).cleanup_budget
     assert CancellationBudget.remaining_ns(budget, time.monotonic_ns()) == 0
     assert budget.local(time.monotonic_ns()).end_ns == window.end_ns
@@ -185,7 +188,7 @@ async def test_partial_cancel_header_and_body_survive_original_work_expiry(recei
     await asyncio.get_running_loop().sock_sendall(peer, data[12:-4])
     await asyncio.sleep(0)
     await asyncio.get_running_loop().sock_sendall(peer, data[-4:])
-    await owner._allocation_snapshot.task
+    await service.BrokerServiceSpine._v2_control(None, owner)
     assert owner._adopted
     assert CancellationBudget.inspect(registry._record(ticket).cleanup_budget)[2] == window.end_ns
 
@@ -413,11 +416,12 @@ async def test_go_clear_preserves_cumulative_original_cursor(receiver):
     cancel_wire = encode_frame(b, "CANCEL", 2,
         CancellationWindow(now, now + CLEANUP_NS).encode(), version=2)
     await asyncio.get_running_loop().sock_sendall(peer, go + cancel_wire)
-    frame = await owner._allocation_snapshot.task
+    frame = await service.BrokerServiceSpine._v2_control(None, owner)
     assert frame.header.kind == "CANCEL" and owner._adopted
-    assert owner._frame_start == len(go)
+    assert owner._frame_start == len(go) + len(cancel_wire)
     assert owner._wire_received == len(go) + len(cancel_wire)
-    assert bytes(owner._buffer_origin) == cancel_wire
+    assert bytes(owner._buffer_origin) == b""
+    assert not owner._allocation_snapshot.task.done()
     assert owner._pending is None and not owner._recv_intent and not owner._io_unknown
 
 
@@ -531,7 +535,7 @@ async def test_control_eagain_wait_keeps_original_end(receiver, monkeypatch):
     wire = encode_frame(b, "CANCEL", 1,
         CancellationWindow(now, now + CLEANUP_NS).encode(), version=2)
     await asyncio.get_running_loop().sock_sendall(peer, wire)
-    await owner._allocation_snapshot.task
+    await service.BrokerServiceSpine._v2_control(None, owner)
     assert cutoffs and set(cutoffs) == {owner._scope[2]}
     assert owner._wire_received == len(wire) and owner._adopted
     assert not owner._io_unknown and owner._pending is None

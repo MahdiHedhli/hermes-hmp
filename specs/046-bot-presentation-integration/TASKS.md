@@ -67,6 +67,13 @@
 - [x] Independently review broker control readiness/cumulative-cursor integration, immediate queued-control draining and original work-to-cleanup timeout transition. Independent153 focused cases plus the final cross-channel isolation causal pass on Python3.13; no ACK continuation or release. See [broker control cursor](BROKER_CONTROL_CURSOR.md).
 - [x] Independently review selected-v2 retained pre-result BEGIN/READY cursor, callback-free final remote custody fence and readiness-proof-before-current ordering. Independent231-case regression and final9-case owner-binding causals pass on Python3.13; preserve v1 and no cleanup activation. See [pre-result cursor](PRE_RESULT_CURSOR.md).
 - [ ] Extend the reviewed post-GO write-quiescence/cleanup-reader coupling to pre-READY and continue the original broker controller after CANCEL toward qualified ACK; retain legacy join gates outside the reviewed scope. See [joined transport prerequisites](TERMINAL_TRANSPORT.md).
+- [x] Implement and independently source-review the original broker cancellation
+      adoption notice and bounded controller park, separate from Task/FD closure.
+      Exact native Future/Task descriptors reject shadowed methods on supported
+      runtimes; original cursor bytes/cumulative offsets, same cleanup end and
+      one-use stop/join remain retained. No ACK/terminal permission is enabled.
+      See [controller prerequisite](BROKER_CONTINUATION.md); the full combined
+      pre-READY/qualified-ACK task above remains open.
 - [ ] Complete selected-v2 STATUS lifecycle, fresh PRE_EMIT, typed started-terminal proof and native/credential retirement before publication; no replay or release shortcuts. See [cancellation contract](CANCELLATION_CLOCK.md).
 - [ ] Qualify broker service/runtime and authenticated transport, integrate native gateway routes and bind started terminal release; local observations alone retain PENDING.
 - [ ] Resolve direct-child native Kanban waitpid(-1) interference through an ownership-aware native contract or a separately reviewed external broker; do not disable Kanban or reinterpret ECHILD as closure.

@@ -6,10 +6,14 @@ no terminal dispatch, ACK permission, image emission or registry/native release.
 
 ## Current concrete prerequisites
 
-The current gateway cleanup cancels and joins the whole work task before sending
-CANCEL (`RemoteCleanupOwner._cleanup`). The broker's original control task now retains cancellation-safe readiness and
-cumulative framing across GO/CANCEL, but still returns after adopting CANCEL (`BrokerCancellationOwner._read`). Consequently neither can
-simply append a new reader for aborted TERMINAL/ACK. Do not lose partial framing,
+The gateway's reviewed post-GO cleanup retains its original reader while sending
+one CANCEL; its unpublished pre-READY extension still needs qualification.
+The broker now publishes a typed cancellation-adoption notice and retains the
+same controller/cumulative cursor in a bounded park after CANCEL. Service cleanup
+waits for that notice rather than Task completion; local FD/clock retirement still
+requires stopping and joining the original Task. This is the
+[controller continuation prerequisite](BROKER_CONTINUATION.md), not ACK parsing.
+Neither side may simply append a new reader for aborted TERMINAL/ACK. Do not lose partial framing,
 create a competing reader or treat full-task join as proof of a different fact.
 The independently qualified producer/receiver factory is also not implemented;
 StartupEnrollment generation, clock qualification, same UID and decoded fields
@@ -81,7 +85,8 @@ The service's original Task owns local reader cleanup and one-use terminal send.
 It may send only actual retained producer facts after known non-torn prior writes,
 under remaining original work time or the earliest cleanup interval.
 
-ACK parsing must be bounded and tied to the exact terminal-write completion fact,
+The cancellation-notice/park portion above is implemented; no park wake currently
+grants further I/O. ACK parsing remains unimplemented and must be bounded and tied to the exact terminal-write completion fact,
 original authenticated gateway/boot/channel and separately qualified receiver
 permission. A syntactically matching digest is not permission. Lost/partial early
 ACK, timeout, drift and uncertainty retain journal debt. Journal retirement never

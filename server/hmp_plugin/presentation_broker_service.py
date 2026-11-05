@@ -1363,13 +1363,25 @@ class BrokerServiceSpine:
 
     async def _v2_control(self, owner):
         from .presentation_broker_cancel import BrokerCancellationOwner
+        from .presentation_remote_cleanup import _FUTURE, _TASK
 
         _require(type(owner) is BrokerCancellationOwner)
-        BrokerCancellationOwner._guard(owner)
-        frame = await asyncio.shield(owner._allocation_snapshot.task)
-        BrokerCancellationOwner._guard(owner)
-        _require(owner._adopted is True and frame is owner._frame_snapshot)
-        return frame
+        try:
+            BrokerCancellationOwner._guard(owner)
+            task, notice = owner._allocation_snapshot.task, owner._cancel_future_snapshot
+            await asyncio.wait((task, notice), return_when=asyncio.FIRST_COMPLETED)
+            BrokerCancellationOwner._guard(owner)
+            if not _FUTURE.done(notice):
+                _TASK.result(task)  # original controller failure, never invent adoption
+                _require(False)
+            receipt = BrokerCancellationOwner.cancel_receipt(owner)
+            _require(owner._adopted is True and receipt.frame is owner._frame_snapshot)
+            return receipt.frame
+        except asyncio.CancelledError:
+            raise  # caller cancellation uses the existing original-controller retirement
+        except BaseException:
+            BrokerCancellationOwner.refuse_notice(owner)
+            raise
 
     def _v2_work_current(self, owner):
         from .presentation_broker_cancel import BrokerCancellationOwner
@@ -1441,7 +1453,8 @@ class BrokerServiceSpine:
             # no second read, READY retry or early resource effect is permitted.
             BrokerCancellationOwner._guard(owner)
             _require(owner._retired is True and not _TASK.cancelling(asyncio.current_task()))
-        await asyncio.wait((owner._allocation_snapshot.task, owner._go_future_snapshot),
+        await asyncio.wait((owner._allocation_snapshot.task, owner._go_future_snapshot,
+                            owner._cancel_future_snapshot),
                            return_when=asyncio.FIRST_COMPLETED)
         BrokerCancellationOwner._guard(owner)
         if owner._retired is False and owner._go_receipt_snapshot is not None:

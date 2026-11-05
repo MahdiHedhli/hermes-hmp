@@ -1,3 +1,29 @@
+## Original broker controller retained after cancellation — November 5, 2026
+
+The broker now publishes a typed cancellation-adoption notice while retaining its
+original controller, read claim and cumulative cursor. The service consumes that
+notice before cleanup; it still has to stop and join the original Task before
+local socket/clock closure. The controller parks under the same earliest cleanup
+end. Queued early ACK bytes remain unread, and expiry or an uncertain wake retains
+unknown debt. Observed drift stays refused after metadata restoration.
+No ACK permission or native/resource release is inferred.
+
+Independent source review accepted the bounded coupling and callback-safety
+repairs. Six no-child/pure modules pass **347 tests on Python 3.11.15** and
+**347 on Python 3.14.4**. This includes 25 new causals for retained cursor/stop
+ownership, partial initialization, receipt substitution, deadline renewal,
+foreign method/equality callbacks, cancellation and expiry. Earlier skipped,
+fixture-metadata and test-migration failures are preserved. The first 3.14 run
+also exposed a native bound-method type difference; the repaired check binds to
+the exact native descriptor, with both runtime regressions passing.
+
+This is source progress toward the existing joined terminal contract. Qualified
+terminal producer/receiver admission, actual ACK transport, gateway pre-READY
+cleanup, native PRE_EMIT/DRAIN, authenticated image routes and runtime/device
+qualification remain open. Full desktop bot characters and host-local images
+are still unfinished. No host, app executable, device grant or release changed.
+See [controller continuation](specs/046-bot-presentation-integration/BROKER_CONTINUATION.md).
+
 ## Cross-platform development candidate — November 5, 2026
 
 Mobile source `a547843` was built as iOS development candidate **2026110502**.

@@ -44,7 +44,25 @@ def _refuse():
 
 
 _GO_RECEIPT_MINT = object()
+_CANCEL_RECEIPT_MINT = object()
+_STOP_MINT = object()
 _SOCKET_RECV = socket.socket.recv
+
+
+def _native_future_methods(future):
+    """asyncio wait/Task internals must not dispatch instance-shadowed methods."""
+    cls = type(future)
+    if cls is not _FUTURE and cls is not _TASK:
+        _refuse()
+    for name in ("done", "cancelled", "get_loop", "add_done_callback",
+                 "remove_done_callback", "cancel", "result"):
+        actual = getattr(future, name)
+        expected = getattr(cls, name).__get__(future, cls)
+        # CPython 3.14 splits some C-bound methods into builtin_method, while
+        # 3.11 uses builtin_function_or_method. Compare to this exact native
+        # descriptor's bound type, never to an arbitrary callable/type allowlist.
+        if type(actual) is not type(expected) or actual != expected:
+            _refuse()
 
 
 class _GoReceipt(NamedTuple):
@@ -56,6 +74,32 @@ class _GoReceipt(NamedTuple):
 
     def __repr__(self):
         return "<GoReceipt redacted>"
+
+
+class _CancelReceipt(NamedTuple):
+    mint: object
+    frame: BrokerFrame
+    window: CancellationWindow
+    scope: tuple
+    allocation: _TaskAllocation
+    future: object
+    park: object
+    timeout: object
+    end: int
+
+    def __repr__(self):
+        return "<CancelReceipt redacted>"
+
+
+class _StopIntent(NamedTuple):
+    mint: object
+    allocation: _TaskAllocation
+    future: object
+    timeout: object
+    end: int
+
+    def __repr__(self):
+        return "<ControllerStop redacted>"
 
 
 class BrokerCancellationOwner:
@@ -84,6 +128,17 @@ class BrokerCancellationOwner:
         self._go_allocation = self._go_allocation_snapshot = None
         self._go_initialized = self._go_initialized_snapshot = None
         self._go_relay_intent = self._go_relay_completed = False
+        self._cancel_future = self._cancel_future_snapshot = None
+        self._cancel_allocation = self._cancel_allocation_snapshot = None
+        self._cancel_initialized = self._cancel_initialized_snapshot = None
+        self._cancel_receipt = self._cancel_receipt_snapshot = None
+        self._notice_attempted = self._notice_completed = False
+        self._park_future = self._park_future_snapshot = None
+        self._park_allocation = self._park_allocation_snapshot = None
+        self._park_initialized = self._park_initialized_snapshot = None
+        self._parked = self._stop_known = False
+        self._park_end = self._park_end_snapshot = None
+        self._stop_intent = self._stop_intent_snapshot = None
         self._slot = self._slot_snapshot = _TaskSlot()
         self._allocation = self._allocation_snapshot = None
         self._task_initialized = self._task_initialized_snapshot = None
@@ -140,6 +195,15 @@ class BrokerCancellationOwner:
             self._go_allocation = self._go_allocation_snapshot = (self._go_future_snapshot,)
             _initialize_future(self._go_future_snapshot, self._loop)
             self._go_initialized = self._go_initialized_snapshot = object()
+            self._cancel_future = self._cancel_future_snapshot = _FUTURE.__new__(_FUTURE)
+            self._cancel_allocation = self._cancel_allocation_snapshot = (
+                self._cancel_future_snapshot,)
+            _initialize_future(self._cancel_future_snapshot, self._loop)
+            self._cancel_initialized = self._cancel_initialized_snapshot = object()
+            self._park_future = self._park_future_snapshot = _FUTURE.__new__(_FUTURE)
+            self._park_allocation = self._park_allocation_snapshot = (self._park_future_snapshot,)
+            _initialize_future(self._park_future_snapshot, self._loop)
+            self._park_initialized = self._park_initialized_snapshot = object()
             self._slot.coroutine = self._slot.coroutine_snapshot = (
                 BrokerCancellationOwner._read(self))
             self._slot.task = self._slot.task_snapshot = _TASK.__new__(_TASK)
@@ -163,6 +227,15 @@ class BrokerCancellationOwner:
 
     def __repr__(self):
         return "<BrokerCancellationOwner redacted>"
+
+    def refuse_notice(self):
+        """Sticky local metadata only; never follow a replaced scope or clock."""
+        if type(self) is not BrokerCancellationOwner:
+            _refuse()
+        self._failed = self._retired = True
+        if (self._parked is True or self._notice_attempted is True
+                or type(self._cancel_receipt_snapshot) is _CancelReceipt):
+            self._io_unknown = True
 
     def _guard(self, *, reader=False, cleanup=False):
         c, reg, ticket = self._channel, self._registry, self._ticket
@@ -208,7 +281,10 @@ class BrokerCancellationOwner:
                 or any(type(v) is not bool for v in (self._retired, self._sampling, self._adopted,
                                                      self._cancel_attempted, self._joined,
                                                      self._go_relay_intent,
-                                                     self._go_relay_completed))
+                                                     self._go_relay_completed,
+                                                     self._notice_attempted,
+                                                     self._notice_completed,
+                                                     self._parked, self._stop_known))
                 or type(self._recv_intent) is not bool or type(self._io_unknown) is not bool
                 or type(self._wire_received) is not int or type(self._frame_start) is not int
                 or not 0 <= self._frame_start <= self._wire_received <= 2 * (8 + 1024 + 16)
@@ -229,12 +305,14 @@ class BrokerCancellationOwner:
                 or type(self._task_initialized) is not object
                 or self._task_initialized is not self._task_initialized_snapshot
                 or type(self._allocation.task) is not _TASK
+                or _TASK.get_loop(self._allocation.task) is not self._loop_snapshot
                 or _TASK.get_coro(self._allocation.task) is not self._allocation.coroutine
                 or self._timeout is not self._timeout_snapshot
                 or (self._timeout is not None and type(self._timeout) is not asyncio.Timeout)
                 or not OperationGrammar._configured(g)
                 or g._binding != scope[1] or g._version != 2):
             _refuse()
+        _native_future_methods(self._allocation.task)
         if (type(self._go_allocation) is not tuple or len(self._go_allocation) != 1
                 or self._go_allocation is not self._go_allocation_snapshot
                 or self._go_future is not self._go_allocation[0]
@@ -244,6 +322,79 @@ class BrokerCancellationOwner:
                 or self._go_initialized is not self._go_initialized_snapshot
                 or _FUTURE.cancelled(self._go_future)
                 or self._go_receipt is not self._go_receipt_snapshot):
+            _refuse()
+        if _FUTURE.get_loop(self._go_future_snapshot) is not self._loop_snapshot:
+            _refuse()
+        _native_future_methods(self._go_future_snapshot)
+        for future, snapshot, allocation, held, initialized, proof in (
+                (self._cancel_future, self._cancel_future_snapshot,
+                 self._cancel_allocation, self._cancel_allocation_snapshot,
+                 self._cancel_initialized, self._cancel_initialized_snapshot),
+                (self._park_future, self._park_future_snapshot,
+                 self._park_allocation, self._park_allocation_snapshot,
+                 self._park_initialized, self._park_initialized_snapshot)):
+            if (type(allocation) is not tuple or len(allocation) != 1 or allocation is not held
+                    or future is not snapshot or future is not allocation[0]
+                    or type(future) is not _FUTURE or type(initialized) is not object
+                    or initialized is not proof):
+                _refuse()
+            if _FUTURE.get_loop(future) is not self._loop_snapshot:
+                _refuse()
+            _native_future_methods(future)
+        if (_FUTURE.cancelled(self._cancel_future_snapshot)
+                or self._cancel_receipt is not self._cancel_receipt_snapshot
+                or self._park_end is not self._park_end_snapshot
+                or self._stop_intent is not self._stop_intent_snapshot):
+            _refuse()
+        notice = self._cancel_receipt_snapshot
+        if notice is None:
+            if (self._notice_attempted or self._notice_completed or self._parked
+                    or self._park_end is not None or _FUTURE.done(self._cancel_future_snapshot)):
+                _refuse()
+        else:
+            if (type(notice) is not _CancelReceipt or notice.mint is not _CANCEL_RECEIPT_MINT
+                    or notice.frame is not self._frame_snapshot
+                    or notice.scope is not scope
+                    or notice.allocation is not self._allocation_snapshot
+                    or notice.future is not self._cancel_future_snapshot
+                    or notice.park is not self._park_future_snapshot
+                    or type(notice.frame) is not BrokerFrame
+                    or type(notice.frame.header) is not BrokerHeader
+                    or type(notice.frame.body) is not bytes
+                    or type(notice.timeout) is not asyncio.Timeout
+                    or notice.timeout is not self._timeout_snapshot
+                    or type(self._park_end) is not int
+                    or type(notice.end) is not int or notice.end != self._park_end
+                    or type(notice.window) is not CancellationWindow
+                    or type(self._park_end) is not int or not 0 < self._park_end <= MAX_NS
+                    or self._adopted is not True or self._parked is not True):
+                _refuse()
+            CancellationWindow.__post_init__(notice.window)
+            if CancellationWindow.encode(notice.window) != notice.frame.body:
+                _refuse()
+            when = asyncio.Timeout.when(notice.timeout)
+            if type(when) is not float or when != notice.end / 1_000_000_000:
+                _refuse()
+            if self._notice_completed:
+                if (self._notice_attempted is not True
+                        or not _FUTURE.done(notice.future)
+                        or _FUTURE.result(notice.future) is not notice):
+                    _refuse()
+            elif _FUTURE.done(notice.future):
+                _refuse()
+        stop = self._stop_intent_snapshot
+        if (stop is not None
+                and (type(stop) is not _StopIntent or stop.mint is not _STOP_MINT
+                    or stop.allocation is not self._allocation_snapshot
+                    or stop.future is not self._park_future_snapshot
+                    or stop.timeout is not self._timeout_snapshot
+                    or type(stop.end) is not int or stop.end != self._park_end
+                    or self._cancel_attempted is not True)):
+            _refuse()
+        if (_FUTURE.done(self._park_future_snapshot)
+                and (not cleanup or type(stop) is not _StopIntent
+                    or not _FUTURE.cancelled(self._park_future_snapshot)
+                    or not _TASK.cancelling(self._allocation_snapshot.task))):
             _refuse()
         receipt = self._go_receipt_snapshot
         if receipt is not None:
@@ -496,9 +647,57 @@ class BrokerCancellationOwner:
             BrokerCancellationOwner._guard(self, reader=True)
             CancellationBudget.inherit(self._scope[3], window, now)
             self._adopted = True
-            return self._frame
-        except BaseException:
+            BrokerCancellationOwner._remaining(self)
+            end = CancellationBudget.inspect(self._scope_snapshot[3])[2]
+            if type(end) is not int or self._notice_attempted is not False:
+                _refuse()
+            # Retain the exact consumed cursor and notification before scheduling
+            # any service continuation. No terminal/ACK permission is minted.
+            buffer, received = self._buffer_origin, self._wire_received
+            self._timeout = self._timeout_snapshot = asyncio.timeout_at(end / 1_000_000_000)
+            notice = _CancelReceipt(_CANCEL_RECEIPT_MINT, self._frame_snapshot, window,
+                                    self._scope_snapshot, self._allocation_snapshot,
+                                    self._cancel_future_snapshot, self._park_future_snapshot,
+                                    self._timeout_snapshot, end)
+            self._cancel_receipt = self._cancel_receipt_snapshot = notice
+            self._parked = True
+            self._park_end = self._park_end_snapshot = end
+            BrokerCancellationOwner._guard(self, reader=True)
+            self._recv_intent = True
+            buffer.clear()
+            self._frame_start = received
+            self._recv_intent = False
+            BrokerCancellationOwner._guard(self, reader=True)
+            self._notice_attempted = True
+            _FUTURE.set_result(notice.future, notice)
+            self._notice_completed = True
+            BrokerCancellationOwner._guard(self, reader=True)
+            async with self._timeout_snapshot:
+                BrokerCancellationOwner._remaining(self)
+                await self._park_future_snapshot
+            _refuse()  # No wake currently grants ACK or ordinary-work authority.
+        except asyncio.CancelledError:
+            if self._parked:
+                try:
+                    if self._io_unknown is not False or self._failed is not False:
+                        _refuse()
+                    BrokerCancellationOwner._guard(self, cleanup=True)
+                    if (self._stop_intent_snapshot is None or self._notice_completed is not True
+                            or asyncio.current_task() is not self._allocation_snapshot.task
+                            or not BrokerCancellationOwner.cleanup_remaining(self)):
+                        _refuse()
+                    self._stop_known = True
+                    return self._frame_snapshot
+                except BaseException:
+                    self._io_unknown = True
             if self._recv_intent is not False:
+                self._io_unknown = True
+            self._pending = None
+            BrokerCancellationOwner._local_cause(self)
+            self._failed = True
+            raise
+        except BaseException:
+            if self._recv_intent is not False or self._parked:
                 self._io_unknown = True
             self._pending = None
             BrokerCancellationOwner._local_cause(self)
@@ -520,6 +719,19 @@ class BrokerCancellationOwner:
             _refuse()
         return receipt
 
+    def cancel_receipt(self):
+        """Completed cancellation adoption only; not Task/FD/native closure."""
+        try:
+            BrokerCancellationOwner._guard(self)
+            notice = self._cancel_receipt_snapshot
+            if (type(notice) is not _CancelReceipt or self._notice_completed is not True
+                    or _FUTURE.result(self._cancel_future_snapshot) is not notice):
+                _refuse()
+            return notice
+        except BaseException:
+            BrokerCancellationOwner.refuse_notice(self)
+            raise FrameError("BI1_BROKER_CANCELLATION_REFUSED") from None
+
     def abort(self):
         BrokerCancellationOwner._local_cause(self)
         allocation = self._allocation_snapshot
@@ -528,6 +740,19 @@ class BrokerCancellationOwner:
                 and type(self._task_initialized) is object
                 and self._task_initialized is self._task_initialized_snapshot
                 and not _TASK.done(allocation.task)):
+            if self._parked is True:
+                try:
+                    if self._io_unknown is not False or self._failed is not False:
+                        _refuse()
+                    BrokerCancellationOwner._guard(self, cleanup=True)
+                    if (type(self._timeout_snapshot) is not asyncio.Timeout
+                            or self._notice_completed is not True):
+                        _refuse()
+                    self._stop_intent = self._stop_intent_snapshot = _StopIntent(
+                        _STOP_MINT, allocation, self._park_future_snapshot,
+                        self._timeout_snapshot, self._park_end_snapshot)
+                except BaseException:
+                    self._io_unknown = True
             self._cancel_attempted = True
             _TASK.cancel(allocation.task)
 
