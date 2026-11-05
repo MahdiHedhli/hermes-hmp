@@ -14,7 +14,7 @@ import pytest_asyncio
 from hmp_plugin import presentation_remote_cleanup as cleanup
 from hmp_plugin.presentation_authority import AuthorityRefusalError
 from hmp_plugin.presentation_broker_codec import encode_frame
-from hmp_plugin.presentation_broker_registry import RegistryStatus
+from hmp_plugin.presentation_broker_registry import BrokerRegistry, RegistryStatus
 from hmp_plugin.presentation_broker_service import SocketChannel
 from hmp_plugin.presentation_cancel_budget import CLEANUP_NS, CancellationBudget, CancellationWindow
 from hmp_plugin.presentation_jobs import FrameError, RemotePhase, State
@@ -57,7 +57,11 @@ async def coupled(local, context, monkeypatch):
     await spine.stop_local_sockets()
 
 
-async def test_fresh_native_go_and_cancel2_keep_original_work_and_started_debt(coupled):
+async def test_fresh_native_go_and_cancel2_keep_original_work_and_started_debt(
+    coupled, monkeypatch
+):
+    # This causal isolates GO/CANCEL2 before RESULT; result transport has its own matrix.
+    monkeypatch.setattr(BrokerRegistry, "poll_resource_result", lambda *args: False)
     remote, task, row, spine = coupled
     authority, op, native, channel, _, _, _, b = row
     assert await remote.begin_ready()

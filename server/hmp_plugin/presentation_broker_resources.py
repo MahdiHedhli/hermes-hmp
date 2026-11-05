@@ -63,6 +63,7 @@ class BrokerReaderResources:
         self._cleanup_budget = self._cleanup_budget_snapshot = cleanup_budget
         self._cleanup_sampling = False
         self._operation = self._operation_snapshot = operation
+        self._input_receipt_origin = self._input_receipt_snapshot = operation.input_receipt_snapshot
         self._process = self._process_snapshot = process
         self._scope = self._scope_snapshot = (
             binding.iid,
@@ -159,8 +160,10 @@ class BrokerReaderResources:
             if (
                 type(self._poisoned) is not bool
                 or self._poisoned
+                or self._input_receipt_origin is not self._input_receipt_snapshot
                 or self._operation is not self._operation_snapshot
                 or type(self._operation) is not _Record
+                or self._operation.input_receipt_snapshot is not self._input_receipt_snapshot
                 or self._process is not self._process_snapshot
                 or type(self._process) is not BrokerChildOwner
                 or self._scope is not self._scope_snapshot
@@ -334,6 +337,10 @@ class BrokerReaderResources:
                 or (self._scope[6] == "AVATAR" and row["expected_avatar_sha"] is None)
             ):
                 raise FrameError("BI1_BROKER_RESOURCES_INPUT_REFUSED")
+            if self._operation_snapshot.input_receipt_snapshot is not None:
+                from .presentation_terminal_claim import input_current
+
+                input_current(self._operation_snapshot, packet)
             self._input_context = self._input_snapshot = (
                 row["challenge"],
                 row["epoch"],
@@ -569,4 +576,4 @@ class BrokerReaderResources:
             self._lock.release()
 
     def validates_local(self, operation: object, observation: BrokerLocalDrainObservation) -> bool:
-        return observation is self.local_observation(operation)
+        return observation is BrokerReaderResources.local_observation(self, operation)

@@ -15,6 +15,7 @@ from .presentation_broker_codec import (
     BrokerBinding,
     BrokerFrame,
     BrokerHeader,
+    _binding,
     _row,
     decode_header,
     header_size,
@@ -160,8 +161,9 @@ class BrokerCancellationOwner:
     def _guard(self, *, reader=False, cleanup=False):
         c, reg, ticket = self._channel, self._registry, self._ticket
         g, scope = self._grammar, self._scope
-        if type(c) is not SocketChannel:
+        if type(c) is not SocketChannel or type(scope) is not tuple or len(scope) != 10:
             _refuse()
+        _binding(scope[1])  # exact closed field types before any dataclass equality
         SocketChannel._bindings(c)  # exact enrollment types before any field/property reads
         if (self._initialized is not True
                 or (self._failed is not False and not (cleanup and self._failed is True))

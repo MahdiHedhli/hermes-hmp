@@ -1,4 +1,4 @@
-"""Enrolled private socket service spine; NO production admission or GO.
+"""Enrolled private control/result spine; no production admission or started release.
 
 Trusted startup supplies both kernel identities and one immutable instance /
 listener / broker-boot scope. It separately qualifies installation and manager
@@ -896,8 +896,8 @@ class BrokerServiceSpine:
 
     Adopt a private already-bound/listening socket from trusted startup. Never
     create/unlink endpoints or enroll from frames. This slice handles real
-    admission/READY/cancellation/STATUS, but deliberately cannot relay GO, send
-    RESULT or release a started reservation. It is not a runnable production CLI.
+    admission/control/private-result paths, but cannot release a started
+    reservation or publish data. It is not a runnable production CLI.
     """
     def __init__(self, listener: socket.socket, enrollment: StartupEnrollment, *,
                  endpoint: BrokerEndpointOwner, observation: EndpointObservation,
@@ -1202,6 +1202,7 @@ class BrokerServiceSpine:
         self._current()
         record.ticket = self._registry.reserve(binding, row["profile"], row["operation"],
                                               row["deadline_ns"])
+        BrokerRegistry.bind_input_receipt_once(self._registry, record.ticket, first.body)
         try:
             owner = BrokerCancellationOwner.retain(channel, self._registry, record.ticket,
                                                    record.grammar)
@@ -1255,9 +1256,15 @@ class BrokerServiceSpine:
             while owner._retired is False and not _TASK.done(owner._allocation_snapshot.task):
                 BrokerServiceSpine._v2_work_current(self, owner)
                 if BrokerResultWriter.poll(writer):
-                    if not await BrokerResultWriter.send(writer):
-                        _require(owner._retired is True
-                                 or _TASK.done(owner._allocation_snapshot.task))
+                    sent = await BrokerResultWriter.send(writer)
+                    if not sent:
+                        if writer._cancel_requested is True:
+                            await BrokerServiceSpine._v2_control(self, owner)
+                        return  # original budget frozen; finally joins IO/reader and cleans locally
+                    elif owner._retired is False:
+                        from .presentation_terminal_claim import LocalStartedProducer
+
+                        LocalStartedProducer.retain(self, record)
                     break
                 await asyncio.sleep(0.001)
         await BrokerServiceSpine._v2_control(self, owner)
@@ -1307,6 +1314,11 @@ class BrokerServiceSpine:
                         await asyncio.sleep(0.001)
                 if BrokerCancellationOwner.cleanup_remaining(owner) <= 0:
                     return  # no late socket/clock action and no renewed shutdown allowance
+                if (held.terminal_producer is None and held.resources is not None
+                        and held.resources._observation is not None):
+                    from .presentation_terminal_claim import LocalStartedProducer
+
+                    LocalStartedProducer.retain(self, record)
                 record.local_closed = SocketChannel.close(channel)
                 if record.local_closed and BrokerCancellationOwner.cleanup_remaining(owner) > 0:
                     record.clock_closed = SocketChannel.close_clock(channel)

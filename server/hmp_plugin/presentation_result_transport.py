@@ -6,7 +6,9 @@ traceback retaining a full candidate. Runtime qualification remains separate.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import os
+from contextlib import suppress
 from typing import NamedTuple
 
 from .presentation_authority import AuthorityRefusalError
@@ -65,6 +67,20 @@ class _WriterScope(NamedTuple):
     task: object
 
 
+_TRANSFER_MINT = object()
+
+
+class _CompletedResultTransfer(NamedTuple):
+    mint: object
+    writer: object
+    scope: _WriterScope
+    sha256: str
+    length: int
+
+    def __repr__(self):
+        return "<CompletedResultTransfer metadata-only redacted>"
+
+
 class BrokerResultWriter:
     @classmethod
     def retain(cls, service, connection, packet):
@@ -83,6 +99,7 @@ class BrokerResultWriter:
         self._scope = self._scope_snapshot = None
         self._initialized = self._failed = self._take_attempted = self._write_attempted = False
         self._write_completed = self._cancel_requested = False
+        self._transfer_fact = self._transfer_fact_snapshot = None
         self._payload = self._payload_snapshot = None
         self._timeout = self._timeout_snapshot = None
         control = connection.cancel_owner
@@ -142,6 +159,13 @@ class BrokerResultWriter:
                       or s.channel._writing is True)
                  and self._timeout is self._timeout_snapshot
                  and (self._timeout is None or type(self._timeout) is asyncio.Timeout))
+        fact = self._transfer_fact
+        _require(fact is self._transfer_fact_snapshot
+                 and (fact is None or (type(fact) is _CompletedResultTransfer
+                      and fact.mint is _TRANSFER_MINT and fact.writer is self and fact.scope is s
+                      and type(fact.sha256) is str and len(fact.sha256) == 64
+                      and type(fact.length) is int and 4 <= fact.length <= OUTPUT_LIMIT
+                      and self._write_completed is True)))
         BrokerCancellationOwner._guard(s.control)
         _require(s.control._go_relay_completed is True
                  and s.control._scope_snapshot is s.control_scope)
@@ -173,6 +197,7 @@ class BrokerResultWriter:
                 or asyncio.current_task() is not s.control_allocation.task
                 or type(s.task) is not _TASK
                 or self._write_attempted is not True or self._write_completed is not False
+                or self._failed is not False or s.channel._writing is not True
                 or self._cancel_requested is not False or _TASK.done(s.task)):
             return
         _, _, end, failed = CancellationBudget.inspect(s.control_scope[3])
@@ -191,6 +216,7 @@ class BrokerResultWriter:
 
     async def send(self):
         frame = held = chunk = None
+        origin = self._scope_snapshot
         try:
             BrokerResultWriter._current(self)
             s = self._scope_snapshot
@@ -198,6 +224,9 @@ class BrokerResultWriter:
             self._take_attempted = True
             held = BrokerRegistry.take_resource_candidate(s.registry, s.ticket)
             self._payload = self._payload_snapshot = held
+            BrokerResultWriter._current(self)
+            _require(self._payload is held and self._payload_snapshot is held)
+            digest = hashlib.sha256(held).hexdigest()
             BrokerResultWriter._current(self)
             _require(self._payload is held and self._payload_snapshot is held)
             header = BrokerHeader(s.record.binding, "RESULT", 1, len(held), 2)
@@ -231,9 +260,14 @@ class BrokerResultWriter:
             BrokerResultWriter._current(self)
             _require(self._payload is held and self._payload_snapshot is held)
             self._write_completed = True  # local I/O only; no execution or release proof
+            self._transfer_fact = self._transfer_fact_snapshot = _CompletedResultTransfer(
+                _TRANSFER_MINT, self, s, digest, len(held))
             return True
         except BaseException:
             self._failed = True
+            if type(origin) is _WriterScope and type(origin.control) is BrokerCancellationOwner:
+                with suppress(BaseException):
+                    BrokerCancellationOwner._local_cause(origin.control)
             return False
         finally:
             frame = held = chunk = None

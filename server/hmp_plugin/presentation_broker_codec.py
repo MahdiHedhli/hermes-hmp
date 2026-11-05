@@ -74,7 +74,7 @@ class BrokerFrame:
 def _binding(value: BrokerBinding) -> None:
     if type(value) is not BrokerBinding:
         _fail()
-    value.__post_init__()
+    BrokerBinding.__post_init__(value)
 
 
 def _version(value: int) -> None:

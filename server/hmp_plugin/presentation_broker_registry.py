@@ -76,6 +76,11 @@ class _Record:
     resources: BrokerReaderResources | None = None
     resources_snapshot: BrokerReaderResources | None = None
     resources_ready: bool = False
+    input_bind_attempted: bool = False
+    input_receipt: object | None = None
+    input_receipt_snapshot: object | None = None
+    terminal_producer: object | None = None
+    terminal_producer_snapshot: object | None = None
 
 
 def _recipe_value(recipe: ChildLaunch) -> tuple:
@@ -365,6 +370,30 @@ class BrokerRegistry:
             raise FrameError("BI1_BROKER_REGISTRY_TICKET_REFUSED")
         return self._records[ticket]
 
+    def bind_input_receipt_once(self, ticket, packet):
+        from .presentation_terminal_claim import bind_input, input_current
+
+        self._enter()
+        try:
+            record = self._record(ticket)
+            if (record.state is not _State.QUEUED or record.start_attempted is not False
+                    or record.managed is not False or record.resources is not None
+                    or record.unknown is not False or record.input_bind_attempted is not False
+                    or record.input_receipt is not None or record.input_receipt_snapshot is not None
+                    or not BrokerRegistry._work_budget(record)):
+                raise FrameError("BI1_BROKER_INPUT_RECEIPT_REFUSED")
+            record.input_bind_attempted = True
+            try:
+                receipt = bind_input(record, packet)
+                record.input_receipt = record.input_receipt_snapshot = receipt
+                self._check()
+                input_current(record, packet)
+            except BaseException:
+                record.unknown = True  # no late bind/retry after uncertain input custody
+                raise FrameError("BI1_BROKER_INPUT_RECEIPT_REFUSED") from None
+        finally:
+            self._lock.release()
+
     @staticmethod
     def _work_budget(record: _Record) -> bool:
         end, _, cause, failed = CancellationBudget.inspect(record.cleanup_budget)
@@ -583,7 +612,7 @@ class BrokerRegistry:
         self._enter()
         try:
             record = self._managed(ticket)
-            observation = record.resources.local_observation(record)
+            observation = BrokerReaderResources.local_observation(record.resources, record)
             self._check()
             return observation
         finally:

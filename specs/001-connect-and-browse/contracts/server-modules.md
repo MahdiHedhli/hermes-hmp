@@ -509,3 +509,16 @@ closed module set includes it explicitly; the exact-tree, Hermes-free import and
 optional local-media isolation checks remain enforced. Validation produces only
 a private job candidate/token; publication, native terminal proof and release
 remain inaccessible through this module.
+
+### BI1 local started-reader claim data (November 5, 2026)
+
+`presentation_terminal_claim.py` binds immutable input receipts before reader
+effects and retains one local producer over actual child-wait, pipe/control
+closure and signal-retirement observations. Its bounded canonical codec carries
+data only; decoded bytes cannot settle started debt or authorize publication.
+It imports no Hermes internals and adds no route, tool, registration, provider
+or network destination. The exact closed module set admits it explicitly,
+retaining Hermes-free and optional local-media isolation checks. See
+[STARTED_TERMINAL.md](../../046-bot-presentation-integration/STARTED_TERMINAL.md).
+Shared process-group membership is not a group-absence proof; remote joined
+proof, COMPLETE/ACK, native release and public rendering remain closed.
