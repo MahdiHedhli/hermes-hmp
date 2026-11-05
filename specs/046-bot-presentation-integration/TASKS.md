@@ -72,7 +72,8 @@
       earliest shared budget. Root's exact-source serial nine-module regression
       passes 334 cases on each of Python 3.11.15 and 3.14.4, with 74 dedicated
       causals and no unobserved-task warnings. Reviewer execution is not claimed.
-      Full isolated CI and integration remain pending; no ACK/native release,
+      Integrated source2c2a14e passes exact CI42124526459 (7,192 passed,
+      21 skipped, 190 subtests plus Unicode jobs); no ACK/native release,
       route activation or runtime/device qualification follows from this check.
       See [bounded prerequisite](PRE_READY_CLEANUP.md); the combined task above
       and complete character/host-local image delivery remain open.

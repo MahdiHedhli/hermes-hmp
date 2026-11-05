@@ -8,7 +8,7 @@ no terminal dispatch, ACK permission, image emission or registry/native release.
 
 The gateway's reviewed post-GO cleanup retains its original reader while sending
 one CANCEL. Its [pre-READY extension](PRE_READY_CLEANUP.md) has bounded source
-review and local regression coverage; isolated CI and integration remain pending.
+review, local regression and exact-source CI; it is integrated through PR113.
 The broker now publishes a typed cancellation-adoption notice and retains the
 same controller/cumulative cursor in a bounded park after CANCEL. Service cleanup
 waits for that notice rather than Task completion; local FD/clock retirement still
@@ -44,8 +44,9 @@ No retransmission, modified envelope or appended frame after a torn write.
 
 The [write-quiescence prerequisite](WRITE_QUIESCENCE.md) now composes with the
 reviewed [post-GO cleanup reader](CLEANUP_READER.md) for one CANCEL while the
-original RESULT task drains. Pre-READY, ACK and terminal acceptance remain
-unimplemented; the following full contract must not be read as deployment proof.
+original RESULT task drains. The [pre-READY source candidate](PRE_READY_CLEANUP.md)
+extends that coupling before GO and passes exact-source CI42124526459. ACK and
+terminal acceptance remain unimplemented, and this contract is not deployment proof.
 Keep the original retained work Task as the sole stream reader; existing cleanup
 Task is the sole planned CANCEL/ACK writer (only CANCEL is implemented).
 Replacing whole-task-join before sending requires the exact one-use

@@ -73,7 +73,12 @@ Tasks in two deliberately UNKNOWN tests after their outcome assertions. Initial
 legacy closure expectations were migrated to actual CANCEL/EOF/controller joins,
 without changing the deadline or weakening the UNKNOWN gates.
 
-Full isolated CI, integration and runtime/physical qualification remain pending.
+Source `2c2a14e750f4b66fdff25209f35609b7535513d0` is integrated through
+[PR113](https://github.com/MahdiHedhli/hermes-hmp/pull/113). Exact-source
+[CI42124526459](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42124526459)
+passes all jobs and required gates: 7,192 tests, 21 skipped, 18 warnings and
+190 subtests, plus the separate Unicode 17 jobs. Counts overlap the local
+regressions; do not add them. Runtime/physical qualification remains pending.
 The [joined terminal transport contract](TERMINAL_TRANSPORT.md), qualified
 producer/receiver admission, ACK, PRE_EMIT/DRAIN and authenticated routes remain
 separate required work for complete desktop character and host-local image delivery.

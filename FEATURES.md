@@ -1,21 +1,24 @@
-## Original pre-READY cleanup reader candidate — November 5, 2026
+## Reviewed pre-READY cleanup lifecycle — November 5, 2026
 
-The pre-READY and READY-wait cleanup extension is independently source-reviewed.
-It retains the original Task, cursor, buffer and earliest cleanup budget while
-the existing cleanup Task writes one CANCEL. Healthy READY-to-GO is unchanged;
-lost readiness/owner/budget proof refuses selection. A refused cross-operation
-borrow leaves a second admitted synthetic operation intact and operational.
+HMP source `2c2a14e` is integrated into the character feature branch through
+[PR113](https://github.com/MahdiHedhli/hermes-hmp/pull/113). Before GO, cleanup
+retains the original work Task, cursor, bytes and earliest shared budget while
+sending one CANCEL. Owner/readiness/end drift refuses selection; a refused borrow
+leaves a second independently admitted synthetic operation operational.
 
-Root's exact-source serial nine-module regression passes **334 cases each on
-Python 3.11.15 and 3.14.4**, without unobserved-task warnings; reviewer execution
-is not claimed. Full CI and integration are pending. See the
-[bounded contract and evidence scope](specs/046-bot-presentation-integration/PRE_READY_CLEANUP.md).
+Independent bounded source review accepted the coupling. Root's serial regression
+passes **334 cases each on Python 3.11.15 and 3.14.4**, including 74 dedicated
+causals; reviewer execution is not claimed. Exact-source
+[CI42124526459](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42124526459)
+passes all jobs and required gates: **7,192 passed, 21 skipped, 190 subtests**,
+plus the separate Unicode 17 jobs. Counts overlap and are not additive.
 
-This is source progress, not installed character or host-local image support.
-Terminal/ACK/native retirement, authenticated routes and runtime/device gates
-remain open. App executable, embedded HMP, installed hosts/devices and grants are
-unchanged. Original project access recovered; its dirty source was backed up
-and reconciled in the isolated feature worktree.
+This is integrated source progress, not installed image support. Qualified
+terminal/ACK, native PRE_EMIT/DRAIN/retirement, authenticated routes and
+runtime/physical qualification remain open. Full desktop bot characters and
+host-local images are still unfinished. App executable, embedded HMP, installed
+hosts/devices and grants are unchanged. See the
+[bounded contract](specs/046-bot-presentation-integration/PRE_READY_CLEANUP.md).
 
 ## Original broker controller cancellation lifecycle — November 5, 2026
 
@@ -38,8 +41,8 @@ The initial full run's one legacy Task-return fixture failure remains recorded;
 its reviewed notice migration preserved the original deadline and assertions.
 
 This is source progress, not installed image support. Qualified terminal
-producer/receiver admission, ACK transport, gateway pre-READY cleanup, native
-PRE_EMIT/DRAIN, authenticated routes and runtime/physical qualification remain
+producer/receiver admission, ACK transport, native PRE_EMIT/DRAIN,
+authenticated routes and runtime/physical qualification remain
 open. Full desktop bot characters and host-local images are still unfinished.
 App executable, embedded HMP, installed hosts/devices and grants are unchanged
 by this slice. See [controller continuation](specs/046-bot-presentation-integration/BROKER_CONTINUATION.md).
@@ -69,8 +72,8 @@ are not physical qualification or release acceptance. Device-local sections and
 static icon source is implemented; its physical persistence/accessibility
 acceptance remains open. Full desktop bot characters and host-local images
 remain unfinished. At that checkpoint project file access blocked the original
-pre-READY edits; access has since recovered and the candidate above is being
-qualified. Mobile build preparation used a separate clean working copy.
+pre-READY edits; access has since recovered and the reviewed coupling above is
+integrated. Mobile build preparation used a separate clean working copy.
 
 ## Character and Unicode source CI restored — November 5, 2026
 
@@ -90,9 +93,9 @@ not physical-device or runtime qualification.
 
 The repair is integrated into the feature branch through PR #88. No HMP pin,
 dependency, permission, provider, host or device deployment changed. Phone-visible
-characters and host-local images remain unfinished. Unpublished pre-READY cleanup
-work has since been recovered into the independently reviewed candidate above;
-full CI/integration and complete character delivery remain pending.
+characters and host-local images remain unfinished. Pre-READY cleanup work has
+since been reviewed, tested and integrated as recorded above; complete character
+delivery and runtime qualification remain pending.
 
 ## Reviewed post-GO cleanup reader — November 5, 2026
 
