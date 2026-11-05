@@ -32,7 +32,7 @@
 - [x] Implement/review the [fixed-install verifier plus namespace-only synthetic bootstrap](BROKER_BOOTSTRAP.md); external expected manifest trust and explicit runtime/bytecode/OS-loader premises; actual retained no-GO child and generation/deadline refusal tested. Production audit/service/crash gates remain separate.
 - [x] Independently audit the fixed own-code worker and PyYAML 6.0.3 token/event path for process/group/FD-transfer calls; source-path evidence only, not OS confinement. See [audit](BROKER_WORKER_SOURCE_AUDIT.md).
 - [x] Implement/review native Popen retention before initialization, opaque partial state, fresh-process empty-active guards and original-deadline checks; 120 focused cases independently pass. Constructor-internal cleanup remains UNKNOWN; no reaper patch or ECHILD-to-success conversion.
-- [ ] Qualify multi-operation service lifecycle under the fresh-runtime/exclusive-reaper premises, including crash/orphan containment and retained unknown debt.
+- [ ] Qualify multi-operation service lifecycle under the fresh-runtime/exclusive-reaper premises, including crash/orphan containment and retained unknown debt; see [reviewed bounded fixture sequence](BROKER_SERVICE_CONTAINMENT_FIXTURE.md).
 - [ ] Qualify broker service/runtime and authenticated transport, integrate native gateway routes and bind started terminal release; local observations alone retain PENDING.
 - [ ] Resolve direct-child native Kanban waitpid(-1) interference through an ownership-aware native contract or a separately reviewed external broker; do not disable Kanban or reinterpret ECHILD as closure.
 - [x] Add reviewed cleanup-only discard after exact child/group/control closure (bf24a54); frozen cleanup budget, actual EOF, buffered wipe and unknown-debt causals.

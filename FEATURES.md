@@ -10,8 +10,9 @@ The native GC/second-reader fixture confirms that the failed handle is retained
 without invoking its internal poll while a separate reader completes. Root and
 independent focused suites each pass 120 cases. Complete serial Python 3.11 and
 3.14.9 suites each pass 860 tests plus 66 subtests; lint and closed-import scan
-pass. Bootstrap source `9ef3bf4` passed hosted CI41968921451; the new source's CI
-must be recorded by its own commit after publication.
+pass. Hosted CI41971597711 now passes all jobs on exact source `e056102`,
+including the Ubuntu plugin/unit/privacy suite. The Python 3.12–3.14 jobs retain
+their separate Unicode scope; they are not a full custody matrix.
 
 This does not suppress constructor-internal cleanup or establish concurrency
 exclusion: a fresh standalone runtime, no foreign constructors/reapers and strong

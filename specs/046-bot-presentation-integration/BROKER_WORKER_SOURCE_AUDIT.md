@@ -70,3 +70,15 @@ loader remain inside the explicit trusted-runtime/OS premises. Text/AST tracing
 cannot establish confinement against vulnerabilities there. Actual loaded-image
 qualification, service crash/orphan/descendant containment, authenticated peer/boot
 binding, original native authorization and started-operation release remain open.
+
+## Post-audit source repair — November 5, 2026
+
+Source `e056102` now retains native Popen allocations before initialization and
+checks the same exact empty stdlib cleanup list around allocation. Independent
+120-case focused convergence and floor/current regressions passed; hosted
+CI41971597711 passes on that exact source. This improves the partial-constructor
+condition identified above, without converting constructor-internal cleanup to
+closure or excluding arbitrary concurrent foreign reapers. Fresh standalone and
+strong-retention premises remain mandatory. Next is the separately reviewed
+[bounded service-containment fixture](BROKER_SERVICE_CONTAINMENT_FIXTURE.md);
+its implementation and actual observations remain open.
