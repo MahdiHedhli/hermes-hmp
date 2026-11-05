@@ -61,6 +61,8 @@ CONTRACT_MODULES = {
     "presentation_worker_control.py",
     "presentation_go.py",
     "presentation_child_launch.py",
+    # BR2 source-only bounded IPC framing; no broker service/route.
+    "presentation_broker_codec.py",
     "presentation_child.py",
     "presentation_pipes.py",
     "presentation_process.py",

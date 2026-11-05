@@ -1,3 +1,20 @@
+## External character custodian path — November 4, 2026
+
+A separately OS-supervised reader broker is the selected development path around
+the conditional native waitpid(-1) conflict. The gateway will retain original phone
+and bot authorization plus final response approval; it will not start/reap/kill
+that service or treat remote completion as a forged local Popen/wait receipt.
+No service is implemented or activated yet.
+
+The first reviewed source piece is bounded private framing: canonical closed
+headers, kind-specific input3/output2 size limits and exact instance/listener/
+broker/channel/operation correlation. Codec/skeleton328 cases pass on Python3.11
+and3.14.9, independently repeated; lint and the closed-import scanner pass.
+This is framing only, not peer authentication, lifecycle sequencing, body content
+validation, child closure or transport memory-bound certification. Service peer/
+endpoint identity, restart/orphan custody, native backend integration and physical
+character parity remain open. See [broker decision](specs/046-bot-presentation-integration/BROKER_DECISION.md).
+
 ## Explicit character-parser runtime — November 4, 2026
 
 The development reader now accepts a validated, frozen startup parser package
