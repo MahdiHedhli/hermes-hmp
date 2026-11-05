@@ -148,17 +148,20 @@ async def test_broker_accepts_queued_eof_without_postclose_peer_api(local, monke
         if closed:
             pytest.fail("closed peer is not a credential-availability requirement")
         return original_peer(*args, **kwargs)
-    def close_peer():
+    async def close_peer():
         nonlocal closed
+        # Closing with unread response bytes sends ECONNRESET on Linux. Drain
+        # the canonical reply first: this causal targets clean EOF, not reset.
+        assert (await read_frame(sock, binding())).header.kind == "UNKNOWN"
         sock.close()
         closed = True
     async def send(target, data):
         await original_send(target, data)
         if target is not sock and when == "post_send":
-            close_peer()
+            await close_peer()
     async def eof(owner):
         if when == "eof_entry":
-            close_peer()
+            await close_peer()
         await original_eof(owner)
     monkeypatch.setattr(service, "observe_peer", peer)
     monkeypatch.setattr(loop, "sock_sendall", send)
@@ -353,3 +356,23 @@ async def test_positive_python_timeout_refuses_before_io_creation(gateway, monke
         assert owner._failed is True and owner._shutdown_intent is False
     finally:
         channel._socket.setblocking(False)
+
+
+@pytest.mark.asyncio
+async def test_reset_after_bodyless_reply_is_not_clean_eof(gateway, monkeypatch):
+    channel, remote, _ = gateway
+    owner = adopt(channel)
+    await owner.request()
+    await read_frame(remote, binding())
+    await asyncio.get_running_loop().sock_sendall(remote, encode_frame(binding(), "PENDING", 0))
+    original_recv = asyncio.get_running_loop().sock_recv
+    async def reset_after_halfclose(sock, amount):
+        if owner._shutdown_intent:
+            raise ConnectionResetError(errno.ECONNRESET, "synthetic connection reset")
+        return await original_recv(sock, amount)
+    monkeypatch.setattr(asyncio.get_running_loop(), "sock_recv", reset_after_halfclose)
+    with pytest.raises(ConnectionResetError):
+        await owner.receive_reply()
+    assert owner._failed is True and owner._completion is None
+    with pytest.raises(FrameError):
+        await owner.receive_reply()  # no retry or reset-to-EOF conversion
