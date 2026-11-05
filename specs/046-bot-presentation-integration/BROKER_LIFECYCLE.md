@@ -139,7 +139,8 @@ needs independent resource cleanup and cannot issue closure/release evidence.
 `ACK_REQUEST` deliberately means neither acknowledged global tombstone nor slot
 release. Atomic idempotent original/STATUS ACK convergence, actual registry limits,
 qualified endpoint/direction, deadlines, native pre-GO/pre-emit, body proof and
-process/thread/pipe closure are still required. No service imports these helpers.
+process/thread/pipe closure are still required. The later enrolled no-GO service spine imports these helpers with fixed startup
+scope. Its local tests mock peer identity; production qualification remains open.
 
 Before custody implementation/activation, qualify service-manager crash/orphan
 containment: the current direct reader starts a new session, so broker exit or

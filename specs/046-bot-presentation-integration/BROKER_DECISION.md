@@ -1,6 +1,7 @@
 # BI1 external reader custodian — proposed no-core-change path
 
-Status: architecture review requested; no live service, capability or route.
+Status: architecture/source foundations and the [enrolled no-GO service spine](SERVICE_SPINE.md)
+are independently reviewed. No production service, capability or route is active.
 The direct gateway reader cannot assume exclusive wait ownership when the native
 Kanban thread may call waitpid(-1). An HMP-only lock, forkserver started by the
 gateway, detached child or altered SIGCHLD handler does not repair that premise.

@@ -80,3 +80,15 @@ separate authority model and does not require this presentation reader. Do not
 mark desktop parity complete or permanently upstream-impossible: choose and
 review the direct-owner integration or external-broker path, and preserve the
 full presentation scope, runtime/route/physical tasks and active broader goal.
+
+## Primary-source recheck — November 5, 2026
+
+Read-only inspection confirms the installed source checkout remains
+`ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df`; no update/restart was performed by
+this check. Current upstream `d8c79e4b6b8c63e6c40167ff95ec28e7b1fee189` is145
+commits ahead. The exact `tui_gateway/methods_profiles.py` Git blob is identical
+at both revisions: `c5b1e649a8256799bf37b6880bb925b4477aa740`. Thus the previously
+inspected broad profile/asset method module has not itself become a narrowed HMP
+presentation contract in that interval. This is not an audit of every new gateway
+API, nor proof of the currently executing process image. Broker generation
+qualification remains distinct from Hermes minimum-version compatibility.

@@ -1,3 +1,36 @@
+## Enrolled broker service spine — November 5, 2026
+
+Source `e0fe0e7` now joins private socket ownership, fixed startup enrollment,
+header-first bounded HBR1 transport, shared replay/capacity registry and actual
+reader resources. The local path exercises BEGIN/READY/cancellation and bodyless
+STATUS while preserving started PENDING debt. No frame enrolls or replaces a boot;
+no HELLO/self-reported hash is trusted. GO, RESULT and started terminal release
+remain closed pending original native and custody integration.
+
+Independent review passes 29 local service cases on Python 3.11. Root serial
+Python 3.11 and 3.14.9 suites each pass 958 tests plus 66 subtests. The final
+format-only follow-up has an identical parsed AST; lint, closed-surface and privacy
+scans pass. Manager-control source `dfa2858` now passes all jobs in CI41978260093;
+service-source CI is tracked separately. The local service tests explicitly mock
+kernel peer identity; they are not separate-process or production qualification.
+
+The reviewed repair retains a pending holder before native accept, uses readiness-
+only futures, preserves ambiguous acquisition and validates original close facts.
+It also handles inspected Python 3.11 completed-future cancellation behavior:
+pending cancellation cannot trigger another accept, progress return or reader
+start. Cleanup stays available without reviving work. A fresh default-loop audit
+found a child-watcher object but no active foreign reap/thread path without a
+subprocess transport; no custom policy/executor/foreign subprocess is admitted.
+
+Next is one independently reviewed, externally supervised separate-process fixture
+with real peer checks and fixed private startup enrollment. Production runtime/
+startup, global cancellation timing, typed remote/native authorization, started
+release, routes, full rendering and signed physical parity remain open. Broker
+installation integrity is not a Hermes version allowlist. No existing host,
+provider/grant, phone installation or actual bot data changed. Full desktop
+metadata/classic/blobatar/custom-image delivery and host-local images remain
+required outcomes. See [service spine](specs/046-bot-presentation-integration/SERVICE_SPINE.md).
+
 ## Character manager group control — November 5, 2026
 
 Source `dfa2858` adds a separately instrumented Darwin manager-control experiment.
