@@ -1,3 +1,29 @@
+## Coupled cancellation transport source — November 5, 2026
+
+HMP `f38b435` joins one-use gateway CANCEL sending to the exclusive broker
+receiver and private selected-v2 BEGIN/READY/CANCEL service dispatch. An immutable
+channel-owned completed-BEGIN fact prevents a mutable flag from authorizing a
+following frame. The sender joins original work before using the same frozen
+cutoff; partial writes remain unknown and are never retried. A validated CANCEL
+header revokes queued work before its body arrives. Complete adoption, actual
+receiver join and original-budget resource cleanup precede separate local
+socket/clock close facts; started registry/native debt remains retained.
+
+Independent review passes 243 tests on Python3.13. Root serial Python3.11.15 and
+standalone Python3.14.4 each pass 1,656 tests plus 190 subtests, with one
+Linux-native skip. Lint, surface, privacy and diff checks pass. Homebrew3.14.6's
+full inventory fixture is refused for a symlink escaping its runtime root (26
+setup failures, 1,630 passes); no check was weakened. Previously cited3.14.9 is
+unavailable to the current runner and is not claimed for this candidate. Prior
+receiver head `f8f8686` CI42033005260 is green; this source needs separate CI.
+
+This remains source work toward complete desktop character delivery. Synthetic
+Unix/owned-reader tests mock peer/Darwin clock facts; no production runtime,
+Linux or device qualification follows. GO/results/status/started release,
+authenticated image routes and full character rendering remain unfinished. App
+executable, embedded HMP and installed hosts are unchanged. Host-local images
+follow character delivery. See [coupled cancellation](specs/046-bot-presentation-integration/INHERITED_CANCEL.md).
+
 ## Original-window broker receiver source — November 5, 2026
 
 HMP `c0c6e82` adds an exclusive selected-v2 cancellation receiver bound to the
