@@ -4,8 +4,9 @@
 
 Complete the native-authorized remote character-image path, not an alternative
 snapshot feature. Current source `f38b435` couples selected-v2 BEGIN/READY/CANCEL
-only. It must continue to reject GO until this entire control-path change is
-implemented and independently reviewed. No new installed service, gateway,
+only. Coupled GO source now implements the control path below; independent
+implementation review and regression evidence are tracked separately in FEATURES.md.
+Production activation still requires its retained runtime/source qualification. No new installed service, gateway,
 permission, provider, image route or device qualification follows from this plan.
 
 The local `ParentAuthorityAdapter.go_inline` deliberately rejects remote jobs and
@@ -118,14 +119,15 @@ GO notification/write, EOF, local task completion or local close releases credit
 
 ## Acceptance and implementation order
 
-1. READY-notification/task-retention source is implemented separately from shared
-   remote GO intent states. It preserves public behavior while keeping the exact
-   work task alive; wire GO remains closed. Complete GO-request barrier and
-   intent states next, preserving partial initialization and actual joins.
-2. Implement fresh native GO admission and one-use exact-task intent; review
-   callback/reentrancy/metadata boundaries. Preserve local go_inline semantics.
-3. Couple concrete GO write facts, CANCEL1/2 selection, continuous broker receiver
-   and service relay together. Do not enable only the sender or only grammar.
+1. READY/GO notification and request barriers plus shared remote GO intent states
+   are implemented on the same retained work task. Partial initialization retains
+   unknown debt; actual joins and public requester isolation remain mandatory.
+2. Fresh native GO admission and one-use exact-task intent are implemented.
+   Callback-free cleanup allocation validation follows the JobOwner clock before
+   indexing; foreign metadata tripwires pass. Local go_inline stays unchanged.
+3. Concrete GO write facts, CANCEL1/2 selection, continuous broker receiver
+   and service relay are coupled in source. Neither receipt/write/relay alone
+   attests execution, result validity or release.
 4. Add synthetic real Unix/process causals: READY is not task join; native gate
    refusal; queued GO; GO/CANCEL delivery races; CANCEL before relay; duplicate/
    partial/late GO; lost write acknowledgement; cancellation at every await;

@@ -141,8 +141,30 @@ class _BeginWriteFact(NamedTuple):
         return "<BeginWriteFact redacted>"
 
 
+_GO_WRITE_MINT = object()
+
+
+class _GoWriteIntent(NamedTuple):
+    begin: _BeginWriteFact
+    work: object
+    admission: object
+    wire: bytes
+    token: object
+
+    def __repr__(self):
+        return "<GoWriteIntent redacted>"
+
+
+class _GoWriteFact(NamedTuple):
+    mint: object
+    intent: _GoWriteIntent
+
+    def __repr__(self):
+        return "<GoWriteFact redacted>"
+
+
 class SocketChannel:
-    """Exclusive exact native socket, bounded no-GO spine frames, no retry.
+    """Exclusive native socket, bounded frames and dedicated one-use GO, no retry.
 
     Endpoint owner/observation outlive every referencing channel. Caller retains
     this owner before initialize; partial native resources remain reachable.
@@ -168,6 +190,8 @@ class SocketChannel:
         self._cancel_receiver = self._cancel_receiver_snapshot = None
         self._begin_write_intent = self._begin_write_intent_snapshot = None
         self._begin_write_fact = self._begin_write_fact_snapshot = None
+        self._go_write_intent = self._go_write_intent_snapshot = None
+        self._go_write_fact = self._go_write_fact_snapshot = None
         self._clock_owner = self._clock_owner_snapshot = None
         self._clock_closed_known = False
         try:
@@ -232,6 +256,15 @@ class SocketChannel:
                       or (type(self._begin_write_fact) is _BeginWriteFact
                           and self._begin_write_fact.mint is _BEGIN_WRITE_MINT
                           and self._begin_write_fact.intent is self._begin_write_intent)))
+        _require(self._go_write_intent is self._go_write_intent_snapshot
+                 and (self._go_write_intent is None
+                      or (type(self._go_write_intent) is _GoWriteIntent
+                          and self._go_write_intent.begin is self._begin_write_fact_snapshot))
+                 and self._go_write_fact is self._go_write_fact_snapshot
+                 and (self._go_write_fact is None
+                      or (type(self._go_write_fact) is _GoWriteFact
+                          and self._go_write_fact.mint is _GO_WRITE_MINT
+                          and self._go_write_fact.intent is self._go_write_intent_snapshot)))
         _require(self._cancel_receiver is self._cancel_receiver_snapshot)
         if self._cancel_receiver is not None:
             from .presentation_broker_cancel import BrokerCancellationOwner
@@ -460,6 +493,57 @@ class SocketChannel:
                     _BEGIN_WRITE_MINT, intent)
         except BaseException:
             self._refused = True
+            raise
+        finally:
+            self._writing = False
+
+    def _go_written(self, remote):
+        from .presentation_remote import RemoteOperationOwner
+
+        SocketChannel._bindings(self)
+        _require(type(remote) is RemoteOperationOwner and self._remote_owner is remote
+                 and self._remote_owner_snapshot is remote)
+        intent, fact = self._go_write_intent_snapshot, self._go_write_fact_snapshot
+        _require(type(intent) is _GoWriteIntent and type(fact) is _GoWriteFact
+                 and fact.mint is _GO_WRITE_MINT and fact.intent is intent
+                 and intent.begin is self._begin_write_fact_snapshot
+                 and type(intent.begin) is _BeginWriteFact
+                 and intent.begin.intent.remote is remote
+                 and intent.work is remote._cleanup_owner_snapshot._allocations_snapshot[1]
+                 and intent.admission is remote._go_admission_snapshot
+                 and type(intent.wire) is bytes and type(intent.token) is object)
+
+    async def send_go(self, remote):
+        from .presentation_jobs import RemotePhase
+        from .presentation_remote import RemoteOperationOwner
+        from .presentation_remote_cleanup import _LOOP, RemoteCleanupOwner
+
+        _require(type(remote) is RemoteOperationOwner)
+        RemoteOperationOwner._check(remote, RemotePhase.GO_INTENT)
+        cleanup = remote._cleanup_owner_snapshot
+        _require(type(cleanup) is RemoteCleanupOwner
+                 and RemoteCleanupOwner._can_cancel(cleanup)
+                 and self is remote._channel_snapshot and self._writing is False
+                 and self._reading is False and self._go_write_intent is None)
+        data = encode_frame(remote._binding_snapshot, "GO", 1, version=2)
+        intent = _GoWriteIntent(self._begin_write_fact_snapshot, cleanup._allocations_snapshot[1],
+                                remote._go_admission_snapshot, data, object())
+        self._go_write_intent = self._go_write_intent_snapshot = intent
+        self._writing = True  # intent before any possibly partial native write
+        try:
+            async with asyncio.timeout_at(remote._end_snapshot / 1_000_000_000):
+                RemoteOperationOwner._check(remote, RemotePhase.GO_INTENT)
+                _require(self._go_write_intent_snapshot is intent and self._writing is True
+                         and self._socket is self._socket_snapshot)
+                await _LOOP.sock_sendall(cleanup._loop_snapshot, self._socket_snapshot, data)
+            RemoteOperationOwner._check(remote, RemotePhase.GO_INTENT)
+            _require(self._go_write_intent is intent and self._go_write_intent_snapshot is intent
+                     and self._writing is True and data is intent.wire)
+            self._go_write_fact = self._go_write_fact_snapshot = _GoWriteFact(
+                _GO_WRITE_MINT, intent)
+        except BaseException:
+            self._refused = True
+            RemoteOperationOwner._poison(remote)
             raise
         finally:
             self._writing = False
@@ -1140,6 +1224,19 @@ class BrokerServiceSpine:
             # no second read, READY retry or early resource effect is permitted.
             BrokerCancellationOwner._guard(owner)
             _require(owner._retired is True and not _TASK.cancelling(asyncio.current_task()))
+        await asyncio.wait((owner._allocation_snapshot.task, owner._go_future_snapshot),
+                           return_when=asyncio.FIRST_COMPLETED)
+        BrokerCancellationOwner._guard(owner)
+        if owner._retired is False and owner._go_receipt_snapshot is not None:
+            receipt = BrokerCancellationOwner.go_receipt(owner)
+            BrokerServiceSpine._v2_work_current(self, owner)
+            _require(BrokerCancellationOwner.go_receipt(owner) is receipt
+                     and owner._go_relay_intent is False)
+            owner._go_relay_intent = True  # before concrete resource/control effects
+            self._registry.relay_resource_go(record.ticket)
+            BrokerServiceSpine._v2_work_current(self, owner)
+            _require(BrokerCancellationOwner.go_receipt(owner) is receipt)
+            owner._go_relay_completed = True  # control write only, never execution ack
         await BrokerServiceSpine._v2_control(self, owner)
         self._registry.abort_resources(record.ticket)  # inherited minimum already adopted
 

@@ -4,8 +4,10 @@ This advances BR3/BR6 toward the full metadata/classic/blobatar/custom-image
 feature. Independent review accepts the BEGIN/READY source boundary, including
 monotonic channel adoption and post-peer deadline/cancellation checks. It is not
 a substitute final feature or production activation. The
-bounded no-GO service passed separately; GO/RESULT, started release, routes and
-signed device parity remain required and incomplete.
+bounded no-GO service passed separately. Subsequent coupled selected-v2 GO source
+adds fresh native intent and continuous control ownership under [ASYNC_GO.md](ASYNC_GO.md).
+RESULT, started release, routes, production runtime and signed device parity
+remain required and incomplete.
 
 ## One shared admission and native authority ledger
 
@@ -84,7 +86,7 @@ version, refusing downgrade. These changes still authorize only BEGIN/READY.
 The subsequent [retained cleanup source](REMOTE_CLEANUP.md) now owns selected-v2
 work/cleanup tasks, a one-use CANCEL sender and local closure under the same
 original budget. The coupled private service dispatch adopts inherited windows
-without opening GO/result/status/release. Local Unix
+with dedicated one-use GO source while result/status/release remain closed. Local Unix
 tests explicitly mock peer and Darwin clock facts; actual host/runtime/device
 qualification remains separate.
 
@@ -110,8 +112,9 @@ Never translate a remote CLOSED/EOF/boolean into local custody events.
 The selected-v2 cancellation/clock source conveys the gateway's original
 frozen cleanup end without per-hop renewal. Version1 bodyless CANCEL cannot do
 that; it remains separate from selected-v2 work. Lost CANCEL/disconnection or a later broker-local drain cannot certify a
-previous gateway 250 ms bound; uncertainty remains retained debt. No GO or started
-release is enabled before this decision and its implementation review.
+previous gateway 250 ms bound; uncertainty remains retained debt. The coupled GO
+source preserves this original-window decision. Started release remains closed
+until its own typed proof and ownership integration.
 
 ## Source acceptance checks
 

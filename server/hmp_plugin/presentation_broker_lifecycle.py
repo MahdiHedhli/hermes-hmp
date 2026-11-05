@@ -207,7 +207,8 @@ class OperationGrammar:
                 or len(frame.body) != frame.header.body_length
                 or type(frame.header.version) is not int
                 or frame.header.version != self._version
-                or (self._version == 2 and frame.header.kind not in ("BEGIN", "READY", "CANCEL"))
+                or (self._version == 2
+                    and frame.header.kind not in ("BEGIN", "READY", "GO", "CANCEL"))
                 or frame.header.binding != self._binding
                 or type(sender) is not str
                 or sender not in ("client", "broker")

@@ -1,6 +1,6 @@
-"""Exclusive selected-v2 CANCEL reader/adoption; no dispatch or release authority.
+"""Exclusive selected-v2 GO/CANCEL reader; no native or release authority.
 
-Service activation and gateway sender remain separate coupled gates. Wire bytes
+The coupled service and native-authorized sender retain separate ownership. Wire bytes
 are read only on the original enrolled channel under its qualified clock domain.
 """
 from __future__ import annotations
@@ -9,6 +9,7 @@ import asyncio
 import os
 import socket
 import threading
+from typing import NamedTuple
 
 from .presentation_broker_codec import (
     BrokerBinding,
@@ -24,11 +25,33 @@ from .presentation_broker_service import _SOCKET_FILENO, _SOCKET_TIMEOUT, Socket
 from .presentation_cancel_budget import MAX_NS, CancellationBudget, CancellationWindow
 from .presentation_clock import NativeClockOwner, _PeerClockRefusedError
 from .presentation_jobs import FrameError
-from .presentation_remote_cleanup import _LOOP, _TASK, _initialize_task, _TaskAllocation, _TaskSlot
+from .presentation_remote_cleanup import (
+    _FUTURE,
+    _LOOP,
+    _TASK,
+    _initialize_future,
+    _initialize_task,
+    _TaskAllocation,
+    _TaskSlot,
+)
 
 
 def _refuse():
     raise FrameError("BI1_BROKER_CANCELLATION_REFUSED")
+
+
+_GO_RECEIPT_MINT = object()
+
+
+class _GoReceipt(NamedTuple):
+    mint: object
+    frame: BrokerFrame
+    scope: tuple
+    allocation: _TaskAllocation
+    future: object
+
+    def __repr__(self):
+        return "<GoReceipt redacted>"
 
 
 class BrokerCancellationOwner:
@@ -52,6 +75,11 @@ class BrokerCancellationOwner:
         self._grammar = self._grammar_snapshot = grammar
         self._initialized = self._failed = self._retired = self._sampling = False
         self._adopted = self._cancel_attempted = self._joined = False
+        self._go_receipt = self._go_receipt_snapshot = None
+        self._go_future = self._go_future_snapshot = None
+        self._go_allocation = self._go_allocation_snapshot = None
+        self._go_initialized = self._go_initialized_snapshot = None
+        self._go_relay_intent = self._go_relay_completed = False
         self._slot = self._slot_snapshot = _TaskSlot()
         self._allocation = self._allocation_snapshot = None
         self._task_initialized = self._task_initialized_snapshot = None
@@ -101,6 +129,10 @@ class BrokerCancellationOwner:
                 record, record.binding, record.deadline_ns, record.cleanup_budget,
                 registry._records, channel._values_snapshot, clock, clock._domain_snapshot,
                 clock._domain_values, clock._qualification_snapshot)
+            self._go_future = self._go_future_snapshot = _FUTURE.__new__(_FUTURE)
+            self._go_allocation = self._go_allocation_snapshot = (self._go_future_snapshot,)
+            _initialize_future(self._go_future_snapshot, self._loop)
+            self._go_initialized = self._go_initialized_snapshot = object()
             self._slot.coroutine = self._slot.coroutine_snapshot = (
                 BrokerCancellationOwner._read(self))
             self._slot.task = self._slot.task_snapshot = _TASK.__new__(_TASK)
@@ -165,7 +197,9 @@ class BrokerCancellationOwner:
                 or len(self._context) != 3 or any(type(v) is not int for v in self._context)
                 or self._context != (os.getpid(), os.geteuid(), threading.get_ident())
                 or any(type(v) is not bool for v in (self._retired, self._sampling, self._adopted,
-                                                     self._cancel_attempted, self._joined))
+                                                     self._cancel_attempted, self._joined,
+                                                     self._go_relay_intent,
+                                                     self._go_relay_completed))
                 or type(self._buffer) is not bytearray or self._buffer is not self._buffer_snapshot
                 or len(self._buffer) > 8 + 1024 + 16
                 or self._slot is not self._slot_snapshot or type(self._slot) is not _TaskSlot
@@ -185,6 +219,31 @@ class BrokerCancellationOwner:
                 or not OperationGrammar._configured(g)
                 or g._binding != scope[1] or g._version != 2):
             _refuse()
+        if (type(self._go_allocation) is not tuple or len(self._go_allocation) != 1
+                or self._go_allocation is not self._go_allocation_snapshot
+                or self._go_future is not self._go_allocation[0]
+                or self._go_future is not self._go_future_snapshot
+                or type(self._go_future) is not _FUTURE
+                or type(self._go_initialized) is not object
+                or self._go_initialized is not self._go_initialized_snapshot
+                or _FUTURE.cancelled(self._go_future)
+                or self._go_receipt is not self._go_receipt_snapshot):
+            _refuse()
+        receipt = self._go_receipt_snapshot
+        if receipt is not None:
+            if (type(receipt) is not _GoReceipt or receipt.mint is not _GO_RECEIPT_MINT
+                    or receipt.scope is not scope
+                    or receipt.allocation is not self._allocation_snapshot
+                    or receipt.future is not self._go_future_snapshot
+                    or type(receipt.frame) is not BrokerFrame
+                    or type(receipt.frame.header) is not BrokerHeader
+                    or type(receipt.frame.body) is not bytes or receipt.frame.body != b""):
+                _refuse()
+            _row(receipt.frame.header)
+            h = receipt.frame.header
+            if (h.kind != "GO" or h.sequence != 1 or h.version != 2 or h.body_length != 0
+                    or h.binding != scope[1]):
+                _refuse()
         if reader and (asyncio.current_task() is not self._allocation.task
                        or _TASK.cancelling(self._allocation.task)):
             _refuse()
@@ -204,7 +263,8 @@ class BrokerCancellationOwner:
                 _refuse()
             _row(self._frame.header)
             h = self._frame.header
-            if (h.binding != scope[1] or h.kind != "CANCEL" or h.sequence != 1
+            if (h.binding != scope[1] or h.kind != "CANCEL"
+                    or h.sequence != (2 if self._go_receipt_snapshot is not None else 1)
                     or h.version != 2 or h.body_length != 16 or len(self._frame.body) != 16):
                 _refuse()
         if cleanup and c._closed_known is True:
@@ -320,11 +380,33 @@ class BrokerCancellationOwner:
             if self._channel._reading is not False:
                 _refuse()
             self._channel._reading = True
-            prefix = await BrokerCancellationOwner._exact(self, 8)
-            raw = prefix + await BrokerCancellationOwner._exact(self, header_size(prefix))
-            header = decode_header(raw, expected=self._scope[1], expected_version=2)
-            if header.kind != "CANCEL" or header.sequence != 1 or header.body_length != 16:
-                _refuse()
+            while True:
+                prefix = await BrokerCancellationOwner._exact(self, 8)
+                raw = prefix + await BrokerCancellationOwner._exact(self, header_size(prefix))
+                header = decode_header(raw, expected=self._scope[1], expected_version=2)
+                if header.kind == "GO":
+                    if (header.sequence != 1 or header.body_length != 0
+                            or self._go_receipt is not None or self._retired is not False
+                            or _FUTURE.done(self._go_future_snapshot)):
+                        _refuse()
+                    BrokerCancellationOwner._remaining(self)
+                    _, _, end, failed = CancellationBudget.inspect(self._scope_snapshot[3])
+                    if self._retired is not False or end is not None or failed:
+                        _refuse()
+                    frame = BrokerFrame(header, b"")
+                    OperationGrammar.observe(self._grammar_snapshot, frame, sender="client")
+                    receipt = _GoReceipt(_GO_RECEIPT_MINT, frame, self._scope_snapshot,
+                                         self._allocation_snapshot, self._go_future_snapshot)
+                    self._go_receipt = self._go_receipt_snapshot = receipt
+                    BrokerCancellationOwner._guard(self, reader=True)
+                    _FUTURE.set_result(receipt.future, receipt)
+                    self._buffer.clear()  # same bounded cursor; no second reader/task
+                    continue
+                sequence = 2 if self._go_receipt_snapshot is not None else 1
+                if (header.kind != "CANCEL" or header.sequence != sequence
+                        or header.body_length != 16):
+                    _refuse()
+                break
             # A validated CANCEL header is a local revocation hint. Retire work
             # before waiting for its body, but adopt nothing or abort resources
             # until the complete original window is semantically validated.
@@ -350,6 +432,15 @@ class BrokerCancellationOwner:
             c = self._channel_snapshot
             if type(c) is SocketChannel and c._cancel_receiver_snapshot is self:
                 c._reading = False
+
+    def go_receipt(self):
+        """Exact decoded control notification; not phone/native execution authority."""
+        BrokerCancellationOwner._guard(self)
+        receipt = self._go_receipt_snapshot
+        if (type(receipt) is not _GoReceipt or not _FUTURE.done(self._go_future_snapshot)
+                or _FUTURE.result(self._go_future_snapshot) is not receipt):
+            _refuse()
+        return receipt
 
     def abort(self):
         BrokerCancellationOwner._local_cause(self)

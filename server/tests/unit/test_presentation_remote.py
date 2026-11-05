@@ -105,7 +105,7 @@ async def test_native_policy_and_shared_slot_join_one_begin_ready_without_creden
     assert a.owner.inspect(record.handle) == (State.STARTING, False, False)
     assert a.owner.inspect_remote(record.handle) is RemotePhase.READY
     assert record.headers is not None and not await a.retire_known(op)
-    assert not hasattr(remote, "go") and not hasattr(remote, "release")
+    assert callable(remote.go) and not hasattr(remote, "release")
 
 
 @pytest.mark.asyncio
@@ -520,7 +520,7 @@ async def test_v2_remote_retains_original_clock_domain_and_selected_frames(prepa
     assert await task
     assert a.owner.inspect_remote(a._record(op).handle) is RemotePhase.READY
     assert native.calls == {"INITIAL": 1, "BEFORE": 1, "PRE_GO": 3}
-    assert not hasattr(remote, "go") and not hasattr(remote, "cleanup")
+    assert callable(remote.go) and not hasattr(remote, "cleanup")
 
 
 @pytest.mark.asyncio

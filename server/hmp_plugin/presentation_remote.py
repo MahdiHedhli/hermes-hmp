@@ -1,4 +1,4 @@
-"""Native-owned remote BEGIN/READY binding; no GO/result/release or live route.
+"""Native-owned remote BEGIN/READY/GO; no result/release or live route.
 
 Original request credentials and policy remain in ParentAuthorityAdapter. The
 broker connection is a separate custody plane; it is never a local process.
@@ -9,6 +9,7 @@ import asyncio
 import os
 import time
 from contextlib import suppress
+from typing import NamedTuple
 
 from .presentation_authority import (
     AuthorityRefusalError,
@@ -27,13 +28,29 @@ from .presentation_parent_policy import ParentPolicyReadOwner
 from .presentation_policy_binding import NativePolicyWork
 from .presentation_policy_thread import PolicyThreadOwner
 
+_GO_ADMISSION_MINT = object()
+
+
+class _GoAdmission(NamedTuple):
+    mint: object
+    remote: object
+    record: object
+    work: object
+    packet: bytes
+    binding: BrokerBinding
+    end_ns: int
+
+    def __repr__(self):
+        return "<GoAdmission redacted>"
+
 
 class RemoteOperationOwner:
     """One existing reservation and one immutable input3 transfer, no replay.
 
     Only ParentAuthorityAdapter.bind_remote may retain and initialize this owner.
     The shared slot exists before initialization; even a partial owner is debt.
-    No method forwards GO, reads RESULT or claims remote terminal custody.
+    Only fixed retained work forwards one freshly authorized GO. No method reads
+    RESULT or claims remote terminal custody.
     """
     def __init__(self, authority, operation, channel, binding, packet):
         self._authority = self._authority_snapshot = authority
@@ -43,6 +60,8 @@ class RemoteOperationOwner:
         self._packet = self._packet_snapshot = packet
         self._failed = False
         self._begin_attempted = False
+        self._go_admission = self._go_admission_snapshot = None
+        self._go_admission_used = False
         self._send_claimed = self._send_completed = self._receive_claimed = False
         self._initialized = False
         self._record = self._record_snapshot = None
@@ -298,9 +317,12 @@ class RemoteOperationOwner:
                     or r.remote_operation is not self or r.child is not None
                     or r.process_owner is not None or r.reader_supervisor is not None
                     or r.native_claim is not None or r.initial_complete is not True
-                    or r.owner.inspect(r.handle)[0] is not State.STARTING
+                    or r.owner.inspect(r.handle)[0] is not (
+                        State.RUNNING if phase in (RemotePhase.GO_INTENT, RemotePhase.GO_SENT)
+                        else State.STARTING)
                     or r.owner.inspect_remote(r.handle) is not phase):
                 raise AuthorityRefusalError
+            RemoteOperationOwner._go_binding(self)
             work = r.policy_work
             job = r.owner._resolve(r.handle)
             current = self._references()
@@ -342,6 +364,82 @@ class RemoteOperationOwner:
         except BaseException:
             self._poison()
             raise
+
+    def _go_binding(self):
+        value = self._go_admission
+        if (value is not self._go_admission_snapshot or type(self._go_admission_used) is not bool
+                or (self._go_admission_used and value is None)):
+            raise AuthorityRefusalError
+        if value is not None:
+            from .presentation_remote_cleanup import RemoteCleanupOwner
+
+            owner = self._cleanup_owner_snapshot
+            if type(owner) is not RemoteCleanupOwner:
+                raise AuthorityRefusalError
+            RemoteCleanupOwner._guard(owner)  # validate allocation seals before indexing
+            if (type(value) is not _GoAdmission or value.mint is not _GO_ADMISSION_MINT
+                    or value.remote is not self or value.record is not self._record_snapshot
+                    or type(owner) is not RemoteCleanupOwner
+                    or value.work is not owner._allocations_snapshot[1]
+                    or value.packet is not self._packet_snapshot
+                    or value.binding is not self._binding_snapshot
+                    or type(value.end_ns) is not int or value.end_ns != self._end_snapshot):
+                raise AuthorityRefusalError
+
+    def _authorize_job_go(self, owner, handle, phase):
+        RemoteOperationOwner._retained_local(self)
+        RemoteOperationOwner._go_binding(self)
+        if (type(phase) is not RemotePhase
+                or phase not in (RemotePhase.GO_INTENT, RemotePhase.GO_SENT)):
+            raise AuthorityRefusalError
+        admission = self._go_admission_snapshot
+        expected_used = phase is RemotePhase.GO_SENT
+        if (type(admission) is not _GoAdmission or owner is not self._seal_snapshot[0]
+                or handle is not self._seal_snapshot[1]
+                or asyncio.current_task() is not admission.work.task
+                or self._go_admission_used is not expected_used
+                or CancellationBudget.inspect(self._cleanup_budget_snapshot)
+                != (self._end_snapshot, None, None, False)):
+            raise AuthorityRefusalError
+        _task_allows_work()
+        if expected_used:
+            SocketChannel._go_written(self._channel_snapshot, self)
+
+    async def _go_exchange(self):
+        try:
+            RemoteOperationOwner._check(self, RemotePhase.READY)
+            if self._protocol != 2 or self._go_admission is not None:
+                raise AuthorityRefusalError
+            if not await ParentAuthorityAdapter._observe(
+                    self._authority_snapshot, self._record_snapshot, "PRE_GO"):
+                raise AuthorityRefusalError
+            RemoteOperationOwner._check(self, RemotePhase.READY)
+            cleanup = self._cleanup_owner_snapshot
+            self._go_admission = self._go_admission_snapshot = _GoAdmission(
+                _GO_ADMISSION_MINT, self, self._record_snapshot, cleanup._allocations_snapshot[1],
+                self._packet_snapshot, self._binding_snapshot, self._end_snapshot)
+            JobOwner.remote_transition(self._seal_snapshot[0], self._seal_snapshot[1],
+                                       self, RemotePhase.GO_INTENT)
+            RemoteOperationOwner._check(self, RemotePhase.GO_INTENT)
+            await SocketChannel.send_go(self._channel_snapshot, self)
+            RemoteOperationOwner._check(self, RemotePhase.GO_INTENT)
+            JobOwner.remote_transition(self._seal_snapshot[0], self._seal_snapshot[1],
+                                       self, RemotePhase.GO_SENT)
+            RemoteOperationOwner._check(self, RemotePhase.GO_SENT)
+            return True  # local write only; no execution/result/release proof
+        except BaseException:
+            RemoteOperationOwner._poison(self)
+            raise
+
+    async def go(self):
+        """Same original public request only; no arbitrary callback or remote receipt."""
+        from .presentation_remote_cleanup import RemoteCleanupOwner
+
+        owner = self._cleanup_owner_snapshot
+        if type(owner) is not RemoteCleanupOwner or self._protocol != 2:
+            RemoteOperationOwner._poison(self)
+            raise AuthorityRefusalError
+        return await RemoteCleanupOwner.go(owner)
 
     def _authorize_channel(self, channel, direction, binding, end_ns, frame):
         """Linear channel I/O claims; no generic owner token can send GO or results."""

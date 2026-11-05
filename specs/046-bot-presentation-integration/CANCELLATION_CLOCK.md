@@ -24,9 +24,9 @@ authority or lifecycle. Every other control body remains empty. Version 1 stays
 the default; a selected receiver refuses a different version without fallback.
 Explicit startup enrollment can select v2 framing with a retained native clock.
 The [coupled transport source](INHERITED_CANCEL.md) joins a one-use gateway
-cleanup sender to the broker receiver and private BEGIN/READY/CANCEL dispatch.
+cleanup sender to the broker receiver and private BEGIN/READY/GO/CANCEL dispatch.
 Both ends use their original budgets and the receiver adopts only the earlier
-cutoff. Existing service paths default to v1; GO/result/status/release remain closed.
+cutoff. Existing service paths default to v1; result/status/release remain closed.
 
 ## Original owner binding (source only)
 

@@ -5,7 +5,7 @@
 This joins the selected-v2 remote BEGIN/READY handoff to retained work/cleanup
 ownership. It is part of complete desktop character delivery, not a substitute
 feature. Version1 behavior stays unchanged. The coupled source adds only selected-v2
-BEGIN/READY/CANCEL dispatch. GO, RESULT, STATUS/ACK, started terminal release
+BEGIN/READY/GO/CANCEL dispatch. RESULT, STATUS/ACK, started terminal release
 and credential/native DRAIN remain closed.
 
 Allocate and retain one exact owner on RemoteOperationOwner before initializing
@@ -24,12 +24,13 @@ never retry construction, reopen the barrier or guess that a task did not start.
 Separate immutable NamedTuple allocation seals retain original task/coroutine and
 barrier identities independently of mutable partial-initialization records. Slot
 substitution cannot manufacture a join or redirect cancellation. The work task
-runs only the fixed RemoteOperationOwner BEGIN/READY method, never an arbitrary
+runs only the fixed RemoteOperationOwner BEGIN/READY and GO methods, never an arbitrary
 callback/coroutine. A separately retained READY Future notifies the original
 public caller. Its immutable minted fact joins that exact Future, original work
 allocation, remote/channel and packet. The public await shields the notification,
 not the work task; READY does not imply an actual work join. The exact task stays
-parked on the original cause until later GO/result integration or cleanup.
+parked on retained GO-request/cause barriers; after GO write notification it
+remains alive until result integration or cleanup.
 Notification cancellation or a foreign early result cannot certify READY. Raw
 original record references are fenced after the final native readiness clock
 boundary before returning success. Request cancellation is first observed and
@@ -55,7 +56,9 @@ Cleanup may send exactly one CANCEL only after actual work-task join and no live
 read/write flags. A channel-owned immutable intent and completion fact bind the
 concrete BEGIN write to the original remote/channel/socket/scope/packet/deadline;
 a mutable remote completion flag alone is insufficient. Partial or uncertain
-BEGIN never receives an appended frame. The dedicated send accepts only the
+BEGIN never receives an appended frame. A separate channel-owned GO write intent
+and completion fact determine CANCEL2; uncertain/torn GO receives no appended
+frame or retry. A known completed BEGIN without GO intent permits CANCEL1. The dedicated send accepts only the
 original retained cleanup owner on its own exact task. It freezes write intent
 before encoding and uses the existing cleanup cutoff as its absolute timeout,
 checking original clock/budget and data identity before and after native I/O.
@@ -75,7 +78,7 @@ separate. Synthetic tests cannot certify a production hard wall-clock bound.
 ## Causal acceptance
 
 - Actual local Unix selected-v2 BEGIN/READY with the original input/budget/clock.
-- READY notification retains the exact live work task; original cause cancellation
+- READY and GO-write notifications retain the exact live work task; original cause cancellation
   joins it before socket cleanup. Partial notification Future initialization,
   replacement, foreign success and public cancellation cannot forge a fact.
 - Final public native-clock owner/fence/policy substitutions refuse before foreign

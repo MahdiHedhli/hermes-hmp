@@ -271,7 +271,9 @@ async def test_cleanup_task_cancel_retains_debt_without_replacement(prepared_v2)
 @pytest.mark.asyncio
 @pytest.mark.parametrize("field,after_init", [("start", False), ("start", True),
                                                ("cause", False), ("cause", True),
-                                               ("ready", False), ("ready", True)])
+                                               ("ready", False), ("ready", True),
+                                               ("go_request", False), ("go_request", True),
+                                               ("go_notice", False), ("go_notice", True)])
 async def test_partial_barrier_future_is_retained_without_work(
     prepared_v2, monkeypatch, field, after_init
 ):
@@ -280,7 +282,8 @@ async def test_partial_barrier_future_is_retained_without_work(
     original = cleanup._initialize_future
     def initialize(future, loop):
         owner = remote._cleanup_owner_snapshot
-        assert future in (owner._start_snapshot, owner._cause_snapshot, owner._ready_snapshot)
+        assert future in (owner._start_snapshot, owner._cause_snapshot, owner._ready_snapshot,
+                          owner._go_request_snapshot, owner._go_notice_snapshot)
         if future is getattr(owner, "_" + field + "_snapshot"):
             if after_init:
                 original(future, loop)

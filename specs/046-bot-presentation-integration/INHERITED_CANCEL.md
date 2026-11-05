@@ -5,7 +5,8 @@
 Retain existing native/remote and broker resource budgets; wire values never
 attest a clock or authorize GO, result publication or release. Both ends bind
 exact selected version 2, original operation/channel and qualified clock/domain.
-CANCEL is sequence 1, exactly 16 body bytes (original start/end), never a timer
+CANCEL is sequence 1 before GO, or sequence 2 after a completed GO1 write;
+it carries exactly 16 body bytes (original start/end), never a timer
 request. Semantic adoption can only shorten the earlier retained end and is
 capped at original work end plus 250 ms. Future starts, overflow, uncertain clock
 or malformed framing refuse and retain debt. Version1 remains the default.
@@ -25,8 +26,9 @@ original deadline. Default native selector/Task runtime only; retain partial Tas
 allocation/coroutine and independent immutable origin before initialization.
 Failed/ambiguous construction cannot be retried or certify no work.
 
-The receiver reads only one selected-v2 CANCEL for that exact binding. Bound
-prefix/header/body before allocation and reject GO/status/downgrade/wrong scope.
+The continuous receiver reads optional GO1 followed by CANCEL2, or CANCEL1
+before GO, for that exact binding. Bound
+prefix/header/body before allocation and reject queued/duplicate/wrong-sequence GO, status, downgrade and wrong scope.
 Keep partial bytes under one original absolute ceiling. Before the original work
 end, native work time bounds each wait at that work end. On the first local work
 expiry or already-caused budget, invalidate work/grammar before the cleanup
@@ -48,7 +50,7 @@ pure grammar alone is not receipt/adoption authority.
 Service work must shield the receiver task: caller cancellation first freezes
 local cause, then cancels the original task once. Actual receiver join and frozen
 budget precede local socket/clock closure; stalled/partial tasks stay reachable.
-Version2 STATUS/ACK, GO/RESULT and started terminal release remain closed until
+Version2 STATUS/ACK, RESULT and started terminal release remain closed until
 their own lifecycle and proof integration. Native DRAIN/credentials are separate.
 
 ## Receiver source and coupled transport
@@ -77,7 +79,8 @@ the original cutoff. Registry/native debt is never released by these facts.
 
 Local Unix tests explicitly mock peer identity and Darwin clock facts. Synthetic
 owned-reader causals are not production manager/runtime or device qualification.
-General SocketChannel CANCEL, GO/result/status/release remain closed.
+General SocketChannel GO/CANCEL and result/status/release remain closed. Dedicated
+GO source is joined by the [async contract](ASYNC_GO.md); it adds no release authority.
 
 ## Source sequencing, not a reduced final feature
 
@@ -93,5 +96,5 @@ Causals: no renewed allowance after local-first or remote-first cause; delayed
 already-expired interval; future/overflow/short/long/mixed-version/wrong-operation
 refusal; partial header/body across work expiry; actual receiver/task ownership,
 partial init and exact native Task substitution; one cancellation attempt and
-actual join; resource launch/abort shares the original budget; no GO/result/
+actual join; resource launch/abort shares the original budget; no unintended GO, result/
 release or post-ambiguity appended frame. No live host, messages or deployments.

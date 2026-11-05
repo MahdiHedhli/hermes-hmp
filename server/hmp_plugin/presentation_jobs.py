@@ -443,6 +443,8 @@ class RemotePhase(Enum):
     BOUND = "BOUND"
     BEGIN_INTENT = "BEGIN_INTENT"
     READY = "READY"
+    GO_INTENT = "GO_INTENT"
+    GO_SENT = "GO_SENT"
     DRAINING = "DRAINING"
     UNKNOWN = "UNKNOWN"
 
@@ -665,20 +667,35 @@ class JobOwner:
         return job.remote_phase
 
     def remote_transition(self, handle: JobHandle, remote: object, phase: RemotePhase) -> None:
+        from .presentation_remote import RemoteOperationOwner
+
         job = self._resolve(handle)
         if type(phase) is not RemotePhase:
             _fail()
         expected = {RemotePhase.BEGIN_INTENT: RemotePhase.BOUND,
-                    RemotePhase.READY: RemotePhase.BEGIN_INTENT}.get(phase)
+                    RemotePhase.READY: RemotePhase.BEGIN_INTENT,
+                    RemotePhase.GO_INTENT: RemotePhase.READY,
+                    RemotePhase.GO_SENT: RemotePhase.GO_INTENT}.get(phase)
+        state = State.RUNNING if phase is RemotePhase.GO_SENT else State.STARTING
         if (expected is None or self._remote(job) is not remote
-                or job.remote_phase is not expected or job.state is not State.STARTING
-                or job.child is not None or not self._current(job)):
+                or job.remote_phase is not expected or job.state is not state
+                or job.child is not None):
+            _fail()
+        if phase in (RemotePhase.GO_INTENT, RemotePhase.GO_SENT):
+            RemoteOperationOwner._authorize_job_go(remote, self, handle, phase)
+        if not self._current(job):
             _fail()
         # The shared clock can reenter; recheck exact ownership after it returns.
         if (self._jobs.get(handle) is not job or self._remote(job) is not remote
-                or job.remote_phase is not expected or job.state is not State.STARTING
+                or job.remote_phase is not expected or job.state is not state
                 or job.child is not None or job.emit_revoked or self._disabled):
             _fail()
+        if phase in (RemotePhase.GO_INTENT, RemotePhase.GO_SENT):
+            RemoteOperationOwner._authorize_job_go(remote, self, handle, phase)
+        if phase is RemotePhase.GO_INTENT:
+            remote._go_admission_used = True  # intent before any possibly partial wire write
+            job.go_sent = True  # remote intent, not receipt/execution evidence
+            job.state = State.RUNNING
         job.remote_phase = phase
 
     def _retire(self, handle: JobHandle) -> None:

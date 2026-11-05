@@ -155,7 +155,7 @@ async def test_service_cancel_freezes_before_cancelling_exclusive_reader(local, 
     assert await spine.stop_local_sockets()
 
 
-async def test_v2_go_is_cleanup_refusal_not_execution_permission(local, monkeypatch):
+async def test_v2_wrong_sequence_go_is_cleanup_refusal_not_execution_permission(local, monkeypatch):
     spine, _, client, packet, _, _ = local
     darwin_model(monkeypatch)
     b, sock = binding(), client()
@@ -165,7 +165,7 @@ async def test_v2_go_is_cleanup_refusal_not_execution_permission(local, monkeypa
     task = asyncio.create_task(spine.serve_once(time.monotonic_ns() + 1_900_000_000))
     assert (await read_v2(sock, b)).header.kind == "READY"
     record, _ = await wait_receiver(spine)
-    await asyncio.get_running_loop().sock_sendall(sock, encode_frame(b, "GO", 1, version=2))
+    await asyncio.get_running_loop().sock_sendall(sock, encode_frame(b, "GO", 2, version=2))
     with pytest.raises(FrameError):
         await task
     resources = spine._registry._record(record.ticket).resources

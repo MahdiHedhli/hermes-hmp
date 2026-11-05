@@ -18,9 +18,9 @@ sample overrides are not qualification.
 
 Encoding and header-first decoding require the selected version. Ordinary v2
 channel framing supports BEGIN/READY only. The dedicated retained cleanup sender
-and exclusive broker receiver now join private service BEGIN/READY/CANCEL
+and exclusive broker receiver now join private service BEGIN/READY/GO/CANCEL
 source; neither is a general CANCEL reader/writer. No competing reader or
-terminal owner may reuse the adopted receiver channel. GO, RESULT, STATUS/ACK
+terminal owner may reuse the adopted receiver channel. RESULT, STATUS/ACK
 and started release remain refused. This is not a deployed capability or an
 alternative to complete character delivery. See [coupled transport](INHERITED_CANCEL.md).
 
@@ -60,10 +60,11 @@ native case status must be assessed from exact-run evidence, not green totals.
 3. The [retained cleanup source](REMOTE_CLEANUP.md) now owns work/cleanup tasks,
    a scoped completed-BEGIN fact and one-use CANCEL intent. It transmits only
    after work join under the original frozen cutoff; no replay after ambiguity.
-4. Private v2 BEGIN/READY/CANCEL service dispatch now joins both ends. Queue and
+4. Private v2 BEGIN/READY/GO/CANCEL service dispatch now joins both ends. Queue and
    READY checks, original-budget abort/poll and partial-task retention preserve
    raw-auth versus qualified work separation. STATUS/ACK remains closed.
-5. Complete async native GO intent, independently validated RESULT, typed started
+5. Async native GO intent and continuous control ownership are source-implemented
+   under [the reviewed contract](ASYNC_GO.md). Complete independently validated RESULT, typed started
    terminal proof, credential retirement, runtime admission, authenticated routes,
    full character rendering and signed physical qualification. Host-local images
    follow character delivery; these requirements are not replaced by framing.
