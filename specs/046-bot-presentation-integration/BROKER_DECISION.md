@@ -120,6 +120,7 @@ handling must be qualified before runtime activation.
 - [ ] BR3: complete exact global atomic ACK/tombstone integration and typed remote custody authority, plus client/server lifecycle, sequencing/cancellation race,
   capacity/tombstone/ACK/status and typed remote closure authority contract.
 - [x] BR4a: implement/review kernel UID/PID snapshot helper and actual Darwin cross-process fixture; endpoint/code/liveness/custody remain separate.
+- [x] BR4b: implement/review held private directory/socket-entry snapshots; see [endpoint contract](BROKER_ENDPOINT.md). No future-connect/service/boot identity attestation.
 - [ ] BR4: qualify platform UID/endpoint identity and private socket acquisition,
   race-safe startup and nonblocking bounded transport with original deadlines.
 - [x] BR5a: implement/review separate shared-group exact-child custody; no group/remote closure. See [child contract](BROKER_CHILD_CUSTODY.md).

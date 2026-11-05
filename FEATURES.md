@@ -1,3 +1,22 @@
+## Character broker private endpoint — November 4, 2026
+
+The reviewed source can now retain a private socket directory through an
+FD-relative no-symlink ancestry walk and observe the fixed endpoint entry.
+It enforces expected ownership and exact private permissions, detects held/current
+path or socket replacement, and keeps refusal sticky after observed drift.
+Partial acquisition retains its owner; exact owned descriptors close at most once,
+with no-op, reuse and ambiguous closure unable to produce a success fact.
+
+Root and independent suites each pass 56 endpoint cases. Complete serial Python
+3.11 and 3.14.9 regression runs each pass 803 tests plus 66 subtests; lint and
+closed-import scanning pass. The previous resource source `f04b3b5` also passed
+hosted CI41963160105. These are source and isolated kernel-fixture observations.
+The endpoint helper never creates, connects, repairs or deletes a socket, and
+cannot attest a future connection, service code/boot or child custody. Runtime
+qualification, service/transport/native integration, started terminal release,
+authenticated routes and physical character delivery remain open. No live host
+or app installation changed. See [endpoint contract](specs/046-bot-presentation-integration/BROKER_ENDPOINT.md).
+
 ## Character reader resource binding — November 4, 2026
 
 The reviewed source now binds each metadata/custom-image reader to its original
