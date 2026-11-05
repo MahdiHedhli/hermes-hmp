@@ -420,7 +420,7 @@ async def test_cancelled_policy_thread_is_retained_until_actual_join(context, mo
 
 @pytest.mark.asyncio
 async def test_sink_failure_after_write_never_replays_or_claims_retirement(context):
-    authority, operation, _ = context
+    authority, operation, native = context
     supervisor = ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
     writes = []
 
@@ -431,7 +431,18 @@ async def test_sink_failure_after_write_never_replays_or_claims_retirement(conte
     assert not await supervisor.run(
         source_sha="b" * 64, fallback="Hermes", observed_at=100, sink=lost_ack
     )
-    assert len(writes) == 1 and supervisor.phase == "DEBT" and not supervisor.retired
+    task = supervisor.task
+    error = task.exception() if task.done() and not task.cancelled() else None
+    diagnostic = {
+        "native_stages": dict(native.calls),
+        "task_done": task.done(), "task_cancelled": task.cancelled(),
+        "exception_class": None if error is None else type(error).__name__,
+        "remaining_ns": int((supervisor.record.deadline - time.monotonic()) * 1_000_000_000),
+        "child_retained": supervisor.process is not None,
+        "reader_collected": supervisor.record.reader_collected,
+    }
+    assert (len(writes) == 1 and supervisor.phase == "DEBT"
+            and not supervisor.retired), diagnostic
     assert authority._record(operation).headers is not None
     assert authority.owner.inspect(authority.handle(operation))[0] is State.UNKNOWN
     with pytest.raises(AuthorityRefusalError):
