@@ -1,3 +1,29 @@
+## Retained READY lifecycle source — November 5, 2026
+
+HMP `23f1454` keeps the original operation work task alive after READY, with a
+separate shielded notification and immutable fact bound to its exact Future,
+work allocation, remote/channel and packet. READY is no longer mistaken for an
+actual work join. Cleanup still freezes the original cause, cancels and joins
+that exact task before transport retirement. Partial notification initialization,
+foreign notification success and substituted barriers refuse without new work.
+Final public readiness rechecks original owner/fence/policy references after
+native clock boundaries; causal tests ensure foreign fields are never invoked.
+
+Independent review passed 249 cases before the final boundary repair and its
+three new causals afterward on Python 3.13. Root final focused suite passes 252;
+serial Python 3.11.15 and standalone 3.14.4 each pass 1,665 tests plus 190 subtests,
+with one Linux-native skip. Lint, surface, privacy and diff checks pass. Prior
+coupled cancellation head `02c18d8` CI42039373402 succeeded with 6,790 tests / 21 skips
+plus 190 subtests. This new source has separate CI evidence.
+
+The reviewed [async GO contract](specs/046-bot-presentation-integration/ASYNC_GO.md)
+now fixes the next steps: original public requester, fresh native admission,
+retained GO intent/write facts, continuous broker GO1/CANCEL2 control ownership
+and one-use resource relay. Wire GO remains closed until these are coupled;
+results/status/started release, production qualification, authenticated image
+routes and full character rendering remain unfinished. No app executable,
+embedded HMP, host or device change. Host-local images follow character delivery.
+
 ## Coupled cancellation transport source — November 5, 2026
 
 HMP `f38b435` joins one-use gateway CANCEL sending to the exclusive broker
