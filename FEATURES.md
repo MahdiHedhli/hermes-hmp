@@ -1,3 +1,24 @@
+## Character and Unicode source CI restored — November 5, 2026
+
+Mobile source `e4f57c5` restores strict NFC typing and character-renderer analysis
+without analyzer exclusions. Generated Unicode table values and the original MIT
+license bytes are unchanged. The privacy scanner preserves only that exact
+public attribution, bound to its path, full-file hash, EMAIL rule, line and match;
+other private values remain findings. Independent source review accepted the fix.
+
+Private app-source CI on that exact commit passes: 2,674 client tests (1 skipped), 9 dev-support tests,
+158 device-key mock tests, 1,311 app tests (7 skipped), and 168 Python scanner and
+release-wrapper cases. This includes all 20,034 official Unicode 17 NFC cases
+under all five NFC relations, the grapheme corpus, malformed-type rejection,
+desktop character geometry/palette/trait parity, and privacy negative cases.
+The eight skips cover real-fixture/host acceptance and macOS goldens; these are
+not physical-device or runtime qualification.
+
+The repair is integrated into the feature branch through PR #88. No HMP pin,
+dependency, permission, provider, host or device deployment changed. Phone-visible
+characters and host-local images remain unfinished. Unpublished pre-READY cleanup
+work still needs verification after development-project file access recovers.
+
 ## Reviewed post-GO cleanup reader — November 5, 2026
 
 HMP `0cc0b0b` keeps the original post-GO reader for bounded discard while its
