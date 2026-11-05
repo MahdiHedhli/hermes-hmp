@@ -67,3 +67,15 @@ Restoring a receipt, bound method or timer does not revive known-stop/local-clos
 permission. These latches do not follow a substituted clock, scope or another
 operation's budget. Tests preserve that other budget before and after refusal;
 fixture-only handle disposal follows the frozen unknown outcome.
+
+## Full CI fixture migration
+
+The first exact cloud run (42113671221, source 8bc56cc) failed one existing coupled
+sender/receiver test, with 7,117 passed, 21 skipped and 190 subtests. That test
+still awaited controller Task completion as cancellation notification; the new
+bounded park correctly expired instead. Its reviewed test-only migration waits
+for the actual service adoption notice and explicitly asserts the original
+controller/read claim remain held. Original window equality, pending journal,
+retained headers and exact abort/join/local-close checks are unchanged.
+The corrected single coupled test passes on each of Python 3.11 and 3.14; this is
+not a replacement for a fresh full cloud run or a deployment qualification.

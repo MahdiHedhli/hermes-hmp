@@ -443,7 +443,7 @@ async def test_actual_local_sender_receiver_adopt_same_original_window(prepared_
     from hmp_plugin.presentation_broker_codec import BrokerFrame, BrokerHeader
     from hmp_plugin.presentation_broker_lifecycle import OperationGrammar
     from hmp_plugin.presentation_broker_registry import RegistryStatus
-    from hmp_plugin.presentation_broker_service import SocketChannel
+    from hmp_plugin.presentation_broker_service import BrokerServiceSpine, SocketChannel
     from hmp_plugin.presentation_input_v3 import decode_input_v3
 
     a, op, _, gateway_channel, peer, _, packet, b = prepared_v2
@@ -470,8 +470,9 @@ async def test_actual_local_sender_receiver_adopt_same_original_window(prepared_
         owner = remote._cleanup_owner_snapshot
         owner.request()
         assert await joined_cleanup(owner)
-        frame = await receiver._allocation_snapshot.task
+        frame = await BrokerServiceSpine._v2_control(None, receiver)
         assert frame.header.kind == "CANCEL" and receiver._adopted
+        assert not receiver._allocation_snapshot.task.done() and broker._reading
         assert CancellationBudget.inspect(registry._record(ticket).cleanup_budget)[2] == (
             CancellationBudget.inspect(a._record(op).cleanup_budget)[2])
         assert registry.status(b) is RegistryStatus.PENDING
