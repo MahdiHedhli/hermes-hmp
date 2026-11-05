@@ -1,3 +1,28 @@
+## Character service actual-process checkpoint — November 5, 2026
+
+HMP `8a77d13` now has real separate-process evidence for mutual kernel peer/startup
+enrollment, rejection of wrong-process and wrong-boot traffic before work,
+BEGIN/READY, cancellation and retained PENDING ownership after local drain. A
+retained kernel observer saw the synthetic reader exit. The fixture then refused
+before completing STATUS/shutdown; it is a partial result, not service acceptance.
+Exact temporary job removal, broker/reader exits and local cleanup were verified.
+The failure lock and private evidence remain preserved; no automatic retry ran.
+
+Reviewed fixture source `e0eafcf` now bounds settling and records private command
+progress; the
+original generic FrameError does not prove its exact cause. Focused service/model
+checks passed54 cases on both Python3.11 and3.14.9 before this polling repair.
+Independent polling/control checks pass26 cases. Root floor regression passes985
+tests plus66 subtests, followed by31 service cases including fresh-channel STATUS;
+current Python3.14.9 regression passes986 tests plus66 subtests. Lint, plugin
+surface and privacy scans pass. Independent artifact review matched93 plugin and
+17 parser files; all118 regular evidence files have private0600 modes.
+Exact source8a77d13 passes all jobs in CI41991480726; polling-repair CI is separate.
+Production/native GO/RESULT, started release, authenticated routes, full classic/
+blobatar/custom character rendering and signed physical parity remain open. No
+installed app or host changed; host-local images remain the next feature goal.
+See the [actual-process fixture](specs/046-bot-presentation-integration/SERVICE_PROCESS_FIXTURE.md).
+
 ## Enrolled broker service spine — November 5, 2026
 
 Source `e0fe0e7` now joins private socket ownership, fixed startup enrollment,
