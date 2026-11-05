@@ -44,6 +44,22 @@ class _TaskAllocation(NamedTuple):
 class _BarrierAllocation(NamedTuple):
     start: object
     cause: object
+    ready: object
+
+
+_READY_MINT = object()
+
+
+class _ReadyFact(NamedTuple):
+    mint: object
+    future: object
+    work: _TaskAllocation
+    remote: object
+    channel: object
+    packet: bytes
+
+    def __repr__(self):
+        return "<ReadyFact redacted>"
 
 
 @dataclass(eq=False, repr=False)
@@ -87,10 +103,13 @@ class RemoteCleanupOwner:
         self._caller = self._caller_snapshot = None
         self._refs = self._refs_snapshot = None
         self._start = self._cause = self._start_snapshot = self._cause_snapshot = None
+        self._ready = self._ready_snapshot = None
+        self._ready_fact = self._ready_fact_snapshot = None
+        self._ready_initialized = False
         self._start_initialized = self._cause_initialized = False
         self._slots = self._slots_snapshot = (_TaskSlot(), _TaskSlot())
         self._allocations = self._allocations_snapshot = (None, None)
-        self._barriers = self._barriers_snapshot = _BarrierAllocation(None, None)
+        self._barriers = self._barriers_snapshot = _BarrierAllocation(None, None, None)
         try:
             if type(remote) is not RemoteOperationOwner or remote._protocol != 2:
                 raise AuthorityRefusalError
@@ -109,13 +128,19 @@ class RemoteCleanupOwner:
             self._cancel_scope = self._cancel_scope_snapshot = (
                 remote._binding_snapshot, remote._values_snapshot)
             self._start = self._start_snapshot = _FUTURE.__new__(_FUTURE)
-            self._barriers = self._barriers_snapshot = _BarrierAllocation(self._start, None)
+            self._barriers = self._barriers_snapshot = _BarrierAllocation(self._start, None, None)
             _initialize_future(self._start, self._loop)
             self._start_initialized = True
             self._cause = self._cause_snapshot = _FUTURE.__new__(_FUTURE)
-            self._barriers = self._barriers_snapshot = _BarrierAllocation(self._start, self._cause)
+            self._barriers = self._barriers_snapshot = _BarrierAllocation(
+                self._start, self._cause, None)
             _initialize_future(self._cause, self._loop)
             self._cause_initialized = True
+            self._ready = self._ready_snapshot = _FUTURE.__new__(_FUTURE)
+            self._barriers = self._barriers_snapshot = _BarrierAllocation(
+                self._start, self._cause, self._ready)
+            _initialize_future(self._ready, self._loop)
+            self._ready_initialized = True
             # Cleanup is retained first. Both fixed coroutines remain gated until
             # all initialization and reciprocal ownership checks have succeeded.
             functions = (RemoteCleanupOwner._cleanup, RemoteCleanupOwner._work)
@@ -138,6 +163,8 @@ class RemoteCleanupOwner:
                 _FUTURE.set_result(self._start_snapshot, False)
             if self._cause_initialized and not _FUTURE.done(self._cause_snapshot):
                 _FUTURE.set_result(self._cause_snapshot, None)
+            if self._ready_initialized and not _FUTURE.done(self._ready_snapshot):
+                _FUTURE.set_result(self._ready_snapshot, False)
             if type(remote) is RemoteOperationOwner:
                 budget = remote._cleanup_budget_snapshot
                 if type(budget) is CancellationBudget:
@@ -175,6 +202,8 @@ class RemoteCleanupOwner:
                 or type(self._barriers) is not _BarrierAllocation
                 or self._start is not self._barriers.start
                 or self._cause is not self._barriers.cause
+                or self._ready is not self._barriers.ready
+                or self._ready_fact is not self._ready_fact_snapshot
                 or self._caller is not self._caller_snapshot or type(self._caller) is not _TASK
                 or type(self._loop) is not _LOOP or self._loop is not self._loop_snapshot
                 or asyncio.get_running_loop() is not self._loop
@@ -200,8 +229,11 @@ class RemoteCleanupOwner:
                 or r._seal is not self._refs[10]
                 or type(self._start) is not _FUTURE or self._start is not self._start_snapshot
                 or type(self._cause) is not _FUTURE or self._cause is not self._cause_snapshot
+                or type(self._ready) is not _FUTURE or self._ready is not self._ready_snapshot
+                or self._ready_initialized is not True
                 or self._start_initialized is not True or self._cause_initialized is not True
-                or _FUTURE.cancelled(self._start) or _FUTURE.cancelled(self._cause)):
+                or _FUTURE.cancelled(self._start) or _FUTURE.cancelled(self._cause)
+                or _FUTURE.cancelled(self._ready)):
             raise AuthorityRefusalError
         if not all(x is y for x, y in zip(
                 RemoteCleanupOwner._references(self), self._refs, strict=True)):
@@ -215,6 +247,14 @@ class RemoteCleanupOwner:
                     or slot.attempted is not True or slot.initialized is not True
                     or _TASK.get_coro(slot.task) is not slot.coroutine):
                 raise AuthorityRefusalError
+        fact = self._ready_fact
+        if fact is not None and (type(fact) is not _ReadyFact or fact.mint is not _READY_MINT
+                or fact.future is not self._barriers_snapshot.ready
+                or fact.work is not self._allocations_snapshot[1]
+                or fact.remote is not self._remote_snapshot
+                or fact.channel is not self._refs_snapshot[3]
+                or fact.packet is not r._packet_snapshot):
+            raise AuthorityRefusalError
         scope = self._cancel_scope
         if (type(scope) is not tuple or len(scope) != 2 or scope is not self._cancel_scope_snapshot
                 or type(scope[0]) is not BrokerBinding or type(scope[1]) is not tuple
@@ -393,15 +433,46 @@ class RemoteCleanupOwner:
 
         if self._initialized is not True or self._unknown is not False:
             return False  # partial initialization never opens work
+        barriers = self._barriers_snapshot
+        ready = barriers.ready if type(barriers) is _BarrierAllocation else None
         try:
             RemoteCleanupOwner._guard(self)
             allowed = await self._barriers_snapshot.start
             RemoteCleanupOwner._guard(self)
             if allowed is not True or self._intent:
                 raise AuthorityRefusalError
-            return await RemoteOperationOwner._begin_ready_exchange(self._remote_snapshot)
+            result = await RemoteOperationOwner._begin_ready_exchange(self._remote_snapshot)
+            RemoteCleanupOwner._guard(self)
+            if (result is not True or self._intent is not False
+                    or asyncio.current_task() is not self._allocations_snapshot[1].task
+                    or _FUTURE.done(self._barriers_snapshot.ready)
+                    or self._ready_fact is not None):
+                raise AuthorityRefusalError
+            from .presentation_jobs import RemotePhase
+
+            RemoteOperationOwner._check(self._remote_snapshot, RemotePhase.READY)
+            RemoteCleanupOwner._guard(self)
+            if (self._barriers_snapshot is not barriers or barriers.ready is not ready
+                    or _FUTURE.done(ready) or self._intent is not False):
+                raise AuthorityRefusalError
+            fact = _ReadyFact(_READY_MINT, ready,
+                              self._allocations_snapshot[1], self._remote_snapshot,
+                              self._refs_snapshot[3], self._remote_snapshot._packet_snapshot)
+            self._ready_fact = self._ready_fact_snapshot = fact
+            _FUTURE.set_result(fact.future, True)
+            # READY is a notification, never work completion. Keep the exact
+            # owned task parked for later GO/result integration or cleanup.
+            # asyncio.wait does not propagate Task.cancel into the cause Future.
+            await asyncio.wait((self._barriers_snapshot.cause,))
+            RemoteCleanupOwner._guard(self)
+            if self._intent is not True:
+                raise AuthorityRefusalError
+            return False
         except BaseException:
             RemoteCleanupOwner.request(self)
+            if (self._ready_initialized is True and type(ready) is _FUTURE
+                    and not _FUTURE.done(ready)):
+                _FUTURE.set_result(ready, False)
             raise
 
     async def _cleanup(self):
@@ -468,7 +539,9 @@ class RemoteCleanupOwner:
         _task_allows_work()
 
     async def run(self):
+        from .presentation_remote import RemoteOperationOwner
 
+        barriers = self._barriers_snapshot
         try:
             RemoteCleanupOwner._guard(self)
             _task_allows_work()
@@ -476,19 +549,35 @@ class RemoteCleanupOwner:
                 raise AuthorityRefusalError
             self._run_attempted = True
             _FUTURE.set_result(self._barriers_snapshot.start, True)
-            result = await asyncio.shield(self._allocations_snapshot[1].task)
+            result = await asyncio.shield(barriers.ready)
             _task_allows_work()
             RemoteCleanupOwner._guard(self)
             record, authority = self._refs[2], self._refs[0]
             custody = self._refs[11]
+            RemoteOperationOwner._retained_local(self._remote_snapshot)
             if (type(authority) is not ParentAuthorityAdapter
                     or type(custody) is not tuple or len(custody) != 3
                     or record.owner is not custody[0] or record.handle is not custody[1]
                     or record.fence is not custody[2]
                     or result is not True or self._intent
+                    or self._barriers_snapshot is not barriers
+                    or type(self._ready_fact) is not _ReadyFact
+                    or _TASK.done(self._allocations_snapshot[1].task)
                     or not ParentAuthorityAdapter._current(authority, record)):
                 raise AuthorityRefusalError
+            RemoteOperationOwner._retained_local(self._remote_snapshot)
+            RemoteOperationOwner._work_now(self._remote_snapshot)
             RemoteCleanupOwner._guard(self)
+            from .presentation_jobs import JobOwner, RemotePhase, State
+
+            owner, handle, _ = custody
+            if (JobOwner.inspect(owner, handle)[0] is not State.STARTING
+                    or JobOwner.inspect_remote(owner, handle) is not RemotePhase.READY
+                    or CancellationBudget.inspect(self._refs[8])
+                    != (self._refs[9], None, None, False)
+                    or self._barriers_snapshot is not barriers or self._intent is not False):
+                raise AuthorityRefusalError
+            RemoteOperationOwner._retained_local(self._remote_snapshot)
             _task_allows_work()
             return True
         except BaseException:

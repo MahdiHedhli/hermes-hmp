@@ -171,6 +171,9 @@ async def test_ready_retains_deadline_watcher_and_only_local_closure(prepared_v2
     await asyncio.get_running_loop().sock_sendall(peer, encode_frame(b, "READY", 0, version=2))
     assert await public
     assert not owner._slots_snapshot[0].task_snapshot.done()
+    assert not owner._slots_snapshot[1].task_snapshot.done()  # READY is not a work join
+    assert owner._ready_fact.future is owner._barriers_snapshot.ready
+    assert owner._ready_fact.work is owner._allocations_snapshot[1]
     assert not owner._intent and not owner._socket_closed
     assert await joined_cleanup(owner, seconds=3)
     budget = a._record(op).cleanup_budget
@@ -267,7 +270,8 @@ async def test_cleanup_task_cancel_retains_debt_without_replacement(prepared_v2)
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("field,after_init", [("start", False), ("start", True),
-                                               ("cause", False), ("cause", True)])
+                                               ("cause", False), ("cause", True),
+                                               ("ready", False), ("ready", True)])
 async def test_partial_barrier_future_is_retained_without_work(
     prepared_v2, monkeypatch, field, after_init
 ):
@@ -276,7 +280,7 @@ async def test_partial_barrier_future_is_retained_without_work(
     original = cleanup._initialize_future
     def initialize(future, loop):
         owner = remote._cleanup_owner_snapshot
-        assert future is owner._start_snapshot or future is owner._cause_snapshot
+        assert future in (owner._start_snapshot, owner._cause_snapshot, owner._ready_snapshot)
         if future is getattr(owner, "_" + field + "_snapshot"):
             if after_init:
                 original(future, loop)
@@ -328,7 +332,7 @@ async def test_exact_completed_task_substitution_cannot_fake_original_work_join(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("field", ["start", "cause"])
+@pytest.mark.parametrize("field", ["start", "cause", "ready"])
 async def test_exact_barrier_substitution_never_becomes_original_barrier(prepared_v2, field):
     _, public, owner = await start_waiting(prepared_v2)
     original = owner._barriers_snapshot
@@ -517,3 +521,84 @@ async def test_begin_write_fact_is_immutable_and_redacted(prepared_v2):
     with pytest.raises(asyncio.CancelledError):
         await public
     assert await joined_cleanup(owner)
+
+
+@pytest.mark.asyncio
+async def test_foreign_ready_notification_cannot_certify_ready_or_work_join(prepared_v2):
+    _, public, owner = await start_waiting(prepared_v2)
+    owner._barriers_snapshot.ready.set_result(True)  # exact Future, no concrete work fact
+    with pytest.raises(AuthorityRefusalError):
+        await public
+    assert owner._ready_fact is None
+    assert await joined_cleanup(owner)
+    assert owner._work_joined and owner._cancel_write_completed
+
+
+@pytest.mark.asyncio
+async def test_public_cancel_does_not_cancel_ready_notification_future(prepared_v2):
+    _, public, owner = await start_waiting(prepared_v2)
+    ready = owner._barriers_snapshot.ready
+    public.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await public
+    assert await joined_cleanup(owner)
+    assert ready.done() and not ready.cancelled() and ready.result() is False
+    assert owner._work_joined and owner._cancel_attempted
+
+
+@pytest.mark.asyncio
+async def test_ready_task_remains_original_until_explicit_cleanup(prepared_v2):
+    from hmp_plugin.presentation_broker_codec import encode_frame
+
+    _, public, owner = await start_waiting(prepared_v2)
+    peer, b = prepared_v2[4], prepared_v2[7]
+    work = owner._allocations_snapshot[1]
+    await asyncio.get_running_loop().sock_sendall(peer, encode_frame(b, "READY", 0, version=2))
+    assert await public
+    assert owner._allocations_snapshot[1] is work and not work.task.done()
+    assert not owner._work_joined and not owner._socket_closed
+    assert owner._ready_fact.packet is owner._remote_snapshot._packet_snapshot
+    assert "packet" not in repr(owner._ready_fact)
+    owner.request()
+    assert await joined_cleanup(owner)
+    assert owner._allocations_snapshot[1] is work and work.task.done()
+    assert owner._barriers_snapshot.ready.result() is True
+    assert not owner._barriers_snapshot.cause.cancelled()
+    assert owner._work_joined and owner._cancel_write_completed
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["owner", "fence", "policy_work"])
+async def test_public_ready_post_native_record_drift_refuses_without_foreign_callbacks(
+    prepared_v2, monkeypatch, field
+):
+    from hmp_plugin.presentation_broker_codec import encode_frame
+
+    authority, op, _, _, peer, _, _, b = prepared_v2
+    record = authority._record(op)
+    remote, public, owner = await start_waiting(prepared_v2)
+    original = cleanup.ParentAuthorityAdapter._current
+    held = getattr(record, field)
+    calls = []
+    class Foreign:
+        def __getattribute__(self, name):
+            calls.append(name)
+            raise AssertionError("foreign record field must never be invoked")
+    foreign = Foreign()
+    changed = []
+    def current(a, r):
+        result = original(a, r)
+        if a is authority and asyncio.current_task() is public and not changed:
+            changed.append(True)
+            setattr(record, field, foreign)
+        return result
+    monkeypatch.setattr(cleanup.ParentAuthorityAdapter, "_current", current)
+    try:
+        await asyncio.get_running_loop().sock_sendall(peer, encode_frame(b, "READY", 0, version=2))
+        with pytest.raises(AuthorityRefusalError):
+            await public
+        assert changed and calls == [] and remote._failed
+        await joined_cleanup(owner)
+        assert record.headers is not None
+    finally:
+        setattr(record, field, held)  # test-only disposal after the refusal outcome

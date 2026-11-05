@@ -90,7 +90,7 @@ qualification remains separate.
 
 ## Full backend gates preserved
 
-A later one-use async GO-intent contract must freshly reauthenticate original
+The [retained asynchronous GO contract](ASYNC_GO.md) must freshly reauthenticate original
 PRE_GO authority and join the exact operation/packet/challenge before dispatch.
 The existing synchronous local go_inline callback cannot wrap awaited socket IO.
 Partial send or cancellation revokes publication and forbids replay.
@@ -107,9 +107,9 @@ Retirement must drop original credential references from both the native record
 and remote sealed context only after the required ownership planes close.
 Never translate a remote CLOSED/EOF/boolean into local custody events.
 
-The versioned cancellation/clock contract must convey the gateway's original
-frozen cleanup end without per-hop renewal. Current bodyless CANCEL cannot do
-that. Lost CANCEL/disconnection or a later broker-local drain cannot certify a
+The selected-v2 cancellation/clock source conveys the gateway's original
+frozen cleanup end without per-hop renewal. Version1 bodyless CANCEL cannot do
+that; it remains separate from selected-v2 work. Lost CANCEL/disconnection or a later broker-local drain cannot certify a
 previous gateway 250 ms bound; uncertainty remains retained debt. No GO or started
 release is enabled before this decision and its implementation review.
 

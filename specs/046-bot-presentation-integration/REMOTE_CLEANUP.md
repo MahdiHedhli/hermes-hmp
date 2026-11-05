@@ -25,8 +25,15 @@ Separate immutable NamedTuple allocation seals retain original task/coroutine an
 barrier identities independently of mutable partial-initialization records. Slot
 substitution cannot manufacture a join or redirect cancellation. The work task
 runs only the fixed RemoteOperationOwner BEGIN/READY method, never an arbitrary
-callback/coroutine. The public await shields that task, so request
-cancellation is first observed and frozen before cancelling the owned work task.
+callback/coroutine. A separately retained READY Future notifies the original
+public caller. Its immutable minted fact joins that exact Future, original work
+allocation, remote/channel and packet. The public await shields the notification,
+not the work task; READY does not imply an actual work join. The exact task stays
+parked on the original cause until later GO/result integration or cleanup.
+Notification cancellation or a foreign early result cannot certify READY. Raw
+original record references are fenced after the final native readiness clock
+boundary before returning success. Request cancellation is first observed and
+frozen before cancelling the owned work task.
 
 A cause observed before the cleanup task first runs skips the work clock entirely;
 only original cleanup sampling is permitted after retirement. A single cleanup
@@ -68,6 +75,11 @@ separate. Synthetic tests cannot certify a production hard wall-clock bound.
 ## Causal acceptance
 
 - Actual local Unix selected-v2 BEGIN/READY with the original input/budget/clock.
+- READY notification retains the exact live work task; original cause cancellation
+  joins it before socket cleanup. Partial notification Future initialization,
+  replacement, foreign success and public cancellation cannot forge a fact.
+- Final public native-clock owner/fence/policy substitutions refuse before foreign
+  callbacks and keep original headers/credit retained.
 - First-cause capture precedes owned task cancellation; repeated caller cancel
   cannot cancel cleanup, renew the deadline, reopen work or duplicate sends.
 - Cancellation before work start, during native PRE_GO, during BEGIN, awaiting
