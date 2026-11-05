@@ -23,7 +23,7 @@ authority or lifecycle. Every other control body remains empty. Version 1 stays
 the default; a selected receiver refuses a different version without fallback.
 The existing service/enrollment still selects v1 and therefore cannot accept v2.
 
-## Required next integration (not implemented or qualified)
+## Required transport integration (not implemented or qualified)
 
 Before either transport end selects v2, trusted startup must independently
 qualify the exact kernel-authenticated peer's native monotonic clock domain.
@@ -46,7 +46,8 @@ owner must survive work-task cancellation without bypassing authority for GO or
 result delivery. Disconnect/lost cancellation retains unknown debt; a later
 broker-local deadline cannot certify the gateway's earlier cleanup bound.
 
-Native observer, selected startup enrollment, both-end transport adoption,
+The [native observer source](NATIVE_CLOCK.md) now exists separately; it does not
+select startup enrollment or activate both-end transport adoption. Remaining:
 async GO intent, typed started-terminal proof, result validation, credential
 retirement, manager/runtime latency and physical rendering remain open. This
 source slice changes no service, route, live host, app artifact or device.

@@ -64,6 +64,7 @@ CONTRACT_MODULES = {
     # BR2 source-only bounded IPC framing; no broker service/route.
     "presentation_broker_codec.py",
     "presentation_cancel_budget.py",
+    "presentation_clock.py",
     # BR4a read-only kernel connection identity; no endpoint/service activation.
     "presentation_broker_peer.py",
     "presentation_broker_endpoint.py",
