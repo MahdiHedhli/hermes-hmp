@@ -150,6 +150,14 @@ class BrokerEndpointOwner:
             or any(a is not b for a, b in zip(self._records, self._record_refs, strict=True))
             or self._seals is not self._seals_snapshot
             or self._socket is not self._socket_snapshot
+            or (
+                self._socket_snapshot is not None
+                and (
+                    type(self._socket_snapshot) is not tuple
+                    or len(self._socket_snapshot) != 5
+                    or any(type(v) is not int or v < 0 for v in self._socket_snapshot)
+                )
+            )
         ):
             raise FrameError(_UNAVAILABLE)
         if any(type(r) is not _Directory for r in self._record_refs) or any(
@@ -246,11 +254,21 @@ class BrokerEndpointOwner:
 
     def validates(self, observation: EndpointObservation) -> bool:
         current = self._current()
+        value = self._observation_value
         if (
-            type(observation) is not EndpointObservation
+            type(value) is not tuple
+            or len(value) != 2
+            or any(
+                type(row) is not tuple
+                or len(row) != 5
+                or any(type(v) is not int or v < 0 for v in row)
+                for row in value
+            )
+            or type(observation) is not EndpointObservation
             or observation is not self._observation
-            or (observation.directory, observation.socket) != self._observation_value
-            or current != self._observation_value
+            or observation.directory is not value[0]
+            or observation.socket is not value[1]
+            or current != value
         ):
             self._refused = True
             raise FrameError(_UNAVAILABLE)

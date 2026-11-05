@@ -420,3 +420,78 @@ def test_foreign_container_never_traversed(endpoint, action, field):
                 owner.observe()
     finally:
         setattr(owner, field, original)
+
+
+def test_held_unlinked_directory_is_not_current_endpoint(endpoint):
+    directory, path, acquire = endpoint
+    owner = acquire()
+    observation = owner.observe()
+    path.unlink()
+    directory.rmdir()
+    assert not directory.exists()
+    # APFS may retain a nonzero link count on this held, removed directory.
+    assert module._identity(os.fstat(owner._records[-1].fd)) == observation.directory
+    with pytest.raises(FrameError):
+        owner.validates(observation)
+    # Held FD disposal is still safe; it does not revive pathname authority.
+    assert owner.close() is True
+
+
+def test_preexisting_ebadf_does_not_become_close_success(endpoint, monkeypatch):
+    _, _, acquire = endpoint
+    owner = acquire()
+    descriptor = owner._records[-1].fd
+    _NATIVE_CLOSE(descriptor)
+    calls = []
+
+    def close(fd):
+        calls.append(fd)
+        _NATIVE_CLOSE(fd)
+
+    monkeypatch.setattr(module.os, "close", close)
+    assert owner.close() is False
+    assert descriptor not in calls
+    count = len(calls)
+    assert owner.close() is False
+    assert len(calls) == count
+
+
+@pytest.mark.parametrize("field", ["directory", "socket"])
+def test_frozen_observation_drift_cannot_invoke_equality(endpoint, field):
+    _, _, acquire = endpoint
+    owner = acquire()
+    observation = owner.observe()
+
+    class Foreign:
+        def __eq__(self, other):
+            pytest.fail("foreign observation equality executed")
+
+    object.__setattr__(observation, field, Foreign())
+    with pytest.raises(FrameError):
+        owner.validates(observation)
+    assert owner.close() is True
+
+
+def test_socket_snapshot_drift_cannot_invoke_equality(endpoint):
+    _, _, acquire = endpoint
+    owner = acquire()
+
+    class Foreign:
+        def __eq__(self, other):
+            pytest.fail("foreign snapshot equality executed")
+
+    owner._socket = owner._socket_snapshot = Foreign()
+    with pytest.raises(FrameError):
+        owner.observe()
+    assert owner.close() is False
+
+
+@pytest.mark.parametrize("value", [True, (True, True), ((True,) * 5,) * 2])
+def test_observation_snapshot_primitive_shape_guard(endpoint, value):
+    _, _, acquire = endpoint
+    owner = acquire()
+    observation = owner.observe()
+    owner._observation_value = value
+    with pytest.raises(FrameError):
+        owner.validates(observation)
+    assert owner.close() is True

@@ -46,6 +46,8 @@ Acceptance includes actual private socket and FD fixtures: ancestor symlink and
 replacement during acquisition, retained directory replacement, socket replacement
 and sticky refusal after restoration, missing/wrong-type/UID/mode entries, startup
 type bounds, partial open, descriptor coercion/reuse, ambiguous/no-op close,
-owner-minted observation isolation, and no creation/connect/unlink/repair by the
+owner-minted observation isolation and primitive/reference guards before any
+foreign equality/traversal; held-but-removed directories and preexisting EBADF;
+and no creation/connect/unlink/repair by the
 helper. Production service/runtime and platform connection qualification do not
 follow from these tests.

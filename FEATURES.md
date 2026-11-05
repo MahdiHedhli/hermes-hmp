@@ -4,13 +4,15 @@ The reviewed source can now retain a private socket directory through an
 FD-relative no-symlink ancestry walk and observe the fixed endpoint entry.
 It enforces expected ownership and exact private permissions, detects held/current
 path or socket replacement, and keeps refusal sticky after observed drift.
+Malformed snapshots and observation drift are rejected before foreign callbacks.
 Partial acquisition retains its owner; exact owned descriptors close at most once,
 with no-op, reuse and ambiguous closure unable to produce a success fact.
 
-Root and independent suites each pass 56 endpoint cases. Complete serial Python
-3.11 and 3.14.9 regression runs each pass 803 tests plus 66 subtests; lint and
-closed-import scanning pass. The previous resource source `f04b3b5` also passed
-hosted CI41963160105. These are source and isolated kernel-fixture observations.
+Root and independent suites each pass 64 endpoint cases. Complete serial Python
+3.11 and 3.14.9 regression runs each pass 811 tests plus 66 subtests; lint and
+closed-import scanning pass. Endpoint source `c5a5c76` passed hosted CI41964518254 before the final
+primitive-guard repair and supplemental tests; the repaired source CI is tracked
+separately. These are source and isolated kernel-fixture observations.
 The endpoint helper never creates, connects, repairs or deletes a socket, and
 cannot attest a future connection, service code/boot or child custody. Runtime
 qualification, service/transport/native integration, started terminal release,
