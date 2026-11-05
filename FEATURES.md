@@ -1,3 +1,24 @@
+## Native remote clock handoff source — November 5, 2026
+
+HMP `d7be14d` retains the original selected protocol and exact qualified native
+clock/domain/value/qualification references with the remote operation's existing
+budget. Callback-free ownership checks surround native sampling before owner or
+fence methods can run. Selected BEGIN/READY uses its original version and rejects
+downgrade, reference drift, late deadlines and cancellation without new work.
+
+Independent focused review passes 170 tests with one Linux-native skip. Final
+root serial Python 3.11/3.14.9 regressions each pass 1,572 tests plus 190 subtests,
+with one Linux-native skip. Lint, surface and privacy checks pass. Prior budget
+head `4844d38` CI42022506650 is green: 6,687 tests / 21 skips plus 190 subtests.
+The new handoff has separate CI evidence. Local Unix exchange tests explicitly
+mock kernel peer/Darwin clock facts; no new native runtime qualification follows.
+
+Retained async cleanup and both-end inherited cancellation remain next. v2
+CANCEL/dispatch/status, GO/result/started release and authenticated image routes
+stay closed. Full character images and signed physical verification are unfinished;
+app executable, embedded HMP and hosts are unchanged. Host-local images follow.
+See the [handoff contract](specs/046-bot-presentation-integration/REMOTE_OPERATION.md).
+
 ## Original cancellation owner source — November 5, 2026
 
 HMP `31214d3` binds one retained cancellation budget before native observation
