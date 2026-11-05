@@ -37,12 +37,14 @@ No retransmission, modified envelope or appended frame after a torn write.
 
 ## Gateway: retain the original reader into cleanup-only mode
 
-The [write-quiescence prerequisite](WRITE_QUIESCENCE.md) is implemented separately;
-its original fact does not yet replace the whole-task-join/readFalse gates below.
+The [write-quiescence prerequisite](WRITE_QUIESCENCE.md) now composes with the
+reviewed [post-GO cleanup reader](CLEANUP_READER.md) for one CANCEL while the
+original RESULT task drains. Pre-READY, ACK and terminal acceptance remain
+unimplemented; the following full contract must not be read as deployment proof.
 Keep the original retained work Task as the sole stream reader; existing cleanup
-Task becomes the sole CANCEL/ACK writer. Before changing the old whole-task-join
-send gate, add an exact one-use write-quiescence barrier owned by the original
-work allocation/channel/budget. It must establish completed BEGIN, no pending
+Task is the sole planned CANCEL/ACK writer (only CANCEL is implemented).
+Replacing whole-task-join before sending requires the exact one-use
+write-quiescence barrier owned by the original work allocation/channel/budget. It must establish completed BEGIN, no pending
 client write, and either no GO attempt or the original completed GO-write fact.
 An IO flag alone is not quiescence. Allocate/retain partial Future/Task/barrier
 ownership before effects, with existing initializer failure and cancellation rules.
@@ -58,9 +60,9 @@ transfer the cursor or permission to another operation.
 
 The selected-v2 pre-result and normal RESULT readers now retain framing progress
 through their reviewed readiness/cursor integrations; RESULT also retains its
-original digest. It does not
-yet continue in cleanup mode. Extend that exact original cursor, rather than
-relying on `_small` locals, resetting offsets or starting a replacement reader.
+original digest. The post-GO RESULT cursor now continues as bounded discard
+under its original cleanup scope. Pre-result cleanup remains unfinished: extend
+its exact original cursor, never reset offsets or start a replacement reader.
 Partial RESULT uses the existing credited accumulator; after revocation it is
 bounded discard, never a new candidate. TERMINAL has the bounded envelope ceiling.
 All active IO timeouts must shorten to the same earliest cleanup end before later

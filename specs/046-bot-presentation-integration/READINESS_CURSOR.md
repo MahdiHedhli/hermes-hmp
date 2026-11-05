@@ -9,9 +9,9 @@ synthetic bytes left the kernel, while the original task received zero. Saving a
 cursor only after await cannot recover that offset. The normal RESULT path now uses the readiness/cursor integration below; other
 selected-v2 normal BEGIN/READY now uses [pre-result cursor ownership](PRE_RESULT_CURSOR.md).
 Legacy v1/service paths remain separate; broker control integration is described
-in [its cursor contract](BROKER_CONTROL_CURSOR.md). No cleanup-reader resumption is
-enabled. They must retain UNKNOWN rather than guess a frame boundary after
-ambiguity.
+in [its cursor contract](BROKER_CONTROL_CURSOR.md). Selected-v2 post-GO RESULT
+has a separately reviewed [cleanup-reader coupling](CLEANUP_READER.md).
+Other paths must retain UNKNOWN rather than guess a frame boundary after ambiguity.
 
 ## Owned readiness primitive
 
@@ -93,9 +93,9 @@ payload custody; consumed-count metadata remains. No scan, replay, second reader
 or fresh deadline is introduced. A successfully retired notification followed by
 cancellation consumes no further kernel bytes.
 
-This integrates normal RESULT reading only. Selected-v2 BEGIN/READY and broker control now have their own retained readiness
-integrations; legacy channel paths remain separate, and whole-work-task join before CANCEL remains mandatory.
-No cleanup-mode resumption, active first-cause timeout shortening, qualified
-terminal acceptance or native release follows from these counters. Those remain
-the coupled next integration, including exact retained framing state at both
-transport ends and current authority before cleanup-only IO.
+These counters alone grant no cleanup permission. Selected-v2 BEGIN/READY and
+broker control have their own retained integrations; legacy paths remain separate.
+The reviewed [post-GO coupling](CLEANUP_READER.md) adds same-task bounded discard,
+one CANCEL and owned minimum-deadline wake only after exact write quiescence and
+known read custody. Other paths retain whole-work join/readFalse gates. Qualified
+terminal acceptance, ACK and native release remain unfinished.

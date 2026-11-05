@@ -565,3 +565,10 @@ metadata proof precedes later current/native checks for all selected-v2 callers.
 No module, dependency, route, permission or network destination is added; v1
 remains unchanged. No cleanup/terminal/release qualification follows from framing.
 See [pre-result cursor](../../046-bot-presentation-integration/PRE_RESULT_CURSOR.md).
+
+### Cooperative cleanup reader (reviewed bounded source)
+
+`presentation_cleanup_reader.py` owns the same-task post-GO transition, original
+read-scope fact, bounded discard/terminal-data cursor and owned minimum-deadline
+notice. It cannot grant join/closure, ACK, native credit, image emission or runtime
+admission. See [cleanup reader](../../046-bot-presentation-integration/CLEANUP_READER.md).

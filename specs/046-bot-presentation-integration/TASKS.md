@@ -1,5 +1,7 @@
 # BI1 integration tasks
 
+- [x] Independently accept bounded cooperative post-GO cleanup reader, owned minimum-deadline wake and adversarial coupling matrix (467 focused cases on Python 3.13); exact source/test scope is in [CLEANUP_READER.md](CLEANUP_READER.md). No image route or terminal authority is enabled.
+
 - [x] Compose existing HMP/mobile presentation foundations with current candidate.
 - [x] Implement explicit POSIX backend and actual synthetic kernel transaction tests.
 - [x] Implement native authority observer; independent review accepted0eef repair.
@@ -64,7 +66,7 @@
 - [x] Independently review normal RESULT readiness/cursor integration with retained outer/body offsets, original digest and sticky ambiguous IO. Independent178 focused cases plus final EAGAIN/cancellation causal pass on Python3.13; no cleanup-reader activation.
 - [x] Independently review broker control readiness/cumulative-cursor integration, immediate queued-control draining and original work-to-cleanup timeout transition. Independent153 focused cases plus the final cross-channel isolation causal pass on Python3.13; no ACK continuation or release. See [broker control cursor](BROKER_CONTROL_CURSOR.md).
 - [x] Independently review selected-v2 retained pre-result BEGIN/READY cursor, callback-free final remote custody fence and readiness-proof-before-current ordering. Independent231-case regression and final9-case owner-binding causals pass on Python3.13; preserve v1 and no cleanup activation. See [pre-result cursor](PRE_RESULT_CURSOR.md).
-- [ ] Replace whole-work cancellation/join-before-CANCEL only through reviewed original-work write-quiescence and cleanup-reader mode; continue original broker controller after CANCEL. See [joined transport prerequisites](TERMINAL_TRANSPORT.md).
+- [ ] Extend the reviewed post-GO write-quiescence/cleanup-reader coupling to pre-READY and continue the original broker controller after CANCEL toward qualified ACK; retain legacy join gates outside the reviewed scope. See [joined transport prerequisites](TERMINAL_TRANSPORT.md).
 - [ ] Complete selected-v2 STATUS lifecycle, fresh PRE_EMIT, typed started-terminal proof and native/credential retirement before publication; no replay or release shortcuts. See [cancellation contract](CANCELLATION_CLOCK.md).
 - [ ] Qualify broker service/runtime and authenticated transport, integrate native gateway routes and bind started terminal release; local observations alone retain PENDING.
 - [ ] Resolve direct-child native Kanban waitpid(-1) interference through an ownership-aware native contract or a separately reviewed external broker; do not disable Kanban or reinterpret ECHILD as closure.

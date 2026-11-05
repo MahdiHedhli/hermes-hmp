@@ -3,8 +3,10 @@
 This binds known completed native client writes to the original retained work
 Task before cleanup can consume its connection. It is not a Task join, reader
 handoff, transport closure, native permission or terminal qualification. The
-existing whole-work-task join and reading=False CANCEL gates remain mandatory.
-Retained-work cleanup-only reading is a separate unfinished integration.
+whole-work-task join and reading=False CANCEL gates remain mandatory outside
+the separately reviewed [post-GO cleanup coupling](CLEANUP_READER.md). That
+coupling binds this fact to an active original read scope; the fact alone never
+replaces those gates.
 
 ## Allocation and immutable fact
 
@@ -39,12 +41,12 @@ CANCEL intent/encoding/IO; no failure restores or replays it. Wrong actors,
 forged Future success, changed scope/allocation/reference, native sample failure
 and partial initialization refuse without foreign callbacks or foreign cleanup.
 
-This prerequisite does not replace whole-task join or reading=False. No ACK,
-terminal dispatch, cleanup-only read mode, reader cursor transfer, registry/native
-release, reauthentication or image publication is enabled. The full coupling in
-[TERMINAL_TRANSPORT.md](TERMINAL_TRANSPORT.md) still needs retained cursor and
-active-timeout ownership, same-controller CANCEL/ACK continuation, qualified
-producer/receiver acceptance, native PRE_EMIT/DRAIN and credential retirement.
+This prerequisite alone does not replace whole-task join or reading=False.
+The post-GO coupling adds only original-scope cleanup reading and one CANCEL;
+no ACK, registry/native release, reauthentication or image publication is enabled.
+The full contract in [TERMINAL_TRANSPORT.md](TERMINAL_TRANSPORT.md) still needs
+pre-READY cleanup, same-controller ACK continuation, qualified producer/receiver
+acceptance, native PRE_EMIT/DRAIN and credential retirement.
 
 Consumed historical facts still retain their original owner graph. Future native
 credential retirement must account for references reachable through that owner,

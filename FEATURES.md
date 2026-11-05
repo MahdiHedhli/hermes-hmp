@@ -1,3 +1,26 @@
+## Reviewed post-GO cleanup reader — November 5, 2026
+
+HMP `0cc0b0b` keeps the original post-GO reader for bounded discard while its
+existing cleanup task writes one CANCEL. Owned change notifications retire the
+old wait before adopting an earlier deadline; no replacement reader or renewed
+budget is created. Native descriptor/nonblocking and original buffer/counter
+fences reject drift. Unqualified terminal data cannot authorize later effects,
+ACK or native release.
+
+Independent Python 3.13 review passes 467 cases across seven modules, including
+23 cleanup causals. The 56-file Python 3.11.15 and 3.14.4 matrices each pass
+1,959 tests plus 190 subtests, with one Linux-native skip each. Final cleanup
+causals also rerun after the deterministic peer-EOF test correction.
+A prior floor repeat missed the intended pre-sink entry in an unchanged supervisor
+test; isolated and whole-supervisor reruns pass. Its cause remains unexplained;
+`855a412` adds status-only diagnostics without changing assertions or deadlines.
+This intermittent prerequisite observation remains a qualification limit.
+
+Source coupling is reviewed; no host deployment or mobile executable change.
+Phone-visible characters and host-local images remain unfinished. Pre-READY
+cleanup, qualified terminal/ACK/runtime admission, native PRE_EMIT/DRAIN and
+credential retirement remain gates. See [cleanup-reader scope](specs/046-bot-presentation-integration/CLEANUP_READER.md).
+
 ## Retained v2 BEGIN/READY and final authority fences — November 5, 2026
 
 HMP `ff895bb` retains selected-v2 BEGIN/READY framing on its original Task before
