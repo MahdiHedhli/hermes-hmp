@@ -236,9 +236,31 @@ def test_protocol_selection_is_exact_and_closed(binding, version):
                      expected_version=version)
 
 
-@pytest.mark.parametrize("kind", ["GO", "READY", "STATUS", "PENDING", "UNKNOWN", "CLOSED", "ACK"])
+@pytest.mark.parametrize("kind", ["GO", "READY", "STATUS", "PENDING", "UNKNOWN", "CLOSED"])
 def test_v2_other_control_frames_remain_bodyless(binding, kind):
     packet = encode_frame(binding, kind, 1, version=2)
     assert decode_frame(packet, expected=binding, expected_version=2).body == b""
     with pytest.raises(FrameError):
         encode_frame(binding, kind, 1, b"x" * 16, version=2)
+
+
+@pytest.mark.parametrize("kind,limit", [("TERMINAL", 4096), ("ACK", 32)])
+def test_v2_terminal_and_digest_ack_are_header_bounded(binding, kind, limit):
+    sizes = (1, limit) if kind == "TERMINAL" else (limit,)
+    for size in sizes:
+        raw = encode_frame(binding, kind, 2, b"x" * size, version=2)
+        parsed = decode_frame(raw, expected=binding, expected_version=2)
+        assert parsed.body == b"x" * size
+    invalid = (0, limit + 1) if kind == "TERMINAL" else (0, 16, 31, 33)
+    for size in invalid:
+        with pytest.raises(FrameError):
+            decode_header(header(row(binding, v=2, kind=kind, body_length=size)),
+                          expected=binding, expected_version=2)
+
+
+def test_legacy_terminal_extension_and_ack_body_are_refused(binding):
+    with pytest.raises(FrameError):
+        encode_frame(binding, "TERMINAL", 2, b"x")
+    with pytest.raises(FrameError):
+        encode_frame(binding, "ACK", 2, b"x" * 32)
+    assert decode_frame(encode_frame(binding, "ACK", 2), expected=binding).body == b""

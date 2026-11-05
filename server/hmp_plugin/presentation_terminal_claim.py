@@ -9,12 +9,12 @@ import hashlib
 import json
 from typing import NamedTuple
 
-from .presentation_broker_codec import BrokerBinding, _binding
+from .presentation_broker_codec import TERMINAL_LIMIT, BrokerBinding, _binding
 from .presentation_cancel_budget import CLEANUP_NS, MAX_NS
 from .presentation_input_v3 import decode_input_v3
 from .presentation_jobs import _PROFILE, INPUT_LIMIT, FrameError, _digest, _json
 
-CLAIM_LIMIT = 4096
+CLAIM_LIMIT = TERMINAL_LIMIT
 _INPUT_MINT = object()
 
 

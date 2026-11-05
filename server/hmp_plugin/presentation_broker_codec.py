@@ -17,9 +17,11 @@ from .presentation_jobs import INPUT_LIMIT, OUTPUT_LIMIT, FrameError
 
 MAGIC = b"HBR1"
 HEADER_LIMIT = 1024
+TERMINAL_LIMIT = 4096
 FRAME_LIMIT = 8 + HEADER_LIMIT + OUTPUT_LIMIT
 _KINDS = frozenset(
-    {"BEGIN", "READY", "GO", "CANCEL", "CLOSED", "ACK", "STATUS", "RESULT", "PENDING", "UNKNOWN"}
+    {"BEGIN", "READY", "GO", "CANCEL", "CLOSED", "ACK", "STATUS", "RESULT", "PENDING",
+     "UNKNOWN", "TERMINAL"}
 )
 _KEYS = frozenset(
     {"v", "kind", "iid", "listener", "broker", "channel", "operation", "sequence", "body_length"}
@@ -96,6 +98,10 @@ def _shape(kind: str, sequence: int, body_length: int, version: int) -> None:
         valid = 4 <= body_length <= INPUT_LIMIT + 4
     elif kind == "CANCEL" and version == 2:
         valid = body_length == 16
+    elif kind == "TERMINAL":
+        valid = version == 2 and 1 <= body_length <= TERMINAL_LIMIT
+    elif kind == "ACK" and version == 2:
+        valid = body_length == 32
     elif kind == "RESULT":
         valid = 4 <= body_length <= OUTPUT_LIMIT
     else:

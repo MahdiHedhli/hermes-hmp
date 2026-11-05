@@ -7,9 +7,11 @@ No result here proves a child closed or permits publication/GO/slot release.
 
 from __future__ import annotations
 
+import hashlib
 import secrets
 import threading
 from enum import Enum
+from typing import NamedTuple
 
 from .presentation_broker_codec import BrokerBinding, BrokerFrame, BrokerHeader, _binding, _row
 from .presentation_jobs import FrameError
@@ -92,8 +94,19 @@ class MessageDisposition(Enum):
     RESULT_CANDIDATE = "result_candidate"
     RESULT_DISCARDED = "result_discarded"
     ACK_REQUEST = "ack_request"
+    TERMINAL_CLAIM = "terminal_claim"
+    TERMINAL_DISCARDED = "terminal_discarded"
+    TERMINAL_ABORTED = "terminal_aborted"
     STATUS_PENDING = "status_pending"
     STATUS_UNKNOWN = "status_unknown"
+
+
+class _TerminalSyntax(NamedTuple):
+    digest: bytes
+    outcome: str
+
+    def __repr__(self):
+        return "<TerminalSyntax correlation-only redacted>"
 
 
 class OperationGrammar:
@@ -134,6 +147,10 @@ class OperationGrammar:
         self._ready = False
         self._go = False
         self._cancel = False
+        self._result_seen = False
+        self._terminal_syntax = self._terminal_syntax_snapshot = None
+        self._terminal_digest: bytes | None = None
+        self._terminal_outcome: str | None = None
         self._terminal_message: str | None = None
         self._acked_message = False
         self._invalidated = False
@@ -162,9 +179,22 @@ class OperationGrammar:
             and type(self._client_next) is int and 0 <= self._client_next <= _SERIAL_MAX + 1
             and type(self._broker_next) is int and 0 <= self._broker_next <= _SERIAL_MAX + 1
             and all(type(v) is bool for v in (self._begun, self._ready, self._go, self._cancel,
-                                             self._acked_message, self._invalidated, self._failed))
+                                             self._acked_message, self._invalidated, self._failed,
+                                             self._result_seen))
             and (self._terminal_message is None or (type(self._terminal_message) is str
-                 and self._terminal_message in ("RESULT", "CLOSED", "PENDING", "UNKNOWN")))
+                 and self._terminal_message in (
+                     "RESULT", "CLOSED", "PENDING", "UNKNOWN", "TERMINAL")))
+            and (self._terminal_digest is None or (type(self._terminal_digest) is bytes
+                 and len(self._terminal_digest) == 32))
+            and (self._terminal_outcome is None or (type(self._terminal_outcome) is str
+                 and self._terminal_outcome in ("OK", "ABORTED")))
+            and self._terminal_syntax is self._terminal_syntax_snapshot
+            and ((self._terminal_message == "TERMINAL"
+                  and type(self._terminal_syntax) is _TerminalSyntax
+                  and self._terminal_digest is self._terminal_syntax.digest
+                  and self._terminal_outcome is self._terminal_syntax.outcome)
+                 or (self._terminal_message != "TERMINAL" and self._terminal_syntax is None
+                     and self._terminal_digest is None and self._terminal_outcome is None))
             and type(self._version) is int and self._version in (1, 2)
             and self._version is self._version_snapshot
             and (self._version != 2 or self._mode == "operation")
@@ -183,7 +213,9 @@ class OperationGrammar:
             return False
         return (
             self._role == "gateway"
-            and self._terminal_message == "RESULT"
+            and ((self._version == 1 and self._terminal_message == "RESULT")
+                 or (self._version == 2 and self._result_seen
+                     and self._terminal_outcome != "ABORTED"))
             and not self._invalidated
             and not self._failed
         )
@@ -208,7 +240,8 @@ class OperationGrammar:
                 or type(frame.header.version) is not int
                 or frame.header.version != self._version
                 or (self._version == 2
-                    and frame.header.kind not in ("BEGIN", "READY", "GO", "CANCEL", "RESULT"))
+                    and frame.header.kind not in (
+                        "BEGIN", "READY", "GO", "CANCEL", "RESULT", "TERMINAL", "ACK"))
                 or frame.header.binding != self._binding
                 or type(sender) is not str
                 or sender not in ("client", "broker")
@@ -219,6 +252,8 @@ class OperationGrammar:
                 _fail()
             if self._mode == "status":
                 disposition = self._status(sender, frame.header.kind)
+            elif self._version == 2:
+                disposition = self._operation_v2(sender, frame)
             else:
                 disposition = self._operation(sender, frame.header.kind)
             if sender == "client":
@@ -298,4 +333,64 @@ class OperationGrammar:
                 if self._invalidated
                 else MessageDisposition.RESULT_CANDIDATE
             )
+        _fail()
+
+
+    def _operation_v2(self, sender: str, frame: BrokerFrame) -> MessageDisposition:
+        """Transcript syntax only: claims/ACK hashes cannot settle any resource."""
+        kind = frame.header.kind
+        if sender == "client":
+            if kind == "BEGIN" and not self._begun:
+                if self._invalidated and self._role == "gateway":
+                    _fail()
+                self._begun = True
+            elif (kind == "GO" and self._begun and self._ready and not self._go
+                  and not self._cancel and not self._invalidated
+                  and self._terminal_message is None):
+                self._go = True
+            elif kind == "CANCEL" and self._begun and not self._cancel:
+                self._cancel = self._invalidated = True
+            elif (kind == "ACK" and self._terminal_message == "TERMINAL"
+                  and frame.body == self._terminal_digest):
+                self._acked_message = True
+                return MessageDisposition.ACK_REQUEST  # correlation, NOT permission to release
+            else:
+                _fail()
+            return MessageDisposition.CONTROL
+        if not self._begun or self._terminal_message is not None:
+            _fail()
+        if kind == "READY" and not self._ready and not self._result_seen:
+            if self._invalidated and self._role == "broker":
+                _fail()
+            self._ready = True
+            return MessageDisposition.CONTROL
+        if kind == "RESULT" and self._ready and self._go and not self._result_seen:
+            if self._invalidated and self._role == "broker":
+                _fail()  # never start fresh result work after local cancellation
+            self._result_seen = True  # v2 RESULT does not terminate the transcript
+            return (MessageDisposition.RESULT_DISCARDED if self._invalidated
+                    else MessageDisposition.RESULT_CANDIDATE)
+        if kind == "TERMINAL":
+            from .presentation_terminal_claim import decode_claim
+
+            claim = decode_claim(frame.body)
+            if tuple(claim.binding) != self._binding_values:
+                _fail()
+            if claim.outcome == "OK":
+                if not self._go or not self._result_seen:
+                    _fail()
+                # A previously frozen OK may race CANCEL; data cannot revive work.
+                disposition = (MessageDisposition.TERMINAL_DISCARDED if self._invalidated
+                               else MessageDisposition.TERMINAL_CLAIM)
+            else:
+                if self._role == "broker" and not self._invalidated:
+                    _fail()  # sticky syntax gate, not actual budget/closure proof
+                self._invalidated = True
+                disposition = MessageDisposition.TERMINAL_ABORTED
+            syntax = _TerminalSyntax(hashlib.sha256(frame.body).digest(), claim.outcome)
+            self._terminal_syntax = self._terminal_syntax_snapshot = syntax
+            self._terminal_digest = syntax.digest
+            self._terminal_outcome = syntax.outcome
+            self._terminal_message = "TERMINAL"
+            return disposition
         _fail()

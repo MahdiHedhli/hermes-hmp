@@ -371,3 +371,174 @@ def test_explicit_grammar_never_downgrades_or_upgrades_frames(version):
 def test_selected_v2_status_construction_stays_closed():
     with pytest.raises(FrameError):
         OperationGrammar(binding(), role="gateway", mode="status", protocol_version=2)
+
+
+
+def v2_step(model, sender, kind, sequence, body=None):
+    from hmp_plugin.presentation_broker_codec import decode_frame, encode_frame
+
+    if body is None:
+        body = b"data" if kind in ("BEGIN", "RESULT") else b""
+    frame = decode_frame(encode_frame(model._binding, kind, sequence, body, version=2),
+                         expected=model._binding, expected_version=2)
+    return model.observe(frame, sender=sender)
+
+
+def terminal_body(model, outcome="OK", **changes):
+    from hmp_plugin.presentation_terminal_claim import StartedClaim, claim_binding, encode_claim
+
+    claim = StartedClaim(claim_binding(model._binding), "alpha", "METADATA", 2_000_000_000,
+                         "f" * 64, 1, "a" * 64, "b" * 64, "c" * 64, "d" * 64,
+                         outcome, 0, "e" * 64 if outcome == "OK" else None)
+    return encode_claim(claim._replace(**changes))
+
+
+def v2_result(model):
+    v2_step(model, "client", "BEGIN", 0)
+    v2_step(model, "broker", "READY", 0)
+    v2_step(model, "client", "GO", 1)
+    return v2_step(model, "broker", "RESULT", 1)
+
+
+@pytest.mark.parametrize("role", ["gateway", "broker"])
+def test_v2_result_terminal_ack_is_only_correlated_data(role):
+    import hashlib
+
+    model = OperationGrammar(binding(), role=role, protocol_version=2)
+    assert v2_result(model) is D.RESULT_CANDIDATE
+    assert model._terminal_message is None  # RESULT alone cannot be ACKed
+    body = terminal_body(model)
+    assert v2_step(model, "broker", "TERMINAL", 2, body) is D.TERMINAL_CLAIM
+    assert model.candidate_message is (role == "gateway")
+    assert v2_step(model, "client", "ACK", 2, hashlib.sha256(body).digest()) is D.ACK_REQUEST
+    assert not hasattr(model, "release") and not hasattr(model, "complete")
+    with pytest.raises(FrameError):
+        v2_step(model, "client", "ACK", 3, hashlib.sha256(body).digest())
+
+
+@pytest.mark.parametrize("role", ["gateway", "broker"])
+@pytest.mark.parametrize("stage", [0, 1, 2])
+def test_v2_abort_uses_next_broker_sequence_and_retires_candidate(role, stage):
+    import hashlib
+
+    model = OperationGrammar(binding(), role=role, protocol_version=2)
+    v2_step(model, "client", "BEGIN", 0)
+    if stage:
+        v2_step(model, "broker", "READY", 0)
+    if stage == 2:
+        v2_step(model, "client", "GO", 1)
+        v2_step(model, "broker", "RESULT", 1)
+    if role == "broker":
+        model.invalidate()  # syntax only, not an actual closure/budget fact
+    body = terminal_body(model, "ABORTED")
+    assert v2_step(model, "broker", "TERMINAL", stage, body) is D.TERMINAL_ABORTED
+    assert not model.candidate_message and model._invalidated
+    assert v2_step(model, "client", "ACK", 2 if stage == 2 else 1,
+                   hashlib.sha256(body).digest()) is D.ACK_REQUEST
+
+
+@pytest.mark.parametrize("role", ["gateway", "broker"])
+@pytest.mark.parametrize("cancel_first", [False, True])
+def test_v2_cancel_racing_frozen_ok_never_remints_or_revives(role, cancel_first):
+    import hashlib
+
+    from hmp_plugin.presentation_cancel_budget import CancellationWindow
+
+    model = OperationGrammar(binding(), role=role, protocol_version=2)
+    v2_result(model)
+    body = terminal_body(model)
+    cancel = CancellationWindow(0, 250_000_000).encode()
+    if cancel_first:
+        v2_step(model, "client", "CANCEL", 2, cancel)
+    outcome = v2_step(model, "broker", "TERMINAL", 2, body)
+    assert outcome is (D.TERMINAL_DISCARDED if cancel_first else D.TERMINAL_CLAIM)
+    digest = model._terminal_digest
+    syntax = model._terminal_syntax_snapshot
+    if not cancel_first:
+        v2_step(model, "client", "CANCEL", 2, cancel)
+    assert model._terminal_digest is digest and model._terminal_outcome == "OK"
+    assert model._terminal_syntax is syntax and model._terminal_syntax_snapshot is syntax
+    assert not model.candidate_message
+    assert v2_step(model, "client", "ACK", 3, hashlib.sha256(body).digest()) is D.ACK_REQUEST
+
+
+@pytest.mark.parametrize("fault", ["early_ack", "wrong_digest", "wrong_sequence", "scope",
+                                  "ok_without_result", "duplicate_result", "duplicate_terminal"])
+def test_v2_terminal_transcript_faults_are_sticky(fault):
+    import hashlib
+
+    from hmp_plugin.presentation_terminal_claim import claim_binding
+
+    model = OperationGrammar(binding(), role="gateway", protocol_version=2)
+    if fault == "ok_without_result":
+        v2_step(model, "client", "BEGIN", 0)
+    else:
+        v2_result(model)
+    body = terminal_body(model)
+    with pytest.raises(FrameError):
+        if fault == "early_ack":
+            v2_step(model, "client", "ACK", 2, hashlib.sha256(body).digest())
+        elif fault == "scope":
+            body = terminal_body(model, binding=claim_binding(binding(2)))
+            v2_step(model, "broker", "TERMINAL", 2, body)
+        elif fault == "ok_without_result":
+            v2_step(model, "broker", "TERMINAL", 0, body)
+        elif fault == "duplicate_result":
+            v2_step(model, "broker", "RESULT", 2)
+        else:
+            v2_step(model, "broker", "TERMINAL", 2, body)
+            if fault == "duplicate_terminal":
+                v2_step(model, "broker", "TERMINAL", 3, body)
+            else:
+                v2_step(model, "client", "ACK", 3 if fault == "wrong_sequence" else 2,
+                        hashlib.sha256(body).digest() if fault == "wrong_sequence" else b"x" * 32)
+    assert model._failed and not model.candidate_message
+
+
+def test_v2_late_result_and_ok_remain_discarded_after_cancel():
+    from hmp_plugin.presentation_cancel_budget import CancellationWindow
+
+    model = OperationGrammar(binding(), role="gateway", protocol_version=2)
+    v2_step(model, "client", "BEGIN", 0)
+    v2_step(model, "broker", "READY", 0)
+    v2_step(model, "client", "GO", 1)
+    v2_step(model, "client", "CANCEL", 2, CancellationWindow(0, 250_000_000).encode())
+    assert v2_step(model, "broker", "RESULT", 1) is D.RESULT_DISCARDED
+    assert v2_step(model, "broker", "TERMINAL", 2, terminal_body(model)) is D.TERMINAL_DISCARDED
+    assert not model.candidate_message
+
+
+def test_v2_broker_abort_requires_sticky_invalidation_not_merely_body_claim():
+    model = OperationGrammar(binding(), role="broker", protocol_version=2)
+    v2_step(model, "client", "BEGIN", 0)
+    with pytest.raises(FrameError):
+        v2_step(model, "broker", "TERMINAL", 0, terminal_body(model, "ABORTED"))
+    assert model._failed
+
+
+@pytest.mark.parametrize("fault", ["digest", "outcome", "partial", "foreign", "paired_syntax"])
+def test_terminal_syntax_seal_refuses_valid_shaped_scalar_or_reference_drift(fault):
+    from hmp_plugin.presentation_broker_lifecycle import _TerminalSyntax
+
+    model = OperationGrammar(binding(), role="gateway", protocol_version=2)
+    v2_result(model)
+    v2_step(model, "broker", "TERMINAL", 2, terminal_body(model))
+    original = model._terminal_syntax_snapshot
+    assert not any(type(value) in (dict, list) for value in original)
+    with pytest.raises(AttributeError):
+        object.__setattr__(original, "outcome", "ABORTED")
+    if fault == "digest":
+        model._terminal_digest = bytes(bytearray(original.digest))
+    elif fault == "outcome":
+        model._terminal_outcome = "ABORTED"
+    elif fault == "partial":
+        model._terminal_syntax = None
+    elif fault == "foreign":
+        model._terminal_syntax = model._terminal_syntax_snapshot = object()
+    else:
+        model._terminal_syntax = model._terminal_syntax_snapshot = _TerminalSyntax(b"x" * 32, "OK")
+    assert not model.candidate_message and model._failed
+    model._terminal_digest = original.digest
+    model._terminal_outcome = original.outcome
+    model._terminal_syntax = model._terminal_syntax_snapshot = original
+    assert not model.candidate_message  # detected drift is sticky, not recoverable permission

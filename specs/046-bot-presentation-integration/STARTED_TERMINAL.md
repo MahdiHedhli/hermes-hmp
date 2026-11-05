@@ -90,10 +90,11 @@ become the opaque local observation/custody capability.
 
 ## Required joined wire/ACK/STATUS lifecycle (not yet enabled)
 
-Freeze a dedicated typed terminal frame after RESULT, or an aborted terminal
-outcome after cancellation, with separate sequence and bounded body rules. Current
-OperationGrammar's one terminal RESULT and bodyless CLOSED do not already permit
-this. Preserve one continuous broker control cursor/task; no competing ACK reader.
+The selected-v2 codec/grammar now represent a dedicated typed terminal frame
+after RESULT, or an aborted terminal outcome after cancellation, with separate
+sequence and bounded body rules. This is transcript syntax/data correlation
+only, not an enabled transport, accepted producer capability or completion path.
+Legacy v1 retains its one terminal RESULT/bodyless CLOSED behavior. Preserve one continuous broker control cursor/task; no competing ACK reader.
 The gateway's original work task validates exact original binding, challenge,
 input/source/domain/generation and required producer qualification before accepting
 any remote closure capability. No reconnect BEGIN/GO/result replay or fresh budget.
@@ -106,6 +107,52 @@ its typed local closure; it does not drop native headers, policy or job credits.
 STATUS needs a reviewed boot-bound lookup/ACK contract; UNKNOWN/PENDING cannot
 resume work or certify closure, and old-boot responses cannot cross generations.
 Do not enable only the exporter, decoder or grammar as completion authority.
+
+## Reviewed selected-v2 transcript syntax
+
+TERMINAL is v2-only with 1..4096 bytes of canonical closed claim data; the
+framing and claim decoder share one limit. ACK v2 carries exactly 32 raw bytes,
+SHA-256 of the exact terminal body. V1 framing and bodyless ACK are unchanged;
+no version fallback or v2 STATUS construction is added.
+
+| Path | Broker sequence | Client ACK sequence |
+| --- | --- | --- |
+| Normal | READY0, RESULT1, TERMINAL2 | 2 after GO1 |
+| Abort before READY | TERMINAL0 | 1 after BEGIN0 |
+| Abort after READY, before RESULT | READY0, TERMINAL1 | next client sequence |
+| Abort after RESULT | READY0, RESULT1, TERMINAL2 | 2 after GO1 |
+| One CANCEL races frozen TERMINAL | terminal sequence/outcome/digest unchanged | advances by one |
+
+BEGIN/READY/GO keep existing role and ordering rules. Selected-v2 RESULT is one
+private candidate message, not the terminal transcript event and never enough
+for ACK. OK terminal syntax requires GO and RESULT. Broker ABORTED syntax needs
+sticky local invalidation; this is not real cancellation-budget/resource proof.
+A gateway may learn ABORTED from terminal data, which permanently invalidates its
+candidate. Header and claim must name the exact same original operation binding.
+The grammar does not validate challenge/input/source/domain/producer authority;
+the joined receiver must still bind all of them before accepting closure.
+
+A historical OK frozen before cancellation may arrive after cancellation, but is
+classified as discarded data and cannot revive work. A gateway can parse one
+late RESULT as discarded while continuing its original cursor to TERMINAL. A
+broker cannot start RESULT after its local invalidation. One CANCEL after RESULT
+or TERMINAL advances the next client sequence without changing the frozen terminal
+outcome/digest. Duplicate RESULT/TERMINAL/ACK, wrong roles/sequences/scope/digests,
+malformed or oversized claims and ACK before TERMINAL fail permanently. ABORTED
+never becomes an image candidate. The terminal digest/outcome are captured once in an immutable metadata-only
+NamedTuple with an independent original reference; scalar/reference drift is
+sticky refusal. It retains no claim-body or candidate aliases. This guards
+ordinary ownership drift under trusted installed-memory premises, not arbitrary
+Python-memory tampering. Digest equality and ACK_REQUEST are syntactic
+correlation only, not permission to send ACK or retire any journal/native credit.
+
+Actual send/receive dispatch remains closed: the continuous original controller,
+known non-torn write facts, qualified producer/receiver custody, original work or
+earliest cleanup budget and no-replay failure semantics must be integrated and
+reviewed together. A torn RESULT/TERMINAL cannot get an appended frame or retry;
+uncertain/truncated parsing retains debt. V2 STATUS needs its own reviewed,
+authenticated boot-bound lookup and journal-only ACK contract. A new lookup may
+never renew expired operation work/cleanup or resume a candidate.
 
 ## Candidate integrity, fresh native emission and retirement
 
