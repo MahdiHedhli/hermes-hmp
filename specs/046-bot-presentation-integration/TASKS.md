@@ -40,6 +40,7 @@
 - [x] Implement/review the separate-process no-GO fixture and outbound scope guard (`8a77d13`);54 focused cases pass on3.11/3.14.9. Actual run supplies peer/boot rejection, READY/cancel/local drain/reader exit, then refuses before STATUS/shutdown; cleanup known, lock retained. This is partial evidence only.
 - [x] Independently review bounded fixture polling/control count and private phase diagnostics (`e0eafcf`),26 component cases; original actual FrameError attribution remains unproven, no repeat run or service-acceptance claim.
 - [ ] Qualify this spine in one externally supervised separate-process fixture with real mutual kernel identities, startup enrollment and independently recorded cleanup; see [service contract](SERVICE_SPINE.md).
+- [ ] Resolve the independently reproduced Darwin terminal-response/peer-close race under reviewed connection identity and local FD ownership; initial authentication/native authorization/registry custody cannot be weakened. See RUNTIME_FINDINGS.md.
 - [ ] Qualify broker service/runtime and authenticated transport, integrate native gateway routes and bind started terminal release; local observations alone retain PENDING.
 - [ ] Resolve direct-child native Kanban waitpid(-1) interference through an ownership-aware native contract or a separately reviewed external broker; do not disable Kanban or reinterpret ECHILD as closure.
 - [x] Add reviewed cleanup-only discard after exact child/group/control closure (bf24a54); frozen cleanup budget, actual EOF, buffered wipe and unknown-debt causals.

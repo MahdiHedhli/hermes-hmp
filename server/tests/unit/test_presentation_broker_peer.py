@@ -216,3 +216,20 @@ def test_missing_linux_peercred_constant_is_not_guessed(monkeypatch):
     with pytest.raises(FrameError) as error:
         peer._api("SO_PEERCRED")
     assert str(error.value) == "BI1_BROKER_PEER_UNAVAILABLE"
+
+
+@pytest.mark.skipif(sys.platform != "darwin", reason="observed Darwin terminal socket semantics")
+def test_darwin_buffered_data_does_not_imply_peer_credentials_remain_available():
+    left, right = socket.socketpair()
+    try:
+        observation = peer.observe_peer(left, expected_uid=os.geteuid(), expected_pid=os.getpid())
+        assert observation.uid == os.geteuid() and observation.pid == os.getpid()
+        right.sendall(b"SYNTHETIC_TERMINAL_BYTE")
+        right.close()
+        with pytest.raises(FrameError):
+            peer.observe_peer(left, expected_uid=os.geteuid(), expected_pid=os.getpid())
+        assert left.recv(64) == b"SYNTHETIC_TERMINAL_BYTE"
+        assert left.recv(1) == b""
+    finally:
+        left.close()
+        right.close()

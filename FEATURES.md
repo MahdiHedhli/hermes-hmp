@@ -21,6 +21,11 @@ Exact source8a77d13 passes all jobs in CI41991480726; polling-repair CI is separ
 Production/native GO/RESULT, started release, authenticated routes, full classic/
 blobatar/custom character rendering and signed physical parity remain open. No
 installed app or host changed; host-local images remain the next feature goal.
+A new actual Darwin socketpair case also reproduces peer-credential refusal after
+remote close while terminal bytes remain buffered; it passes on3.11/3.14.9. The
+terminal-read contract is under review, separately from the unproven original
+FrameError cause. Initial authentication and registry/native gates stay intact.
+CI41992650017 passes on documentation/source head2e0236d.
 See the [actual-process fixture](specs/046-bot-presentation-integration/SERVICE_PROCESS_FIXTURE.md).
 
 ## Enrolled broker service spine — November 5, 2026

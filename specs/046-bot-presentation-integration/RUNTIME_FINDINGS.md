@@ -92,3 +92,29 @@ inspected broad profile/asset method module has not itself become a narrowed HMP
 presentation contract in that interval. This is not an audit of every new gateway
 API, nor proof of the currently executing process image. Broker generation
 qualification remains distinct from Hermes minimum-version compatibility.
+
+## Darwin terminal-response observation — November 5, 2026
+
+A bounded owned socketpair reproduces a separate terminal-transport issue: kernel
+peer observation succeeds while connected; after the other endpoint sends a fixed
+synthetic byte string and closes, the credential observation refuses while those
+bytes remain buffered and readable. The regression case uses no process/service,
+real profile or mocked kernel credential API. This proves the Darwin behavior,
+not the precise cause of the earlier generic actual-service FrameError.
+
+The service currently closes PENDING/UNKNOWN STATUS connections immediately after
+replying, while SocketChannel rechecks peer APIs around every asynchronous read.
+Those assumptions can race: readable terminal bytes do not imply the post-close
+peer APIs remain available. Keep the gate closed pending a reviewed terminal-read
+contract. Do not treat this as permission to skip initial peer authentication,
+accept another FD/endpoint/boot, cache authority across connections, publish work
+without native checks or turn EOF into global/registry closure. The safe fix must
+retain original deadline, scope and local socket ownership while distinguishing
+connection identity from current peer liveness.
+
+Independent contract checkpoint rejects plain wait-for-EOF as sufficient: both
+post-send and pre-EOF-wait peer checks can race the gateway closing. The next
+review is a terminal/bodyless STATUS-specific sealed connection snapshot, bound
+to exact socket/FD/context/endpoint/enrollment and expected binding, with current
+local/generation checks after awaits. Its API/state contract is still pending.
+No generic cached-peer fallback or change to GO/RESULT/data paths is accepted.
