@@ -12,6 +12,8 @@ import stat
 import threading
 import time
 from collections.abc import Callable
+from dataclasses import dataclass
+from io import FileIO
 from typing import BinaryIO
 
 from .presentation_go import GoHandoff
@@ -19,13 +21,34 @@ from .presentation_input_v3 import decode_input_v3
 from .presentation_jobs import FrameError
 
 
+def _native_close(stream: FileIO) -> None:
+    """Exact fixed native boundary; never dispatch an instance close override."""
+    if type(stream) is not FileIO:
+        raise FrameError("BI1_CONTROL_CLOSE_UNCERTAIN")
+    FileIO.close(stream)
+
+
+@dataclass(frozen=True)
+class ControlCloseObservation:
+    """One owned local write-end close, never child/native/descendant closure."""
+
+    descriptor: tuple[int, int, int]
+
+
+class ControlAcquisitionError(FrameError):
+    def __init__(self, owner: OwnedControlPipe, original: BaseException):
+        super().__init__("BI1_CONTROL_PIPE_REFUSED")
+        self.failed_owner = owner
+        self._original = original
+
+
 class OwnedControlPipe:
     def __init__(
         self, stream: BinaryIO, *, handle: object, child: object, current: Callable[[], bool]
     ):
-        self._stream = stream
-        self._handle = handle
-        self._child = child
+        self._stream = self._stream_snapshot = stream
+        self._handle = self._handle_snapshot = handle
+        self._child = self._child_snapshot = child
         self._current = current
         self._lock = threading.Lock()
         self._input_attempted = False
@@ -34,40 +57,87 @@ class OwnedControlPipe:
         self.closed = False
         self.uncertain = False
         self._deadline = 0.0
+        self._work_refused = False
+        self._resource_uncertain = False
+        self._acquired = False
+        self._identity = self._identity_snapshot = None
+        self._close_observation: ControlCloseObservation | None = None
+        self._close_observation_identity: ControlCloseObservation | None = None
+        self._close_observation_snapshot: tuple[int, int, int] | None = None
         try:
-            fd = stream.fileno()
+            fd = FileIO.fileno(stream) if type(stream) is FileIO else stream.fileno()
+            if type(fd) is not int or fd < 0:
+                raise ValueError
             row = os.fstat(fd)
             if not stat.S_ISFIFO(row.st_mode):
                 raise ValueError
-            self._identity = (fd, row.st_dev, row.st_ino)
+            self._identity = self._identity_snapshot = (fd, row.st_dev, row.st_ino)
             os.set_blocking(fd, False)
             self._go = GoHandoff(
                 handle=handle, child=child, fd=fd, current=self._current_go, write=self._write_go
             )
-        except BaseException:
-            # No additional FD was acquired; caller retains this exact stream.
-            self.uncertain = True
-            raise FrameError("BI1_CONTROL_PIPE_REFUSED") from None
+            self._acquired = True
+        except BaseException as original:
+            # Preserve this exact partial owner and its held stream/close history.
+            self._mark_resource_uncertain()
+            raise ControlAcquisitionError(self, original) from None
+
+    def _mark_work_refused(self) -> None:
+        self._work_refused = True
+        self.uncertain = True  # legacy direct path stays conservative
+
+    def _mark_resource_uncertain(self) -> None:
+        self._resource_uncertain = True
+        self._mark_work_refused()
+
+    @property
+    def work_refused(self) -> bool:
+        return self._work_refused is True
+
+    @property
+    def resource_uncertain(self) -> bool:
+        return self._resource_uncertain is not False
+
+    def _bindings(self) -> None:
+        if (
+            self._stream is not self._stream_snapshot
+            or self._handle is not self._handle_snapshot
+            or self._child is not self._child_snapshot
+            or self._identity is not self._identity_snapshot
+            or type(self._identity) is not tuple
+            or len(self._identity) != 3
+            or any(type(value) is not int or value < 0 for value in self._identity)
+        ):
+            self._mark_resource_uncertain()
+            raise FrameError("BI1_CONTROL_IDENTITY_REFUSED")
 
     def _enter(self) -> None:
         if not self._lock.acquire(blocking=False):
-            self.uncertain = True
+            self._mark_work_refused()
             raise FrameError("BI1_CONTROL_REENTRY")
         if self.uncertain or self.closed:
             self._lock.release()
             raise FrameError("BI1_CONTROL_PIPE_REFUSED")
 
     def _fd(self) -> int:
-        fd, device, inode = self._identity
-        row = os.fstat(fd)
-        if (
-            self._stream.fileno() != fd
-            or (row.st_dev, row.st_ino) != (device, inode)
-            or os.get_blocking(fd) is not False
-        ):
-            self.uncertain = True
-            raise FrameError("BI1_CONTROL_IDENTITY_REFUSED")
-        return fd
+        try:
+            self._bindings()
+            stream = self._stream_snapshot
+            fd, device, inode = self._identity_snapshot
+            observed_fd = FileIO.fileno(stream) if type(stream) is FileIO else stream.fileno()
+            self._bindings()
+            row = os.fstat(fd)
+            if (
+                type(observed_fd) is not int
+                or observed_fd != fd
+                or (row.st_dev, row.st_ino) != (device, inode)
+                or os.get_blocking(fd) is not False
+            ):
+                raise FrameError("BI1_CONTROL_IDENTITY_REFUSED")
+            return fd
+        except BaseException:
+            self._mark_resource_uncertain()
+            raise FrameError("BI1_CONTROL_IDENTITY_REFUSED") from None
 
     def _current_go(self) -> bool:
         current = self._current()
@@ -129,7 +199,7 @@ class OwnedControlPipe:
                 raise FrameError("BI1_CONTROL_INPUT_REFUSED")
             self._input_ready = True
         except BaseException as error:
-            self.uncertain = True
+            self._mark_work_refused()
             if isinstance(error, FrameError):
                 raise
             raise FrameError("BI1_CONTROL_PIPE_UNCERTAIN") from None
@@ -150,7 +220,7 @@ class OwnedControlPipe:
             if self.uncertain or now >= self._deadline:
                 raise FrameError("BI1_CONTROL_GO_UNCERTAIN")
         except BaseException as error:
-            self.uncertain = True
+            self._mark_work_refused()
             if isinstance(error, FrameError):
                 raise
             raise FrameError("BI1_CONTROL_PIPE_UNCERTAIN") from None
@@ -159,27 +229,77 @@ class OwnedControlPipe:
 
     def _close(self) -> None:
         if self._close_attempted:
-            self.uncertain = True
+            self._mark_work_refused()
             raise FrameError("BI1_CONTROL_CLOSE_REFUSED")
         self._fd()
+        stream = self._stream_snapshot
+        self._bindings()
         self._close_attempted = True
         try:
-            self._stream.close()
+            native_close = type(stream) is FileIO
+            owned_native_close = native_close and FileIO.closefd.__get__(stream, FileIO) is True
+            self._bindings()
+            if native_close:
+                _native_close(stream)
+                closed = FileIO.closed.__get__(stream, FileIO)
+            else:
+                stream.close()  # legacy trusted wrapper support; no typed close fact
+                closed = stream.closed
+            self._bindings()
+            if closed is not True:
+                raise FrameError("BI1_CONTROL_CLOSE_UNCERTAIN")
         except BaseException:
-            self.uncertain = True
+            self._mark_resource_uncertain()
             raise
         self.closed = True
+        if self._acquired is True and self._resource_uncertain is False and owned_native_close:
+            self._close_observation = self._close_observation_identity = ControlCloseObservation(
+                self._identity_snapshot
+            )
+            self._close_observation_snapshot = self._identity_snapshot
+
+    def close_observation(self, handle: object, child: object) -> ControlCloseObservation:
+        """Revalidate a known local close; work refusal never becomes GO authority."""
+        if not self._lock.acquire(blocking=False):
+            self._mark_resource_uncertain()
+            raise FrameError("BI1_CONTROL_REENTRY")
+        try:
+            self._bindings()
+            observation = self._close_observation
+            if observation is not self._close_observation_identity:
+                self._mark_resource_uncertain()
+                raise FrameError("BI1_CONTROL_CLOSE_OBSERVATION_REFUSED")
+            if (
+                handle is not self._handle_snapshot
+                or child is not self._child_snapshot
+                or self._acquired is not True
+                or self._resource_uncertain is not False
+                or self.closed is not True
+                or self._close_attempted is not True
+                or type(observation) is not ControlCloseObservation
+                or observation.descriptor is not self._close_observation_snapshot
+                or observation.descriptor is not self._identity_snapshot
+            ):
+                raise FrameError("BI1_CONTROL_CLOSE_OBSERVATION_REFUSED")
+            return observation
+        finally:
+            self._lock.release()
+
+    def validates_close(
+        self, handle: object, child: object, observation: ControlCloseObservation
+    ) -> bool:
+        return observation is self.close_observation(handle, child)
 
     def close_for_drain(self) -> None:
         # Drain may close a refused job's still-held stream, but never retry a
         # close with unknown outcome or guess a replaced descriptor.
         if not self._lock.acquire(blocking=False):
-            self.uncertain = True
+            self._mark_resource_uncertain()
             raise FrameError("BI1_CONTROL_REENTRY")
         try:
             self._close()
         except BaseException as error:
-            self.uncertain = True
+            self._mark_work_refused()
             if isinstance(error, FrameError):
                 raise
             raise FrameError("BI1_CONTROL_CLOSE_UNCERTAIN") from None

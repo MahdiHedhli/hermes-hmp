@@ -130,6 +130,10 @@ cancelled result into success. Wipe buffered payloads before a candidate retires
 
 - [x] Independently review this full resource/authority contract, including the
   old poll_discard precondition and exact partial control-owner retention.
+- [x] Retain partial control acquisition and add monotonic work-refusal versus
+  resource/close uncertainty, with owner-validated native owning-FileIO close fact.
+- [x] Add bounded local-FD-only discard after exact child wait/control close;
+  native read-end/selector closure, no legacy-flag laundering or direct-path mix.
 - [ ] Implement retained acquisition, one-use lifecycle and typed LOCAL drain
   observation; no started terminal release until full startup premise binding.
 - [ ] Actual fixed reader empty input and synthetic input3/GO cases under new
@@ -142,3 +146,39 @@ cancelled result into success. Wipe buffered payloads before a candidate retires
 - [ ] Independent source/security review, existing direct regression suite,
   floor/current Python and actual bounded kernel fixtures. Source tests are not
   physical/service/runtime qualification and cannot substitute for those gates.
+
+## Reviewed prerequisites and local descriptor adapter
+
+Independent56 control/pipe/local-discard cases pass. Root composed broker/control/
+pipes/direct authority/supervisor/GO/jobs/inventory707 tests plus66 subtests pass
+on Python3.11 and3.14.9 on this Mac, with lint and the closed-import scanner.
+These composed suites run serially: their synthetic native-policy fixtures create
+roots under the same working directory, and concurrent runs can change captured
+ancestor metadata. Initial concurrent composed runs each refused one normal flow;
+the standalone case and complete serial floor/current runs passed. No production
+check was relaxed or time allowance extended to obtain those passes.
+
+Control acquisition now raises the same FrameError code through an owner-carrying
+subclass. Ordinary work refusal remains sticky in legacy uncertain; resource-close
+facts are separate and cannot revive GO. A new local close fact requires exact
+owning FileIO (native closefd=True), native fileno/close/closed descriptors and
+exact retained identity; wrappers, no-op overrides and non-owning FileIO cannot
+self-report that fact. Unknown close stays one attempted operation, never retried.
+
+The local discard entry validates exact waited child, held pipe identities and
+its own control-close fact. It freezes proof references/mode/end and permanently
+refuses/wipes result publication. It discards bounded bytes only on those owned
+read ends and cannot renew the shared250ms end or switch to direct cleanup. The
+local path uses captured concrete unregister, original captured stream plus fresh
+native descriptor identity, exact owning FileIO native close, and captured native
+Kqueue/Epoll selector closure. Native close failure/no-op remains uncertain. Any
+already-closed legacy state is independently validated before adoption, preventing
+legacy booleans from becoming local native facts. Direct group-based preconditions
+and generic direct behavior remain unchanged.
+
+Actual fixed-reader/reap/EOF tests leave the registry ACTIVE/PENDING and refuse
+ACK. A separate real-pipe surviving-writer test uses an explicitly synthetic wait
+backend; it demonstrates bounded descriptor behavior, not real child/service or
+all-descendant qualification. Full retained BrokerReaderResources acquisition,
+input/GO/result lifecycle, owner-minted aggregate local drain and typed startup/
+terminal/native binding are still required. No live route/capability is enabled.

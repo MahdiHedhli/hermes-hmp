@@ -1,3 +1,20 @@
+## Character reader local cleanup — November 4, 2026
+
+The reviewed cleanup layer now retains partial control acquisition and separates
+work refusal from unknown resource closure without clearing legacy uncertainty.
+A local close observation requires the native owning file operation; wrapper
+flags, no-op overrides and closefd=False cannot supply it. The separate bounded
+local discard entry verifies exact child wait/control close and native read-end/
+selector closure, including independently checking any adopted legacy state.
+It cannot renew cleanup, restore output, claim descendants gone or free a started
+registry/native reservation. The direct process-group cleanup contract is preserved.
+
+Independent56 focused cases pass. Complete serial Python3.11/3.14.9 runs each pass
+707 tests plus66 subtests, with lint/import scanner. Actual fixed-reader EOF stays
+registry PENDING. Full resource binding, service/runtime provenance, transport/
+routes and physical character delivery remain open; no phone feature is activated.
+See [resource-drain contract](specs/046-bot-presentation-integration/BROKER_RESOURCE_DRAIN.md).
+
 ## Character request retention — November 4, 2026
 
 A separately reviewed broker registry now retains reader owners before launch,

@@ -26,6 +26,7 @@
 - [ ] Qualify service-manager crash/orphan containment before broker activation; current direct reader starts a new session, so broker process-group exit is not assumed child closure.
 - [x] Implement/review source-only shared-group broker child owner, exact wait and one-use child-only termination; real two-child isolation, no group closure API.
 - [x] Implement/review bounded broker registry retention, replay-burning capacity admission, original-deadline launch guards and never-launched global ACK; started-owner terminal release remains unavailable until actual resource binder.
+- [x] Implement/review retained partial control acquisition, native close observations and bounded local-FD-only discard; no descendant/native/registry closure inferred. Full resource binder remains open.
 - [ ] Resolve direct-child native Kanban waitpid(-1) interference through an ownership-aware native contract or a separately reviewed external broker; do not disable Kanban or reinterpret ECHILD as closure.
 - [x] Add reviewed cleanup-only discard after exact child/group/control closure (bf24a54); frozen cleanup budget, actual EOF, buffered wipe and unknown-debt causals.
 - [x] Review and implement refusal-only post-GO cancellation closure without treating discarded/missing worker output as successful work; keep ambiguous native/policy resources retained. Actual parent GO-write/termination test uses synthetic native authority; runtime containment premise remains unqualified.
