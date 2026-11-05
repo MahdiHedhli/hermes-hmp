@@ -165,3 +165,8 @@ Actual started-resource binder, result/input wiping, terminal custody handoff,
 wire transport, global multi-listener capacity, native gateway backend, runtime/
 service qualification and physical character delivery remain open. This source
 slice does not advertise a capability or make the feature available on devices.
+
+Hosted CI41954648933 completed success on exact sourcecf33ec9, including the
+Ubuntu plugin suite and Python3.12–3.14 Unicode jobs. Later documentation does
+not change that executable. The next [resource-drain contract](BROKER_RESOURCE_DRAIN.md)
+is independently frozen, with prerequisite ownership/uncertainty work explicit.

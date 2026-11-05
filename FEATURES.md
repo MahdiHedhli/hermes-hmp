@@ -8,7 +8,10 @@ Only an explicitly sealed never-started owner can take the current global ACK
 path. Started reap and pipe EOF alone remain PENDING and cannot release a slot.
 
 Independent87 registry/child cases and root composed548 on Python3.11/3.14.9 pass,
-plus lint/import scanner. No runtime imports this registry. Started-resource
+plus lint/import scanner. Hosted CI41954648933 also passes all jobs on exact
+sourcecf33ec9. The next local-FD resource-drain contract is independently frozen;
+its partial-control retention and monotonic uncertainty prerequisites are next.
+No runtime imports this registry. Started-resource
 closure binding, service/runtime qualification, authenticated routes and physical
 character delivery remain open; no phone capability is activated. See [registry](specs/046-bot-presentation-integration/BROKER_REGISTRY.md).
 
