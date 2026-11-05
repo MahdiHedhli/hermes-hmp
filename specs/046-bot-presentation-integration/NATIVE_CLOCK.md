@@ -119,3 +119,12 @@ then samples the original local clock and verifies that the first cleanup end is
 unchanged. Independent convergence passes 62 cases with one Linux-native skip on
 Python 3.13. These facts do not implement the retained async cleanup task, bind
 its original native operation, switch transport to v2 or prove terminal drain.
+
+## Selected channel lifecycle
+
+The [explicit selected-protocol source](SELECTED_PROTOCOL.md) now retains a
+NativeClockOwner before initializing a selected-v2 channel. Enrollment guards
+include the ninth protocol field. Concrete clock sampling/closure boundaries
+resist instance overrides; socket and clock-FD close facts remain separate.
+v2 cancellation, status lifecycle, broker dispatch and native work are still
+closed until the original-budget/cleanup integration is complete.

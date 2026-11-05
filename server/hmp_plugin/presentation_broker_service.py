@@ -65,9 +65,10 @@ def _context_shape(value: object) -> bool:
 
 
 def _values_shape(value: object) -> bool:
-    return (type(value) is tuple and len(value) == 8
+    return (type(value) is tuple and len(value) == 9
             and all(type(value[i]) is str for i in (0, 1, 2, 7))
-            and all(type(value[i]) is int for i in (3, 4, 5, 6)))
+            and all(type(value[i]) is int for i in (3, 4, 5, 6, 8))
+            and value[8] in (1, 2))
 
 
 def _identity_shape(value: object) -> bool:
@@ -83,6 +84,7 @@ class StartupEnrollment:
     service_uid: int
     service_pid: int
     installation_generation: str
+    protocol_version: int = 1
 
     def validate(self) -> None:
         _require(type(self.scope) is BrokerBinding)
@@ -92,6 +94,7 @@ class StartupEnrollment:
         for value in (self.gateway_pid, self.service_pid):
             _require(type(value) is int and 1 < value < (1 << 31))
         _require(self.gateway_pid != self.service_pid)
+        _require(type(self.protocol_version) is int and self.protocol_version in (1, 2))
         value = self.installation_generation
         _require(type(value) is str and len(value) == 64
                  and all(c in "0123456789abcdef" for c in value))
@@ -100,7 +103,8 @@ class StartupEnrollment:
         self.validate()
         b = self.scope
         return (b.iid, b.listener, b.broker, self.gateway_uid, self.gateway_pid,
-                self.service_uid, self.service_pid, self.installation_generation)
+                self.service_uid, self.service_pid, self.installation_generation,
+                self.protocol_version)
 
 
 class ChannelAcquisitionError(FrameError):
@@ -133,6 +137,8 @@ class SocketChannel:
         self._close_fact = self._close_fact_snapshot = None
         self._terminal_owner = self._terminal_owner_snapshot = None
         self._remote_owner = self._remote_owner_snapshot = None
+        self._clock_owner = self._clock_owner_snapshot = None
+        self._clock_closed_known = False
         try:
             _require(type(sock) is socket.socket and type(enrollment) is StartupEnrollment
                      and type(role) is str and role in ("gateway", "broker")
@@ -145,6 +151,14 @@ class SocketChannel:
             self._identity = self._identity_snapshot = self._descriptor()
             sock.setblocking(False)
             self._check()
+            if enrollment.protocol_version == 2:
+                from .presentation_clock import NativeClockOwner
+
+                # Retain the allocation BEFORE initialization/native effects.
+                self._clock_owner = self._clock_owner_snapshot = NativeClockOwner.__new__(
+                    NativeClockOwner)
+                NativeClockOwner.__init__(self._clock_owner, self)
+                self._qualified_clock()
         except BaseException:
             self._refused = True
             raise ChannelAcquisitionError(self) from None
@@ -159,7 +173,7 @@ class SocketChannel:
     def _bindings(self) -> None:
         _require(all(type(v) is bool for v in (self._refused, self._close_attempted,
                  self._closed_known, self._reading, self._writing, self._closing,
-                 self._integrity_lost)))
+                 self._integrity_lost, self._clock_closed_known)))
         _require(self._integrity_lost is False
                  and _context_shape(self._context_snapshot)
                  and self._context is self._context_snapshot
@@ -179,6 +193,12 @@ class SocketChannel:
                  and (self._terminal_owner is None
                       or type(self._terminal_owner) is TerminalStatusExchange))
         _require(self._remote_owner is self._remote_owner_snapshot)
+        _require(self._clock_owner is self._clock_owner_snapshot)
+        if self._clock_owner is not None:
+            from .presentation_clock import NativeClockOwner
+
+            _require(self._enrollment.protocol_version == 2
+                     and type(self._clock_owner) is NativeClockOwner)
         if self._remote_owner is not None:
             from .presentation_remote import RemoteOperationOwner
 
@@ -240,9 +260,49 @@ class SocketChannel:
     def _remaining(self, end_ns: int) -> float:
         _task_allows_work()
         self._check()
-        now = time.monotonic_ns()
+        if self._enrollment.protocol_version == 2:
+            from .presentation_clock import NativeClockOwner
+
+            clock = self._qualified_clock()
+            now = NativeClockOwner.sample(clock)
+            _require(self._qualified_clock() is clock)
+        else:
+            now = time.monotonic_ns()
+        self._local_integrity()
+        _task_allows_work()
         _require(type(end_ns) is int and now < end_ns)
         return (end_ns - now) / 1_000_000_000
+
+    def _qualified_clock(self):
+        from .presentation_clock import NativeClockOwner
+
+        self._bindings()
+        clock = self._clock_owner_snapshot
+        _require(self._enrollment.protocol_version == 2
+                 and clock is self._clock_owner and type(clock) is NativeClockOwner
+                 and clock._channel_snapshot is self and clock._channel is self
+                 and type(clock._qualification) is object
+                 and clock._qualification is clock._qualification_snapshot
+                 and self._clock_closed_known is False)
+        return clock
+
+    def close_clock(self) -> bool:
+        """Distinct local clock-FD fact; socket close alone never establishes it."""
+        try:
+            self._bindings()
+            _require(self._closed_known is True)
+            if self._clock_owner_snapshot is None:
+                _require(self._clock_owner is None)
+                self._clock_closed_known = True
+            else:
+                from .presentation_clock import NativeClockOwner
+
+                self._clock_closed_known = NativeClockOwner.close_local(
+                    self._clock_owner_snapshot) is True
+            self._bindings()
+            return self._clock_closed_known
+        except BaseException:
+            return False  # partial/ambiguous allocation remains reachable
 
     async def _exact(self, count: int, end_ns: int) -> bytes:
         _require(type(count) is int and 0 <= count <= _MAX_WIRE)
@@ -288,8 +348,14 @@ class SocketChannel:
         try:
             prefix = await self._exact(8, end_ns)
             raw = prefix + await self._exact(header_size(prefix), end_ns)
-            header = (decode_scope_header(raw, expected_scope=self._enrollment.scope)
-                      if expected is None else decode_header(raw, expected=expected))
+            version = self._enrollment.protocol_version
+            header = (decode_scope_header(raw, expected_scope=self._enrollment.scope,
+                                          expected_version=version)
+                      if expected is None else decode_header(raw, expected=expected,
+                                                             expected_version=version))
+            # v2 operation/cleanup integration is a separate admission gate.
+            if version == 2:
+                _require(header.kind in ("BEGIN", "READY"))
             _require(header.kind != "RESULT" and header.body_length <= INPUT_LIMIT + 4)
             body = await self._exact(header.body_length, end_ns)
             self._remaining(end_ns)
@@ -314,8 +380,12 @@ class SocketChannel:
             _binding(frame.header.binding)
             b, scope = frame.header.binding, self._enrollment.scope
             _require((b.iid, b.listener, b.broker) == (scope.iid, scope.listener, scope.broker))
+            version = self._enrollment.protocol_version
+            _require(type(frame.header.version) is int and frame.header.version == version)
+            if version == 2:
+                _require(frame.header.kind in ("BEGIN", "READY"))
             data = encode_frame(frame.header.binding, frame.header.kind,
-                                frame.header.sequence, frame.body)
+                                frame.header.sequence, frame.body, version=version)
             _require(len(data) <= _MAX_WIRE)
             remaining = self._remaining(end_ns)
             await asyncio.wait_for(asyncio.get_running_loop().sock_sendall(self._socket, data),
@@ -390,6 +460,7 @@ class TerminalStatusExchange:
         self._timeout = self._timeout_snapshot = _SOCKET_TIMEOUT
         try:
             _require(type(channel) is SocketChannel and type(binding) is BrokerBinding)
+            _require(channel._enrollment.protocol_version == 1)  # v2 lifecycle not yet joined
             _binding(binding)
             _require(channel._terminal_owner is None and channel._remote_owner is None
                      and not channel._reading and not channel._writing)
@@ -618,6 +689,7 @@ class _Connection:
         self.grammar = None
         self.task = None
         self.local_closed = False
+        self.clock_closed = False
         self.control_task = None
         self.accept_unknown = False
         self.terminal = None
@@ -822,6 +894,8 @@ class BrokerServiceSpine:
 
     async def _dispatch(self, record: _Connection, admission_end_ns: int) -> None:
         channel = record.channel
+        # Selected framing is not permission to renew cleanup or start work.
+        _require(self._enrollment.protocol_version == 1)
         first = await channel.receive(admission_end_ns)
         binding, kind = first.header.binding, first.header.kind
         _require(kind in ("BEGIN", "STATUS"))
@@ -917,9 +991,11 @@ class BrokerServiceSpine:
                 self._refused = True
         if record.channel is not None:
             record.local_closed = record.channel.close()
+            if record.local_closed:
+                record.clock_closed = record.channel.close_clock()
         # Keep unknown local descriptors and all registry ownership reachable.
         # Known closed connection records can go; their registry tickets cannot.
-        if record.local_closed:
+        if record.local_closed and record.clock_closed:
             self._records.remove(record)
 
     async def stop_local_sockets(self) -> bool:

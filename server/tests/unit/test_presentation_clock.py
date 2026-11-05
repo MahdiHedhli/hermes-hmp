@@ -21,7 +21,11 @@ import pytest
 from hmp_plugin import presentation_clock as clock
 from hmp_plugin.presentation_broker_codec import BrokerBinding
 from hmp_plugin.presentation_broker_endpoint import BrokerEndpointOwner
-from hmp_plugin.presentation_broker_service import SocketChannel, StartupEnrollment
+from hmp_plugin.presentation_broker_service import (
+    ChannelAcquisitionError,
+    SocketChannel,
+    StartupEnrollment,
+)
 from hmp_plugin.presentation_cancel_budget import CLEANUP_NS, CancellationBudget
 from hmp_plugin.presentation_jobs import FrameError
 
@@ -396,8 +400,9 @@ def test_actual_linux_pidfd_procfs_and_active_namespace_without_foreign_process(
 
 @pytest.mark.skipif(sys.platform not in ("darwin", "linux") or os.geteuid() == 0,
                     reason="native nonroot private connected-channel clock fixture")
-def test_actual_separate_process_peer_and_common_clock_without_work():
-    """One exact owned helper; no broker work, manager, profile or v2 activation."""
+@pytest.mark.parametrize("protocol_version", [1, 2])
+def test_actual_separate_process_peer_and_common_clock_without_work(protocol_version):
+    """One exact owned helper; selected clock only, no broker work/manager/profile."""
     temporary = "/private/tmp" if sys.platform == "darwin" else tempfile.gettempdir()
     root = Path(tempfile.mkdtemp(prefix="hc-", dir=temporary)).resolve()
     path = str(root / "presentation.sock")
@@ -422,14 +427,23 @@ def test_actual_separate_process_peer_and_common_clock_without_work():
         assert remote.recv(1) == b"R"
         binding = BrokerBinding("a" * 52, "1" * 32, "2" * 64, "3" * 64, "4" * 64)
         enrollment = StartupEnrollment(binding, os.geteuid(), child.pid,
-                                       os.geteuid(), os.getpid(), "5" * 64)
-        channel = SocketChannel(remote, enrollment, role="broker", endpoint=endpoint,
-                                observation=endpoint.observe())
+                                       os.geteuid(), os.getpid(), "5" * 64, protocol_version)
         try:
-            owner = clock.NativeClockOwner(channel)
-        except clock.ClockAcquisitionError as error:
-            owner = error.failed_owner
+            channel = SocketChannel(remote, enrollment, role="broker", endpoint=endpoint,
+                                    observation=endpoint.observe())
+            owner = (channel._clock_owner if protocol_version == 2
+                     else clock.NativeClockOwner(channel))
+        except (clock.ClockAcquisitionError, ChannelAcquisitionError) as error:
+            # Capture every partially allocated owner before inspecting a known
+            # native unsupported-API cause; never discard a v2 clock allocation.
+            if isinstance(error, clock.ClockAcquisitionError):
+                owner = error.failed_owner
+            else:
+                channel = error.failed_owner
+                owner = channel._clock_owner
             cause = error.__context__
+            if isinstance(cause, clock.ClockAcquisitionError):
+                cause = cause.__context__
             if (sys.platform == "linux" and isinstance(cause, OSError)
                     and cause.errno in (errno.ENOPROTOOPT, errno.ENOSYS, errno.EACCES)):
                 pytest.skip("required native API unavailable; no common-clock qualification")
@@ -449,11 +463,13 @@ def test_actual_separate_process_peer_and_common_clock_without_work():
             owner.sample()
         assert owner.cleanup_sample() >= now
         assert owner.close_local()
+        assert channel.close_clock()
     finally:
         if owner is not None:
             assert owner.close_local()
         if channel is not None:
             channel.close()
+            assert channel.close_clock()
         if remote is not None:
             remote.close()
         listener.close()

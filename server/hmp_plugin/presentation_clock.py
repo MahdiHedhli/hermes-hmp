@@ -297,7 +297,7 @@ class NativeClockOwner:
         _require(not self._local_lost and not self._closing and not self._closed_known
                  and self._channel is self._channel_snapshot
                  and type(self._channel) is SocketChannel
-                 and type(self._channel_values) is tuple and len(self._channel_values) == 8
+                 and type(self._channel_values) is tuple and len(self._channel_values) == 9
                  and _ints(self._channel_identity, 4)
                  and self._channel._values_snapshot is self._channel_values
                  and self._channel._identity_snapshot is self._channel_identity

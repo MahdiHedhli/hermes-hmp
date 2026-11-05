@@ -21,7 +21,10 @@ then requires `end = start + 250000000`, signed-domain bounds and the original
 operation ceiling. Framing alone intentionally cannot validate clock, deadline,
 authority or lifecycle. Every other control body remains empty. Version 1 stays
 the default; a selected receiver refuses a different version without fallback.
-The existing service/enrollment still selects v1 and therefore cannot accept v2.
+Explicit startup enrollment can now select v2 framing with a retained native
+clock; the [selected-protocol boundary](SELECTED_PROTOCOL.md) still refuses v2
+CANCEL and broker work. Existing service paths default to v1. Both-end budget
+adoption is required before cancellation transport can be enabled.
 
 ## Required transport integration (not implemented or qualified)
 
