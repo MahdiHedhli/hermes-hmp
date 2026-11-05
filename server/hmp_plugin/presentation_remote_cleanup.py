@@ -391,6 +391,13 @@ class RemoteCleanupOwner:
             return  # completed local facts do not sample a retired clock again
         first = self._intent is False
         self._intent = True
+        if first:
+            from .presentation_cleanup_reader import CleanupReadGate
+
+            try:
+                CleanupReadGate.capture(self._read_gate_snapshot)
+            except BaseException:
+                self._unknown = True  # still retire/freeze/cancel; never retry capture
         # Original custody only: failed work or drift cannot choose the fence.
         refs = self._refs_snapshot
         if type(refs) is not tuple or len(refs) != 12:
@@ -677,6 +684,8 @@ class RemoteCleanupOwner:
             await asyncio.wait((barriers.cause, go.request), return_when=asyncio.FIRST_COMPLETED)
             RemoteCleanupOwner._guard(self)
             if self._intent is True:
+                CleanupReadGate.switch(self._read_gate_snapshot,
+                    self._refs_snapshot[3]._pre_result_cursor_origin)
                 return False
             if (self._go_barriers_snapshot is not go or self._go_attempted is not True
                     or not _FUTURE.done(go.request) or _FUTURE.result(go.request) is not True):

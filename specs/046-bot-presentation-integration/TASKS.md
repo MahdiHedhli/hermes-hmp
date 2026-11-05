@@ -67,6 +67,15 @@
 - [x] Independently review broker control readiness/cumulative-cursor integration, immediate queued-control draining and original work-to-cleanup timeout transition. Independent153 focused cases plus the final cross-channel isolation causal pass on Python3.13; no ACK continuation or release. See [broker control cursor](BROKER_CONTROL_CURSOR.md).
 - [x] Independently review selected-v2 retained pre-result BEGIN/READY cursor, callback-free final remote custody fence and readiness-proof-before-current ordering. Independent231-case regression and final9-case owner-binding causals pass on Python3.13; preserve v1 and no cleanup activation. See [pre-result cursor](PRE_RESULT_CURSOR.md).
 - [ ] Extend the reviewed post-GO write-quiescence/cleanup-reader coupling to pre-READY and continue the original broker controller after CANCEL toward qualified ACK; retain legacy join gates outside the reviewed scope. See [joined transport prerequisites](TERMINAL_TRANSPORT.md).
+- [x] Implement and independently source-review original pre-READY/READY-wait
+      cleanup-reader coupling, preserving the original Task/cursor/buffer and
+      earliest shared budget. Root's exact-source serial nine-module regression
+      passes 334 cases on each of Python 3.11.15 and 3.14.4, with 74 dedicated
+      causals and no unobserved-task warnings. Reviewer execution is not claimed.
+      Full isolated CI and integration remain pending; no ACK/native release,
+      route activation or runtime/device qualification follows from this check.
+      See [bounded prerequisite](PRE_READY_CLEANUP.md); the combined task above
+      and complete character/host-local image delivery remain open.
 - [x] Implement and independently source-review the original broker cancellation
       adoption notice and bounded controller park, separate from Task/FD closure.
       Exact native Future/Task descriptors reject shadowed methods on supported

@@ -35,7 +35,7 @@ from .presentation_broker_peer import PeerObservation, observe_peer
 from .presentation_broker_registry import BrokerRegistry, RegistryStatus
 from .presentation_input_v3 import decode_input_v3
 from .presentation_jobs import INPUT_LIMIT, MAX_PROCESSES, MAX_WAITING, FrameError
-from .presentation_readiness import SelectorReadiness
+from .presentation_readiness import ReadinessWakeError, SelectorReadiness
 
 _MAX_CONNECTIONS = MAX_PROCESSES + MAX_WAITING
 _MAX_WIRE = 8 + 1024 + INPUT_LIMIT + 4
@@ -187,6 +187,7 @@ class _PreResultCursor:
 
     def __init__(self, channel, end, expected, owner):
         self._initialized = self._io_unknown = self._intent = self._done = False
+        self._cleanup_switched = False
         self._scope = self._scope_snapshot = self._scope_origin = None
         self._buffer = self._buffer_origin = bytearray()
         self._pending = self._waiter = None
@@ -220,7 +221,8 @@ class _PreResultCursor:
                  and all(type(v) is int for v in s.context)
                  and s.context == (os.getpid(), threading.get_ident())
                  and self._initialized is True and self._io_unknown is False
-                 and all(type(v) is bool for v in (self._intent, self._done))
+                 and all(type(v) is bool for v in (
+                     self._intent, self._done, self._cleanup_switched))
                  and type(self._buffer) is bytearray and self._buffer is self._buffer_origin
                  and self._buffer is s.buffer
                  and type(self._received) is int and type(self._target) is int
@@ -237,20 +239,43 @@ class _PreResultCursor:
             _require(self._header.version == 2 and self._header.kind in ("BEGIN", "READY")
                      and self._header.body_length <= INPUT_LIMIT + 4)
 
+    def _switch_cleanup(self):
+        s = self._scope_origin
+        _require(type(s) is _PreResultScope)
+        if s.owner is not None:
+            from .presentation_cleanup_reader import CleanupReadGate
+            from .presentation_remote import RemoteOperationOwner
+            from .presentation_remote_cleanup import RemoteCleanupOwner
+
+            _require(type(s.owner) is RemoteOperationOwner and type(s.channel) is SocketChannel
+                     and s.channel._remote_owner is s.owner
+                     and s.channel._remote_owner_snapshot is s.owner
+                     and s.owner._channel is s.channel and s.owner._channel_snapshot is s.channel)
+            cleanup = s.owner._cleanup_owner_snapshot
+            _require(type(cleanup) is RemoteCleanupOwner and s.owner._cleanup_owner is cleanup
+                     and cleanup._remote_snapshot is s.owner)
+            CleanupReadGate.switch(cleanup._read_gate_snapshot, self)
+
     def _current(self):
         _PreResultCursor._guard(self)
+        _PreResultCursor._switch_cleanup(self)
         s = self._scope_origin
-        if s.owner is not None:
-            from .presentation_jobs import RemotePhase
-            from .presentation_remote import RemoteOperationOwner
+        try:
+            if s.owner is not None:
+                from .presentation_jobs import RemotePhase
+                from .presentation_remote import RemoteOperationOwner
 
-            _require(type(s.owner) is RemoteOperationOwner
-                     and s.channel._remote_owner_snapshot is s.owner)
-            RemoteOperationOwner._check(s.owner, RemotePhase.BEGIN_INTENT)
-        else:
-            _require(s.channel._remote_owner_snapshot is None)
-        _PreResultCursor._guard(self)
-        SocketChannel._remaining(s.channel, s.end)
+                _require(type(s.owner) is RemoteOperationOwner
+                         and s.channel._remote_owner_snapshot is s.owner)
+                RemoteOperationOwner._check(s.owner, RemotePhase.BEGIN_INTENT)
+            else:
+                _require(s.channel._remote_owner_snapshot is None)
+            _PreResultCursor._guard(self)
+            SocketChannel._remaining(s.channel, s.end)
+        except BaseException:
+            _PreResultCursor._switch_cleanup(self)
+            raise
+        _PreResultCursor._switch_cleanup(self)
         if s.owner is not None:
             RemoteOperationOwner._pre_result_local(s.owner, s.channel, s.end)
         _PreResultCursor._guard(self)
@@ -280,7 +305,17 @@ class _PreResultCursor:
                     self._waiter = waiter
                     try:
                         SelectorReadiness.__init__(waiter, s.sock)
-                        await SelectorReadiness.wait(waiter, s.end)
+                        wake = (None if s.owner is None else
+                                s.owner._cleanup_owner_snapshot._barriers_snapshot.cause)
+                        await SelectorReadiness.wait(waiter, s.end, wake=wake)
+                    except ReadinessWakeError:
+                        if (waiter._initialized is not True or waiter._unknown is not False
+                                or type(waiter._attempted) is not bool
+                                or (waiter._attempted is True and waiter._retired is not True)):
+                            self._io_unknown = True
+                            _require(False)
+                        _PreResultCursor._switch_cleanup(self)
+                        raise
                     except BaseException:
                         if (getattr(waiter, "_initialized", False) is not True
                                 or waiter._unknown is not False
@@ -314,6 +349,9 @@ class _PreResultCursor:
             part = buffer = None
 
     async def frame(self):
+        from .presentation_cleanup_reader import CleanupReadGate, CleanupReadSwitch
+
+        switched = False
         scope = self._scope_origin
         _require(type(scope) is _PreResultScope and type(scope.buffer) is bytearray)
         original_buffer = scope.buffer
@@ -334,15 +372,25 @@ class _PreResultCursor:
             frame = BrokerFrame(header, body)
             self._done = True
             return frame
+        except CleanupReadSwitch as transition:
+            _require(transition.reader is self and self._cleanup_switched is True
+                     and scope.owner is not None)
+            gate = scope.owner._cleanup_owner_snapshot._read_gate_snapshot
+            CleanupReadGate.guard(gate)
+            _require(gate._requested is True and gate._request_origin.reader is self
+                     and gate._request_origin.mode == "ready")
+            switched = True
+            raise
         except BaseException:
             if self._intent is not False:
                 self._io_unknown = True
             raise
         finally:
             prefix = raw = body = frame = None
-            self._pending = None
-            original_buffer[:] = b"\x00" * len(original_buffer)
-            original_buffer.clear()  # never follow replaced buffer slots on refusal
+            if not switched:
+                self._pending = None
+                original_buffer[:] = b"\x00" * len(original_buffer)
+                original_buffer.clear()  # never follow replaced buffer slots on refusal
 
 
 class SocketChannel:
@@ -627,14 +675,25 @@ class SocketChannel:
             self._pre_result_cursor = self._pre_result_cursor_snapshot = cursor
             self._pre_result_cursor_origin = cursor
             self._reading = True
+            switched = False
+            from .presentation_cleanup_reader import CleanupReadGate, CleanupReadSwitch
+
             try:
                 _PreResultCursor.__init__(cursor, self, end_ns, expected, owner)
                 return await _PreResultCursor.frame(cursor)
+            except CleanupReadSwitch as transition:
+                _require(transition.reader is cursor and cursor._cleanup_switched is True
+                         and owner is not None)
+                gate = owner._cleanup_owner_snapshot._read_gate_snapshot
+                CleanupReadGate.guard(gate)
+                _require(gate._request_origin.reader is cursor and gate._requested is True)
+                switched = True
+                raise
             except BaseException:
                 self._refused = True
                 raise
             finally:
-                if (getattr(cursor, "_initialized", False) is True
+                if (not switched and getattr(cursor, "_initialized", False) is True
                         and cursor._io_unknown is False and cursor._intent is False):
                     self._reading = False
         self._reading = True

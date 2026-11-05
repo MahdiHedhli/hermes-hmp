@@ -1,3 +1,22 @@
+## Original pre-READY cleanup reader candidate — November 5, 2026
+
+The pre-READY and READY-wait cleanup extension is independently source-reviewed.
+It retains the original Task, cursor, buffer and earliest cleanup budget while
+the existing cleanup Task writes one CANCEL. Healthy READY-to-GO is unchanged;
+lost readiness/owner/budget proof refuses selection. A refused cross-operation
+borrow leaves a second admitted synthetic operation intact and operational.
+
+Root's exact-source serial nine-module regression passes **334 cases each on
+Python 3.11.15 and 3.14.4**, without unobserved-task warnings; reviewer execution
+is not claimed. Full CI and integration are pending. See the
+[bounded contract and evidence scope](specs/046-bot-presentation-integration/PRE_READY_CLEANUP.md).
+
+This is source progress, not installed character or host-local image support.
+Terminal/ACK/native retirement, authenticated routes and runtime/device gates
+remain open. App executable, embedded HMP, installed hosts/devices and grants are
+unchanged. Original project access recovered; its dirty source was backed up
+and reconciled in the isolated feature worktree.
+
 ## Original broker controller cancellation lifecycle — November 5, 2026
 
 HMP source `935eca3` is integrated into the feature branch through
@@ -49,9 +68,9 @@ Both prior feature-document heads passed their exact CI checks (HMP run
 are not physical qualification or release acceptance. Device-local sections and
 static icon source is implemented; its physical persistence/accessibility
 acceptance remains open. Full desktop bot characters and host-local images
-remain unfinished. Original unpublished pre-READY edits remain untouched until
-development-project file access recovers; current mobile build preparation used
-a separate clean working copy.
+remain unfinished. At that checkpoint project file access blocked the original
+pre-READY edits; access has since recovered and the candidate above is being
+qualified. Mobile build preparation used a separate clean working copy.
 
 ## Character and Unicode source CI restored — November 5, 2026
 
@@ -72,7 +91,8 @@ not physical-device or runtime qualification.
 The repair is integrated into the feature branch through PR #88. No HMP pin,
 dependency, permission, provider, host or device deployment changed. Phone-visible
 characters and host-local images remain unfinished. Unpublished pre-READY cleanup
-work still needs verification after development-project file access recovers.
+work has since been recovered into the independently reviewed candidate above;
+full CI/integration and complete character delivery remain pending.
 
 ## Reviewed post-GO cleanup reader — November 5, 2026
 

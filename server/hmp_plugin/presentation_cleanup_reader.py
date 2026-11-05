@@ -20,15 +20,16 @@ from .presentation_broker_codec import (
     decode_header,
     header_size,
 )
-from .presentation_broker_service import SocketChannel
+from .presentation_broker_service import SocketChannel, _PreResultCursor, _PreResultScope
 from .presentation_cancel_budget import CancellationBudget, CancellationWindow
-from .presentation_jobs import OUTPUT_LIMIT
+from .presentation_jobs import OUTPUT_LIMIT, JobOwner, RemotePhase, State
 from .presentation_readiness import ReadinessWakeError, SelectorReadiness, _scheduler_safe
 from .presentation_remote_cleanup import (
     _FUTURE,
     _TASK,
     RemoteCleanupOwner,
     _initialize_future,
+    _ReadyFact,
 )
 from .presentation_result_transport import RemoteResultOwner, _ReaderScope, _ResultCursor
 from .presentation_terminal_claim import decode_handoff
@@ -60,6 +61,20 @@ class _Request(NamedTuple):
     channel: SocketChannel
     write: object
     outer: bytearray
+    mode: str = "result"
+    state: object = None
+    ready: object = None
+    phase: object = None
+
+
+class _PreState(NamedTuple):
+    received: int
+    target: int
+    header: object
+    done: bool
+    waiter: object
+    waiter_attempted: object
+    waiter_retired: object
 
 
 class _ReadFact(NamedTuple):
@@ -71,6 +86,8 @@ class _ReadFact(NamedTuple):
     budget: object
     clock: object
     outer: bytearray
+    mode: str
+    write: object
 
     def __repr__(self):
         return "<CleanupReadFact no-join no-release redacted>"
@@ -93,6 +110,9 @@ class CleanupReadGate:
         self._refs = owner._refs_snapshot
         self._initialized = self._failed = self._requested = self._activated = False
         self._request = self._request_origin = None
+        self._capture_attempted = self._capture_failed = False
+        self._capture_kind = self._capture_receiver = self._capture_cause = None
+        self._preflight = self._preflight_origin = None
         self._fact = self._fact_origin = None
         self._notice = self._notice_origin = _FUTURE.__new__(_FUTURE)
         self._notice_initialized = False
@@ -132,37 +152,53 @@ class CleanupReadGate:
                  and all(type(v) is bool for v in (
                      self._failed, self._requested, self._activated, self._change_initialized,
                      self._change_active, self._changing, self._intent, self._io_unknown,
-                     self._done, self._eof))
+                     self._done, self._eof, self._capture_attempted, self._capture_failed))
+                 and self._preflight is self._preflight_origin
+                 and (self._capture_kind is None or (type(self._capture_kind) is str
+                      and self._capture_kind in ("none", "pre", "result")))
                  and self._request is self._request_origin
                  and self._fact is self._fact_origin
                  and self._change is self._change_origin
                  and type(self._epoch) is int and 0 <= self._epoch < 1 << 63
                  and type(self._generation) is int and 0 <= self._generation < 1 << 63)
+        if self._preflight is not None:
+            _require(self._capture_kind == "pre" and type(self._preflight) is _Request)
+            CleanupReadGate._pre_seal(self, self._preflight)
         if self._request is not None:
             r = self._request
-            _require(type(r) is _Request and type(r.reader) is RemoteResultOwner
-                     and type(r.scope) is _ReaderScope and type(r.cursor) is _ResultCursor
-                     and type(r.channel) is SocketChannel and r.channel is self._refs[3]
-                     and r.reader._scope is r.scope and r.reader._scope_snapshot is r.scope
-                     and r.reader._cursor_origin is r.cursor and r.reader._cursor is r.cursor
-                     and r.reader._cursor_snapshot is r.cursor and r.cursor.scope is r.scope
-                     and r.scope.cleanup is o and r.scope.channel is r.channel
-                     and r.scope.record is self._refs[2]
-                     and r.scope.remote is o._remote_snapshot
-                     and r.scope.task is o._allocations_snapshot[1].task
-                     and r.reader._failure_cleanup_origin is o
-                     and r.reader._io_channel_origin is r.channel
-                     and r.channel._result_receiver_snapshot is r.reader
-                     and r.channel._result_receiver is r.reader
-                     and r.write is o._write_fact_snapshot
-                     and type(r.outer) is bytearray
-                     and type(r.cursor._data_origin) is tuple and len(r.cursor._data_origin) == 3
-                     and r.cursor._data_origin[1] is r.outer)
+            _require(type(r) is _Request and type(r.mode) is str
+                     and r.mode in ("result", "ready", "ready_wait"))
+            if r.mode == "result":
+                _require(r.state is None and r.ready is None and r.phase is None)
+                _require(type(r.reader) is RemoteResultOwner
+                         and type(r.scope) is _ReaderScope and type(r.cursor) is _ResultCursor
+                         and type(r.channel) is SocketChannel and r.channel is self._refs[3]
+                         and r.reader._scope is r.scope and r.reader._scope_snapshot is r.scope
+                         and r.reader._cursor_origin is r.cursor and r.reader._cursor is r.cursor
+                         and r.reader._cursor_snapshot is r.cursor and r.cursor.scope is r.scope
+                         and r.scope.cleanup is o and r.scope.channel is r.channel
+                         and r.scope.record is self._refs[2]
+                         and r.scope.remote is o._remote_snapshot
+                         and r.scope.task is o._allocations_snapshot[1].task
+                         and r.reader._failure_cleanup_origin is o
+                         and r.reader._io_channel_origin is r.channel
+                         and r.channel._result_receiver_snapshot is r.reader
+                         and r.channel._result_receiver is r.reader
+                         and r.write is o._write_fact_snapshot
+                         and type(r.outer) is bytearray
+                         and type(r.cursor._data_origin) is tuple
+                         and len(r.cursor._data_origin) == 3
+                         and r.cursor._data_origin[1] is r.outer)
+            else:
+                _require(r is self._preflight_origin and r.write is None)
+                CleanupReadGate._pre_seal(self, r)
         if self._fact is not None:
             f = self._fact
             _require(type(f) is _ReadFact and f.mint is _MINT and f.gate is self
                      and f.owner is o and f.work is o._allocations_snapshot[1]
                      and f.request is self._request_origin
+                     and type(f.mode) is str and f.mode == f.request.mode
+                     and f.write is o._write_fact_snapshot and f.write is not None
                      and f.budget is self._refs[8] and f.clock is self._refs[4]
                      and self._activated is True and _FUTURE.done(self._notice)
                      and _FUTURE.result(self._notice) is f
@@ -178,7 +214,8 @@ class CleanupReadGate:
                 _binding(o._cancel_scope_snapshot[0])
                 _require(self._header.version == 2
                          and self._header.binding == o._cancel_scope_snapshot[0]
-                         and self._header.kind in ("RESULT", "TERMINAL"))
+                         and self._header.kind in (("RESULT", "TERMINAL")
+                         if f.mode == "result" else ("READY", "TERMINAL")))
         else:
             _require(not _FUTURE.done(self._notice))
         if self._change is not None:
@@ -196,14 +233,201 @@ class CleanupReadGate:
                 _require(_FUTURE.get_loop(c.future) is o._loop_snapshot
                          and not _FUTURE.cancelled(c.future))
 
+    def _pre_seal(self, r):
+        """Callback-free original cursor seals; consumed counters remain frozen."""
+        o = self._owner_origin
+        _require(type(r) is _Request and type(r.mode) is str
+                 and r.mode in ("ready", "ready_wait")
+                 and type(r.reader) is _PreResultCursor and r.cursor is r.reader
+                 and type(r.scope) is _PreResultScope and type(r.state) is _PreState
+                 and type(r.outer) is bytearray and r.channel is self._refs[3]
+                 and r.write is None)
+        c, scope, state = r.cursor, r.scope, r.state
+        _require(c._initialized is True and c._io_unknown is False and c._intent is False
+                 and type(c._done) is bool and type(c._cleanup_switched) is bool
+                 and c._scope is scope and c._scope_snapshot is scope and c._scope_origin is scope
+                 and c._buffer is r.outer and c._buffer_origin is r.outer
+                 and scope.buffer is r.outer
+                 and c._pending is None and c._waiter is state.waiter
+                 and scope.channel is r.channel and scope.sock is r.channel._socket_snapshot
+                 and scope.owner is o._remote_snapshot
+                 and scope.task is o._allocations_snapshot[1].task
+                 and scope.loop is o._loop_snapshot and type(scope.context) is tuple
+                 and len(scope.context) == 2 and all(type(v) is int for v in scope.context)
+                 and scope.context == o._context_snapshot[::2]
+                 and scope.expected is o._cancel_scope_snapshot[0]
+                 and type(scope.end) is int and scope.end == self._refs[9]
+                 and r.channel._pre_result_cursor is c
+                 and r.channel._pre_result_cursor_snapshot is c
+                 and r.channel._pre_result_cursor_origin is c
+                 and type(state.received) is int and type(state.target) is int
+                 and 0 <= state.received <= state.target <= 1032
+                 and type(state.done) is bool and c._done is state.done
+                 and type(c._received) is int and c._received == state.received
+                 and type(c._target) is int and c._target == state.target
+                 and c._header is state.header and c._header_snapshot is state.header
+                 and o._go_attempted is False
+                 and o._remote_snapshot._go_admission is None
+                 and o._remote_snapshot._go_admission_snapshot is None
+                 and o._remote_snapshot._go_admission_used is False
+                 and r.channel._go_write_intent is None
+                 and r.channel._go_write_intent_snapshot is None
+                 and r.channel._go_write_fact is None and r.channel._go_write_fact_snapshot is None
+                 and type(o._go_barriers_snapshot.request) is _FUTURE
+                 and not _FUTURE.done(o._go_barriers_snapshot.request)
+                 and not _FUTURE.cancelled(o._go_barriers_snapshot.request))
+        if state.header is not None:
+            _row(state.header)
+            _binding(scope.expected)
+            _require(state.header.binding == scope.expected and state.header.kind == "READY"
+                     and state.header.version == 2 and state.header.sequence == 0
+                     and state.header.body_length == 0)
+        if state.waiter is not None:
+            _require(type(state.waiter) is SelectorReadiness
+                     and state.waiter._initialized is True
+                     and state.waiter._unknown is False
+                     and type(state.waiter_attempted) is bool
+                     and type(state.waiter_retired) is bool
+                     and type(state.waiter._attempted) is bool
+                     and type(state.waiter._retired) is bool
+                     and state.waiter._attempted is state.waiter_attempted
+                     and (state.waiter_retired is False or state.waiter._retired is True))
+        else:
+            _require(state.waiter_attempted is None and state.waiter_retired is None)
+        if r.mode == "ready_wait":
+            _require(r.phase is RemotePhase.READY and state.done
+                     and r.ready is o._ready_fact_snapshot
+                     and type(r.ready) is _ReadyFact and r.ready is o._ready_fact
+                     and r.ready.work is o._allocations_snapshot[1]
+                     and r.ready.channel is r.channel and r.ready.remote is scope.owner
+                     and r.ready.future is o._barriers_snapshot.ready
+                     and type(r.ready.future) is _FUTURE and _FUTURE.done(r.ready.future)
+                     and _FUTURE.result(r.ready.future) is True and state.header is not None
+                     and state.received == state.target)
+            if state.waiter is not None:
+                _require(state.waiter._attempted is True and state.waiter._retired is True)
+        else:
+            _require(r.phase is RemotePhase.BEGIN_INTENT and not state.done and r.ready is None
+                     and o._ready_fact is None and o._ready_fact_snapshot is None)
+            future = o._barriers_snapshot.ready
+            _require(type(future) is _FUTURE and not _FUTURE.cancelled(future)
+                     and (not _FUTURE.done(future) or _FUTURE.result(future) is False))
+
+    def capture(self):
+        """One metadata-only pre-poison snapshot; never IO or write permission."""
+        _require(self._capture_attempted is False)
+        self._capture_attempted = True
+        self._capture_kind = "none"
+        o = self._owner_origin
+        try:
+            _require(type(o) is RemoteCleanupOwner and o is self._owner
+                     and o._read_gate is self and o._read_gate_snapshot is self)
+            RemoteCleanupOwner._guard(o)
+            channel = self._refs[3]
+            self._capture_cause = o._barriers_snapshot.cause
+            _require(type(self._capture_cause) is _FUTURE
+                     and not _FUTURE.done(self._capture_cause))
+            self._capture_receiver = channel._result_receiver_snapshot
+            if self._capture_receiver is not None:
+                self._capture_kind = "result"
+                return
+            cursor = channel._pre_result_cursor_origin
+            if cursor is None:
+                return
+            self._capture_kind = "pre"  # failure cannot become a later RESULT selection
+            if (type(cursor) is not _PreResultCursor or cursor._initialized is not True
+                    or cursor._io_unknown is not False or cursor._intent is not False
+                    or cursor._pending is not None or type(cursor._done) is not bool
+                    or channel._writing is not False):
+                return
+            owner, handle, _ = self._refs[11]
+            phase = JobOwner.inspect_remote(owner, handle)
+            _require(JobOwner.inspect(owner, handle)[0] is State.STARTING)
+            mode = "ready_wait" if cursor._done else "ready"
+            scope = cursor._scope_origin
+            waiter = cursor._waiter
+            attempted = retired = None
+            if waiter is not None:
+                _require(type(waiter) is SelectorReadiness)
+                attempted, retired = waiter._attempted, waiter._retired
+            state = _PreState(cursor._received, cursor._target, cursor._header,
+                              cursor._done, waiter, attempted, retired)
+            r = _Request(cursor, scope, cursor, channel, None, cursor._buffer_origin,
+                         mode, state, o._ready_fact_snapshot, phase)
+            CleanupReadGate._pre_seal(self, r)
+            _require(channel._reading is (mode == "ready")
+                     and len(r.outer) == (state.received if mode == "ready" else 0)
+                     and not _TASK.done(scope.task) and not _TASK.cancelling(scope.task)
+                     and cursor._cleanup_switched is False
+                     and RemoteCleanupOwner._can_cancel(o, note_unknown=False))
+            if state.waiter is not None:
+                _require(type(state.waiter) is SelectorReadiness
+                         and state.waiter._initialized is True and state.waiter._unknown is False
+                         and type(state.waiter._attempted) is bool
+                         and type(state.waiter._retired) is bool
+                         and (mode != "ready_wait" or state.waiter._retired is True))
+            self._preflight = self._preflight_origin = r
+        except BaseException:
+            self._capture_failed = True
+            self._preflight = self._preflight_origin = None
+
     def request(self):
         """Select cooperative post-GO only from original known local custody."""
         CleanupReadGate.guard(self)
         o = self._owner_origin
-        if self._failed or o._unknown or o._write_fact_snapshot is None:
+        if self._failed or o._unknown or self._capture_failed:
+            return False
+        if self._capture_kind == "pre":
+            r = self._preflight_origin
+            if r is None:
+                return False
+            CleanupReadGate._pre_seal(self, r)
+            owner, handle, _ = self._refs[11]
+            _, _, end, failed = CancellationBudget.inspect(self._refs[8])
+            _require(o._intent is True and o._remote_snapshot._failed is True
+                     and JobOwner.inspect(owner, handle)[0] is State.UNKNOWN
+                     and JobOwner.inspect_remote(owner, handle) is RemotePhase.UNKNOWN
+                     and self._capture_cause is o._barriers_snapshot.cause
+                     and type(self._capture_cause) is _FUTURE
+                     and not _FUTURE.done(self._capture_cause)
+                     and type(end) is int and failed is False
+                     and r.channel._reading is (r.mode == "ready")
+                     and r.channel._writing is False and r.reader._cleanup_switched is False
+                     and len(r.outer) == (r.state.received if r.mode == "ready" else 0))
+            waiter = r.state.waiter
+            if waiter is not None:
+                SelectorReadiness._native(waiter, actor=False)
+                handle, _ = SelectorReadiness._slots(waiter)
+                SelectorReadiness._guard(waiter, actor=False)
+                RemoteCleanupOwner._guard(o)
+                if waiter._attempted is True and waiter._retired is False:
+                    SelectorReadiness._owned(waiter, handle)
+                else:
+                    # Retired/no-registration flags cannot hide a live read
+                    # subscription. Observe absence, without removing any slot.
+                    _require(handle is None)
+                    if waiter._attempted is False:
+                        _require(waiter._retired is False and waiter._handle_snapshot is None)
+            CleanupReadGate._pre_seal(self, r)
+            RemoteCleanupOwner._guard(o)
+            _, _, current_end, current_failed = CancellationBudget.inspect(self._refs[8])
+            _require(o._intent is True and o._unknown is False
+                     and o._remote_snapshot._failed is True
+                     and type(current_end) is int and current_end == end
+                     and current_failed is False
+                     and self._capture_cause is o._barriers_snapshot.cause
+                     and type(self._capture_cause) is _FUTURE
+                     and not _FUTURE.done(self._capture_cause)
+                     and not _FUTURE.cancelled(self._capture_cause))
+            self._request = self._request_origin = r
+            self._requested = True
+            CleanupReadGate.guard(self)
+            return True
+        if (self._capture_kind != "result" or o._write_fact_snapshot is None
+                or self._capture_receiver is not self._refs[3]._result_receiver_snapshot):
             return False
         RemoteCleanupOwner._quiescence_binding(o)
-        reader = self._refs[3]._result_receiver_snapshot
+        reader = self._capture_receiver
         if (type(reader) is not RemoteResultOwner or reader._initialized is not True
                 or reader._attempted is not True or reader._failed is not False
                 or self._refs[3]._reading is not True or self._refs[3]._writing is not False
@@ -243,6 +467,9 @@ class CleanupReadGate:
                  and not _TASK.cancelling(o._allocations_snapshot[1].task))
         _, _, end, failed = CancellationBudget.inspect(self._refs[8])
         _require(type(end) is int and failed is False)
+        if self._request.mode != "result":
+            _require(type(reader) is _PreResultCursor and reader._cleanup_switched is False)
+            reader._cleanup_switched = True
         raise CleanupReadSwitch(reader)
 
     def activate(self, reader):
@@ -256,28 +483,42 @@ class CleanupReadGate:
                  and o._intent and not o._unknown)
         self._activated = True  # transition attempt is irreversible before effects
         cursor = r.cursor
-        _ResultCursor.guard(cursor, reader)
-        _require(not cursor.io_unknown and not cursor.recv_intent and not cursor.commit_intent)
-        self._outer = self._outer_origin = r.outer
-        self._received = cursor.received
-        self._header = reader._header_snapshot
-        if cursor.pending is not None and self._header is None:
-            self._intent = True
-            self._outer_origin.extend(cursor.pending)
-            cursor.outer_committed += len(cursor.pending)
-            self._intent = False
-        cursor.pending = None  # received body bytes are revoked discard, never another candidate
-        if self._header is not None:
-            _row(self._header)
-            _require(self._header.kind == "RESULT" and self._header.sequence == 1
-                     and self._header.version == 2
-                     and self._header.binding == o._cancel_scope_snapshot[0]
-                     and 0 <= cursor.body_received <= self._header.body_length <= OUTPUT_LIMIT)
-            self._remaining_body = self._header.body_length - cursor.body_received
+        if r.mode == "result":
+            _ResultCursor.guard(cursor, reader)
+            _require(not cursor.io_unknown and not cursor.recv_intent and not cursor.commit_intent)
+            self._outer = self._outer_origin = r.outer
+            self._received = cursor.received
+            self._header = reader._header_snapshot
+            if cursor.pending is not None and self._header is None:
+                self._intent = True
+                self._outer_origin.extend(cursor.pending)
+                cursor.outer_committed += len(cursor.pending)
+                self._intent = False
+            cursor.pending = None  # revoked discard, never another candidate
+            if self._header is not None:
+                _row(self._header)
+                _require(self._header.kind == "RESULT" and self._header.sequence == 1
+                         and self._header.version == 2
+                         and self._header.binding == o._cancel_scope_snapshot[0]
+                         and 0 <= cursor.body_received <= self._header.body_length <= OUTPUT_LIMIT)
+                self._remaining_body = self._header.body_length - cursor.body_received
+        else:
+            CleanupReadGate._pre_seal(self, r)
+            _require(cursor._cleanup_switched is True)
+            self._outer = self._outer_origin = r.outer
+            self._received = r.state.received
+            self._header = r.state.header if r.mode == "ready" else None
+            if r.mode == "ready_wait":
+                _require(r.channel._reading is False and len(r.outer) == 0)
+                self._intent = True
+                r.channel._reading = True
+                self._intent = False
+            else:
+                _require(r.channel._reading is True)
         _require(RemoteCleanupOwner._publish_write_quiescence(o))
         _require(RemoteCleanupOwner._remaining(o) > 0)
         f = _ReadFact(_MINT, self, o, o._allocations_snapshot[1], r,
-                      self._refs[8], self._refs[4], r.outer)
+                      self._refs[8], self._refs[4], r.outer, r.mode, o._write_fact_snapshot)
         self._fact = self._fact_origin = f
         _scheduler_safe(o._loop_snapshot)
         _FUTURE.set_result(self._notice_origin, f)
@@ -470,36 +711,55 @@ class CleanupReadGate:
         part = body = None
         try:
             CleanupReadGate._current(self)
-            if self._header is None:
-                self._header = await CleanupReadGate._header_bytes(self)
+            mode = self._fact_origin.mode
+            if mode == "result":
                 if self._header is None:
-                    return False
-                _require(self._header.kind in ("RESULT", "TERMINAL")
-                         and self._header.sequence == 1)
-                self._remaining_body = self._header.body_length
-            if self._header.kind == "RESULT":
-                _require(4 <= self._header.body_length <= OUTPUT_LIMIT)
-                while self._remaining_body:
-                    remaining = self._remaining_body
-                    _require(type(remaining) is int)
-                    part = await CleanupReadGate._recv(self, min(remaining, 65536))
-                    if part is None:
-                        return False  # torn RESULT is EOF/debt, never a scan for TERMINAL
+                    self._header = await CleanupReadGate._header_bytes(self)
+                    if self._header is None:
+                        return False
+                    _require(self._header.kind in ("RESULT", "TERMINAL")
+                             and self._header.sequence == 1)
+                    self._remaining_body = self._header.body_length
+                if self._header.kind == "RESULT":
+                    _require(4 <= self._header.body_length <= OUTPUT_LIMIT)
+                    while self._remaining_body:
+                        remaining = self._remaining_body
+                        _require(type(remaining) is int)
+                        part = await CleanupReadGate._recv(self, min(remaining, 65536))
+                        if part is None:
+                            return False  # torn RESULT is EOF/debt, never a scan for TERMINAL
+                        self._intent = True
+                        CleanupReadGate.guard(self)
+                        _require(type(self._remaining_body) is int
+                                 and self._remaining_body == remaining)
+                        self._remaining_body = remaining - len(part)
+                        self._pending = part = None
+                        self._intent = False
                     self._intent = True
-                    CleanupReadGate.guard(self)
-                    _require(type(self._remaining_body) is int
-                             and self._remaining_body == remaining)
-                    self._remaining_body = remaining - len(part)
-                    self._pending = part = None
+                    original_outer[:] = b"\x00" * len(original_outer)
+                    original_outer.clear()
                     self._intent = False
-                self._intent = True
-                original_outer[:] = b"\x00" * len(original_outer)
-                original_outer.clear()
-                self._intent = False
-                self._header = await CleanupReadGate._header_bytes(self)
+                    self._header = await CleanupReadGate._header_bytes(self)
+                    if self._header is None:
+                        return False
+                    _require(self._header.kind == "TERMINAL" and self._header.sequence == 2)
+            else:
+                expected = 1 if mode == "ready_wait" else 0
                 if self._header is None:
-                    return False
-                _require(self._header.kind == "TERMINAL" and self._header.sequence == 2)
+                    self._header = await CleanupReadGate._header_bytes(self)
+                    if self._header is None:
+                        return False
+                if mode == "ready" and self._header.kind == "READY":
+                    _require(self._header.sequence == 0 and self._header.body_length == 0)
+                    self._intent = True
+                    original_outer[:] = b"\x00" * len(original_outer)
+                    original_outer.clear()
+                    self._intent = False
+                    self._header = await CleanupReadGate._header_bytes(self)
+                    if self._header is None:
+                        return False
+                    expected = 1
+                _require(self._header.kind == "TERMINAL" and self._header.sequence == expected)
             _require(self._header.kind == "TERMINAL"
                      and 0 < self._header.body_length <= TERMINAL_LIMIT)
             terminal_header = self._header

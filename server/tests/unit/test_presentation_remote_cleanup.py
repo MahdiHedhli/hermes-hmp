@@ -3,6 +3,7 @@
 No host content, GO, result, server deployment or remote release.
 """
 import asyncio
+import socket
 from contextlib import suppress
 
 import pytest
@@ -34,6 +35,18 @@ async def joined_cleanup(owner, seconds=1):
     return result
 
 
+async def cancel_then_eof(prepared_v2, owner):
+    """Fixture peer supplies an observed response, never a fabricated join."""
+    frame = await read_selected(prepared_v2[4], prepared_v2[7])
+    assert frame.header.kind == "CANCEL" and frame.header.sequence == 1
+    prepared_v2[4].shutdown(socket.SHUT_WR)
+    assert await joined_cleanup(owner)
+    assert owner._work_joined and owner._read_gate_snapshot._eof
+    assert owner._allocations_snapshot[1].task.done()
+    assert not owner._cancel_attempted  # cooperative original reader, not Task.cancel
+    return frame
+
+
 @pytest.mark.asyncio
 async def test_caller_cancel_retains_cleanup_and_sends_one_frozen_cancel(prepared_v2):
     a, op, _, channel, peer, _, _, _ = prepared_v2
@@ -47,10 +60,9 @@ async def test_caller_cancel_retains_cleanup_and_sends_one_frozen_cancel(prepare
         await public
     end = CancellationBudget.inspect(record.cleanup_budget)[2]
     assert end is not None
-    assert await joined_cleanup(owner)
+    frame = await cancel_then_eof(prepared_v2, owner)
     assert owner._work_joined and owner._socket_closed and owner._clock_closed
     assert work.done() and channel._closed_known and channel._clock_closed_known
-    frame = await read_selected(peer, prepared_v2[7])
     assert frame.header.kind == "CANCEL" and frame.header.sequence == 1
     from hmp_plugin.presentation_cancel_budget import CancellationWindow
     assert CancellationWindow.decode(frame.body).end_ns == end
@@ -64,7 +76,7 @@ async def test_caller_cancel_retains_cleanup_and_sends_one_frozen_cancel(prepare
 
 
 @pytest.mark.asyncio
-async def test_first_cause_is_frozen_before_owned_task_cancellation(prepared_v2, monkeypatch):
+async def test_first_cause_is_frozen_before_cooperative_original_reader(prepared_v2, monkeypatch):
     a, op, _, _, _, _, _, _ = prepared_v2
     remote, public, owner = await start_waiting(prepared_v2)
     record = a._record(op)
@@ -79,9 +91,10 @@ async def test_first_cause_is_frozen_before_owned_task_cancellation(prepared_v2,
     with pytest.raises(asyncio.CancelledError):
         await public
     assert observed[0] == (True, False, 0)
-    assert owner._cancel_attempted
+    assert not owner._cancel_attempted
+    assert owner._allocations_snapshot[1].task.cancelling() == 0
     assert CancellationBudget.inspect(record.cleanup_budget)[2] is not None
-    assert await joined_cleanup(owner)
+    await cancel_then_eof(prepared_v2, owner)
     assert remote._failed
 
 
@@ -175,7 +188,13 @@ async def test_ready_retains_deadline_watcher_and_only_local_closure(prepared_v2
     assert owner._ready_fact.future is owner._barriers_snapshot.ready
     assert owner._ready_fact.work is owner._allocations_snapshot[1]
     assert not owner._intent and not owner._socket_closed
+    # EOF is queued by the fixture peer; READY's original task stays parked
+    # until the unchanged deadline, then its cleanup reader consumes that EOF.
+    peer.shutdown(socket.SHUT_WR)
     assert await joined_cleanup(owner, seconds=3)
+    cancel = await read_selected(peer, b)
+    assert cancel.header.kind == "CANCEL" and cancel.header.sequence == 1
+    assert owner._cancel_write_completed and not owner._cancel_attempted
     budget = a._record(op).cleanup_budget
     assert CancellationBudget.inspect(budget)[2] <= remote._end + 250_000_000
     assert a._record(op).headers is not None
@@ -224,6 +243,12 @@ async def test_expired_original_budget_does_not_start_local_close(prepared_v2, m
     assert CancellationBudget.inspect(a._record(op).cleanup_budget)[2] == remote._end + 250_000_000
     assert not channel._close_attempted and not owner._socket_closed
     assert owner._unknown and a._record(op).headers is not None
+    # Observe only the original stopped task after the unknown outcome. This
+    # test-owned disposal does not certify the cleanup ledger's join or close.
+    with suppress(asyncio.CancelledError, AuthorityRefusalError):
+        stopped = await asyncio.wait_for(asyncio.shield(owner._allocations_snapshot[1].task), 1)
+        assert stopped is False
+    assert owner._unknown and not owner._socket_closed and not channel._close_attempted
 
 
 @pytest.mark.asyncio
@@ -266,6 +291,10 @@ async def test_cleanup_task_cancel_retains_debt_without_replacement(prepared_v2)
         await public
     assert owner._unknown and owner._slots_snapshot[0].task_snapshot is cleanup_task
     assert not owner._socket_closed
+    with suppress(asyncio.CancelledError, AuthorityRefusalError):
+        stopped = await asyncio.wait_for(asyncio.shield(owner._allocations_snapshot[1].task), 1)
+        assert stopped is False
+    assert owner._unknown and not owner._socket_closed
 
 
 @pytest.mark.asyncio
@@ -469,7 +498,6 @@ async def test_actual_local_sender_receiver_adopt_same_original_window(prepared_
         assert await public
         owner = remote._cleanup_owner_snapshot
         owner.request()
-        assert await joined_cleanup(owner)
         frame = await BrokerServiceSpine._v2_control(None, receiver)
         assert frame.header.kind == "CANCEL" and receiver._adopted
         assert not receiver._allocation_snapshot.task.done() and broker._reading
@@ -477,6 +505,17 @@ async def test_actual_local_sender_receiver_adopt_same_original_window(prepared_
             CancellationBudget.inspect(a._record(op).cleanup_budget)[2])
         assert registry.status(b) is RegistryStatus.PENDING
         assert registry._record(ticket).resources is None and a._record(op).headers is not None
+        # CANCEL adoption is a notice, not controller termination. Only the
+        # original controller's stop/join allows its actual socket EOF to let
+        # the gateway's original cleanup reader finish local closure.
+        receiver.abort()
+        assert await receiver.join()
+        assert receiver._allocation_snapshot.task.done()
+        assert SocketChannel.close(broker) and SocketChannel.close_clock(broker)
+        assert await joined_cleanup(owner)
+        assert owner._read_gate_snapshot._eof and owner._work_joined
+        assert registry.status(b) is RegistryStatus.PENDING
+        assert a._record(op).headers is not None
     finally:
         if not receiver._allocation_snapshot.task.done():
             receiver.abort()
@@ -526,7 +565,7 @@ async def test_begin_write_fact_is_immutable_and_redacted(prepared_v2):
     public.cancel()
     with pytest.raises(asyncio.CancelledError):
         await public
-    assert await joined_cleanup(owner)
+    await cancel_then_eof(prepared_v2, owner)
 
 
 @pytest.mark.asyncio
@@ -547,9 +586,9 @@ async def test_public_cancel_does_not_cancel_ready_notification_future(prepared_
     public.cancel()
     with pytest.raises(asyncio.CancelledError):
         await public
-    assert await joined_cleanup(owner)
+    await cancel_then_eof(prepared_v2, owner)
     assert ready.done() and not ready.cancelled() and ready.result() is False
-    assert owner._work_joined and owner._cancel_attempted
+    assert owner._work_joined and not owner._cancel_attempted
 
 
 @pytest.mark.asyncio
@@ -566,7 +605,7 @@ async def test_ready_task_remains_original_until_explicit_cleanup(prepared_v2):
     assert owner._ready_fact.packet is owner._remote_snapshot._packet_snapshot
     assert "packet" not in repr(owner._ready_fact)
     owner.request()
-    assert await joined_cleanup(owner)
+    await cancel_then_eof(prepared_v2, owner)
     assert owner._allocations_snapshot[1] is work and work.task.done()
     assert owner._barriers_snapshot.ready.result() is True
     assert not owner._barriers_snapshot.cause.cancelled()
