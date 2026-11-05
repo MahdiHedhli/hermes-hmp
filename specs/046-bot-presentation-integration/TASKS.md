@@ -23,6 +23,7 @@
 - [x] Implement/review read-only broker kernel peer observation with actual Darwin separate-process identity checks (BR4a); no service or endpoint attestation.
 - [x] Implement/review BR3a message grammar and retained64-serial replay window, including sticky scope/role/mode guards; not native/remote custody authority.
 - [x] Implement/review and run bounded BR8a temporary launchd crash fixture; new-session reader socket remains open, shared-group socket EOF observed, own-job/communication cleanup verified. This is not production process closure.
+- [x] Implement and independently review fixture-only retained Darwin exit observer (`1996c03`); 41 focused cases and serial floor/current combined suites pass. Registration/exit/local close facts remain distinct from service containment.
 - [ ] Qualify service-manager crash/orphan containment before broker activation; current direct reader starts a new session, so broker process-group exit is not assumed child closure.
 - [x] Implement/review source-only shared-group broker child owner, exact wait and one-use child-only termination; real two-child isolation, no group closure API.
 - [x] Implement/review bounded broker registry retention, replay-burning capacity admission, original-deadline launch guards and never-launched global ACK; started-owner terminal release remains unavailable until actual resource binder.
