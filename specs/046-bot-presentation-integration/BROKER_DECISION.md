@@ -18,7 +18,9 @@ monotonic deadline, native pre-GO/pre-emit checks and the sole HTTP emission.
 Original bearer/headers/keys never leave it. The broker has no gateway, Hermes,
 provider, identity or credential initialization and does not assert phone rights.
 Its sole privileged task is the existing fixed isolated reader and exact child,
-pipe, wait, group, termination and cleanup custody. It consumes bounded input3
+pipe, wait, termination and cleanup custody under the separately reviewed topology.
+The shared-group child contract supersedes any exclusive-reader-group assumption:
+no per-reader group signal or group_absent proof is permitted. It consumes bounded input3
 and GO only after the gateway authorizes that exact operation.
 
 An explicit separate broker-operation owner/closure receipt is required at the

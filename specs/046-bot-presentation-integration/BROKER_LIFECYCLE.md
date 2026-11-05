@@ -102,8 +102,10 @@ Both sides use the original input3 absolute monotonic deadline. No hop issues a
 fresh work interval; cleanup has one frozen total250ms across every plane. This
 model has no clock and must never be used to infer freshness. The future owner
 must invalidate before timeout/cancellation handoff, recheck current authority
-before GO and pre-emit, validate output2/work/source proof, and join actual child/
-group/pipes/native/thread custody before retirement. Socket EOF or peer UID/PID
+before GO and pre-emit, validate output2/work/source proof, and join actual topology-specific
+child/pipes/control/native/thread custody before retirement. The shared-group
+[child contract](BROKER_CHILD_CUSTODY.md) does not own the broker group and cannot
+reuse exclusive-reader group_absent proof. Socket EOF or peer UID/PID
 is not such proof.
 
 ## Plan / checklist
