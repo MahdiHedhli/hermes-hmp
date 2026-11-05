@@ -17,7 +17,8 @@ READY is bodyless. Exact wanted counts cannot consume the next GO/CANCEL/RESULT.
 
 A second channel clock sample follows the ordinary remote check. Immediately
 after it, a callback-free local fence revalidates original remote custody,
-owner/job/lease/fence/epoch/phase, policy transfer/closed-state, cleanup actor and
+owner/job/lease/fence/epoch/phase, reciprocal channel ownership, policy
+transfer/closed-state, original cleanup remote/record/channel/actor and
 unretired original budget. It does not repeat authorization, sample another clock
 or create a new allowance. Causals revoke ownership, budget, fence, policy,
 epoch or emit state at that last sample and forbid receive/readiness creation.

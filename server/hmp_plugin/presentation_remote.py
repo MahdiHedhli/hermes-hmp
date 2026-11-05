@@ -271,6 +271,7 @@ class RemoteOperationOwner:
         a, r, job = self._authority_snapshot, self._record_snapshot, self._job_origin_snapshot
         work = r.policy_work
         if (channel is not self._channel_snapshot or end is not self._end_snapshot
+                or channel._remote_owner is not self or channel._remote_owner_snapshot is not self
                 or self._end is not end or type(end) is not int
                 or a.owner is not r.owner or a._disabled is not False
                 or r.owner._disabled is not False or type(a._by_operation) is not dict
@@ -310,7 +311,10 @@ class RemoteOperationOwner:
             if type(row) is not _HeldDirectory or row.closed is not True:
                 raise AuthorityRefusalError
         cleanup = self._cleanup_owner_snapshot
-        if type(cleanup) is not RemoteCleanupOwner:
+        if (type(cleanup) is not RemoteCleanupOwner or cleanup._remote_snapshot is not self
+                or cleanup._remote is not self or type(cleanup._refs_snapshot) is not tuple
+                or len(cleanup._refs_snapshot) != 12 or cleanup._refs_snapshot[2] is not r
+                or cleanup._refs_snapshot[3] is not channel):
             raise AuthorityRefusalError
         RemoteCleanupOwner.authorize_work(cleanup)  # retained metadata only, no clock sampling
         original, _, cleanup_end, failed = CancellationBudget.inspect(r.cleanup_budget_snapshot)

@@ -900,7 +900,7 @@ async def test_eagain_after_cancellation_has_no_second_readiness_registration(
 
 
 @pytest.mark.parametrize("fault", ["owner", "budget", "fence", "policy", "policy_closed",
-                                  "epoch", "revoked"])
+                                  "epoch", "revoked", "channel_owner", "cleanup_owner"])
 async def test_pre_result_last_channel_sample_cannot_revive_remote_work(
     coupled_result, monkeypatch, fault
 ):
@@ -913,6 +913,15 @@ async def test_pre_result_last_channel_sample_cannot_revive_remote_work(
     original_recv = result._SOCKET_RECV
     original_initialize = result.SelectorReadiness.__init__
     active, tripped, callbacks = [], [], []
+    foreign_cleanup = RemoteCleanupOwner.__new__(RemoteCleanupOwner)
+    saved_cleanup = []
+    original_authorize = RemoteCleanupOwner.authorize_work
+
+    def authorize(current):
+        if current is foreign_cleanup:
+            callbacks.append("foreign_cleanup")
+            raise AssertionError("must not follow another cleanup owner")
+        return original_authorize(current)
 
     def remaining(current, end):
         active.append(current is channel)
@@ -940,6 +949,13 @@ async def test_pre_result_last_channel_sample_cannot_revive_remote_work(
                 record.policy_work._policy.uncertain = True
             elif fault == "epoch":
                 record.owner._epoch += 1
+            elif fault == "channel_owner":
+                from hmp_plugin.presentation_remote import RemoteOperationOwner
+                channel._remote_owner = channel._remote_owner_snapshot = (
+                    RemoteOperationOwner.__new__(RemoteOperationOwner))
+            elif fault == "cleanup_owner":
+                saved_cleanup.append(remote._cleanup_owner_snapshot)
+                remote._cleanup_owner = remote._cleanup_owner_snapshot = foreign_cleanup
             else:
                 job.emit_revoked = True
         return now
@@ -956,17 +972,26 @@ async def test_pre_result_last_channel_sample_cannot_revive_remote_work(
             raise AssertionError("revoked preRESULT must not register")
         return original_initialize(waiter, sock)
 
+    monkeypatch.setattr(RemoteCleanupOwner, "authorize_work", authorize)
     monkeypatch.setattr(SocketChannel, "_remaining", remaining)
     monkeypatch.setattr(NativeClockOwner, "sample", sample)
     from hmp_plugin import presentation_broker_service as service
     monkeypatch.setattr(service, "_SOCKET_RECV", recv)
     monkeypatch.setattr(result.SelectorReadiness, "__init__", initialize)
+    original_cleanup = None
+    # The original cleanup owner is allocated by begin_ready, so capture it at
+    # the mutation boundary rather than inventing an identity for disposal.
     with pytest.raises(AuthorityRefusalError):
         await remote.begin_ready()
     assert tripped and callbacks == []
     cursor = channel._pre_result_cursor_origin
     assert cursor._received == 0 and not cursor._scope_origin.buffer
     assert remote._job_origin_snapshot.result is None and not channel._reading
+    if fault == "channel_owner":
+        channel._remote_owner = channel._remote_owner_snapshot = remote
+    if fault == "cleanup_owner":
+        original_cleanup = saved_cleanup[0]
+        remote._cleanup_owner = remote._cleanup_owner_snapshot = original_cleanup
 
 
 async def test_lost_readiness_proof_and_work_refusal_keeps_result_claim(
