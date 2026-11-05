@@ -16,6 +16,7 @@ from .presentation_jobs import _PROFILE, INPUT_LIMIT, FrameError, _digest, _json
 
 CLAIM_LIMIT = TERMINAL_LIMIT
 _INPUT_MINT = object()
+_HANDOFF_MINT = object()
 
 
 def _require(value):
@@ -250,6 +251,20 @@ class _ProducerScope(NamedTuple):
     task: object
 
 
+class _FrozenLocalHandoff(NamedTuple):
+    mint: object
+    producer: object
+    scope: _ProducerScope
+    claim: StartedClaim
+    budget: object
+    cleanup_end: object
+    wire: bytes
+    sha256: str
+
+    def __repr__(self):
+        return "<FrozenLocalHandoff data-only no-write no-release redacted>"
+
+
 class LocalStartedProducer:
     """One retained local observation producer; exposes data, no completion API."""
 
@@ -284,6 +299,8 @@ class LocalStartedProducer:
         self._observation = self._observation_snapshot = None
         self._claim = self._claim_snapshot = None
         self._transfer = self._transfer_snapshot = None
+        self._handoff_attempted = self._handoff_failed = False
+        self._handoff = self._handoff_snapshot = None
         self._initialized = self._failed = False
         try:
             control, channel = connection.cancel_owner, connection.channel_snapshot
@@ -363,7 +380,8 @@ class LocalStartedProducer:
     def __repr__(self):
         return "<LocalStartedProducer no-release redacted>"
 
-    def _guard(self):
+    def _metadata_guard(self):
+        """Local reference/actor seals only; no FD checks or clock sampling."""
         import asyncio
 
         from .presentation_broker_cancel import BrokerCancellationOwner
@@ -379,7 +397,7 @@ class LocalStartedProducer:
             _Connection,
             _values_shape,
         )
-        from .presentation_clock import NativeClockOwner
+        from .presentation_clock import ClockDomain, NativeClockOwner
         from .presentation_remote_cleanup import _TASK
 
         s = self._scope
@@ -408,22 +426,32 @@ class LocalStartedProducer:
                  and s.connection.channel_snapshot is s.channel
                  and s.connection.cancel_owner is s.control
                  and type(s.control_scope) is tuple and len(s.control_scope) == 10
+                 and s.control._scope is s.control_scope
                  and s.control._scope_snapshot is s.control_scope and s.control_scope[0] is s.record
+                 and s.channel._cancel_receiver is s.control
+                 and s.channel._cancel_receiver_snapshot is s.control
                  and s.channel._clock_owner_snapshot is s.clock
+                 and s.channel._clock_owner is s.clock
+                 and s.clock._channel is s.channel and s.clock._channel_snapshot is s.channel
                  and s.channel._enrollment_snapshot is s.enrollment
+                 and s.channel._enrollment is s.enrollment
                  and s.channel._values_snapshot is s.values
+                 and s.channel._values is s.values
                  and _values_shape(s.values) and s.values[8] == 2
                  and s.clock._domain_snapshot is s.domain and s.clock._domain is s.domain
                  and s.clock._domain_values is s.domain_values
                  and self._observation is self._observation_snapshot
                  and self._claim is self._claim_snapshot
                  and self._transfer is self._transfer_snapshot)
+        _require(type(s.domain) is ClockDomain and type(s.domain_values) is tuple
+                 and len(s.domain_values) == 4
+                 and all(x is y for x, y in zip(
+                     (s.domain.platform, s.domain.implementation,
+                      s.domain.boot, s.domain.namespace),
+                     s.domain_values, strict=True)))
         _require(input_current(s.record) is s.receipt
                  and s.resources._input_receipt_origin is s.receipt
                  and s.resources._input_receipt_snapshot is s.receipt)
-        BrokerServiceSpine._metadata(s.service)
-        BrokerCancellationOwner._guard(s.control, cleanup=True)
-        _require(SocketChannel._qualified_clock(s.channel) is s.clock)
         if self._observation is not None:
             observation = self._observation
             _require(type(observation) is BrokerLocalDrainObservation
@@ -435,6 +463,41 @@ class LocalStartedProducer:
                      and s.resources._wait is s.resources._wait_identity
                      and type(s.resources._wait.exit_code) is int
                      and observation.exit_code == s.resources._wait.exit_code)
+        if self._transfer is not None:
+            from .presentation_result_transport import (
+                _TRANSFER_MINT,
+                BrokerResultWriter,
+                _CompletedResultTransfer,
+                _WriterScope,
+            )
+
+            fact = self._transfer
+            _require(type(fact) is _CompletedResultTransfer and fact.mint is _TRANSFER_MINT
+                     and type(fact.writer) is BrokerResultWriter
+                     and type(fact.scope) is _WriterScope
+                     and s.connection.result_writer is fact.writer
+                     and s.connection.result_writer_snapshot is fact.writer
+                     and fact.writer._scope is fact.scope
+                     and fact.writer._scope_snapshot is fact.scope
+                     and fact.writer._transfer_fact is fact
+                     and fact.writer._transfer_fact_snapshot is fact
+                     and fact.scope.service is s.service and fact.scope.connection is s.connection
+                     and fact.scope.record is s.record and fact.scope.resources is s.resources
+                     and fact.scope.channel is s.channel and fact.scope.control is s.control
+                     and fact.scope.registry is s.registry and fact.scope.ticket is s.ticket
+                     and fact.scope.task is s.task)
+
+    def _guard(self):
+        from .presentation_broker_cancel import BrokerCancellationOwner
+        from .presentation_broker_service import BrokerServiceSpine, SocketChannel
+
+        LocalStartedProducer._metadata_guard(self)
+        s = self._scope_snapshot
+        BrokerServiceSpine._metadata(s.service)
+        BrokerCancellationOwner._guard(s.control, cleanup=True)
+        _require(SocketChannel._qualified_clock(s.channel) is s.clock)
+        # The native/control tail cannot leave changed local custody unchecked.
+        LocalStartedProducer._metadata_guard(self)
 
     def _current(self):
         from .presentation_cancel_budget import CancellationBudget
@@ -458,3 +521,82 @@ class LocalStartedProducer:
         _require(self._initialized is True and self._failed is False
                  and type(self._claim) is StartedClaim and self._claim is self._claim_snapshot)
         return self._claim
+
+    def _handoff_seal(self, scope, claim, budget, observation, transfer):
+        """Callback-free local identity fence; not runtime qualification."""
+        from .presentation_broker_cancel import BrokerCancellationOwner
+        from .presentation_broker_registry import _Record
+        from .presentation_cancel_budget import CancellationBudget
+
+        _require(type(self) is LocalStartedProducer and self._initialized is True
+                 and self._failed is False and self._handoff_attempted is True
+                 and self._handoff_failed is False
+                 and self._handoff is None and self._handoff_snapshot is None
+                 and type(scope) is _ProducerScope
+                 and self._scope is scope and self._scope_snapshot is scope
+                 and type(claim) is StartedClaim
+                 and self._claim is claim and self._claim_snapshot is claim
+                 and type(scope.control) is BrokerCancellationOwner
+                 and type(scope.record) is _Record
+                 and type(scope.control_scope) is tuple and len(scope.control_scope) == 10
+                 and scope.control._scope_snapshot is scope.control_scope
+                 and type(budget) is CancellationBudget
+                 and scope.control_scope[3] is budget
+                 and scope.record.cleanup_budget is budget
+                 and scope.record.cleanup_budget_snapshot is budget
+                 and scope.record.terminal_producer is self
+                 and scope.record.terminal_producer_snapshot is self)
+        LocalStartedProducer._metadata_guard(self)
+        _require(self._observation is observation and self._observation_snapshot is observation
+                 and self._transfer is transfer and self._transfer_snapshot is transfer)
+
+    def freeze_handoff_data(self):
+        """One historical envelope from actual local custody; never write permission.
+
+        A future qualified writer must reject _handoff_failed, even if the
+        original producer's _failed is False, and recheck custody and exact
+        cause/end before IO. Later cause/shortening cannot authorize refreezing.
+        """
+        from .presentation_cancel_budget import CancellationBudget
+
+        _require(type(self) is LocalStartedProducer and self._initialized is True
+                 and self._failed is False)
+        if self._handoff_attempted is not False:
+            self._handoff_failed = True
+            raise FrameError("BI1_LOCAL_HANDOFF_FREEZE_REFUSED")
+        _require(self._handoff_failed is False
+                 and self._handoff is None and self._handoff_snapshot is None)
+        # Even _guard crosses native/control boundaries. Latch before calling
+        # it, so reentry or partial failure cannot create a second envelope.
+        self._handoff_attempted = True
+        wire = None
+        try:
+            scope, claim = self._scope_snapshot, self._claim_snapshot
+            observation, transfer = self._observation_snapshot, self._transfer_snapshot
+            _require(type(scope) is _ProducerScope and type(scope.control_scope) is tuple
+                     and len(scope.control_scope) == 10)
+            budget = scope.control_scope[3]
+            LocalStartedProducer._handoff_seal(self, scope, claim, budget, observation, transfer)
+            caused = LocalStartedProducer._current(self)
+            LocalStartedProducer._handoff_seal(self, scope, claim, budget, observation, transfer)
+            original, _, end, failed = CancellationBudget.inspect(budget)
+            _require(failed is False and original == claim.deadline_ns
+                     and caused is (end is not None))
+            stamp = None if end is None else CleanupStamp(end - CLEANUP_NS, end)
+            wire = encode_handoff(claim, stamp)
+            _require(type(wire) is bytes and 0 < len(wire) <= CLAIM_LIMIT)
+            digest = hashlib.sha256(wire).hexdigest()
+            LocalStartedProducer._handoff_seal(self, scope, claim, budget, observation, transfer)
+            _require(LocalStartedProducer._current(self) is caused)
+            LocalStartedProducer._handoff_seal(self, scope, claim, budget, observation, transfer)
+            current_original, _, current_end, current_failed = CancellationBudget.inspect(budget)
+            _require(current_failed is False and current_original == original
+                     and current_end == end)
+            fact = _FrozenLocalHandoff(_HANDOFF_MINT, self, scope, claim, budget, end, wire, digest)
+            self._handoff = self._handoff_snapshot = fact
+            return fact
+        except BaseException:
+            self._handoff_failed = True
+            raise FrameError("BI1_LOCAL_HANDOFF_FREEZE_REFUSED") from None
+        finally:
+            wire = None

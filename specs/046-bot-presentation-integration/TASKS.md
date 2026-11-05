@@ -67,6 +67,12 @@
 - [x] Independently review broker control readiness/cumulative-cursor integration, immediate queued-control draining and original work-to-cleanup timeout transition. Independent153 focused cases plus the final cross-channel isolation causal pass on Python3.13; no ACK continuation or release. See [broker control cursor](BROKER_CONTROL_CURSOR.md).
 - [x] Independently review selected-v2 retained pre-result BEGIN/READY cursor, callback-free final remote custody fence and readiness-proof-before-current ordering. Independent231-case regression and final9-case owner-binding causals pass on Python3.13; preserve v1 and no cleanup activation. See [pre-result cursor](PRE_RESULT_CURSOR.md).
 - [ ] Extend the reviewed post-GO write-quiescence/cleanup-reader coupling to pre-READY and continue the original broker controller after CANCEL toward qualified ACK; retain legacy join gates outside the reviewed scope. See [joined transport prerequisites](TERMINAL_TRANSPORT.md).
+- [ ] Qualify/integrate the one-use actual local-producer handoff freeze. The
+      [source candidate](LOCAL_HANDOFF_FREEZE.md) binds immutable envelope bytes
+      to original custody and the actual minimum budget; it supplies DATA only.
+      Root's local 418 coupled plus 230 budget/grammar cases pass on each of
+      Python 3.11.15 and 3.14.4. Full CI/integration and any sender/receiver/ACK
+      permission remain separate open work.
 - [x] Implement and independently source-review original pre-READY/READY-wait
       cleanup-reader coupling, preserving the original Task/cursor/buffer and
       earliest shared budget. Root's exact-source serial nine-module regression

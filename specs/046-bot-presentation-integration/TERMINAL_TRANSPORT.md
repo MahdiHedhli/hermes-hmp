@@ -67,8 +67,8 @@ transfer the cursor or permission to another operation.
 The selected-v2 pre-result and normal RESULT readers now retain framing progress
 through their reviewed readiness/cursor integrations; RESULT also retains its
 original digest. The post-GO RESULT cursor now continues as bounded discard
-under its original cleanup scope. Pre-result cleanup remains unfinished: extend
-its exact original cursor, never reset offsets or start a replacement reader.
+under its original cleanup scope. The integrated pre-READY extension retains
+its exact original cursor; it never resets offsets or starts a replacement reader.
 Partial RESULT uses the existing credited accumulator; after revocation it is
 bounded discard, never a new candidate. TERMINAL has the bounded envelope ceiling.
 All active IO timeouts must shorten to the same earliest cleanup end before later
