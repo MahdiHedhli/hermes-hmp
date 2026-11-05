@@ -1,3 +1,29 @@
+## Fresh native GO control source — November 5, 2026
+
+HMP `2854edb` joins the original public request, retained operation task and fresh
+native PRE_GO admission to one-use GO intent/write facts. Shared JobOwner remote
+states distinguish intent and completed local write; no local child is fabricated.
+The same exclusive broker task/cursor handles GO1 then CANCEL2 (or CANCEL1 before
+GO), with original-budget checks before one-use reader relay. A torn or uncertain
+GO gets no appended frame or retry. The work task stays alive after notification;
+headers, credits and started registry debt remain retained. Neither write nor
+relay is an execution acknowledgement.
+
+Independent review passed the eight-module 266-test candidate before the final
+allocation-order repair, then all 16 GO transport cases afterward on Python 3.13.
+Final root serial Python 3.11.15 and standalone 3.14.4 each pass 1,685 tests plus
+190 subtests, with one Linux-native skip. Lint, surface, privacy and diff checks
+pass. Prior READY head `d0d7d70` CI42041303793 succeeded with 6,799 tests / 21
+skips plus 190 subtests; this new source has separate CI evidence. Synthetic
+Unix/owned-reader tests explicitly mock peer and Darwin clock facts.
+
+Next: independently validate bounded result2 and fresh PRE_EMIT, typed started
+terminal proof and native/policy/credential retirement, production runtime
+qualification, authenticated image routes and full classic/blobatar/custom
+rendering. STATUS/release and signed physical checks remain open. App executable,
+embedded HMP, installed hosts and devices are unchanged. Host-local images follow.
+See [GO ownership](specs/046-bot-presentation-integration/ASYNC_GO.md).
+
 ## Retained READY lifecycle source — November 5, 2026
 
 HMP `23f1454` keeps the original operation work task alive after READY, with a
