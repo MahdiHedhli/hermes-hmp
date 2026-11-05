@@ -63,6 +63,8 @@ CONTRACT_MODULES = {
     "presentation_child_launch.py",
     # BR2 source-only bounded IPC framing; no broker service/route.
     "presentation_broker_codec.py",
+    # BR4a read-only kernel connection identity; no endpoint/service activation.
+    "presentation_broker_peer.py",
     "presentation_child.py",
     "presentation_pipes.py",
     "presentation_process.py",

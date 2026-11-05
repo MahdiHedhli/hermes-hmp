@@ -20,6 +20,7 @@
 - [x] Implement explicit frozen startup parser-package launch under -I -B -S, with namespace-only parser binding, no site activation and reviewed static imports.
 - [ ] Bind and attest the actual listener PM generation, interpreter/stdlib/parser/bytecode closure; parent sys.path activation is not inherited by the current -I child. See RUNTIME_FINDINGS.md.
 - [x] Review external OS-supervised custodian architecture and implement bounded source-only frame codec (BR1/BR2); no service or remote closure authority.
+- [x] Implement/review read-only broker kernel peer observation with actual Darwin separate-process identity checks (BR4a); no service or endpoint attestation.
 - [ ] Resolve direct-child native Kanban waitpid(-1) interference through an ownership-aware native contract or a separately reviewed external broker; do not disable Kanban or reinterpret ECHILD as closure.
 - [x] Add reviewed cleanup-only discard after exact child/group/control closure (bf24a54); frozen cleanup budget, actual EOF, buffered wipe and unknown-debt causals.
 - [x] Review and implement refusal-only post-GO cancellation closure without treating discarded/missing worker output as successful work; keep ambiguous native/policy resources retained. Actual parent GO-write/termination test uses synthetic native authority; runtime containment premise remains unqualified.

@@ -1,3 +1,21 @@
+## Local broker peer observation — November 4, 2026
+
+The next reviewed broker prerequisite can now match a connected local stream's
+kernel UID/PID to trusted startup expectations. Actual temporary Darwin endpoint
+and separate synthetic-process checks verify the retained child's PID, reject
+wrong UID/PID and preserve fixed refusals on missing/unsupported APIs. The helper
+checks connected AF_UNIX stream and observed descriptor consistency. It never
+signals/waits for peer IDs or treats them as phone rights, code identity, liveness
+or child custody. No broker service/route is activated.
+
+Independent39-case peer review passes; root peer/codec/skeleton368 cases pass on
+Python3.11 and3.14.9 on this Mac, plus lint and closed-import scanner. Linux
+credential layouts have decoder tests, not a fresh Linux kernel qualification.
+Darwin's inspected xucred ABI is explicitly versioned/unstable; unknown APIs or
+shapes refuse without fallback. Endpoint acquisition, service/code identity,
+lifecycle/remote closure and orphan/shutdown qualification remain open. See the
+[peer decision](specs/046-bot-presentation-integration/BROKER_PEER_DECISION.md).
+
 ## External character custodian path — November 4, 2026
 
 A separately OS-supervised reader broker is the selected development path around

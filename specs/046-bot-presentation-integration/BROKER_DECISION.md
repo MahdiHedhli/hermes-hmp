@@ -110,6 +110,7 @@ handling must be qualified before runtime activation.
 - [x] BR2: implement closed pure codec + causal malformed/boundary/isolation tests.
 - [ ] BR3: freeze precise client/server lifecycle, sequencing/cancellation race,
   capacity/tombstone/ACK/status and typed remote closure authority contract.
+- [x] BR4a: implement/review kernel UID/PID snapshot helper and actual Darwin cross-process fixture; endpoint/code/liveness/custody remain separate.
 - [ ] BR4: qualify platform UID/endpoint identity and private socket acquisition,
   race-safe startup and nonblocking bounded transport with original deadlines.
 - [ ] BR5: implement standalone namespace-only broker using explicit parser recipe,
