@@ -6,6 +6,7 @@ import asyncio
 import errno
 import hashlib
 import os
+import time
 from contextlib import suppress
 from dataclasses import replace
 from pathlib import Path
@@ -151,7 +152,32 @@ async def test_gateway_independently_rejects_broker_accepted_result(
 
 async def test_duplicate_candidate_wait_revokes_and_wipes_original(coupled_result):
     remote, _, _, _ = coupled_result
-    assert await remote.begin_ready() and await remote.go() and await remote.result_ready()
+    # Status-only diagnostics preserve the original budget and positive assertion.
+    # Parent reservation precedes dependent socket/policy setup; never rebase it.
+    checkpoints = [("test_entry", remote._end_snapshot - time.monotonic_ns())]
+    assert await remote.begin_ready()
+    checkpoints.append(("begin", remote._end_snapshot - time.monotonic_ns()))
+    assert await remote.go()
+    checkpoints.append(("go", remote._end_snapshot - time.monotonic_ns()))
+    try:
+        assert await remote.result_ready()
+    except AuthorityRefusalError as error:
+        owner, receiver = remote._cleanup_owner_snapshot, remote._result_owner_snapshot
+        notice = owner._result_notice_snapshot
+        notice_value = (None if not notice.done() or notice.cancelled() else notice.result())
+        work = owner._allocations_snapshot[1].task
+        work_error = (type(work.exception()).__name__ if work.done() and not work.cancelled()
+                      else "cancelled_or_pending")
+        cursor = receiver._cursor_origin if receiver is not None else None
+        status = {"remaining_ns": [*checkpoints,
+                      ("refusal", remote._end_snapshot - time.monotonic_ns())],
+                  "notice": notice_value, "work_error": work_error,
+                  "cleanup_intent": owner._intent, "cleanup_unknown": owner._unknown,
+                  "validated": receiver._validated if receiver is not None else None,
+                  "cursor": None if cursor is None else (
+                      cursor.received, cursor.outer_committed, cursor.body_received,
+                      cursor.body_committed, cursor.io_unknown)}
+        raise AssertionError(f"synthetic candidate prerequisite refused: {status}") from error
     job = remote._job_origin_snapshot
     assert job.result is not None
     with pytest.raises(AuthorityRefusalError):
