@@ -18,7 +18,8 @@ Hosted CI41996029329 found two Linux test-causal errors (unread reply on close
 causes reset). Reviewed test-only correction `0141adc` consumes the reply before
 clean close and explicitly tests reset refusal; 27 terminal cases pass on both
 Python 3.11/3.14.9. Product code is unchanged from the observed fixture. Corrected
-Linux CI remains separately tracked. Full character rendering/routes/authority
+Linux CI41997460084 now passes all jobs on exact source head `a2984e8`; this
+is not Linux service-manager qualification. Full character rendering/routes/authority
 and host-local images remain required. See the
 [observed fixture](specs/046-bot-presentation-integration/SERVICE_PROCESS_FIXTURE.md).
 

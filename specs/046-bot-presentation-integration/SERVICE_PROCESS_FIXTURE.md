@@ -151,4 +151,5 @@ Hosted CI41996029329 separately reported two Linux test-causal failures: closing
 a client with unread response bytes produces reset instead of clean EOF. The
 reviewed test correction drains the reply before the simulated legitimate close;
 reset remains refusal. That is not a product reset-to-EOF fallback or Linux
-service-manager qualification. Exact corrected-source CI is tracked separately.
+service-manager qualification. Exact corrected-source CI41997460084 now passes
+all jobs at head `a2984e8`; the test-only correction is `0141adc`.
