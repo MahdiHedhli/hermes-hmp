@@ -13,6 +13,7 @@ import errno
 import os
 import socket
 import stat
+import threading
 import time
 from dataclasses import dataclass
 from typing import NamedTuple
@@ -22,6 +23,7 @@ from .presentation_broker_codec import (
     BrokerFrame,
     BrokerHeader,
     _binding,
+    _row,
     decode_header,
     decode_scope_header,
     encode_frame,
@@ -33,6 +35,7 @@ from .presentation_broker_peer import PeerObservation, observe_peer
 from .presentation_broker_registry import BrokerRegistry, RegistryStatus
 from .presentation_input_v3 import decode_input_v3
 from .presentation_jobs import INPUT_LIMIT, MAX_PROCESSES, MAX_WAITING, FrameError
+from .presentation_readiness import SelectorReadiness
 
 _MAX_CONNECTIONS = MAX_PROCESSES + MAX_WAITING
 _MAX_WIRE = 8 + 1024 + INPUT_LIMIT + 4
@@ -163,6 +166,185 @@ class _GoWriteFact(NamedTuple):
         return "<GoWriteFact redacted>"
 
 
+
+class _PreResultScope(NamedTuple):
+    channel: object
+    sock: object
+    buffer: bytearray
+    expected: object
+    end: int
+    owner: object
+    task: object
+    loop: object
+    context: tuple
+
+    def __repr__(self):
+        return "<PreResultScope redacted>"
+
+
+class _PreResultCursor:
+    """One original-task selected-v2 BEGIN/READY frame, never cleanup permission."""
+
+    def __init__(self, channel, end, expected, owner):
+        self._initialized = self._io_unknown = self._intent = self._done = False
+        self._scope = self._scope_snapshot = self._scope_origin = None
+        self._buffer = self._buffer_origin = bytearray()
+        self._pending = self._waiter = None
+        self._received = self._target = 0
+        self._header = self._header_snapshot = None
+        self._scope = self._scope_snapshot = self._scope_origin = _PreResultScope(
+            channel, channel._socket_snapshot, self._buffer_origin, expected, end, owner,
+            asyncio.current_task(), asyncio.get_running_loop(),
+            (os.getpid(), threading.get_ident()))
+        self._initialized = True
+        _PreResultCursor._current(self)
+
+    def __repr__(self):
+        return "<PreResultCursor payload-redacted>"
+
+    def _guard(self):
+        s = self._scope
+        _require(type(self) is _PreResultCursor and type(s) is _PreResultScope
+                 and s is self._scope_snapshot and s is self._scope_origin
+                 and type(s.channel) is SocketChannel
+                 and s.channel._pre_result_cursor is self
+                 and s.channel._pre_result_cursor_snapshot is self
+                 and s.channel._pre_result_cursor_origin is self
+                 and type(s.sock) is socket.socket and s.sock is s.channel._socket_snapshot
+                 and type(s.end) is int and 0 < s.end < 1 << 63
+                 and type(s.task) is asyncio.Task and asyncio.current_task() is s.task
+                 and type(s.loop) is asyncio.SelectorEventLoop
+                 and asyncio.get_running_loop() is s.loop
+                 and asyncio.BaseEventLoop.get_task_factory(s.loop) is None
+                 and type(s.context) is tuple and len(s.context) == 2
+                 and all(type(v) is int for v in s.context)
+                 and s.context == (os.getpid(), threading.get_ident())
+                 and self._initialized is True and self._io_unknown is False
+                 and all(type(v) is bool for v in (self._intent, self._done))
+                 and type(self._buffer) is bytearray and self._buffer is self._buffer_origin
+                 and self._buffer is s.buffer
+                 and type(self._received) is int and type(self._target) is int
+                 and 0 <= self._received <= self._target <= _MAX_WIRE
+                 and len(self._buffer) == self._received and self._pending is None
+                 and (self._waiter is None or type(self._waiter) is SelectorReadiness)
+                 and self._header is self._header_snapshot)
+        if s.expected is not None:
+            _require(type(s.expected) is BrokerBinding)
+            _binding(s.expected)
+        if self._header is not None:
+            _require(type(self._header) is BrokerHeader)
+            _row(self._header)
+            _require(self._header.version == 2 and self._header.kind in ("BEGIN", "READY")
+                     and self._header.body_length <= INPUT_LIMIT + 4)
+
+    def _current(self):
+        _PreResultCursor._guard(self)
+        s = self._scope_origin
+        if s.owner is not None:
+            from .presentation_jobs import RemotePhase
+            from .presentation_remote import RemoteOperationOwner
+
+            _require(type(s.owner) is RemoteOperationOwner
+                     and s.channel._remote_owner_snapshot is s.owner)
+            RemoteOperationOwner._check(s.owner, RemotePhase.BEGIN_INTENT)
+        else:
+            _require(s.channel._remote_owner_snapshot is None)
+        _PreResultCursor._guard(self)
+        SocketChannel._remaining(s.channel, s.end)
+        if s.owner is not None:
+            RemoteOperationOwner._pre_result_local(s.owner, s.channel, s.end)
+        _PreResultCursor._guard(self)
+
+    async def _take(self, count):
+        _PreResultCursor._current(self)
+        _require(type(count) is int and 0 <= count <= _MAX_WIRE)
+        start = self._received
+        self._target = start + count
+        _require(self._target <= _MAX_WIRE and not self._done and not self._intent)
+        part = buffer = None
+        try:
+            while self._received < self._target:
+                _PreResultCursor._current(self)
+                s, buffer = self._scope_origin, self._buffer_origin
+                received, target = self._received, self._target
+                self._intent = True
+                try:
+                    part = _SOCKET_RECV(s.sock, target - received)
+                except BlockingIOError as error:
+                    if (type(error) is not BlockingIOError or type(error.errno) is not int
+                            or error.errno not in (errno.EAGAIN, errno.EWOULDBLOCK)):
+                        raise
+                    self._intent = False
+                    _PreResultCursor._current(self)
+                    waiter = SelectorReadiness.__new__(SelectorReadiness)
+                    self._waiter = waiter
+                    try:
+                        SelectorReadiness.__init__(waiter, s.sock)
+                        await SelectorReadiness.wait(waiter, s.end)
+                    except BaseException:
+                        if (getattr(waiter, "_initialized", False) is not True
+                                or waiter._unknown is not False
+                                or type(waiter._attempted) is not bool
+                                or (waiter._attempted is True and waiter._retired is not True)):
+                            self._io_unknown = True
+                        raise
+                    if (self._waiter is not waiter or waiter._initialized is not True
+                        or waiter._attempted is not True or waiter._retired is not True
+                            or waiter._unknown is not False):
+                        self._io_unknown = True
+                        _require(False)
+                    continue
+                self._pending = part
+                _require(type(part) is bytes)
+                prior_received, prior_target = self._received, self._target
+                self._received = received + len(part)
+                _require(len(part) <= target - received)
+                buffer.extend(part)
+                self._pending = None
+                self._intent = False
+                if (type(prior_received) is not int or prior_received != received
+                        or type(prior_target) is not int or prior_target != target
+                        or self._buffer is not buffer or self._buffer_origin is not buffer):
+                    self._io_unknown = True
+                    _require(False)
+                _PreResultCursor._current(self)
+                _require(bool(part))  # known zero-byte EOF, no invented progress
+            return bytes(self._buffer_origin[start:self._target])
+        finally:
+            part = buffer = None
+
+    async def frame(self):
+        scope = self._scope_origin
+        _require(type(scope) is _PreResultScope and type(scope.buffer) is bytearray)
+        original_buffer = scope.buffer
+        prefix = raw = body = frame = None
+        try:
+            prefix = await _PreResultCursor._take(self, 8)
+            raw = prefix + await _PreResultCursor._take(self, header_size(prefix))
+            s = self._scope_origin
+            header = (decode_scope_header(raw, expected_scope=s.channel._enrollment.scope,
+                                          expected_version=2) if s.expected is None else
+                      decode_header(raw, expected=s.expected, expected_version=2))
+            _require(header.kind == ("BEGIN" if s.channel._role == "broker" else "READY")
+                     and header.sequence == 0 and header.body_length <= INPUT_LIMIT + 4
+                     and (header.kind != "READY" or header.body_length == 0))
+            self._header = self._header_snapshot = header
+            body = await _PreResultCursor._take(self, header.body_length)
+            _PreResultCursor._current(self)
+            frame = BrokerFrame(header, body)
+            self._done = True
+            return frame
+        except BaseException:
+            if self._intent is not False:
+                self._io_unknown = True
+            raise
+        finally:
+            prefix = raw = body = frame = None
+            self._pending = None
+            original_buffer[:] = b"\x00" * len(original_buffer)
+            original_buffer.clear()  # never follow replaced buffer slots on refusal
+
+
 class SocketChannel:
     """Exclusive native socket, bounded frames and dedicated one-use GO, no retry.
 
@@ -195,6 +377,8 @@ class SocketChannel:
         self._go_write_fact = self._go_write_fact_snapshot = None
         self._result_writer = self._result_writer_snapshot = None
         self._result_receiver = self._result_receiver_snapshot = None
+        self._pre_result_cursor = self._pre_result_cursor_snapshot = None
+        self._pre_result_cursor_origin = None
         self._clock_owner = self._clock_owner_snapshot = None
         self._clock_closed_known = False
         try:
@@ -436,6 +620,23 @@ class SocketChannel:
             raise FrameError("BI1_BROKER_TERMINAL_CHANNEL_ADOPTED")
         self._authorize_io(owner, "receive", expected, end_ns)
         _require(not self._reading and (self._role == "broker" or expected is not None))
+        if self._enrollment.protocol_version == 2:
+            _require(self._pre_result_cursor is None and self._pre_result_cursor_snapshot is None
+                     and self._pre_result_cursor_origin is None)
+            cursor = _PreResultCursor.__new__(_PreResultCursor)
+            self._pre_result_cursor = self._pre_result_cursor_snapshot = cursor
+            self._pre_result_cursor_origin = cursor
+            self._reading = True
+            try:
+                _PreResultCursor.__init__(cursor, self, end_ns, expected, owner)
+                return await _PreResultCursor.frame(cursor)
+            except BaseException:
+                self._refused = True
+                raise
+            finally:
+                if (getattr(cursor, "_initialized", False) is True
+                        and cursor._io_unknown is False and cursor._intent is False):
+                    self._reading = False
         self._reading = True
         try:
             prefix = await self._exact(8, end_ns)

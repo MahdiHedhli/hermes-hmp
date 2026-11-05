@@ -56,8 +56,9 @@ an appended CANCEL or an invented quiescence fact; retain UNKNOWN debt instead.
 Foreign scope/task/channel/generation or lost barrier acknowledgement cannot
 transfer the cursor or permission to another operation.
 
-The normal RESULT reader now retains prefix/header/body progress and its
-original digest through the reviewed readiness/cursor integration. It does not
+The selected-v2 pre-result and normal RESULT readers now retain framing progress
+through their reviewed readiness/cursor integrations; RESULT also retains its
+original digest. It does not
 yet continue in cleanup mode. Extend that exact original cursor, rather than
 relying on `_small` locals, resetting offsets or starting a replacement reader.
 Partial RESULT uses the existing credited accumulator; after revocation it is

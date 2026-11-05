@@ -580,3 +580,32 @@ async def test_control_scope_retarget_cannot_retire_other_channel(receiver, monk
         assert not owner._adopted
     finally:
         owner._channel = owner._channel_snapshot = channel  # synthetic disposal only
+
+
+@pytest.mark.asyncio
+async def test_lost_readiness_proof_and_budget_refusal_keeps_control_claim(receiver, monkeypatch):
+    owner, channel, peer, _, _, b = receiver
+    original = cancel.SelectorReadiness.wait
+    registered = asyncio.Event()
+    callbacks = []
+
+    class Foreign:
+        def __bool__(self):
+            callbacks.append("bool")
+            raise AssertionError("foreign retirement flag")
+
+    async def wait(waiter, end):
+        registered.set()
+        await original(waiter, end)
+        waiter._retired = Foreign()
+        CancellationBudget.refuse(owner._scope_snapshot[3])
+
+    monkeypatch.setattr(cancel.SelectorReadiness, "wait", wait)
+    wire = encode_frame(b, "CANCEL", 1, b"x" * 16, version=2)
+    await asyncio.get_running_loop().sock_sendall(peer, wire[:3])
+    await registered.wait()
+    await asyncio.get_running_loop().sock_sendall(peer, wire[3:])
+    with pytest.raises(FrameError):
+        await owner._allocation_snapshot.task
+    assert callbacks == [] and owner._wire_received == 3
+    assert owner._io_unknown and channel._reading and not owner._adopted

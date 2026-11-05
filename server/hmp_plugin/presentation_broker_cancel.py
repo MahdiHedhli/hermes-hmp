@@ -402,8 +402,9 @@ class BrokerCancellationOwner:
                     SelectorReadiness.__init__(waiter, self._channel_snapshot._socket_snapshot)
                     await SelectorReadiness.wait(waiter, cutoff)
                 except BaseException as error:
-                    if (getattr(waiter, "_initialized", False) is not True or waiter._unknown
-                            or (waiter._attempted and not waiter._retired)):
+                    if (getattr(waiter, "_initialized", False) is not True
+                            or waiter._unknown is not False or type(waiter._attempted) is not bool
+                            or (waiter._attempted is True and waiter._retired is not True)):
                         self._io_unknown = True
                     elif type(error) is TimeoutError:
                         # Same original controller/cursor, native clock and first-cause
@@ -411,8 +412,9 @@ class BrokerCancellationOwner:
                         BrokerCancellationOwner._remaining(self)
                         continue
                     raise
-                BrokerCancellationOwner._remaining(self)
-                if self._waiter is not waiter or not waiter._retired or waiter._unknown:
+                if (self._waiter is not waiter or waiter._initialized is not True
+                        or waiter._attempted is not True or waiter._retired is not True
+                        or waiter._unknown is not False):
                     self._io_unknown = True
                     _refuse()
                 continue  # recheck original budget and recv without a second reader

@@ -878,7 +878,8 @@ async def test_eagain_after_cancellation_has_no_second_readiness_registration(
     registrations = []
 
     def initialize(waiter, sock):
-        if sock is row[3]._socket_snapshot:
+        if (sock is row[3]._socket_snapshot
+                and remote._result_owner_snapshot is not None):
             registrations.append(waiter)
         return original_init(waiter, sock)
 
@@ -896,3 +897,112 @@ async def test_eagain_after_cancellation_has_no_second_readiness_registration(
     assert cursor.received == cursor.body_received == cursor.body_committed == 0
     assert cursor.pending is None and cursor.io_unknown is False
     assert row[3]._reading is False and remote._job_origin_snapshot.result is None
+
+
+@pytest.mark.parametrize("fault", ["owner", "budget", "fence", "policy", "policy_closed",
+                                  "epoch", "revoked"])
+async def test_pre_result_last_channel_sample_cannot_revive_remote_work(
+    coupled_result, monkeypatch, fault
+):
+    from hmp_plugin.presentation_cancel_budget import CancellationBudget
+    from hmp_plugin.presentation_clock import NativeClockOwner
+
+    remote, row, _, _ = coupled_result
+    channel = row[3]
+    original_remaining, original_sample = SocketChannel._remaining, NativeClockOwner.sample
+    original_recv = result._SOCKET_RECV
+    original_initialize = result.SelectorReadiness.__init__
+    active, tripped, callbacks = [], [], []
+
+    def remaining(current, end):
+        active.append(current is channel)
+        try:
+            return original_remaining(current, end)
+        finally:
+            active.pop()
+
+    def sample(clock):
+        now = original_sample(clock)
+        cursor = channel._pre_result_cursor_origin
+        if (active and active[-1] and not tripped and cursor is not None
+                and cursor._initialized and cursor._target > cursor._received):
+            tripped.append(True)
+            record, job = remote._record_snapshot, remote._job_origin_snapshot
+            if fault == "owner":
+                remote._failed = True
+            elif fault == "budget":
+                CancellationBudget.local(record.cleanup_budget_snapshot, now)
+            elif fault == "fence":
+                record.fence.retire()
+            elif fault == "policy":
+                record.policy_work._invalid = True
+            elif fault == "policy_closed":
+                record.policy_work._policy.uncertain = True
+            elif fault == "epoch":
+                record.owner._epoch += 1
+            else:
+                job.emit_revoked = True
+        return now
+
+    def recv(sock, count):
+        if sock is channel._socket_snapshot and tripped:
+            callbacks.append("recv")
+            raise AssertionError("revoked preRESULT must not recv")
+        return original_recv(sock, count)
+
+    def initialize(waiter, sock):
+        if sock is channel._socket_snapshot and tripped:
+            callbacks.append("readiness")
+            raise AssertionError("revoked preRESULT must not register")
+        return original_initialize(waiter, sock)
+
+    monkeypatch.setattr(SocketChannel, "_remaining", remaining)
+    monkeypatch.setattr(NativeClockOwner, "sample", sample)
+    from hmp_plugin import presentation_broker_service as service
+    monkeypatch.setattr(service, "_SOCKET_RECV", recv)
+    monkeypatch.setattr(result.SelectorReadiness, "__init__", initialize)
+    with pytest.raises(AuthorityRefusalError):
+        await remote.begin_ready()
+    assert tripped and callbacks == []
+    cursor = channel._pre_result_cursor_origin
+    assert cursor._received == 0 and not cursor._scope_origin.buffer
+    assert remote._job_origin_snapshot.result is None and not channel._reading
+
+
+async def test_lost_readiness_proof_and_work_refusal_keeps_result_claim(
+    coupled_result, monkeypatch
+):
+    from hmp_plugin.presentation_clock import NativeClockOwner
+
+    remote, row, _, _ = coupled_result
+    original = result.SelectorReadiness.wait
+    callbacks, changed = [], []
+
+    class Foreign:
+        def __bool__(self):
+            callbacks.append("bool")
+            raise AssertionError("foreign retirement flag")
+
+    async def wait(waiter, end):
+        await original(waiter, end)
+        if (waiter._origin_scope.sock is row[3]._socket_snapshot
+                and remote._result_owner_snapshot is not None):
+            waiter._retired = Foreign()
+            remote._job_origin_snapshot.emit_revoked = True
+            changed.append(True)
+
+    monkeypatch.setattr(result.SelectorReadiness, "wait", wait)
+    assert await remote.begin_ready() and await remote.go()
+    with pytest.raises(AuthorityRefusalError):
+        await remote.result_ready()
+    cursor = remote._result_owner_snapshot._cursor_origin
+    assert changed and callbacks == [] and cursor.received == 0
+    assert cursor.io_unknown and row[3]._reading and remote._job_origin_snapshot.result is None
+    cleanup = remote._cleanup_owner_snapshot._allocations_snapshot[0].task
+    with suppress(BaseException):
+        await asyncio.wait_for(asyncio.shield(cleanup), 1)
+    assert cleanup.done()
+    # Fixture-only disposal, with production closure facts still unknown.
+    assert NativeClockOwner.close_local(row[3]._clock_owner_snapshot)
+    row[3]._socket_snapshot.close()
+    assert not row[3]._closed_known and not row[3]._clock_closed_known

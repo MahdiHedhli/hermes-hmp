@@ -554,3 +554,14 @@ expiry, and unknown IO/read claims. A valid elapsed readiness end returns a know
 no-registration timeout. Existing native-clock/budget checks decide continuation;
 no new interval or authority follows from the timeout. No module/dependency,
 route, destination or ACK/release activation is added. See [control cursor](../../046-bot-presentation-integration/BROKER_CONTROL_CURSOR.md).
+
+
+### BI1 selected-v2 pre-result framing (November 5, 2026)
+
+Existing `presentation_broker_service.py` retains bounded original-task BEGIN/READY
+framing with readiness only on EAGAIN. The existing remote owner supplies a
+callback-free final local custody fence after channel clock sampling. Readiness
+metadata proof precedes later current/native checks for all selected-v2 callers.
+No module, dependency, route, permission or network destination is added; v1
+remains unchanged. No cleanup/terminal/release qualification follows from framing.
+See [pre-result cursor](../../046-bot-presentation-integration/PRE_RESULT_CURSOR.md).

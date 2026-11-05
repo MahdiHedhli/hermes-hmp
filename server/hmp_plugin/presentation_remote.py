@@ -24,7 +24,7 @@ from .presentation_cancel_budget import CancellationBudget
 from .presentation_clock import ClockDomain, NativeClockOwner
 from .presentation_input_v3 import decode_input_v3
 from .presentation_jobs import CapturedLease, JobHandle, JobOwner, RemotePhase, State, _Job
-from .presentation_parent_policy import ParentPolicyReadOwner
+from .presentation_parent_policy import ParentPolicyReadOwner, _HeldDirectory
 from .presentation_policy_binding import NativePolicyWork
 from .presentation_policy_thread import PolicyThreadOwner
 
@@ -260,6 +260,64 @@ class RemoteOperationOwner:
                 or r.cleanup_budget is not r.cleanup_budget_snapshot
                 or self._failed is not False):
             raise AuthorityRefusalError
+
+    def _pre_result_local(self, channel, end):
+        """Callback-free custody/latch fence after the last channel clock sample."""
+        from .presentation_budget import PresentationWorkLedger
+        from .presentation_remote_cleanup import RemoteCleanupOwner
+
+        RemoteOperationOwner._retained_local(self)
+        RemoteOperationOwner._clock_binding(self)
+        a, r, job = self._authority_snapshot, self._record_snapshot, self._job_origin_snapshot
+        work = r.policy_work
+        if (channel is not self._channel_snapshot or end is not self._end_snapshot
+                or self._end is not end or type(end) is not int
+                or a.owner is not r.owner or a._disabled is not False
+                or r.owner._disabled is not False or type(a._by_operation) is not dict
+                or type(r.operation) is not OpaqueOperation
+                or a._by_operation.get(r.operation) is not r or r.remote_operation is not self
+                or r.initial_complete is not True
+                or r.child is not None or r.process_owner is not None
+                or r.reader_supervisor is not None or r.native_claim is not None
+                or type(r.fence._epoch) is not int or r.fence._epoch != r.fence_epoch
+                or r.fence._retired is not False
+                or type(r.owner._epoch) is not int
+                or self._lease_values is not self._lease_values_snapshot
+                or type(self._lease_values_snapshot) is not tuple
+                or len(self._lease_values_snapshot) != 8
+                or any(type(v) is not str or len(v) > 256
+                       for v in self._lease_values_snapshot[:7])
+                or type(self._lease_values_snapshot[7]) is not int
+                or RemoteOperationOwner._lease_tuple(r.lease) != self._lease_values_snapshot
+                or r.owner._epoch != r.lease.epoch or job.lease is not r.lease
+                or job.state is not State.STARTING
+                or job.remote_phase is not RemotePhase.BEGIN_INTENT
+                or job.emit_revoked is not False
+                or job.parent_result_context is not self._seal_snapshot[5]
+                or work._invalid is not False or work._construction_finished is not True
+                or work._postchecked is not True or work._transfer_attempted is not True
+                or work._packet is not self._packet_snapshot
+                or work._packet_snapshot is not self._packet_snapshot
+                or type(work._thread) is not PolicyThreadOwner
+                or type(work._policy) is not ParentPolicyReadOwner
+                or work._thread.policy is not work._policy
+                or work._thread.joined is not True or work._thread.uncertain is not False
+                or work._policy.uncertain is not False or work._policy._pending_fd is not None
+                or type(work._policy._held) is not list
+                or len(work._policy._held) > PresentationWorkLedger._LIMITS["opens"]):
+            raise AuthorityRefusalError
+        for row in work._policy._held:
+            if type(row) is not _HeldDirectory or row.closed is not True:
+                raise AuthorityRefusalError
+        cleanup = self._cleanup_owner_snapshot
+        if type(cleanup) is not RemoteCleanupOwner:
+            raise AuthorityRefusalError
+        RemoteCleanupOwner.authorize_work(cleanup)  # retained metadata only, no clock sampling
+        original, _, cleanup_end, failed = CancellationBudget.inspect(r.cleanup_budget_snapshot)
+        if original != end or cleanup_end is not None or failed:
+            raise AuthorityRefusalError
+        RemoteOperationOwner._retained_local(self)
+        _task_allows_work()
 
     def _work_now(self):
         RemoteOperationOwner._retained_local(self)

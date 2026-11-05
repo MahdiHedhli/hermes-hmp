@@ -579,13 +579,16 @@ class RemoteResultOwner:
                 await SelectorReadiness.wait(waiter, s.deadline)
             except BaseException:
                 if (getattr(waiter, "_initialized", False) is not True
-                        or waiter._unknown is True
-                        or (waiter._attempted and not waiter._retired)):
+                        or waiter._unknown is not False or type(waiter._attempted) is not bool
+                        or (waiter._attempted is True and waiter._retired is not True)):
                     cursor.io_unknown = True
                 raise
+            if (cursor.waiter is not waiter or waiter._initialized is not True
+                    or waiter._attempted is not True or waiter._retired is not True
+                    or waiter._unknown is not False):
+                cursor.io_unknown = True
+                _require(False)
             RemoteResultOwner._current(self)
-            _require(cursor.waiter is waiter and waiter._retired is True
-                     and waiter._unknown is False)
             received, body_received = cursor.received, cursor.body_received
             held_header = self._header_snapshot
             cursor.recv_intent = True
