@@ -1,3 +1,27 @@
+## Cancellation-safe broker control reader — November 5, 2026
+
+HMP `b0f9d5e` retains the original GO/CANCEL controller's bounded framing and
+cumulative received offsets. It tries concrete nonblocking receive immediately;
+only exact EAGAIN/EWOULDBLOCK waits for owned readiness. This preserves queued
+CANCEL priority before resource relay. Partial control frames remain on the same
+Task across the original work-to-cleanup deadline transition. Known EOF settles
+local receive; uncertain registration, receive or commit retains the read claim.
+No fresh interval, replacement reader or closure fact is inferred.
+
+Independent review passes 153 focused tests plus the final cross-channel isolation
+causal on Python 3.13. Root Python 3.11.15 and standalone 3.14.4 each pass 1,898
+tests plus 190 subtests, with one Linux-native skip. Lint, plugin surface, privacy
+and diff checks pass.
+The previous result-cursor head `251e08c` CI42081121740 succeeded.
+
+This is normal control-reader source, not ACK continuation or image publication.
+Gateway preRESULT cursor integration, cleanup-only reading/timeout shortening,
+qualified terminal acceptance and native completion remain before character-image
+routes. Bot characters and host-local images are still unfinished on phones.
+Development build 2026110501 remains installed on iPad Pro and iPhone 15 Pro Max.
+iPad launch/liveness passed; iPhone launch remains pending because it was locked.
+No host plugin, permissions or provider settings changed. See [broker control cursor](specs/046-bot-presentation-integration/BROKER_CONTROL_CURSOR.md).
+
 ## Retained normal image-result reader and iOS development candidate — November 5, 2026
 
 HMP `e4fb280` integrates readiness-only notification into the original normal
