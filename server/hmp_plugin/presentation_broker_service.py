@@ -233,7 +233,8 @@ class SocketChannel:
         loop = asyncio.get_running_loop()
         while len(data) < count:
             remaining = self._remaining(end_ns)  # validate before creating the IO coroutine
-            part = await asyncio.wait_for(loop.sock_recv(self._socket, count - len(data)), remaining)
+            part = await asyncio.wait_for(
+                loop.sock_recv(self._socket, count - len(data)), remaining)
             self._remaining(end_ns)
             _require(type(part) is bytes and 0 < len(part) <= count - len(data))
             data.extend(part)
