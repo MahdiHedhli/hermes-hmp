@@ -64,3 +64,8 @@ native case status must be assessed from exact-run evidence, not green totals.
    terminal proof, credential retirement, runtime admission, authenticated routes,
    full character rendering and signed physical qualification. Host-local images
    follow character delivery; these requirements are not replaced by framing.
+
+The subsequent [PID-realm source repair](PROC_PID_REALM.md) closes the foreign-
+proc-view qualification gap before selected-v2 publication. Its focused clock/
+selected convergence passes 106 cases with one Linux-native skip independently
+on Python 3.13; actual Linux repair qualification is still separate.

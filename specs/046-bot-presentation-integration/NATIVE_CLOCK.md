@@ -128,3 +128,12 @@ include the ninth protocol field. Concrete clock sampling/closure boundaries
 resist instance overrides; socket and clock-FD close facts remain separate.
 v2 cancellation, status lifecycle, broker dispatch and native work are still
 closed until the original-budget/cleanup integration is complete.
+
+## Proc PID realm repair before selected-v2 publication
+
+The [self-pidfd/fdinfo realm qualifier](PROC_PID_REALM.md) now runs before
+numeric peer namespace paths. Actual procfs origin alone was insufficient for
+a foreign PID-namespace proc mount. Two additional retained descriptors prove
+the caller/proc realm without PID1 access, and native namespace type checks
+require active time namespaces. Trusted unmodified proc layout remains explicit;
+this does not defend against a privileged administrator replacing submounts.

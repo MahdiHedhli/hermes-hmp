@@ -126,6 +126,7 @@ class LinuxModel:
         self.close_error = None
         self.namespace_drift = False
         self.boot = BOOT + b"\n"
+        self.info = f"Pid:\t{os.getpid()}\nNSpid:\t{os.getpid()}\n".encode("ascii")
         self.peer_pid = channel._check().pid
         monkeypatch.setattr(clock, "sys", SimpleNamespace(platform="linux"))
         monkeypatch.setattr(clock.NativeClockOwner, "_implementation",
@@ -138,12 +139,14 @@ class LinuxModel:
         api.stat = self.stat
         api.fstat = self.fstat
         api.lseek = lambda *args: 0
-        api.read = lambda *args: self.boot
+        api.read = self.read
+        api.pidfd_open = self.self_pidfd
         api.uname = lambda: SimpleNamespace(machine="x86_64")
         monkeypatch.setattr(clock, "os", api)
         monkeypatch.setattr(clock, "_GETSOCKOPT", self.pidfd)
         monkeypatch.setattr(clock, "_identity", self.identity)
         monkeypatch.setattr(clock, "_filesystem", self.filesystem)
+        monkeypatch.setattr(clock, "_namespace_kind", lambda fd: 0x80)
         monkeypatch.setattr(clock, "select",
                             SimpleNamespace(poll=self.poll, POLLIN=1, POLLHUP=16, POLLERR=8))
 
@@ -155,6 +158,17 @@ class LinuxModel:
     def pidfd(self, sock, level, option):
         assert type(sock) is socket.socket and level == socket.SOL_SOCKET and option == 77
         return self.acquire("pidfd")
+
+    def self_pidfd(self, pid, flags):
+        assert pid == os.getpid() and flags == 0
+        return self.acquire("ownpidfd")
+
+    def read(self, fd, count):
+        if self.entries[fd].startswith("self/fdinfo/"):
+            assert count == clock._FDINFO_LIMIT + 1
+            return self.info
+        assert count == 38
+        return self.boot
 
     def open(self, name, flags, *, dir_fd):
         self.paths.append(name)
@@ -180,9 +194,12 @@ class LinuxModel:
         if name == self.bad_fs:
             return 0
         return (clock._NSFS if name.endswith("/ns/time") else
-                0x09041934 if name == "pidfd" else clock._PROCFS)
+                0x09041934 if name in ("pidfd", "ownpidfd") else clock._PROCFS)
 
     def stat(self, name, **kwargs):
+        if name.startswith("self/fdinfo/"):
+            fd = next(fd for fd, value in self.entries.items() if value == name)
+            return SimpleNamespace(st_dev=4, st_ino=fd, st_mode=0o100444)
         assert name in ("self/ns/time", f"{self.peer_pid}/ns/time")
         inode = 201 if self.namespace_drift else 200
         return SimpleNamespace(st_dev=4, st_ino=inode, st_mode=0o100444)
@@ -213,11 +230,12 @@ async def test_linux_matches_actual_namespace_not_children_and_retains_all_fds(
     owner = clock.NativeClockOwner(channel)
     assert owner._domain.namespace == (4, 200)
     assert owner.sample() >= owner._last_ns
-    assert model.paths == ["/proc", "sys/kernel/random/boot_id", "self/ns/time",
+    assert model.paths == ["/proc", "sys/kernel/random/boot_id",
+                           f"self/fdinfo/{owner._own_pidfd.fd}", "self/ns/time",
                            f"{model.peer_pid}/ns/time"]
-    assert len(owner._records) == 5
-    assert owner.close_local() and len(model.closed) == 5
-    assert owner.close_local() and len(model.closed) == 5
+    assert len(owner._records) == 7
+    assert owner.close_local() and len(model.closed) == 7
+    assert owner.close_local() and len(model.closed) == 7
 
 
 @pytest.mark.asyncio
@@ -270,7 +288,7 @@ async def test_partial_fstat_and_close_ambiguity_remain_retained_without_retry(
     assert owner.close_local() is False
     assert owner._pidfd.unknown and owner._pidfd.close_attempted
     assert owner.close_local() is False
-    assert len(model.closed) == 5 and model.closed.count(model.close_error) == 1
+    assert len(model.closed) == 7 and model.closed.count(model.close_error) == 1
 
 
 @pytest.mark.asyncio
@@ -298,7 +316,7 @@ async def test_noop_close_never_becomes_known_closure(gateway, monkeypatch):
     monkeypatch.setattr(clock.os, "close", lambda fd: calls.append(fd))
     assert owner.close_local() is False
     assert owner.close_local() is False
-    assert len(calls) == 5 and model.closed == []
+    assert len(calls) == 7 and model.closed == []
     assert all(record.unknown and not record.closed for record in owner._record_refs)
 
 
@@ -571,12 +589,12 @@ async def test_cleanup_uses_original_own_namespace_without_peer_lookup(gateway, 
     paths = []
     def only_local(path, **kwargs):
         paths.append(path)
-        assert path == "self/ns/time"
+        assert path == "self/ns/time" or path.startswith("self/fdinfo/")
         return own_stat(path, **kwargs)
     monkeypatch.setattr(clock.os, "stat", only_local)
     monkeypatch.setattr(owner, "_live", lambda: pytest.fail("no peer liveness for local time"))
     assert owner.cleanup_sample() >= owner._last_ns
-    assert paths == ["self/ns/time"]
+    assert paths == [f"self/fdinfo/{owner._own_pidfd.fd}", "self/ns/time"]
     model.namespace_drift = True
     with pytest.raises(FrameError):
         owner.cleanup_sample()
@@ -644,4 +662,66 @@ async def test_actual_channel_local_or_wrapped_unknown_failure_poison_cleanup(
     # Restore test metadata so the fixture can retire its original owned socket.
     channel._context = channel._context_snapshot
     channel._socket = channel._socket_snapshot
+    assert owner.close_local()
+
+
+def test_self_pidfd_fdinfo_realm_accepts_only_current_single_namespace():
+    clock._pid_realm(b"pos:\t0\nflags:\t02000002\nPid:\t123\nNSpid:\t123\n", 123)
+
+
+@pytest.mark.parametrize("data", [
+    b"Pid:\t123\nNSpid:\t123\t123\n",  # identical numbers still span two realms
+    b"Pid:\t321\nNSpid:\t123\n",
+    b"Pid:\t123\nNSpid:\t321\n",
+    b"Pid:\t123\nNSpid:\t0\n",
+    b"Pid:\t123\n", b"NSpid:\t123\n",
+    b"Pid:\t123\nPid:\t123\nNSpid:\t123\n",
+    b"Pid:\t123\nNSpid:\t123\nNSpid:\t123\n",
+    b"Pid:\t123 extra\nNSpid:\t123\n",
+    b"Pid:\t123\nNSpid:\t123",
+    b"Pid:\t+123\nNSpid:\t123\n",
+    b"Pid:\t0123\nNSpid:\t123\n",
+    b"Pid:\t123\r\nNSpid:\t123\n",
+    b"Pid:\t123\nNSpid:\t123\ninvalid\n",
+    b"Pid:\t123\nNSpid:\t123\nextra:\t\xff\n",
+    b"x" * 2049,
+    bytearray(b"Pid:\t123\nNSpid:\t123\n"), None,
+])
+def test_self_realm_malformed_ancestor_or_truncated_metadata_refuses(data):
+    with pytest.raises(FrameError):
+        clock._pid_realm(data, 123)
+
+
+@pytest.mark.asyncio
+async def test_foreign_pid_proc_view_refuses_before_numeric_peer_path(gateway, monkeypatch):
+    channel, _, _ = gateway
+    model = LinuxModel(channel, monkeypatch)
+    model.info = f"Pid:\t{os.getpid()}\nNSpid:\t{os.getpid()}\t{os.getpid()}\n".encode()
+    with pytest.raises(clock.ClockAcquisitionError) as error:
+        clock.NativeClockOwner(channel)
+    owner = error.value.failed_owner
+    assert f"{model.peer_pid}/ns/time" not in model.paths
+    assert "self/ns/time" not in model.paths
+    assert owner._qualification is None and owner.close_local()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("failure", ["realm_drift", "wrong_namespace_type", "fdinfo_origin"])
+async def test_realm_or_namespace_kind_loss_is_permanent_local_poison(
+    gateway, monkeypatch, failure
+):
+    channel, _, _ = gateway
+    model = LinuxModel(channel, monkeypatch)
+    owner = clock.NativeClockOwner(channel)
+    if failure == "realm_drift":
+        model.info = f"Pid:\t{os.getpid()}\nNSpid:\t1\t{os.getpid()}\n".encode()
+    elif failure == "wrong_namespace_type":
+        monkeypatch.setattr(clock, "_namespace_kind", lambda fd: 0x20000000)  # PID, not time
+    else:
+        model.bad_fs = model.entries[owner._fdinfo.fd]
+    with pytest.raises(FrameError):
+        owner.sample()
+    assert owner._local_lost
+    with pytest.raises(FrameError):
+        owner.cleanup_sample()
     assert owner.close_local()

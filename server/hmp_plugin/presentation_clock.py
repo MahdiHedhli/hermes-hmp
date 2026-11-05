@@ -31,6 +31,7 @@ _NSFS = 0x6E736673
 _PIDFD_FS = frozenset((0x09041934, 0x50494446))  # anon_inodefs, later pidfs
 # Linux v6.6 UAPI asm-generic/socket.h. No numeric-PID fallback.
 _SO_PEERPIDFD = 77
+_FDINFO_LIMIT = 2048
 _UUID = re.compile(rb"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}\Z")
 
 
@@ -66,6 +67,38 @@ def _filesystem(fd: int) -> int:
     buffer = (ctypes.c_long * 32)()
     _require(api(fd, ctypes.byref(buffer)) == 0)
     return buffer[0]
+
+
+def _namespace_kind(fd: int) -> int:
+    import fcntl
+
+    # Linux UAPI nsfs.h _IO(0xb7, 3), read-only; never enters a namespace.
+    value = fcntl.ioctl(fd, 0xB703)
+    _require(type(value) is int)
+    return value
+
+
+def _pid_realm(data: bytes, pid: int) -> None:
+    """A SELF pidfd's one-element NSpid proves the proc mount's PID realm.
+
+    The kernel prints ancestors as additional elements even when numeric PIDs
+    coincide. Native proc origin and a trusted unmodified subtree are required.
+    """
+    _require(type(pid) is int and 1 < pid < 1 << 31
+             and type(data) is bytes and 0 < len(data) <= _FDINFO_LIMIT
+             and data.endswith(b"\n"))
+    lines = data[:-1].split(b"\n")
+    _require(len(lines) <= 32)
+    rows = {}
+    for line in lines:
+        key, sep, value = line.partition(b":")
+        _require(sep == b":" and 0 < len(key) <= 32 and len(value) <= 256
+                 and all(c in b"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789"
+                         for c in key)
+                 and all(c == 9 or 32 <= c < 127 for c in value) and key not in rows)
+        rows[key] = value.strip(b" \t").split()
+    expected = [str(pid).encode("ascii")]
+    _require(rows.get(b"Pid") == expected and rows.get(b"NSpid") == expected)
 
 
 def _identity(fd: int) -> tuple[int, int, int]:
@@ -134,6 +167,7 @@ class NativeClockOwner:
         self._domain: ClockDomain | None = None
         self._peer = self._peer_values = self._channel_values = self._channel_identity = None
         self._proc = self._pidfd = self._bootfd = self._ownns = self._peerns = None
+        self._own_pidfd = self._fdinfo = None
         self._last_ns: int | None = None
         try:
             _require(type(channel) is SocketChannel and self._platform in ("darwin", "linux"))
@@ -224,6 +258,17 @@ class NativeClockOwner:
         self._bootfd = self._open("sys/kernel/random/boot_id", os.O_RDONLY | os.O_NOFOLLOW,
                                   parent=self._proc.fd)
         _require(_filesystem(self._bootfd.fd) == _PROCFS)
+        self._own_pidfd = self._slot()
+        try:
+            self._own_pidfd.fd = self._own_pidfd.original_fd = os.pidfd_open(os.getpid(), 0)
+        except OSError:
+            self._own_pidfd.no_fd_known = True
+            raise
+        self._seal(self._own_pidfd)
+        _require(_filesystem(self._own_pidfd.fd) in _PIDFD_FS)
+        self._fdinfo = self._open(f"self/fdinfo/{self._own_pidfd.fd}",
+                                  os.O_RDONLY | os.O_NOFOLLOW, parent=self._proc.fd)
+        self._proc_pid_realm()  # BEFORE any numeric peer process path
         # Deliberate kernel namespace-link following; O_NOFOLLOW would refuse
         # nsfs itself. There are no caller-selected path components.
         self._ownns = self._open("self/ns/time", os.O_RDONLY, parent=self._proc.fd)
@@ -231,6 +276,8 @@ class NativeClockOwner:
                                   parent=self._proc.fd)
         _require(_filesystem(self._ownns.fd) == _NSFS
                  and _filesystem(self._peerns.fd) == _NSFS
+                 and _namespace_kind(self._ownns.fd) == 0x80
+                 and _namespace_kind(self._peerns.fd) == 0x80
                  and self._ownns.identity[:2] == self._peerns.identity[:2])
         self._linux_current()
 
@@ -240,8 +287,29 @@ class NativeClockOwner:
         _require(len(value) == 37 and value[-1:] == b"\n")
         return _uuid(value[:-1])
 
+    def _proc_pid_realm(self) -> None:
+        self._local_ownership()
+        for held in (self._proc, self._own_pidfd, self._fdinfo):
+            _require(type(held) is _Descriptor)
+            observed = _identity(held.fd)
+            self._local_ownership()
+            _require(_ints(observed, 3) and observed == held.identity)
+        _require(_filesystem(self._proc.fd) == _PROCFS
+                 and _filesystem(self._own_pidfd.fd) in _PIDFD_FS
+                 and _filesystem(self._fdinfo.fd) == _PROCFS)
+        row = os.stat(f"self/fdinfo/{self._own_pidfd.fd}", dir_fd=self._proc.fd,
+                      follow_symlinks=False)
+        observed = (row.st_dev, row.st_ino, row.st_mode)
+        self._local_ownership()
+        _require(_ints(observed, 3) and observed == self._fdinfo.identity)
+        os.lseek(self._fdinfo.fd, 0, os.SEEK_SET)
+        data = os.read(self._fdinfo.fd, _FDINFO_LIMIT + 1)
+        self._local_ownership()
+        _pid_realm(data, os.getpid())
+
     def _linux_current(self) -> None:
         self._live()
+        self._proc_pid_realm()
         _require(_filesystem(self._proc.fd) == _PROCFS
                  and _filesystem(self._bootfd.fd) == _PROCFS
                  and _filesystem(self._pidfd.fd) in _PIDFD_FS)
@@ -319,12 +387,14 @@ class NativeClockOwner:
                  and domain.boot is values[2] and domain.namespace is values[3])
         _require(len(self._records) == len(self._seals))
         if self._platform == "linux":
-            _require(len(self._record_refs) == 5
+            _require(len(self._record_refs) == 7
                      and self._proc is self._record_refs[0]
                      and self._pidfd is self._record_refs[1]
                      and self._bootfd is self._record_refs[2]
-                     and self._ownns is self._record_refs[3]
-                     and self._peerns is self._record_refs[4])
+                     and self._own_pidfd is self._record_refs[3]
+                     and self._fdinfo is self._record_refs[4]
+                     and self._ownns is self._record_refs[5]
+                     and self._peerns is self._record_refs[6])
 
     def _peer_matches(self, peer: PeerObservation) -> None:
         _require(type(peer) is PeerObservation and type(peer.uid) is int
@@ -346,6 +416,7 @@ class NativeClockOwner:
             self._clock_guard()
             self._peer_matches(peer)
             if self._platform == "linux":
+                self._proc_pid_realm()
                 self._live()
                 try:
                     row = os.stat(f"{self._peer.pid}/ns/time", dir_fd=self._proc.fd,
@@ -374,11 +445,14 @@ class NativeClockOwner:
             self._clock_guard()
             _require(type(implementation) is str and implementation == self._domain.implementation)
             if self._platform == "linux":
+                self._proc_pid_realm()
                 _require(_filesystem(self._proc.fd) == _PROCFS
                          and _filesystem(self._bootfd.fd) == _PROCFS
                          and _filesystem(self._pidfd.fd) in _PIDFD_FS
                          and _filesystem(self._ownns.fd) == _NSFS
                          and _filesystem(self._peerns.fd) == _NSFS)
+                _require(_namespace_kind(self._ownns.fd) == 0x80
+                         and _namespace_kind(self._peerns.fd) == 0x80)
                 row = os.stat("self/ns/time", dir_fd=self._proc.fd, follow_symlinks=True)
                 observed = (row.st_dev, row.st_ino, row.st_mode)
                 _require(_ints(observed, 3) and observed == self._ownns.identity
