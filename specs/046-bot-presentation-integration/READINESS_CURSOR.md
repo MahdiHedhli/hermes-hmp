@@ -6,9 +6,10 @@ A bounded synthetic socketpair probe on Python3.11 proved that the default
 selector sock_recv callback can consume bytes into its internal Future and then
 Task.cancel can win before the original task resumes. In that observation 22
 synthetic bytes left the kernel, while the original task received zero. Saving a
-cursor only after await cannot recover that offset. The current result/control
-paths still use sock_recv; no cleanup-reader resumption is enabled there. They
-must retain UNKNOWN rather than guess a frame boundary after ambiguity.
+cursor only after await cannot recover that offset. The normal RESULT path now uses the readiness/cursor integration below; other
+service/control paths still use sock_recv. No cleanup-reader resumption is
+enabled. They must retain UNKNOWN rather than guess a frame boundary after
+ambiguity.
 
 ## Owned readiness primitive
 
@@ -50,10 +51,10 @@ channel on a fabricated no-reader fact. The primitive never closes the socket.
 
 ## Remaining whole receive/cursor integration
 
-This standalone native primitive is not yet called by the HMP receive paths.
-Bind it to the exact retained channel/work task/cursor/budget/clock before use.
-Preserve outer prefix/header and body-consumption offsets, pending bounded chunks
-and original credited accumulator identity across every await. Actual recv and
+Normal RESULT reads now bind the primitive to their retained channel/work task,
+cursor and original work deadline as described below. Cleanup-mode transport
+integration remains. Preserve outer prefix/header and body-consumption offsets,
+pending bounded chunks and original credited accumulator identity across every await. Actual recv and
 progress capture must precede native callbacks or later awaits; revoked result
 bytes become bounded discard, never a new candidate. Hold an explicit ambiguous
 recv/commit intent if either side is uncertain. Do not recover by scanning bytes
@@ -66,3 +67,33 @@ adoption before subsequent cleanup IO, native PRE_EMIT/DRAIN and credential
 retirement remain mandatory before terminal dispatch, release or public images.
 No helper hint, registration flag or codec is a qualification capability. Trusted
 installed Python/default-loop ownership is a premise, not a memory sandbox.
+
+## Normal RESULT reader integration
+
+The normal gateway RESULT reader now retains one original-task cursor. It keeps
+outer prefix/header target and consumed offsets, total wire/body received and
+body committed offsets, the original streaming digest and bounded pending chunk.
+Each readiness allocation is retained before initialization and registration.
+After positively retired readiness and a fresh original-work/native check,
+concrete nonblocking recv stores its result and advances consumed offsets before
+another check, callback or await. The original task commits the pending chunk to
+the outer header or original credited body accumulator before waiting again.
+Only an exact EAGAIN/EWOULDBLOCK error resolves zero consumption; the retry
+rechecks current authority and reuses the same original absolute end. Counter
+arithmetic uses validated primitive values held before recv; replaced counters
+refuse after consumed-byte capture without invoking foreign methods.
+EOF refuses the candidate.
+
+An explicit recv or commit intent survives uncertainty. Unknown readiness
+retirement or uncertain syscall/commit outcome keeps the read claim even after
+the original task finishes. Failure wipes only original outer/pending/body
+payload custody; consumed-count metadata remains. No scan, replay, second reader
+or fresh deadline is introduced. A successfully retired notification followed by
+cancellation consumes no further kernel bytes.
+
+This integrates normal RESULT reading only. Service BEGIN/GO/control receive
+paths are unchanged, and whole-work-task join before CANCEL remains mandatory.
+No cleanup-mode resumption, active first-cause timeout shortening, qualified
+terminal acceptance or native release follows from these counters. Those remain
+the coupled next integration, including exact retained framing state at both
+transport ends and current authority before cleanup-only IO.

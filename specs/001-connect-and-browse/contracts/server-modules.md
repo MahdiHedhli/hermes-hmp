@@ -533,3 +533,14 @@ There is no route, tool, provider, socket close or native authority import. The
 module is explicitly admitted to the closed module set; exact-tree, Hermes-free
 and optional local-media isolation checks remain enforced. HMP receive paths and
 retained cursor integration are not activated by admitting this primitive.
+
+
+### BI1 normal RESULT cursor integration (November 5, 2026)
+
+The existing `presentation_result_transport.py` now uses owned readiness plus
+concrete nonblocking receive on its original work Task. Retained bounded framing,
+consumption and commit offsets survive awaits; original custody alone is wiped
+on refusal. Unknown registration/syscall/commit outcome retains the read claim.
+No dependency, route, registration or network destination is added. Service/control
+receive paths, cleanup-reader activation, terminal acceptance and release remain
+separate gates. See [cursor ownership](../../046-bot-presentation-integration/READINESS_CURSOR.md).

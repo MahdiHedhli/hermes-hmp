@@ -3,6 +3,7 @@
 No real host data, public image response, terminal proof or native release.
 """
 import asyncio
+import errno
 import hashlib
 import os
 from contextlib import suppress
@@ -161,7 +162,7 @@ async def test_duplicate_candidate_wait_revokes_and_wipes_original(coupled_resul
 
 async def test_foreign_buffer_during_read_never_receives_feed_or_wipe(coupled_result, monkeypatch):
     remote, row, _, _ = coupled_result
-    original = result._LOOP.sock_recv
+    original = result.SelectorReadiness.wait
     callbacks, changed = [], []
     job = remote._job_origin_snapshot
     buffer = job.output_buffer
@@ -169,14 +170,15 @@ async def test_foreign_buffer_during_read_never_receives_feed_or_wipe(coupled_re
         def __getattribute__(self, name):
             callbacks.append(name)
             raise AssertionError("foreign buffer is not owned")
-    async def recv(loop, sock, count):
-        data = await original(loop, sock, count)
+    async def recv(waiter, end):
+        data = await original(waiter, end)
+        sock = waiter._origin_scope.sock
         owner = remote._result_owner_snapshot
         if sock is row[3]._socket_snapshot and owner is not None and owner._header is not None:
             job.output_buffer = Foreign()
             changed.append(True)
         return data
-    monkeypatch.setattr(result._LOOP, "sock_recv", recv)
+    monkeypatch.setattr(result.SelectorReadiness, "wait", recv)
     assert await remote.begin_ready()
     try:
         with pytest.raises(AuthorityRefusalError):
@@ -212,22 +214,23 @@ async def test_cross_operation_accumulator_retarget_never_feeds_or_wipes_other(
     from hmp_plugin.presentation_output_v2 import BoundedResultBufferV2
 
     remote, row, _, _ = coupled_result
-    original = result._LOOP.sock_recv
+    original = result.SelectorReadiness.wait
     job = remote._job_origin_snapshot
     own = job.output_buffer._buffer
     other = BoundedResultBufferV2()
     other._buffer.extend(b"OTHER_OPERATION_SYNTHETIC_PRIVATE_PAYLOAD")
     held = bytes(other._buffer)
     changed = []
-    async def recv(loop, sock, count):
-        data = await original(loop, sock, count)
+    async def recv(waiter, end):
+        data = await original(waiter, end)
+        sock = waiter._origin_scope.sock
         receiver = remote._result_owner_snapshot
         if (sock is row[3]._socket_snapshot and receiver is not None
                 and receiver._header is not None):
             job.output_buffer._buffer = other._buffer
             changed.append(True)
         return data
-    monkeypatch.setattr(result._LOOP, "sock_recv", recv)
+    monkeypatch.setattr(result.SelectorReadiness, "wait", recv)
     assert await remote.begin_ready()
     try:
         with pytest.raises(AuthorityRefusalError):
@@ -377,20 +380,21 @@ async def test_custody_tuple_retarget_cannot_redirect_central_cancel_wipe(
 
     remote, row, _, _ = coupled_result
     job = remote._job_origin_snapshot
-    original = result._LOOP.sock_recv
+    original = result.SelectorReadiness.wait
     origin = job._remote_output_custody_snapshot
     other = BoundedResultBufferV2()
     other._buffer.extend(b"OTHER_CUSTODY_SYNTHETIC_PAYLOAD")
     held, changed = bytes(other._buffer), []
-    async def recv(loop, sock, count):
-        data = await original(loop, sock, count)
+    async def recv(waiter, end):
+        data = await original(waiter, end)
+        sock = waiter._origin_scope.sock
         receiver = remote._result_owner_snapshot
         if (sock is row[3]._socket_snapshot and receiver is not None
                 and receiver._header is not None):
             job.remote_output_custody = (job, other, other._buffer)
             changed.append(True)
         return data
-    monkeypatch.setattr(result._LOOP, "sock_recv", recv)
+    monkeypatch.setattr(result.SelectorReadiness, "wait", recv)
     assert await remote.begin_ready()
     try:
         with pytest.raises(AuthorityRefusalError):
@@ -631,15 +635,16 @@ async def test_inflight_reader_scope_retarget_cannot_cancel_or_reset_other_opera
     foreign_channel = SocketChannel.__new__(SocketChannel)
     foreign_channel._reading = True
     foreign_cleanup = RemoteCleanupOwner.__new__(RemoteCleanupOwner)
-    original_recv, original_request = result._LOOP.sock_recv, RemoteCleanupOwner.request
+    original_recv, original_request = result.SelectorReadiness.wait, RemoteCleanupOwner.request
     changed, foreign_requests = [], []
     def request(owner):
         if owner is foreign_cleanup:
             foreign_requests.append(True)
             return
         return original_request(owner)
-    async def recv(loop, sock, count):
-        data = await original_recv(loop, sock, count)
+    async def recv(waiter, end):
+        data = await original_recv(waiter, end)
+        sock = waiter._origin_scope.sock
         receiver = remote._result_owner_snapshot
         if sock is row[3]._socket_snapshot and receiver is not None and not changed:
             original = receiver._scope_snapshot
@@ -649,7 +654,7 @@ async def test_inflight_reader_scope_retarget_cannot_cancel_or_reset_other_opera
             changed.append((receiver, original))
         return data
     monkeypatch.setattr(RemoteCleanupOwner, "request", request)
-    monkeypatch.setattr(result._LOOP, "sock_recv", recv)
+    monkeypatch.setattr(result.SelectorReadiness, "wait", recv)
     try:
         assert await remote.begin_ready()
         with pytest.raises(AuthorityRefusalError):
@@ -692,3 +697,176 @@ async def test_inflight_writer_scope_retarget_cannot_reset_other_channel(
     finally:
         for writer, original in changed:
             writer._scope = writer._scope_snapshot = original
+
+
+@pytest.mark.parametrize("stage", ["outer", "body"])
+async def test_partial_cursor_cancel_keeps_consumed_offsets_and_wipes_payload(
+    coupled_result, monkeypatch, stage
+):
+    remote, row, _, _ = coupled_result
+    original_recv, original_wait = result._SOCKET_RECV, result.SelectorReadiness.wait
+    observations = []
+
+    def short_recv(sock, count):
+        return original_recv(sock, min(count, 3))
+
+    async def wait(waiter, end):
+        await original_wait(waiter, end)
+        owner = remote._result_owner_snapshot
+        if owner is None or waiter._origin_scope.sock is not row[3]._socket_snapshot:
+            return
+        cursor = owner._cursor_origin
+        ready = (cursor.outer_committed == 3 if stage == "outer"
+                 else cursor.body_committed == 3)
+        if ready and not observations:
+            observations.append((cursor.received, cursor.outer_committed,
+                                 cursor.body_received, cursor.body_committed))
+            asyncio.current_task().cancel()
+            await asyncio.sleep(0)  # after retired readiness, before next concrete recv
+
+    monkeypatch.setattr(result, "_SOCKET_RECV", short_recv)
+    monkeypatch.setattr(result.SelectorReadiness, "wait", wait)
+    assert await remote.begin_ready() and await remote.go()
+    with pytest.raises(AuthorityRefusalError):
+        await remote.result_ready()
+    cursor = remote._result_owner_snapshot._cursor_origin
+    assert observations == [(cursor.received, cursor.outer_committed,
+                              cursor.body_received, cursor.body_committed)]
+    assert not cursor.outer_origin and cursor.pending is None
+    assert cursor.recv_intent is False and cursor.commit_intent is False
+    assert cursor.io_unknown is False and row[3]._reading is False
+    assert remote._job_origin_snapshot.result is None
+    assert cursor.received == cursor.outer_committed + cursor.body_committed
+    assert (cursor.body_committed == 0 if stage == "outer" else cursor.body_committed == 3)
+
+
+async def test_uncertain_recv_never_fabricates_cursor_or_reader_retirement(
+    coupled_result, monkeypatch
+):
+    remote, row, _, _ = coupled_result
+    original_recv = result._SOCKET_RECV
+    consumed = []
+
+    def interrupted(sock, count):
+        part = original_recv(sock, count)
+        consumed.append(len(part))
+        raise RuntimeError("synthetic interruption after syscall")
+
+    monkeypatch.setattr(result, "_SOCKET_RECV", interrupted)
+    assert await remote.begin_ready() and await remote.go()
+    with pytest.raises(AuthorityRefusalError):
+        await remote.result_ready()
+    receiver = remote._result_owner_snapshot
+    cursor = receiver._cursor_origin
+    assert consumed == [8] and cursor.recv_intent is True
+    assert cursor.io_unknown is True and cursor.received == 0
+    assert row[3]._reading is True and not row[3]._closed_known
+    assert remote._job_origin_snapshot.result is None
+    # Test-only disposal of our exact synthetic socket, not a production close fact.
+    row[3]._socket_snapshot.close()
+
+
+async def test_eagain_consumes_no_offset_and_does_not_renew_deadline(
+    coupled_result, monkeypatch
+):
+    remote, _, _, _ = coupled_result
+    original_recv, original_wait = result._SOCKET_RECV, result.SelectorReadiness.wait
+    ends, calls = [], []
+
+    def recv(sock, count):
+        if not calls:
+            calls.append(True)
+            raise BlockingIOError(errno.EAGAIN, "synthetic EAGAIN")
+        return original_recv(sock, count)
+
+    async def wait(waiter, end):
+        ends.append(end)
+        return await original_wait(waiter, end)
+
+    monkeypatch.setattr(result, "_SOCKET_RECV", recv)
+    monkeypatch.setattr(result.SelectorReadiness, "wait", wait)
+    assert await remote.begin_ready() and await remote.go() and await remote.result_ready()
+    receiver = remote._result_owner_snapshot
+    cursor = receiver._cursor_origin
+    assert calls == [True] and len(ends) >= 4
+    assert set(ends) == {receiver._scope_snapshot.deadline}
+    assert cursor.body_received == cursor.body_committed == receiver._header.body_length
+    assert cursor.received == cursor.outer_committed + cursor.body_committed
+    assert cursor.pending is None and cursor.io_unknown is False
+
+
+async def test_non_eagain_blocking_error_keeps_read_claim(coupled_result, monkeypatch):
+    remote, row, _, _ = coupled_result
+
+    def recv(sock, count):
+        raise BlockingIOError(errno.EIO, "synthetic unknown receive")
+
+    monkeypatch.setattr(result, "_SOCKET_RECV", recv)
+    assert await remote.begin_ready() and await remote.go()
+    with pytest.raises(AuthorityRefusalError):
+        await remote.result_ready()
+    cursor = remote._result_owner_snapshot._cursor_origin
+    assert cursor.recv_intent and cursor.io_unknown and row[3]._reading
+    assert cursor.received == 0 and remote._job_origin_snapshot.result is None
+    row[3]._socket_snapshot.close()  # test-only disposal, no production closure proof
+
+
+@pytest.mark.parametrize("field", ["received", "body_received"])
+async def test_recv_boundary_counter_drift_never_runs_foreign_arithmetic(
+    coupled_result, monkeypatch, field
+):
+    remote, row, _, _ = coupled_result
+    original = result._SOCKET_RECV
+    callbacks = []
+
+    class Foreign:
+        def __add__(self, value):
+            callbacks.append("add")
+            raise AssertionError("foreign arithmetic")
+        __iadd__ = __add__
+        def __eq__(self, value):
+            callbacks.append("eq")
+            raise AssertionError("foreign comparison")
+
+    def recv(sock, count):
+        part = original(sock, count)
+        setattr(remote._result_owner_snapshot._cursor_origin, field, Foreign())
+        return part
+
+    monkeypatch.setattr(result, "_SOCKET_RECV", recv)
+    assert await remote.begin_ready() and await remote.go()
+    with pytest.raises(AuthorityRefusalError):
+        await remote.result_ready()
+    cursor = remote._result_owner_snapshot._cursor_origin
+    assert callbacks == [] and cursor.received == 8
+    assert cursor.io_unknown and row[3]._reading
+    assert cursor.pending is None and not cursor.outer_origin
+    row[3]._socket_snapshot.close()  # test-only disposal, no production closure proof
+
+
+async def test_eagain_after_cancellation_has_no_second_readiness_registration(
+    coupled_result, monkeypatch
+):
+    remote, row, _, _ = coupled_result
+    original_init = result.SelectorReadiness.__init__
+    registrations = []
+
+    def initialize(waiter, sock):
+        if sock is row[3]._socket_snapshot:
+            registrations.append(waiter)
+        return original_init(waiter, sock)
+
+    def recv(sock, count):
+        RemoteCleanupOwner.request(remote._cleanup_owner_snapshot)
+        raise BlockingIOError(errno.EAGAIN, "synthetic cancellation at zero-byte boundary")
+
+    monkeypatch.setattr(result.SelectorReadiness, "__init__", initialize)
+    monkeypatch.setattr(result, "_SOCKET_RECV", recv)
+    assert await remote.begin_ready() and await remote.go()
+    with pytest.raises(AuthorityRefusalError):
+        await remote.result_ready()
+    cursor = remote._result_owner_snapshot._cursor_origin
+    assert len(registrations) == 1 and cursor.waiter is registrations[0]
+    assert cursor.received == cursor.body_received == cursor.body_committed == 0
+    assert cursor.pending is None and cursor.io_unknown is False
+    assert row[3]._reading is False and remote._job_origin_snapshot.result is None
