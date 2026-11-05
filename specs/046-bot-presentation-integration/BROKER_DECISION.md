@@ -119,6 +119,7 @@ handling must be qualified before runtime activation.
 - [x] BR4a: implement/review kernel UID/PID snapshot helper and actual Darwin cross-process fixture; endpoint/code/liveness/custody remain separate.
 - [ ] BR4: qualify platform UID/endpoint identity and private socket acquisition,
   race-safe startup and nonblocking bounded transport with original deadlines.
+- [x] BR5a: implement/review separate shared-group exact-child custody; no group/remote closure. See [child contract](BROKER_CHILD_CUSTODY.md).
 - [ ] BR5: implement standalone namespace-only broker using explicit parser recipe,
   fixed reader, exclusive child custody, retained partial owners and real drains.
 - [ ] BR6: new gateway backend with native original-credential pre-GO/pre-emit;

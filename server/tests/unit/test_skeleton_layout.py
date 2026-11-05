@@ -65,6 +65,7 @@ CONTRACT_MODULES = {
     "presentation_broker_codec.py",
     # BR4a read-only kernel connection identity; no endpoint/service activation.
     "presentation_broker_peer.py",
+    "presentation_broker_child.py",
     # BR3 grammar/replay control only, never native/remote custody authority.
     "presentation_broker_lifecycle.py",
     "presentation_child.py",

@@ -1,3 +1,19 @@
+## Character broker child ownership — November 4, 2026
+
+The separate shared-group reader owner is now implemented and independently
+reviewed. It launches only the fixed isolated reader, exposes owned pipes, waits
+only for its exact retained child, and permits one child-only cleanup signal.
+It never signals the shared group or treats reap as full resource closure.
+Malformed/coercible PID, recipe/stream drift, stolen wait, reentry and uncertain
+launch/signal outcomes refuse; uncertain handles remain retained.
+
+Actual fixed-child checks verify empty-input EOF/exact reap and termination that
+leaves another owned reader and the controller unaffected. Independent53 cases
+pass; root composed513 pass on Python3.11/3.14.9, plus lint/import scanner.
+This is source-only: retained registry, topology-specific closure binder,
+service/runtime qualification, authenticated routes and signed-device parity
+remain open. No bot character capability is activated. See [contract and limits](specs/046-bot-presentation-integration/BROKER_CHILD_CUSTODY.md).
+
 ## Character reader crash experiment — November 4, 2026
 
 A reviewed temporary launchd fixture now demonstrates why the current new-session
