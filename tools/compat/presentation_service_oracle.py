@@ -20,6 +20,8 @@ from pathlib import Path
 
 _RETAINED: list[object] = []
 _MAX_RECORD = 2048
+# Four bounded settling phases (64 samples each) plus fixed control commands.
+MAX_CONTROL_COMMANDS = 272
 _CHILD_OWNER_TYPE = None
 _SOCKET_TYPE = socket.socket
 _SOCKET_CLOSE, _SOCKET_FILENO = socket.socket.close, socket.socket.fileno
@@ -204,7 +206,7 @@ async def service_loop(control, end_ns, enrollment, endpoint, observation, liste
                    parser_package=parser)
     pending = None
     await send_control(control, {"ready": True}, end_ns)
-    for sequence in range(1, 33):
+    for sequence in range(1, MAX_CONTROL_COMMANDS + 1):
         command = await receive_control(control, end_ns)
         require(type(command.get("sequence")) is int and command["sequence"] == sequence)
         mode = command.get("mode")

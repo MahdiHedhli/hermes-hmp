@@ -158,3 +158,31 @@ def test_raw_close_requires_real_descriptor_disposal(held_io_reference):
         left._io_refs = 0
         left.close()
         right.close()
+
+
+@pytest.mark.asyncio
+async def test_readonly_control_polling_survives_old_32_command_boundary(monkeypatch):
+    class Spine:
+        def __init__(self, *args, **kwargs):
+            pass
+    class CompletedModelError(Exception):
+        pass
+    received, replies = [], []
+    async def receive(*args):
+        sequence = len(received) + 1
+        if sequence == 34:
+            raise CompletedModelError
+        received.append(sequence)
+        return {"mode": "inspect", "sequence": sequence}
+    async def send(sock, value, end):
+        replies.append(value)
+    monkeypatch.setattr(oracle, "receive_control", receive)
+    monkeypatch.setattr(oracle, "send_control", send)
+    monkeypatch.setattr(oracle, "snapshot", lambda *args: {"task": "running"})
+    monkeypatch.setattr(oracle, "_RETAINED", [])
+    with pytest.raises(CompletedModelError):
+        await oracle.service_loop(object(), time.monotonic_ns() + 2_000_000_000,
+            None, None, None, None, SimpleNamespace(BrokerServiceSpine=Spine), None)
+    assert received == list(range(1, 34))
+    assert len(replies) == 34 and replies[-1]["sequence"] == 33
+    assert oracle.MAX_CONTROL_COMMANDS >= 4 * 64 + 16

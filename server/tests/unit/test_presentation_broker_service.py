@@ -114,7 +114,10 @@ async def read_frame(sock, b):
 
 
 @pytest.mark.asyncio
-async def test_actual_ready_cancel_cleanup_stays_pending_and_status_has_no_body(local):
+@pytest.mark.parametrize("fresh_status_channel", [False, True])
+async def test_actual_ready_cancel_cleanup_stays_pending_and_status_has_no_body(
+    local, fresh_status_channel
+):
     spine, _, client, packet, checks, _ = local
     b = binding()
     end = time.monotonic_ns() + 1_800_000_000
@@ -134,8 +137,10 @@ async def test_actual_ready_cancel_cleanup_stays_pending_and_status_has_no_body(
     assert not spine._records and checks
     status_sock = client()
     status_task = asyncio.create_task(spine.serve_once(time.monotonic_ns() + 1_000_000_000))
-    await asyncio.get_running_loop().sock_sendall(status_sock, encode_frame(b, "STATUS", 0))
-    result = await read_frame(status_sock, b)
+    status_binding = replace(b, channel="e" * 64) if fresh_status_channel else b
+    await asyncio.get_running_loop().sock_sendall(
+        status_sock, encode_frame(status_binding, "STATUS", 0))
+    result = await read_frame(status_sock, status_binding)
     assert result.header.kind == "PENDING" and result.body == b""
     await status_task
     assert await spine.stop_local_sockets()

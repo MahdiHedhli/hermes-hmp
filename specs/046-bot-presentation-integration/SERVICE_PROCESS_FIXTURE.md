@@ -56,6 +56,13 @@ independent reader kernel exit and retained registry PENDING separately. Fresh-
 channel STATUS must return bodyless PENDING, no RESULT/body replay/started ACK.
 Native original authorization, GO and started terminal release remain closed.
 
+Control commands share a 272-command ceiling: four settling phases have at most64
+read-only samples each at25ms intervals, with16 slots reserved for fixed commands.
+The controller refuses before an over-budget send; oracle uses the same ceiling.
+Neither sampling nor successful replies renews the original absolute phase end.
+Intent/reply sequence and fixed phase/mode diagnostics remain private and contain
+no application payload. Lost replies never reset the sequence or trigger replay.
+
 Control commands are finite sequential serve/inspect/shutdown under one original
 fixture phase end; serve retains its original <=2s deadline and cannot outlive the
 control phase. Lost command/reply is not retried. Read-only settling cannot restart
@@ -86,3 +93,23 @@ Python environment lacked PyYAML. No service label was created or bootstrap
 attempted; this provides no real-service qualification. The private receipt and
 lock were retained; no automatic retry was performed. Dependency preflight now
 refuses before creating a lock, with a specific diagnostic.
+
+## November 5 actual enrolled run — partial evidence
+
+Source `8a77d13`, with controller PyYAML6.0.3 and Python3.14.9, completed actual
+mutual kernel identity/startup enrollment, wrong-process pre-body refusal with no
+registry work, wrong-boot rejection with no work, BEGIN/READY and retained no-GO
+reader identity. CANCEL produced communication EOF and separately observed local
+drain; registry stayed PENDING and the retained reader kernel observer saw exit.
+The run then refused with FrameError before completing STATUS/shutdown. Exact
+owned-job removal, broker/reader kernel exits, helper wait and local monitor/socket
+cleanup were known, with no recorded cleanup errors. The refusal lock remains.
+No complete service qualification follows, and no retry was performed.
+
+The generic original error does not prove the failure's exact location. Review
+identified a definite fixture budget inconsistency: the oracle allowed only32
+commands while1ms settling could issue unbounded inspections under the phase
+deadline. The bounded polling/sequence-diagnostic repair closes that inconsistency;
+causal tests and future observed evidence must remain distinct from attribution
+of this original failure. No production GO/RESULT, host route or phone delivery
+was exercised.

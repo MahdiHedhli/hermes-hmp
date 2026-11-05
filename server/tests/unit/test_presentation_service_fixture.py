@@ -150,3 +150,29 @@ def test_missing_controller_dependency_refuses_before_lock(monkeypatch):
     monkeypatch.setattr(fixture.importlib, "import_module", missing)
     with pytest.raises(fixture.probe.ProbeRefusedError, match="pyyaml_dependency_missing"):
         fixture.main()
+
+
+@pytest.mark.asyncio
+async def test_settling_is_bounded_readonly_and_records_delivery_progress(monkeypatch):
+    sent = []
+    async def send(sock, value, end_ns):
+        sent.append(value)
+    async def receive(sock, end_ns):
+        return {"sequence": len(sent), "reply": {"task": "running"}}
+    async def pause(delay):
+        assert delay == 0.025
+    monkeypatch.setattr(fixture.protocol, "send_control", send)
+    monkeypatch.setattr(fixture.protocol, "receive_control", receive)
+    monkeypatch.setattr(fixture.asyncio, "sleep", pause)
+    progress = {}
+    control = fixture.Control(object(), time.monotonic_ns() + 2_000_000_000, progress)
+    with pytest.raises(fixture.probe.ProbeRefusedError, match="settle_samples_exhausted"):
+        await control.settled()
+    assert len(sent) == 64 and all(row["mode"] == "inspect" for row in sent)
+    assert [row["sequence"] for row in sent] == list(range(1, 65))
+    assert progress == {"control_sequence": 64, "control_mode": "inspect",
+                        "control_reply_sequence": 64}
+    control.sequence = fixture.protocol.MAX_CONTROL_COMMANDS
+    with pytest.raises(fixture.probe.ProbeRefusedError, match="control_count_exhausted"):
+        await control.command("inspect")
+    assert len(sent) == 64  # exhausted control budget performs no send/retry

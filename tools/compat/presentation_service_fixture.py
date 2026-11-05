@@ -120,11 +120,14 @@ def _client_modules(plugin: Path):
 
 
 class Control:
-    def __init__(self, sock, end_ns):
+    def __init__(self, sock, end_ns, progress=None):
         self.sock, self.end_ns, self.sequence = sock, end_ns, 0
+        self.progress = {} if progress is None else progress
 
     async def command(self, mode, **values):
+        base._require(self.sequence < protocol.MAX_CONTROL_COMMANDS, "control_count_exhausted")
         self.sequence += 1  # record intent before potentially partial send; never retry
+        self.progress.update(control_sequence=self.sequence, control_mode=mode)
         command = {"mode": mode, "sequence": self.sequence, **values}
         await protocol.send_control(self.sock, command, self.end_ns)
         result = await protocol.receive_control(self.sock, self.end_ns)
@@ -134,14 +137,16 @@ class Control:
             and result["sequence"] == self.sequence,
             "fixture_control_reply",
         )
+        self.progress["control_reply_sequence"] = self.sequence
         return result["reply"]
 
     async def settled(self):
-        while True:
+        for _ in range(64):
             result = await self.command("inspect")
             if result["task"] != "running":
                 return result
-            await asyncio.sleep(0.001)
+            await asyncio.sleep(0.025)
+        raise probe.ProbeRefusedError("control_settle_samples_exhausted")
 
 
 def _packet(modules, home: Path, binding, end_ns: int, digest: str) -> bytes:
@@ -274,7 +279,7 @@ async def _run(case, boot, home, record, receipt, state):
             == {"ready": True},
             "service_not_ready",
         )
-        control = Control(control_socket, record["observe_end_ns"])
+        control = Control(control_socket, record["observe_end_ns"], record)
         endpoint_type = modules["presentation_broker_endpoint"].BrokerEndpointOwner
         endpoint = endpoint_type.__new__(endpoint_type)
         _RETAINED.append(endpoint)
@@ -438,25 +443,32 @@ async def _run(case, boot, home, record, receipt, state):
                 await asyncio.sleep(0.001)
         base._require(fact is not None, "reader_kernel_exit_not_observed")
         record["reader_kernel_exit_observed_ns"] = fact.observed_at_ns
+        record["phase"] = "status_serve"
         status = replace(scope, channel=secrets.token_hex(32))
         await control.command("serve", deadline_ns=time.monotonic_ns() + 1_000_000_000)
+        record["phase"] = "status_connect"
         status_channel = await connect()
+        record["phase"] = "status_write"
         await status_channel.send(
             codec.BrokerFrame(codec.BrokerHeader(status, "STATUS", 0, 0), b""),
             record["observe_end_ns"],
         )
+        record["phase"] = "status_receive"
         pending = await status_channel.receive(record["observe_end_ns"], expected=status)
         base._require(
             pending.header.kind == "PENDING" and pending.body == b"", "status_replayed_body"
         )
         base._require(status_channel.close(), "status_socket_close_unknown")
+        record["phase"] = "status_settle"
         record["status"] = await control.settled()
+        record["phase"] = "shutdown"
         record["shutdown"] = await control.command("shutdown")
         base._require(
             record["shutdown"]["local_sockets_closed"] is True
             and record["shutdown"]["retained"]["operations"][0]["status"] == "pending",
             "shutdown_claimed_started_release",
         )
+        record["phase"] = "observations_complete"
         record["expected_observations"] = True
     finally:
         errors = []
