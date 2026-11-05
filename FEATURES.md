@@ -1,3 +1,31 @@
+## Cross-platform development candidate — November 5, 2026
+
+Mobile source `a547843` was built as iOS development candidate **2026110502**.
+The guarded build and final signed-artifact scan passed. Signature, bundle/build,
+existing development entitlements and provisioning were checked; independent
+review accepted this bounded existing-package iPad update. The original pinned
+HMP `dbdcdba`, dependency locks, permissions and providers are unchanged.
+
+The iPad installed version was read back as 2026110502. Its launch was refused
+because the device locked again; there is no new-build UI or feature pass.
+Earlier build 2026110501 launched and remained in the same process while the
+iPad was unlocked. That observation does not qualify the replacement build.
+iPhone 15 Pro Max remains on the previously verified 2026110501 candidate.
+
+The physical Gemini Android development device is now ADB-authorized and has
+Free beta version code 5 installed. A replacement Android artifact was not built:
+the required existing signing inputs are unavailable in the current session.
+No debug-key substitution, uninstall or app-data export was used.
+
+Both prior feature-document heads passed their exact CI checks (HMP run
+42106694520 and mobile run 42106694991). These checks and development signing
+are not physical qualification or release acceptance. Device-local sections and
+static icon source is implemented; its physical persistence/accessibility
+acceptance remains open. Full desktop bot characters and host-local images
+remain unfinished. Original unpublished pre-READY edits remain untouched until
+development-project file access recovers; current mobile build preparation used
+a separate clean working copy.
+
 ## Character and Unicode source CI restored — November 5, 2026
 
 Mobile source `e4f57c5` restores strict NFC typing and character-renderer analysis
