@@ -1,3 +1,33 @@
+## Retained normal image-result reader and iOS development candidate — November 5, 2026
+
+HMP `e4fb280` integrates readiness-only notification into the original normal
+RESULT reader. Bounded prefix/header and body offsets, pending bytes and the
+original digest are retained across waits. Concrete receive commits consumption
+before another boundary; EAGAIN rechecks current authority under the same original
+deadline. Uncertain registration, receive or commit retains the read claim and
+wipes original payload custody, without inventing closure or restarting a reader.
+
+Independent review passes 178 focused tests plus the final cancellation/EAGAIN
+causal on Python 3.13. Product-source regressions pass 1,889 tests plus 190 subtests
+on each of Python 3.11.15 and standalone 3.14.4, with one Linux-native skip each.
+Earlier local failures and isolated passes remain recorded; added status-only
+diagnostics do not establish their historical cause or relax deadlines. Lint,
+plugin surface, privacy and diff checks pass. Previous readiness CI42077652676
+succeeded; the new head has separate CI evidence.
+
+Apple development signing is unblocked. Existing app executable source `a17145e`
+was rebuilt as development candidate **2026110501** and installed on iPad Pro and
+iPhone 15 Pro Max. Both installed versions were read back. iPad launch and two
+same-process observations passed; iPhone launch was refused because it was locked.
+This is not full UI, feature or release qualification. Embedded HMP remains
+`dbdcdba`; no host plugin was deployed or permissions/providers changed.
+
+Bot characters and host-local chat images remain unfinished. Cleanup-only reader
+mode, continued broker CANCEL/ACK, qualified terminal acceptance and native
+completion still precede authenticated image routes and phone-visible characters.
+Host-local images follow character delivery. See [retained cursor](specs/046-bot-presentation-integration/READINESS_CURSOR.md)
+and [joined lifecycle](specs/046-bot-presentation-integration/TERMINAL_TRANSPORT.md).
+
 ## Cancellation-safe image reader prerequisite — November 5, 2026
 
 HMP `5d3a5a4` adds an owned readiness-only socket notification. A synthetic
