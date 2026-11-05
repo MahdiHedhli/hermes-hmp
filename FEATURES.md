@@ -1,3 +1,24 @@
+## Reviewed local handoff freeze — November 5, 2026
+
+HMP source `797dbbc` is integrated through
+[PR114](https://github.com/MahdiHedhli/hermes-hmp/pull/114). A one-use local
+producer now freezes immutable envelope bytes against original custody and the
+actual earliest cleanup budget. Reentry, encoding failure and final native-tail
+custody drift refuse publication permanently; this fact grants no IO authority.
+
+Independent bounded source review accepted the change. Root executed **418
+coupled cases and 230 budget/grammar cases on each of Python 3.11.15 and 3.14.4**,
+including 27 dedicated freeze cases. Reviewer execution is not claimed.
+[Exact-source CI42129488493](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42129488493)
+passes every job: **7,219 passed, 21 skipped, 18 warnings, 190 subtests**,
+plus Unicode 17 jobs on Python 3.12–3.14. Counts overlap and are not additive.
+
+This is source progress. Qualified producer/receiver factories, TERMINAL/ACK
+transport, native PRE_EMIT/DRAIN/credential retirement, authenticated routes and
+runtime/physical qualification remain open. Desktop bot characters and host-local
+images are unfinished. App executable, embedded HMP and installed devices/hosts
+are unchanged. See the [bounded contract](specs/046-bot-presentation-integration/LOCAL_HANDOFF_FREEZE.md).
+
 ## Reviewed pre-READY cleanup lifecycle — November 5, 2026
 
 HMP source `2c2a14e` is integrated into the character feature branch through

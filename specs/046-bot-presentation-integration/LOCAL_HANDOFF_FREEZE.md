@@ -1,6 +1,6 @@
-# Local producer handoff freeze — implementation candidate
+# Local producer handoff freeze — integrated source
 
-This unpublished candidate fills the sender-data step in
+Source `797dbbc`, integrated through PR114, fills the sender-data step in
 [terminal transport](TERMINAL_TRANSPORT.md). It does not qualify the producer or
 receiver, enable a service route, write TERMINAL/ACK, or release native credit.
 
@@ -48,5 +48,7 @@ reentry, wrong actor, encoding failure, scope/claim/cause/budget mutation across
 encoding and sampling, and final descriptor-tail custody drift. Failure keeps
 registry PENDING and native headers/credits retained. Independent source review
 accepted the final metadata-tail repair and causal scope; reviewer execution is
-not claimed. Full isolated CI, integration, qualified factories, actual terminal
-transport and runtime/physical qualification remain pending.
+not claimed. Exact-source CI42129488493 passes every job: 7,219 passed,
+21 skipped, 18 warnings and 190 subtests, plus Unicode 17 jobs on Python
+3.12–3.14. Qualified factories, actual terminal transport and runtime/physical
+qualification remain pending.

@@ -21,6 +21,10 @@ StartupEnrollment generation, clock qualification, same UID and decoded fields
 cannot replace it. Native read service/PRE_EMIT and all ownership planes remain
 required before public character routes.
 
+The [local handoff freeze](LOCAL_HANDOFF_FREEZE.md) is integrated as source
+797dbbc through PR114 with exact-source green CI42129488493. It supplies immutable
+DATA only; qualified runtime custody and IO permission remain separate gates.
+
 ## Envelope and earliest first cause
 
 Freeze canonical STARTED_READER_HANDOFF bytes with a closed historical claim and
