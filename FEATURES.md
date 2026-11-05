@@ -1,3 +1,26 @@
+## Terminal STATUS repair — November 5, 2026
+
+HMP source `89734eb` adds a dedicated one-use terminal STATUS exchange. It seals
+the actual initial peer observation to the original channel/FD, endpoint, startup
+enrollment, binding, loop and unchanged deadline. Ordinary channel I/O cannot be
+reused afterward. PENDING/UNKNOWN accepts a canonical bodyless reply only with
+known queued EOF or one known half-close followed by clean EOF; trailing data,
+ambiguous shutdown, drift, cancellation and reentry refuse. CLOSED retains live
+peer/ACK checks. Transport EOF never releases registry/native debt.
+
+Both kernel nonblocking mode and captured Python timeout0.0 are enforced before
+I/O. Independent review passes83 focused cases. Serial Python3.11 and3.14.9
+regressions each pass1013 tests plus66 subtests; lint, plugin-surface and privacy
+scans pass. The fixture controller uses this owner under its original status
+deadline, but no new actual-process invocation has run. The older FrameError's
+exact cause is still unproven; its lock and partial evidence are preserved.
+
+This advances character transport source, not installed character images or
+host-local media. Native authority/GO/RESULT, started release, authenticated
+routes, full classic/blobatar/custom rendering and signed physical parity remain
+open. App executable and embedded HMP remain unchanged. See the
+[terminal contract](specs/046-bot-presentation-integration/TERMINAL_STATUS.md).
+
 ## Character service actual-process checkpoint — November 5, 2026
 
 HMP `8a77d13` now has real separate-process evidence for mutual kernel peer/startup
