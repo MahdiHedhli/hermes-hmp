@@ -1,3 +1,24 @@
+## Original cancellation owner source — November 5, 2026
+
+HMP `31214d3` binds one retained cancellation budget before native observation
+and broker resource effects. Remote/resource owners share their original budget;
+explicit parent cancellation freezes its first cause before cancelling work.
+Duplicate, late or reentrant cancellation cannot create a new allowance. Both
+launch paths reject caused budgets, including across clock callbacks. Immutable
+minted generations protect policy-thread reads and refuse replacement/rollback.
+
+Independent focused review passes 195 tests plus 23 subtests. Final root serial
+Python 3.11/3.14.9 regressions each pass 1,553 tests plus 190 subtests, with one
+Linux-native skip. Lint, surface and privacy checks pass. Prior selected/realm
+head `eef60f6` CI42017153633 is green; this new slice has its own CI run and
+no new Linux-native, live-host or physical-device qualification claim.
+
+Both-end inherited transport and a retained cleanup task remain next. v2 CANCEL,
+broker dispatch, GO/result/terminal release and authenticated image routes remain
+closed. Full desktop character rendering and signed device checks are unfinished;
+the app executable, embedded HMP and installed hosts are unchanged. Host-local
+images follow. See the [original-owner contract](specs/046-bot-presentation-integration/CANCELLATION_CLOCK.md).
+
 ## Selected protocol and PID-realm source — November 5, 2026
 
 HMP `2e2f4f8` binds trusted protocol selection to the retained native clock
