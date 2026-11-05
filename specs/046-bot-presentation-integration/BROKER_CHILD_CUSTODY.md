@@ -140,3 +140,48 @@ configuration for comparison, never a Popen or code-attestation claim.
 The amended owner has59 focused cases; independent registry/child union87 passes.
 Full root source union548 passes on Python3.11/3.14.9, plus lint/import scanner.
 All existing activation limits remain. Broker resource closure is still unbound.
+
+## Partial native constructor custody — November 5, 2026
+
+The independently reviewed amendment separates native Popen allocation from
+initialization. The fixed native class/new/initializer are captured from the
+selected trusted runtime, with private seams used by isolated unit models.
+The owner retains the allocated handle and its original snapshot before type
+validation or initializer effects. An exact constructor-return flag distinguishes
+opaque partial state from a successfully returned constructor; it is not wait,
+stream-close, process-layout or terminal authority.
+
+Before allocation and immediately before initialization, the standard-library
+`_active` value must be the same exact empty list. No list item is inspected,
+polled, removed or cleared. A foreign container, nonempty/replaced list or foreign
+allocated handle refuses before initialization. Fixed recipe/context/class bindings
+and the unchanged original deadline are checked after allocation. No new deadline
+is issued. Reentry and malformed state remain sticky refusals.
+
+This list observation is necessary, not atomic concurrency exclusion. A fresh
+standalone namespace, no foreign constructors/reapers and strong retention of all
+owners/handles remain qualification premises. Nothing monkeypatches native
+reapers, SIGCHLD policy, `_active` cleanup or standard-library behavior in production.
+
+If allocation or initialization raises, the exact owner and any allocated native
+object remain retained, signals/work retire and replay/sealing refuse. Partial
+PID/stream/returncode attributes are not consulted to mint facts. The native
+constructor may itself close pipes or reap a failed child (inspected CPython
+3.14.9 `subprocess.py` constructor/error paths). Those effects are opaque UNKNOWN;
+retention prevents destructor enrollment but does not suppress constructor-internal
+cleanup or recover its result as this owner's terminal observation.
+
+The causal suite covers constructor failure before child creation, foreign handle
+and `_active` state without getters/length callbacks, list replacement during
+allocation, original-deadline crossing and reentry, plus attempted replay refusal.
+An actual native initializer-success-then-injected-error fixture forces GC and
+starts a second unrelated no-input reader without invoking the first handle's
+internal poll. Fixture cleanup uses its independently retained exact own native
+children and actual wait statuses. It never restores the failed production owner
+from UNKNOWN or fabricates returncode/closure. No input, GO or real profile is used.
+
+Root and independent child/registry/local-discard/partial-constructor union each
+pass 120 cases on Python 3.13. Broader floor/current checks and exact published
+source CI are recorded in FEATURES.md. This is a source custody improvement;
+service crash/orphan containment, runtime/peer/boot qualification, native
+original authorization and started terminal release remain open.

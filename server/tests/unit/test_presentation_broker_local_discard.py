@@ -123,7 +123,9 @@ def test_surviving_actual_pipe_writer_does_not_become_full_closure(monkeypatch):
     child = SimpleNamespace(
         pid=765432, returncode=None, stdin=streams[0], stdout=streams[1], stderr=streams[2]
     )
-    monkeypatch.setattr(child_module.subprocess, "Popen", lambda *a, **k: child)
+    monkeypatch.setattr(child_module, "_POPEN_TYPE", type(child))
+    monkeypatch.setattr(child_module, "_allocate_popen", lambda: child)
+    monkeypatch.setattr(child_module, "_initialize_popen", lambda *a, **k: None)
     monkeypatch.setattr(child_module.os, "getpgid", lambda pid: os.getpgrp())
     monkeypatch.setattr(child_module.os, "waitpid", lambda pid, flags: (pid, 0))
     binding = object()

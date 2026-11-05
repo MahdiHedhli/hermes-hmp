@@ -31,7 +31,7 @@ def reserve(registry, serial=1, profile=None, kind="METADATA"):
 def fake_children(monkeypatch):
     children = []
 
-    def spawn(*args, **kwargs):
+    def spawn():
         child = SimpleNamespace(
             pid=400000 + len(children),
             returncode=None,
@@ -42,7 +42,9 @@ def fake_children(monkeypatch):
         children.append(child)
         return child
 
-    monkeypatch.setattr(child_module.subprocess, "Popen", spawn)
+    monkeypatch.setattr(child_module, "_POPEN_TYPE", SimpleNamespace)
+    monkeypatch.setattr(child_module, "_allocate_popen", spawn)
+    monkeypatch.setattr(child_module, "_initialize_popen", lambda *a, **k: None)
     monkeypatch.setattr(child_module.os, "getpgid", lambda pid: module.os.getpgrp())
     monkeypatch.setattr(child_module.os, "killpg", lambda *a: pytest.fail("group signal"))
     return children
@@ -206,7 +208,7 @@ def test_start_failure_keeps_active_owner_no_seal_ack_or_replay(monkeypatch):
     def fail(*a, **k):
         raise OSError("synthetic launch")
 
-    monkeypatch.setattr(child_module.subprocess, "Popen", fail)
+    monkeypatch.setattr(child_module, "_initialize_popen", fail)
     with pytest.raises(FrameError):
         registry.start(t)
     assert registry._records[t].owner is owner
@@ -355,7 +357,7 @@ def test_startup_recipe_drift_does_not_launch_or_choose_new_executable(monkeypat
 
     object.__setattr__(registry._recipe, "argv", (ForeignExecutable(),))
     monkeypatch.setattr(
-        child_module.subprocess, "Popen", lambda *a, **k: pytest.fail("recipe drift spawn")
+        child_module, "_initialize_popen", lambda *a, **k: pytest.fail("recipe drift spawn")
     )
     with pytest.raises(FrameError):
         registry.start(ticket)
@@ -372,7 +374,7 @@ def test_constructed_owner_recipe_must_match_original_startup(monkeypatch):
 
     monkeypatch.setattr(child_module, "child_launch", changed)
     monkeypatch.setattr(
-        child_module.subprocess, "Popen", lambda *a, **k: pytest.fail("changed recipe spawn")
+        child_module, "_initialize_popen", lambda *a, **k: pytest.fail("changed recipe spawn")
     )
     with pytest.raises(FrameError):
         reserve(registry)
@@ -424,14 +426,14 @@ def test_deadline_crossing_inside_spawn_keeps_owner_and_refuses_normal_return(
     registry = BrokerRegistry(binding())
     b, ticket = reserve(registry)
     record = registry._records[ticket]
-    spawn = child_module.subprocess.Popen
+    spawn = child_module._initialize_popen
 
     def delayed(*a, **k):
         child = spawn(*a, **k)
         monkeypatch.setattr(module.time, "monotonic_ns", lambda: record.deadline_ns)
         return child
 
-    monkeypatch.setattr(child_module.subprocess, "Popen", delayed)
+    monkeypatch.setattr(child_module, "_initialize_popen", delayed)
     with pytest.raises(FrameError):
         registry.start(ticket)
     assert len(fake_children) == 1

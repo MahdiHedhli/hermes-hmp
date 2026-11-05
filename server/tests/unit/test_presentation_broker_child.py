@@ -27,11 +27,13 @@ def fake(monkeypatch):
     )
     calls = []
 
-    def start(*args, **kwargs):
+    def start(allocated, *args, **kwargs):
+        assert allocated is child
         calls.append((args, kwargs))
-        return child
 
-    monkeypatch.setattr(module.subprocess, "Popen", start)
+    monkeypatch.setattr(module, "_POPEN_TYPE", SimpleNamespace)
+    monkeypatch.setattr(module, "_allocate_popen", lambda: child)
+    monkeypatch.setattr(module, "_initialize_popen", start)
     monkeypatch.setattr(module.os, "getpgid", lambda pid: os.getpgrp())
     monkeypatch.setattr(
         module.os, "killpg", lambda *args: pytest.fail("group signal/probe forbidden")
@@ -224,7 +226,7 @@ def test_launch_failure_retains_owner_and_no_retry(monkeypatch):
         calls.append(1)
         raise OSError("synthetic launch ambiguity")
 
-    monkeypatch.setattr(module.subprocess, "Popen", fail)
+    monkeypatch.setattr(module, "_initialize_popen", fail)
     owner = BrokerChildOwner(object())
     with pytest.raises(BrokerChildLaunchError) as error:
         owner.start()
@@ -251,7 +253,7 @@ def test_never_launch_seal_is_explicit_once(monkeypatch):
     owner.seal_unlaunched()
     assert owner.never_launched_closed
     monkeypatch.setattr(
-        module.subprocess, "Popen", lambda *args, **kwargs: pytest.fail("sealed launch")
+        module, "_initialize_popen", lambda *args, **kwargs: pytest.fail("sealed launch")
     )
     with pytest.raises(FrameError):
         owner.start()
@@ -376,7 +378,7 @@ def test_in_place_recipe_drift_refuses_before_launch(monkeypatch):
     original = owner._launch.argv
     object.__setattr__(owner._launch, "argv", ("/untrusted",))
     monkeypatch.setattr(
-        module.subprocess, "Popen", lambda *a, **k: pytest.fail("changed argv launched")
+        module, "_initialize_popen", lambda *a, **k: pytest.fail("changed argv launched")
     )
     with pytest.raises(FrameError):
         owner.start()
@@ -443,7 +445,7 @@ def test_foreign_executable_cannot_compare_or_select_path(monkeypatch):
     original = owner._launch.argv
     object.__setattr__(owner._launch, "argv", (ForeignExecutable(), *original[1:]))
     monkeypatch.setattr(
-        module.subprocess, "Popen", lambda *a, **k: pytest.fail("foreign executable")
+        module, "_initialize_popen", lambda *a, **k: pytest.fail("foreign executable")
     )
     with pytest.raises(FrameError):
         owner.start()
@@ -466,7 +468,7 @@ def test_original_deadline_checked_inside_owner_before_popen(monkeypatch):
     deadline = time.monotonic_ns() + 1_000_000_000
     owner = BrokerChildOwner(object(), deadline_ns=deadline)
     monkeypatch.setattr(module.time, "monotonic_ns", lambda: deadline)
-    monkeypatch.setattr(module.subprocess, "Popen", lambda *a, **k: pytest.fail("late spawn"))
+    monkeypatch.setattr(module, "_initialize_popen", lambda *a, **k: pytest.fail("late spawn"))
     with pytest.raises(BrokerChildLaunchError):
         owner.start()
     assert owner.uncertain and owner.signals_retired

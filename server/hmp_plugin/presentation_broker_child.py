@@ -18,6 +18,31 @@ from typing import BinaryIO
 from .presentation_child_launch import ChildLaunch, child_launch
 from .presentation_jobs import FrameError
 
+# Fixed trusted-runtime primitives, not request-selected constructors. Separate
+# allocation lets the owner retain a partial handle before initializer effects.
+_POPEN_TYPE = subprocess.Popen
+_POPEN_NEW = _POPEN_TYPE.__new__
+_POPEN_INIT = _POPEN_TYPE.__init__
+
+
+def _allocate_popen() -> subprocess.Popen:
+    return _POPEN_NEW(_POPEN_TYPE)
+
+
+def _initialize_popen(child: subprocess.Popen, *args, **kwargs) -> None:
+    if type(child) is not _POPEN_TYPE:
+        raise FrameError("BI1_BROKER_CHILD_NATIVE_HANDLE_REFUSED")
+    _POPEN_INIT(child, *args, **kwargs)
+
+
+def _empty_active() -> list:
+    # Necessary observation only: fresh standalone startup, no foreign
+    # constructors/reapers and strong retention remain qualification premises.
+    active = getattr(subprocess, "_active", None)
+    if type(active) is not list or len(active) != 0:
+        raise FrameError("BI1_BROKER_CHILD_RUNTIME_REFUSED")
+    return active
+
 
 @dataclass(frozen=True)
 class BrokerReaderStreams:
@@ -67,6 +92,8 @@ class BrokerChildOwner:
             self._launch.start_new_session,
         )
         self._lock = threading.Lock()
+        self._popen_type = self._popen_type_snapshot = _POPEN_TYPE
+        self._constructor_returned = False
         self._child: subprocess.Popen[bytes] | None = None
         self._child_snapshot: subprocess.Popen[bytes] | None = None
         self._pid: int | None = None
@@ -105,7 +132,7 @@ class BrokerChildOwner:
         except BaseException:
             self._poison("BI1_BROKER_CHILD_STATE_UNCERTAIN")
 
-    def _check_state(self) -> None:
+    def _check_launch_state(self) -> None:
         if any(
             type(value) is not bool
             for value in (
@@ -114,13 +141,17 @@ class BrokerChildOwner:
                 self._signal_attempted,
                 self._launch_attempted,
                 self._sealed,
+                self._constructor_returned,
             )
         ):
             self._poison("BI1_BROKER_CHILD_STATE_DRIFT")
         if self._uncertain:
             raise FrameError("BI1_BROKER_CHILD_UNCERTAIN")
         if (
-            type(self._context_snapshot) is not tuple
+            type(self._popen_type) is not type
+            or self._popen_type is not self._popen_type_snapshot
+            or self._popen_type is not _POPEN_TYPE
+            or type(self._context_snapshot) is not tuple
             or len(self._context_snapshot) != 2
             or any(type(value) is not int for value in self._context_snapshot)
             or self._context is not self._context_snapshot
@@ -148,6 +179,12 @@ class BrokerChildOwner:
             )
         ):
             self._poison("BI1_BROKER_CHILD_CONTEXT_DRIFT")
+    def _check_state(self) -> None:
+        self._check_launch_state()
+        if self._child is not None and not self._constructor_returned:
+            self._poison("BI1_BROKER_CHILD_PARTIAL_HANDLE")
+        if self._child is None and self._constructor_returned:
+            self._poison("BI1_BROKER_CHILD_PARTIAL_HANDLE")
         if self._child is not self._child_snapshot:
             self._poison("BI1_BROKER_CHILD_HANDLE_DRIFT")
         if self._child is None:
@@ -266,7 +303,17 @@ class BrokerChildOwner:
             try:
                 if self._deadline_ns is not None and time.monotonic_ns() >= self._deadline_ns:
                     self._poison("BI1_BROKER_CHILD_START_DEADLINE")
-                child = subprocess.Popen(  # noqa: S603 — captured fixed own-code recipe
+                active = _empty_active()
+                child = _allocate_popen()
+                # Retain before type checks and every constructor side effect.
+                self._child = self._child_snapshot = child
+                self._check_launch_state()
+                if type(child) is not self._popen_type or _empty_active() is not active:
+                    self._poison("BI1_BROKER_CHILD_NATIVE_HANDLE_REFUSED")
+                if self._deadline_ns is not None and time.monotonic_ns() >= self._deadline_ns:
+                    self._poison("BI1_BROKER_CHILD_START_DEADLINE")
+                _initialize_popen(
+                    child,
                     self._launch.argv,
                     env=dict(self._launch.environment),
                     stdin=subprocess.PIPE,
@@ -277,13 +324,15 @@ class BrokerChildOwner:
                     pass_fds=(),
                     start_new_session=False,
                 )
+                if self._child is not child or self._child_snapshot is not child:
+                    self._poison("BI1_BROKER_CHILD_HANDLE_DRIFT")
+                self._constructor_returned = True
             except BaseException as error:
                 self._uncertain = self._signals_retired = True
                 raise BrokerChildLaunchError(self, error) from None
-            # Retain before validation, and never clear this handle on failure.
-            self._child = self._child_snapshot = child
-            self._pid = self._pid_snapshot = child.pid
+            # A successful constructor return is not a wait/close/custody fact.
             try:
+                self._pid = self._pid_snapshot = child.pid
                 if (
                     type(self._pid) is not int
                     or self._pid <= 1

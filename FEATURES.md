@@ -1,3 +1,27 @@
+## Character broker partial-start retention — November 5, 2026
+
+The reviewed child owner now retains the exact native Popen allocation before
+initializer effects. Failed construction stays opaque and retained, with no
+PID/stream/wait/signal authority or retry. Native class/recipe/context and the
+original deadline are rechecked after allocation. The same exact empty stdlib
+cleanup list is required around allocation; no list is cleared or swept.
+
+The native GC/second-reader fixture confirms that the failed handle is retained
+without invoking its internal poll while a separate reader completes. Root and
+independent focused suites each pass 120 cases. Complete serial Python 3.11 and
+3.14.9 suites each pass 860 tests plus 66 subtests; lint and closed-import scan
+pass. Bootstrap source `9ef3bf4` passed hosted CI41968921451; the new source's CI
+must be recorded by its own commit after publication.
+
+This does not suppress constructor-internal cleanup or establish concurrency
+exclusion: a fresh standalone runtime, no foreign constructors/reapers and strong
+retention remain mandatory premises. Ambiguous constructor cleanup never becomes
+known closure. Production crash/orphan containment, runtime/endpoint/peer/boot
+qualification, native original authorization, started terminal release, routes
+and signed physical parity remain open. No host service, phone capability, device
+grant, model/provider setting or app installation changed. Full desktop character
+scope and host-local images remain in the active goal. See [custody amendment](specs/046-bot-presentation-integration/BROKER_CHILD_CUSTODY.md).
+
 ## Character broker synthetic bootstrap — November 4, 2026
 
 The reviewed source now composes fixed-install verification with an isolated,
