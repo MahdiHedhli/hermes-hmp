@@ -517,3 +517,18 @@ async def test_expired_budget_precedes_io_coroutine_creation(local, monkeypatch,
         assert channel.close()
     finally:
         sock.close()
+
+
+@pytest.mark.asyncio
+async def test_wrong_outbound_scope_refuses_before_any_bytes(local, monkeypatch):
+    channel, sock = accepted_channel(local)
+    def forbidden(*args):
+        pytest.fail("wrong startup scope must never reach wire")
+    monkeypatch.setattr(asyncio.get_running_loop(), "sock_sendall", forbidden)
+    try:
+        wrong = BrokerFrame(BrokerHeader(binding(boot="f" * 64), "READY", 0, 0), b"")
+        with pytest.raises(FrameError):
+            await channel.send(wrong, time.monotonic_ns() + 500_000_000)
+        assert channel._refused and channel.close()
+    finally:
+        sock.close()

@@ -266,6 +266,9 @@ class SocketChannel:
                  and frame.header.kind != "RESULT")
         self._writing = True  # intent before any possibly partial write; no rollback/retry
         try:
+            _binding(frame.header.binding)
+            b, scope = frame.header.binding, self._enrollment.scope
+            _require((b.iid, b.listener, b.broker) == (scope.iid, scope.listener, scope.broker))
             data = encode_frame(frame.header.binding, frame.header.kind,
                                 frame.header.sequence, frame.body)
             _require(len(data) <= _MAX_WIRE)
