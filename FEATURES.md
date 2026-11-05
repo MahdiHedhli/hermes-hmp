@@ -1,3 +1,26 @@
+## Local started-reader claim source — November 5, 2026
+
+HMP `929b77b` binds the original input receipt before reader effects and
+retains one producer over actual child-wait, pipe/control closure and signal
+retirement. Successful claims require the original writer's completed-transfer
+digest; cancelled readers produce only aborted data. Historical claim values
+are immutable, bounded and canonical. Copied observations, changed scopes,
+receipt substitution and foreign callbacks cannot manufacture completion.
+
+Independent review passes 82 focused cases on Python 3.13. Root serial Python
+3.11.15 and standalone 3.14.4 each pass 1,748 tests plus 190 subtests, with one
+Linux-native skip. Lint, plugin surface, privacy and exact module/import checks
+pass. The preceding result head f1c1f51 CI42050745375 failed one GO/cancel race
+(6,845 passed / 21 skips plus 190 subtests); this slice fixes its isolated causal
+fixture and freezes the writer's original cleanup budget before retirement.
+
+These are local facts and data only. Decoding cannot acknowledge started debt,
+release native credits or publish an image. Joined qualified terminal handoff,
+wire/ACK/STATUS, fresh PRE_EMIT, native/policy/credential retirement, authenticated
+routes and complete character/device qualification remain. No app executable,
+embedded HMP, installed host or device changed. Host-local images follow character
+delivery. See [terminal lifecycle](specs/046-bot-presentation-integration/STARTED_TERMINAL.md).
+
 ## Private result2 candidate source — November 5, 2026
 
 HMP `ab87b44` transports the owned reader's result on the original service/work
