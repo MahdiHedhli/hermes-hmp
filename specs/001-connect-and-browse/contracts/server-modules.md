@@ -522,3 +522,14 @@ retaining Hermes-free and optional local-media isolation checks. See
 [STARTED_TERMINAL.md](../../046-bot-presentation-integration/STARTED_TERMINAL.md).
 Shared process-group membership is not a group-absence proof; remote joined
 proof, COMPLETE/ACK, native release and public rendering remain closed.
+
+### BI1 owned readiness notification (November 5, 2026)
+
+`presentation_readiness.py` owns one default-selector read-registration attempt
+on an exact borrowed socket/FD/backend and original task/thread/process scope.
+Its callback notifies only Future(None), never receives bytes or starts a Task.
+It preserves foreign read/write subscriptions and refuses uncertain retirement.
+There is no route, tool, provider, socket close or native authority import. The
+module is explicitly admitted to the closed module set; exact-tree, Hermes-free
+and optional local-media isolation checks remain enforced. HMP receive paths and
+retained cursor integration are not activated by admitting this primitive.
