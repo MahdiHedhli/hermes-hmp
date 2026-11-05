@@ -1,3 +1,27 @@
+## Retained v2 BEGIN/READY and final authority fences — November 5, 2026
+
+HMP `ff895bb` retains selected-v2 BEGIN/READY framing on its original Task before
+initialization, without changing v1 receive behavior. Headers are bounded and
+validated before body reads, with no over-read into the next frame. A local
+custody fence follows the final channel clock sample and rejects revoked or
+replaced remote/channel/cleanup ownership before receive or registration.
+Readiness proof is validated immediately after its await, ahead of later work
+checks. Lost proof retains the read claim even when work is also refused.
+
+Independent review passes a 231-case regression and the final nine native-sample
+owner-binding causals on Python 3.13. Python 3.11.15 and standalone 3.14.4 each pass
+1,929 tests plus 190 subtests, with one Linux-native skip each. Lint, plugin surface, privacy and diff checks pass. Previous broker
+head `27ec16b` CI42083898313 succeeded.
+
+Cursor copies and transient failure aliases are cleared only in original custody;
+the successfully returned private frame body remains intact. These facts grant
+no cleanup resumption, native authority or release. Cleanup-only reader/timeout
+coupling, same-controller CANCEL/ACK and qualified terminal/native completion
+remain before character-image routes. Phone-visible bot characters and host-local
+images are still unfinished. Development build2026110501 and its device
+qualification limits are unchanged; no host deployment or permission change.
+See [pre-result framing](specs/046-bot-presentation-integration/PRE_RESULT_CURSOR.md).
+
 ## Cancellation-safe broker control reader — November 5, 2026
 
 HMP `b0f9d5e` retains the original GO/CANCEL controller's bounded framing and
