@@ -136,3 +136,17 @@ def test_bytecode_enabled_refuses_before_lock_or_import(tmp_path, monkeypatch):
         fixture.main()
     with pytest.raises(fixture.probe.ProbeRefusedError, match="bytecode_disabled"):
         fixture._client_modules(tmp_path)
+
+
+def test_missing_controller_dependency_refuses_before_lock(monkeypatch):
+    monkeypatch.setattr(sys, "dont_write_bytecode", True)
+    monkeypatch.setattr(sys, "argv", ["fixture", "--run-local-fixture"])
+    monkeypatch.setattr(fixture.sys, "platform", "darwin")
+    monkeypatch.setattr(fixture.os, "geteuid", lambda: 501)
+    monkeypatch.setattr(fixture.os, "open", lambda *args: pytest.fail("no lock"))
+    def missing(name):
+        assert name == "yaml"
+        raise ModuleNotFoundError("synthetic missing yaml")
+    monkeypatch.setattr(fixture.importlib, "import_module", missing)
+    with pytest.raises(fixture.probe.ProbeRefusedError, match="pyyaml_dependency_missing"):
+        fixture.main()

@@ -537,6 +537,10 @@ def main() -> int:
         "explicit_nonroot_darwin_fixture_required",
     )
     base._require(sys.dont_write_bytecode is True, "controller_bytecode_disabled_required")
+    try:
+        importlib.import_module("yaml")
+    except ModuleNotFoundError as error:
+        raise probe.ProbeRefusedError("controller_pyyaml_dependency_missing") from error
     fd = os.open(_LOCK, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     os.close(fd)
     root = Path(tempfile.mkdtemp(prefix="hbr-service-", dir="/private/tmp"))

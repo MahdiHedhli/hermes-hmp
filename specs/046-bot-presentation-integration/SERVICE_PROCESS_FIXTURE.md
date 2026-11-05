@@ -6,6 +6,8 @@ exact source and refusal tests before one invocation. Preserve full metadata,
 classic/blobatar/custom image and host-local image goals; this is integration
 qualification, not replacement delivery.
 
+The controller environment must include PyYAML; it is checked before creating
+the lock. The isolated service/reader still uses the copied source-only parser.
 Invoke the controller with `python -B tools/compat/presentation_service_fixture.py --run-local-fixture`.
 Bytecode suppression is required before any lock/preparation and again before copied
 module imports: creating caches would invalidate the source-only installation.
@@ -76,3 +78,11 @@ watcher object but starts its wait thread only through subprocess transport
 registration. This spine uses socket/readiness/task APIs, not subprocess transports,
 executors or DNS; retain the fresh-default-loop/no-foreign-reaper premise and do
 not generalize that source audit to another runtime automatically.
+
+## November 5 first actual attempt
+
+Source `acfde1f` refused before preparation/submission because the bare controller
+Python environment lacked PyYAML. No service label was created or bootstrap
+attempted; this provides no real-service qualification. The private receipt and
+lock were retained; no automatic retry was performed. Dependency preflight now
+refuses before creating a lock, with a specific diagnostic.
