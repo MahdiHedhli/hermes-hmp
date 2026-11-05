@@ -184,6 +184,7 @@ class SocketChannel:
         self._fd = self._fd_snapshot = self._identity = self._identity_snapshot = None
         self._refused = self._close_attempted = self._closed_known = False
         self._reading = self._writing = self._closing = False
+        self._work_write_retired = False
         self._close_fact = self._close_fact_snapshot = None
         self._terminal_owner = self._terminal_owner_snapshot = None
         self._remote_owner = self._remote_owner_snapshot = None
@@ -230,7 +231,7 @@ class SocketChannel:
     def _bindings(self) -> None:
         _require(all(type(v) is bool for v in (self._refused, self._close_attempted,
                  self._closed_known, self._reading, self._writing, self._closing,
-                 self._integrity_lost, self._clock_closed_known)))
+                 self._integrity_lost, self._clock_closed_known, self._work_write_retired)))
         _require(self._integrity_lost is False
                  and _context_shape(self._context_snapshot)
                  and self._context is self._context_snapshot
@@ -467,6 +468,7 @@ class SocketChannel:
                  and frame.header.kind != "RESULT")
         self._authorize_io(owner, "send", frame.header.binding, end_ns, frame)
         if owner is not None and self._enrollment.protocol_version == 2:
+            _require(self._work_write_retired is False)
             _require(self._begin_write_intent is None and self._begin_write_fact is None)
             self._begin_write_intent = self._begin_write_intent_snapshot = _BeginWriteIntent(
                 owner, self, self._socket_snapshot, self._values_snapshot, self._identity_snapshot,
@@ -535,7 +537,8 @@ class SocketChannel:
         _require(type(cleanup) is RemoteCleanupOwner
                  and RemoteCleanupOwner._can_cancel(cleanup)
                  and self is remote._channel_snapshot and self._writing is False
-                 and self._reading is False and self._go_write_intent is None)
+                 and self._reading is False and self._go_write_intent is None
+                 and self._work_write_retired is False)
         data = encode_frame(remote._binding_snapshot, "GO", 1, version=2)
         intent = _GoWriteIntent(self._begin_write_fact_snapshot, cleanup._allocations_snapshot[1],
                                 remote._go_admission_snapshot, data, object())

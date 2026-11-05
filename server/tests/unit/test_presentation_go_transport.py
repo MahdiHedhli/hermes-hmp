@@ -182,6 +182,8 @@ async def test_torn_go_has_no_following_cancel_or_replay(coupled, monkeypatch):
     assert len(writes) == 1 and channel._go_write_intent is not None
     assert channel._go_write_fact is None and not owner._cancel_write_attempted
     assert owner._unknown and owner._work_joined
+    assert owner._write_fact_snapshot is None and owner._write_fact_failed
+    assert not owner._write_fact_consumed
     assert row[0]._record(row[1]).headers is not None
     assert row[0].owner.inspect(row[0]._record(row[1]).handle)[2] is False
 

@@ -37,6 +37,8 @@ No retransmission, modified envelope or appended frame after a torn write.
 
 ## Gateway: retain the original reader into cleanup-only mode
 
+The [write-quiescence prerequisite](WRITE_QUIESCENCE.md) is implemented separately;
+its original fact does not yet replace the whole-task-join/readFalse gates below.
 Keep the original retained work Task as the sole stream reader; existing cleanup
 Task becomes the sole CANCEL/ACK writer. Before changing the old whole-task-join
 send gate, add an exact one-use write-quiescence barrier owned by the original

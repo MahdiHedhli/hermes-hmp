@@ -53,6 +53,22 @@ class _GoBarriers(NamedTuple):
 
 
 _READY_MINT = object()
+_QUIESCENCE_MINT = object()
+
+
+class _WriteQuiescence(NamedTuple):
+    mint: object
+    owner: object
+    future: object
+    work: _TaskAllocation
+    channel: object
+    begin: object
+    go: object
+    budget: object
+    clock: object
+
+    def __repr__(self):
+        return "<WriteQuiescence metadata-only no-join redacted>"
 
 
 class _ReadyFact(NamedTuple):
@@ -123,6 +139,12 @@ class RemoteCleanupOwner:
         self._result_notice_initialized = False
         self._result_awaited = False
         self._result_token = self._result_token_snapshot = None
+        self._write_notice = self._write_notice_snapshot = None
+        self._write_barrier = self._write_barrier_snapshot = None
+        self._write_notice_initialized = False
+        self._write_fact = self._write_fact_snapshot = None
+        self._write_fact_consumed = False
+        self._write_fact_attempted = self._write_fact_failed = False
         self._start_initialized = self._cause_initialized = False
         self._slots = self._slots_snapshot = (_TaskSlot(), _TaskSlot())
         self._allocations = self._allocations_snapshot = (None, None)
@@ -170,6 +192,10 @@ class RemoteCleanupOwner:
             self._result_barrier = self._result_barrier_snapshot = (self._result_notice_snapshot,)
             _initialize_future(self._result_notice_snapshot, self._loop)
             self._result_notice_initialized = True
+            self._write_notice = self._write_notice_snapshot = _FUTURE.__new__(_FUTURE)
+            self._write_barrier = self._write_barrier_snapshot = (self._write_notice_snapshot,)
+            _initialize_future(self._write_notice_snapshot, self._loop)
+            self._write_notice_initialized = True
             # Cleanup is retained first. Both fixed coroutines remain gated until
             # all initialization and reciprocal ownership checks have succeeded.
             functions = (RemoteCleanupOwner._cleanup, RemoteCleanupOwner._work)
@@ -194,7 +220,7 @@ class RemoteCleanupOwner:
                 _FUTURE.set_result(self._cause_snapshot, None)
             if self._ready_initialized and not _FUTURE.done(self._ready_snapshot):
                 _FUTURE.set_result(self._ready_snapshot, False)
-            for field in ("go_request", "go_notice", "result_notice"):
+            for field in ("go_request", "go_notice", "result_notice", "write_notice"):
                 future = getattr(self, "_" + field + "_snapshot")
                 if getattr(self, "_" + field + "_initialized") is True and not _FUTURE.done(future):
                     _FUTURE.set_result(future, False)
@@ -294,6 +320,7 @@ class RemoteCleanupOwner:
                 or self._result_token is not self._result_token_snapshot
                 or (self._result_token is not None and type(self._result_token) is not object)):
             raise AuthorityRefusalError
+        RemoteCleanupOwner._quiescence_binding(self)
         if not all(x is y for x, y in zip(
                 RemoteCleanupOwner._references(self), self._refs, strict=True)):
             raise AuthorityRefusalError
@@ -411,12 +438,14 @@ class RemoteCleanupOwner:
         finally:
             self._sampling = False
 
-    def _can_cancel(self):
+    def _can_cancel(self, *, note_unknown=True):
+        if type(note_unknown) is not bool:
+            raise AuthorityRefusalError
         RemoteCleanupOwner._guard(self)
         c, r = self._refs[3], self._remote_snapshot
         fact = c._begin_write_fact_snapshot
         if fact is None:
-            if r._send_completed is True:
+            if r._send_completed is True and note_unknown:
                 self._unknown = True  # a mutable completion flag is not native write evidence
             return False
         if (type(fact) is not _BeginWriteFact or c._begin_write_fact is not fact
@@ -438,10 +467,88 @@ class RemoteCleanupOwner:
             raise AuthorityRefusalError
         if c._go_write_intent_snapshot is not None:
             if c._go_write_fact_snapshot is None:
-                self._unknown = True  # torn/unknown GO cannot receive an appended CANCEL
+                if note_unknown:
+                    self._unknown = True  # torn/unknown GO cannot receive an appended CANCEL
                 return False
             SocketChannel._go_written(c, r)
         return r._send_completed is True
+
+    def _quiescence_binding(self):
+        barrier, fact = self._write_barrier, self._write_fact
+        if (type(barrier) is not tuple or len(barrier) != 1
+                or barrier is not self._write_barrier_snapshot
+                or self._write_notice is not barrier[0]
+                or self._write_notice_snapshot is not barrier[0]
+                or type(barrier[0]) is not _FUTURE or self._write_notice_initialized is not True
+                or _FUTURE.cancelled(barrier[0])
+                or fact is not self._write_fact_snapshot
+                or any(type(v) is not bool for v in (
+                    self._write_fact_consumed, self._write_fact_attempted, self._write_fact_failed))
+                or (self._write_fact_failed and not self._write_fact_attempted)
+                or self._write_fact_consumed is not self._cancel_write_attempted):
+            raise AuthorityRefusalError
+        if fact is None:
+            if _FUTURE.done(barrier[0]) or self._write_fact_consumed:
+                raise AuthorityRefusalError
+            return
+        if (self._write_fact_attempted is not True or self._write_fact_failed is not False
+                or type(fact) is not _WriteQuiescence or fact.mint is not _QUIESCENCE_MINT
+                or fact.owner is not self or fact.future is not barrier[0]
+                or fact.work is not self._allocations_snapshot[1]
+                or type(fact.channel) is not SocketChannel or fact.channel is not self._refs[3]
+                or fact.begin is not fact.channel._begin_write_fact_snapshot
+                or fact.go is not fact.channel._go_write_fact_snapshot
+                or fact.budget is not self._refs[8] or fact.clock is not self._refs[4]
+                or fact.channel._work_write_retired is not True
+                or not _FUTURE.done(barrier[0]) or _FUTURE.result(barrier[0]) is not fact):
+            raise AuthorityRefusalError
+
+    def _publish_write_quiescence(self):
+        """Original work only; seals no future work writes, never task/read closure."""
+        from .presentation_remote import RemoteOperationOwner
+
+        RemoteCleanupOwner._guard(self)
+        if asyncio.current_task() is not self._allocations_snapshot[1].task:
+            raise AuthorityRefusalError
+        if self._write_fact_snapshot is not None:
+            return True  # retained historical fact, never re-mint or renew allowance
+        if self._write_fact_attempted:
+            return False
+        self._write_fact_attempted = True  # before native/clock boundary; one producer attempt
+        try:
+            channel = self._refs_snapshot[3]
+            if type(channel) is not SocketChannel or channel._writing is not False:
+                self._write_fact_failed = True
+                return False
+            channel._work_write_retired = True  # irreversible before native boundary
+            if not RemoteCleanupOwner._can_cancel(self, note_unknown=False):
+                self._write_fact_failed = True
+                return False  # missing/torn original BEGIN/GO facts cannot mint quiescence
+            _, _, end, failed = CancellationBudget.inspect(self._refs_snapshot[8])
+            if failed:
+                self._write_fact_failed = True
+                return False
+            if end is None:
+                RemoteOperationOwner._work_now(self._remote_snapshot)
+            elif RemoteCleanupOwner._remaining(self) <= 0:
+                self._write_fact_failed = True
+                return False
+            RemoteCleanupOwner._guard(self)
+            if (channel is not self._refs_snapshot[3] or channel._writing is not False
+                    or channel._work_write_retired is not True
+                    or asyncio.current_task() is not self._allocations_snapshot[1].task
+                    or not RemoteCleanupOwner._can_cancel(self, note_unknown=False)):
+                raise AuthorityRefusalError
+            fact = _WriteQuiescence(_QUIESCENCE_MINT, self, self._write_notice_snapshot,
+                self._allocations_snapshot[1], channel, channel._begin_write_fact_snapshot,
+                channel._go_write_fact_snapshot, self._refs_snapshot[8], self._refs_snapshot[4])
+            self._write_fact = self._write_fact_snapshot = fact
+            _FUTURE.set_result(fact.future, fact)
+            RemoteCleanupOwner._guard(self)
+            return True
+        except BaseException:
+            self._write_fact_failed = True
+            raise
 
     def _cancel_actor(self, channel):
         RemoteCleanupOwner._guard(self)
@@ -450,7 +557,7 @@ class RemoteCleanupOwner:
                 or channel._remote_owner_snapshot is not self._remote_snapshot
                 or channel._terminal_owner is not None or channel._cancel_receiver is not None
                 or self._intent is not True or self._unknown is not False
-                or self._work_joined is not True
+                or self._work_joined is not True or self._write_fact_snapshot is None
                 or asyncio.current_task() is not self._allocations_snapshot[0].task
                 or _TASK.cancelling(self._allocations_snapshot[0].task)
                 or not _TASK.done(self._allocations_snapshot[1].task)
@@ -479,6 +586,7 @@ class RemoteCleanupOwner:
             raise AuthorityRefusalError
         self._cancel_sequence = self._cancel_sequence_snapshot = (
             2 if channel._go_write_fact_snapshot is not None else 1)
+        self._write_fact_consumed = True  # one use before encoding/IO, no rollback
         self._cancel_write_attempted = True  # intent before any encoding/timeout/IO attempt
         self._cancel_end = self._cancel_end_snapshot = end
         window = CancellationWindow(end - CLEANUP_NS, end)
@@ -554,6 +662,8 @@ class RemoteCleanupOwner:
             self._go_notice_fact = self._go_notice_fact_snapshot = (
                 self._refs_snapshot[3]._go_write_fact_snapshot)
             _FUTURE.set_result(notice, True)
+            if not RemoteCleanupOwner._publish_write_quiescence(self):
+                raise AuthorityRefusalError
             from .presentation_result_transport import RemoteResultOwner
 
             receiver = RemoteResultOwner.retain(self._remote_snapshot)
@@ -584,6 +694,12 @@ class RemoteCleanupOwner:
                     and not _FUTURE.done(result_notice)):
                 _FUTURE.set_result(result_notice, False)
             raise
+        finally:
+            if self._initialized is True:
+                try:
+                    RemoteCleanupOwner._publish_write_quiescence(self)
+                except BaseException:
+                    self._unknown = True  # no fabricated fact after unknown scope/clock outcome
 
     async def _cleanup(self):
         from .presentation_remote import RemoteOperationOwner
