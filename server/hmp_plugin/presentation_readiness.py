@@ -300,9 +300,11 @@ class SelectorReadiness:
         except BaseException:
             self._unknown = True
             raise FrameError("BI1_READINESS_SCOPE_UNKNOWN") from None
-        _require(type(end_ns) is int and 0 < end_ns <= MAX_NS and _NOW() < end_ns
+        _require(type(end_ns) is int and 0 < end_ns <= MAX_NS
                  and self._attempted is False
                  and self._unknown is False and self._retired is False)
+        if _NOW() >= end_ns:
+            raise TimeoutError  # known no-registration expiry, not ownership uncertainty
         current, _ = SelectorReadiness._slots(self)
         _require(current is None)  # never replace another reader
         self._attempted = True  # registration intent before the possibly partial native add

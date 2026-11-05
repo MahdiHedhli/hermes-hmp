@@ -3,6 +3,7 @@
 No service activation, reader launch, native authorizations, host or user data.
 """
 import asyncio
+import errno
 import os
 import time
 from contextlib import suppress
@@ -13,7 +14,7 @@ import pytest_asyncio
 
 from hmp_plugin import presentation_broker_cancel as cancel
 from hmp_plugin import presentation_broker_service as service
-from hmp_plugin.presentation_broker_codec import encode_frame
+from hmp_plugin.presentation_broker_codec import BrokerFrame, BrokerHeader, encode_frame
 from hmp_plugin.presentation_broker_lifecycle import OperationGrammar
 from hmp_plugin.presentation_broker_registry import RegistryStatus
 from hmp_plugin.presentation_cancel_budget import CLEANUP_NS, CancellationBudget, CancellationWindow
@@ -55,7 +56,18 @@ async def broker_context(local, monkeypatch):
             with suppress(BaseException):
                 await asyncio.wait_for(asyncio.shield(owner._allocation_snapshot.task), 1)
             assert owner._allocation_snapshot.task.done()
-        assert channel.close() and channel.close_clock()
+        if (type(owner) is cancel.BrokerCancellationOwner
+                and owner._io_unknown is True):
+            assert channel._reading is True and not channel.close()
+            # Fixture-only disposal after the original controller Task joined.
+            # Keep production socket/read/clock facts UNKNOWN; our synthetic
+            # loop/FD ownership permits disposal without certifying retirement.
+            asyncio.get_running_loop().remove_reader(sock.fileno())
+            assert cancel.NativeClockOwner.close_local(channel._clock_owner_snapshot)
+            sock.close()
+            assert not channel._closed_known and not channel._clock_closed_known
+        else:
+            assert channel.close() and channel.close_clock()
         peer.close()
         sock.close()
         assert await spine.stop_local_sockets()
@@ -389,3 +401,151 @@ async def test_abort_flag_drift_after_cleanup_sample_never_invokes_foreign_truth
     owner.abort()
     with pytest.raises(asyncio.CancelledError):
         await owner._allocation_snapshot.task
+
+
+@pytest.mark.asyncio
+async def test_go_clear_preserves_cumulative_original_cursor(receiver):
+    owner, _, peer, _, _, b = receiver
+    now = time.monotonic_ns()
+    owner._grammar.observe(BrokerFrame(BrokerHeader(b, "READY", 0, 0, 2), b""),
+                           sender="broker")  # explicit synthetic prior READY grammar fact
+    go = encode_frame(b, "GO", 1, b"", version=2)
+    cancel_wire = encode_frame(b, "CANCEL", 2,
+        CancellationWindow(now, now + CLEANUP_NS).encode(), version=2)
+    await asyncio.get_running_loop().sock_sendall(peer, go + cancel_wire)
+    frame = await owner._allocation_snapshot.task
+    assert frame.header.kind == "CANCEL" and owner._adopted
+    assert owner._frame_start == len(go)
+    assert owner._wire_received == len(go) + len(cancel_wire)
+    assert bytes(owner._buffer_origin) == cancel_wire
+    assert owner._pending is None and not owner._recv_intent and not owner._io_unknown
+
+
+@pytest.mark.asyncio
+async def test_cancel_after_readiness_hint_keeps_partial_bytes_in_original_cursor(
+    receiver, monkeypatch
+):
+    owner, channel, peer, _, _, b = receiver
+    original_recv, original_wait = cancel._SOCKET_RECV, cancel.SelectorReadiness.wait
+    seen = []
+    registered = asyncio.Event()
+
+    def short_recv(sock, count):
+        return original_recv(sock, min(count, 3))
+
+    async def wait(waiter, end):
+        registered.set()
+        await original_wait(waiter, end)
+        if owner._wire_received == 3 and not seen:
+            seen.append(True)
+            asyncio.current_task().cancel()
+            await asyncio.sleep(0)
+
+    monkeypatch.setattr(cancel, "_SOCKET_RECV", short_recv)
+    monkeypatch.setattr(cancel.SelectorReadiness, "wait", wait)
+    now = time.monotonic_ns()
+    wire = encode_frame(b, "CANCEL", 1,
+        CancellationWindow(now, now + CLEANUP_NS).encode(), version=2)
+    await asyncio.get_running_loop().sock_sendall(peer, wire[:3])
+    await registered.wait()
+    await asyncio.get_running_loop().sock_sendall(peer, wire[3:])
+    with pytest.raises(asyncio.CancelledError):
+        await owner._allocation_snapshot.task
+    assert seen and owner._wire_received == 3 and bytes(owner._buffer_origin) == wire[:3]
+    assert not owner._io_unknown and not channel._reading
+    assert not owner._adopted and owner._pending is None
+
+
+@pytest.mark.asyncio
+async def test_uncertain_control_recv_retains_read_claim(receiver, monkeypatch):
+    owner, channel, peer, _, _, b = receiver
+    original = cancel._SOCKET_RECV
+    consumed = []
+
+    def recv(sock, count):
+        part = original(sock, count)
+        consumed.append(len(part))
+        raise RuntimeError("synthetic interruption after syscall")
+
+    monkeypatch.setattr(cancel, "_SOCKET_RECV", recv)
+    await asyncio.get_running_loop().sock_sendall(
+        peer, encode_frame(b, "CANCEL", 1, b"x" * 16, version=2))
+    with pytest.raises(RuntimeError):
+        await owner._allocation_snapshot.task
+    assert consumed == [8] and owner._wire_received == 0
+    assert owner._io_unknown and owner._recv_intent and channel._reading
+    assert not owner._adopted and not channel._closed_known
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["_wire_received", "_frame_start"])
+async def test_control_recv_counter_drift_has_no_foreign_arithmetic(
+    receiver, monkeypatch, field
+):
+    owner, channel, peer, _, _, b = receiver
+    original = cancel._SOCKET_RECV
+    callbacks = []
+
+    class Foreign:
+        def __add__(self, other):
+            callbacks.append("add")
+            raise AssertionError("foreign arithmetic")
+        __iadd__ = __add__
+        def __eq__(self, other):
+            callbacks.append("eq")
+            raise AssertionError("foreign comparison")
+
+    def recv(sock, count):
+        part = original(sock, count)
+        setattr(owner, field, Foreign())
+        return part
+
+    monkeypatch.setattr(cancel, "_SOCKET_RECV", recv)
+    await asyncio.get_running_loop().sock_sendall(
+        peer, encode_frame(b, "CANCEL", 1, b"x" * 16, version=2))
+    with pytest.raises(FrameError):
+        await owner._allocation_snapshot.task
+    assert callbacks == [] and owner._wire_received == 8 and len(owner._buffer_origin) == 8
+    assert owner._io_unknown and channel._reading and not owner._adopted
+
+
+@pytest.mark.asyncio
+async def test_control_eagain_wait_keeps_original_end(receiver, monkeypatch):
+    owner, _, peer, _, _, b = receiver
+    original_recv, original_wait = cancel._SOCKET_RECV, cancel.SelectorReadiness.wait
+    calls, cutoffs = [], []
+
+    def recv(sock, count):
+        if not calls:
+            calls.append(True)
+            raise BlockingIOError(errno.EAGAIN, "synthetic zero-byte EAGAIN")
+        return original_recv(sock, count)
+
+    async def wait(waiter, end):
+        cutoffs.append(end)
+        return await original_wait(waiter, end)
+
+    monkeypatch.setattr(cancel, "_SOCKET_RECV", recv)
+    monkeypatch.setattr(cancel.SelectorReadiness, "wait", wait)
+    now = time.monotonic_ns()
+    wire = encode_frame(b, "CANCEL", 1,
+        CancellationWindow(now, now + CLEANUP_NS).encode(), version=2)
+    await asyncio.get_running_loop().sock_sendall(peer, wire)
+    await owner._allocation_snapshot.task
+    assert cutoffs and set(cutoffs) == {owner._scope[2]}
+    assert owner._wire_received == len(wire) and owner._adopted
+    assert not owner._io_unknown and owner._pending is None
+
+
+@pytest.mark.asyncio
+async def test_control_non_eagain_blocking_error_keeps_unknown_read_claim(receiver, monkeypatch):
+    owner, channel, _, _, _, _ = receiver
+
+    def recv(sock, count):
+        raise BlockingIOError(errno.EIO, "synthetic uncertain syscall")
+
+    monkeypatch.setattr(cancel, "_SOCKET_RECV", recv)
+    with pytest.raises(BlockingIOError):
+        await owner._allocation_snapshot.task
+    assert owner._io_unknown and owner._recv_intent and channel._reading
+    assert owner._wire_received == 0 and not owner._adopted

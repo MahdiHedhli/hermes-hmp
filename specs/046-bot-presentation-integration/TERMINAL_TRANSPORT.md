@@ -7,8 +7,8 @@ no terminal dispatch, ACK permission, image emission or registry/native release.
 ## Current concrete prerequisites
 
 The current gateway cleanup cancels and joins the whole work task before sending
-CANCEL (`RemoteCleanupOwner._cleanup`). The broker's original control task returns
-after adopting CANCEL (`BrokerCancellationOwner._read`). Consequently neither can
+CANCEL (`RemoteCleanupOwner._cleanup`). The broker's original control task now retains cancellation-safe readiness and
+cumulative framing across GO/CANCEL, but still returns after adopting CANCEL (`BrokerCancellationOwner._read`). Consequently neither can
 simply append a new reader for aborted TERMINAL/ACK. Do not lose partial framing,
 create a competing reader or treat full-task join as proof of a different fact.
 The independently qualified producer/receiver factory is also not implemented;

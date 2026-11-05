@@ -73,15 +73,9 @@ async def test_timeout_retires_only_registration_without_reading_or_renewal(pair
     left, right = pair
     owner = readiness.SelectorReadiness(left)
     deadline = time.monotonic_ns() + 100_000_000
-    try:
+    with pytest.raises(TimeoutError):
         await owner.wait(deadline)
-    except TimeoutError:
-        assert owner._retired
-    except FrameError:
-        # A descheduled runner can pass the deadline before installation.
-        assert time.monotonic_ns() >= deadline and not owner._attempted
-    else:
-        pytest.fail("no-data readiness wait completed")
+    assert owner._retired or not owner._attempted
     assert not owner._unknown
     right.send(b"SYNTHETIC_AFTER_TIMEOUT")
     assert left.recv(64) == b"SYNTHETIC_AFTER_TIMEOUT"
@@ -414,3 +408,13 @@ async def test_current_future_retarget_does_not_mutate_foreign_future(pair):
         await task
     assert not other.done() and original.done() and owner._unknown
     other.cancel()  # test-owned disposal only
+
+
+async def test_elapsed_valid_end_is_known_no_registration_timeout(pair):
+    left, right = pair
+    owner = readiness.SelectorReadiness(left)
+    with pytest.raises(TimeoutError):
+        await owner.wait(time.monotonic_ns() - 1)
+    assert not owner._attempted and not owner._unknown
+    right.send(b"SYNTHETIC_NOT_CONSUMED")
+    assert left.recv(64) == b"SYNTHETIC_NOT_CONSUMED"

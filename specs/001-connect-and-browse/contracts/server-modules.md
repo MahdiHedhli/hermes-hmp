@@ -544,3 +544,13 @@ on refusal. Unknown registration/syscall/commit outcome retains the read claim.
 No dependency, route, registration or network destination is added. Service/control
 receive paths, cleanup-reader activation, terminal acceptance and release remain
 separate gates. See [cursor ownership](../../046-bot-presentation-integration/READINESS_CURSOR.md).
+
+### BI1 broker control readiness integration (November 5, 2026)
+
+The existing `presentation_broker_cancel.py` now retains cumulative framing and
+uses immediate concrete nonblocking receive plus owned readiness on EAGAIN only.
+This preserves queued GO/CANCEL priority, partial framing across original work
+expiry, and unknown IO/read claims. A valid elapsed readiness end returns a known
+no-registration timeout. Existing native-clock/budget checks decide continuation;
+no new interval or authority follows from the timeout. No module/dependency,
+route, destination or ACK/release activation is added. See [control cursor](../../046-bot-presentation-integration/BROKER_CONTROL_CURSOR.md).

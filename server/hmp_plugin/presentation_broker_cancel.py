@@ -6,6 +6,7 @@ are read only on the original enrolled channel under its qualified clock domain.
 from __future__ import annotations
 
 import asyncio
+import errno
 import os
 import socket
 import threading
@@ -26,6 +27,7 @@ from .presentation_broker_service import _SOCKET_FILENO, _SOCKET_TIMEOUT, Socket
 from .presentation_cancel_budget import MAX_NS, CancellationBudget, CancellationWindow
 from .presentation_clock import NativeClockOwner, _PeerClockRefusedError
 from .presentation_jobs import FrameError
+from .presentation_readiness import SelectorReadiness
 from .presentation_remote_cleanup import (
     _FUTURE,
     _LOOP,
@@ -42,6 +44,7 @@ def _refuse():
 
 
 _GO_RECEIPT_MINT = object()
+_SOCKET_RECV = socket.socket.recv
 
 
 class _GoReceipt(NamedTuple):
@@ -87,7 +90,10 @@ class BrokerCancellationOwner:
         self._scope = self._scope_snapshot = None
         self._failure_origin = self._failure_origin_snapshot = (
             grammar if type(grammar) is OperationGrammar else None, None)
-        self._buffer = self._buffer_snapshot = bytearray()
+        self._buffer = self._buffer_snapshot = self._buffer_origin = bytearray()
+        self._wire_received = self._frame_start = 0
+        self._pending = self._waiter = None
+        self._recv_intent = self._io_unknown = False
         self._frame = self._frame_snapshot = None
         self._frame_seal = self._frame_seal_snapshot = None
         self._timeout = self._timeout_snapshot = None
@@ -202,7 +208,14 @@ class BrokerCancellationOwner:
                                                      self._cancel_attempted, self._joined,
                                                      self._go_relay_intent,
                                                      self._go_relay_completed))
+                or type(self._recv_intent) is not bool or type(self._io_unknown) is not bool
+                or type(self._wire_received) is not int or type(self._frame_start) is not int
+                or not 0 <= self._frame_start <= self._wire_received <= 2 * (8 + 1024 + 16)
+                or self._pending is not None
+                or (self._waiter is not None and type(self._waiter) is not SelectorReadiness)
                 or type(self._buffer) is not bytearray or self._buffer is not self._buffer_snapshot
+                or self._buffer is not self._buffer_origin
+                or self._wire_received != self._frame_start + len(self._buffer)
                 or len(self._buffer) > 8 + 1024 + 16
                 or self._slot is not self._slot_snapshot or type(self._slot) is not _TaskSlot
                 or type(self._allocation) is not _TaskAllocation
@@ -316,6 +329,8 @@ class BrokerCancellationOwner:
                 BrokerResultWriter.retire_from_control(writer, self)
 
     def _remaining(self):
+        if self._io_unknown is not False or self._recv_intent is not False:
+            _refuse()
         BrokerCancellationOwner._guard(self, reader=True)
         budget, clock, deadline = self._scope[3], self._scope[6], self._scope[2]
         _, _, end, failed = CancellationBudget.inspect(budget)
@@ -357,6 +372,7 @@ class BrokerCancellationOwner:
             self._sampling = False
 
     async def _exact(self, count):
+        BrokerCancellationOwner._guard(self, reader=True)
         if type(count) is not int or not 0 < count <= 8 + 1024 + 16:
             _refuse()
         target = len(self._buffer) + count
@@ -364,21 +380,62 @@ class BrokerCancellationOwner:
             _refuse()
         while len(self._buffer) < target:
             BrokerCancellationOwner._remaining(self)
-            end = CancellationBudget.inspect(self._scope[3])[2]
-            cutoff = self._scope[2] if end is None else end
-            self._timeout = self._timeout_snapshot = asyncio.timeout_at(cutoff / 1_000_000_000)
-            try:
-                async with self._timeout:
-                    part = await _LOOP.sock_recv(
-                        self._loop, self._channel._socket, target - len(self._buffer))
-            except TimeoutError:
-                # Preserve partial bytes and sample the same absolute budget.
-                BrokerCancellationOwner._remaining(self)
-                continue
-            BrokerCancellationOwner._guard(self, reader=True)
-            if type(part) is not bytes or not part:
+            buffer, received, base = self._buffer_origin, self._wire_received, self._frame_start
+            wanted = target - len(buffer)
+            if not 0 < wanted <= 8 + 1024 + 16:
                 _refuse()
-            self._buffer.extend(part)
+            self._recv_intent = True
+            try:
+                part = _SOCKET_RECV(self._channel_snapshot._socket_snapshot, wanted)
+            except BlockingIOError as error:
+                if (type(error) is not BlockingIOError or type(error.errno) is not int
+                        or error.errno not in (errno.EAGAIN, errno.EWOULDBLOCK)):
+                    raise
+                self._recv_intent = False
+                BrokerCancellationOwner._remaining(self)
+                end = CancellationBudget.inspect(self._scope[3])[2]
+                cutoff = self._scope[2] if end is None else end
+                waiter = SelectorReadiness.__new__(SelectorReadiness)
+                self._waiter = waiter  # allocation retained before initialization/native interest
+                try:
+                    SelectorReadiness.__init__(waiter, self._channel_snapshot._socket_snapshot)
+                    await SelectorReadiness.wait(waiter, cutoff)
+                except BaseException as error:
+                    if (getattr(waiter, "_initialized", False) is not True or waiter._unknown
+                            or (waiter._attempted and not waiter._retired)):
+                        self._io_unknown = True
+                    elif type(error) is TimeoutError:
+                        # Same original controller/cursor, native clock and first-cause
+                        # budget: work expiry may enter its existing cleanup interval.
+                        BrokerCancellationOwner._remaining(self)
+                        continue
+                    raise
+                BrokerCancellationOwner._remaining(self)
+                if self._waiter is not waiter or not waiter._retired or waiter._unknown:
+                    self._io_unknown = True
+                    _refuse()
+                continue  # recheck original budget and recv without a second reader
+            # Capture consumption before another guard/callback/await. Arithmetic
+            # uses held primitive values, never mutable post-syscall counters.
+            self._pending = part
+            if type(part) is not bytes:
+                _refuse()
+            prior_received, prior_base = self._wire_received, self._frame_start
+            self._wire_received = received + len(part)
+            if not 0 <= len(part) <= wanted:
+                _refuse()
+            buffer.extend(part)
+            self._pending = None
+            self._recv_intent = False
+            if (type(prior_received) is not int or prior_received != received
+                    or type(prior_base) is not int or prior_base != base
+                    or self._buffer is not buffer or self._buffer_snapshot is not buffer
+                    or self._buffer_origin is not buffer):
+                self._io_unknown = True
+                _refuse()
+            BrokerCancellationOwner._guard(self, reader=True)
+            if not part:
+                _refuse()  # known zero-byte EOF, not an uncertain syscall
         return bytes(self._buffer[target - count:target])
 
     async def _read(self):
@@ -409,7 +466,12 @@ class BrokerCancellationOwner:
                     self._go_receipt = self._go_receipt_snapshot = receipt
                     BrokerCancellationOwner._guard(self, reader=True)
                     _FUTURE.set_result(receipt.future, receipt)
-                    self._buffer.clear()  # same bounded cursor; no second reader/task
+                    if self._pending is not None or self._recv_intent or self._io_unknown:
+                        _refuse()
+                    self._recv_intent = True  # logical cursor commit can also be interrupted
+                    self._buffer.clear()  # accepted GO only; cumulative history remains
+                    self._frame_start = self._wire_received
+                    self._recv_intent = False
                     continue
                 sequence = 2 if self._go_receipt_snapshot is not None else 1
                 if (header.kind != "CANCEL" or header.sequence != sequence
@@ -433,13 +495,17 @@ class BrokerCancellationOwner:
             self._adopted = True
             return self._frame
         except BaseException:
+            if self._recv_intent is not False:
+                self._io_unknown = True
+            self._pending = None
             BrokerCancellationOwner._local_cause(self)
             self._failed = True
             raise
         finally:
             # Only original channel metadata; no stream or resource closure.
             c = self._channel_snapshot
-            if type(c) is SocketChannel and c._cancel_receiver_snapshot is self:
+            if (type(c) is SocketChannel and c._cancel_receiver_snapshot is self
+                    and self._io_unknown is False and self._recv_intent is False):
                 c._reading = False
 
     def go_receipt(self):

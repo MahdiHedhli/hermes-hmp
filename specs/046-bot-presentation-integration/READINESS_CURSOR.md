@@ -7,7 +7,8 @@ selector sock_recv callback can consume bytes into its internal Future and then
 Task.cancel can win before the original task resumes. In that observation 22
 synthetic bytes left the kernel, while the original task received zero. Saving a
 cursor only after await cannot recover that offset. The normal RESULT path now uses the readiness/cursor integration below; other
-service/control paths still use sock_recv. No cleanup-reader resumption is
+other service paths still use sock_recv; broker control integration is described
+in [its cursor contract](BROKER_CONTROL_CURSOR.md). No cleanup-reader resumption is
 enabled. They must retain UNKNOWN rather than guess a frame boundary after
 ambiguity.
 
@@ -91,8 +92,8 @@ payload custody; consumed-count metadata remains. No scan, replay, second reader
 or fresh deadline is introduced. A successfully retired notification followed by
 cancellation consumes no further kernel bytes.
 
-This integrates normal RESULT reading only. Service BEGIN/GO/control receive
-paths are unchanged, and whole-work-task join before CANCEL remains mandatory.
+This integrates normal RESULT reading only. Service BEGIN and other channel receive paths remain separate; broker control
+has its own readiness integration, and whole-work-task join before CANCEL remains mandatory.
 No cleanup-mode resumption, active first-cause timeout shortening, qualified
 terminal acceptance or native release follows from these counters. Those remain
 the coupled next integration, including exact retained framing state at both
