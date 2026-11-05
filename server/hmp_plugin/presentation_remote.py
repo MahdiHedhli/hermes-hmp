@@ -10,10 +10,17 @@ import os
 import time
 from contextlib import suppress
 
-from .presentation_authority import AuthorityRefusalError, OpaqueOperation, ParentAuthorityAdapter
+from .presentation_authority import (
+    AuthorityRefusalError,
+    ListenerFence,
+    OpaqueOperation,
+    ParentAuthorityAdapter,
+    _Record,
+)
 from .presentation_broker_codec import BrokerBinding, BrokerFrame, BrokerHeader, _binding
 from .presentation_broker_service import SocketChannel, _task_allows_work
 from .presentation_cancel_budget import CancellationBudget
+from .presentation_clock import ClockDomain, NativeClockOwner
 from .presentation_input_v3 import decode_input_v3
 from .presentation_jobs import CapturedLease, JobHandle, JobOwner, RemotePhase, State
 from .presentation_parent_policy import ParentPolicyReadOwner
@@ -43,6 +50,11 @@ class RemoteOperationOwner:
         self._loop = self._loop_snapshot = None
         self._context = self._context_snapshot = None
         self._cleanup_budget = self._cleanup_budget_snapshot = None
+        self._protocol = self._protocol_snapshot = None
+        self._clock_owner = self._clock_owner_snapshot = None
+        self._clock_domain = self._clock_domain_snapshot = None
+        self._clock_domain_values = self._clock_domain_values_snapshot = None
+        self._clock_qualification = self._clock_qualification_snapshot = None
         try:
             self._loop = self._loop_snapshot = asyncio.get_running_loop()
             self._context = self._context_snapshot = (os.getpid(), os.geteuid())
@@ -86,6 +98,16 @@ class RemoteOperationOwner:
                     or CancellationBudget.inspect(budget) != (self._end, None, None, False)):
                 raise AuthorityRefusalError
             self._cleanup_budget = self._cleanup_budget_snapshot = budget
+            self._protocol = self._protocol_snapshot = channel._enrollment.protocol_version
+            if self._protocol == 2:
+                clock = SocketChannel._qualified_clock(channel)
+                self._clock_owner = self._clock_owner_snapshot = clock
+                self._clock_domain = self._clock_domain_snapshot = clock._domain_snapshot
+                self._clock_domain_values = self._clock_domain_values_snapshot = (
+                    clock._domain_values)
+                self._clock_qualification = self._clock_qualification_snapshot = (
+                    clock._qualification)
+            RemoteOperationOwner._clock_binding(self)
             root, native_home, profile, uid, gid = work._scope
             if (row["iid"] != record.lease.iid or binding.iid != record.lease.iid
                     or row["profile"] != record.lease.profile or profile != record.lease.profile
@@ -123,7 +145,90 @@ class RemoteOperationOwner:
                 c._values, c._socket, c._identity, c._endpoint, c._observation,
                 work._thread, work._policy, work._scope, r.listener, r.fence,
                 r.fence_epoch, r.store, r.bridge, r.identity, r.native_owner, r.headers,
-                r._custody_snapshot, r.cleanup_budget)
+                r._custody_snapshot, r.cleanup_budget, self._protocol,
+                self._clock_owner, self._clock_domain, self._clock_domain_values,
+                self._clock_qualification)
+
+    def _clock_binding(self):
+        """Original selection/domain only; no new clock or cleanup authority."""
+        c = self._channel_snapshot
+        if type(c) is not SocketChannel:
+            raise AuthorityRefusalError
+        SocketChannel._bindings(c)
+        if (self._channel is not c
+                or type(self._protocol) is not int or self._protocol not in (1, 2)
+                or self._protocol is not self._protocol_snapshot
+                or c._enrollment.protocol_version != self._protocol
+                or c._values_snapshot[-1] != self._protocol
+                or self._clock_owner is not self._clock_owner_snapshot
+                or self._clock_domain is not self._clock_domain_snapshot
+                or self._clock_domain_values is not self._clock_domain_values_snapshot
+                or self._clock_qualification is not self._clock_qualification_snapshot):
+            raise AuthorityRefusalError
+        if self._protocol == 1:
+            if any(v is not None for v in (self._clock_owner, self._clock_domain,
+                                          self._clock_domain_values, self._clock_qualification,
+                                          c._clock_owner, c._clock_owner_snapshot)):
+                raise AuthorityRefusalError
+            return
+        clock, domain, values = self._clock_owner, self._clock_domain, self._clock_domain_values
+        if (type(clock) is not NativeClockOwner
+                or SocketChannel._qualified_clock(c) is not clock
+                or type(domain) is not ClockDomain
+                or clock._domain is not domain or clock._domain_snapshot is not domain
+                or type(values) is not tuple or len(values) != 4
+                or clock._domain_values is not values
+                or type(self._clock_qualification) is not object
+                or clock._qualification is not self._clock_qualification
+                or clock._qualification_snapshot is not self._clock_qualification
+                or type(domain.platform) is not str or type(domain.implementation) is not str
+                or type(domain.boot) is not bytes
+                or (domain.namespace is not None and (type(domain.namespace) is not tuple
+                    or len(domain.namespace) != 2
+                    or any(type(v) is not int for v in domain.namespace)))
+                or any(x is not y for x, y in zip(
+                    (domain.platform, domain.implementation, domain.boot, domain.namespace),
+                    values, strict=True))):
+            raise AuthorityRefusalError
+
+    def _retained_local(self):
+        """Callback-free reference fence before owner/policy methods after native IO."""
+        a, r, c, seal = self._authority, self._record, self._channel, self._seal
+        if (type(a) is not ParentAuthorityAdapter or a is not self._authority_snapshot
+                or type(r) is not _Record or r is not self._record_snapshot
+                or type(c) is not SocketChannel or c is not self._channel_snapshot
+                or type(seal) is not tuple or seal is not self._seal_snapshot or len(seal) != 31
+                or type(r.owner) is not JobOwner or type(r.handle) is not JobHandle
+                or type(r.fence) is not ListenerFence or type(r.policy_work) is not NativePolicyWork
+                or a._clock is not time.monotonic or r.owner._clock is not time.monotonic):
+            raise AuthorityRefusalError
+        work = r.policy_work
+        # Index5 is a resolved JobOwner context: never resolve it until these
+        # callback-free local references have passed. _references checks it later.
+        current = (r.owner, r.handle, r.lease, r.remote_slot, work,
+                   seal[5], r.deadline, c._enrollment, c._values, c._socket,
+                   c._identity, c._endpoint, c._observation, work._thread, work._policy,
+                   work._scope, r.listener, r.fence, r.fence_epoch, r.store, r.bridge,
+                   r.identity, r.native_owner, r.headers, r._custody_snapshot,
+                   r.cleanup_budget, self._protocol, self._clock_owner, self._clock_domain,
+                   self._clock_domain_values, self._clock_qualification)
+        if (not all(x is y for x, y in zip(current, seal, strict=True))
+                or r.cleanup_budget is not r.cleanup_budget_snapshot
+                or self._failed is not False):
+            raise AuthorityRefusalError
+
+    def _work_now(self):
+        RemoteOperationOwner._retained_local(self)
+        RemoteOperationOwner._clock_binding(self)
+        now = (NativeClockOwner.sample(self._clock_owner) if self._protocol == 2
+               else time.monotonic_ns())
+        RemoteOperationOwner._retained_local(self)
+        RemoteOperationOwner._clock_binding(self)
+        _task_allows_work()
+        if (type(self._end) is not int or self._end is not self._end_snapshot
+                or type(now) is not int or not 0 <= now < self._end):
+            raise AuthorityRefusalError
+        return now
 
     def __repr__(self):
         return "<RemoteOperationOwner redacted>"
@@ -166,7 +271,7 @@ class RemoteOperationOwner:
                     or self._values is not self._values_snapshot or type(self._values) is not tuple
                     or len(self._values) != 5 or any(type(v) is not str for v in self._values)
                     or self._seal is not self._seal_snapshot or type(self._seal) is not tuple
-                    or len(self._seal) != 26
+                    or len(self._seal) != 31
                     or type(self._cleanup_budget) is not CancellationBudget
                     or self._cleanup_budget is not self._cleanup_budget_snapshot
                     or r.cleanup_budget is not self._cleanup_budget
@@ -204,7 +309,7 @@ class RemoteOperationOwner:
                     or decode_input_v3(self._packet) != self._row
                     or r.initial_home != self._row["home"]
                     or int(r.deadline * 1_000_000_000) != self._end
-                    or time.monotonic_ns() >= self._end):
+                    or RemoteOperationOwner._work_now(self) >= self._end):
                 raise AuthorityRefusalError
             c._check()  # original enrolled peer/endpoint, never status-terminal fallback
             c._local_integrity()
@@ -218,9 +323,12 @@ class RemoteOperationOwner:
                     or c._remote_owner is not self or self._packet is not self._packet_snapshot):
                 raise AuthorityRefusalError
             _task_allows_work()
-            now = time.monotonic_ns()
+            now = RemoteOperationOwner._work_now(self)
             _task_allows_work()  # native/clock callbacks cannot revive pending cancellation
-            if now >= self._end or r.owner.inspect_remote(r.handle) is not phase:
+            if (now >= self._end or r.owner.inspect_remote(r.handle) is not phase
+                    or not a._current(r) or self._failed is not False
+                    or not all(x is y for x, y in zip(
+                        self._references(), self._seal, strict=True))):
                 raise AuthorityRefusalError
         except BaseException:
             self._poison()
@@ -238,6 +346,8 @@ class RemoteOperationOwner:
                         or type(frame.header) is not BrokerHeader
                         or type(frame.header.kind) is not str or frame.header.kind != "BEGIN"
                         or type(frame.header.sequence) is not int or frame.header.sequence != 0
+                        or type(frame.header.version) is not int
+                        or frame.header.version != self._protocol
                         or type(frame.header.body_length) is not int
                         or frame.body is not self._packet_snapshot
                         or frame.header.body_length != len(self._packet_snapshot)):
@@ -266,14 +376,17 @@ class RemoteOperationOwner:
             self._record.owner.remote_transition(
                 self._record.handle, self, RemotePhase.BEGIN_INTENT)
             self._check(RemotePhase.BEGIN_INTENT)
-            frame = BrokerFrame(BrokerHeader(self._binding, "BEGIN", 0, len(self._packet)),
+            frame = BrokerFrame(BrokerHeader(self._binding, "BEGIN", 0, len(self._packet),
+                                            self._protocol),
                                 self._packet)
             await self._channel.send(frame, self._end, owner=self)
             self._send_completed = True
             self._check(RemotePhase.BEGIN_INTENT)
             ready = await self._channel.receive(self._end, expected=self._binding, owner=self)
             self._check(RemotePhase.BEGIN_INTENT)
-            if ready.header.kind != "READY" or ready.header.sequence != 0 or ready.body != b"":
+            if (type(ready.header.version) is not int or ready.header.version != self._protocol
+                    or ready.header.kind != "READY" or ready.header.sequence != 0
+                    or ready.body != b""):
                 raise AuthorityRefusalError
             if not await self._authority._observe(self._record, "PRE_GO"):
                 raise AuthorityRefusalError

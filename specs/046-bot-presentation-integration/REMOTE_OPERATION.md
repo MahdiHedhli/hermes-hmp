@@ -64,6 +64,27 @@ drifted metadata. No retry,
 reconnect BEGIN, fresh deadline, GO, output read, publication or inferred closure
 is available from READY. Wire/control ownership stays reachable after failure.
 
+## Selected native clock handoff
+
+The remote owner now retains the explicit original protocol selection together
+with its exact qualified NativeClockOwner, immutable domain-value tuple, domain
+object and qualification reference. Those references join the existing original
+budget, operation and input seals. Version 1 retains no qualified clock and
+cannot acquire one as a fallback. Version 2 work samples dispatch the concrete
+native sampler; no new clock or domain is constructed during the operation.
+
+A callback-free exact reference fence runs before and immediately after native
+sampling, before resolving JobOwner context or invoking owner/fence methods.
+Clock/domain/qualification changes, budget cancellation, deadline replacement
+and pending task cancellation refuse before later native observation or BEGIN.
+The original custody snapshot retains unknown debt; restoring metadata cannot
+revive work. Selected BEGIN headers and READY validation use the original exact
+version, refusing downgrade. These changes still authorize only BEGIN/READY.
+
+This handoff does not send CANCEL, retain a cleanup task, adopt an inherited
+window or activate v2 broker dispatch. Local Unix tests explicitly mock peer and
+Darwin clock facts; actual host/runtime/device qualification remains separate.
+
 ## Full backend gates preserved
 
 A later one-use async GO-intent contract must freshly reauthenticate original

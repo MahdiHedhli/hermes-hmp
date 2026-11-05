@@ -48,9 +48,10 @@ native case status must be assessed from exact-run evidence, not green totals.
 
 ## Coupled work remaining
 
-1. Bind the original CancellationBudget to the native gateway reservation and
-   broker BEGIN before resource effects. Seal exact selected clock/domain,
-   operation and original work end; do not create a new budget at cancel time.
+1. Local original CancellationBudget binding is implemented before native and
+   broker resource effects. The remote owner now seals exact selected clock,
+   immutable domain values and qualification with the operation and original work
+   end. Inherited transport adoption remains open; no new budget at cancel time.
 2. Route every local EOF/timeout/revocation and authenticated inherited window
    through the same minimum. Registry/resource adoption can only shorten the
    earlier frozen end. Unknown clock or delivery retains unknown debt.

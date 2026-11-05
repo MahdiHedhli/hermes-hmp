@@ -18,7 +18,14 @@ from hmp_plugin.presentation_authority import (
     OriginalHeaders,
     ParentAuthorityAdapter,
 )
-from hmp_plugin.presentation_broker_codec import BrokerFrame, BrokerHeader, encode_frame
+from hmp_plugin.presentation_broker_codec import (
+    BrokerFrame,
+    BrokerHeader,
+    decode_frame,
+    decode_header,
+    encode_frame,
+    header_size,
+)
 from hmp_plugin.presentation_broker_service import TerminalStatusExchange
 from hmp_plugin.presentation_cancel_budget import CancellationBudget
 from hmp_plugin.presentation_input_v3 import decode_input_v3
@@ -29,13 +36,13 @@ from hmp_plugin.presentation_supervisor import ReaderSupervisor
 
 from .test_presentation_broker_service import binding, read_frame
 from .test_presentation_broker_service import local as local
+from .test_presentation_selected_protocol import v2gateway as v2gateway
 from .test_presentation_supervisor import Native, Request
 from .test_presentation_supervisor import context as context
 from .test_presentation_terminal_status import gateway as gateway
 
 
-@pytest_asyncio.fixture
-async def prepared(context, gateway):
+async def prepare(context, gateway):
     authority, operation, native = context
     channel, peer, _ = gateway
     assert await authority.initialize(operation)
@@ -52,8 +59,14 @@ async def prepared(context, gateway):
     packet = work.worker_input(source_manifest_sha="b" * 64,
                               canonical_fallback="Synthetic", observed_at=0)
     b = binding()
-    yield authority, operation, native, channel, peer, work, packet, b
-    native.release.set()
+    return authority, operation, native, channel, peer, work, packet, b
+
+
+@pytest_asyncio.fixture
+async def prepared(context, gateway):
+    row = await prepare(context, gateway)
+    yield row
+    row[2].release.set()
 
 
 def adopt(prepared):
@@ -451,3 +464,171 @@ async def test_changed_socket_mode_refuses_before_begin_io(prepared, monkeypatch
         assert a.owner.inspect(a.handle(op)) == (State.UNKNOWN, False, False)
     finally:
         channel._socket.setblocking(False)
+
+
+@pytest_asyncio.fixture
+async def prepared_v2(context, v2gateway):
+    row = await prepare(context, v2gateway)
+    yield row
+    row[2].release.set()
+
+
+async def read_selected(peer, binding):
+    async def exact(count):
+        data = bytearray()
+        while len(data) < count:
+            part = await asyncio.get_running_loop().sock_recv(peer, count - len(data))
+            assert part
+            data.extend(part)
+        return bytes(data)
+    async def receive():
+        prefix = await exact(8)
+        raw = prefix + await exact(header_size(prefix))
+        header = decode_header(raw, expected=binding, expected_version=2)
+        return decode_frame(raw + await exact(header.body_length), expected=binding,
+                            expected_version=2)
+    return await asyncio.wait_for(receive(), 1)
+
+
+@pytest.mark.asyncio
+async def test_v2_remote_retains_original_clock_domain_and_selected_frames(prepared_v2):
+    a, op, native, channel, peer, _, packet, b = prepared_v2
+    remote = adopt(prepared_v2)
+    clock = channel._clock_owner
+    assert remote._clock_owner is clock
+    assert remote._clock_domain is clock._domain_snapshot
+    assert remote._clock_domain_values is clock._domain_values
+    assert remote._clock_qualification is clock._qualification_snapshot
+    assert remote._cleanup_budget is a._record(op).cleanup_budget
+    task = asyncio.create_task(remote.begin_ready())
+    frame = await read_selected(peer, b)
+    assert frame.body is not packet and frame.body == packet and frame.header.version == 2
+    await asyncio.get_running_loop().sock_sendall(peer, encode_frame(b, "READY", 0, version=2))
+    assert await task
+    assert a.owner.inspect_remote(a._record(op).handle) is RemotePhase.READY
+    assert native.calls == {"INITIAL": 1, "BEFORE": 1, "PRE_GO": 3}
+    assert not hasattr(remote, "go") and not hasattr(remote, "cleanup")
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("drift", ["domain", "domain_values", "qualification", "clock", "protocol",
+                                   "remote_domain", "remote_values", "remote_qualification"])
+async def test_v2_remote_clock_drift_refuses_before_native_or_begin(prepared_v2, drift):
+    a, op, native, channel, _, _, _, _ = prepared_v2
+    remote = adopt(prepared_v2)
+    clock = channel._clock_owner
+    if drift == "domain":
+        clock._domain = replace(clock._domain)
+    elif drift == "domain_values":
+        clock._domain_values = tuple(v for v in clock._domain_values)
+    elif drift == "qualification":
+        clock._qualification = object()
+    elif drift == "clock":
+        channel._clock_owner = object()
+    elif drift == "protocol":
+        object.__setattr__(channel._enrollment, "protocol_version", 1)
+    elif drift == "remote_domain":
+        remote._clock_domain = replace(clock._domain)
+    elif drift == "remote_values":
+        remote._clock_domain_values = tuple(v for v in clock._domain_values)
+    else:
+        remote._clock_qualification = object()
+    calls = dict(native.calls)
+    try:
+        with pytest.raises((AuthorityRefusalError, FrameError)):
+            await remote.begin_ready()
+        assert native.calls == calls and not remote._send_claimed
+        assert a._record(op).headers is not None
+        assert a.owner.inspect(a._record(op).handle)[2] is False
+    finally:
+        # Restore fixture metadata only for local socket/clock cleanup, not work.
+        clock._domain = clock._domain_snapshot
+        clock._domain_values = remote._clock_domain_values_snapshot
+        clock._qualification = clock._qualification_snapshot
+        channel._clock_owner = channel._clock_owner_snapshot
+        object.__setattr__(channel._enrollment, "protocol_version", 2)
+
+
+@pytest.mark.asyncio
+async def test_v2_remote_rejects_legacy_ready_without_downgrade(prepared_v2):
+    a, op, _, _, peer, _, _, b = prepared_v2
+    remote = adopt(prepared_v2)
+    task = asyncio.create_task(remote.begin_ready())
+    assert (await read_selected(peer, b)).header.version == 2
+    await asyncio.get_running_loop().sock_sendall(peer, encode_frame(b, "READY", 0))
+    with pytest.raises(AuthorityRefusalError):
+        await task
+    assert remote._protocol == 2 and remote._failed
+    assert a._record(op).headers is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("drift", ["values", "budget", "end", "pending_cancel"])
+async def test_v2_remote_rechecks_after_native_clock_boundary(prepared_v2, monkeypatch, drift):
+    a, op, native, channel, _, _, _, _ = prepared_v2
+    remote = adopt(prepared_v2)
+    clock = channel._clock_owner
+    record = a._record(op)
+    original = remote_module.NativeClockOwner.sample
+    def sample(owner):
+        now = original(owner)
+        if drift == "values":
+            owner._domain_values = tuple(v for v in owner._domain_values)
+        elif drift == "budget":
+            CancellationBudget.local(record.cleanup_budget, now)
+        elif drift == "end":
+            remote._end += 1_000_000_000
+        else:
+            asyncio.current_task().cancel()
+        return now
+    monkeypatch.setattr(remote_module.NativeClockOwner, "sample", sample)
+    calls = dict(native.calls)
+    task = asyncio.create_task(remote.begin_ready())
+    try:
+        with pytest.raises((AuthorityRefusalError, FrameError, asyncio.CancelledError)):
+            await task
+        assert native.calls == calls and not remote._send_claimed
+        assert record.headers is not None and a.owner.inspect(record.handle)[2] is False
+    finally:
+        clock._domain_values = remote._clock_domain_values_snapshot
+
+
+@pytest.mark.asyncio
+async def test_v2_remote_uses_concrete_clock_sample_not_instance_override(prepared_v2):
+    _, _, _, channel, peer, _, _, b = prepared_v2
+    remote = adopt(prepared_v2)
+    channel._clock_owner.sample = lambda: pytest.fail("instance override")
+    task = asyncio.create_task(remote.begin_ready())
+    assert (await read_selected(peer, b)).header.version == 2
+    await asyncio.get_running_loop().sock_sendall(peer, encode_frame(b, "READY", 0, version=2))
+    assert await task
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("field", ["owner", "fence"])
+@pytest.mark.parametrize("boundary", [1, 2])
+async def test_v2_clock_substitution_never_invokes_foreign_owner_or_fence(
+    prepared_v2, monkeypatch, field, boundary
+):
+    a, op, native, _, _, _, _, _ = prepared_v2
+    remote = adopt(prepared_v2)
+    record = a._record(op)
+    callbacks = []
+    class Foreign:
+        def __getattribute__(self, name):
+            callbacks.append(name)
+            raise AssertionError("foreign getter invoked")
+    original = remote_module.NativeClockOwner.sample
+    calls = [0]
+    def sample(clock):
+        now = original(clock)
+        calls[0] += 1
+        if calls[0] == boundary:
+            setattr(record, field, Foreign())
+        return now
+    monkeypatch.setattr(remote_module.NativeClockOwner, "sample", sample)
+    native_calls = dict(native.calls)
+    with pytest.raises((AuthorityRefusalError, FrameError)):
+        await remote.begin_ready()
+    assert callbacks == [] and native.calls == native_calls
+    assert not remote._send_claimed and record.headers is not None
