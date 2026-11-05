@@ -549,3 +549,34 @@ async def test_control_non_eagain_blocking_error_keeps_unknown_read_claim(receiv
         await owner._allocation_snapshot.task
     assert owner._io_unknown and owner._recv_intent and channel._reading
     assert owner._wire_received == 0 and not owner._adopted
+
+
+@pytest.mark.asyncio
+async def test_control_scope_retarget_cannot_retire_other_channel(receiver, monkeypatch):
+    owner, channel, peer, _, _, b = receiver
+    original_wait = cancel.SelectorReadiness.wait
+    foreign = service.SocketChannel.__new__(service.SocketChannel)
+    foreign._reading = True
+    foreign._cancel_receiver_snapshot = owner
+    changed = []
+    registered = asyncio.Event()
+
+    async def wait(waiter, end):
+        registered.set()
+        await original_wait(waiter, end)
+        owner._channel = owner._channel_snapshot = foreign
+        changed.append(True)
+
+    monkeypatch.setattr(cancel.SelectorReadiness, "wait", wait)
+    wire = encode_frame(b, "CANCEL", 1, b"x" * 16, version=2)
+    await asyncio.get_running_loop().sock_sendall(peer, wire[:3])
+    await registered.wait()
+    await asyncio.get_running_loop().sock_sendall(peer, wire[3:])
+    try:
+        with pytest.raises(FrameError):
+            await owner._allocation_snapshot.task
+        assert changed and foreign._reading is True
+        assert channel._reading is False and owner._wire_received == 3
+        assert not owner._adopted
+    finally:
+        owner._channel = owner._channel_snapshot = channel  # synthetic disposal only

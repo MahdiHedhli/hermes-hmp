@@ -9,7 +9,9 @@ Cumulative consumption is never reset. Pending bytes and a sticky receive/commit
 intent precede further checks or awaits. Arithmetic uses primitive counters held
 before the syscall, and buffer extension uses the original exact bytearray.
 Foreign metadata or uncertain receive/commit refuses without callbacks or a
-fabricated read-retirement fact.
+fabricated read-retirement fact. Guarding, failure cleanup and the final read-claim
+update use the independently retained original channel, so paired metadata
+retargeting cannot reset another channel or follow its result writer.
 
 Try the bounded concrete recv immediately under the current original qualified
 budget/native/grammar checks. Only an exact integer EAGAIN/EWOULDBLOCK leads to

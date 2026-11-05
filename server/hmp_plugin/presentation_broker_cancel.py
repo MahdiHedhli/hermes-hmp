@@ -73,7 +73,7 @@ class BrokerCancellationOwner:
         return owner
 
     def __init__(self, channel, registry, ticket, grammar):
-        self._channel = self._channel_snapshot = channel
+        self._channel = self._channel_snapshot = self._io_channel_origin = channel
         self._registry = self._registry_snapshot = registry
         self._ticket = self._ticket_snapshot = ticket
         self._grammar = self._grammar_snapshot = grammar
@@ -167,7 +167,8 @@ class BrokerCancellationOwner:
     def _guard(self, *, reader=False, cleanup=False):
         c, reg, ticket = self._channel, self._registry, self._ticket
         g, scope = self._grammar, self._scope
-        if type(c) is not SocketChannel or type(scope) is not tuple or len(scope) != 10:
+        if (type(c) is not SocketChannel or c is not self._io_channel_origin
+                or type(scope) is not tuple or len(scope) != 10):
             _refuse()
         _binding(scope[1])  # exact closed field types before any dataclass equality
         SocketChannel._bindings(c)  # exact enrollment types before any field/property reads
@@ -320,7 +321,7 @@ class BrokerCancellationOwner:
                 CancellationBudget.refuse(scope[3])
         finally:
             self._sampling = False
-        c = self._channel_snapshot
+        c = self._io_channel_origin
         if type(c) is SocketChannel and c._result_writer_snapshot is not None:
             from .presentation_result_transport import BrokerResultWriter
 
@@ -503,7 +504,7 @@ class BrokerCancellationOwner:
             raise
         finally:
             # Only original channel metadata; no stream or resource closure.
-            c = self._channel_snapshot
+            c = self._io_channel_origin
             if (type(c) is SocketChannel and c._cancel_receiver_snapshot is self
                     and self._io_unknown is False and self._recv_intent is False):
                 c._reading = False
