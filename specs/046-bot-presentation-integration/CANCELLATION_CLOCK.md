@@ -49,10 +49,12 @@ racing a publication refuses transiently without poisoning; malformed stable
 state and foreign-thread writes irreversibly refuse. This protects the declared
 local reference boundary, not arbitrary hostile Python-memory modification.
 
-This is local custody plumbing, not cross-process clock attestation or a joined
-async cleanup task. Version 2 cancellation transport and broker dispatch remain
-closed. Parent native-policy failures and other future transport causes still
-need the retained cleanup-owner integration; no wire deadline alone is authority.
+This local budget binding alone is not cross-process clock attestation. The
+subsequent [retained task source](REMOTE_CLEANUP.md) joins selected-v2 work before
+local socket/clock closure; stalled work retains debt. Version2 cancellation
+transport and broker dispatch remain closed. Parent native-policy DRAIN and
+future inherited transport causes still require their own integration; no wire
+deadline or local close alone is authority.
 
 ## Required transport integration (not implemented or qualified)
 
@@ -74,8 +76,9 @@ Bind the qualified domain and explicit protocol selection to retained enrollment
 channel and original operation. Both local cleanup and received CANCEL must
 adopt the same minimum before cleanup effects. The native observer now has a reviewed irreversible local-only cleanup-clock
 mode after successful initialization; it does not authenticate new frames. A
-dedicated retained async cleanup owner must still survive work-task cancellation without bypassing authority for GO or
-result delivery. Disconnect/lost cancellation retains unknown debt; a later
+dedicated retained async cleanup owner now survives caller cancellation in the
+selected-v2 no-frame source without bypassing authority for GO or result delivery.
+Inherited transport and runtime qualification remain separate. Disconnect/lost cancellation retains unknown debt; a later
 broker-local deadline cannot certify the gateway's earlier cleanup bound.
 
 The [native observer source](NATIVE_CLOCK.md) now exists separately; it does not

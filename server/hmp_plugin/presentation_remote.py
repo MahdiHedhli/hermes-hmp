@@ -49,6 +49,7 @@ class RemoteOperationOwner:
         self._seal = self._seal_snapshot = None
         self._loop = self._loop_snapshot = None
         self._context = self._context_snapshot = None
+        self._cleanup_owner = self._cleanup_owner_snapshot = None
         self._cleanup_budget = self._cleanup_budget_snapshot = None
         self._protocol = self._protocol_snapshot = None
         self._clock_owner = self._clock_owner_snapshot = None
@@ -197,6 +198,7 @@ class RemoteOperationOwner:
         if (type(a) is not ParentAuthorityAdapter or a is not self._authority_snapshot
                 or type(r) is not _Record or r is not self._record_snapshot
                 or type(c) is not SocketChannel or c is not self._channel_snapshot
+                or self._cleanup_owner is not self._cleanup_owner_snapshot
                 or type(seal) is not tuple or seal is not self._seal_snapshot or len(seal) != 31
                 or type(r.owner) is not JobOwner or type(r.handle) is not JobHandle
                 or type(r.fence) is not ListenerFence or type(r.policy_work) is not NativePolicyWork
@@ -249,6 +251,13 @@ class RemoteOperationOwner:
     def _check(self, phase: RemotePhase):
         try:
             _task_allows_work()
+            if self._protocol == 2 and self._cleanup_owner_snapshot is not None:
+                from .presentation_remote_cleanup import RemoteCleanupOwner
+
+                owner = self._cleanup_owner_snapshot
+                if type(owner) is not RemoteCleanupOwner or self._cleanup_owner is not owner:
+                    raise AuthorityRefusalError
+                RemoteCleanupOwner.authorize_work(owner)
             a, r, c = self._authority, self._record, self._channel
             if (self._failed is not False or self._initialized is not True
                     or type(self._begin_attempted) is not bool
@@ -364,6 +373,27 @@ class RemoteOperationOwner:
             raise
 
     async def begin_ready(self) -> bool:
+        """Selected v2 retains independent cleanup before any exchange effect."""
+        if self._protocol == 1:
+            return await RemoteOperationOwner._begin_ready_exchange(self)
+        from .presentation_remote_cleanup import RemoteCleanupOwner
+
+        try:
+            if self._cleanup_owner is not None or self._cleanup_owner_snapshot is not None:
+                retained = self._cleanup_owner_snapshot
+                if type(retained) is RemoteCleanupOwner:
+                    RemoteCleanupOwner.request(retained)
+                raise AuthorityRefusalError
+            self._check(RemotePhase.BOUND)
+            owner = RemoteCleanupOwner.__new__(RemoteCleanupOwner)
+            self._cleanup_owner = self._cleanup_owner_snapshot = owner
+            RemoteCleanupOwner.__init__(owner, self)
+            return await RemoteCleanupOwner.run(owner)
+        except BaseException:
+            self._poison()
+            raise
+
+    async def _begin_ready_exchange(self) -> bool:
         """Fresh native check, one input BEGIN and one READY; no work permission."""
         try:
             if self._begin_attempted:

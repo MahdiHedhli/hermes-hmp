@@ -55,9 +55,10 @@ native case status must be assessed from exact-run evidence, not green totals.
 2. Route every local EOF/timeout/revocation and authenticated inherited window
    through the same minimum. Registry/resource adoption can only shorten the
    earlier frozen end. Unknown clock or delivery retains unknown debt.
-3. Retain a dedicated one-use cleanup task/owner before effects, retire work and
-   join outstanding work I/O, record CANCEL-write intent before any transmission,
-   and use cleanup-only time under that frozen end. No replay after ambiguity.
+3. The [retained no-frame cleanup source](REMOTE_CLEANUP.md) now owns work/cleanup
+   tasks before effects, retires work, joins its I/O and uses the original frozen
+   cleanup end. Remaining: record scoped CANCEL-write intent and transmit only
+   after both-end inherited-window integration. No replay after ambiguity.
 4. Join v2 grammar, status lifecycle and both transport ends before allowing v2
    broker dispatch. Preserve raw-auth versus qualified work separation and
    retain clock resources until their ownership facts can actually be retired.

@@ -6,6 +6,7 @@ explicitly mocked by the local gateway fixture. No child, GO or result dispatch.
 import asyncio
 import os
 import time
+from contextlib import suppress
 from dataclasses import replace
 
 import pytest
@@ -29,7 +30,7 @@ from hmp_plugin.presentation_broker_codec import (
 from hmp_plugin.presentation_broker_service import TerminalStatusExchange
 from hmp_plugin.presentation_cancel_budget import CancellationBudget
 from hmp_plugin.presentation_input_v3 import decode_input_v3
-from hmp_plugin.presentation_jobs import FrameError, RemotePhase, State
+from hmp_plugin.presentation_jobs import FrameError, RemotePhase, RemoteSlot, State
 from hmp_plugin.presentation_policy_binding import NativePolicyWork
 from hmp_plugin.presentation_remote import RemoteOperationOwner
 from hmp_plugin.presentation_supervisor import ReaderSupervisor
@@ -469,8 +470,20 @@ async def test_changed_socket_mode_refuses_before_begin_io(prepared, monkeypatch
 @pytest_asyncio.fixture
 async def prepared_v2(context, v2gateway):
     row = await prepare(context, v2gateway)
-    yield row
-    row[2].release.set()
+    try:
+        yield row
+    finally:
+        row[2].release.set()
+        retained = RemoteSlot.read(row[0]._record(row[1]).remote_slot_snapshot)
+        if type(retained) is RemoteOperationOwner:
+            owner = retained._cleanup_owner_snapshot
+            if owner is not None and owner._initialized:
+                owner.request()
+                await asyncio.wait_for(asyncio.shield(owner._slots_snapshot[0].task_snapshot), 1)
+                work = owner._slots_snapshot[1].task_snapshot
+                if not work.done():
+                    with suppress(asyncio.CancelledError, AuthorityRefusalError):
+                        await asyncio.wait_for(asyncio.shield(work), 1)
 
 
 async def read_selected(peer, binding):

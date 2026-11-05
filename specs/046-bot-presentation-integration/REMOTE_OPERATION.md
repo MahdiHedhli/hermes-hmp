@@ -81,9 +81,11 @@ The original custody snapshot retains unknown debt; restoring metadata cannot
 revive work. Selected BEGIN headers and READY validation use the original exact
 version, refusing downgrade. These changes still authorize only BEGIN/READY.
 
-This handoff does not send CANCEL, retain a cleanup task, adopt an inherited
-window or activate v2 broker dispatch. Local Unix tests explicitly mock peer and
-Darwin clock facts; actual host/runtime/device qualification remains separate.
+The subsequent [retained cleanup source](REMOTE_CLEANUP.md) now owns selected-v2
+work/cleanup tasks and local closure under the same original budget. It sends no
+CANCEL, adopts no inherited window and activates no v2 broker dispatch. Local Unix
+tests explicitly mock peer and Darwin clock facts; actual host/runtime/device
+qualification remains separate.
 
 ## Full backend gates preserved
 
