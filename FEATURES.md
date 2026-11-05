@@ -1,3 +1,27 @@
+## Retained remote cleanup source — November 5, 2026
+
+HMP `29b77ab` retains separate selected-v2 work and cleanup tasks before exchange
+effects. Partial native Future/Task allocations stay reachable; immutable
+allocation seals prevent completed-task substitution from inventing a work join.
+Caller cancellation freezes the same original budget before owned cancellation,
+and cleanup uses only the original cleanup clock after retirement. READY retains
+its deadline watcher. Stalled work, expired budgets and partial writes retain
+unknown debt; cleanup sends no following frame and cannot release native credit.
+
+Independent focused convergence passes 85 tests. Final root serial Python
+3.11/3.14.9 regressions each pass 1,594 tests plus 190 subtests, with one
+Linux-native skip. Lint, surface and privacy checks pass. Prior clock handoff
+head `6519f57` CI42023957342 is green: 6,706 tests / 21 skips plus 190 subtests.
+The new source has separate CI evidence. Local model peer/clock facts remain
+explicitly mocked; local socket/clock facts do not certify a hard deadline,
+remote/native closure or production admission.
+
+Both-end inherited cancellation and selected-v2 dispatch remain next. CANCEL,
+GO/result/started release and authenticated image routes remain closed. Full
+character image rendering and signed physical verification remain unfinished;
+app executable, embedded HMP and installed hosts are unchanged. Host-local images
+follow. See [retained cleanup](specs/046-bot-presentation-integration/REMOTE_CLEANUP.md).
+
 ## Native remote clock handoff source — November 5, 2026
 
 HMP `d7be14d` retains the original selected protocol and exact qualified native
