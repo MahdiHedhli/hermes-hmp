@@ -10,7 +10,9 @@ launch/signal outcomes refuse; uncertain handles remain retained.
 Actual fixed-child checks verify empty-input EOF/exact reap and termination that
 leaves another owned reader and the controller unaffected. Independent53 cases
 pass; root composed513 pass on Python3.11/3.14.9, plus lint/import scanner.
-This is source-only: retained registry, topology-specific closure binder,
+Hosted CI41952456322 also passes the full Ubuntu plugin job and Python3.12–3.14
+Unicode jobs on exact executable sourcec715030. Later documentation commits do not
+change that executable. This is source-only: retained registry, topology-specific closure binder,
 service/runtime qualification, authenticated routes and signed-device parity
 remain open. No bot character capability is activated. See [contract and limits](specs/046-bot-presentation-integration/BROKER_CHILD_CUSTODY.md).
 
