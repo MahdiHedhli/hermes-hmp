@@ -2,6 +2,7 @@
 import asyncio
 import errno
 import os
+import socket
 from contextlib import suppress
 
 import pytest
@@ -246,9 +247,9 @@ async def test_post_go_cancel_writes_while_original_reader_drains_torn_result(
             waiter = gate._waiter
             assert waiter._attempted and not waiter._retired
             assert asyncio.current_task() is owner._caller_snapshot
+            await asyncio.wait_for(writer_entered.wait(), 1)
+            assert len(trace) == 1  # order peer EOF after the original writer entry
             if drift in external_cases:
-                await asyncio.wait_for(writer_entered.wait(), 1)
-                assert len(trace) == 1  # synchronize the chosen writer boundary
                 target = (work if drift == "external_work"
                           else owner._allocations_snapshot[0].task)
                 target.cancel()  # only the exact synthetic original Task
@@ -264,6 +265,8 @@ async def test_post_go_cancel_writes_while_original_reader_drains_torn_result(
                 assert ends[1] == earlier.end_ns
                 assert waiter._retired and not waiter._unknown
                 assert CancellationBudget.inspect(gate._refs[8])[2] == earlier.end_ns
+                # Controlled stream EOF must not wait for variable native service teardown.
+                spine._records[0].socket.shutdown(socket.SHUT_WR)
         finally:
             release_peer.set()
     with suppress(BaseException):
