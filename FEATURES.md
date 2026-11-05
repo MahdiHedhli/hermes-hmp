@@ -1,3 +1,26 @@
+## Cleanup-only native clock source — November 5, 2026
+
+HMP `9f975f7` adds irreversible local-only cleanup sampling on the same
+successfully qualified clock owner. It retains original domain values and
+monotonic history after transport EOF without consulting a departed peer or
+reviving work. Local clock/context/FD failures permanently poison it. Generic
+channel failures are conservatively uncertain; only explicitly typed peer paths
+can preserve cleanup eligibility.
+
+The actual private-helper test freezes the existing CancellationBudget before
+closing transport, observes the exact helper exit, then verifies unchanged first
+cleanup end with the original local clock. Independent convergence passes 62
+cases with one Linux-native skip. Root serial Python 3.11/3.14.9 regressions each
+pass 1,485 tests, one Linux-native skip and 190 subtests. Lint, surface and privacy
+checks pass. Prior native-clock CI head `a736e32` is green (6,603 tests / 21 skips).
+CI now prints skip reasons; green totals alone do not qualify native Linux.
+
+The service stays v1. Explicit versioned enrollment, retained async cleanup and
+both-end original-budget adoption remain next; GO/result/terminal release,
+authenticated character routes, full rendering and physical qualification remain
+open. App/embedded HMP and installations are unchanged. Host-local images follow.
+See [native clock and cleanup contract](specs/046-bot-presentation-integration/NATIVE_CLOCK.md).
+
 ## Native common-clock source — November 5, 2026
 
 HMP `37fd2da` adds a retained native clock observer for the existing authenticated
