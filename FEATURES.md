@@ -1,3 +1,27 @@
+## Original-window broker receiver source — November 5, 2026
+
+HMP `c0c6e82` adds an exclusive selected-v2 cancellation receiver bound to the
+original registry budget and qualified channel clock/domain. It retains bounded
+partial bytes across work expiry, adopts only the earlier received cutoff before
+resource effects, and never renews an expired window. Constructor failure retires
+original work while retaining partial task debt. Selected grammar captures its
+version; exact metadata guards refuse substituted values without invoking them.
+
+Independent focused convergence passes 94 tests. Final root serial Python
+3.11/3.14.9 regressions each pass 1,643 tests plus 190 subtests, with one
+Linux-native skip. Lint, surface and privacy checks pass. Prior retained-cleanup
+head `0e0c74e` CI42027395100 is green: 6,728 tests / 21 skips plus 190 subtests.
+The new source has separate CI evidence. Local Unix tests explicitly mock peer
+and Darwin clock facts; no reader launch, new host or runtime qualification is
+claimed by this receiver model.
+
+Gateway cancellation send and service retirement must still join this receiver
+before opening only private v2 BEGIN/READY/CANCEL dispatch. General CANCEL,
+GO/result/status/started release, authenticated image routes and full character
+rendering remain closed or unfinished. App executable, embedded HMP and hosts
+are unchanged; signed physical checks remain open. Host-local images follow.
+See the [complete cancellation contract](specs/046-bot-presentation-integration/INHERITED_CANCEL.md).
+
 ## Retained remote cleanup source — November 5, 2026
 
 HMP `29b77ab` retains separate selected-v2 work and cleanup tasks before exchange
