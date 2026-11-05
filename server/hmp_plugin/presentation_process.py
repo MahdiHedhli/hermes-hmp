@@ -24,7 +24,7 @@ class ProcessLaunchError(FrameError):
 
 
 class PresentationProcessOwner:
-    def __init__(self):
+    def __init__(self, *, parser_package: str | None = None):
         self._lock = threading.Lock()
         self._child: subprocess.Popen[bytes] | None = None
         self._pid: int | None = None
@@ -38,6 +38,10 @@ class PresentationProcessOwner:
         self.group_absent = False
         self.signals_retired = False
         self.uncertain = False
+        # Capture the fixed deep-immutable recipe before claim/start. Never accept
+        # arbitrary argv, reselect PM state during a job, or rebuild after failure.
+        self._launch = child_launch(parser_package)
+        self._launch_snapshot = self._launch
 
     def _enter(self) -> None:
         if not self._lock.acquire(blocking=False):
@@ -91,7 +95,11 @@ class PresentationProcessOwner:
         try:
             if self._launch_attempted or self._sealed_unlaunched:
                 raise FrameError("BI1_PROCESS_LAUNCH_REFUSED")
-            launch = child_launch()
+            launch = self._launch
+            if launch is not self._launch_snapshot:
+                self.uncertain = True
+                self.signals_retired = True
+                raise FrameError("BI1_PROCESS_RECIPE_REBOUND")
             if self.uncertain:
                 raise FrameError("BI1_PROCESS_UNCERTAIN")
             self._launch_attempted = True

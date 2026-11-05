@@ -1,5 +1,7 @@
 """Actual parser/reducer correspondence on synthetic documents, no live files."""
 
+from contextlib import suppress
+
 import pytest
 
 from hmp_plugin.presentation_yaml import PresentationYamlError
@@ -71,3 +73,67 @@ def test_unknown_directive_is_not_silently_discarded_by_parser():
 
 def test_directive_like_text_inside_block_scalar_is_preserved():
     assert parse(b"display_name: |-\n  %FOO synthetic\n").display_name == "%FOO synthetic"
+
+
+def test_token_event_projection_never_constructs_yaml_graph(monkeypatch):
+    from yaml.loader import SafeLoader
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("YAML graph construction invoked")
+
+    for name in (
+        "get_data",
+        "get_single_data",
+        "get_node",
+        "get_single_node",
+        "construct_object",
+        "construct_document",
+    ):
+        monkeypatch.setattr(SafeLoader, name, forbidden)
+    result = parse(b"display_name: Label\nprivate: {nested: [one, two]}\n")
+    assert result.display_name == "Label"
+
+
+@pytest.mark.parametrize(
+    "raw, expected_disposals",
+    [
+        (b"display_name: Label\n", 2),
+        (b"%YAML 1.1\n---\ndisplay_name: Label\n", 1),
+        (b"display_name: One\ndisplay_name: Two\n", 2),
+    ],
+)
+def test_both_loaders_dispose_on_success_or_early_refusal(monkeypatch, raw, expected_disposals):
+    from yaml.loader import SafeLoader
+
+    disposed = []
+    original = SafeLoader.dispose
+
+    def record(loader):
+        disposed.append(loader)
+        original(loader)
+
+    monkeypatch.setattr(SafeLoader, "dispose", record)
+    with suppress(PresentationYamlError):
+        parse(raw)
+    assert len(disposed) == expected_disposals
+    assert len({id(loader) for loader in disposed}) == expected_disposals
+
+
+def test_explicit_event_generator_close_disposes_parser(monkeypatch):
+    from yaml.loader import SafeLoader
+
+    from hmp_plugin.presentation_yaml_adapter import _events
+
+    disposed = []
+    original = SafeLoader.dispose
+
+    def record(loader):
+        disposed.append(loader)
+        original(loader)
+
+    monkeypatch.setattr(SafeLoader, "dispose", record)
+    events = _events(b"display_name: Label", lambda: 1.0, 2.0, None)
+    assert next(events).kind == "stream_start"
+    assert len(disposed) == 1  # token scan completed first
+    events.close()
+    assert len(disposed) == 2

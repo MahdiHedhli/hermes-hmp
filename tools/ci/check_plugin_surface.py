@@ -182,9 +182,13 @@ class _ModuleScanner(ast.NodeVisitor):
     # --- S1 / S3 ---
     def _check_absolute(self, node: ast.AST, module: str, names: list[str] | None) -> None:
         root = module.split(".", 1)[0]
-        if root == "yaml" and (module != "yaml" or names is not None):
-            self._add("S1", node, "yaml permits only the exact worker module import")
-            return
+        if root == "yaml":
+            allowed = (
+                module in {"yaml", "yaml.error", "yaml.events", "yaml.tokens"} and names is None
+            ) or (module == "yaml.loader" and names == ["SafeLoader"])
+            if not allowed:
+                self._add("S1", node, "yaml permits only the fixed worker token/event imports")
+                return
         only_module = MODULE_ONLY_THIRD_PARTY.get(root)
         if only_module is not None:
             # A module-restricted third-party package (qrcode: cli.py only, lazily). This check

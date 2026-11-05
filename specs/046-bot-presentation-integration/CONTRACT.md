@@ -6,6 +6,14 @@ Hermes remains the bot authorization/routing authority. No upstream core edit is
 required for the observed version-bound metadata/home interfaces; qualification
 of their plugin binding remains required.
 
+## Runtime dependency amendment
+
+The [explicit parser-package launch decision](DEPENDENCY_LAUNCH_DECISION.md)
+supersedes implicit site dependency discovery in the fixed worker. Only a trusted
+startup parser path is accepted; the default unbound recipe is refusal-only.
+Native authorization, runtime integrity, exclusive reaper custody and route
+activation requirements below are unchanged.
+
 ## Negotiation and metadata
 
 The authenticated `/hmp/v1/bots` response may add

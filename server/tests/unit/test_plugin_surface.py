@@ -357,3 +357,56 @@ def test_worker_function_local_class_import_is_lazy(pkg: Path) -> None:
 def test_bridge_import_in_eager_class_is_not_late_bound(pkg: Path) -> None:
     _append(pkg, "reads.py", "class Eager:\n    from . import bridge\n")
     assert ("S3", "reads.py") in _rules(pkg)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "import yaml.error",
+        "import yaml.events",
+        "import yaml.tokens",
+        "from yaml.loader import SafeLoader",
+    ],
+)
+def test_fixed_token_event_imports_are_lazy_adapter_only(pkg: Path, statement: str) -> None:
+    _append(pkg, "presentation_yaml_adapter.py", f"def worker():\n    {statement}\n")
+    assert _rules(pkg) == []
+    for module in (
+        "server.py",
+        "adapter.py",
+        "reads.py",
+        "bridge.py",
+        "cli.py",
+        "presentation_child.py",
+    ):
+        _append(pkg, module, f"def forbidden():\n    {statement}\n")
+    assert {
+        ("S1", module)
+        for module in (
+            "server.py",
+            "adapter.py",
+            "reads.py",
+            "bridge.py",
+            "cli.py",
+            "presentation_child.py",
+        )
+    } <= set(_rules(pkg))
+    _append(pkg, "presentation_yaml_adapter.py", statement + "\n")
+    assert ("S1", "presentation_yaml_adapter.py") in _rules(pkg)
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "from yaml.loader import Loader",
+        "from yaml.loader import UnsafeLoader",
+        "from yaml.loader import SafeLoader, Loader",
+        "from yaml.events import *",
+        "from yaml.error import YAMLError",
+        "import yaml.cyaml",
+        "import yaml._yaml",
+    ],
+)
+def test_unreviewed_parser_import_variants_remain_closed(pkg: Path, statement: str) -> None:
+    _append(pkg, "presentation_yaml_adapter.py", f"def forbidden():\n    {statement}\n")
+    assert ("S1", "presentation_yaml_adapter.py") in _rules(pkg)

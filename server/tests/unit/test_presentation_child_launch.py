@@ -15,7 +15,7 @@ def test_launch_is_fixed_isolated_and_closes_unrelated_descriptors(monkeypatch):
     monkeypatch.setenv("HMP_ACCESS_TOKEN", "synthetic-not-inherited")
     launch = child_launch()
     assert launch.argv[0] == sys.executable
-    assert launch.argv[1:3] == ("-I", "-B")
+    assert launch.argv[1:4] == ("-I", "-B", "-S")
     assert launch.argv[-1].endswith("/presentation_child.py")
     assert dict(launch.environment) == {"LANG": "C", "LC_ALL": "C"}
     assert launch.close_fds and launch.pass_fds == () and launch.start_new_session

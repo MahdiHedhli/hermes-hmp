@@ -670,3 +670,15 @@ model/provider settings and device grants were untouched. Physical image display
 remains unverified. CoreDevice inventory shows the authorized iPad Pro connected
 with Developer Mode and iPhone15ProMax disconnected; source build preparation is
 separate from signing/install/launch and image journeys.
+
+
+## November 4: explicit isolated parser dependency
+
+Closed startup parser path and namespace-only -I-B-S launch are implemented and
+independently accepted; see DEPENDENCY_LAUNCH_DECISION.md for the S2 rejection,
+static amendment, retained constructor-code scope, dispose semantics, startup
+mutation repair and exact verification. Final Python3.11 presentation/skeleton/
+surface union793 tests+190 subtests passes; Python3.14.9 earlier union790+190 and
+final20-case parser launch checks pass. No live PM generation, exclusive reaper,
+listener route, advertised capability or phone parity is certified. The broad
+feature goal and actual deployment/physical gates remain open.

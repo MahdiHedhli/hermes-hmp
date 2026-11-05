@@ -30,13 +30,38 @@ def bootstrap() -> None:
     __package__ = _NAMESPACE
 
 
+def bind_parser_namespace(package_path: str) -> None:
+    """Bind only a fixed package search path; do not execute its initializer."""
+    if any(name == "yaml" or name.startswith("yaml.") for name in sys.modules):
+        raise RuntimeError("BI1_PARSER_NAMESPACE_REFUSED")
+    package = types.ModuleType("yaml")
+    package.__package__ = "yaml"
+    package.__path__ = [package_path]
+    package.__spec__ = importlib.machinery.ModuleSpec("yaml", loader=None, is_package=True)
+    package.__spec__.submodule_search_locations = [package_path]
+    sys.modules["yaml"] = package
+
+
 def main() -> int:
     try:
         if os.name != "posix" or os.geteuid() <= 0:
             raise RuntimeError("BI1_CHILD_IDENTITY_REFUSED")
+        if (
+            sys.flags.isolated != 1
+            or not sys.dont_write_bytecode
+            or sys.flags.no_site != 1
+            or len(sys.argv) != 3
+            or sys.argv[1] != "--parser-package"
+        ):
+            raise RuntimeError("BI1_CHILD_ARGUMENTS_REFUSED")
         bootstrap()
+        from .presentation_child_launch import parser_package_path
+
+        package_path = parser_package_path(sys.argv[2])
+        bind_parser_namespace(package_path)
         # Fixed own-code relative closure. No plugin initializer, sys.path edit,
-        # environment/config lookup or input-selected module is involved.
+        # environment/config lookup or input-selected module is involved. The one
+        # startup-selected parser package has a closed path, not site activation.
         from .presentation_posix import PosixFileOps
         from .presentation_worker import process_child_stream_v3
 

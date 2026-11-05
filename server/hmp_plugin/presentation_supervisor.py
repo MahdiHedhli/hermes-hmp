@@ -12,6 +12,7 @@ import time
 from collections.abc import Callable
 
 from .presentation_authority import AuthorityRefusalError, OpaqueOperation, ParentAuthorityAdapter
+from .presentation_child_launch import parser_package_path
 from .presentation_control_pipe import OwnedControlPipe
 from .presentation_jobs import State
 from .presentation_pipes import OwnedPresentationPipes, PipeAcquisitionError
@@ -22,7 +23,13 @@ from .presentation_process import PresentationProcessOwner
 class ReaderSupervisor:
     """One reserved operation, one run task, one nonrenewable cleanup phase."""
 
-    def __init__(self, authority: ParentAuthorityAdapter, operation: OpaqueOperation):
+    def __init__(
+        self,
+        authority: ParentAuthorityAdapter,
+        operation: OpaqueOperation,
+        *,
+        parser_package: str | None = None,
+    ):
         if type(authority) is not ParentAuthorityAdapter or authority._clock is not time.monotonic:
             raise AuthorityRefusalError
         record = authority._record(operation)
@@ -31,6 +38,10 @@ class ReaderSupervisor:
             or record.owner.inspect(record.handle)[0] is not State.QUEUED
         ):
             raise AuthorityRefusalError
+        self._parser_package = (
+            None if parser_package is None else parser_package_path(parser_package)
+        )
+        self._parser_snapshot = (self._parser_package,)
         self.authority, self.operation, self.record = authority, operation, record
         self.phase = "READY"
         self.task: asyncio.Task | None = None
@@ -45,7 +56,13 @@ class ReaderSupervisor:
         record.reader_supervisor = self  # retain all partial owners before any await
 
     def _current(self) -> bool:
-        return self.phase == "RUNNING" and self.authority._current(self.record)
+        parser = self._parser_package
+        return (
+            (parser is None or type(parser) is str)
+            and parser == self._parser_snapshot[0]
+            and self.phase == "RUNNING"
+            and self.authority._current(self.record)
+        )
 
     def _require_current(self) -> None:
         if not self._current():
@@ -68,7 +85,7 @@ class ReaderSupervisor:
         self._require_current()
         if not accepted:
             return
-        self.process = PresentationProcessOwner()
+        self.process = PresentationProcessOwner(parser_package=self._parser_snapshot[0])
         self.authority.retain_process(self.operation, self.process)
         packet = work.worker_input(
             source_manifest_sha=source_sha,

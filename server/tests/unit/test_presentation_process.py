@@ -87,21 +87,24 @@ def test_failed_launch_retains_exact_owner_without_retry(monkeypatch):
     assert calls == [1] and owner.uncertain
 
 
-def test_caught_launch_recipe_reentry_blocks_process_creation(monkeypatch):
+def test_captured_recipe_is_not_reselected_at_start(monkeypatch):
     owner = PresentationProcessOwner()
-    recipe = module.child_launch()
+    recipe = owner._launch
     calls = []
+    monkeypatch.setattr(module, "child_launch", lambda *args: pytest.fail("recipe rebound"))
+    child = SimpleNamespace(pid=123456, returncode=None)
 
-    def reenter():
-        with pytest.raises(FrameError):
-            owner.start()
-        return recipe
+    def capture(argv, **kwargs):
+        calls.append((argv, kwargs))
+        return child
 
-    monkeypatch.setattr(module, "child_launch", reenter)
-    monkeypatch.setattr(module.subprocess, "Popen", lambda *a, **k: calls.append(1))
+    monkeypatch.setattr(module.subprocess, "Popen", capture)
+    owner.start()
+    assert calls[0][0] is recipe.argv
+    assert calls[0][1]["env"] == dict(recipe.environment)
     with pytest.raises(FrameError):
         owner.start()
-    assert calls == [] and owner.uncertain
+    assert len(calls) == 1
 
 
 def test_mutated_popen_pid_cannot_select_another_child_for_wait(monkeypatch):
@@ -221,3 +224,15 @@ def test_actual_competing_reap_cannot_be_reinterpreted_as_owned_exit():
         for stream in (child.stdout, child.stderr):
             if not stream.closed:
                 stream.close()
+
+
+def test_recipe_replacement_is_terminal_before_any_process(monkeypatch):
+    owner = PresentationProcessOwner()
+    owner._launch = module.child_launch()
+    monkeypatch.setattr(module.subprocess, "Popen", lambda *a, **k: pytest.fail("spawned"))
+    with pytest.raises(FrameError):
+        owner.start()
+    assert owner.uncertain and owner.signals_retired
+    owner._launch = owner._launch_snapshot
+    with pytest.raises(FrameError):
+        owner.start()

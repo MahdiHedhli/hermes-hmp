@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import pytest
+import yaml
 
 from hmp_plugin.presentation_authority import (
     AuthorityRefusalError,
@@ -16,6 +17,8 @@ from hmp_plugin.presentation_authority import (
 )
 from hmp_plugin.presentation_jobs import CapturedLease, State
 from hmp_plugin.presentation_supervisor import ReaderSupervisor
+
+_PARSER_PACKAGE = str(Path(yaml.__file__).resolve().parent)
 
 
 class Request:
@@ -110,7 +113,7 @@ def context():
 @pytest.mark.asyncio
 async def test_complete_policy_child_native_emit_and_retirement(context):
     authority, operation, native = context
-    supervisor = ReaderSupervisor(authority, operation)
+    supervisor = ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
     results = []
     assert await supervisor.run(
         source_sha="b" * 64,
@@ -147,7 +150,7 @@ async def test_cancelled_native_await_cannot_resume_normal_work(
     native.block = phase
     native.block_occurrence = occurrence
     native.ignore_cancel = True
-    supervisor = ReaderSupervisor(authority, operation)
+    supervisor = ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
     results = []
     running = asyncio.create_task(
         supervisor.run(
@@ -181,9 +184,9 @@ async def test_cancelled_native_await_cannot_resume_normal_work(
 @pytest.mark.asyncio
 async def test_supervisor_single_owner_binding(context):
     authority, operation, _ = context
-    owner = ReaderSupervisor(authority, operation)
+    owner = ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
     with pytest.raises(AuthorityRefusalError):
-        ReaderSupervisor(authority, operation)
+        ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
     assert authority._record(operation).reader_supervisor is owner
 
 
@@ -196,7 +199,7 @@ async def test_partial_acquisition_is_retained_without_replay(context, monkeypat
     from hmp_plugin.presentation_pipes import OwnedPresentationPipes, PipeAcquisitionError
 
     authority, operation, _ = context
-    supervisor = ReaderSupervisor(authority, operation)
+    supervisor = ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
     attempts = []
     if failure == "launch":
 
@@ -256,7 +259,7 @@ async def test_expired_original_deadline_cannot_launch(context):
     authority, operation, native = context
     native.block = "INITIAL"
     native.ignore_cancel = True
-    supervisor = ReaderSupervisor(authority, operation)
+    supervisor = ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
     began = time.monotonic()
     assert not await supervisor.run(
         source_sha="b" * 64,
@@ -281,7 +284,7 @@ async def test_cleanup_budget_exhaustion_after_signal_prevents_close_and_probe(
 
     authority, operation, native = context
     native.block, native.block_occurrence, native.ignore_cancel = "PRE_GO", 2, True
-    supervisor = ReaderSupervisor(authority, operation)
+    supervisor = ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
     original = PresentationProcessOwner.terminate_once
 
     def exhaust(owner):
@@ -326,7 +329,7 @@ async def test_cleanup_budget_exhaustion_after_signal_prevents_close_and_probe(
 async def test_second_run_cannot_create_competing_cleanup(context):
     authority, operation, native = context
     native.block = "INITIAL"
-    supervisor = ReaderSupervisor(authority, operation)
+    supervisor = ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
     running = asyncio.create_task(
         supervisor.run(
             source_sha="b" * 64, fallback="Hermes", observed_at=100, sink=lambda *_: None
@@ -348,7 +351,7 @@ async def test_second_run_cannot_create_competing_cleanup(context):
 async def test_late_native_drain_cannot_retire_or_repeat_emission(context):
     authority, operation, native = context
     native.block, native.ignore_cancel = "DRAIN", True
-    supervisor = ReaderSupervisor(authority, operation)
+    supervisor = ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
     emitted = []
     assert await supervisor.run(
         source_sha="b" * 64,
@@ -384,7 +387,7 @@ async def test_cancelled_policy_thread_is_retained_until_actual_join(context, mo
         return original(owner, *args)
 
     monkeypatch.setattr(ParentPolicyReadOwner, "_stat", blocked)
-    supervisor = ReaderSupervisor(authority, operation)
+    supervisor = ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
     running = asyncio.create_task(
         supervisor.run(
             source_sha="b" * 64,
@@ -418,7 +421,7 @@ async def test_cancelled_policy_thread_is_retained_until_actual_join(context, mo
 @pytest.mark.asyncio
 async def test_sink_failure_after_write_never_replays_or_claims_retirement(context):
     authority, operation, _ = context
-    supervisor = ReaderSupervisor(authority, operation)
+    supervisor = ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
     writes = []
 
     def lost_ack(*row):
@@ -434,3 +437,29 @@ async def test_sink_failure_after_write_never_replays_or_claims_retirement(conte
     with pytest.raises(AuthorityRefusalError):
         await supervisor.run(source_sha="b" * 64, fallback="Hermes", observed_at=100, sink=lost_ack)
     assert len(writes) == 1
+
+
+@pytest.mark.asyncio
+async def test_startup_parser_rebinding_during_native_await_never_launches(context, monkeypatch):
+    from hmp_plugin import presentation_process
+
+    authority, operation, native = context
+    native.block = "INITIAL"
+    supervisor = ReaderSupervisor(authority, operation, parser_package=_PARSER_PACKAGE)
+    monkeypatch.setattr(
+        presentation_process.subprocess, "Popen", lambda *a, **k: pytest.fail("spawned")
+    )
+    running = asyncio.create_task(
+        supervisor.run(
+            source_sha="b" * 64,
+            fallback="Hermes",
+            observed_at=100,
+            sink=lambda *row: pytest.fail("emitted"),
+        )
+    )
+    await native.entered.wait()
+    # None is a valid default configuration, but is not the captured startup binding.
+    supervisor._parser_package = None
+    native.release.set()
+    assert await running is False
+    assert supervisor.process is None and not supervisor.emitted

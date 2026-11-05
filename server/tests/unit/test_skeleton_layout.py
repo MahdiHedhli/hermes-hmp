@@ -64,6 +64,8 @@ CONTRACT_MODULES = {
     "presentation_child.py",
     "presentation_pipes.py",
     "presentation_process.py",
+    # Reviewed retained reader lifecycle (d26db66); no live route activation.
+    "presentation_supervisor.py",
     "presentation_control_pipe.py",
     "presentation_worker.py",
     "presentation_input_v2.py",

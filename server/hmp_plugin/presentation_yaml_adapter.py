@@ -8,6 +8,7 @@ that reducer; the disposable worker's supervisor must enforce its hard deadline.
 from __future__ import annotations
 
 from collections.abc import Callable, Iterator
+from contextlib import closing
 
 from .presentation_budget import PresentationWorkLedger
 from .presentation_yaml import (
@@ -19,10 +20,34 @@ from .presentation_yaml import (
 )
 
 
+def _scan_tokens(raw: bytes):
+    from yaml.loader import SafeLoader
+
+    loader = SafeLoader(raw)
+    try:
+        while loader.check_token():
+            yield loader.get_token()
+    finally:
+        loader.dispose()
+
+
+def _parse_events(raw: bytes):
+    from yaml.loader import SafeLoader
+
+    loader = SafeLoader(raw)
+    try:
+        while loader.check_event():
+            yield loader.get_event()
+    finally:
+        loader.dispose()
+
+
 def _events(
     raw: bytes, clock: Callable[[], float], deadline: float, ledger: PresentationWorkLedger | None
 ) -> Iterator[YamlEvent]:
-    import yaml
+    import yaml.error
+    import yaml.events
+    import yaml.tokens
 
     kinds = {
         yaml.events.StreamStartEvent: "stream_start",
@@ -41,33 +66,37 @@ def _events(
         # PyYAML drops unknown directives before emitting document events.
         # Inspect actual scanner tokens; text in a quoted/block scalar is not
         # a DirectiveToken and must not be rejected by a textual heuristic.
-        for count, token in enumerate(yaml.scan(raw, Loader=yaml.SafeLoader), start=1):
-            if ledger is not None:
-                ledger.charge_yaml_token()
-            now = clock()
-            if type(now) is not float or not 0 <= now < deadline:
-                raise PresentationYamlError("DEADLINE")
-            if count > 2048:
-                raise PresentationYamlError("TOKEN_LIMIT")
-            if isinstance(token, yaml.tokens.DirectiveToken):
-                raise PresentationYamlError("YAML_FEATURE")
-        for event in yaml.parse(raw, Loader=yaml.SafeLoader):
-            kind = kinds.get(type(event))
-            if kind is None:
-                raise PresentationYamlError("EVENT_SCHEMA")
-            directives = ()
-            if isinstance(event, yaml.events.DocumentStartEvent) and (event.version or event.tags):
-                directives = ("explicit-directive",)
-            scalar = isinstance(event, yaml.events.ScalarEvent)
-            yield YamlEvent(
-                kind=kind,
-                value=event.value if scalar else None,
-                style=styles.get(event.style) if scalar else None,
-                anchor=getattr(event, "anchor", None),
-                tag=getattr(event, "tag", None),
-                directives=directives,
-            )
-    except yaml.YAMLError:
+        with closing(_scan_tokens(raw)) as tokens:
+            for count, token in enumerate(tokens, start=1):
+                if ledger is not None:
+                    ledger.charge_yaml_token()
+                now = clock()
+                if type(now) is not float or not 0 <= now < deadline:
+                    raise PresentationYamlError("DEADLINE")
+                if count > 2048:
+                    raise PresentationYamlError("TOKEN_LIMIT")
+                if isinstance(token, yaml.tokens.DirectiveToken):
+                    raise PresentationYamlError("YAML_FEATURE")
+        with closing(_parse_events(raw)) as events:
+            for event in events:
+                kind = kinds.get(type(event))
+                if kind is None:
+                    raise PresentationYamlError("EVENT_SCHEMA")
+                directives = ()
+                if isinstance(event, yaml.events.DocumentStartEvent) and (
+                    event.version or event.tags
+                ):
+                    directives = ("explicit-directive",)
+                scalar = isinstance(event, yaml.events.ScalarEvent)
+                yield YamlEvent(
+                    kind=kind,
+                    value=event.value if scalar else None,
+                    style=styles.get(event.style) if scalar else None,
+                    anchor=getattr(event, "anchor", None),
+                    tag=getattr(event, "tag", None),
+                    directives=directives,
+                )
+    except yaml.error.YAMLError:
         raise PresentationYamlError("PARSER_REFUSED") from None
 
 
@@ -88,10 +117,14 @@ def parse_presentation_yaml(
         ):
             raise PresentationYamlError("WORK_SCOPE")
         ledger.begin_yaml()
-    return reduce_presentation_events(
-        raw,
-        _events(raw, clock, deadline, ledger),
-        clock=clock,
-        deadline=deadline,
-        charge_node=ledger.charge_yaml_node if ledger is not None else None,
-    )
+    events = _events(raw, clock, deadline, ledger)
+    try:
+        return reduce_presentation_events(
+            raw,
+            events,
+            clock=clock,
+            deadline=deadline,
+            charge_node=ledger.charge_yaml_node if ledger is not None else None,
+        )
+    finally:
+        events.close()

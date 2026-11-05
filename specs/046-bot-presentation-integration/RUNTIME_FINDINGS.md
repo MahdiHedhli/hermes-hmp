@@ -1,5 +1,24 @@
 # Reader runtime findings — November 4, 2026
 
+## Source repair after the observations below
+
+The isolated worker now accepts a fixed, validated startup parser-package path
+under `-I -B -S`, without executing its package initializer or activating site
+paths. The namespace/adapter only uses closed pure-Python SafeLoader token/event
+imports, including its transitive composer/constructor/resolver initialization
+code but no graph-construction calls. The supervisor/process owner freeze that
+selection before launch and reject rebinding across native awaits. No automatic
+PM selector lookup or parent sys.path copy is introduced. See the reviewed
+[dependency launch decision](DEPENDENCY_LAUNCH_DECISION.md).
+
+This fixes the source mechanism for exposing the dependency. Binding and attesting
+the actual listener's selected generation, interpreter/stdlib/own code/parser
+closure and bytecode remains open. The original observed failure below describes
+the preceding launch recipe, not an active version allowlist. The independent
+Kanban reaper/custody gap is unchanged; no live route or capability is activated.
+
+## Original runtime observations
+
 The composed reader is source-reviewed, but two actual integration assumptions
 need repair before activation. These are capability/ownership issues, not an
 exact Hermes version allowlist or a Linux restriction. Source hashes are in

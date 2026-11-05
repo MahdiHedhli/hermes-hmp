@@ -803,7 +803,10 @@ def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope, bou
         },
     }
     script = Path(__file__).parents[2] / "hmp_plugin" / "presentation_child.py"
-    argv = [sys.executable, "-I", "-B", str(script)]
+    import yaml
+
+    parser_package = str(Path(yaml.__file__).resolve().parent)
+    argv = [sys.executable, "-I", "-B", "-S", str(script), "--parser-package", parser_package]
     payload = encode_input_v3(row) + bound.challenge.encode() + b"\n"
     if bounded_pipes:
         from hmp_plugin.presentation_pipes import OwnedPresentationPipes
@@ -812,7 +815,7 @@ def test_fixed_isolated_child_script_processes_only_synthetic_profile(scope, bou
         if bounded_pipes == "retained":
             from hmp_plugin.presentation_process import PresentationProcessOwner
 
-            lifetime = PresentationProcessOwner()
+            lifetime = PresentationProcessOwner(parser_package=parser_package)
             lifetime.start()
             child = lifetime.child
         else:

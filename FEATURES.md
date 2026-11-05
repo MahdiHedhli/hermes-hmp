@@ -1,3 +1,33 @@
+## Explicit character-parser runtime — November 4, 2026
+
+The development reader now accepts a validated, frozen startup parser package
+under -I -B -S. It exposes only the selected package namespace, never executes its
+initializer or site hooks, and uses fixed pure-Python SafeLoader token/event
+imports. Graph retrieval/construction methods are not called; SafeLoader's
+transitive constructor/composer/resolver code and initialization remain part of
+the trusted dependency closure. Both iterators dispose on refusal or closure.
+The original general importlib mechanism failed the closed-import scanner and was
+replaced; S2 was not relaxed. Exact lazy adapter-only S1 rules retain negative
+checks for every other module and unsafe loader/import variant.
+
+Independent review accepted the source repair, including a pending-native-await
+startup-binding mutation finding and its no-launch/no-emission regression.
+Python3.14.9 presentation/skeleton/surface run passes790 tests+190 subtests, with
+20 parser-launch cases separately passing after three extra missing-flag cases;
+Python3.11 final run passes793 tests+190 subtests. Counts overlap. Ruff and the
+mandatory closed-surface scanner pass. No installed runtime or physical character
+parity is claimed.
+
+Actual listener PM-generation/interpreter/stdlib/source/parser/bytecode attestation
+and the conditional Kanban reaper conflict remain activation gates. The default
+unbound worker refuses; no path is derived from phone input or a fresh mutable PM
+selection per job. No route, capability, dependency, host grant or provider setting
+was activated. See [runtime decision](specs/046-bot-presentation-integration/DEPENDENCY_LAUNCH_DECISION.md).
+
+The app separately has selected-chat readiness source and scanned unsigned iOS
+2026110403. This HMP branch is not silently substituted into that app artifact or
+its pinned submodule, and neither is claimed installed/device-qualified.
+
 ## Harmless approval-test compatibility — November 4, 2026
 
 Reviewed repair 4ad1344 fixes a real current-native mismatch: native notifications
