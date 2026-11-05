@@ -1,3 +1,23 @@
+## Native common-clock source — November 5, 2026
+
+HMP `37fd2da` adds a retained native clock observer for the existing authenticated
+character-broker channel. Darwin observes the actual boot/Mach clock; Linux
+requires the socket's kernel peer-process reference, real procfs/nsfs and matching
+active time namespaces. Numeric-PID fallback and inferred clock equality refuse.
+Native descriptor closure requires EBADF; ambiguity and refusal remain sticky.
+
+Independent convergence passes 46 focused cases with one Linux-native skip on
+Python 3.13. Root serial Python 3.11/3.14.9 regressions each pass 1,469 tests,
+one Linux-native skip and 190 subtests. Real Darwin private-peer observation
+passes; Linux native kernel/ABI qualification remains separate. Lint, surface and
+privacy checks pass. Prior cancellation CI head `b5a145f` is green.
+
+The service remains v1. Next is explicit both-end v2 enrollment and adoption of
+the original cleanup budget; GO/result/typed terminal release, authenticated
+routes, full character rendering and signed physical checks remain open.
+Host-local images follow. App executable/embedded HMP and installations are
+unchanged. See the [native clock contract](specs/046-bot-presentation-integration/NATIVE_CLOCK.md).
+
 ## Cancellation budget source — November 5, 2026
 
 HMP `1a02abe` adds one nonrenewing cleanup budget: cancellation, EOF, timeout

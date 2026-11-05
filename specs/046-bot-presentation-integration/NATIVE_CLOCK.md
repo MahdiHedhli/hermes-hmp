@@ -84,3 +84,13 @@ Independent review accepts the repaired bounded observer source after 46 passing
 cases and one Linux-native skip on Python 3.13. Native no-op-close, foreign
 metadata and swallowed sampling-reentry findings are repaired with causal tests.
 This does not certify startup admission or the full image feature.
+
+## Fresh upstream alternative check
+
+Read-only public source pin `36b29e812a2ca5edbae3172508a41f04efbe68be`
+(November 5) still implements `profiles.get_asset` in
+`tui_gateway/methods_profiles.py` with `is_file()` followed by unbounded
+`read_bytes()` and base64 construction. This inspected Desktop/TUI method is not
+proof of a bounded HMP presentation route or per-device profile authorization.
+It does not replace the existing bounded-reader contract. No upstream source,
+installed Hermes or private profile was changed or read in this check.
