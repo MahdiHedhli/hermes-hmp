@@ -1,3 +1,30 @@
+## Private candidate integrity source — November 5, 2026
+
+HMP `10266e8` binds the original private candidate to its immutable body
+identity, bounded canonical header and actual streaming wire SHA-256/length.
+Nested header, container, body and token substitutions refuse. The receiver
+owns clearable references to the original tuple; metadata facts contain no
+image/header dictionary aliases or second image copy. Central cancellation
+discards the original owner even after current-slot drift. Independently sealed
+custody and fixed original cleanup/I/O targets prevent cross-operation wiping,
+cleanup requests and flag resets. Header validation rejects foreign callbacks,
+cycles, excessive depth/width/text, surrogates and integer overflow before JSON.
+
+Independent review passes 103 focused tests on Python 3.13. Root serial Python
+3.11.15 and standalone 3.14.4 each pass 1,769 tests plus 190 subtests, with one
+Linux-native skip. Lint, surface, privacy and diff checks pass. The preceding
+local-claim head `5211181` CI42058388837 succeeded: 6,882 passed / 21 skips plus
+190 subtests. This slice has its own pending CI, not inherited qualification.
+
+These checks preserve private candidate integrity; they grant no terminal
+acceptance, COMPLETE, native release or publication. Trusted installed Python
+and exclusive ownership remain explicit premises, not an arbitrary memory
+sandbox. Remaining delivery work: qualified joined terminal handoff and
+wire/ACK/STATUS, fresh PRE_EMIT, native/policy/credential retirement, authenticated
+routes, complete character rendering and runtime/signed-device qualification.
+No app executable, embedded HMP, installed host or device changed. Host-local
+images follow character delivery. See [result contract](specs/046-bot-presentation-integration/RESULT_TRANSPORT.md).
+
 ## Local started-reader claim source — November 5, 2026
 
 HMP `929b77b` binds the original input receipt before reader effects and
