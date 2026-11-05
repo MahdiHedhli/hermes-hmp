@@ -118,6 +118,11 @@ class RemoteCleanupOwner:
         self._go_request_initialized = self._go_notice_initialized = False
         self._go_attempted = False
         self._go_notice_fact = self._go_notice_fact_snapshot = None
+        self._result_notice = self._result_notice_snapshot = None
+        self._result_barrier = self._result_barrier_snapshot = None
+        self._result_notice_initialized = False
+        self._result_awaited = False
+        self._result_token = self._result_token_snapshot = None
         self._start_initialized = self._cause_initialized = False
         self._slots = self._slots_snapshot = (_TaskSlot(), _TaskSlot())
         self._allocations = self._allocations_snapshot = (None, None)
@@ -161,6 +166,10 @@ class RemoteCleanupOwner:
                     self._go_request_snapshot, self._go_notice_snapshot)
                 _initialize_future(future, self._loop)
                 setattr(self, "_" + field + "_initialized", True)
+            self._result_notice = self._result_notice_snapshot = _FUTURE.__new__(_FUTURE)
+            self._result_barrier = self._result_barrier_snapshot = (self._result_notice_snapshot,)
+            _initialize_future(self._result_notice_snapshot, self._loop)
+            self._result_notice_initialized = True
             # Cleanup is retained first. Both fixed coroutines remain gated until
             # all initialization and reciprocal ownership checks have succeeded.
             functions = (RemoteCleanupOwner._cleanup, RemoteCleanupOwner._work)
@@ -185,7 +194,7 @@ class RemoteCleanupOwner:
                 _FUTURE.set_result(self._cause_snapshot, None)
             if self._ready_initialized and not _FUTURE.done(self._ready_snapshot):
                 _FUTURE.set_result(self._ready_snapshot, False)
-            for field in ("go_request", "go_notice"):
+            for field in ("go_request", "go_notice", "result_notice"):
                 future = getattr(self, "_" + field + "_snapshot")
                 if getattr(self, "_" + field + "_initialized") is True and not _FUTURE.done(future):
                     _FUTURE.set_result(future, False)
@@ -272,6 +281,18 @@ class RemoteCleanupOwner:
                 or (self._go_notice_fact is not None
                     and self._go_notice_fact is not (
                         self._refs_snapshot[3]._go_write_fact_snapshot))):
+            raise AuthorityRefusalError
+        _barrier = self._result_barrier
+        if (type(_barrier) is not tuple or len(_barrier) != 1
+                or _barrier is not self._result_barrier_snapshot
+                or self._result_notice is not _barrier[0]
+                or self._result_notice_snapshot is not _barrier[0]
+                or type(self._result_notice) is not _FUTURE
+                or self._result_notice_initialized is not True
+                or _FUTURE.cancelled(self._result_notice)
+                or type(self._result_awaited) is not bool
+                or self._result_token is not self._result_token_snapshot
+                or (self._result_token is not None and type(self._result_token) is not object)):
             raise AuthorityRefusalError
         if not all(x is y for x, y in zip(
                 RemoteCleanupOwner._references(self), self._refs, strict=True)):
@@ -486,6 +507,9 @@ class RemoteCleanupOwner:
         ready = barriers.ready if type(barriers) is _BarrierAllocation else None
         go = self._go_barriers_snapshot
         notice = go.notice if type(go) is _GoBarriers else None
+        result_barrier = self._result_barrier_snapshot
+        result_notice = (result_barrier[0] if type(result_barrier) is tuple
+                         and len(result_barrier) == 1 else None)
         try:
             RemoteCleanupOwner._guard(self)
             allowed = await self._barriers_snapshot.start
@@ -530,7 +554,19 @@ class RemoteCleanupOwner:
             self._go_notice_fact = self._go_notice_fact_snapshot = (
                 self._refs_snapshot[3]._go_write_fact_snapshot)
             _FUTURE.set_result(notice, True)
-            # Local GO write notification is not execution/result completion.
+            from .presentation_result_transport import RemoteResultOwner
+
+            receiver = RemoteResultOwner.retain(self._remote_snapshot)
+            if not await RemoteResultOwner.receive(receiver):
+                raise AuthorityRefusalError
+            RemoteCleanupOwner._guard(self)
+            RemoteResultOwner._guard(receiver)
+            if (self._result_barrier_snapshot is not result_barrier
+                    or _FUTURE.done(result_notice) or self._intent is not False):
+                raise AuthorityRefusalError
+            self._result_token = self._result_token_snapshot = receiver._token_snapshot
+            _FUTURE.set_result(result_notice, True)  # private candidate only, no data release
+            # Neither write nor candidate validation is execution/terminal completion.
             await asyncio.wait((barriers.cause,))
             RemoteCleanupOwner._guard(self)
             if self._intent is not True:
@@ -544,6 +580,9 @@ class RemoteCleanupOwner:
             if (self._go_notice_initialized is True and type(notice) is _FUTURE
                     and not _FUTURE.done(notice)):
                 _FUTURE.set_result(notice, False)
+            if (self._result_notice_initialized is True and type(result_notice) is _FUTURE
+                    and not _FUTURE.done(result_notice)):
+                _FUTURE.set_result(result_notice, False)
             raise
 
     async def _cleanup(self):
@@ -640,12 +679,47 @@ class RemoteCleanupOwner:
                     or self._go_notice_fact is None
                     or _TASK.done(self._allocations_snapshot[1].task)
                     or JobOwner.inspect(owner, handle)[0] is not State.RUNNING
-                    or JobOwner.inspect_remote(owner, handle) is not RemotePhase.GO_SENT):
+                    or JobOwner.inspect_remote(owner, handle) not in (
+                        RemotePhase.GO_SENT, RemotePhase.RESULT_VALIDATED)):
                 raise AuthorityRefusalError
             SocketChannel._go_written(self._refs_snapshot[3], self._remote_snapshot)
             RemoteOperationOwner._retained_local(self._remote_snapshot)
             _task_allows_work()
             return True
+        except BaseException:
+            RemoteCleanupOwner.request(self)
+            raise
+
+    async def result_ready(self):
+        from .presentation_remote import RemoteOperationOwner
+        from .presentation_result_transport import RemoteResultOwner
+
+        barrier = self._result_barrier_snapshot
+        try:
+            RemoteCleanupOwner._guard(self)
+            _task_allows_work()
+            if (asyncio.current_task() is not self._caller_snapshot or self._result_awaited
+                    or self._intent or self._go_notice_fact is None):
+                raise AuthorityRefusalError
+            self._result_awaited = True
+            result = await asyncio.shield(barrier[0])
+            RemoteCleanupOwner._guard(self)
+            RemoteOperationOwner._retained_local(self._remote_snapshot)
+            record = self._refs_snapshot[2]
+            if not ParentAuthorityAdapter._current(self._refs_snapshot[0], record):
+                raise AuthorityRefusalError
+            RemoteOperationOwner._work_now(self._remote_snapshot)
+            RemoteCleanupOwner._guard(self)
+            receiver = self._remote_snapshot._result_owner_snapshot
+            if (result is not True or self._intent or self._result_barrier_snapshot is not barrier
+                    or type(receiver) is not RemoteResultOwner
+                    or self._result_token is None or receiver._validated is not True
+                    or self._result_token is not receiver._token_snapshot):
+                raise AuthorityRefusalError
+            RemoteResultOwner._guard(receiver, work=False)
+            RemoteOperationOwner._retained_local(self._remote_snapshot)
+            _task_allows_work()
+            return True  # no header/avatar returned by this public readiness method
         except BaseException:
             RemoteCleanupOwner.request(self)
             raise

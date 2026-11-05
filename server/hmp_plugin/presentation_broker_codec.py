@@ -129,16 +129,21 @@ def _canonical(row: dict[str, object]) -> bytes:
     ).encode("ascii")
 
 
+def encode_header(header: BrokerHeader) -> bytes:
+    """Bounded outer prefix/header only; body ownership remains with its writer."""
+    raw = _canonical(_row(header))
+    if not 1 <= len(raw) <= HEADER_LIMIT:
+        _fail()
+    return MAGIC + struct.pack(">I", len(raw)) + raw
+
+
 def encode_frame(
     binding: BrokerBinding, kind: str, sequence: int, body: bytes = b"", *, version: int = 1
 ) -> bytes:
     if type(body) is not bytes:
         _fail()
     header = BrokerHeader(binding, kind, sequence, len(body), version)
-    raw = _canonical(_row(header))
-    if not 1 <= len(raw) <= HEADER_LIMIT:
-        _fail()
-    return MAGIC + struct.pack(">I", len(raw)) + raw + body
+    return encode_header(header) + body
 
 
 def header_size(prefix: bytes) -> int:

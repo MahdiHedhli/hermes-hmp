@@ -6,7 +6,8 @@ monotonic channel adoption and post-peer deadline/cancellation checks. It is not
 a substitute final feature or production activation. The
 bounded no-GO service passed separately. Subsequent coupled selected-v2 GO source
 adds fresh native intent and continuous control ownership under [ASYNC_GO.md](ASYNC_GO.md).
-RESULT, started release, routes, production runtime and signed device parity
+Private [result candidate transport](RESULT_TRANSPORT.md) is now implemented.
+Publication, started release, routes, production runtime and signed device parity
 remain required and incomplete.
 
 ## One shared admission and native authority ledger
@@ -86,7 +87,7 @@ version, refusing downgrade. These changes still authorize only BEGIN/READY.
 The subsequent [retained cleanup source](REMOTE_CLEANUP.md) now owns selected-v2
 work/cleanup tasks, a one-use CANCEL sender and local closure under the same
 original budget. The coupled private service dispatch adopts inherited windows
-with dedicated one-use GO source while result/status/release remain closed. Local Unix
+with dedicated GO and private result-candidate source; publication/status/release remain closed. Local Unix
 tests explicitly mock peer and Darwin clock facts; actual host/runtime/device
 qualification remains separate.
 

@@ -305,6 +305,13 @@ class BrokerCancellationOwner:
                 CancellationBudget.refuse(scope[3])
         finally:
             self._sampling = False
+        c = self._channel_snapshot
+        if type(c) is SocketChannel and c._result_writer_snapshot is not None:
+            from .presentation_result_transport import BrokerResultWriter
+
+            writer = c._result_writer_snapshot
+            if type(writer) is BrokerResultWriter:
+                BrokerResultWriter.retire_from_control(writer, self)
 
     def _remaining(self):
         BrokerCancellationOwner._guard(self, reader=True)

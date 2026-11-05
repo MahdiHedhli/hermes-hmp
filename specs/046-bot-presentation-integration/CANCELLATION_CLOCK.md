@@ -26,7 +26,8 @@ Explicit startup enrollment can select v2 framing with a retained native clock.
 The [coupled transport source](INHERITED_CANCEL.md) joins a one-use gateway
 cleanup sender to the broker receiver and private BEGIN/READY/GO/CANCEL dispatch.
 Both ends use their original budgets and the receiver adopts only the earlier
-cutoff. Existing service paths default to v1; result/status/release remain closed.
+cutoff. Existing service paths default to v1; publication/status/release remain closed.
+Dedicated [private result validation](RESULT_TRANSPORT.md) shares original work ownership.
 
 ## Original owner binding (source only)
 

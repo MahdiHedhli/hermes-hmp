@@ -43,7 +43,7 @@ from .test_presentation_supervisor import context as context
 from .test_presentation_terminal_status import gateway as gateway
 
 
-async def prepare(context, gateway):
+async def prepare(context, gateway, *, expected_avatar_sha=None):
     authority, operation, native = context
     channel, peer, _ = gateway
     assert await authority.initialize(operation)
@@ -58,7 +58,8 @@ async def prepare(context, gateway):
         pytest.fail("synthetic parent policy did not join within setup budget")
     assert await work.postcheck()
     packet = work.worker_input(source_manifest_sha="b" * 64,
-                              canonical_fallback="Synthetic", observed_at=0)
+                              canonical_fallback="Synthetic", observed_at=0,
+                              expected_avatar_sha=expected_avatar_sha)
     b = binding()
     return authority, operation, native, channel, peer, work, packet, b
 

@@ -192,6 +192,8 @@ class SocketChannel:
         self._begin_write_fact = self._begin_write_fact_snapshot = None
         self._go_write_intent = self._go_write_intent_snapshot = None
         self._go_write_fact = self._go_write_fact_snapshot = None
+        self._result_writer = self._result_writer_snapshot = None
+        self._result_receiver = self._result_receiver_snapshot = None
         self._clock_owner = self._clock_owner_snapshot = None
         self._clock_closed_known = False
         try:
@@ -265,6 +267,15 @@ class SocketChannel:
                       or (type(self._go_write_fact) is _GoWriteFact
                           and self._go_write_fact.mint is _GO_WRITE_MINT
                           and self._go_write_fact.intent is self._go_write_intent_snapshot)))
+        _require(self._result_writer is self._result_writer_snapshot
+                 and self._result_receiver is self._result_receiver_snapshot)
+        if self._result_writer is not None or self._result_receiver is not None:
+            from .presentation_result_transport import BrokerResultWriter, RemoteResultOwner
+
+            _require((self._result_writer is None or (self._role == "broker"
+                         and type(self._result_writer) is BrokerResultWriter))
+                     and (self._result_receiver is None or (self._role == "gateway"
+                         and type(self._result_receiver) is RemoteResultOwner)))
         _require(self._cancel_receiver is self._cancel_receiver_snapshot)
         if self._cancel_receiver is not None:
             from .presentation_broker_cancel import BrokerCancellationOwner
@@ -863,6 +874,7 @@ class _Connection:
         self.socket = sock  # retain accepted socket before authentication/initialization
         self.channel = self.channel_snapshot = None
         self.cancel_owner = None
+        self.result_writer = self.result_writer_snapshot = None
         self.ticket = None
         self.grammar = None
         self.task = None
@@ -1237,6 +1249,17 @@ class BrokerServiceSpine:
             BrokerServiceSpine._v2_work_current(self, owner)
             _require(BrokerCancellationOwner.go_receipt(owner) is receipt)
             owner._go_relay_completed = True  # control write only, never execution ack
+            from .presentation_result_transport import BrokerResultWriter
+
+            writer = BrokerResultWriter.retain(self, record, first.body)
+            while owner._retired is False and not _TASK.done(owner._allocation_snapshot.task):
+                BrokerServiceSpine._v2_work_current(self, owner)
+                if BrokerResultWriter.poll(writer):
+                    if not await BrokerResultWriter.send(writer):
+                        _require(owner._retired is True
+                                 or _TASK.done(owner._allocation_snapshot.task))
+                    break
+                await asyncio.sleep(0.001)
         await BrokerServiceSpine._v2_control(self, owner)
         self._registry.abort_resources(record.ticket)  # inherited minimum already adopted
 

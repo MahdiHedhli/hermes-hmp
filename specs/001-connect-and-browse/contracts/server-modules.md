@@ -496,3 +496,16 @@ Native/helper/socket/current device and release qualifications remain separate.
 - `presentation_policy_thread.py`: retained actual directory-policy worker/start/join observations; task completion/cancellation does not settle it. Native job reservation/authority/transfer remain binder obligations.
 
 - `presentation_policy_binding.py`: one retained policy work per existing admitted authority operation, actual join then fresh native PRE_GO observation; no route, transfer, child launch or clean-abort provided yet.
+
+
+### BI1 private result-candidate transport module (November 5, 2026)
+
+`presentation_result_transport.py` is the independently reviewed retained writer/
+reader boundary described in [RESULT_TRANSPORT.md](../../046-bot-presentation-integration/RESULT_TRANSPORT.md).
+It imports no Hermes internals and adds no route, tool, registration, provider or
+network destination. Original service/work tasks use existing authenticated Unix
+channels, admission credits, qualified clock/budget and result2 buffer. The
+closed module set includes it explicitly; the exact-tree, Hermes-free import and
+optional local-media isolation checks remain enforced. Validation produces only
+a private job candidate/token; publication, native terminal proof and release
+remain inaccessible through this module.

@@ -20,8 +20,8 @@ Encoding and header-first decoding require the selected version. Ordinary v2
 channel framing supports BEGIN/READY only. The dedicated retained cleanup sender
 and exclusive broker receiver now join private service BEGIN/READY/GO/CANCEL
 source; neither is a general CANCEL reader/writer. No competing reader or
-terminal owner may reuse the adopted receiver channel. RESULT, STATUS/ACK
-and started release remain refused. This is not a deployed capability or an
+terminal owner may reuse the adopted receiver channel. Dedicated result transport
+accepts only a private candidate; STATUS/ACK, publication and started release remain refused. This is not a deployed capability or an
 alternative to complete character delivery. See [coupled transport](INHERITED_CANCEL.md).
 
 ## Separate local closure facts

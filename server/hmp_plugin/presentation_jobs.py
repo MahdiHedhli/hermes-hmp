@@ -445,6 +445,7 @@ class RemotePhase(Enum):
     READY = "READY"
     GO_INTENT = "GO_INTENT"
     GO_SENT = "GO_SENT"
+    RESULT_VALIDATED = "RESULT_VALIDATED"
     DRAINING = "DRAINING"
     UNKNOWN = "UNKNOWN"
 
@@ -489,6 +490,10 @@ class _Job:
     output_buffer: BoundedResultBuffer = field(default_factory=BoundedResultBuffer)
     parent_result_context: tuple[str, object] | None = None
     result: tuple[dict[str, object], bytes] | None = None
+    remote_result_token: object | None = None
+    remote_output_origin: object | None = None
+    remote_output_custody: tuple | None = None
+    _remote_output_custody_snapshot: tuple | None = None
     result_eof: bool = False
     result_aborted: bool = False
     diagnostic_eof: bool = False
@@ -612,7 +617,8 @@ class JobOwner:
         return handle
 
     def _resolve(self, handle: JobHandle) -> _Job:
-        if type(handle) is not JobHandle or handle not in self._jobs:
+        if (type(self._jobs) is not dict or type(handle) is not JobHandle
+                or handle not in self._jobs):
             _fail()
         return self._jobs[handle]
 
@@ -622,6 +628,8 @@ class JobOwner:
 
     def inspect(self, handle: JobHandle) -> tuple[State, bool, bool]:
         if type(handle) is not JobHandle:
+            _fail()
+        if type(self._jobs) is not dict:
             _fail()
         job = self._jobs.get(handle)
         if job is not None:
@@ -659,6 +667,14 @@ class JobOwner:
         # One shared cell is retained by both ledgers before initialization.
         # No foreign clock, callback or await follows installation here.
         RemoteSlot.install(job.remote_slot, remote)
+        from .presentation_output_v2 import BoundedResultBufferV2
+
+        if (type(job.output_buffer) is not BoundedResultBufferV2
+                or type(job.output_buffer._buffer) is not bytearray):
+            _fail()
+        job.remote_output_origin = job.output_buffer
+        job.remote_output_custody = job._remote_output_custody_snapshot = (
+            job, job.output_buffer, job.output_buffer._buffer)
         job.remote_phase = RemotePhase.BOUND
 
     def inspect_remote(self, handle: JobHandle) -> RemotePhase | None:
@@ -1073,6 +1089,7 @@ class JobOwner:
         job = self._resolve(handle)
         job.emit_revoked = True
         if self._remote(job) is not None:
+            JobOwner._wipe_remote_candidate(job)
             if job.state is not State.UNKNOWN:
                 job.state = State.DRAINING
                 job.remote_phase = RemotePhase.DRAINING
@@ -1111,12 +1128,29 @@ class JobOwner:
             if job.state not in (State.REFUSED, State.EMIT, State.UNKNOWN):
                 self.cancel(handle)
 
+    @staticmethod
+    def _wipe_remote_candidate(job) -> None:
+        from .presentation_output_v2 import BoundedResultBufferV2
+
+        # Original owned accumulator only; never invoke a drifted buffer callback.
+        origin = job._remote_output_custody_snapshot
+        if (type(origin) is tuple and len(origin) == 3 and origin[0] is job
+                and type(origin[1]) is BoundedResultBufferV2 and type(origin[2]) is bytearray):
+            origin[2][:] = b"\x00" * len(origin[2])
+            origin[2].clear()
+            origin[1]._done = True
+        job.result = None
+        job.remote_result_token = None
+
     def unknown(self, handle: JobHandle) -> None:
         job = self._resolve(handle)
         job.emit_revoked = True
         job.state = State.UNKNOWN
         if job.remote_phase is not None:
             job.remote_phase = RemotePhase.UNKNOWN
-        job.output_buffer.wipe()
-        job.result = None
+        if self._remote(job) is not None:
+            JobOwner._wipe_remote_candidate(job)
+        else:
+            job.output_buffer.wipe()
+            job.result = None
         self._disabled = True

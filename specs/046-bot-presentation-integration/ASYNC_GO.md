@@ -73,7 +73,8 @@ Bound header/body allocation before effects. Selected-v2 grammar is:
 - GO has an empty body; CANCEL has the original sixteen-byte frozen window;
 - GO is forbidden while queued/before READY, after cancellation/expiry, twice,
   or under different protocol/binding/operation/boot;
-- no RESULT, STATUS/ACK or started release until their separate integration.
+- dedicated RESULT candidate transport is specified in [RESULT_TRANSPORT.md](RESULT_TRANSPORT.md);
+  STATUS/ACK, publication and started release remain separate gates.
 
 A complete validated GO header is the complete empty GO frame. Grammar admission
 sets a retained one-use GO notification for the service; the same reader task

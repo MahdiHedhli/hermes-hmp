@@ -1,4 +1,4 @@
-"""Native-owned remote BEGIN/READY/GO; no result/release or live route.
+"""Native-owned remote control and private result candidates; no release or live route.
 
 Original request credentials and policy remain in ParentAuthorityAdapter. The
 broker connection is a separate custody plane; it is never a local process.
@@ -23,7 +23,7 @@ from .presentation_broker_service import SocketChannel, _task_allows_work
 from .presentation_cancel_budget import CancellationBudget
 from .presentation_clock import ClockDomain, NativeClockOwner
 from .presentation_input_v3 import decode_input_v3
-from .presentation_jobs import CapturedLease, JobHandle, JobOwner, RemotePhase, State
+from .presentation_jobs import CapturedLease, JobHandle, JobOwner, RemotePhase, State, _Job
 from .presentation_parent_policy import ParentPolicyReadOwner
 from .presentation_policy_binding import NativePolicyWork
 from .presentation_policy_thread import PolicyThreadOwner
@@ -49,8 +49,8 @@ class RemoteOperationOwner:
 
     Only ParentAuthorityAdapter.bind_remote may retain and initialize this owner.
     The shared slot exists before initialization; even a partial owner is debt.
-    Only fixed retained work forwards one freshly authorized GO. No method reads
-    RESULT or claims remote terminal custody.
+    Only fixed retained work forwards GO and reads a private result candidate.
+    Result readiness publishes no data or remote terminal custody.
     """
     def __init__(self, authority, operation, channel, binding, packet):
         self._authority = self._authority_snapshot = authority
@@ -62,6 +62,10 @@ class RemoteOperationOwner:
         self._begin_attempted = False
         self._go_admission = self._go_admission_snapshot = None
         self._go_admission_used = False
+        self._result_owner = self._result_owner_snapshot = None
+        self._jobs_origin = self._jobs_origin_snapshot = None
+        self._job_origin = self._job_origin_snapshot = None
+        self._output_custody = self._output_custody_snapshot = None
         self._send_claimed = self._send_completed = self._receive_claimed = False
         self._initialized = False
         self._record = self._record_snapshot = None
@@ -86,6 +90,15 @@ class RemoteOperationOwner:
                 raise AuthorityRefusalError
             record = authority._record(operation)
             self._record = self._record_snapshot = record
+            if type(record.owner) is not JobOwner or type(record.owner._jobs) is not dict:
+                raise AuthorityRefusalError
+            self._jobs_origin = self._jobs_origin_snapshot = record.owner._jobs
+            self._job_origin = self._job_origin_snapshot = record.owner._jobs.get(record.handle)
+            self._output_custody = self._output_custody_snapshot = (
+                self._job_origin.remote_output_custody
+                if type(self._job_origin) is _Job else None)
+            if type(self._job_origin) is not _Job:
+                raise AuthorityRefusalError
             work = record.policy_work
             if (record.remote_operation is not self or type(work) is not NativePolicyWork
                     or work._authority is not authority or work._record is not record
@@ -220,6 +233,16 @@ class RemoteOperationOwner:
                 or self._cleanup_owner is not self._cleanup_owner_snapshot
                 or type(seal) is not tuple or seal is not self._seal_snapshot or len(seal) != 31
                 or type(r.owner) is not JobOwner or type(r.handle) is not JobHandle
+                or type(self._jobs_origin) is not dict
+                or self._jobs_origin is not self._jobs_origin_snapshot
+                or r.owner._jobs is not self._jobs_origin
+                or type(self._job_origin) is not _Job
+                or self._job_origin is not self._job_origin_snapshot
+                or self._jobs_origin.get(r.handle) is not self._job_origin
+                or type(self._output_custody) is not tuple or len(self._output_custody) != 3
+                or self._output_custody is not self._output_custody_snapshot
+                or self._output_custody[0] is not self._job_origin
+                or self._job_origin.remote_output_custody is not self._output_custody
                 or type(r.fence) is not ListenerFence or type(r.policy_work) is not NativePolicyWork
                 or a._clock is not time.monotonic or r.owner._clock is not time.monotonic):
             raise AuthorityRefusalError
@@ -270,6 +293,7 @@ class RemoteOperationOwner:
     def _check(self, phase: RemotePhase):
         try:
             _task_allows_work()
+            RemoteOperationOwner._retained_local(self)
             if self._protocol == 2 and self._cleanup_owner_snapshot is not None:
                 from .presentation_remote_cleanup import RemoteCleanupOwner
 
@@ -318,7 +342,8 @@ class RemoteOperationOwner:
                     or r.process_owner is not None or r.reader_supervisor is not None
                     or r.native_claim is not None or r.initial_complete is not True
                     or r.owner.inspect(r.handle)[0] is not (
-                        State.RUNNING if phase in (RemotePhase.GO_INTENT, RemotePhase.GO_SENT)
+                        State.RUNNING if phase in (RemotePhase.GO_INTENT, RemotePhase.GO_SENT,
+                                                       RemotePhase.RESULT_VALIDATED)
                         else State.STARTING)
                     or r.owner.inspect_remote(r.handle) is not phase):
                 raise AuthorityRefusalError
@@ -440,6 +465,16 @@ class RemoteOperationOwner:
             RemoteOperationOwner._poison(self)
             raise AuthorityRefusalError
         return await RemoteCleanupOwner.go(owner)
+
+    async def result_ready(self):
+        """Private candidate readiness only; never returns result data or release."""
+        from .presentation_remote_cleanup import RemoteCleanupOwner
+
+        owner = self._cleanup_owner_snapshot
+        if type(owner) is not RemoteCleanupOwner:
+            RemoteOperationOwner._poison(self)
+            raise AuthorityRefusalError
+        return await RemoteCleanupOwner.result_ready(owner)
 
     def _authorize_channel(self, channel, direction, binding, end_ns, frame):
         """Linear channel I/O claims; no generic owner token can send GO or results."""

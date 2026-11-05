@@ -1,0 +1,460 @@
+"""Synthetic result candidates, actual Unix/owned reader, mocked peer/clock.
+
+No real host data, public image response, terminal proof or native release.
+"""
+import asyncio
+import hashlib
+import os
+from contextlib import suppress
+from dataclasses import replace
+from pathlib import Path
+
+import pytest
+import pytest_asyncio
+
+from hmp_plugin import presentation_result_transport as result
+from hmp_plugin.presentation_authority import (
+    AuthorityRefusalError,
+    ListenerFence,
+    ParentAuthorityAdapter,
+)
+from hmp_plugin.presentation_broker_codec import BrokerHeader, encode_header
+from hmp_plugin.presentation_broker_registry import BrokerRegistry, RegistryStatus
+from hmp_plugin.presentation_broker_service import SocketChannel
+from hmp_plugin.presentation_jobs import RemotePhase, State
+from hmp_plugin.presentation_output_v2 import decode_output_v2, encode_output_v2
+from hmp_plugin.presentation_remote_cleanup import RemoteCleanupOwner
+
+from .test_presentation_broker_resources import image
+from .test_presentation_broker_service import local as local
+from .test_presentation_clock import darwin_model
+from .test_presentation_remote import adopt, prepare
+from .test_presentation_supervisor import context as context
+
+pytestmark = [pytest.mark.asyncio, pytest.mark.parametrize("local", [2], indirect=True)]
+
+
+@pytest_asyncio.fixture
+async def coupled_result(local, context, monkeypatch, request):
+    import time
+
+    variant = getattr(request, "param", "metadata")
+    authority, op, native = context
+    expected = None
+    if variant != "metadata":
+        asset = Path(native.home) / "assets" / "avatar.png"
+        asset.parent.mkdir(mode=0o700)
+        asset.write_bytes(image())
+        asset.chmod(0o600)
+        if variant == "avatar":
+            expected = hashlib.sha256(asset.read_bytes()).hexdigest()
+            original = authority._record(op)
+            authority = ParentAuthorityAdapter(original.lease.iid, service=native)
+            op = authority.reserve(original.lease, "AVATAR", original.headers,
+                listener=object(), fence=ListenerFence(1), store=object(), bridge=object(),
+                identity=object(), native_owner=object())
+    spine, enrollment, client, _, _, _ = local
+    darwin_model(monkeypatch)
+    channel = SocketChannel(client(), replace(enrollment, gateway_pid=os.getpid(),
+        service_pid=os.getpid() + 1), role="gateway", endpoint=spine._endpoint,
+        observation=spine._observation)
+    row = await prepare((authority, op, native), (channel, None, spine),
+                        expected_avatar_sha=expected)
+    remote = adopt(row)
+    task = asyncio.create_task(spine.serve_once(time.monotonic_ns() + 2_000_000_000))
+    yield remote, row, spine, task
+    native.release.set()
+    owner = remote._cleanup_owner_snapshot
+    if owner is not None and owner._initialized is True:
+        RemoteCleanupOwner.request(owner)
+        with suppress(BaseException):
+            await asyncio.wait_for(asyncio.shield(owner._allocations_snapshot[0].task), 1)
+        work = owner._allocations_snapshot[1].task
+        if work.done():
+            with suppress(BaseException):
+                work.result()
+    if not task.done():
+        task.cancel()
+    with suppress(BaseException):
+        await task
+    channel.close()
+    channel.close_clock()
+    await spine.stop_local_sockets()
+
+
+@pytest.mark.parametrize("coupled_result", ["metadata", "metadata_avatar", "avatar"], indirect=True)
+async def test_actual_result_is_private_validated_candidate_not_completion(coupled_result):
+    remote, row, spine, task = coupled_result
+    authority, op, native, _, _, _, packet, binding = row
+    assert await remote.begin_ready() and await remote.go()
+    assert await remote.result_ready() is True
+    record = authority._record(op)
+    job = authority.owner._resolve(record.handle)
+    receiver = remote._result_owner_snapshot
+    writer = receiver._scope_snapshot.channel  # gateway side, no broker authority
+    assert writer is row[3] and receiver._validated
+    assert job.result[0]["fields"]["display_name"] == "Aster"
+    assert job.remote_result_token is receiver._token_snapshot
+    assert not receiver._scope_snapshot.buffer._buffer
+    assert authority.owner.inspect(record.handle) == (State.RUNNING, True, False)
+    assert authority.owner.inspect_remote(record.handle) is RemotePhase.RESULT_VALIDATED
+    assert record.headers is not None and native.drain_calls == 0
+    assert "PRE_EMIT" not in native.calls
+    held = spine._registry._record(spine._registry._operations[binding.operation])
+    assert held.resources._normal_complete and held.resources._result_taken
+    assert held.resources._phase == "LOCAL_DRAINED"
+    broker_writer = spine._records[0].result_writer
+    assert broker_writer._write_completed and broker_writer._payload is None
+    assert broker_writer._scope_snapshot.packet is not packet
+    assert spine._registry.status(binding) is RegistryStatus.PENDING
+    assert not remote._cleanup_owner_snapshot._allocations_snapshot[1].task.done()
+    RemoteCleanupOwner.request(remote._cleanup_owner_snapshot)
+    await asyncio.wait_for(asyncio.shield(
+        remote._cleanup_owner_snapshot._allocations_snapshot[0].task), 1)
+    await task
+    assert job.result is None and job.remote_result_token is None
+    assert not authority.owner.inspect(record.handle)[2]
+
+
+@pytest.mark.parametrize("fault", ["challenge", "epoch", "chain", "totals"])
+async def test_gateway_independently_rejects_broker_accepted_result(
+    coupled_result, monkeypatch, fault
+):
+    remote, row, _, _ = coupled_result
+    original = BrokerRegistry.take_resource_candidate
+    tampered = []
+    def take(registry, ticket):
+        wire = original(registry, ticket)
+        header, avatar = decode_output_v2(wire, remote._row_snapshot["challenge"],
+                                        remote._row_snapshot["epoch"])
+        if fault == "challenge":
+            header["challenge"] = "0" * 64
+        elif fault == "epoch":
+            header["epoch"] += 1
+        elif fault == "chain":
+            header["chain"][0][0] += 1
+        else:
+            header["ledger"]["opens"] = 0
+        tampered.append(True)
+        return encode_output_v2(header, avatar)
+    monkeypatch.setattr(BrokerRegistry, "take_resource_candidate", take)
+    assert await remote.begin_ready()
+    with pytest.raises(AuthorityRefusalError):
+        assert await remote.go()
+        await remote.result_ready()
+    job = remote._job_origin_snapshot
+    assert tampered and job.result is None and job.remote_result_token is None
+    assert not job.output_buffer._buffer
+    assert row[0]._record(row[1]).headers is not None and not job.credit_released
+
+
+async def test_duplicate_candidate_wait_revokes_and_wipes_original(coupled_result):
+    remote, _, _, _ = coupled_result
+    assert await remote.begin_ready() and await remote.go() and await remote.result_ready()
+    job = remote._job_origin_snapshot
+    assert job.result is not None
+    with pytest.raises(AuthorityRefusalError):
+        await remote.result_ready()
+    assert job.result is None and job.remote_result_token is None
+    assert job.state is State.UNKNOWN and not job.credit_released
+
+
+async def test_foreign_buffer_during_read_never_receives_feed_or_wipe(coupled_result, monkeypatch):
+    remote, row, _, _ = coupled_result
+    original = result._LOOP.sock_recv
+    callbacks, changed = [], []
+    job = remote._job_origin_snapshot
+    buffer = job.output_buffer
+    class Foreign:
+        def __getattribute__(self, name):
+            callbacks.append(name)
+            raise AssertionError("foreign buffer is not owned")
+    async def recv(loop, sock, count):
+        data = await original(loop, sock, count)
+        owner = remote._result_owner_snapshot
+        if sock is row[3]._socket_snapshot and owner is not None and owner._header is not None:
+            job.output_buffer = Foreign()
+            changed.append(True)
+        return data
+    monkeypatch.setattr(result._LOOP, "sock_recv", recv)
+    assert await remote.begin_ready()
+    try:
+        with pytest.raises(AuthorityRefusalError):
+            assert await remote.go()
+            await remote.result_ready()
+        assert changed and callbacks == []
+        assert not buffer._buffer and job.result is None and job.remote_result_token is None
+    finally:
+        job.output_buffer = buffer  # test disposal only, after refusal
+
+
+async def test_no_public_result_method_returns_data_or_local_custody(coupled_result):
+    remote, row, _, _ = coupled_result
+    assert await remote.begin_ready() and await remote.go() and await remote.result_ready()
+    authority, op = row[:2]
+    assert not await authority.reauthorize(op)
+    await authority.owner.reauthorize(authority._record(op).handle)
+    assert remote._job_origin_snapshot.result is None  # old local path refuses remote
+    assert authority._record(op).headers is not None
+
+
+async def test_bounded_header_encoding_has_no_body_copy(coupled_result):
+    remote, _, _, _ = coupled_result
+    binding = remote._binding_snapshot
+    header = BrokerHeader(binding, "RESULT", 1, 2_008_196, 2)
+    wire = encode_header(header)
+    assert len(wire) < 1032 and wire.startswith(b"HBR1")
+
+
+async def test_cross_operation_accumulator_retarget_never_feeds_or_wipes_other(
+    coupled_result, monkeypatch
+):
+    from hmp_plugin.presentation_output_v2 import BoundedResultBufferV2
+
+    remote, row, _, _ = coupled_result
+    original = result._LOOP.sock_recv
+    job = remote._job_origin_snapshot
+    own = job.output_buffer._buffer
+    other = BoundedResultBufferV2()
+    other._buffer.extend(b"OTHER_OPERATION_SYNTHETIC_PRIVATE_PAYLOAD")
+    held = bytes(other._buffer)
+    changed = []
+    async def recv(loop, sock, count):
+        data = await original(loop, sock, count)
+        receiver = remote._result_owner_snapshot
+        if (sock is row[3]._socket_snapshot and receiver is not None
+                and receiver._header is not None):
+            job.output_buffer._buffer = other._buffer
+            changed.append(True)
+        return data
+    monkeypatch.setattr(result._LOOP, "sock_recv", recv)
+    assert await remote.begin_ready()
+    try:
+        with pytest.raises(AuthorityRefusalError):
+            assert await remote.go()
+            await remote.result_ready()
+        assert changed and bytes(other._buffer) == held
+        assert not own and job.result is None and job.remote_result_token is None
+    finally:
+        job.output_buffer._buffer = own  # test disposal only after the refusal outcome
+
+
+@pytest.mark.parametrize("partial", [False, True])
+async def test_transferred_writer_payload_cannot_be_retargeted_or_retried(
+    coupled_result, monkeypatch, partial
+):
+    remote, _, spine, _ = coupled_result
+    original = result._LOOP.sock_sendall
+    attempted, emitted, changed = [], [], []
+    foreign = b"FOREIGN_OPERATION_SYNTHETIC_RESULT"
+    async def send(loop, sock, data):
+        writer = spine._records[0].result_writer if spine._records else None
+        if writer is not None and sock is writer._scope_snapshot.channel._socket_snapshot:
+            attempted.append(data)
+            if not changed and data.startswith(b"HBR1"):
+                await original(loop, sock, data)
+                emitted.append(data)
+                if not partial:
+                    writer._payload = writer._payload_snapshot = foreign
+                    changed.append(True)
+                return
+            if partial:
+                changed.append(True)
+                await original(loop, sock, data[:1])
+                emitted.append(data[:1])
+                raise OSError("synthetic partial RESULT")
+        return await original(loop, sock, data)
+    monkeypatch.setattr(result._LOOP, "sock_sendall", send)
+    assert await remote.begin_ready()
+    with pytest.raises(AuthorityRefusalError):
+        assert await remote.go()
+        await remote.result_ready()
+    assert changed and foreign not in b"".join(emitted)
+    assert len(attempted) == (2 if partial else 1)
+    assert remote._job_origin_snapshot.result is None
+    assert not remote._job_origin_snapshot.credit_released
+
+
+@pytest.mark.parametrize("fault", ["size", "sequence", "version", "binding"])
+async def test_outer_result_header_refuses_before_body_read(coupled_result, monkeypatch, fault):
+    import json
+    import struct
+
+    from hmp_plugin.presentation_jobs import OUTPUT_LIMIT
+
+    remote, _, _, _ = coupled_result
+    original = result.encode_header
+    def invalid(header):
+        wire = original(header)
+        fields = json.loads(wire[8:])
+        if fault == "size":
+            fields["body_length"] = OUTPUT_LIMIT + 1
+        elif fault == "sequence":
+            fields["sequence"] = 2
+        elif fault == "version":
+            fields["v"] = 1
+        else:
+            fields["operation"] = "e" * 64
+        raw = json.dumps(fields, sort_keys=True, separators=(",", ":")).encode()
+        return b"HBR1" + struct.pack(">I", len(raw)) + raw  # deliberately bypass closed encoder
+    monkeypatch.setattr(result, "encode_header", invalid)
+    assert await remote.begin_ready()
+    with pytest.raises(AuthorityRefusalError):
+        assert await remote.go()
+        await remote.result_ready()
+    receiver = remote._result_owner_snapshot
+    assert receiver._header is None and not receiver._scope_snapshot.accumulator
+    assert receiver._scope_snapshot.job.result is None
+
+
+async def test_native_result_clock_never_invokes_foreign_jobs_map(coupled_result, monkeypatch):
+    remote, row, _, _ = coupled_result
+    jobs = row[0].owner._jobs
+    original = ParentAuthorityAdapter._current
+    changed, callbacks = [], []
+    class Foreign:
+        def get(self, *args):
+            callbacks.append("get")
+            raise AssertionError("foreign jobs map must never run")
+        def __contains__(self, value):
+            callbacks.append("contains")
+            raise AssertionError("foreign jobs map must never run")
+    def current(a, r):
+        okay = original(a, r)
+        receiver = remote._result_owner_snapshot
+        if (a is row[0] and receiver is not None and receiver._initialized is True
+                and asyncio.current_task() is (
+                    remote._cleanup_owner_snapshot._allocations_snapshot[1].task)
+                and not changed):
+            changed.append(True)
+            a.owner._jobs = Foreign()
+        return okay
+    monkeypatch.setattr(ParentAuthorityAdapter, "_current", current)
+    try:
+        assert await remote.begin_ready()
+        with pytest.raises(AuthorityRefusalError):
+            assert await remote.go()
+            await remote.result_ready()
+        assert changed and callbacks == [] and remote._job_origin_snapshot.result is None
+    finally:
+        row[0].owner._jobs = jobs  # test disposal only after refusal
+
+
+@pytest.mark.parametrize("coupled_result", ["avatar"], indirect=True)
+@pytest.mark.parametrize("fault", ["hash", "expected_revision"])
+async def test_gateway_checks_avatar_body_and_original_expected_revision(
+    coupled_result, monkeypatch, fault
+):
+    from hmp_plugin.presentation_jobs import HEADER_LIMIT, _envelope
+
+    remote, _, _, _ = coupled_result
+    original = BrokerRegistry.take_resource_candidate
+    changed = []
+    def take(registry, ticket):
+        wire = original(registry, ticket)
+        header, avatar = decode_output_v2(wire, remote._row_snapshot["challenge"],
+                                        remote._row_snapshot["epoch"])
+        damaged = avatar[:-1] + bytes([avatar[-1] ^ 1])
+        if fault == "expected_revision":
+            digest = hashlib.sha256(damaged).hexdigest()
+            header["avatar_sha"] = digest
+            header["source_proof"]["avatar_body_sha"] = digest
+        changed.append(True)
+        return _envelope(header, HEADER_LIMIT) + damaged  # bypass broker hash validation only
+    monkeypatch.setattr(BrokerRegistry, "take_resource_candidate", take)
+    assert await remote.begin_ready()
+    with pytest.raises(AuthorityRefusalError):
+        assert await remote.go()
+        await remote.result_ready()
+    assert changed and remote._job_origin_snapshot.result is None
+    assert not remote._job_origin_snapshot.credit_released
+
+
+async def test_custody_tuple_retarget_cannot_redirect_central_cancel_wipe(
+    coupled_result, monkeypatch
+):
+    from hmp_plugin.presentation_output_v2 import BoundedResultBufferV2
+
+    remote, row, _, _ = coupled_result
+    job = remote._job_origin_snapshot
+    original = result._LOOP.sock_recv
+    origin = job._remote_output_custody_snapshot
+    other = BoundedResultBufferV2()
+    other._buffer.extend(b"OTHER_CUSTODY_SYNTHETIC_PAYLOAD")
+    held, changed = bytes(other._buffer), []
+    async def recv(loop, sock, count):
+        data = await original(loop, sock, count)
+        receiver = remote._result_owner_snapshot
+        if (sock is row[3]._socket_snapshot and receiver is not None
+                and receiver._header is not None):
+            job.remote_output_custody = (job, other, other._buffer)
+            changed.append(True)
+        return data
+    monkeypatch.setattr(result._LOOP, "sock_recv", recv)
+    assert await remote.begin_ready()
+    try:
+        with pytest.raises(AuthorityRefusalError):
+            assert await remote.go()
+            await remote.result_ready()
+        assert changed and bytes(other._buffer) == held
+        assert job._remote_output_custody_snapshot is origin and not origin[2]
+        assert job.result is None and job.remote_result_token is None
+    finally:
+        job.remote_output_custody = origin  # test-only disposal after refusal
+
+
+async def test_forged_notification_cannot_report_unvalidated_candidate(coupled_result, monkeypatch):
+    remote, _, _, _ = coupled_result
+    monkeypatch.setattr(BrokerRegistry, "poll_resource_result", lambda *args: False)
+    assert await remote.begin_ready() and await remote.go()
+    owner = remote._cleanup_owner_snapshot
+    assert owner._result_token is None
+    owner._result_notice_snapshot.set_result(True)  # no validation token exists
+    with pytest.raises(AuthorityRefusalError):
+        await remote.result_ready()
+    assert remote._job_origin_snapshot.result is None
+    assert not remote._job_origin_snapshot.credit_released
+
+
+async def test_cancel_during_blocked_body_stops_original_writer_before_work_deadline(
+    coupled_result, monkeypatch
+):
+    remote, _, spine, task = coupled_result
+    original = result._LOOP.sock_sendall
+    entered, release = asyncio.Event(), asyncio.Event()
+    continued = []
+    async def send(loop, sock, data):
+        writer = spine._records[0].result_writer if spine._records else None
+        if (writer is not None and sock is writer._scope_snapshot.channel._socket_snapshot
+                and not data.startswith(b"HBR1")):
+            await original(loop, sock, data[:1])
+            entered.set()
+            await release.wait()  # deterministic backpressure under original service task
+            continued.append(True)
+            return await original(loop, sock, data[1:])
+        return await original(loop, sock, data)
+    monkeypatch.setattr(result._LOOP, "sock_sendall", send)
+    async def flow():
+        assert await remote.begin_ready() and await remote.go()
+        return await remote.result_ready()
+    public = asyncio.create_task(flow())
+    try:
+        await asyncio.wait_for(entered.wait(), 1)
+        writer = spine._records[0].result_writer
+        public.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await public
+        owner = remote._cleanup_owner_snapshot
+        await asyncio.wait_for(asyncio.shield(owner._allocations_snapshot[0].task), 1)
+        await asyncio.wait_for(asyncio.shield(task), 1)
+        assert writer._cancel_requested and not continued
+        assert writer._payload is None and not writer._write_completed
+        assert not remote._job_origin_snapshot.remote_output_origin._buffer
+        assert remote._job_origin_snapshot.result is None
+        assert not owner._result_notice_snapshot.cancelled()
+    finally:
+        release.set()
+        if not public.done():
+            public.cancel()
+        with suppress(BaseException):
+            await public

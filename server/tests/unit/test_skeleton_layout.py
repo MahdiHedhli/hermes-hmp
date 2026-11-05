@@ -76,6 +76,8 @@ CONTRACT_MODULES = {
     "presentation_broker_cancel.py",
     "presentation_remote.py",
     "presentation_remote_cleanup.py",
+    # Reviewed original-owner private result candidates; no publication/release or live route.
+    "presentation_result_transport.py",
     # BR3 grammar/replay control only, never native/remote custody authority.
     "presentation_broker_lifecycle.py",
     "presentation_child.py",
