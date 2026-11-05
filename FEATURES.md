@@ -1,3 +1,20 @@
+## Character reader resource binding — November 4, 2026
+
+The reviewed source now binds each metadata/custom-image reader to its original
+request, child, control pipe, output buffer and deadline before launch. It checks
+input scope before transfer, moves a complete bounded result only once, and
+invalidates output immediately on cancellation. Cleanup retains uncertain owners
+and never touches another operation's buffers or child.
+
+The new resource suite passes 38 cases; independent review passed its earlier
+37-case version, followed by one additional valid wrong-profile input test.
+Complete serial Python 3.11 and 3.14.9 runs each pass 746 tests plus 66 subtests;
+lint and the plugin import scanner pass. These are source/fixture results.
+Local completion still leaves started registry reservations PENDING. Production
+service/runtime qualification, authenticated transport, gateway integration,
+terminal release and physical character delivery remain open. No host or phone
+capability was activated. See [resource API](specs/046-bot-presentation-integration/BROKER_RESOURCE_API.md).
+
 ## Character reader local cleanup — November 4, 2026
 
 The reviewed cleanup layer now retains partial control acquisition and separates

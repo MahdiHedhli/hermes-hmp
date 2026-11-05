@@ -17,6 +17,7 @@ from types import MappingProxyType
 from .presentation_broker_child import BrokerChildOwner, BrokerReaderStreams
 from .presentation_broker_codec import BrokerBinding, _binding
 from .presentation_broker_lifecycle import ReplayWindow
+from .presentation_broker_resources import BrokerReaderResources
 from .presentation_child_launch import ChildLaunch, child_launch, parser_package_path
 from .presentation_jobs import (
     _PROFILE,
@@ -67,6 +68,10 @@ class _Record:
     state: _State = _State.QUEUED
     start_attempted: bool = False
     unknown: bool = False
+    managed: bool = False
+    resources: BrokerReaderResources | None = None
+    resources_snapshot: BrokerReaderResources | None = None
+    resources_ready: bool = False
 
 
 def _recipe_value(recipe: ChildLaunch) -> tuple:
@@ -236,6 +241,15 @@ class BrokerRegistry:
                 or type(record.state) is not _State
                 or type(record.start_attempted) is not bool
                 or type(record.unknown) is not bool
+                or type(record.managed) is not bool
+                or type(record.resources_ready) is not bool
+                or record.resources is not record.resources_snapshot
+                or (
+                    record.resources is not None
+                    and type(record.resources) is not BrokerReaderResources
+                )
+                or (record.resources_ready and (not record.managed or record.resources is None))
+                or (record.resources is not None and not record.managed)
                 or record.owner is not record.owner_snapshot
                 or (record.owner is not None and type(record.owner) is not BrokerChildOwner)
                 or (record.owner is None and not record.unknown)
@@ -346,6 +360,7 @@ class BrokerRegistry:
             counts = self._counts()
             if (
                 record.state is not _State.QUEUED
+                or record.managed
                 or record.unknown
                 or record.owner is None
                 or record.start_attempted
@@ -378,11 +393,157 @@ class BrokerRegistry:
         finally:
             self._lock.release()
 
+    def start_resources(self, ticket: BrokerTicket) -> None:
+        self._enter()
+        try:
+            record = self._record(ticket)
+            counts = self._counts()
+            if (
+                record.state is not _State.QUEUED
+                or record.unknown
+                or record.managed
+                or record.owner is None
+                or record.start_attempted
+                or time.monotonic_ns() >= record.deadline_ns
+                or counts.active >= MAX_PROCESSES
+                or (record.kind == "METADATA" and counts.metadata >= MAX_METADATA)
+                or (record.kind == "AVATAR" and counts.avatar >= MAX_AVATAR)
+                or any(
+                    r.state is _State.ACTIVE and r.profile == record.profile
+                    for r in self._records.values()
+                )
+            ):
+                raise FrameError("BI1_BROKER_REGISTRY_START_REFUSED")
+            record.managed = True  # no unmanaged fallback after any managed intent
+            try:
+                resources = BrokerReaderResources.__new__(BrokerReaderResources)
+                record.resources = record.resources_snapshot = resources
+                resources.__init__(
+                    record,
+                    record.owner,
+                    binding=record.binding,
+                    profile=record.profile,
+                    kind=record.kind,
+                    deadline_ns=record.deadline_ns,
+                )
+                record.resources_ready = True
+                self._check()
+                record.state = _State.ACTIVE
+                record.start_attempted = True
+                if time.monotonic_ns() >= record.deadline_ns:
+                    raise FrameError("BI1_BROKER_REGISTRY_START_DEADLINE")
+                resources.start()
+                self._check()
+                if time.monotonic_ns() >= record.deadline_ns:
+                    resources.abort()
+                    raise FrameError("BI1_BROKER_REGISTRY_START_DEADLINE")
+            except BaseException:
+                record.unknown = True
+                raise FrameError("BI1_BROKER_REGISTRY_START_UNCERTAIN") from None
+        finally:
+            self._lock.release()
+
+    def _managed(self, ticket: BrokerTicket, *, normal: bool = False) -> _Record:
+        record = self._record(ticket)
+        if (
+            record.state is not _State.ACTIVE
+            or not record.managed
+            or not record.resources_ready
+            or type(record.resources) is not BrokerReaderResources
+            or (normal and record.unknown)
+        ):
+            raise FrameError("BI1_BROKER_REGISTRY_RESOURCES_REFUSED")
+        return record
+
+    def stage_resource_input(self, ticket: BrokerTicket, packet: bytes) -> None:
+        self._enter()
+        try:
+            record = self._managed(ticket, normal=True)
+            try:
+                record.resources.stage_input(packet)
+                self._check()
+            except BaseException:
+                record.unknown = True
+                raise FrameError("BI1_BROKER_REGISTRY_INPUT_REFUSED") from None
+        finally:
+            self._lock.release()
+
+    def relay_resource_go(self, ticket: BrokerTicket) -> None:
+        """Qualified private service only, after original native+authenticated GO."""
+        self._enter()
+        try:
+            record = self._managed(ticket, normal=True)
+            try:
+                record.resources.relay_go()
+                self._check()
+            except BaseException:
+                record.unknown = True
+                raise FrameError("BI1_BROKER_REGISTRY_GO_REFUSED") from None
+        finally:
+            self._lock.release()
+
+    def poll_resource_result(self, ticket: BrokerTicket) -> bool:
+        self._enter()
+        try:
+            record = self._managed(ticket, normal=True)
+            try:
+                result = record.resources.poll_result()
+                self._check()
+                return result
+            except BaseException:
+                record.unknown = True
+                raise FrameError("BI1_BROKER_REGISTRY_RESULT_REFUSED") from None
+        finally:
+            self._lock.release()
+
+    def take_resource_candidate(self, ticket: BrokerTicket) -> bytes:
+        self._enter()
+        try:
+            record = self._managed(ticket, normal=True)
+            try:
+                result = record.resources.take_candidate()
+                self._check()
+                return result
+            except BaseException:
+                record.unknown = True
+                raise FrameError("BI1_BROKER_REGISTRY_CANDIDATE_REFUSED") from None
+        finally:
+            self._lock.release()
+
+    def abort_resources(self, ticket: BrokerTicket) -> None:
+        self._enter()
+        try:
+            record = self._managed(ticket)
+            record.resources.abort()
+            self._check()
+        finally:
+            self._lock.release()
+
+    def poll_resource_cleanup(self, ticket: BrokerTicket) -> bool:
+        self._enter()
+        try:
+            record = self._managed(ticket)
+            result = record.resources.poll_cleanup()
+            self._check()
+            return result  # LOCAL only; remains ACTIVE/PENDING, no slot release
+        finally:
+            self._lock.release()
+
+    def resource_local_observation(self, ticket: BrokerTicket):
+        self._enter()
+        try:
+            record = self._managed(ticket)
+            observation = record.resources.local_observation(record)
+            self._check()
+            return observation
+        finally:
+            self._lock.release()
+
     def poll_wait(self, ticket: BrokerTicket) -> bool:
         self._enter()
         try:
             record = self._record(ticket)
-            if record.state is not _State.ACTIVE or record.owner is None:
+            if record.state is not _State.ACTIVE or record.owner is None or record.managed:
                 raise FrameError("BI1_BROKER_REGISTRY_WAIT_REFUSED")
             try:
                 if not record.owner.owns(record):
@@ -400,7 +561,7 @@ class BrokerRegistry:
         self._enter()
         try:
             record = self._record(ticket)
-            if record.state is not _State.ACTIVE or record.owner is None:
+            if record.state is not _State.ACTIVE or record.owner is None or record.managed:
                 raise FrameError("BI1_BROKER_REGISTRY_SIGNAL_REFUSED")
             try:
                 if not record.owner.owns(record):
@@ -430,7 +591,12 @@ class BrokerRegistry:
         self._enter()
         try:
             record = self._record(ticket)
-            if record.state is not _State.QUEUED or record.unknown or record.owner is None:
+            if (
+                record.state is not _State.QUEUED
+                or record.unknown
+                or record.owner is None
+                or record.managed
+            ):
                 raise FrameError("BI1_BROKER_REGISTRY_SEAL_REFUSED")
             try:
                 record.owner.seal_unlaunched()

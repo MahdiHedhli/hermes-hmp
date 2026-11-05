@@ -335,6 +335,40 @@ class OwnedPresentationPipes:
                 self.uncertain = True
                 raise FrameError("BI1_LOCAL_SELECTOR_CLOSE_UNCERTAIN")
 
+    def validate_local_closed(
+        self, *, process: object, binding: object, control: object, control_fact: object
+    ) -> bool:
+        """Read-only native local-close validation; no discard/publication permission."""
+        from .presentation_broker_child import BrokerChildOwner
+        from .presentation_control_pipe import ControlCloseObservation, OwnedControlPipe
+
+        if (
+            type(self) is not OwnedPresentationPipes
+            or type(process) is not BrokerChildOwner
+            or type(control) is not OwnedControlPipe
+            or type(control_fact) is not ControlCloseObservation
+            or self.uncertain
+        ):
+            raise FrameError("BI1_PIPE_LOCAL_CLOSE_REFUSED")
+        if not process.owns(binding):
+            raise FrameError("BI1_PIPE_LOCAL_CLOSE_REFUSED")
+        waited = process.terminal_wait(binding)
+        streams = process.streams
+        if (
+            not process.validates_wait(binding, waited)
+            or process.signals_retired is not True
+            or type(self._streams) is not dict
+            or any(type(key) is not str for key in self._streams)
+            or set(self._streams) != {"result", "diagnostic"}
+            or self._streams["result"] is not streams.result
+            or self._streams["diagnostic"] is not streams.diagnostic
+            or control._stream_snapshot is not streams.control
+            or not control.validates_close(binding, process, control_fact)
+        ):
+            raise FrameError("BI1_PIPE_LOCAL_CLOSE_REFUSED")
+        self._validate_local_closed_facts()
+        return self.drained
+
     def poll_local_discard(
         self,
         *,
