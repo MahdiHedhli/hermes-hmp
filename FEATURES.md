@@ -1,3 +1,28 @@
+## Selected protocol and PID-realm source — November 5, 2026
+
+HMP `2e2f4f8` binds trusted protocol selection to the retained native clock
+lifecycle: nine-field enrollment, no fallback, no frames before qualification,
+concrete clock method boundaries and distinct socket/clock-FD closure facts.
+HMP `6aa829f` then repairs Linux proc PID-realm qualification before numeric peer
+lookup, using its own pidfd/fdinfo without PID1 access or elevated permissions.
+Active namespace type checks refuse wrong-kind descriptors. Trusted unmodified
+proc layout remains an explicit premise.
+
+Independent selected-lifecycle convergence passes 141 cases with one native
+Linux skip; the subsequent realm repair passes 106 clock/selected cases with one
+Linux-native skip. Root final serial Python 3.11/3.14.9 regressions each pass
+1,529 tests, one Linux-native skip and 190 subtests. Lint, surface and privacy
+checks pass. Prior cleanup CI head `9c40e66` is green (6,619 tests / 21 skips);
+new selected/realm source has separate CI evidence and no Linux runtime claim.
+
+Selected v2 supports bounded channel BEGIN/READY framing only. v2 CANCEL,
+status lifecycle and broker work dispatch remain refused until the original
+budget and retained cleanup owner are joined; GO/result/terminal release,
+authenticated routes, full character rendering and signed physical checks remain
+open. App executable, embedded HMP and installed hosts are unchanged. Host-local
+images follow. See [selected protocol](specs/046-bot-presentation-integration/SELECTED_PROTOCOL.md)
+and [PID-realm repair](specs/046-bot-presentation-integration/PROC_PID_REALM.md).
+
 ## Cleanup-only native clock source — November 5, 2026
 
 HMP `9f975f7` adds irreversible local-only cleanup sampling on the same
