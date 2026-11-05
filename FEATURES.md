@@ -1,3 +1,29 @@
+## Terminal cleanup-stamp envelope source — November 5, 2026
+
+HMP `a50158a` separates the immutable reader outcome from the sender's
+cleanup deadline in a bounded canonical handoff envelope. ABORTED and an
+already-caused broker require the original sender stamp, including historical
+OK; null normal data cannot grant a fresh interval. Exact integer/range/overflow
+checks, immutable values and raw-claim fallback refusal protect the data boundary.
+ACK correlation now covers the entire envelope, including its stamp. The codec
+does not sample a clock, inherit a budget or attest timely closure.
+
+Independent review passes 319 focused cases on Python 3.13. Root serial Python
+3.11.15 and standalone 3.14.4 each pass 1,821 tests plus 190 subtests, with one
+Linux-native skip. Lint, surface, privacy and diff checks pass. Previous transcript
+head `be1afd0` CI42063144561 succeeded with 6,931 passed / 21 skips plus 190 subtests;
+this candidate has separate CI evidence.
+
+Actual joined terminal transport remains unfinished: gateway cleanup currently
+joins the whole work task before CANCEL, and broker control returns after CANCEL.
+The reviewed next contract retains the original reader in cleanup-only mode,
+requires exact one-use write quiescence before cleanup writes, preserves partial
+cursors and shortens original timeouts; the same broker controller must continue
+to ACK. Qualified producer/receiver acceptance, fresh PRE_EMIT, native/policy/
+credential retirement and image routes remain required. No transport activation,
+ACK permission, release, app executable, embedded HMP or installed-device change
+is claimed. Host-local images follow full character delivery. See [joined transport](specs/046-bot-presentation-integration/TERMINAL_TRANSPORT.md).
+
 ## Typed terminal transcript source — November 5, 2026
 
 HMP `672d4cf` adds selected-v2 framing and sequence rules for bounded
