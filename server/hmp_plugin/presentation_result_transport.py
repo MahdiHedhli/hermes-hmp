@@ -42,7 +42,7 @@ from .presentation_output_v2 import (
     compare_parent_snapshot,
     validate_header_v2,
 )
-from .presentation_readiness import SelectorReadiness
+from .presentation_readiness import ReadinessWakeError, SelectorReadiness
 from .presentation_remote import RemoteOperationOwner
 from .presentation_remote_cleanup import _LOOP, _TASK, RemoteCleanupOwner, _TaskAllocation
 
@@ -373,6 +373,7 @@ class _ResultCursor:
         self.owner, self.scope = owner, scope
         self.outer = self.outer_origin = bytearray()
         self.digest = self.digest_origin = hashlib.sha256()
+        self._data_origin = (scope, self.outer_origin, self.digest_origin)
         self.pending = None
         self.received = self.body_received = self.body_committed = 0
         self.outer_committed = self.outer_target = 0
@@ -386,6 +387,10 @@ class _ResultCursor:
         _require(type(self) is _ResultCursor and self.owner is owner
                  and owner._cursor is self and owner._cursor_snapshot is self
                  and owner._cursor_origin is self and self.scope is owner._scope_snapshot
+                 and type(self._data_origin) is tuple and len(self._data_origin) == 3
+                 and self._data_origin[0] is self.scope
+                 and self._data_origin[1] is self.outer_origin
+                 and self._data_origin[2] is self.digest_origin
                  and type(self.outer) is bytearray and self.outer is self.outer_origin
                  and len(self.outer) <= 1032
                  and type(self.digest) is _HASH and self.digest is self.digest_origin
@@ -411,9 +416,10 @@ class _ResultCursor:
         # This original custody cell is independently retained; never follow a
         # substituted current cursor or mutable bytearray reference on refusal.
         self.pending = None
-        if type(self.outer_origin) is bytearray:
-            self.outer_origin[:] = b"\x00" * len(self.outer_origin)
-            self.outer_origin.clear()
+        origin = self._data_origin
+        if type(origin) is tuple and len(origin) == 3 and type(origin[1]) is bytearray:
+            origin[1][:] = b"\x00" * len(origin[1])
+            origin[1].clear()
 
 
 class RemoteResultOwner:
@@ -446,6 +452,7 @@ class RemoteResultOwner:
         self._candidate = self._candidate_snapshot = None
         self._candidate_fact = self._candidate_fact_snapshot = None
         self._discarded = False
+        self._cleanup_switched = False
         self._timeout = self._timeout_snapshot = None
         self._header = self._header_snapshot = None
         self._cursor = self._cursor_snapshot = self._cursor_origin = None
@@ -556,9 +563,19 @@ class RemoteResultOwner:
                      and s.job.result is None and s.job.remote_phase is RemotePhase.GO_SENT)
 
     def _current(self):
+        from .presentation_cleanup_reader import CleanupReadGate
+
+        cleanup = self._failure_cleanup_origin
+        if type(cleanup) is RemoteCleanupOwner and cleanup._initialized is True:
+            CleanupReadGate.switch(cleanup._read_gate_snapshot, self)
         RemoteResultOwner._guard(self)
         s = self._scope_snapshot
-        RemoteOperationOwner._check(s.remote, RemotePhase.GO_SENT)
+        try:
+            RemoteOperationOwner._check(s.remote, RemotePhase.GO_SENT)
+        except BaseException:
+            CleanupReadGate.switch(s.cleanup._read_gate_snapshot, self)
+            raise
+        CleanupReadGate.switch(s.cleanup._read_gate_snapshot, self)
         RemoteResultOwner._guard(self)
         _native_io(s.channel)
         RemoteResultOwner._guard(self)
@@ -569,52 +586,67 @@ class RemoteResultOwner:
         _require(type(count) is int and 0 < count <= 65536
                  and cursor.pending is None and cursor.recv_intent is False
                  and cursor.commit_intent is False)
-        while True:
-            RemoteResultOwner._current(self)
-            # Retain allocation BEFORE initialization/registration effects.
-            waiter = SelectorReadiness.__new__(SelectorReadiness)
-            cursor.waiter = waiter
-            try:
-                SelectorReadiness.__init__(waiter, s.channel._socket_snapshot)
-                await SelectorReadiness.wait(waiter, s.deadline)
-            except BaseException:
-                if (getattr(waiter, "_initialized", False) is not True
-                        or waiter._unknown is not False or type(waiter._attempted) is not bool
-                        or (waiter._attempted is True and waiter._retired is not True)):
-                    cursor.io_unknown = True
-                raise
-            if (cursor.waiter is not waiter or waiter._initialized is not True
-                    or waiter._attempted is not True or waiter._retired is not True
-                    or waiter._unknown is not False):
-                cursor.io_unknown = True
-                _require(False)
-            RemoteResultOwner._current(self)
-            received, body_received = cursor.received, cursor.body_received
-            held_header = self._header_snapshot
-            cursor.recv_intent = True
-            try:
-                part = _SOCKET_RECV(s.channel._socket_snapshot, count)
-            except BlockingIOError as error:
-                if (type(error) is not BlockingIOError or type(error.errno) is not int
-                        or error.errno not in (errno.EAGAIN, errno.EWOULDBLOCK)):
+        part = None
+        try:
+            while True:
+                RemoteResultOwner._current(self)
+                # Retain allocation BEFORE initialization/registration effects.
+                waiter = SelectorReadiness.__new__(SelectorReadiness)
+                cursor.waiter = waiter
+                try:
+                    SelectorReadiness.__init__(waiter, s.channel._socket_snapshot)
+                    await SelectorReadiness.wait(waiter, s.deadline,
+                        wake=s.cleanup._barriers_snapshot.cause)
+                except ReadinessWakeError:
+                    if (waiter._initialized is not True or waiter._unknown is not False
+                            or type(waiter._attempted) is not bool
+                            or (waiter._attempted is True and waiter._retired is not True)):
+                        cursor.io_unknown = True
+                        _require(False)
+                    from .presentation_cleanup_reader import CleanupReadGate
+
+                    CleanupReadGate.switch(s.cleanup._read_gate_snapshot, self)
                     raise
-                cursor.recv_intent = False  # exact zero-byte EAGAIN; same deadline
-                continue
-            # No guard, callback or await may interpose syscall and retained commit.
-            cursor.pending = part
-            _require(type(part) is bytes)  # never invoke a foreign length/coercion
-            prior_received, prior_body = cursor.received, cursor.body_received
-            cursor.received = received + len(part)
-            cursor.body_received = body_received + (len(part) if held_header is not None else 0)
-            cursor.recv_intent = False
-            if (type(prior_received) is not int or prior_received != received
-                    or type(prior_body) is not int or prior_body != body_received
-                    or self._header_snapshot is not held_header):
-                cursor.io_unknown = True
-                _require(False)
-            _require(0 < len(part) <= count)
-            RemoteResultOwner._current(self)
-            return part
+                except BaseException:
+                    if (getattr(waiter, "_initialized", False) is not True
+                            or waiter._unknown is not False or type(waiter._attempted) is not bool
+                            or (waiter._attempted is True and waiter._retired is not True)):
+                        cursor.io_unknown = True
+                    raise
+                if (cursor.waiter is not waiter or waiter._initialized is not True
+                        or waiter._attempted is not True or waiter._retired is not True
+                        or waiter._unknown is not False):
+                    cursor.io_unknown = True
+                    _require(False)
+                RemoteResultOwner._current(self)
+                received, body_received = cursor.received, cursor.body_received
+                held_header = self._header_snapshot
+                cursor.recv_intent = True
+                try:
+                    part = _SOCKET_RECV(s.channel._socket_snapshot, count)
+                except BlockingIOError as error:
+                    if (type(error) is not BlockingIOError or type(error.errno) is not int
+                            or error.errno not in (errno.EAGAIN, errno.EWOULDBLOCK)):
+                        raise
+                    cursor.recv_intent = False  # exact zero-byte EAGAIN; same deadline
+                    continue
+                # No guard, callback or await may interpose syscall and retained commit.
+                cursor.pending = part
+                _require(type(part) is bytes)  # never invoke a foreign length/coercion
+                prior_received, prior_body = cursor.received, cursor.body_received
+                cursor.received = received + len(part)
+                cursor.body_received = body_received + (len(part) if held_header is not None else 0)
+                cursor.recv_intent = False
+                if (type(prior_received) is not int or prior_received != received
+                        or type(prior_body) is not int or prior_body != body_received
+                        or self._header_snapshot is not held_header):
+                    cursor.io_unknown = True
+                    _require(False)
+                _require(0 < len(part) <= count)
+                RemoteResultOwner._current(self)
+                return part
+        finally:
+            part = None
 
     async def _small(self, count):
         RemoteResultOwner._current(self)
@@ -657,6 +689,8 @@ class RemoteResultOwner:
         RemoteResultOwner.discard(self)
 
     async def receive(self):
+        from .presentation_cleanup_reader import CleanupReadSwitch
+
         candidate = part = digest = None
         cleanup, channel = self._failure_cleanup_origin, self._io_channel_origin
         reading = False
@@ -710,6 +744,9 @@ class RemoteResultOwner:
             BoundedResultBufferV2.wipe(s.buffer)
             RemoteResultOwner._guard(self)
             return True
+        except CleanupReadSwitch:
+            self._cleanup_switched = True
+            raise
         except BaseException:
             cursor = self._cursor_origin
             if type(cursor) is _ResultCursor and (cursor.recv_intent or cursor.commit_intent):
@@ -729,5 +766,6 @@ class RemoteResultOwner:
             if (reading and type(channel) is SocketChannel
                     and channel._result_receiver_snapshot is self
                     and type(self._cursor_origin) is _ResultCursor
-                    and self._cursor_origin.io_unknown is False):
+                    and self._cursor_origin.io_unknown is False
+                    and self._cleanup_switched is False):
                 channel._reading = False

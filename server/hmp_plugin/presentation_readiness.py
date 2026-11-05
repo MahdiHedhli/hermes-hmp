@@ -33,7 +33,7 @@ _REMOVE_READER = _LOOP._remove_reader
 _LOOP_METHODS = {name: getattr(_LOOP, name) for name in (
     "_add_reader", "_remove_reader", "_check_closed", "is_closed", "get_debug",
     "call_soon", "_call_soon", "call_at", "time", "_timer_handle_cancelled",
-    "_check_thread", "_check_callback")}
+    "_check_thread", "_check_callback", "create_future")}
 _SELECTOR_METHODS = {name: getattr(selectors.DefaultSelector, name) for name in (
     "get_key", "register", "modify", "unregister", "_fileobj_lookup")}
 _CANCEL_HANDLE = _HANDLE.cancel
@@ -66,7 +66,7 @@ def _scheduler_safe(loop):
              and type(loop._debug) is bool and type(loop._ready) is deque
              and type(loop._scheduled) is list and type(loop._timer_cancelled_count) is int)
     for name in ("call_soon", "_call_soon", "call_at", "time", "_timer_handle_cancelled",
-                 "_check_closed", "get_debug", "_check_thread", "_check_callback"):
+                 "_check_closed", "get_debug", "_check_thread", "_check_callback", "create_future"):
         method = getattr(loop, name)
         _require(type(method) is MethodType and method.__self__ is loop
                  and method.__func__ is _LOOP_METHODS[name])
@@ -104,6 +104,22 @@ class _Scope(NamedTuple):
         return "<ReadinessScope redacted>"
 
 
+class _WakeBinding(NamedTuple):
+    scope: _Scope
+    future: object
+    end: int
+
+    def __repr__(self):
+        return "<ReadinessWakeBinding metadata-only redacted>"
+
+
+class ReadinessWakeError(FrameError):
+    """Only an owned wait interruption; caller must independently prove its cause."""
+
+    def __init__(self):
+        super().__init__("BI1_READINESS_WAKE")
+
+
 class ReadinessAcquisitionError(FrameError):
     def __init__(self, owner):
         super().__init__("BI1_READINESS_ACQUISITION_UNKNOWN")
@@ -118,6 +134,8 @@ class SelectorReadiness:
         self._scope = self._scope_snapshot = self._origin_scope = None
         self._future = self._future_snapshot = self._future_origin = None
         self._future_initialized = False
+        self._wake = self._wake_snapshot = None
+        self._wake_binding = self._wake_binding_origin = None
         self._callback = self._callback_snapshot = SelectorReadiness._readable.__get__(
             self, SelectorReadiness)
         self._token = self._token_snapshot = object()
@@ -195,8 +213,25 @@ class SelectorReadiness:
                  and all(type(v) is bool for v in (
                      self._attempted, self._unknown, self._retired)))
 
+    def _wake_guard(self):
+        binding = self._wake_binding
+        _require(self._wake is self._wake_snapshot)
+        if binding is None:
+            _require(self._wake_binding_origin is None and self._wake is None)
+            return
+        _require(type(binding) is _WakeBinding and binding is self._wake_binding_origin
+                 and binding.scope is self._origin_scope
+                 and type(binding.end) is int and 0 < binding.end <= MAX_NS
+                 and binding.future is self._wake_snapshot
+                 and (binding.future is None or (type(binding.future) is _FUTURE
+                      and _FUTURE.get_loop(binding.future) is binding.scope.loop
+                      and not _FUTURE.cancelled(binding.future))))
+        if binding.future is not None and _FUTURE.done(binding.future):
+            _require(_FUTURE.result(binding.future) is None)
+
     def _native(self, *, actor=True):
         SelectorReadiness._guard(self, actor=actor)
+        SelectorReadiness._wake_guard(self)
         s = self._scope_snapshot
         _dispatch_safe(s.loop, s.selector)
         _require(_FILENO(s.sock) == s.fd and _fd_identity(s.fd) == s.identity
@@ -294,7 +329,7 @@ class SelectorReadiness:
                     # Observe the constant private refusal, never an application payload.
                     _FUTURE.exception(future)
 
-    async def wait(self, end_ns):
+    async def wait(self, end_ns, *, wake=None):
         try:
             SelectorReadiness._native(self)
         except BaseException:
@@ -303,6 +338,15 @@ class SelectorReadiness:
         _require(type(end_ns) is int and 0 < end_ns <= MAX_NS
                  and self._attempted is False
                  and self._unknown is False and self._retired is False)
+        _require(wake is None or (type(wake) is _FUTURE
+                 and _FUTURE.get_loop(wake) is self._origin_scope.loop
+                 and not _FUTURE.cancelled(wake)))
+        self._wake = self._wake_snapshot = wake
+        self._wake_binding = self._wake_binding_origin = _WakeBinding(
+            self._origin_scope, wake, end_ns)
+        SelectorReadiness._wake_guard(self)
+        if wake is not None and _FUTURE.done(wake):
+            raise ReadinessWakeError  # known no-registration revocation dominates readiness/expiry
         if _NOW() >= end_ns:
             raise TimeoutError  # known no-registration expiry, not ownership uncertainty
         current, _ = SelectorReadiness._slots(self)
@@ -317,10 +361,27 @@ class SelectorReadiness:
             self._handle = self._handle_snapshot = handle
             self._handle_args = self._handle_args_snapshot = handle._args
             async with asyncio.timeout_at(end_ns / 1_000_000_000):
-                value = await asyncio.shield(self._future_snapshot)
+                if wake is None:
+                    value = await asyncio.shield(self._future_snapshot)
+                else:
+                    done, _ = await asyncio.wait((self._future_snapshot, wake),
+                                                return_when=asyncio.FIRST_COMPLETED)
+                    SelectorReadiness._native(self)
+                    # A simultaneous hint cannot revive IO after revocation.
+                    if _FUTURE.done(wake):
+                        _require(_FUTURE.result(wake) is None)
+                        raise ReadinessWakeError
+                    _require(self._future_snapshot in done)
+                    value = _FUTURE.result(self._future_snapshot)
             SelectorReadiness._native(self)
             _require(value is None and self._unknown is False)
-        except (asyncio.CancelledError, TimeoutError):
+        except asyncio.CancelledError:
+            raise  # never consume an external Task cancellation as a metadata wake
+        except (TimeoutError, ReadinessWakeError):
+            # A shared wake that completed with the deadline still forbids IO.
+            if wake is not None and _FUTURE.done(wake) and not _FUTURE.cancelled(wake):
+                SelectorReadiness._wake_guard(self)
+                raise ReadinessWakeError from None
             raise
         except BaseException:
             self._unknown = True

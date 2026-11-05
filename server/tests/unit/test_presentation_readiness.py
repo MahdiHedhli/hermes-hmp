@@ -418,3 +418,96 @@ async def test_elapsed_valid_end_is_known_no_registration_timeout(pair):
     assert not owner._attempted and not owner._unknown
     right.send(b"SYNTHETIC_NOT_CONSUMED")
     assert left.recv(64) == b"SYNTHETIC_NOT_CONSUMED"
+
+
+async def test_completed_wake_precedes_registration_readiness_and_expiry(pair):
+    left, right = pair
+    right.send(b"SYNTHETIC_ALREADY_READABLE")
+    cause = asyncio.get_running_loop().create_future()
+    cause.set_result(None)
+    owner = readiness.SelectorReadiness(left)
+    with pytest.raises(readiness.ReadinessWakeError):
+        await owner.wait(time.monotonic_ns() - 1, wake=cause)
+    assert not owner._attempted and not owner._unknown and not cause.cancelled()
+    assert left.recv(64) == b"SYNTHETIC_ALREADY_READABLE"
+
+
+@pytest.mark.parametrize("hint", [False, True])
+async def test_original_wait_wake_retires_subscription_without_payload_or_shared_cancel(pair, hint):
+    left, right = pair
+    cause = asyncio.get_running_loop().create_future()
+    retained = []
+
+    async def wait():
+        owner = readiness.SelectorReadiness(left)
+        retained.append(owner)
+        await owner.wait(time.monotonic_ns() + 1_000_000_000, wake=cause)
+
+    task = asyncio.create_task(wait())
+    await asyncio.sleep(0)
+    owner = retained[0]
+    assert owner._attempted and not owner._retired
+    right.send(b"SYNTHETIC_REVOKED_BYTES")
+    if hint:
+        owner._readable(owner._token)  # exact original callback, before Task resumes
+        assert owner._future_origin.done()
+    cause.set_result(None)
+    with pytest.raises(readiness.ReadinessWakeError):
+        await task
+    assert owner._retired and not owner._unknown
+    assert cause.done() and not cause.cancelled() and cause.result() is None
+    assert left.recv(64) == b"SYNTHETIC_REVOKED_BYTES"
+
+
+async def test_external_task_cancel_stays_cancelled_with_simultaneous_wake(pair):
+    left, right = pair
+    cause = asyncio.get_running_loop().create_future()
+    retained = []
+
+    async def wait():
+        owner = readiness.SelectorReadiness(left)
+        retained.append(owner)
+        await owner.wait(time.monotonic_ns() + 1_000_000_000, wake=cause)
+
+    task = asyncio.create_task(wait())
+    await asyncio.sleep(0)
+    cause.set_result(None)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert retained[0]._retired and not retained[0]._unknown
+    assert cause.done() and not cause.cancelled()
+    right.send(b"SYNTHETIC_AFTER_CANCEL")
+    assert left.recv(64) == b"SYNTHETIC_AFTER_CANCEL"
+
+
+async def test_wake_pair_retarget_cannot_touch_other_future(pair):
+    left, _ = pair
+    loop = asyncio.get_running_loop()
+    cause, other = loop.create_future(), loop.create_future()
+    retained = []
+
+    async def wait():
+        owner = readiness.SelectorReadiness(left)
+        retained.append(owner)
+        await owner.wait(time.monotonic_ns() + 1_000_000_000, wake=cause)
+
+    task = asyncio.create_task(wait())
+    await asyncio.sleep(0)
+    owner = retained[0]
+    owner._wake = owner._wake_snapshot = other
+    cause.set_result(None)
+    with pytest.raises(FrameError):
+        await task
+    assert owner._unknown and not owner._retired
+    assert not other.done() and not cause.cancelled()
+
+
+async def test_foreign_create_future_dispatch_is_refused_before_future_init(pair, monkeypatch):
+    loop = asyncio.get_running_loop()
+    calls = []
+    with monkeypatch.context() as change:
+        change.setattr(loop, "create_future", lambda: calls.append(True))
+        with pytest.raises(readiness.ReadinessAcquisitionError):
+            readiness.SelectorReadiness(pair[0])
+    assert calls == []

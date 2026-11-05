@@ -433,9 +433,9 @@ async def test_cancel_after_readiness_hint_keeps_partial_bytes_in_original_curso
     def short_recv(sock, count):
         return original_recv(sock, min(count, 3))
 
-    async def wait(waiter, end):
+    async def wait(waiter, end, **options):
         registered.set()
-        await original_wait(waiter, end)
+        await original_wait(waiter, end, **options)
         if owner._wire_received == 3 and not seen:
             seen.append(True)
             asyncio.current_task().cancel()
@@ -521,9 +521,9 @@ async def test_control_eagain_wait_keeps_original_end(receiver, monkeypatch):
             raise BlockingIOError(errno.EAGAIN, "synthetic zero-byte EAGAIN")
         return original_recv(sock, count)
 
-    async def wait(waiter, end):
+    async def wait(waiter, end, **options):
         cutoffs.append(end)
-        return await original_wait(waiter, end)
+        return await original_wait(waiter, end, **options)
 
     monkeypatch.setattr(cancel, "_SOCKET_RECV", recv)
     monkeypatch.setattr(cancel.SelectorReadiness, "wait", wait)
@@ -561,9 +561,9 @@ async def test_control_scope_retarget_cannot_retire_other_channel(receiver, monk
     changed = []
     registered = asyncio.Event()
 
-    async def wait(waiter, end):
+    async def wait(waiter, end, **options):
         registered.set()
-        await original_wait(waiter, end)
+        await original_wait(waiter, end, **options)
         owner._channel = owner._channel_snapshot = foreign
         changed.append(True)
 
@@ -594,9 +594,9 @@ async def test_lost_readiness_proof_and_budget_refusal_keeps_control_claim(recei
             callbacks.append("bool")
             raise AssertionError("foreign retirement flag")
 
-    async def wait(waiter, end):
+    async def wait(waiter, end, **options):
         registered.set()
-        await original(waiter, end)
+        await original(waiter, end, **options)
         waiter._retired = Foreign()
         CancellationBudget.refuse(owner._scope_snapshot[3])
 

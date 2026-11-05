@@ -79,6 +79,7 @@ CONTRACT_MODULES = {
     # Reviewed original-owner private result candidates; no publication/release or live route.
     "presentation_result_transport.py",
     "presentation_readiness.py",
+    "presentation_cleanup_reader.py",
     "presentation_terminal_claim.py",
     # BR3 grammar/replay control only, never native/remote custody authority.
     "presentation_broker_lifecycle.py",

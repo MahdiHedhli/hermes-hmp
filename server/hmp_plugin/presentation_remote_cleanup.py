@@ -145,6 +145,7 @@ class RemoteCleanupOwner:
         self._write_fact = self._write_fact_snapshot = None
         self._write_fact_consumed = False
         self._write_fact_attempted = self._write_fact_failed = False
+        self._read_gate = self._read_gate_snapshot = None
         self._start_initialized = self._cause_initialized = False
         self._slots = self._slots_snapshot = (_TaskSlot(), _TaskSlot())
         self._allocations = self._allocations_snapshot = (None, None)
@@ -196,6 +197,11 @@ class RemoteCleanupOwner:
             self._write_barrier = self._write_barrier_snapshot = (self._write_notice_snapshot,)
             _initialize_future(self._write_notice_snapshot, self._loop)
             self._write_notice_initialized = True
+            from .presentation_cleanup_reader import CleanupReadGate
+
+            gate = CleanupReadGate.__new__(CleanupReadGate)
+            self._read_gate = self._read_gate_snapshot = gate
+            CleanupReadGate.__init__(gate, self)
             # Cleanup is retained first. Both fixed coroutines remain gated until
             # all initialization and reciprocal ownership checks have succeeded.
             functions = (RemoteCleanupOwner._cleanup, RemoteCleanupOwner._work)
@@ -363,6 +369,12 @@ class RemoteCleanupOwner:
         b = scope[0]
         if (b.iid, b.listener, b.broker, b.channel, b.operation) != scope[1]:
             raise AuthorityRefusalError
+        from .presentation_cleanup_reader import CleanupReadGate
+
+        if (type(self._read_gate) is not CleanupReadGate
+                or self._read_gate_snapshot is not self._read_gate):
+            raise AuthorityRefusalError
+        CleanupReadGate.guard(self._read_gate)
         original, _, _, failed = CancellationBudget.inspect(self._refs[8])
         if original != self._refs[9] or failed:
             raise AuthorityRefusalError
@@ -408,7 +420,15 @@ class RemoteCleanupOwner:
                 CancellationBudget.refuse(refs[8])
         finally:
             self._sampling = False
-        if first:
+        cooperative = False
+        if first and self._unknown is False:
+            from .presentation_cleanup_reader import CleanupReadGate
+
+            try:
+                cooperative = CleanupReadGate.request(self._read_gate_snapshot)
+            except BaseException:
+                self._unknown = True
+        if first and not cooperative:
             allocations = self._allocations_snapshot
             if (type(allocations) is tuple and len(allocations) == 2
                     and type(allocations[1]) is _TaskAllocation):
@@ -557,13 +577,20 @@ class RemoteCleanupOwner:
                 or channel._remote_owner_snapshot is not self._remote_snapshot
                 or channel._terminal_owner is not None or channel._cancel_receiver is not None
                 or self._intent is not True or self._unknown is not False
-                or self._work_joined is not True or self._write_fact_snapshot is None
+                or self._write_fact_snapshot is None
                 or asyncio.current_task() is not self._allocations_snapshot[0].task
                 or _TASK.cancelling(self._allocations_snapshot[0].task)
-                or not _TASK.done(self._allocations_snapshot[1].task)
-                or channel._reading is not False
                 or not RemoteCleanupOwner._can_cancel(self)):
             raise AuthorityRefusalError
+        gate = self._read_gate_snapshot
+        if gate._fact_origin is None:
+            if (self._work_joined is not True or not _TASK.done(self._allocations_snapshot[1].task)
+                    or channel._reading is not False):
+                raise AuthorityRefusalError
+        else:
+            from .presentation_cleanup_reader import CleanupReadGate
+
+            CleanupReadGate.permits_cancel(gate)
         SocketChannel._local_integrity(channel)
         timeout = _SOCKET_TIMEOUT(channel._socket)
         if (os.get_blocking(channel._fd) is not False
@@ -607,6 +634,7 @@ class RemoteCleanupOwner:
         return remaining
 
     async def _work(self):
+        from .presentation_cleanup_reader import CleanupReadGate, CleanupReadSwitch
         from .presentation_remote import RemoteOperationOwner
 
         if self._initialized is not True or self._unknown is not False:
@@ -682,6 +710,20 @@ class RemoteCleanupOwner:
             if self._intent is not True:
                 raise AuthorityRefusalError
             return False
+        except CleanupReadSwitch as transition:
+            try:
+                RemoteCleanupOwner._guard(self)
+                for future, initialized in ((ready, self._ready_initialized),
+                        (notice, self._go_notice_initialized),
+                        (result_notice, self._result_notice_initialized)):
+                    if initialized is True and type(future) is _FUTURE and not _FUTURE.done(future):
+                        _FUTURE.set_result(future, False)
+                CleanupReadGate.activate(self._read_gate_snapshot, transition.reader)
+                return await CleanupReadGate.drain(self._read_gate_snapshot)
+            except BaseException:
+                self._unknown = True
+                self._read_gate_snapshot._failed = True
+                return False
         except BaseException:
             RemoteCleanupOwner.request(self)
             if (self._ready_initialized is True and type(ready) is _FUTURE
@@ -725,6 +767,20 @@ class RemoteCleanupOwner:
                 self._unknown = True
                 return False
             work = self._allocations_snapshot[1].task
+            gate = self._read_gate_snapshot
+            sent = False
+            if gate._requested is True:
+                if gate._fact_origin is None and not _TASK.done(work):
+                    await asyncio.wait((gate._notice_origin, work),
+                        timeout=RemoteCleanupOwner._remaining(self),
+                        return_when=asyncio.FIRST_COMPLETED)
+                RemoteCleanupOwner._guard(self)
+                if self._unknown or RemoteCleanupOwner._remaining(self) <= 0:
+                    self._unknown = True
+                    return False
+                if gate._fact_origin is not None:
+                    await SocketChannel.send_cancel(self._refs_snapshot[3], self)
+                    sent = True
             if not _TASK.done(work):
                 await asyncio.wait((work,), timeout=RemoteCleanupOwner._remaining(self))
             RemoteCleanupOwner._guard(self)
@@ -734,12 +790,14 @@ class RemoteCleanupOwner:
             self._work_joined = True
             with suppress(BaseException):
                 _TASK.result(work)  # observe/retrieve; no publication or release
+            if self._unknown is not False:
+                return False  # decoded/unqualified terminal cannot authorize later native effects
             channel = self._refs[3]
             if (RemoteCleanupOwner._remaining(self) <= 0 or channel._reading is not False
                     or channel._writing is not False):
                 self._unknown = True
                 return False
-            if RemoteCleanupOwner._can_cancel(self):
+            if not sent and RemoteCleanupOwner._can_cancel(self):
                 await SocketChannel.send_cancel(channel, self)
                 RemoteCleanupOwner._guard(self)
                 if RemoteCleanupOwner._remaining(self) <= 0:

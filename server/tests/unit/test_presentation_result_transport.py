@@ -196,8 +196,8 @@ async def test_foreign_buffer_during_read_never_receives_feed_or_wipe(coupled_re
         def __getattribute__(self, name):
             callbacks.append(name)
             raise AssertionError("foreign buffer is not owned")
-    async def recv(waiter, end):
-        data = await original(waiter, end)
+    async def recv(waiter, end, **options):
+        data = await original(waiter, end, **options)
         sock = waiter._origin_scope.sock
         owner = remote._result_owner_snapshot
         if sock is row[3]._socket_snapshot and owner is not None and owner._header is not None:
@@ -247,8 +247,8 @@ async def test_cross_operation_accumulator_retarget_never_feeds_or_wipes_other(
     other._buffer.extend(b"OTHER_OPERATION_SYNTHETIC_PRIVATE_PAYLOAD")
     held = bytes(other._buffer)
     changed = []
-    async def recv(waiter, end):
-        data = await original(waiter, end)
+    async def recv(waiter, end, **options):
+        data = await original(waiter, end, **options)
         sock = waiter._origin_scope.sock
         receiver = remote._result_owner_snapshot
         if (sock is row[3]._socket_snapshot and receiver is not None
@@ -411,8 +411,8 @@ async def test_custody_tuple_retarget_cannot_redirect_central_cancel_wipe(
     other = BoundedResultBufferV2()
     other._buffer.extend(b"OTHER_CUSTODY_SYNTHETIC_PAYLOAD")
     held, changed = bytes(other._buffer), []
-    async def recv(waiter, end):
-        data = await original(waiter, end)
+    async def recv(waiter, end, **options):
+        data = await original(waiter, end, **options)
         sock = waiter._origin_scope.sock
         receiver = remote._result_owner_snapshot
         if (sock is row[3]._socket_snapshot and receiver is not None
@@ -668,8 +668,8 @@ async def test_inflight_reader_scope_retarget_cannot_cancel_or_reset_other_opera
             foreign_requests.append(True)
             return
         return original_request(owner)
-    async def recv(waiter, end):
-        data = await original_recv(waiter, end)
+    async def recv(waiter, end, **options):
+        data = await original_recv(waiter, end, **options)
         sock = waiter._origin_scope.sock
         receiver = remote._result_owner_snapshot
         if sock is row[3]._socket_snapshot and receiver is not None and not changed:
@@ -736,8 +736,8 @@ async def test_partial_cursor_cancel_keeps_consumed_offsets_and_wipes_payload(
     def short_recv(sock, count):
         return original_recv(sock, min(count, 3))
 
-    async def wait(waiter, end):
-        await original_wait(waiter, end)
+    async def wait(waiter, end, **options):
+        await original_wait(waiter, end, **options)
         owner = remote._result_owner_snapshot
         if owner is None or waiter._origin_scope.sock is not row[3]._socket_snapshot:
             return
@@ -805,9 +805,9 @@ async def test_eagain_consumes_no_offset_and_does_not_renew_deadline(
             raise BlockingIOError(errno.EAGAIN, "synthetic EAGAIN")
         return original_recv(sock, count)
 
-    async def wait(waiter, end):
+    async def wait(waiter, end, **options):
         ends.append(end)
-        return await original_wait(waiter, end)
+        return await original_wait(waiter, end, **options)
 
     monkeypatch.setattr(result, "_SOCKET_RECV", recv)
     monkeypatch.setattr(result.SelectorReadiness, "wait", wait)
@@ -1008,8 +1008,8 @@ async def test_lost_readiness_proof_and_work_refusal_keeps_result_claim(
             callbacks.append("bool")
             raise AssertionError("foreign retirement flag")
 
-    async def wait(waiter, end):
-        await original(waiter, end)
+    async def wait(waiter, end, **options):
+        await original(waiter, end, **options)
         if (waiter._origin_scope.sock is row[3]._socket_snapshot
                 and remote._result_owner_snapshot is not None):
             waiter._retired = Foreign()

@@ -100,11 +100,11 @@ async def test_partial_frame_cancel_after_hint_consumes_no_following_bytes(
     wire = encode_frame(b, "BEGIN", 0, body, version=2)
     cut = 3 if stage == "prefix" else len(wire) - len(body) + 3
 
-    async def wait(waiter, end):
+    async def wait(waiter, end, **options):
         cursor = channel._pre_result_cursor_origin
         if cursor._received == cut:
             registered.set()
-        await original(waiter, end)
+        await original(waiter, end, **options)
         if cursor._received == cut:
             asyncio.current_task().cancel()
             await asyncio.sleep(0)
@@ -256,9 +256,9 @@ async def test_uncertain_registration_retirement_cannot_clear_read_claim(pair, m
         original_remove(loop, fd)
         return False  # explicit synthetic lost acknowledgement, never retry/claim known close
 
-    async def wait(waiter, end):
+    async def wait(waiter, end, **options):
         registered.set()
-        return await original_wait(waiter, end)
+        return await original_wait(waiter, end, **options)
 
     monkeypatch.setattr(readiness, "_remove_reader", uncertain_remove)
     monkeypatch.setattr(service.SelectorReadiness, "wait", wait)
@@ -281,9 +281,9 @@ async def test_scope_pair_retarget_never_touches_other_channel(pair, monkeypatch
     foreign._reading = True
     registered = asyncio.Event()
 
-    async def wait(waiter, end):
+    async def wait(waiter, end, **options):
         registered.set()
-        await original_wait(waiter, end)
+        await original_wait(waiter, end, **options)
         cursor = channel._pre_result_cursor_origin
         cursor._scope = cursor._scope_snapshot = cursor._scope_origin._replace(channel=foreign)
 
@@ -315,9 +315,9 @@ async def test_foreign_readiness_flags_never_dispatch_bool_or_claim_retirement(
             callbacks.append("bool")
             raise AssertionError("foreign readiness truthiness")
 
-    async def wait(waiter, end):
+    async def wait(waiter, end, **options):
         registered.set()
-        await original(waiter, end)
+        await original(waiter, end, **options)
         setattr(waiter, flag, Foreign())
         if raise_after:
             raise FrameError("synthetic unknown notification outcome")
