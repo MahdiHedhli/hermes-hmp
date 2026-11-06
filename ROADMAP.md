@@ -8,7 +8,7 @@ The full additional ordinary/delegated-child scope completed all 144 fresh singl
 
 [PR #136](https://github.com/MahdiHedhli/hermes-hmp/pull/136) and [PR #137](https://github.com/MahdiHedhli/hermes-hmp/pull/137) retain the source/spec/task history. Exact executable source `5e247a6` passed [CI 42205520797](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42205520797): 8,101 tests, 190 subtests (33 skips, 18 warnings), configured lint, closed plugin/privacy and 96 Unicode cases each on Python 3.12/3.13/3.14. Log hygiene had no captured acceptance logs to scan. A separate read-only audit confirmed all eight execution helpers unchanged from `e8653d5`, with only inert added planning definitions and docs/tests changed; this does not relabel older observations as `5e` execution.
 
-C6b root disposition with the other cost/memory evidence, independent exact delivery-candidate review, image activation, exact signed-phone display and release qualification remain open. No real provider call, host permission/config change, deployment or store submission is part of these fixtures.
+Root accepted the bounded C6b native-evidence task, joining the separately accepted cost/allocation, modeled mint, RSS and writer observations without transferring their actual-source limits. See [the root disposition](docs/research/local-media-c6b-root-acceptance-2026-11-06.md). Independent exact delivery-candidate review, image activation, exact signed-phone display and release qualification remain open. No real provider call, host permission/config change, deployment or store submission is part of these fixtures.
 
 ## Heavy-case fresh partition samples reviewed — November 6, 2026
 

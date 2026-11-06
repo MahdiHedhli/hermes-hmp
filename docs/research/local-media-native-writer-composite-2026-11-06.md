@@ -64,7 +64,8 @@ Residual and ABA acceptances remain explicit limitations of the non-atomic
 native boundary. This evidence does not fix them or qualify unbounded native
 history materialization, arbitrary gateway fork/reset behavior, other platforms,
 provider generation, production Desktop ownership, image activation or signed
-phone display. C6b root disposition still joins the other cost/memory evidence;
+phone display. The separate [C6b root disposition](local-media-c6b-root-acceptance-2026-11-06.md)
+now joins the other cost/memory evidence with their original limits;
 exact delivery-candidate review, owner-authorized activation, physical and release
 qualification remain separate. No host setting, permission, model, provider,
 installation or store submission changed during these fixtures.

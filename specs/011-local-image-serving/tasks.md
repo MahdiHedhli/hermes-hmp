@@ -7,6 +7,8 @@
 > and the slices M0-M3 below. Descriptor/fetch source and bounded native samples
 > now exist; activation, physical acceptance and full release qualification remain open.
 
+**Current November 6 disposition:** [C6b scoped native-evidence acceptance](../../docs/research/local-media-c6b-root-acceptance-2026-11-06.md) is complete. Earlier dated stage statements that C6b remains open are historical checkpoints. Full S4/S5 delivery acceptance, R2/R3, activation, devices and release remain open.
+
 `[ ]` means not started or not independently reviewed. Workers do not self-certify. No implementation task starts before the contract revision (P0) is reviewed. A worker meeting unspecified behavior records a gap marker instead of inventing a rule.
 
 ## M0 Documents
@@ -98,7 +100,7 @@ candidate and sample; that evidence does not prove behavior on future builds.
 - [x] **S6a** *(historical; retired design, not carried onto the converted base)* Inert process qualification gate and empty manifest. Root accepted source after independent Opus original review, Sonnet hardening delta review and 392 focused tests. No listener, flag, entry or admission; S6 remains open.
 - [ ] **S6b** *(historical; retired design, superseded by M3)* Bind the S6a gate to the adapter, request context and per-load media caches (static required set, actual-object proofs, strict flag fields). Source and focused tests written under the [S6b freeze](ROOT_DECISIONS.md#s6b-listener-binding-freeze-2026-10-01); bounded source independently reviewed and accepted after repair, with 138 root cases passing. No entry, route consumer or admission; S6 stays open.
 - [x] **C6a** Request-scoped active-history batch module and independent security review, following the C6 freeze; accepted single scanner unchanged. Source acceptance only; native cost/memory and C6b remain open.
-- [ ] **C6b** Bind that reviewed batch to the same native database/home capture, then root exact-native cost, concurrent-writer and mint-memory evidence. C6 remains open.
+- [x] **C6b** Bind the reviewed batch to the same native database/home capture and accept the bounded current-native cost/allocation, modeled mint, process RSS and 912-phase writer evidence. Root accepted after independent contract review and receipt-join repair, preserving actual sources, old refusals and residual/ABA limits. This closes this evidence task only; full delivery, activation, platform/device and release qualification remain separate.
 - [ ] **S4** Descriptor emission in handlers, 128 cap (T1, T5, T6, T7). Needs S2, S3, S6 and C6 admission.
   Source written on `b07890e`, independently reviewed and accepted for the S4 source slice (2026-10-02; full task not ticked): the four read handlers select the old read or the media twin plus one `bind_media_batch` in one worker job, then mint newest-first (at most 128) on the loop through the listener's one registry; `media_unavailable` and the §13 media constants are in `contract.py`; no fetch route (S5). Native complete-binding cost and T12 are release-candidate evidence, not prerequisites for this source. Independent review accepted the exact source, with stale documentation repaired. Root reproduced 679 focused cases after seven added tests; full delivery, native cost, T12 and device evidence remain separate open gates.
 - [ ] **S5** Route, dedicated executor, permits, `ContextVar` copy for both phases, constants, streaming, phase one, phase two, synchronous final section (T3, T9-T11, T13, T15-T17). Needs S1, S3, S6.
