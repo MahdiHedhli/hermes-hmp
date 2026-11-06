@@ -92,7 +92,8 @@ class Fx:
         images: int = 3,
     ) -> None:
         self.monkeypatch = monkeypatch
-        self.rig = Rig(tmp_path, monkeypatch, kind=kind, images=images)
+        self.rig = Rig.__new__(Rig)  # Retain partial setup for fixture cleanup.
+        Rig.__init__(self.rig, tmp_path, monkeypatch, kind=kind, images=images)
         self.native, self.ctx, self.registry = self.rig.native, self.rig.ctx, self.rig.registry
         self.lock = threading.Lock()
         self.p1_gate: threading.Event | None = None

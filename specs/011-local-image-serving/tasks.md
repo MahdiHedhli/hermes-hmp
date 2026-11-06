@@ -391,3 +391,25 @@ S5's full serving task and T12 stay unchecked. The synthetic four-by-8-MiB
 route measurement covers its stated macOS allocation/lifecycle scenario only;
 native sample serving/cost/T12, Linux serving and phone/device/release evidence
 remain open. No live install or flag was changed.
+
+
+## Fresh native-serving harness candidate (2026-11-06)
+
+`tools/compat/local_media_native_serving_fixture.py` prepares the S4/S5 serving
+sample over native SessionDB/registry with real HMP routes and synthetic transport
+routing/authorization/compatibility. It has not executed native imports or DB work.
+It is not T12, Linux, physical acceptance or live activation evidence.
+
+Independent repair review accepted canonical scratch SQLite URI handling, retained
+partial setup and bounded source inventory. Both native and HMP/test trees must be
+private source-only copies: no symlink directories, bytecode, alternate import
+artifacts or preloaded foreign HMP/native/test modules. Selected module file
+origins are checked; dependency/site startup remains a trusted-runtime premise,
+and Python audit hooks are not an OS sandbox. The materializer and exact entry
+still require review before the first native run.
+
+Root passes 32 guard tests on Python 3.11.15 and 3.14.4. An overlapping 277-case
+S4/S5/guard regression run passes after changing test helpers to retain partial
+Rig/Env owners before constructor effects. Real fixture-store fault coverage
+proves cleanup after a post-store setup failure. Source guard results do not tick
+S4/S5/T12/R2/R3; source/native/device/activation scope remains separate.

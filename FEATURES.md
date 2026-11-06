@@ -1,3 +1,20 @@
+## Host-local image native-serving harness — November 6, 2026
+
+A fresh harness candidate now targets the existing descriptor and authenticated
+fetch routes over a real scratch SessionDB and native registry. Routing, host
+flag/owner authorization and compatibility remain explicitly synthetic. It has
+positive controls before wrong-device/profile, changed-file/message and revoked
+device checks; there is no provider, actual image producer, live home or phone.
+The native serving scenario has **not run**. Source-only materialization and entry
+review remain required before execution. No T12, Linux or physical gate is closed.
+
+Review found and repaired SQLite URI containment, partial-setup resource retention
+and import-root/cache binding defects before native execution. The latest 32 guard
+checks pass on Python 3.11 and 3.14; an overlapping descriptor/fetch regression run
+passes 277 tests. These are guard/synthetic results, not native serving evidence.
+No host flag, device permission, app or host deployment changed. See
+[local-image task status](specs/011-local-image-serving/tasks.md).
+
 ## Owned native request and retirement — November 6, 2026
 
 Root completed one independently source-reviewed Darwin request/retirement run:

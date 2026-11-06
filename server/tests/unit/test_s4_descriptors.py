@@ -84,7 +84,8 @@ class Rig:
         self.tmp_path, self.monkeypatch = tmp_path, monkeypatch
         self.native = NativeEnv(tmp_path / "n")
         self.native.world.approve(USER, PROFILE)
-        self.env = hmp_kit.Env(tmp_path / "h")
+        self.env = hmp_kit.Env.__new__(hmp_kit.Env)  # Retain before store/migrate effects.
+        hmp_kit.Env.__init__(self.env, tmp_path / "h")
         self.kind = kind
         if kind == "phone":
             self.tip = self.native.phone(("p1", "p2"), images)
