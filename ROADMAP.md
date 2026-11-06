@@ -1,3 +1,25 @@
+## Internal signed CANCEL routing checkpoint — November 6, 2026
+
+The retained credential cleanup route now composes signed CANCEL on the original
+cleanup Task/channel/window, retaining its one-shot owner before native effects.
+Five direct cases and two actual private-socket broker correlations cover seq1/
+seq2 receipt/window/end, with real READY/resource staging but synthetic native
+peer/authority. Worker GO remains unattempted; PENDING is not CLOSED or ACK.
+
+**1,516 affected tests passed, one skipped**, 75.77 seconds; configured lint passed.
+Independent read-only review accepted the retention-order repair. Earlier fixture
+failures are retained in the evidence; updated tests distinguish dedicated signed
+routing, legitimate automatic CANCEL suffixes and historical close facts from new
+validation after metadata drift.
+
+Known no-IO role/signing refusal still retains automatic local-cleanup debt; no
+close is claimed merely because a role-neutral helper exists. Uncertain IO and
+remote custody remain separate. Production startup, pre-READY cancellation,
+results/terminal custody, worker relay/native publication/STATUS and physical/
+release qualification remain open. Character delivery is unavailable. No live
+host/settings/device or installed build changed.
+See [evidence and limits](docs/research/presentation-cancel-route-2026-11-06.md).
+
 ## Work-writer final-tail repair checkpoint — November 6, 2026
 
 New synthetic tests confirmed final descriptor-tail gaps in earlier writers:

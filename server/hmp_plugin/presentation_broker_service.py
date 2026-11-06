@@ -979,8 +979,12 @@ class SocketChannel:
         """One cleanup-only CANCEL; ordinary retired work IO stays refused."""
         from .presentation_remote_cleanup import _LOOP, RemoteCleanupOwner
 
-        self._credential_work_ready()
+        self._credential_external_idle()
         _require(type(owner) is RemoteCleanupOwner)
+        if self._credential_handshake_snapshot is not None:
+            await RemoteCleanupOwner._send_credential_cancel(owner, self)
+            return
+        self._credential_work_ready()
         data = RemoteCleanupOwner._prepare_cancel(owner, self)
         self._writing = True
         try:

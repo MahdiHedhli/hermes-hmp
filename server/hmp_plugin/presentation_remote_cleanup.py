@@ -648,6 +648,47 @@ class RemoteCleanupOwner:
             raise AuthorityRefusalError
         return remaining
 
+    async def _send_credential_cancel(self, channel):
+        """One fixed original cleanup route; never unsigned fallback or remote ACK."""
+        from .presentation_credential_cancel_commitment import NativeCancelCommitment
+        from .presentation_credential_cancel_write import NativeCancelWriter
+
+        if (type(self) is not RemoteCleanupOwner
+                or type(self._allocations_snapshot) is not tuple
+                or len(self._allocations_snapshot) != 2
+                or self._allocations is not self._allocations_snapshot
+                or type(self._allocations_snapshot[0]) is not _TaskAllocation
+                or type(self._allocations_snapshot[0].task) is not _TASK
+                or asyncio.current_task() is not self._allocations_snapshot[0].task
+                or _TASK.cancelling(self._allocations_snapshot[0].task) != 0):
+            raise AuthorityRefusalError
+        if (type(channel) is not SocketChannel or type(self._refs_snapshot) is not tuple
+                or len(self._refs_snapshot) != 12 or self._refs is not self._refs_snapshot
+                or channel is not self._refs_snapshot[3]):
+            raise AuthorityRefusalError
+        try:
+            signer = NativeCancelCommitment.retain(self)
+            NativeCancelCommitment.prepare(signer)
+            writer = NativeCancelWriter.retain(signer)
+            await NativeCancelWriter.write_cancel(writer)
+            scope = NativeCancelWriter._metadata(writer)
+            if (scope.signed_scope.cleanup is not self
+                    or scope.signed_scope.cleanup_refs[3] is not channel
+                    or self._cancel_write_completed is not True
+                    or writer._complete is not True):
+                raise AuthorityRefusalError
+            NativeCancelWriter._released(writer, channel)
+            RemoteCleanupOwner._guard(self)
+            if RemoteCleanupOwner._remaining(self) <= 0:
+                raise AuthorityRefusalError
+        except BaseException:
+            self._unknown = True
+            if (type(channel) is SocketChannel and type(self._refs_snapshot) is tuple
+                    and len(self._refs_snapshot) == 12 and self._refs is self._refs_snapshot
+                    and channel is self._refs_snapshot[3]):
+                channel._refused = True
+            raise
+
     async def _work(self):
         from .presentation_cleanup_reader import CleanupReadGate, CleanupReadSwitch
         from .presentation_remote import RemoteOperationOwner

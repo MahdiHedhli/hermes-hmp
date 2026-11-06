@@ -59,6 +59,9 @@ from .test_presentation_supervisor import context as context
     "dispatch_cleanup_sign_write_foreign_intent_after_go",
     "dispatch_cleanup_sign_write_zero", "dispatch_cleanup_sign_write_registration",
     "dispatch_cleanup_sign_write_wrong_actor", "dispatch_cleanup_sign_write_tail_cancel",
+    "dispatch_cleanup_route", "dispatch_cleanup_route_after_go",
+    "dispatch_cleanup_route_key", "dispatch_cleanup_route_wrong_actor",
+    "dispatch_cleanup_route_initial_failure",
 ])
 async def test_original_work_ready_read_requires_its_complete_signed_begin(
     context, begin_gateway, tmp_path, monkeypatch, mutation
@@ -452,7 +455,19 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                     writer = producer._go_commitment_snapshot._writer_snapshot
                     held["go_writer"] = writer
                     assert writer._complete and writer._offset == len(writer._scope_snapshot.wire)
-                    assert peer.recv(65536) == writer._scope_snapshot.wire
+                    observed_go = peer.recv(65536)
+                    go_wire = writer._scope_snapshot.wire
+                    assert observed_go[:len(go_wire)] == go_wire
+                    extra = observed_go[len(go_wire):]
+                    if extra:
+                        cancel_signer = cleanup._credential_cancel_commitment_snapshot
+                        assert cancel_signer is not None and cancel_signer._complete
+                        cancel_wire = cancel_signer._raw_snapshot + cancel_signer._frame_snapshot
+                        async with asyncio.timeout(1):
+                            while len(extra) < len(cancel_wire):
+                                extra += await asyncio.get_running_loop().sock_recv(
+                                    peer, len(cancel_wire) - len(extra))
+                        assert extra == cancel_wire and cleanup._cancel_write_completed
                     assert held["live_go_sent_calls"] == 1
                     assert held["observed_native_go_sent"] is RemotePhase.GO_SENT
                     assert remote._go_admission_used is True
@@ -1049,7 +1064,73 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                         assert cleanup._cancel_wire is None
                         raise FrameError("SYNTHETIC_CLEANUP_ROLE_ONLY_NO_SIGN_OR_IO")
 
-                    monkeypatch.setattr(SocketChannel, "send_cancel", material_only_cancel)
+                    if mutation.startswith("dispatch_cleanup_route"):
+                        from hmp_plugin import presentation_credential_cancel_write as write
+
+                        send = write._SEND
+                        held["route_wire"] = bytearray()
+                        held["route_send_calls"] = 0
+
+                        def observed_route_send(sock, data):
+                            held["route_send_calls"] += 1
+                            count = send(sock, data)
+                            held["route_wire"].extend(data[:count])
+                            return count
+
+                        monkeypatch.setattr(write, "_SEND", observed_route_send)
+                        if mutation == "dispatch_cleanup_route_wrong_actor":
+                            before = CancellationBudget.inspect(cleanup._refs_snapshot[8])
+                            with pytest.raises(AuthorityRefusalError):
+                                await RemoteCleanupOwner._send_credential_cancel(cleanup, channel)
+                            assert cleanup._credential_cancel_commitment is None
+                            assert cleanup._cancel_write_attempted is False
+                            assert cleanup._unknown is False
+                            assert CancellationBudget.inspect(cleanup._refs_snapshot[8]) == before
+                        if mutation == "dispatch_cleanup_route_initial_failure":
+                            from hmp_plugin.presentation_credential_cancel_commitment import (
+                                NativeCancelCommitment,
+                            )
+
+                            actor = RemoteCleanupOwner._cancel_actor
+                            retain = NativeCancelCommitment.retain
+                            held["initial_route_native_calls"] = 0
+
+                            def failed_initial_actor(owned, owned_channel):
+                                actor(owned, owned_channel)
+                                if owned is cleanup:
+                                    held["initial_route_native_calls"] += 1
+                                    assert cleanup._credential_cancel_commitment is not None
+                                    raise FrameError("SYNTHETIC_INITIAL_ROUTE_NATIVE_FAILURE")
+
+                            def observed_failed_retain(cls, owned):
+                                try:
+                                    return retain(owned)
+                                except FrameError:
+                                    original = cleanup._credential_cancel_commitment_snapshot
+                                    assert original is not None and original._failed
+                                    # White-box restoration tests only the consumed-owner fence.
+                                    # No actual preparation/IO or authority is retried.
+                                    monkeypatch.setattr(RemoteCleanupOwner, "_cancel_actor", actor)
+                                    original._failed = False
+                                    try:
+                                        with pytest.raises(FrameError):
+                                            retain(owned)
+                                    finally:
+                                        original._failed = True
+                                    assert (cleanup._credential_cancel_commitment_snapshot
+                                            is original)
+                                    assert held["initial_route_native_calls"] == 1
+                                    assert cleanup._cancel_write_attempted is False
+                                    raise
+
+                            monkeypatch.setattr(RemoteCleanupOwner, "_cancel_actor",
+                                                failed_initial_actor)
+                            monkeypatch.setattr(NativeCancelCommitment, "retain",
+                                                classmethod(observed_failed_retain))
+                        if mutation == "dispatch_cleanup_route_key":
+                            keys["gateway"].retire()
+                    else:
+                        monkeypatch.setattr(SocketChannel, "send_cancel", material_only_cancel)
                 RemoteCleanupOwner.request(cleanup)
                 # Actual owned cleanup may retain UNKNOWN: signed cleanup relay
                 # is not integrated by this READY-only dispatch slice.
@@ -1067,7 +1148,50 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 held["joined_work_outcome"] = await asyncio.gather(
                     original_allocations[1].task, return_exceptions=True)
                 assert result is True or cleanup._unknown is True
-                if mutation.startswith("dispatch_cleanup_"):
+                if mutation.startswith("dispatch_cleanup_route"):
+                    from hmp_plugin.presentation_cancel_budget import CancellationWindow
+                    from hmp_plugin.presentation_credential_codec import payload_size
+                    from hmp_plugin.presentation_credential_phase import (
+                        check_commitment,
+                        check_complete_frame,
+                    )
+
+                    commitment = cleanup._credential_cancel_commitment_snapshot
+                    assert commitment is not None
+                    if mutation in ("dispatch_cleanup_route_key",
+                                    "dispatch_cleanup_route_initial_failure"):
+                        assert result is False and cleanup._unknown is True
+                        assert held["route_send_calls"] == 0 and held["route_wire"] == b""
+                        assert commitment._failed and not commitment._complete
+                        assert not cleanup._socket_closed and not cleanup._clock_closed
+                    else:
+                        assert result is True and cleanup._unknown is False
+                        assert cleanup._socket_closed and cleanup._clock_closed
+                        assert cleanup._cancel_write_completed and commitment._complete
+                        wire = bytes(held["route_wire"])
+                        observed = bytearray()
+                        async with asyncio.timeout(1):
+                            while len(observed) < len(wire):
+                                chunk = await asyncio.get_running_loop().sock_recv(
+                                    peer, len(wire) - len(observed))
+                                assert chunk
+                                observed.extend(chunk)
+                        assert bytes(observed) == wire
+                        cut = 8 + payload_size(wire[:8])
+                        scope = commitment._scope_snapshot
+                        expected = dict(scope.ready_scope.read_scope.expected)
+                        expected.update(phase="CANCEL", role="gateway", direction="g2b",
+                            sequence=2 if mutation.endswith("_after_go") else 1)
+                        checked = check_commitment(wire[:cut], sender_public=scope.pins[0],
+                            receiver_public=scope.pins[1], expected=expected)
+                        header = check_complete_frame(checked, wire[cut:],
+                                                      binding=remote._binding_snapshot)
+                        assert header.kind == "CANCEL" and header.body_length == 16
+                        window = CancellationWindow.decode(wire[-16:])
+                        assert window.end_ns == cleanup._cancel_end_snapshot
+                        assert window.end_ns <= remote._end_snapshot + 250_000_000
+                        assert not cleanup._result_token and remote._result_owner is None
+                elif mutation.startswith("dispatch_cleanup_"):
                     assert held.get("cleanup_material_called") is True
                 if mutation in ("dispatch_go_write_release_cleanup",
                                 "dispatch_go_write_release_allocation"):
@@ -1082,6 +1206,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                             held["release_foreign_callbacks"].append(key)
                             raise AssertionError("foreign GO allocation indexing")
 
+                    closed_before_drift = channel._closed_known
+                    close_fact_before_drift = channel._close_fact_snapshot
                     foreign = ForeignGoCleanup()
                     if mutation == "dispatch_go_write_release_cleanup":
                         remote._cleanup_owner = remote._cleanup_owner_snapshot = foreign
@@ -1092,7 +1218,9 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                     with pytest.raises(FrameError):
                         NativeGoWriter._released(held["go_writer"], channel)
                     assert held["release_foreign_callbacks"] == []
-                    assert channel.close() is False and not channel._closed_known
+                    assert channel.close() is False
+                    assert channel._closed_known is closed_before_drift
+                    assert channel._close_fact_snapshot is close_fact_before_drift
             else:
                 with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
                     await remote.begin_ready()

@@ -716,3 +716,11 @@ use typed reciprocal slot descriptions. Unknown IO cannot retry/renew or settle
 closure. Historical local IO requires the original cleanup actor or actually done
 Task with original context. No remote ACK/custody, pre-READY path or production
 sender dispatch follows.
+
+The internal credential `send_cancel` route composes fixed after-READY signing and
+transport only on the original cleanup Task/channel. It retains the partial signer
+before native checks and consumes one preparation. Actual reader/consumer tests
+correlate seq/window/end without broker ACK, worker relay or resource release.
+Known no-IO role refusal currently retains automatic local-cleanup debt; uncertain
+IO stays conservative. Production startup and full terminal/cleanup qualification
+remain open.

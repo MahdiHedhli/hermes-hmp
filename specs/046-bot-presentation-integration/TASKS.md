@@ -323,3 +323,11 @@ historical, not an alternative live authorization path or resolved incident.
       synthetic writes retained (BEGIN2586/GO1617); fixed pure custody + role/actor
       seals and nine new zero-send causals pass independent source review.
       Selected909 and lint pass; no live deployment qualification follows.
+
+- [x] Finalize bounded internal signed CANCEL routing: original cleanup actor,
+      partial-owner retention before native effects, no retries/unsigned fallback.
+      Five direct route + two actual peer-correlation cases/source review pass;
+      full1,516/one skipped and lint pass. Known no-IO signing refusal local cleanup debt
+      remains explicit; do not infer closure from independent helper availability.
+- [ ] Complete automatic solely-local cleanup after known no-IO signing refusal,
+      retaining unknown send/readiness and remote custody as separate debt.

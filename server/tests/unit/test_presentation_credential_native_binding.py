@@ -569,7 +569,10 @@ async def begin_gateway(local, monkeypatch):
                     or (cancel_writer is not None
                         and (cancel_writer._unknown or cancel_writer._failed))
                     or release_drift)
-            assert not channel._closed_known
+            if channel._closed_known:
+                assert release_drift  # prior actual closure is historical, not new credit
+                assert channel._close_fact is channel._close_fact_snapshot
+                assert type(channel._close_fact_snapshot) is object
             # Fixture-owned disposal only, never a channel/native release fact.
             # No test flag or protocol evidence is restored to make close pass.
             sock.close()
@@ -786,8 +789,8 @@ async def test_original_work_signed_begin_transport_preserves_reserved_intent(
             finally:
                 channel._credential_handshake = channel._credential_handshake_snapshot = (
                     handshake_owner)
-        # The native completion fact cannot bypass any old unsigned phase path.
-        with pytest.raises(FrameError):
+        # Completion cannot grant this caller the dedicated cleanup actor role.
+        with pytest.raises((FrameError, AuthorityRefusalError)):
             await channel.send_cancel(remote._cleanup_owner_snapshot)
     finally:
         receiver_task.cancel()
