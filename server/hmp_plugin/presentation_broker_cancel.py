@@ -162,6 +162,21 @@ class BrokerCancellationOwner:
             raise FrameError("BI1_CREDENTIAL_CONTROL_ACQUISITION_REFUSED") from None
         return owner
 
+    @classmethod
+    def retain_credential_cancel(cls, queued):
+        """Pre-GO signed CANCEL only; signed GO/resources remain closed."""
+        from .presentation_credential_control import CredentialCancelAdoption
+
+        if cls is not BrokerCancellationOwner:
+            _refuse()
+        owner = BrokerCancellationOwner.stage_credential_control(queued)
+        try:
+            CredentialCancelAdoption.retain(owner)
+        except BaseException:
+            owner._failed = True
+            raise FrameError("BI1_CREDENTIAL_CANCEL_ACQUISITION_REFUSED") from None
+        return owner
+
     def __init__(self, channel, registry, ticket, grammar):
         if type(self) is not BrokerCancellationOwner or "_initialized" in vars(self):
             _refuse()  # never replace an original task/cursor or partial failure
@@ -199,6 +214,7 @@ class BrokerCancellationOwner:
         self._scope = self._scope_snapshot = None
         self._failure_origin = self._failure_origin_snapshot = (None, None)
         self._signed_cursor = self._signed_cursor_snapshot = None
+        self._signed_cancel = self._signed_cancel_snapshot = None
         self._buffer = self._buffer_snapshot = self._buffer_origin = bytearray()
         self._wire_received = self._frame_start = 0
         self._pending = self._waiter = None
@@ -705,10 +721,21 @@ class BrokerCancellationOwner:
                             or self._signed_cursor is not cursor):
                         _refuse()
                     await CredentialControlCursor.run(cursor)
+                    adoption = self._signed_cancel_snapshot
+                    if adoption is not None:
+                        from .presentation_credential_control import CredentialCancelAdoption
+
+                        if (type(adoption) is not CredentialCancelAdoption
+                                or self._signed_cancel is not adoption):
+                            _refuse()
+                        return await CredentialCancelAdoption.run(adoption)
+                    if self._signed_cancel is not None:
+                        _refuse()
                     # Completed authenticated bytes do not mint native receipts.
                     raise FrameError("BI1_SIGNED_CONTROL_RECEIPT_INTEGRATION_REQUIRED")
-            finally:
+            except BaseException:
                 self._failed = True
+                raise
             return None
         try:
             BrokerCancellationOwner._guard(self, reader=True)

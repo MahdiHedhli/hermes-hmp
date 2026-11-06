@@ -55,6 +55,12 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement/review the original-task first signed control frame cursor, with
       signature/header/body/scope validation, callback-safe byte custody and no
       native receipt/grammar/window/resource effects. Full lifecycle remains below.
+- [x] Implement/review original signed pre-GO CANCEL-to-native grammar/budget/receipt
+      and owned local controller park/stop; 1,151 affected passed, one skipped;
+      final focused55 includes unusable post-notification failure. This does not
+      integrate ordinary service receipt consumers or release native debt.
+- [ ] Implement the dedicated original-service receipt validator/consumer without
+      relaxing generic credential work guards; reject stale/revoked/late failures.
 - [ ] Implement the actual signed GO/CANCEL receiver/context on the existing original
       controller task/cursor and frozen budget before any credential resource/READY
       startup. No legacy fallback, new parser task or boolean gate opening.

@@ -1,21 +1,22 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now includes
-reviewed first signed-control-frame reading on the actual original controller
-Task/socket cursor. It authenticates original key/scope/boot/transcript/sequence,
-checks the bounded header/body/full-frame digest and CANCEL window encoding,
-then explicitly stops before native receipts or lifecycle effects.
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) includes reviewed
+signed pre-GO CANCEL adoption on the original controller Task: exact authenticated
+read, existing native grammar/budget/receipt and owned local park/stop. It preserves
+the earlier cleanup end and permits solely local stop after key retirement.
 
-Affected regression: **1,143 passed, one skipped**, 32.48 seconds; configured lint
-passed. Independent review was source/test read-only. See
-[evidence and limits](docs/research/presentation-signed-control-first-frame-2026-11-06.md).
-This does not qualify working GO/CANCEL, resource/READY startup, remaining signed
-IO, production startup, native publication, STATUS or physical/release readiness.
-Character delivery remains unavailable. No live host/device/settings changed.
+Affected regression: **1,151 passed, one skipped**, 32.13 seconds; final focused
+module **55 passed**, 5.31 seconds, including post-notification failure. Configured
+lint passed. Independent source/test review was read-only. See
+[evidence and limits](docs/research/presentation-signed-pre-go-cancel-2026-11-06.md).
 
-Earlier reader-material source `02329e8` passed all plugin and Python 3.12–3.14
-Unicode jobs in [CI724](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42265728473).
-That result does not qualify this newer first-frame source.
+Ordinary service receipt consumers still refuse this credential path; tests use
+the original internal Future plus actual local stop. A completed notification
+alone is insufficient if the owner later fails. Dedicated service receipt
+validation, signed GO/READY/resources, after-GO and cleanup-time control, remaining
+signed IO, production startup, native publication, STATUS and device/release
+qualification remain open. Character delivery remains unavailable. No live host,
+mobile build, device, permission, provider or key installation changed.
 
 ## Native image verification checkpoint — November 6, 2026
 

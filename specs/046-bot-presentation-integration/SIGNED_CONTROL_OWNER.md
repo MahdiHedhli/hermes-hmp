@@ -126,3 +126,13 @@ without adopting it, and explicitly stops before native receipts/grammar/budget
 mutation. `prepare_credential` alone remains no-IO; the working `retain_credential`
 entry, after-GO CANCEL and cleanup/resource/READY lifecycle are still unimplemented.
 See [first-frame evidence and limits](../../docs/research/presentation-signed-control-first-frame-2026-11-06.md).
+
+## Native pre-GO CANCEL checkpoint
+
+`retain_credential_cancel(queued_owner)` now joins the actual original completed
+signed CANCELseq1 to native grammar/budget/receipt and the existing original Task
+park/local stop. It seals original phase/end across callbacks before effects.
+The original notification Future is not sufficient on later owner failure, and
+ordinary `cancel_receipt`/service `_v2_control` remain closed. Dedicated service
+receipt validation, signed GO, after-GO/cleanup-time reads and resource/READY
+startup remain open. See [bounded evidence](../../docs/research/presentation-signed-pre-go-cancel-2026-11-06.md).

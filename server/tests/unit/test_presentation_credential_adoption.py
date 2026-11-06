@@ -227,6 +227,124 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
 
                     await asyncio.create_task(foreign_task())
             assert work.current_queued() is native
+            if mutation and mutation.startswith("signed_control_native_"):
+                from hmp_plugin.presentation_broker_cancel import (
+                    _CANCEL_RECEIPT_MINT,
+                    BrokerCancellationOwner,
+                    _CancelReceipt,
+                )
+                from hmp_plugin.presentation_cancel_budget import CancellationBudget
+
+                budget = native.cleanup_budget_snapshot
+                before = CancellationBudget.inspect(budget)
+                grammar_before = dict(record.grammar.__dict__)
+                control = BrokerCancellationOwner.retain_credential_cancel(work)
+                held["native_control"] = control
+                inherit = CancellationBudget.inherit
+
+                def inherited(budget, window, now):
+                    held["native_local_end"] = CancellationBudget.inspect(budget)[2]
+                    inherit(budget, window, now)
+                    if mutation == "signed_control_native_retire":
+                        keys["broker"].retire()
+
+                monkeypatch.setattr(CancellationBudget, "inherit", inherited)
+                if mutation in ("signed_control_native_phase_drift",
+                                "signed_control_native_end_drift"):
+                    from hmp_plugin.presentation_credential_control import CredentialControlCursor
+                    complete = CredentialControlCursor.completed_current
+                    current = BrokerServiceSpine._current
+                    callbacks, ready, causes = [], [], []
+                    cause = BrokerCancellationOwner._local_cause
+
+                    class ForeignCursorValue:
+                        def __eq__(self, other):
+                            callbacks.append("eq")
+                            raise AssertionError("foreign cursor comparison")
+
+                        def __gt__(self, other):
+                            callbacks.append("gt")
+                            raise AssertionError("foreign cursor ordering")
+
+                        def __lt__(self, other):
+                            callbacks.append("lt")
+                            raise AssertionError("foreign cursor ordering")
+
+                    def completed(cursor):
+                        result = complete(cursor)
+                        ready.append(True)
+                        return result
+
+                    def changed(service):
+                        current(service)
+                        if ready and asyncio.current_task() is control._allocation_snapshot.task:
+                            cursor = control._signed_cursor_snapshot
+                            if mutation == "signed_control_native_phase_drift":
+                                cursor._phase = ForeignCursorValue()
+                            else:
+                                cursor._end = cursor._end_snapshot = ForeignCursorValue()
+
+                    def observed_cause(owner):
+                        causes.append(True)
+                        cause(owner)
+
+                    monkeypatch.setattr(CredentialControlCursor, "completed_current", completed)
+                    monkeypatch.setattr(BrokerServiceSpine, "_current", changed)
+                    monkeypatch.setattr(BrokerCancellationOwner, "_local_cause", observed_cause)
+                    held["native_foreign_callbacks"] = callbacks
+                    held["native_local_causes"] = causes
+                if mutation == "signed_control_native_notice_retire":
+                    current = BrokerServiceSpine._current
+
+                    def retired_notice(service):
+                        current(service)
+                        if control._notice_completed is True:
+                            keys["broker"].retire()
+
+                    monkeypatch.setattr(BrokerServiceSpine, "_current", retired_notice)
+                waiter = control._cancel_future_snapshot
+                done, _ = await asyncio.wait(
+                    (waiter, control._allocation_snapshot.task), timeout=0.5,
+                    return_when=asyncio.FIRST_COMPLETED)
+                assert done
+                success = mutation in ("signed_control_native_cancel",
+                                       "signed_control_native_retire_parked")
+                if success:
+                    notice = waiter.result()
+                    assert type(notice) is _CancelReceipt and notice.mint is _CANCEL_RECEIPT_MINT
+                    assert notice is control._cancel_receipt_snapshot
+                    assert notice.allocation is control._allocation_snapshot
+                    assert control._go_receipt is None and native.start_attempted is False
+                    assert record.grammar._cancel is True and record.grammar._go is False
+                    assert record.grammar._client_next == 2
+                    assert notice.end == min(notice.window.end_ns, held["native_local_end"])
+                    assert CancellationBudget.inspect(budget)[2] == notice.end
+                    if mutation == "signed_control_native_retire_parked":
+                        keys["broker"].retire()
+                    BrokerCancellationOwner.abort(control)
+                    outcome = await asyncio.gather(control._allocation_snapshot.task,
+                                                   return_exceptions=True)
+                    assert outcome == [notice.frame]
+                    assert control._stop_known is True and control._failed is False
+                    held["native_notice"] = notice
+                else:
+                    outcome = await asyncio.gather(control._allocation_snapshot.task,
+                                                   return_exceptions=True)
+                    assert isinstance(outcome[0], FrameError)
+                    if mutation == "signed_control_native_notice_retire":
+                        assert waiter.done() and control._notice_completed is True
+                        assert control._failed is True and control._io_unknown is True
+                    else:
+                        assert not waiter.done() and control._cancel_receipt is None
+                    if mutation not in ("signed_control_native_retire",
+                                         "signed_control_native_notice_retire"):
+                        assert CancellationBudget.inspect(budget) == before
+                        assert record.grammar.__dict__ == grammar_before
+                    if mutation in ("signed_control_native_phase_drift",
+                                    "signed_control_native_end_drift"):
+                        assert held["native_foreign_callbacks"] == []
+                        assert held["native_local_causes"] == []
+                return ticket
             if mutation and mutation.startswith("signed_control_"):
                 from hmp_plugin.presentation_broker_cancel import BrokerCancellationOwner
                 from hmp_plugin.presentation_cancel_budget import CancellationBudget
@@ -520,7 +638,14 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
 
             phase = "CANCEL" if mutation in ("signed_control_cancel", "signed_control_hash",
                                              "signed_control_window") else "GO"
+            if mutation.startswith("signed_control_native_"):
+                phase = "GO" if mutation == "signed_control_native_go" else "CANCEL"
             body = CancellationWindow(end - 250_000_000, end).encode() if phase == "CANCEL" else b""
+            if mutation.startswith("signed_control_native_") and phase == "CANCEL":
+                start = time.monotonic_ns()
+                if mutation == "signed_control_native_future_window":
+                    start += 1_000_000_000
+                body = CancellationWindow(start, start + 250_000_000).encode()
             if mutation == "signed_control_window":
                 body = b"\0" * 16
             control_frame = encode_frame(binding, phase, 1, body, version=2)
@@ -535,7 +660,7 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 control_value["broker_boot"] = "f" * len(control_value["broker_boot"])
             control_raw = encode_record(control_value, keys["gateway"]._private_key.sign(
                 signing_bytes(control_value)))
-            if mutation == "signed_control_signature":
+            if mutation in ("signed_control_signature", "signed_control_native_signature"):
                 control_raw = control_raw[:-1] + bytes([control_raw[-1] ^ 1])
             if mutation == "signed_control_hash":
                 control_frame = control_frame[:-1] + bytes([control_frame[-1] ^ 1])
@@ -780,3 +905,18 @@ async def test_original_signed_control_cursor_without_native_receipts(local, tmp
                                                                      mutation):
     held, _ = await exchange(local, tmp_path, monkeypatch, mutation)
     assert "signed_cursor" in held
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+@pytest.mark.parametrize("mutation", [
+    "signed_control_native_cancel", "signed_control_native_go",
+    "signed_control_native_future_window", "signed_control_native_signature",
+    "signed_control_native_retire", "signed_control_native_retire_parked",
+    "signed_control_native_phase_drift", "signed_control_native_end_drift",
+    "signed_control_native_notice_retire",
+])
+async def test_signed_cancel_native_receipt_and_owned_local_stop(local, tmp_path, monkeypatch,
+                                                               mutation):
+    held, _ = await exchange(local, tmp_path, monkeypatch, mutation)
+    assert "native_control" in held
