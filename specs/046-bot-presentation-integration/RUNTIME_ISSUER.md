@@ -124,6 +124,51 @@ trusted original gateway native instance/listener lifetime **before** connection
 an open design item; an expected PID/version copied into startup JSON is not its implementation.
 Do not implement a production issuer by assuming this missing transfer.
 
+### Selected next implementation: retained Mach channel admission
+
+The [native sender experiment](NATIVE_SENDER_AUDIT.md) establishes a bounded
+mechanism for kernel identity at message send, including receipt after exact
+sender exit. It does not establish executable origin. Implement a retained
+boot/channel admission owner using that mechanism, while preserving the existing
+UDS operation transport; do not replace operation framing or add an HTTP token.
+
+The proposed exchange first observes a kernel audit incarnation, registers its
+original NOTE_EXIT lifetime, then creates a fresh challenge. Require the response
+to carry the same kernel audit incarnation, independently of its body. A holder
+of a delegated socket or right sends under its own kernel identity and cannot
+substitute an echoed nonce for this check. Recheck the retained original lifetime
+before admission; exit, stale response, uncertain registration or identity drift
+permanently refuses that owner. This is a proposed composition, not an already
+observed native exchange or production admission.
+
+Independently selected gateway and broker manager jobs, fixed launch recipes and
+runtime inventories remain prerequisites. Never derive expected startup origin
+from the responding process's own claimed PID, digest or installation fields.
+If the actual gateway lacks a qualified manager/startup owner, report that exact
+installation prerequisite; no local self-issued token can fill it. This route
+does not require the existing gateway to adopt the broker's isolated import roots
+or reaper and does not restrict Hermes to an exact release allowlist.
+
+Before effects, retain endpoint, copied rights, one-use reply right, original
+challenge, receive cursor, deadline and observer in that same owner. Define
+partial initialization, unexpected message-right disposal, cancellation, timeout,
+revocation and settlement explicitly. No second consumer, renewed challenge,
+automatic retry or success after uncertain cleanup. Bind the UDS channel and its
+qualified clock to this original admission before any input body. Manager,
+runtime and native authority joins must complete before GO or TERMINAL permission;
+the new owner alone must expose neither. Independent contract/security review
+must settle endpoint selection and reply-right lifecycle before native execution.
+
+A boot handshake does not authenticate the authorship of later UDS bytes: another
+inherited descriptor holder can still inject frames. Do not mark that stream
+authenticated from boot admission. Before production operation admission, choose
+and implement either kernel-origin-bearing Mach control messages throughout the
+authority path, or exact operation/phase/input/result/frame-digest approvals from
+the retained native gateway owner over Mach that constrain UDS data. Approval
+must be an original native-owner transition, never a caller boolean. Boot-only
+source must have no route to ordinary UDS BEGIN/GO/control/terminal authority
+until this binding is implemented and independently reviewed, including delegated-holder negatives.
+
 The installed Darwin SDK exposes LOCAL_PEERTOKEN, but it is not selected here as
 a standalone original-peer-incarnation proof. Inspected Apple kernel code looks
 up a current process from the peer socket's last PID when answering that option;

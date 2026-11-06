@@ -1,5 +1,15 @@
 # BI1 integration tasks
 
+- [ ] Implement the reviewed retained Mach boot/channel admission owner with
+      endpoint, reply-right, audit incarnation, original lifetime and deadline
+      ownership. Keep it observation-only until independently selected startup
+      owners/runtime recipes and native phase/digest or kernel-origin control
+      binding are joined. Reject delegated UDS holders across the actual binding;
+      no BEGIN/GO/control/terminal permission from a boot handshake. Integrate at
+      StartupEnrollment/SocketChannel, ParentAuthorityAdapter.bind_remote and
+      RemoteOperationOwner without admitting synthetic_no_go or decoded data.
+      See [selected issuer direction](RUNTIME_ISSUER.md).
+
 - [ ] Complete independent artifact review and CI for the fresh-child native
       sender experiment. Root's single actual Darwin run plus portable checks
       passes 57 cases; production authority remains unqualified. Historical
