@@ -1,19 +1,22 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) contains the
-reviewed credential records, handshake/key custody, original native-input join
-and bounded frame-digest components. Latest component source `aae7a40` passed
-**658 affected tests, one skipped**, and configured repository lint. Independent
-review inspected source/tests without execution. Synthetic authorization and
-modeled peer/clock qualification remain explicit; sockets, policy threads and
-job slots are actual disposable test resources.
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) contains reviewed
+credential records, handshake/key custody, original native-input joins, bounded
+frame-digest checks and now the original work-task no-IO BEGIN reservation.
+Latest source component `6c31d43` passed **928 affected tests, one skipped**, with
+configured lint green. Review inspected source/tests without executing them.
+
+Exact earlier baseline `9788b68` passed [full Linux CI](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42246085048):
+8,247 tests and 190 subtests, plus lint/surface/privacy and Unicode checks on
+Python 3.12/3.13/3.14. That baseline CI does not qualify the later reservation edit.
+Synthetic native authorization and modeled peer/clock qualification remain
+explicit in the local component tests.
 
 Desktop name/classic/blobatar/custom-static delivery remains unfinished. Paired
-runtime/source admission, rotation/capacity, signed phase streaming and direct
-broker IO, actual GO and native publication, STATUS, installation and physical/
-release qualification are open. The digest helper is data-only and unsigned
-phase fallback stays refused. See [streaming evidence](docs/research/presentation-credential-stream-2026-11-06.md)
-and [original-input evidence](docs/research/presentation-credential-native-input-2026-11-06.md).
+runtime admission, role signing, complete streaming/direct broker IO, actual GO
+and native publication, STATUS, installation and physical/release qualification
+remain open. The new reservation neither signs nor writes; unsigned phase
+fallback stays refused. See [the work-task producer contract](specs/046-bot-presentation-integration/PHASE_WORK_OWNER.md).
 No live host setting, permission or device changed.
 
 ## Native image verification checkpoint — November 6, 2026
