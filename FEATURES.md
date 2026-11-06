@@ -1,33 +1,22 @@
-## Reservation security follow-up — November 6, 2026
-
-Three independently reviewed post-admission regression cases now cover listener
-retirement, policy invalidation and replacement of the original packet. The
-focused module passed 12 tests; Ruff passed. No signer or transport gate was
-opened. Fresh CI for exact source `6c31d436e67fda2c818da57f34dc0172ebb331ef`
-completed successfully: [CI 702](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42248707404).
-That CI predates these three added tests. Bot-character delivery and device
-qualification remain incomplete.
-
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) contains reviewed
-credential records, handshake/key custody, original native-input joins, bounded
-frame-digest checks and now the original work-task no-IO BEGIN reservation.
-Latest source component `6c31d43` passed **928 affected tests, one skipped**, with
-configured lint green. Review inspected source/tests without executing them.
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now contains the
+independently reviewed fixed BEGIN signer on the original native work allocation.
+It uses the same reserved intent and exact original input, rechecks native/key/
+task/socket/time state before signing and after crypto, and refuses duplicate
+attempts. The final affected regression passed **940 tests, one skipped**, in
+27.56 seconds; repository-wide configured lint passed. Review was source-only.
 
-Exact earlier baseline `9788b68` passed [full Linux CI](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42246085048):
-8,247 tests and 190 subtests, plus lint/surface/privacy and Unicode checks on
-Python 3.12/3.13/3.14. That baseline CI does not qualify the later reservation edit.
-Synthetic native authorization and modeled peer/clock qualification remain
-explicit in the local component tests.
+The actual transport gate remains CLOSED: no application bytes, GO, child or
+completed-write fact follows. Complete phase/direct-writer/cleanup integration,
+paired production startup, native publication, STATUS and physical/release
+qualification remain open. Desktop character delivery is not yet available.
+No live host setting, permission, key installation or device changed.
+See [source/test evidence and limits](docs/research/presentation-credential-work-signer-2026-11-06.md).
 
-Desktop name/classic/blobatar/custom-static delivery remains unfinished. Paired
-runtime admission, role signing, complete streaming/direct broker IO, actual GO
-and native publication, STATUS, installation and physical/release qualification
-remain open. The new reservation neither signs nor writes; unsigned phase
-fallback stays refused. See [the work-task producer contract](specs/046-bot-presentation-integration/PHASE_WORK_OWNER.md).
-No live host setting, permission or device changed.
+Fresh [CI 702](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42248707404)
+passed for earlier reservation source `6c31d43`, including plugin checks and
+Python 3.12–3.14 Unicode jobs. It does not qualify this newer signer.
 
 ## Native image verification checkpoint — November 6, 2026
 

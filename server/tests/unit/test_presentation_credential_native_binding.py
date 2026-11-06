@@ -4,6 +4,7 @@ No live Hermes home, production factory, worker GO, provider or user contents.
 """
 
 import asyncio
+import json
 import os
 from dataclasses import replace
 
@@ -125,6 +126,33 @@ async def test_handshake_binds_exact_native_packet_and_original_shared_slot(
             return intent
 
         monkeypatch.setattr(SocketChannel, "_reserve_credential_begin", observed_reserve)
+        from hmp_plugin.presentation_credential_work import NativePhaseWorkOwner
+
+        original_init = NativePhaseWorkOwner.__init__
+        original_prepare = NativePhaseWorkOwner.prepare_begin
+        signed_records = []
+        caller_refusals = []
+
+        def observed_init(producer, cleanup):
+            original_init(producer, cleanup)
+            assert asyncio.current_task() is cleanup._caller_snapshot
+            with pytest.raises(AuthorityRefusalError):
+                NativePhaseWorkOwner._guard(producer)
+            assert producer._attempted is False
+            caller_refusals.append(True)
+
+        def observed_prepare(producer):
+            cleanup = producer._cleanup
+            assert asyncio.current_task() is cleanup._allocations_snapshot[1].task
+            raw = original_prepare(producer)
+            with pytest.raises(FrameError):
+                original_prepare(producer)
+            assert producer._record_snapshot is raw
+            signed_records.append(raw)
+            return raw
+
+        monkeypatch.setattr(NativePhaseWorkOwner, "__init__", observed_init)
+        monkeypatch.setattr(NativePhaseWorkOwner, "prepare_begin", observed_prepare)
         # This join grants no unsigned fallback while phase integration is open.
         with pytest.raises(FrameError, match="PHASE_INTEGRATION_REQUIRED"):
             await channel.send_go(remote)
@@ -136,6 +164,33 @@ async def test_handshake_binds_exact_native_packet_and_original_shared_slot(
         assert record.owner.inspect(record.handle)[0] is State.UNKNOWN
         intent = channel._begin_write_intent
         assert observed_intents == [intent]
+        producer = remote._cleanup_owner_snapshot._credential_work_snapshot
+        raw = producer._record_snapshot
+        assert type(raw) is bytes and producer._record is raw
+        assert signed_records == [raw] and caller_refusals == [True]
+        from hmp_plugin.presentation_broker_codec import encode_frame
+        from hmp_plugin.presentation_credential_codec import decode_record
+        from hmp_plugin.presentation_credential_phase import check_commitment, check_complete_frame
+
+        claim = json.loads(decode_record(raw).canonical_json)
+        expected = {
+            key: value
+            for key, value in claim.items()
+            if key
+            not in ("v", "family", "alg", "key_id", "peer_key_id", "frame_sha256", "frame_length")
+        }
+        checked = check_commitment(
+            raw,
+            sender_public=keys["gateway"]._selection.own_public,
+            receiver_public=keys["gateway"]._selection.peer_public,
+            expected=expected,
+        )
+        check_complete_frame(
+            checked, encode_frame(binding, "BEGIN", 0, packet, version=2), binding=binding
+        )
+        assert claim["input_sha256"] == fact.scope.input_sha256
+        assert claim["scope_sha256"] == fact.scope.scope_sha256
+        assert claim["work_end_ns"] == remote._end_snapshot
         assert intent is channel._begin_write_intent_snapshot
         assert intent.remote is remote and intent.packet is packet and intent.binding is binding
         assert intent.end_ns == remote._end_snapshot and intent.version == 2
@@ -299,6 +354,168 @@ async def test_begin_reservation_rechecks_after_native_admission(
         except BlockingIOError:
             received = b""
         assert received == b""
+    finally:
+        assert broker.close() and broker.close_clock()
+        for key in keys.values():
+            key.retire()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mutation", ["key", "fence", "policy"])
+async def test_signing_postcheck_withholds_record_after_retirement(
+    context, v2gateway, tmp_path, monkeypatch, mutation
+):
+    from hmp_plugin import presentation_credential_work as signing
+
+    prepared = await prepare(context, v2gateway)
+    authority, operation, _, channel, peer, _, packet, _ = prepared
+    owner, keys, broker = await handshake(prepared, tmp_path)
+    try:
+        remote = authority.bind_remote(operation, channel, owner._operation_binding(), packet)
+        original = signing.encode_record
+        signatures = []
+
+        def retired(statement, signature):
+            raw = original(statement, signature)
+            signatures.append(raw)
+            if mutation == "key":
+                keys["gateway"].retire()
+            elif mutation == "fence":
+                authority._record(operation).fence.retire()
+            else:
+                authority._record(operation).policy_work._invalid = True
+            return raw
+
+        monkeypatch.setattr(signing, "encode_record", retired)
+        with pytest.raises((FrameError, AuthorityRefusalError)):
+            await remote.begin_ready()
+        producer = remote._cleanup_owner_snapshot._credential_work_snapshot
+        assert len(signatures) == 1 and producer._attempted is True and producer._failed is True
+        assert producer._record is None and producer._record_snapshot is None
+        assert channel._begin_write_intent is not None
+        assert channel._begin_write_fact is None and channel._writing is False
+        assert remote._send_claimed is True and remote._send_completed is False
+        record = authority._record(operation)
+        assert record.remote_operation is remote and record.child is None
+        assert record.owner.inspect(record.handle)[0] is State.UNKNOWN
+        with pytest.raises(FrameError):
+            producer.prepare_begin()
+        assert len(signatures) == 1
+        try:
+            received = peer.recv(1)
+        except BlockingIOError:
+            received = b""
+        assert received == b""
+    finally:
+        assert broker.close() and broker.close_clock()
+        for key in keys.values():
+            key.retire()
+
+
+def test_work_producer_rejects_foreign_receiver_before_getters():
+    from hmp_plugin.presentation_credential_work import NativePhaseWorkOwner
+
+    callbacks = []
+
+    class Foreign:
+        def __getattribute__(self, name):
+            callbacks.append(name)
+            raise AssertionError("foreign receiver getter")
+
+    with pytest.raises(FrameError):
+        NativePhaseWorkOwner.prepare_begin(Foreign())
+    assert callbacks == []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mutation", ["key", "transcript"])
+async def test_preparation_retirement_refused_before_signature_encoding(
+    context, v2gateway, tmp_path, monkeypatch, mutation
+):
+    from hmp_plugin import presentation_credential_work as signing
+
+    prepared = await prepare(context, v2gateway)
+    authority, operation, _, channel, _, _, packet, _ = prepared
+    owner, keys, broker = await handshake(prepared, tmp_path)
+    try:
+        remote = authority.bind_remote(operation, channel, owner._operation_binding(), packet)
+        original = signing.signing_bytes
+        prepared_statements = []
+        encoded = []
+
+        def changed(statement):
+            raw = original(statement)
+            prepared_statements.append(raw)
+            if mutation == "key":
+                keys["gateway"].retire()
+            else:
+                object.__setattr__(owner._transcript_snapshot, "channel", "f" * 64)
+            return raw
+
+        def forbidden_encoding(*args):
+            encoded.append(args)
+            raise AssertionError("retired preparation must not reach signature encoding")
+
+        monkeypatch.setattr(signing, "signing_bytes", changed)
+        monkeypatch.setattr(signing, "encode_record", forbidden_encoding)
+        with pytest.raises((FrameError, AuthorityRefusalError)):
+            await remote.begin_ready()
+        producer = remote._cleanup_owner_snapshot._credential_work_snapshot
+        assert len(prepared_statements) == 1 and encoded == []
+        assert producer._failed is True and producer._record is None
+        assert channel._begin_write_fact is None and remote._send_completed is False
+    finally:
+        assert broker.close() and broker.close_clock()
+        for key in keys.values():
+            key.retire()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mutation", ["allocation", "refs"])
+async def test_constructor_rechecks_allocation_after_handshake_clock_boundary(
+    context, v2gateway, tmp_path, monkeypatch, mutation
+):
+    prepared = await prepare(context, v2gateway)
+    authority, operation, _, channel, _, _, packet, _ = prepared
+    owner, keys, broker = await handshake(prepared, tmp_path)
+    original_guard = CredentialHandshakeOwner._guard
+    callbacks = []
+    retained = []
+
+    class Foreign:
+        def __getitem__(self, index):
+            callbacks.append(index)
+            raise AssertionError("foreign allocation indexing")
+
+    try:
+        remote = authority.bind_remote(operation, channel, owner._operation_binding(), packet)
+
+        def changed(owned):
+            original_guard(owned)
+            cleanup = remote._cleanup_owner_snapshot
+            if cleanup is not None and cleanup._initialized is True and not retained:
+                producer = cleanup._credential_work_snapshot
+                if mutation == "allocation":
+                    retained.append(cleanup._allocations_snapshot)
+                    cleanup._allocations = cleanup._allocations_snapshot = Foreign()
+                elif hasattr(producer, "_refs_snapshot"):
+                    retained.append(cleanup._allocations_snapshot)
+                    producer._refs = Foreign()
+
+        monkeypatch.setattr(CredentialHandshakeOwner, "_guard", changed)
+        with pytest.raises((FrameError, AuthorityRefusalError)):
+            await remote.begin_ready()
+        cleanup = remote._cleanup_owner_snapshot
+        assert len(retained) == 1 and callbacks == []
+        assert cleanup._credential_work_snapshot._ready is False
+        assert cleanup._start_snapshot.result() is False
+        assert cleanup._unknown is True and channel._begin_write_intent is None
+        # Restore only fixture allocation metadata after closed failure barriers;
+        # no work, signature or authority acquisition is retried.
+        cleanup._allocations = cleanup._allocations_snapshot = retained[0]
+        await asyncio.gather(
+            *(allocation.task for allocation in retained[0]), return_exceptions=True
+        )
     finally:
         assert broker.close() and broker.close_clock()
         for key in keys.values():

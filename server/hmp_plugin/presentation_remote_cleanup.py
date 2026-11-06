@@ -111,6 +111,7 @@ class RemoteCleanupOwner:
         from .presentation_remote import RemoteOperationOwner
 
         self._remote = self._remote_snapshot = remote
+        self._credential_work = self._credential_work_snapshot = None
         self._initialized = self._run_attempted = self._intent = False
         self._unknown = self._work_joined = self._socket_closed = self._clock_closed = False
         self._cancel_attempted = self._sampling = False
@@ -216,6 +217,12 @@ class RemoteCleanupOwner:
                 _initialize_task(slot, self._loop)
             self._initialized = True
             RemoteCleanupOwner._guard(self)
+            if remote._credential_handshake_snapshot is not None:
+                from .presentation_credential_work import NativePhaseWorkOwner
+
+                producer = NativePhaseWorkOwner.__new__(NativePhaseWorkOwner)
+                self._credential_work = self._credential_work_snapshot = producer
+                NativePhaseWorkOwner.__init__(producer, self)
         except BaseException:
             self._unknown = True
             # Never infer that failed initialization scheduled nothing. Closed

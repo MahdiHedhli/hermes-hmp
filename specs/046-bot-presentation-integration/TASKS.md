@@ -25,8 +25,9 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement/review original work-task no-IO BEGIN intent reservation after
       actual PRE_GO; caller/duplicate/intent/no-write assertions retained and
       affected regression 928 passed, one skipped.
-- [ ] Implement the fixed work-role signing producer in the caller/start-barrier
+- [x] Implement/review the fixed BEGIN work-role signing producer in the caller/start-barrier
       gap, preserving original work allocation and the SAME reserved intent.
+      Final affected regression: 940 passed, one skipped; no transport/GO activation.
       See [actual task/producer contract](PHASE_WORK_OWNER.md).
 - [ ] Integrate operator-selected paired runtime/source/credential startup,
       capacity and rotation with the retained handshake on its original channel,

@@ -1,8 +1,8 @@
 # Original work-task phase producer contract
 
 Status: independently reviewed bounded contract/source seam. The no-IO BEGIN
-reservation is implemented; the work-role signer and complete signed transport
-are not. No live runtime, credential, service or capability is admitted here.
+reservation and fixed original-work BEGIN signer are implemented; complete signed
+transport is not. See the [source/test evidence](../../docs/research/presentation-credential-work-signer-2026-11-06.md). No live runtime, credential, service or capability is admitted here.
 
 ## Actual task ownership
 
@@ -12,7 +12,7 @@ index 1. Both remain behind the original start barrier until `run` opens it.
 The handshake belongs to the original caller task. Do not relax its guard to
 admit arbitrary tasks, use a callback signer, or treat task names as ownership.
 
-The planned separate `NativePhaseWorkOwner` must be retained in the original
+The separate `NativePhaseWorkOwner` is retained in the original
 caller after successful cleanup initialization and before the start barrier opens.
 That caller must be both the handshake's original task and cleanup's original
 caller. Capture exact native allocation/coroutine/slot, loop, clock, budget and
@@ -40,9 +40,9 @@ signed transport MUST consume it; re-entering old `send`/`_authorize_channel`
 would double-claim the original send and create a second intent. Merely removing
 `_credential_work_ready` refusal is neither integration nor qualification.
 
-## Remaining producer and transport
+## Implemented BEGIN producer; remaining transport
 
-The fixed `prepare_begin` operation takes no caller statement/digest. Its future
+The fixed `prepare_begin` operation takes no caller statement/digest. Its
 signer must verify current role material and exact original work/native intent,
 latch first signing attempt before callback-bearing checks/crypto, derive the
 closed commitment itself, and reseal native/key/task/time context after crypto
@@ -59,10 +59,10 @@ upgrade of synthetic/no-GO objects is permitted.
 
 ## Evidence and qualification limits
 
-Independent source/test review accepted the reservation seam; root's expanded
-local affected regression passed 928 tests, one skipped. Task/caller/duplicate
+Independent source/test review accepted the reservation seam and bounded fixed
+BEGIN signer; root's final affected regression passed 940 tests, one skipped. Task/caller/duplicate
 assertions execute through the real policy-thread/shared-slot/socket model with
 synthetic native authorization and modeled peer/clock facts. They preserve zero
 application bytes and no write-completion/GO/child fact. No reviewer tests ran.
-Production startup, role signing, complete streaming/native publication,
+Production startup, remaining phase signing, complete streaming/native publication,
 installation and physical/release qualification remain unfinished.

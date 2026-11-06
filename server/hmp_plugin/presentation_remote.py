@@ -652,6 +652,13 @@ class RemoteOperationOwner:
                                 self._packet)
             if self._credential_handshake is not None:
                 SocketChannel._reserve_credential_begin(self._channel, self)
+                from .presentation_credential_work import NativePhaseWorkOwner
+
+                producer = self._cleanup_owner_snapshot._credential_work_snapshot
+                if (type(producer) is not NativePhaseWorkOwner
+                        or self._cleanup_owner_snapshot._credential_work is not producer):
+                    raise AuthorityRefusalError
+                NativePhaseWorkOwner.prepare_begin(producer)
             await SocketChannel.send(self._channel, frame, self._end, owner=self)
             self._send_completed = True
             self._check(RemotePhase.BEGIN_INTENT)

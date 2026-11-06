@@ -592,3 +592,5 @@ See [current tasks](../../046-bot-presentation-integration/TASKS.md) and the
 [credential contract](../../046-bot-presentation-integration/CREDENTIAL_ADMISSION.md).
 The census explicitly extends Hermes-free import checks to these files; it does
 not weaken the closed plugin registration or optional-media import boundaries.
+
+- `presentation_credential_work.py`: original native work-task fixed BEGIN signing producer; no transport, GO or publication permission.
