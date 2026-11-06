@@ -299,3 +299,259 @@ def test_ambiguous_release_return_retains_handle_and_blocks_hook_restoration(wit
         hooks.restore()
     assert not hooks.restored
     assert not writer.settle() and calls == ["release"]
+
+
+@pytest.mark.parametrize("case", range(8))
+@pytest.mark.parametrize("count", [1, 16, 128])
+@pytest.mark.parametrize("scenario_request", ["control:ids0", "append:page", "deactivate:ids1",
+    "eligibility:page", "tip_move:ids0", "aba:last", "residual:last"])
+def test_general_writer_requests_keep_full_shape_selector_matrix(case, count, scenario_request):
+    load().validate_request(case, count, scenario_request)
+
+
+@pytest.mark.parametrize("case", [0, 3])
+@pytest.mark.parametrize("scenario_request", ["ambiguous:page", "kind_swap:ids1",
+                                     "title_guard:ids0", "archive:page"])
+def test_native_bot_only_cases_do_not_invent_a_phone_guard_bypass(case, scenario_request):
+    module = load()
+    module.validate_request(case, 128, scenario_request)
+    with pytest.raises(RuntimeError):
+        module.validate_request(case + 4, 128, scenario_request)
+
+
+@pytest.mark.parametrize(("case", "selector", "scenario_request"), [(True, 1, "control:page"),
+    (-1, 1, "control:page"), (8, 1, "control:page"), (0, True, "control:page"),
+    (0, 2, "control:page"), (0, 1, False), (0, 1, "residual:page"),
+    (0, 1, "append:last"), (0, 1, "control:foreign"), (0, 1, "x'; execute()")])
+def test_undeclared_writer_mode_refuses_before_filesystem(
+    tmp_path, case, selector, scenario_request
+):
+    from .test_local_media_native_serving_driver import driver
+
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40, sample_binding_seed=True,
+            binding_cost_case=case, binding_cost_selector=selector, binding_writer=scenario_request)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_writer_request_cannot_combine_with_mint_rss_or_implicit_seed(tmp_path):
+    from .test_local_media_native_serving_driver import driver
+
+    for extra in ({"binding_mint": True}, {"binding_rss": True}, {"sample_binding_seed": False}):
+        options = {"sample_binding_seed": True, "binding_cost_case": 0,
+                   "binding_cost_selector": 1, "binding_writer": "control:page", **extra}
+        with pytest.raises(RuntimeError):
+            driver.run_fixture(tmp_path, tmp_path, "a" * 40, **options)
+        assert not tuple(tmp_path.iterdir())
+
+
+def test_second_deactivated_row_result_is_an_independent_surviving_subset():
+    first, second = load().expected_outcomes("deactivate", "phone", (8,))
+    assert first == ("rows_changed", None, ())
+    assert second == ("ok", "phone", ())
+    selected = tuple(range(128, 0, -1))
+    assert load().expected_outcomes("deactivate", "bot_chat", selected)[1] == (
+        "ok", "bot_chat", selected[1:])
+
+
+def test_residual_and_aba_oracles_preserve_acceptances_as_limitations():
+    module = load()
+    selected = (2,)
+    assert module.expected_outcomes("residual", "bot_chat", selected) == (
+        ("ok", "bot_chat", selected), ("not_eligible", None, ()))
+    assert module.expected_outcomes("aba", "phone", selected) == (
+        ("ok", "phone", selected), ("ok", "phone", selected))
+    assert module.expected_outcomes("kind_swap", "bot_chat", selected)[1] == (
+        "ok", "phone", selected)
+
+
+def test_writer_barrier_requires_settled_actors_and_exact_restored_hooks():
+    m = load()
+    writer, owners, _ = model(m)
+    hooks = m.ReadHooks(db_model(m), owners, lambda _: None)
+    assert not m.barrier(owners, [hooks])
+    assert writer.settle()
+    assert not m.barrier(owners, [hooks])
+    hooks.install()
+    hooks.restore()
+    assert m.barrier(owners, [hooks])
+    assert not m.barrier([object()], [hooks])
+    assert not m.barrier(owners, [object()])
+
+
+@pytest.mark.parametrize("witness", [False, None, 1])
+def test_db_cell_refuses_before_allocation_without_exact_writer_barrier(tmp_path, witness):
+    from .test_local_media_native_binding_sample import cell_fixture
+
+    fixture = cell_fixture(tmp_path)
+    with pytest.raises(RuntimeError), fixture.context(writer_barrier=lambda: witness):
+        pytest.fail("uncertain actor must not allocate a DB")
+    assert fixture.acquired == [] and not (tmp_path / "binding-cells").exists()
+
+
+def test_db_cell_cannot_release_or_restore_scope_under_late_writer_debt(tmp_path):
+    from .test_local_media_native_binding_sample import cell_fixture
+
+    fixture, safe = cell_fixture(tmp_path), [True]
+    with pytest.raises(RuntimeError), fixture.context(writer_barrier=lambda: safe[0]) as db:
+        safe[0] = False
+    assert fixture.released == [] and db._conn is not None
+    assert fixture.selection[0][1] is db and fixture.fx.native.home_path != fixture.original
+    assert fixture.owners[0]["closed"] is False
+
+
+def test_global_failure_cleanup_keeps_all_native_store_and_patch_owners_under_writer_debt(tmp_path):
+    import types
+
+    from .test_local_media_native_serving_fixture import load as load_fixture
+
+    def forbidden(*args):
+        pytest.fail("must retain every owner under uncertain writer debt")
+
+    registry = types.SimpleNamespace(release=forbidden, close_all_under=forbidden)
+    fx = types.SimpleNamespace(rig=types.SimpleNamespace(env=types.SimpleNamespace(
+        store=types.SimpleNamespace(close=forbidden))))
+    patch = types.SimpleNamespace(undo=forbidden)
+    owners = {"workers_joined": True, "writer_barrier": lambda: False}
+    assert load_fixture()._cleanup_setup(
+        owners, registry, object(), fx, patch, tmp_path, {}) is False
+
+
+def writer_report():
+    return {"case": 0, "request": "control:page", "kind": "bot_chat", "selector": 1,
+        "first": {"reason": "ok", "kind": "bot_chat", "accepted_count": 1,
+                  "selection_verified": True},
+        "second": {"reason": "ok", "kind": "bot_chat", "accepted_count": 1,
+                   "selection_verified": True},
+        "native_mutations_verified": 1, "synthetic_store_calls": 0, "native_guard_refused": False,
+        "job_verified": True, "writer_joined": True, "release_verified": True,
+        "hooks_restored": True, "read_events": 12, "trigger": ["before", "get_messages", 1],
+        "residual_acceptance": False, "aba_acceptance": False}
+
+
+@pytest.mark.parametrize("field", ["job_verified", "writer_joined", "release_verified",
+    "hooks_restored", "native_mutations_verified", "trigger", "first", "raw_content"])
+def test_writer_report_refuses_missing_witnesses_wrong_outcomes_or_private_data(field):
+    m, report = load(), writer_report()
+    m.validate_report(report, 0, 1, "control:page")
+    if field in ("job_verified", "writer_joined", "release_verified", "hooks_restored"):
+        report[field] = False
+    elif field == "native_mutations_verified":
+        report[field] = 0
+    elif field == "trigger":
+        report[field] = ["after", "get_messages", 1]
+    elif field == "first":
+        report[field]["accepted_count"] = 0
+    else:
+        report[field] = "forbidden"
+    with pytest.raises(RuntimeError):
+        m.validate_report(report, 0, 1, "control:page")
+
+
+def test_writer_report_requires_its_mode_and_cannot_be_cost_or_mint_evidence():
+    from .test_local_media_native_binding_sample import preparation_report
+    from .test_local_media_native_serving_driver import driver, good
+
+    report = good()
+    prep = preparation_report()
+    prep["cells"], prep["databases_closed"] = [prep["cells"][0], prep["cells"][4]], 1
+    report["native_binding_preparation"] = prep
+    report["native_binding_writer"] = writer_report()
+    args = (report, report["native_source_hashes"], report["hmp_source_hashes"],
+            report["runtime_executable_sha256"])
+    driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                           binding_cost_selector=1, binding_writer="control:page")
+    with pytest.raises(RuntimeError):
+        driver.validate_report(*args, sample_binding_seed=True,
+                               binding_cost_case=0, binding_cost_selector=1)
+
+
+def test_equal_counts_with_wrong_row_ids_cannot_become_selection_verified():
+    from types import SimpleNamespace
+
+    m, candidate = load(), object()
+    reference = SimpleNamespace(sidecar=candidate, reason="ok", accepted=(8,),
+                                kind=SimpleNamespace(value="bot_chat"))
+    wrong = SimpleNamespace(sidecar=candidate, reason="ok", accepted=(10,), kind=reference.kind)
+    with pytest.raises(RuntimeError):
+        m._checked_outcome(wrong, reference, candidate, ("ok", "bot_chat", (8,)))
+
+
+@pytest.mark.parametrize("job_ok", [True, False])
+@pytest.mark.parametrize("release_ok", [True, False])
+def test_scenario_controller_requires_actual_job_release_and_join_even_if_bridge_returns_ok(
+    tmp_path, job_ok, release_ok
+):
+    from types import SimpleNamespace
+
+    m = load()
+    db, owners, hooks, effects = db_model(m), [], [], []
+    candidate = SimpleNamespace(user_id="U", profile="alpha", session_id="R", query_tip="C",
+                                provenance_consistent=True)
+    reference = SimpleNamespace(sidecar=candidate, reason="ok", accepted=(8,), ok=True,
+                                kind=SimpleNamespace(value="bot_chat"))
+
+    read_state = [None]
+
+    def set_read(sid, value):
+        assert sid == "R" and value is True and threading.current_thread().name.endswith("writer")
+        effects.append("native-model-write")
+        if job_ok:
+            read_state[0] = 7
+        return job_ok
+
+    db.set_session_read = set_read
+    db.get_session = lambda sid: {"id": sid, "last_read_at": read_state[0]}
+
+    def bind(sidecar):
+        assert sidecar is candidate
+        db.get_active_message_ids("C")
+        db.get_messages("C")
+        db.get_active_message_ids("C")
+        return reference  # Deliberately cannot manufacture a writer acknowledgment.
+
+    def acquire(path):
+        assert path == tmp_path / "state.db"
+        effects.append("borrow")
+        return db
+
+    def release(value):
+        assert value is db
+        effects.append("release")
+        return release_ok
+
+    fx = SimpleNamespace(native=SimpleNamespace(home_path=tmp_path,
+                                                bridge=SimpleNamespace(bind_media_batch=bind)))
+    options = {"case": 0, "request": "control:page", "user": "U", "profile": "alpha",
+               "chat": "chat", "owners": owners, "hooks": hooks,
+               "acquire_native": acquire, "release_native": release}
+    if job_ok and release_ok:
+        report = m.run_scenario(fx, db, candidate, reference, (8,),
+                               {"kind": "bot_chat", "root": "R", "tip": "C"}, "extra", **options)
+        m.validate_report(report, 0, 1, "control:page")
+    else:
+        with pytest.raises(RuntimeError):
+            m.run_scenario(fx, db, candidate, reference, (8,),
+                           {"kind": "bot_chat", "root": "R", "tip": "C"}, "extra", **options)
+    assert len(owners) == 1 and owners[0].joined and not owners[0].thread.is_alive()
+    assert effects == ["borrow", "native-model-write", "release"]
+    assert m.barrier(owners, hooks) is release_ok
+
+
+def test_writer_uses_captured_profile_context_instead_of_a_later_reader_value():
+    import contextvars
+
+    m, owners, seen, handle = load(), [], [], object()
+    scope = contextvars.ContextVar("synthetic_writer_profile_scope", default="missing")
+    token = scope.set("private-profile-at-construction")
+    writer = m.OwnedWriter(owners, lambda: handle, lambda _: True,
+                           lambda _: seen.append(scope.get()))
+    try:
+        scope.set("different-reader-profile-before-start")
+        writer.start()
+        writer.fire()
+    finally:
+        assert writer.settle()
+        scope.reset(token)
+    assert seen == ["private-profile-at-construction"]
+    assert scope.get() == "missing"

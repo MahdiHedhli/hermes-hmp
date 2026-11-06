@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import importlib.util
 import json
 import os
 import stat
@@ -21,6 +22,10 @@ from types import ModuleType
 from urllib.parse import unquote, urlsplit
 
 _ROOT = Path(__file__).resolve().parents[2]
+_WRITER_SPEC = importlib.util.spec_from_file_location(
+    "_private_native_writer_contract", _ROOT / "tools/compat/local_media_native_writer_sample.py")
+writer_contract = importlib.util.module_from_spec(_WRITER_SPEC)
+_WRITER_SPEC.loader.exec_module(writer_contract)
 _OS_METADATA = Path("/System/Library/CoreServices/SystemVersion.plist")
 
 
@@ -116,8 +121,12 @@ def _require_fresh_source_modules(modules):
                      name.startswith("hmp_plugin.") or name == "unit" or
                      name.startswith("unit.") for name in modules))
 
+def _writers_safe(barrier):
+    return barrier is None or (callable(barrier) and barrier() is True)
+
+
 def _cleanup_setup(owners, native_registry, db, fx, patch, root, report):
-    if not owners["workers_joined"]:
+    if not owners["workers_joined"] or not _writers_safe(owners.get("writer_barrier")):
         return False  # Unsettled owners remain intact; never free beneath work.
     try:
         if db is not None:
@@ -215,9 +224,11 @@ def _binding_tmpdir(root, env):
 
 
 @contextmanager
-def _binding_cell(root, fx, registry, borrowed, lock, selection, owners, index, profile):
+def _binding_cell(root, fx, registry, borrowed, lock, selection, owners, index, profile,
+                  writer_barrier=None):
     """Own one fresh synthetic-profile DB; restore scope only after actual closure."""
-    _require(type(index) is int and 0 <= index < 4 and fx.service.stats() == (0, 0, 0))
+    _require(type(index) is int and 0 <= index < 4 and fx.service.stats() == (0, 0, 0) and
+             _writers_safe(writer_barrier))
     with lock:
         _require(borrowed["acquired"] == borrowed["released"])
     _private_directory(root)
@@ -239,7 +250,8 @@ def _binding_cell(root, fx, registry, borrowed, lock, selection, owners, index, 
     try:
         yield cell_db
     finally:
-        # No restore/close while a borrower or original media worker remains.
+        # No restore/close while a borrower, writer, instrumentation or media worker remains.
+        _require(_writers_safe(writer_barrier))
         with lock:
             _require(borrowed["acquired"] == borrowed["released"])
         _require(fx.service.stats() == (0, 0, 0))
@@ -251,7 +263,7 @@ def _binding_cell(root, fx, registry, borrowed, lock, selection, owners, index, 
 
 def run_fixture(root, *, sample_memory=False, sample_binding_seed=False,
                 binding_cost_case=None, binding_cost_selector=None, binding_mint=False,
-                binding_rss=False):
+                binding_rss=False, binding_writer=None):
     """One native scratch DB, real routes/registry, synthetic transport authority.
 
     Python audit restrictions are test guards, NOT an OS sandbox or complete
@@ -266,6 +278,9 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False,
              (sample_binding_seed and type(binding_cost_case) is int and
               0 <= binding_cost_case < 8 and type(binding_cost_selector) is int and
               binding_cost_selector in (1, 16, 128)))
+    writer_contract.validate_request(binding_cost_case, binding_cost_selector, binding_writer)
+    _require(binding_writer is None or
+             (sample_binding_seed and not binding_mint and not binding_rss))
     _require(sys.flags.isolated == 1 and sys.dont_write_bytecode is True)
     _require(type(root) is type(Path()) and root.is_absolute() and root.resolve() == root)
     info = root.stat()
@@ -385,6 +400,10 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False,
     owners = {"server": None, "client": None, "workers_joined": True}
     binding_selection = [None]
     binding_owners = []
+    writer_owners, hook_owners = [], []
+    writer_barrier = (None if binding_writer is None else
+                      lambda: writer_contract.barrier(writer_owners, hook_owners))
+    owners["writer_barrier"] = writer_barrier
 
     def acquire(path):
         selected_path, selected_db = binding_selection[0] or (db_path, db)
@@ -401,10 +420,17 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False,
         with lock:
             borrowed["released"] += 1
 
+    def writer_release(value):
+        # release() checks actual native registry True and updates the tracked
+        # borrow counter before this separate closed success witness is returned.
+        _require(release(value) is None)
+        return True
+
     def open_binding_cell(index):
         _require(sample_binding_seed)
         return _binding_cell(root, fx, native_registry, borrowed, lock,
-                             binding_selection, binding_owners, index, PROFILE)
+                             binding_selection, binding_owners, index, PROFILE,
+                             writer_barrier=writer_barrier)
 
     try:
         Fx.__init__(fx, root / "rig", patch, kind="phone", images=3)
@@ -556,10 +582,14 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False,
                         report["native_binding_preparation"] = helper.run_preparation(
                             fx, open_binding_cell, user=USER, profile=PROFILE, chat=CHAT,
                             cost_case=binding_cost_case, cost_selector=binding_cost_selector,
-                            cost_results=costs, mint=binding_mint, rss=binding_rss)
+                            cost_results=costs, mint=binding_mint, rss=binding_rss,
+                            writer_module=writer_contract, writer_name=binding_writer,
+                            writer_owners=writer_owners, hook_owners=hook_owners,
+                            writer_ports=(acquire, writer_release))
                         if binding_cost_case is not None:
                             _require(len(costs) == 1)
-                            key = ("native_binding_mint" if binding_mint else
+                            key = ("native_binding_writer" if binding_writer is not None else
+                                   "native_binding_mint" if binding_mint else
                                    "native_binding_rss" if binding_rss else "native_binding_cost")
                             report[key] = costs[0]
                         _require(len(binding_owners) == (4 if binding_cost_case is None else 1) and
@@ -609,7 +639,7 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False,
             else:
                 owners["workers_joined"] = True
             finally:
-                if owners["workers_joined"]:
+                if owners["workers_joined"] and _writers_safe(writer_barrier):
                     restore()
         _require(borrowed["acquired"] > 0 and borrowed["acquired"] == borrowed["released"])
         _require(owners["server"].closed is True and fx.service.closed is True)

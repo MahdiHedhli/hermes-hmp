@@ -273,9 +273,9 @@ def cell_fixture(tmp_path, *, release_result=True, close=True):
     borrowed, selection, owners = {"acquired": 0, "released": 0}, [None], []
     module = load_fixture()
 
-    def context(index=0):
+    def context(index=0, writer_barrier=None):
         return module._binding_cell(tmp_path.resolve(), fx, registry, borrowed,
-                                    threading.Lock(), selection, owners, index, "alpha")
+            threading.Lock(), selection, owners, index, "alpha", writer_barrier=writer_barrier)
 
     return types.SimpleNamespace(context=context, fx=fx, original=original, stats=stats,
         borrowed=borrowed, selection=selection, owners=owners, acquired=acquired, released=released)
