@@ -150,12 +150,12 @@ def test_h4_the_direct_send_manifest_keeps_its_four_sampled_builds() -> None:
     assert "requalification_required" not in data
 
 
-def test_h5_routing_writer_remains_absent_with_reviewed_worker_yaml_dependency() -> None:
+def test_h5_routing_writer_remains_absent_with_reviewed_runtime_dependencies() -> None:
     assert not (PACKAGE / "routes.py").exists()
     for manifest in (SERVER / "hmp_plugin" / "plugin.yaml", REPO / "plugin.yaml"):
         text = manifest.read_text(encoding="utf-8")
         deps = re.findall(r'^\s*-\s*"([^"]+)"', text.split("python_dependencies:", 1)[1], re.M)
-        assert deps == ["qrcode>=7.4.2,<9", "PyYAML>=6,<7"], manifest
+        assert deps == ["aiohttp>=3.14.5,<4", "qrcode>=7.4.2,<9", "PyYAML>=6,<7"], manifest
     pyproject = (SERVER / "pyproject.toml").read_text(encoding="utf-8")
     runtime = pyproject.split("dependencies = [", 1)[1].split("]", 1)[0]
     assert '"PyYAML>=6,<7"' in runtime
