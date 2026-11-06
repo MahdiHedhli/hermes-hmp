@@ -563,3 +563,15 @@ passed; reviewer execution is not claimed. This completes the T12 sampled Darwin
 measurement row, not platform, provider, device or release qualification. No
 broader source/release checkbox is closed. See
 [the exact record](../../docs/research/local-media-native-memory-2026-11-06.md).
+
+## C6b current native refresh: reuse established work (2026-11-06)
+
+The independently confirmed [source reuse audit](../../docs/research/local-media-binding-reuse-audit-2026-11-06.md)
+finds all eight measured capture/classification/binding bridge methods and the
+complete binding/registry/Reads files byte-identical to the historical complete-
+binding study. No implementation rewrite is needed for those methods. Current
+scanner/sidecar/candidate code and three owning native read implementations
+differ. Reuse the established shapes and writer/control/residual assertions, but
+refresh the current native helper/DB lifecycle, timing and allocation evidence.
+The old 500 writer phases are historical evidence, not a new current run.
+C6b remains open; no extra HTTP/provider/Linux/device prerequisite is added to it.

@@ -1,5 +1,9 @@
 ## Native-backed concurrent image memory sample passed — November 6, 2026
 
+The sample is integrated through PR130 at `8d096b5`; exact-source CI42166758410
+passed all four jobs: 7,452 tests, 33 skips, 18 warnings and 190 subtests, plus
+Unicode jobs. These counts overlap the focused checks below.
+
 One independently reviewed Darwin sample at HMP `8f16c1f` / native `ed1afb08`
 held four actual 8 MiB image buffers and four workers, refused a fifth eligible
 request without new work, then streamed four exact responses. Cancelling four
