@@ -675,3 +675,18 @@ limitation is reclassified as a fix or a physical/release qualification.
   no deletion/retry/resume and unchanged native actor refusal/settlement.
 - [ ] Root execute all 384 pairs and independently reconcile every phase,
   source/runtime/checkpoint identity and actor/database cleanup before matrix pass.
+
+### Isolated D2 divergence follow-up
+
+- [ ] Independently review ordinary-child public-fact construction and exact
+  first/fresh-second Bot/Phone refusal oracles; source applicability accepted.
+- [ ] Independently review delegate marker isolation and expanded 912-phase
+  inventory, preserving separately running 768-phase source/evidence binding.
+- [ ] Native supplemental execution/reuse audit after source acceptance; do not
+  relabel previous artifacts as the new runner or claim actual gateway admission.
+
+- [x] Independent base/new Git/AST/inventory reuse audit accepted for explicit
+  two-source evidence only; no execution completion inferred.
+- [ ] Review explicit 72-pair supplemental scope, whose completed result cannot
+  assert full-matrix completion. Execute after prior full run settles; retain
+  separate source bindings, artifacts and independent readback.

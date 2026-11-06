@@ -174,7 +174,7 @@ SEAMS = {"ids0": ("after", "get_active_message_ids", 1),
          "page": ("before", "get_messages", 1),
          "ids1": ("before", "get_active_message_ids", 2)}
 GENERAL = ("control", "append", "deactivate", "eligibility", "tip_move", "aba",
-           "branch_child", "reset_child")
+           "branch_child", "reset_child", "delegate_child", "ordinary_child")
 BOT_ONLY = ("ambiguous", "kind_swap", "title_guard", "archive")
 
 
@@ -242,7 +242,8 @@ def expected_outcomes(scenario, kind, selected):
     ok = ("ok", kind, selected)
     def closed(reason):
         return (reason, None, ())
-    if scenario in ("control", "aba", "title_guard", "branch_child", "reset_child"):
+    if scenario in ("control", "aba", "title_guard", "branch_child", "reset_child",
+                    "delegate_child"):
         return ok, ok
     if scenario == "append":
         return closed("rows_changed"), ok
@@ -252,6 +253,9 @@ def expected_outcomes(scenario, kind, selected):
         return closed("tip_changed"), closed("not_eligible")
     if scenario == "tip_move":
         return closed("tip_changed"), closed("provenance_mismatch")
+    if scenario == "ordinary_child":
+        return closed("tip_changed"), closed(
+            "not_eligible" if kind == "bot_chat" else "provenance_mismatch")
     if scenario == "kind_swap":
         return closed("tip_changed"), ("ok", "phone", selected)
     return ok, closed("not_eligible")  # residual, after the last genuine native read
@@ -259,9 +263,10 @@ def expected_outcomes(scenario, kind, selected):
 
 def construct_isolated_child(handle, tip, scenario):
     """Public-API synthetic child facts, NOT gateway branch/reset admission or routing."""
-    require(scenario in ("branch_child", "reset_child"))
+    require(scenario in ("branch_child", "reset_child", "delegate_child"))
     child = "synthetic-c6b-writer-" + scenario
-    marker = "_branched_from" if scenario == "branch_child" else "_reset_from"
+    marker = {"branch_child": "_branched_from", "reset_child": "_reset_from",
+              "delegate_child": "_delegate_from"}[scenario]
     require(handle.get_session(child) is None)
     require(handle.create_session(child, "api_server", parent_session_id=tip,
                                   model_config={marker: tip}) == child)
@@ -277,6 +282,35 @@ def construct_isolated_child(handle, tip, scenario):
     require(type(message) is int and message > 0 and
             message in handle.get_active_message_ids(child) and
             handle.resolve_resume_session_id(tip) == tip)
+    return 2
+
+
+def construct_divergent_child(handle, root, tip):
+    """An ordinary child can move resume without becoming compression lineage.
+
+    Only a fresh synthetic DB is supplied; no gateway operation or authority is
+    simulated. Verify both native readers, never infer divergence from a marker.
+    """
+    child = "synthetic-c6b-writer-ordinary-child"
+    before = handle.get_compression_lineage(root)
+    require(type(before) is list and before and before[-1] == tip and
+            handle.get_session(tip).get("end_reason") is None and
+            handle.resolve_resume_session_id(root) == tip and handle.get_session(child) is None)
+    require(handle.create_session(child, "api_server", parent_session_id=tip) == child)
+    row = handle.get_session(child)
+    require(type(row) is dict and row.get("id") == child and
+            row.get("parent_session_id") == tip and row.get("source") == "api_server")
+    config = row.get("model_config")
+    if type(config) is str:
+        import json
+        config = json.loads(config)
+    require(config is None or (type(config) is dict and
+            not any(key in config for key in ("_branched_from", "_reset_from", "_delegate_from"))))
+    message = handle.append_message(child, "user", content="SYNTHETIC_DIVERGENT_CHILD_ONLY")
+    require(type(message) is int and message > 0 and
+            message in handle.get_active_message_ids(child) and
+            handle.resolve_resume_session_id(root) == child and
+            handle.get_compression_lineage(root) == before)
     return 2
 
 
@@ -372,8 +406,10 @@ def run_scenario(fx, db, candidate, reference, selected, shape, extra, *,
                     hidden(handle, True)
                 else:
                     phone_to(root)
-        elif scenario in ("branch_child", "reset_child"):
+        elif scenario in ("branch_child", "reset_child", "delegate_child"):
             facts["native_mutations_verified"] += construct_isolated_child(handle, tip, scenario)
+        elif scenario == "ordinary_child":
+            facts["native_mutations_verified"] += construct_divergent_child(handle, root, tip)
         elif scenario == "tip_move":
             child = "synthetic-c6b-writer-compression-child"
             require(handle.get_session(child) is None)
@@ -473,7 +509,8 @@ def validate_report(report, case, selector, request):
         amount = 2 if scenario == "aba" else 1
         native, store = (amount, 0) if kind == "bot_chat" else (0, amount)
     else:
-        native, store = (2 if scenario in ("tip_move", "branch_child", "reset_child") else 1), 0
+        native, store = (2 if scenario in ("tip_move", "branch_child", "reset_child",
+                                        "delegate_child", "ordinary_child") else 1), 0
     require(type(report["native_mutations_verified"]) is int and
             report["native_mutations_verified"] == native and
             type(report["synthetic_store_calls"]) is int and
