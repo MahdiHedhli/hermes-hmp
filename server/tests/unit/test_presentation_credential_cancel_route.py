@@ -34,7 +34,8 @@ from .test_presentation_supervisor import context as context
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("local", [2], indirect=True)
-@pytest.mark.parametrize("stage", ["before_ready", "ready", "after_go"])
+@pytest.mark.parametrize("stage", ["before_ready", "ready", "after_go", "go_current",
+                                  "go_current_wrong_actor", "go_current_deadline"])
 async def test_original_gateway_cancel_reaches_original_authenticated_broker(
     context, local, tmp_path, monkeypatch, stage
 ):
@@ -48,8 +49,10 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
     end = int(authority._record(operation).deadline * 1_000_000_000)
     keys = key_pair(tmp_path, enrollment.installation_generation)
     held = {}
-    before_ready, after_go = stage == "before_ready", stage == "after_go"
+    before_ready = stage == "before_ready"
+    after_go = stage == "after_go" or stage.startswith("go_current")
     control_ready, gateway_waiting = asyncio.Event(), asyncio.Event()
+    go_checked = asyncio.Event()
 
     async def broker():
         record = await BrokerServiceSpine._accept_owned(spine, end)
@@ -82,6 +85,54 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 writer = CredentialReadyWriter.retain(producer)
                 await writer.write_ready()
                 held["broker_ready_writer"] = writer
+            if stage.startswith("go_current"):
+                from hmp_plugin.presentation_credential_control import CredentialGoPhase
+                from hmp_plugin.presentation_jobs import FrameError
+
+                phase = control._signed_go_snapshot
+                with pytest.raises(FrameError):
+                    phase.creator_current()  # no notification yet, never relay permission
+                assert phase._creator_refused is False
+                async with asyncio.timeout_at(end / 1e9):
+                    await asyncio.wait((control._go_future_snapshot,
+                                       control._allocation_snapshot.task),
+                                       return_when=asyncio.FIRST_COMPLETED)
+                assert control._go_future_snapshot.done()
+                try:
+                    if stage == "go_current_wrong_actor":
+                        async def wrong_current():
+                            with pytest.raises(FrameError):
+                                phase.creator_current()
+                        await asyncio.create_task(wrong_current())
+                        assert phase._creator_refused is False
+                    if stage == "go_current_deadline":
+                        from hmp_plugin.presentation_clock import NativeClockOwner
+                        sample = NativeClockOwner.sample
+                        calls = []
+
+                        def expired_go(clock):
+                            value = sample(clock)
+                            if clock is channel._clock_owner_snapshot and not calls:
+                                calls.append(True)
+                                return end
+                            return value
+
+                        monkeypatch.setattr(NativeClockOwner, "sample", expired_go)
+                        with pytest.raises(FrameError):
+                            phase.creator_current()
+                        assert phase._creator_refused is True and calls == [True]
+                        with pytest.raises(FrameError):
+                            phase.creator_current()
+                        assert calls == [True]  # restored sampled time cannot revive consumer
+                    else:
+                        receipt = CredentialGoPhase.creator_current(phase)
+                        assert receipt is control._go_receipt_snapshot
+                        assert receipt is control._go_future_snapshot.result()
+                    assert resources._go_attempted is False
+                    assert resources._control_snapshot._go._attempted is False
+                    held["go_current_checked"] = True
+                finally:
+                    go_checked.set()
             frame = await BrokerServiceSpine._v2_control(spine, control)
             adoption = control._signed_cancel_snapshot
             assert adoption._consume_complete is True and adoption._consume_failed is False
@@ -168,6 +219,12 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 await asyncio.wait((control._go_future_snapshot, control._allocation_snapshot.task),
                                    return_when=asyncio.FIRST_COMPLETED)
             assert control._go_future_snapshot.done() and control._go_receipt is not None
+            if stage.startswith("go_current"):
+                async with asyncio.timeout_at(end / 1e9):
+                    await go_checked.wait()
+                if broker_task.done():
+                    broker_task.result()  # retain actual service failure before later assertions
+                assert held["go_current_checked"]
         RemoteCleanupOwner.request(cleanup)
         async with asyncio.timeout(3):
             local_closed = await asyncio.shield(cleanup._allocations_snapshot[0].task)

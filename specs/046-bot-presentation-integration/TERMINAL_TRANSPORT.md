@@ -23,15 +23,25 @@ required before public character routes.
 
 The current startup direction is [local role credentials](CREDENTIAL_ADMISSION.md).
 The [runtime issuer proposal](RUNTIME_ISSUER.md) is historical Mach research,
-not an alternative admission route. Signed BEGIN/READY/GO and post-READY CANCEL
+not an alternative admission route. Signed BEGIN/READY/GO and pre/post-READY CANCEL
 have bounded source integration; production installation/startup remains open.
-The next signed cleanup prerequisite is the [original pre-READY read-retirement
-and BEGIN-derived cancellation contract](SIGNED_PRE_READY_CLEANUP.md). Its plan
-confers no IO, terminal, ACK or publication authority.
+The [original pre-READY read-retirement and BEGIN-derived cancellation contract](SIGNED_PRE_READY_CLEANUP.md)
+has source components/route/correlation and known-no-IO refusal local cleanup.
+None confers remote terminal/ACK or publication authority. The next actual
+execution dependency is the signed worker relay described below.
 
 The [local handoff freeze](LOCAL_HANDOFF_FREEZE.md) is integrated as source
 797dbbc through PR114 with exact-source green CI42129488493. It supplies immutable
 DATA only; qualified runtime custody and IO permission remain separate gates.
+
+## Signed worker relay prerequisite
+
+The current credential controller records GO but does not relay it to the fixed
+worker. The original-service current GO read validator is implemented; it adds
+no execution permission. Complete the reviewed [fixed native relay contract](SIGNED_GO_RELAY.md)
+before claiming signed RESULT or normal OK TERMINAL. Keep terminal-write/ACK and
+production startup qualification separate; never replace the native control
+pipe's final current/FD/time checks with a signature-only allowance.
 
 ## Envelope and earliest first cause
 

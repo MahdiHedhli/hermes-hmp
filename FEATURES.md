@@ -1,3 +1,19 @@
+## Original-service current GO read — November 6, 2026
+
+Bot-character transport now lets the original broker service revalidate its
+exact signed GO receipt, current role/deadline, original cause-free budget and
+control state. Wrong-task/early calls cannot poison it; currentness failures are
+sticky. It returns the existing read fact and grants no worker execution.
+
+Six actual private-peer stages pass, including current-GO wrong actor and sticky
+deadline refusal followed by original-controller CANCEL handling. Full affected
+regression: **1,559 passed, one skipped**, 84.32 seconds; lint passed. Independent
+read-only review accepted the validator and the source-backed worker-relay
+contract. No host/device/build changed. Actual fixed-worker relay is the next
+prerequisite before signed RESULT/normal OK TERMINAL; startup, terminal/ACK,
+publication and full character/device qualification remain open. Earlier broker
+intermittency remains unresolved despite this passing run.
+
 ## Pre-READY signing-refusal local cleanup — November 6, 2026
 
 Known no-I/O pre-READY signing refusal now retires local transport through a

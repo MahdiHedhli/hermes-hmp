@@ -1479,7 +1479,7 @@ class CredentialGoPhase:
             control._go_future_snapshot,
             control._go_initialized_snapshot,
         )
-        owner._attempted = owner._notified = False
+        owner._attempted = owner._notified = owner._creator_refused = False
         owner._receipt = owner._completion = None
         CredentialGoPhase._local(owner)
         return owner
@@ -1530,6 +1530,7 @@ class CredentialGoPhase:
             and control._go_initialized_snapshot is initialized
             and type(self._attempted) is bool
             and type(self._notified) is bool
+            and type(self._creator_refused) is bool
         )
         _require(
             type(cursor._frame_index) is int
@@ -1597,6 +1598,49 @@ class CredentialGoPhase:
             _require(_FUTURE.done(future) and _FUTURE.result(future) is receipt)
         else:
             _require(not _FUTURE.done(future))
+
+    def creator_current(self):
+        """Original service's current authenticated GO read; never worker permission."""
+        from .presentation_cancel_budget import CancellationBudget
+        from .presentation_clock import NativeClockOwner
+        from .presentation_control_binding import PreparedControlBinding
+        from .presentation_remote_cleanup import _TASK
+
+        CredentialGoPhase._local(self)
+        control, adoption, cursor, binding, _, _, _ = self._refs_snapshot
+        _require(type(adoption._refs_snapshot) is tuple and len(adoption._refs_snapshot) == 19)
+        refs = CredentialCancelAdoption._consume_scope(adoption, adoption._refs_snapshot[0])
+        # Wrong actors and not-yet-notified queries cannot poison the original owner.
+        _require(self._notified is True and self._receipt is not None
+                 and self._creator_refused is False)
+        receipt, completion = self._receipt, self._completion
+        try:
+            _require(CredentialCancelAdoption._creator_current(adoption, refs[0]) is refs)
+            CredentialGoPhase._local(self)
+            expected = dict(cursor._expected_snapshot)
+            expected.update(phase="GO", sequence=1)
+            checked = check_commitment(completion[0], sender_public=cursor._pins_snapshot[0],
+                                       receiver_public=cursor._pins_snapshot[1], expected=expected)
+            check_complete_frame(checked, completion[1], binding=cursor._broker_binding)
+            _require(CredentialCancelAdoption._creator_current(adoption, refs[0]) is refs)
+            now = NativeClockOwner.sample(refs[13])
+            _require(CredentialCancelAdoption._creator_current(adoption, refs[0]) is refs)
+            _require(PreparedControlBinding._creator_local(binding) is refs)
+            CredentialGoPhase._local(self)
+            original, cause, end, failed = CancellationBudget.inspect(refs[17])
+            _require(type(now) is int and 0 <= now < original
+                     and original == refs[4].deadline_ns
+                     and cause is None and end is None and failed is False
+                     and self._receipt is receipt and self._completion is completion
+                     and self._creator_refused is False
+                     and control._retired is False and control._failed is False
+                     and control._io_unknown is False
+                     and asyncio.current_task() is refs[15]
+                     and _TASK.cancelling(refs[15]) == 0)
+            return receipt  # read fact only; no relay/native execution or result transfer
+        except BaseException:
+            self._creator_refused = True  # no restored role/budget can revive this consumer
+            raise
 
     async def run(self):
         from .presentation_broker_cancel import (

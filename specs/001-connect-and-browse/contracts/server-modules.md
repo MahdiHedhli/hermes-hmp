@@ -758,3 +758,12 @@ retirement predicate with the post-READY owner; the other signer slot must be
 absent. Complete no-output/no-writer/current cleanup proofs repeat after native
 budget checks, and socket close independently proves IO settlement. Original
 refusal and remote UNKNOWN remain even after actual socket/clock close.
+
+### Original-service current GO read validator (November 6, 2026)
+
+`CredentialGoPhase.creator_current` revalidates the original signed GO on the
+original service actor after notification, current role/clock/cause-free budget
+and native control checks. Wrong actor/early call cannot poison; an admitted
+currentness refusal is sticky. The return is the original native read receipt,
+not a worker relay/RESULT/terminal permit. Generic credential work gates remain
+closed. The fixed final-pipe-write relay contract is in SIGNED_GO_RELAY.md.

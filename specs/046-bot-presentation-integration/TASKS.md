@@ -363,3 +363,12 @@ historical, not an alternative live authorization path or resolved incident.
       after native budget boundaries. Expiry/cancelled actor/unknown read deny
       new credit; post-socket expiry retains only actual socket close. Remote
       UNKNOWN/original refusal remain; 13 focused route/refusal cases pass.
+
+- [x] Implement/review original-service current signed GO receipt validator:
+      exact signature/frame/current role/clock/uncased budget and original actor;
+      wrong actor/early query does not poison, currentness refusal stays sticky.
+      Returns a read fact only; worker GO and generic work gates stay closed.
+- [ ] Implement fixed original-service signed worker-GO relay with a reciprocal
+      credential fence at the final native pipe write, actual local relay fact
+      and independent failure/containment checks. Follow
+      [SIGNED_GO_RELAY.md](SIGNED_GO_RELAY.md) before RESULT/TERMINAL integration.
