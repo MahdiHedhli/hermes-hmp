@@ -127,6 +127,17 @@ def _cleanup_setup(owners, native_registry, db, fx, patch, root, report):
     return True
 
 
+
+def _builtin_mime_types():
+    """Owned fixture process only: deterministic stdlib tables, no OS MIME inputs."""
+    import mimetypes
+
+    # A cold init(files=[]) still reads knownfiles and the Windows registry.
+    # Seed the builtin-only database first, then publish its tables through init.
+    mimetypes.inited = True
+    mimetypes._db = mimetypes.MimeTypes(filenames=())
+    mimetypes.init(files=[])
+
 def run_fixture(root):
     """One native scratch DB, real routes/registry, synthetic transport authority.
 
@@ -202,6 +213,7 @@ def run_fixture(root):
             refuse("process_creation")
 
     sys.addaudithook(audit)
+    _builtin_mime_types()
     sys.path[:0] = [str(source), str(_ROOT / "server"), str(_ROOT / "server/tests")]
     import hermes_state_registry as native_registry
     import pytest

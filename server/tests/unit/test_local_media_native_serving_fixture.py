@@ -189,3 +189,32 @@ def test_real_partial_fixture_store_is_retained_and_closed(tmp_path, monkeypatch
     assert module._cleanup_setup({"workers_joined": True}, registry, None,
                                  fx, own_patch, tmp_path, {}) is True
     assert store._conn is None
+
+
+@pytest.mark.parametrize("cold", [True, False])
+def test_builtin_mime_setup_ignores_host_files_and_registry(tmp_path, monkeypatch, cold):
+    import mimetypes
+
+    module = load()
+    host = tmp_path / "host-mime.types"
+    host.write_text("application/x-private hmp_private\n")
+    for name in ("inited", "_db", "suffix_map", "types_map", "encodings_map", "common_types"):
+        monkeypatch.setattr(mimetypes, name, getattr(mimetypes, name))
+    monkeypatch.setattr(mimetypes, "knownfiles", [str(host)])
+    if cold:
+        monkeypatch.setattr(mimetypes, "inited", False)
+        monkeypatch.setattr(mimetypes, "_db", None)
+    else:
+        monkeypatch.setattr(mimetypes, "inited", True)
+        warm = mimetypes.MimeTypes(filenames=())
+        warm.add_type("application/x-private", ".hmp_private")
+        monkeypatch.setattr(mimetypes, "_db", warm)
+        assert mimetypes.guess_type("image.hmp_private") == ("application/x-private", None)
+
+    def registry_refused(*args, **kwargs):
+        raise AssertionError("fixture must not read the host MIME registry")
+
+    monkeypatch.setattr(mimetypes.MimeTypes, "read_windows_registry", registry_refused)
+    module._builtin_mime_types()
+    assert mimetypes.guess_type("image.png") == ("image/png", None)
+    assert mimetypes.guess_type("image.hmp_private") == (None, None)
