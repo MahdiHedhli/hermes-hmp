@@ -557,7 +557,7 @@ def test_writer_uses_captured_profile_context_instead_of_a_later_reader_value():
     assert scope.get() == "missing"
 
 
-@pytest.mark.parametrize("scenario", ["branch_child", "reset_child"])
+@pytest.mark.parametrize("scenario", ["branch_child", "reset_child", "delegate_child"])
 @pytest.mark.parametrize("kind", ["phone", "bot_chat"])
 def test_constructed_children_preserve_parent_binding_oracle(scenario, kind):
     module = load()
@@ -567,7 +567,7 @@ def test_constructed_children_preserve_parent_binding_oracle(scenario, kind):
     assert module.expected_outcomes(scenario, kind, (9,)) == (expected, expected)
 
 
-@pytest.mark.parametrize("scenario", ["branch_child", "reset_child"])
+@pytest.mark.parametrize("scenario", ["branch_child", "reset_child", "delegate_child"])
 @pytest.mark.parametrize("fault", [None, "existing", "wrong_parent", "wrong_marker",
                                    "no_message", "hijack"])
 def test_child_construction_requires_fresh_identity_marker_history_and_parent_isolation(
@@ -575,7 +575,8 @@ def test_child_construction_requires_fresh_identity_marker_history_and_parent_is
 ):
     module = load()
     calls = []
-    marker = "_branched_from" if scenario == "branch_child" else "_reset_from"
+    marker = {"branch_child": "_branched_from", "reset_child": "_reset_from",
+              "delegate_child": "_delegate_from"}[scenario]
 
     class DB:
         def get_session(self, sid):
@@ -615,18 +616,18 @@ def test_pair_plan_preserves_every_declared_phase_without_execution():
     before = set(threading.enumerate())
     plan = module.paired_plan()
     assert set(threading.enumerate()) == before
-    assert len(plan) == 384
+    assert len(plan) == 456
     phases = [(case, selector, request) for case, selector, pair in plan for request in pair]
     expected = {(case, selector, request) for case in range(8) for selector in (1, 16, 128)
                 for request in module.declared_requests(case)}
-    assert len(phases) == len(set(phases)) == len(expected) == 768
+    assert len(phases) == len(set(phases)) == len(expected) == 912
     assert set(phases) == expected
     assert all(type(pair) is tuple and len(pair) == 2 and pair[0] != pair[1]
                for _, _, pair in plan)
     assert all(case < 4 for case, _, request in phases
                if request.split(":")[0] in module.BOT_ONLY)
-    assert len(module.declared_requests(0)) == 38
-    assert len(module.declared_requests(4)) == 26
+    assert len(module.declared_requests(0)) == 44
+    assert len(module.declared_requests(4)) == 32
 
 
 @pytest.mark.parametrize("case", [True, -1, 8, None, "0"])
@@ -690,3 +691,59 @@ def test_pair_report_requires_two_independently_valid_ordered_phases(fault):
     else:
         driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
                                binding_cost_selector=1, binding_writer=mode)
+
+
+@pytest.mark.parametrize("kind, fresh", [("bot_chat", "not_eligible"),
+                                        ("phone", "provenance_mismatch")])
+def test_ordinary_child_oracle_refuses_the_old_parent_binding(kind, fresh):
+    module = load()
+    assert module.expected_outcomes("ordinary_child", kind, (7,)) == (
+        ("tip_changed", None, ()), (fresh, None, ()))
+    for seam in module.SEAMS:
+        module.validate_request(0 if kind == "bot_chat" else 4, 128, "ordinary_child:" + seam)
+
+
+@pytest.mark.parametrize("fault", [None, "existing", "ended_parent", "wrong_parent",
+    "marked_child", "wrong_source", "absent_message", "unchanged_resume", "changed_lineage"])
+def test_ordinary_child_requires_actual_native_divergence_facts(fault):
+    module, calls = load(), []
+
+    class DB:
+        def get_compression_lineage(self, root):
+            return ["root", "child"] if calls and fault == "changed_lineage" else ["root", "tip"]
+
+        def get_session(self, sid):
+            if sid == "tip":
+                return {"end_reason": "compression" if fault == "ended_parent" else None}
+            if not calls:
+                return {} if fault == "existing" else None
+            return {"id": sid,
+                    "parent_session_id": "foreign" if fault == "wrong_parent" else "tip",
+                    "source": "tool" if fault == "wrong_source" else "api_server",
+                    "model_config": {"_reset_from": "tip"} if fault == "marked_child" else None}
+
+        def create_session(self, sid, source, **kwargs):
+            calls.append(("create", sid, source, kwargs))
+            return sid
+
+        def append_message(self, sid, role, **kwargs):
+            calls.append(("append", sid, role, kwargs))
+            return 77
+
+        def get_active_message_ids(self, sid):
+            return [] if fault == "absent_message" else [77]
+
+        def resolve_resume_session_id(self, root):
+            if len(calls) < 2 or fault == "unchanged_resume":
+                return "tip"
+            return calls[0][1]
+
+    if fault:
+        with pytest.raises(RuntimeError):
+            module.construct_divergent_child(DB(), "root", "tip")
+        if fault in ("existing", "ended_parent"):
+            assert calls == []
+    else:
+        assert module.construct_divergent_child(DB(), "root", "tip") == 2
+        assert [call[0] for call in calls] == ["create", "append"]
+        assert calls[0][3] == {"parent_session_id": "tip"}

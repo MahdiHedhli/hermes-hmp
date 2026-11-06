@@ -31,7 +31,7 @@ def run_matrix(root, native_repository, native_commit, expected_hmp_commit):
     require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid() and
             stat.S_IMODE(info.st_mode) == 0o700 and not any(root.iterdir()))
     plan = driver.writer_contract.paired_plan()
-    require(type(plan) is tuple and len(plan) == 384)
+    require(type(plan) is tuple and len(plan) == 456)
     state = {"schema": 1, "stage": "prepared", "expected_hmp_commit": expected_hmp_commit,
              "native_commit": native_commit, "processes_planned": len(plan),
              "phases_planned": 2 * len(plan), "completed": [], "current": None,

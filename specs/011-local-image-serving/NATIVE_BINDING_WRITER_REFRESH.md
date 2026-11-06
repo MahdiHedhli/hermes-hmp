@@ -313,3 +313,27 @@ first/later failures, no retry and source mismatch before archive/native work.
 Catastrophic I/O may prevent the newest journal write; original per-process
 receipts/checkpoints stay authoritative and must be reconciled without automatic
 resume. No execution completion is inferred from source acceptance.
+
+## Isolated divergence follow-up candidate
+
+This follow-up branch preserves the separately running `21937dc` 768-phase
+matrix unchanged. It adds ordinary-child divergence and delegate-child isolation
+at each existing bracket, shape, kind and selector: 144 additional declared
+phases (912 total / 456 pairs in this branch). The original run's artifacts stay
+bound to its own source; no result is relabeled as execution of this delta.
+
+An ordinary child is created absent, unmarked, under the live tip without ending
+the parent as compression. One synthetic child message is appended; native facts
+must show resume moved to the child while compression lineage stayed unchanged.
+The old candidate must first refuse `tip_changed`, then freshly refuse
+`not_eligible` for Bot Chat or `provenance_mismatch` for Phone. A delegate child
+uses the actual matching `_delegate_from` marker and must preserve the parent's
+exact binding, like the separately tested branch/reset marker cases. An own
+Phone conversation explicitly bound to a fork child can qualify; this work does
+not invent universal fork rejection or simulate gateway admission/routing.
+
+Independent source applicability review accepted these ordinary-child expected
+outcomes; concrete implementation review and native execution remain pending.
+Models reject existing identity, ended parent, wrong parent/source, fork marker,
+missing child message, unchanged resume and changed compression lineage. No
+production binding function, live route, grant or gateway operation is changed.

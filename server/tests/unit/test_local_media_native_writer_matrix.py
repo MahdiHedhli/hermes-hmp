@@ -45,17 +45,17 @@ def test_all_pairs_retained_once_with_exact_source_and_no_reuse(tmp_path, monkey
     result = module.run_matrix(root, tmp_path / "native", "a" * 40, "b" * 40)
     assert result["full_matrix_completed"] is True and result["production_qualified"] is False
     assert result["stage"] == "matrix_completed_artifact_review_pending"
-    assert len(calls) == len(result["completed"]) == 384
-    assert len({child for child, _ in calls}) == 384
+    assert len(calls) == len(result["completed"]) == 456
+    assert len({child for child, _ in calls}) == 456
     phases = [(kw["binding_cost_case"], kw["binding_cost_selector"], request)
               for _, kw in calls for request in kw["binding_writer"]]
-    assert len(phases) == len(set(phases)) == 768
+    assert len(phases) == len(set(phases)) == 912
     assert all(kw["expected_hmp_commit"] == "b" * 40 for _, kw in calls)
     saved = json.loads((root / "matrix-state.json").read_text())
     assert saved["full_matrix_completed"] is True and saved["current"] is None
     with pytest.raises(RuntimeError):
         module.run_matrix(root, tmp_path / "native", "a" * 40, "b" * 40)
-    assert len(calls) == 384
+    assert len(calls) == 456
 
 
 @pytest.mark.parametrize("capacity_at", [0, 2])
