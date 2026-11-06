@@ -18,10 +18,12 @@ preflight and change API ingress and secret scoping.
 
 Install the runtime plugin directory from its public repository. Hermes scans
 the selected directory, so this avoids scanning research documents and test
-fixtures as executable plugin content. The current runtime scan has two
-medium findings for subprocess calls; both use fixed argument lists, no shell,
-and bounded timeouts. Review any scanner warning before accepting it. Never
-disable the scanner or use `--allow-removed`.
+fixtures as executable plugin content. For exact candidate `5e247a6` on November 6, 2026, native `plugin-guard-v12`
+reports **safe, with 12 medium heuristic matches**: three fixed subprocess sites
+and nine binary-format/Unicode-validation literals. Independent source review
+found no new security issue in those matches; this is not a zero-finding or
+dynamic-runtime claim. Review the actual scanner output before accepting it.
+Never disable the scanner or use `--allow-removed`.
 
 ```sh
 hermes plugins install 'MahdiHedhli/hermes-hmp#server/hmp_plugin' --enable

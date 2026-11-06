@@ -37,6 +37,10 @@ and a fixed commit timestamp. Artifact and manifest are private owner-controlled
 Packaging performed no extraction, plugin/dependency installation, activation or
 native execution. It supplies a reviewable candidate, not deployment permission.
 
+## Dated native static scan
+
+On November 6, 2026, `plugin-guard-v12` reported **safe, with 12 medium heuristic matches** for the exact runtime subtree. Independent source review checked all matches: three fixed subprocess sites (operator pairing, fixed `ioreg`, retained own-reader launch) and nine image-format/Unicode validation literals. None evaluates encoded code or supplies request-controlled shell commands. Scanner rules and block-list checks were not changed or bypassed. The presentation runtime remains closed; a static verdict does not qualify execution or deployment.
+
 ## Remaining delivery and operational scope
 
 Known residual grant/tip windows, non-atomic/ABA behavior, unbounded native
