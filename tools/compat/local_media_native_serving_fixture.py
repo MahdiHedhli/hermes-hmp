@@ -130,6 +130,24 @@ def _cleanup_setup(owners, native_registry, db, fx, patch, root, report):
 
 
 
+
+def _refuse_with_diagnostic(denied, code):
+    if len(denied) < 16:
+        record = {"code": code, "source_frames": []}
+        denied.append(record)  # Latch before optional diagnostics can fail.
+        frame = None
+        try:
+            frame = sys._getframe(1)
+            while frame is not None and len(record["source_frames"]) < 12:
+                record["source_frames"].append((Path(frame.f_code.co_filename).name,
+                                                frame.f_code.co_name, frame.f_lineno))
+                frame = frame.f_back
+        except BaseException:
+            record["diagnostic_capture_failed"] = True
+        finally:
+            del frame  # Never retain frames, locals or payloads in diagnostics.
+    raise PermissionError("LOCAL_MEDIA_FIXTURE_IO_REFUSED")
+
 def _builtin_mime_types():
     """Owned fixture process only: deterministic stdlib tables, no OS MIME inputs."""
     import mimetypes
@@ -169,8 +187,7 @@ def run_fixture(root):
     reads = (root, _ROOT, Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve())
 
     def refuse(code):
-        denied.append(code)
-        raise PermissionError("LOCAL_MEDIA_FIXTURE_IO_REFUSED")
+        _refuse_with_diagnostic(denied, code)
 
     def audit(event, args):
         if event == "open" and isinstance(args[0], (str, bytes, os.PathLike)):
@@ -392,7 +409,9 @@ def run_fixture(root):
     finally:
         _cleanup_setup(owners, native_registry, db, fx, patch, root, report)
     _require(owners["workers_joined"] and report["native_database_close_observed"])
-    _require(not denied and not (root / "home/state.db").exists())
+    if denied or (root / "home/state.db").exists():
+        raise RuntimeError("fixture_final_containment_refused:" + json.dumps({
+            "denial_codes": denied, "default_state_created": (root / "home/state.db").exists()}))
     _require(_inventory_sources(source) == pins and _inventory_sources(_ROOT) == hmp_pins)
     _check_import_origins(dict(sys.modules), source, _ROOT)
     report.update(audit_denials=0, source_unchanged=True, selected_source_origins_checked=True,

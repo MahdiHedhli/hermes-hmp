@@ -227,3 +227,18 @@ def test_sqlite_guard_admits_only_exact_fileless_memory_form(tmp_path):
         with pytest.raises((RuntimeError, TypeError)):
             module._checked_sqlite_path(value, tmp_path)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_audit_denial_latches_before_optional_diagnostic_failure(monkeypatch):
+    module = load()
+    denied = []
+
+    def fail_capture(*args):
+        raise RuntimeError("synthetic diagnostic fault")
+
+    with (pytest.raises(PermissionError, match="LOCAL_MEDIA_FIXTURE_IO_REFUSED"),
+          monkeypatch.context() as patch):
+        patch.setattr(sys, "_getframe", fail_capture)
+        module._refuse_with_diagnostic(denied, "read_outside_fixture_sources")
+    assert denied == [{"code": "read_outside_fixture_sources", "source_frames": [],
+                       "diagnostic_capture_failed": True}]
