@@ -8,6 +8,7 @@ reviewed parent action; never execute an old temporary harness.
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import os
@@ -88,7 +89,9 @@ def _checked_sqlite_path(raw, root):
 def _check_import_origins(modules, source, hmp):
     _require(len(modules) <= 20000)
     for name, module in modules.items():
-        if name.startswith("hermes_"):
+        if name == "agent" or name.startswith("agent."):
+            expected = source / "agent"
+        elif name.startswith("hermes_"):
             expected = source
         elif name == "hmp_plugin" or name.startswith("hmp_plugin."):
             expected = hmp / "server/hmp_plugin"
@@ -103,6 +106,14 @@ def _check_import_origins(modules, source, hmp):
         _require(path.suffix == ".py" and _inside(path, expected)
                  and path.is_file() and not path.is_symlink())
 
+
+
+def _require_fresh_source_modules(modules):
+    _require(len(modules) <= 20000)
+    _require(not any(name == "agent" or name.startswith("agent.") or
+                     name.startswith("hermes_") or name == "hmp_plugin" or
+                     name.startswith("hmp_plugin.") or name == "unit" or
+                     name.startswith("unit.") for name in modules))
 
 def _cleanup_setup(owners, native_registry, db, fx, patch, root, report):
     if not owners["workers_joined"]:
@@ -207,9 +218,7 @@ def run_fixture(root):
                       ("HERMES_RUNTIME_DIR", "runtime")):
         _require(os.environ.get(key) == str(root / leaf))
         (root / leaf).mkdir(mode=0o700, exist_ok=True)
-    _require(not any(name.startswith("hermes_") or name == "hmp_plugin" or
-                     name.startswith("hmp_plugin.") or name == "unit" or
-                     name.startswith("unit.") for name in sys.modules))
+    _require_fresh_source_modules(sys.modules)
     _require(root / "hmp" == _ROOT)
     pins = _inventory_sources(source)
     hmp_pins = _inventory_sources(_ROOT)
@@ -284,11 +293,17 @@ def run_fixture(root):
     sys.path[:0] = [str(source), str(_ROOT / "server"), str(_ROOT / "server/tests")]
     import hermes_state_registry as native_registry
     import pytest
+    from agent.image_gen_provider import save_b64_image, success_response
     from aiohttp.test_utils import TestClient, TestServer
+    from hermes_constants import (
+        get_hermes_home_override,
+        reset_hermes_home_override,
+        set_hermes_home_override,
+    )
     from unit.test_s4_descriptors import PROFILE, USER
     from unit.test_s5_media_fetch import FORBIDDEN_HEADERS, VALID_PNG, VALID_PNG_B, Fx
 
-    from hmp_plugin import media_fetch
+    from hmp_plugin import local_media_candidate, local_media_file_safety, media_fetch
     from hmp_plugin.revoke import revoke_device
 
     _check_import_origins(dict(sys.modules), source, _ROOT)
@@ -301,7 +316,8 @@ def run_fixture(root):
     report = {"schema": 1, "native_database": True, "native_registry": True,
               "synthetic_routing_authorization": True, "synthetic_compatibility_result": True,
               "actual_image_producer": False,
-              "production_qualified": False, "t12_qualified": False}
+              "production_qualified": False, "t12_qualified": False,
+              "provider_generation_executed": False}
     # No worker exists during setup. This becomes false before actual async work,
     # and true again only after original owned workers are known joined.
     owners = {"server": None, "client": None, "workers_joined": True}
@@ -330,23 +346,49 @@ def run_fixture(root):
         fx.native.world.api.release = release
         db.create_session("p1", "api_server")
 
+        image_paths = {}
+        materializations = [0]
+
         def seed_image(number):
+            if number == 2:
+                image_path = fx.write(number, VALID_PNG)
+                content = {"success": True, "image": str(image_path)}
+            else:
+                before = get_hermes_home_override()
+                token = set_hermes_home_override(fx.native.home_path)
+                try:
+                    image_path = save_b64_image(base64.b64encode(VALID_PNG).decode("ascii"),
+                                               prefix="xai_grok-imagine-image")
+                finally:
+                    reset_hermes_home_override(token)
+                _require(get_hermes_home_override() == before)
+                report["producer_home_context_restored"] = True
+                location = local_media_candidate.derive_cache_location(
+                    str(image_path), str(fx.native.home_path))
+                _require(location == (local_media_file_safety.CacheLayout.GENERATED,
+                                      image_path.name) and image_path.read_bytes() == VALID_PNG)
+                materializations[0] += 1
+                report["native_cache_materializer"] = True
+                content = success_response(image=str(image_path), model="fixture-offline",
+                    prompt="SYNTHETIC_NATIVE_CACHE_VALIDATION_ONLY", aspect_ratio="landscape",
+                    provider="fixture-offline")
+                shadow = fx.native.home_path / "cache/images" / image_path.name
+                shadow.write_bytes(VALID_PNG_B)  # A wrong namespace cannot pass the PNG control.
+            image_paths[number] = image_path
             call = f"fixture-image-call-{number}"
             db.append_message("p1", "assistant", tool_calls=[{
                 "id": call, "type": "function",
                 "function": {"name": "image_generate", "arguments": "{}"}}])
             row = db.append_message("p1", "tool", tool_name="image_generate",
-                tool_call_id=call, content=json.dumps({"success": True,
-                "image": str(fx.image_path(number))}))
+                tool_call_id=call, content=json.dumps(content))
             _require(row == number)
-            fx.write(row, VALID_PNG)
             return row
 
         tool_ids = {seed_image(number) for number in (2, 4, 6)}
         changed = {"file": False, "authorization": False}
 
         def change_file():
-            fx.write(4, VALID_PNG_B)
+            image_paths[4].write_bytes(VALID_PNG_B)
             changed["file"] = True
 
         def revoke_synthetic_bot_access():
@@ -377,6 +419,7 @@ def run_fixture(root):
                         headers["X-Content-Type-Options"] == "nosniff" and
                         all(k not in headers for k in FORBIDDEN_HEADERS))
                     report["exact_authenticated_bytes_headers"] = True
+                    report["legacy_compatibility_control"] = True
                     other = await fx.rig.pair(client)
                     other_refs = await fx.mint(client, other)
                     status, _, body = await fx.get(client, other_refs[2], dev=other)
@@ -392,6 +435,7 @@ def run_fixture(root):
                     # fact, so prior asset failure cannot make a refusal vacuous.
                     status, _, body = await fx.get(client, refs[4], dev=owner)
                     _require(status == 200 and body == VALID_PNG)
+                    report["native_generated_cache_control"] = True
                     change_file()
                     status, _, _ = await fx.get(client, refs[4], dev=owner)
                     _require(status == 404 and changed["file"])
@@ -453,7 +497,8 @@ def run_fixture(root):
         _require(owners["server"].closed is True and fx.service.closed is True)
         report.update(listener_closed=True, workers_joined=True, borrowed_native_balanced=True,
                       native_acquires=borrowed["acquired"], native_releases=borrowed["released"],
-                      descriptor_records_retained=fx.registry._audit())
+                      descriptor_records_retained=fx.registry._audit(),
+                      native_cache_materializations=materializations[0])
     finally:
         _cleanup_setup(owners, native_registry, db, fx, patch, root, report)
     _require(owners["workers_joined"] and report["native_database_close_observed"])

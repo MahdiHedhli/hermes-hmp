@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""G3 filesystem safety prototype for host-local generated images (research leaf, not product).
+"""Bounded descriptor-relative filesystem leaf for host-local generated images.
 
-Test tooling: `server/hmp_plugin` never imports it. It reads one candidate file from
-`<profile home>/cache/images/<candidate>` through pinned directory descriptors and returns the
+It reads one candidate file from a selected closed native cache layout under
+the supplied profile home through pinned directory descriptors and returns the
 bytes only to an in-process caller. It defines no media reference, route, grant, token, schema,
 wire shape or public API, and it reads nothing from any Hermes install.
 
@@ -11,14 +11,15 @@ Trust model:
 - `profile_home` is the caller's already-selected, already-resolved profile home. The caller
   owns resolving and pinning it; this leaf opens it with O_NOFOLLOW on the final component and
   never resolves it. Ancestors of the home are trusted as the caller supplied them.
-- `candidate` is untrusted. Root decision: **flat only**. Native producers and the inbound
-  cache write top-level files of `cache/images` (name shapes in the G3 delivery-paths note), so
+- `candidate` is untrusted. Root decision: **flat only**. The two supported roots are
+  `cache/images` and `cache/generated/images`; selection is an exact internal enum, not a path, so
   the candidate must be exactly one component. Nesting, absolute strings, `.`/`..`, empty,
   control/format characters, backslashes and over-long names are refused. Nested names would need a
   separate reviewed amendment; no other root (legacy `image_cache`, `cache/documents`,
   another profile) is ever consulted or used as a fallback.
 
-Method: open home, `cache`, `images` each with O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC relative to the
+Method: open home and each selected literal cache directory with
+O_DIRECTORY|O_NOFOLLOW|O_CLOEXEC relative to the
 previous descriptor; open the file relative to `images` with O_NOFOLLOW|O_NONBLOCK; `fstat`
 (regular, one link, 0 < size <= bound); bounded read of at most bound+1 bytes; `fstat` again;
 then re-`lstat` every path component against the pinned identities. Any difference refuses and
@@ -48,6 +49,12 @@ MAX_BYTES = 8 * 1024 * 1024
 MAX_NAME_BYTES = 128
 READ_CHUNK = 64 * 1024
 CACHE_COMPONENTS = ("cache", "images")
+GENERATED_CACHE_COMPONENTS = ("cache", "generated", "images")
+
+
+class CacheLayout(enum.Enum):
+    LEGACY = "legacy_images"
+    GENERATED = "generated_images"
 BYTES_LABEL = "unvalidated_raster_bytes"
 
 HOOK_NAMES = frozenset(
@@ -67,6 +74,7 @@ class Outcome(enum.StrEnum):
     UNSUPPORTED_PLATFORM = "unsupported_platform"
     PROFILE_HOME_INVALID = "profile_home_invalid"
     PROFILE_HOME_UNAVAILABLE = "profile_home_unavailable"
+    CACHE_LAYOUT_INVALID = "cache_layout_invalid"
     CANDIDATE_TYPE = "candidate_type"
     CANDIDATE_EMPTY = "candidate_empty"
     CANDIDATE_CONTROL = "candidate_control"
@@ -231,12 +239,21 @@ def read_profile_cache_image(
     candidate: str,
     *,
     max_bytes: int = MAX_BYTES,
+    cache_layout: CacheLayout = CacheLayout.LEGACY,
     _hooks: Mapping[str, Callable[[], None]] | None = None,
     _chunk_size: int = READ_CHUNK,
 ) -> ReadResult:
-    """Read `<profile_home>/cache/images/<candidate>` or return a closed refusal."""
+    """Read one basename in the selected closed cache layout; never try a fallback."""
     if not 0 < max_bytes <= MAX_BYTES or _chunk_size <= 0:
         raise ValueError("bounds out of range")
+    if type(cache_layout) is not CacheLayout:
+        return _refuse(Outcome.CACHE_LAYOUT_INVALID)
+    if cache_layout is CacheLayout.LEGACY:
+        components = CACHE_COMPONENTS
+    elif cache_layout is CacheLayout.GENERATED:
+        components = GENERATED_CACHE_COMPONENTS
+    else:
+        return _refuse(Outcome.CACHE_LAYOUT_INVALID)
     hooks = dict(_hooks or {})
     if not hooks.keys() <= HOOK_NAMES:
         raise ValueError("unknown test hook")
@@ -266,7 +283,9 @@ def read_profile_cache_image(
         return fd
 
     try:
-        return _read_pinned(home_path, candidate, max_bytes, _chunk_size, fire, open_tracked)
+        return _read_pinned(
+            home_path, candidate, max_bytes, _chunk_size, fire, open_tracked, components
+        )
     except _FstatFailedError:
         return _refuse(Outcome.READ_FAILED)
     finally:
@@ -282,8 +301,9 @@ def _read_pinned(
     chunk_size: int,
     fire: Callable[[str], None],
     open_tracked: Callable[..., int],
+    components: tuple[str, ...],
 ) -> ReadResult:
-    # Pin home, cache, images by descriptor. Each step is relative to the previous descriptor.
+    # Pin home and every selected ancestor; each step is relative to the previous descriptor.
     try:
         home_fd = open_tracked(home_path, _DIR_FLAGS)
     except OSError as exc:
@@ -291,7 +311,7 @@ def _read_pinned(
     home_identity = _identity(_fstat(home_fd))
     children: list[tuple[int, str, tuple[int, int]]] = []  # (parent fd, name, identity)
     parent_fd = home_fd
-    for name in CACHE_COMPONENTS:
+    for name in components:
         try:
             fd = open_tracked(name, _DIR_FLAGS, parent_fd)
         except OSError as exc:

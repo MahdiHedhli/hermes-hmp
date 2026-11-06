@@ -274,3 +274,32 @@ def test_os_probe_exceptions_remain_exact_and_readonly():
         assert module._absent_darwin_proc_listing(value) is False
     assert module._public_os_metadata_read(str(module._OS_METADATA), True) is False
     assert module._public_os_metadata_read("/etc/passwd", False) is False
+
+
+@pytest.mark.parametrize("name", ["agent", "agent.image_gen_provider", "agent.provider_media"])
+def test_preloaded_native_cache_helper_tree_refuses_before_import(name):
+    from types import ModuleType
+
+    module = load()
+    module._require_fresh_source_modules({"json": ModuleType("json")})
+    with pytest.raises(RuntimeError):
+        module._require_fresh_source_modules({name: ModuleType(name)})
+
+
+@pytest.mark.parametrize("name", ["agent", "agent.image_gen_provider", "agent.provider_media"])
+def test_native_cache_helper_origins_must_be_in_the_copied_agent_tree(tmp_path, name):
+    from types import ModuleType
+
+    module = load()
+    native, hmp = tmp_path / "native", tmp_path / "hmp"
+    owned = native / "agent" / "source.py"
+    owned.parent.mkdir(parents=True)
+    owned.write_text("# never imported\n")
+    value = ModuleType(name)
+    value.__file__ = str(owned)
+    module._check_import_origins({name: value}, native, hmp)
+    foreign = tmp_path / "foreign.py"
+    foreign.write_text("# never imported\n")
+    value.__file__ = str(foreign)
+    with pytest.raises(RuntimeError):
+        module._check_import_origins({name: value}, native, hmp)

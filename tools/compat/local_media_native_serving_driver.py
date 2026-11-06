@@ -37,8 +37,11 @@ _TRUE = frozenset(("native_database", "native_registry", "synthetic_routing_auth
     "revoked_device_refused", "listener_closed",
     "workers_joined", "borrowed_native_balanced", "native_database_close_observed",
     "source_unchanged", "selected_source_origins_checked", "synthetic_absent_linux_proc_probes",
-    "fixture_public_os_metadata_allowed"))
-_FALSE = frozenset(("actual_image_producer", "production_qualified", "t12_qualified"))
+    "fixture_public_os_metadata_allowed", "native_cache_materializer",
+    "producer_home_context_restored", "legacy_compatibility_control",
+    "native_generated_cache_control"))
+_FALSE = frozenset(("actual_image_producer", "production_qualified", "t12_qualified",
+    "provider_generation_executed"))
 _ENTRY = '''import hashlib,importlib.util,json,os,sys
 from pathlib import Path
 if not (sys.flags.isolated == 1 and sys.flags.optimize == 0 and sys.dont_write_bytecode):
@@ -179,6 +182,7 @@ def validate_report(report, native, hmp, executable_sha):
     expected = _TRUE | _FALSE | {"schema", "native_acquires", "native_releases",
         "descriptor_records_retained", "audit_denials", "scoped_native_sweep",
         "expected_absent_proc_probes", "os_metadata_sha256", "os_metadata_reads", "own_fd_listings",
+        "native_cache_materializations",
         "native_source_hashes", "hmp_source_hashes", "runtime_executable_sha256"}
     commands._require(type(report) is dict and set(report) == expected and
         type(report.get("schema")) is int and
@@ -186,13 +190,13 @@ def validate_report(report, native, hmp, executable_sha):
         all(report.get(k) is False for k in _FALSE))
     for key in ("native_acquires", "native_releases", "descriptor_records_retained",
                 "audit_denials", "scoped_native_sweep", "expected_absent_proc_probes",
-                "os_metadata_reads", "own_fd_listings"):
+                "os_metadata_reads", "own_fd_listings", "native_cache_materializations"):
         commands._require(type(report.get(key)) is int)
     commands._require(type(report.get("os_metadata_sha256")) is str and
         re.fullmatch(r"[0-9a-f]{64}", report["os_metadata_sha256"]) is not None and
         1 <= report["os_metadata_reads"] <= 8 and 1 <= report["own_fd_listings"] <= 4096 and
         report["expected_absent_proc_probes"] > 0 and
-        report["native_acquires"] > 0 and
+        report["native_cache_materializations"] == 3 and report["native_acquires"] > 0 and
         report["native_acquires"] == report["native_releases"] and
         0 <= report["descriptor_records_retained"] <= 8 and
         report["audit_denials"] == report["scoped_native_sweep"] == 0 and

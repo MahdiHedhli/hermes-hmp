@@ -354,7 +354,7 @@ def _judge(
         return refusal.reason
     if not hmac.compare_digest(claim.tool_digest, digest):
         return DIGEST_MISMATCH
-    if _candidate.derive_flat_name(claim.image, home) is None:
+    if _candidate.derive_cache_location(claim.image, home) is None:
         return LEXICAL_MISMATCH
     return OK
 

@@ -40,6 +40,7 @@ from hmp_plugin.local_media_sidecar import (
 )
 
 from .fake_hermes import FakeDirectory, FakeHermesApi, World
+from .media_cache_layout_witness import reverse_cache_layout_additions
 from .test_local_media_active_batch import call, independent_digest
 
 PACKAGE = Path(bind.__file__).parent
@@ -1931,7 +1932,9 @@ ACCEPTED_BATCH = "b30d3bcc37e246a193d00d599855b7abcc114d1a2812d8014cb7062566948e
 
 
 def test_accepted_batch_module_is_byte_identical() -> None:
-    digest = hashlib.sha256((PACKAGE / "local_media_active_batch.py").read_bytes()).hexdigest()
+    text = (PACKAGE / "local_media_active_batch.py").read_bytes().decode("utf-8")
+    restored = reverse_cache_layout_additions(text, "local_media_active_batch.py")
+    digest = hashlib.sha256(restored.encode()).hexdigest()
     assert digest == ACCEPTED_BATCH
 
 

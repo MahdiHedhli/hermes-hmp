@@ -772,3 +772,23 @@ G-M1 native allocation/pruning/accounting and non-atomic reads, same-account
 replacement, trusted title metadata, ABA/torn-buffer races and changes after
 the last native check remain the stated residuals. This source slice introduces
 no runtime build allowlist, fingerprint admission or process latch.
+
+
+## C1a — Two explicit native cache layouts (2026-11-06)
+
+The independently reviewed [cache-layout amendment](CACHE_LAYOUT_AMENDMENT.md)
+extends C1 to current native `cache/generated/images` while preserving legacy
+`cache/images`. The basename remains flat and bounded; there is no arbitrary
+path, normalization, namespace search or fallback. The full original tool-result
+digest binds the namespace, and fetch validates that digest before selecting the
+exact internal layout enum. Every added ancestor is descriptor-pinned and
+revalidated. Ownership, authorization, flags, minimum/API policy, TTL, CAS and
+resource limits remain unchanged. This source decision does not activate delivery
+or qualify native producer/device behavior.
+
+Exact test-only inverse chunks preserve historical R1/AT1/S5 byte witnesses;
+unknown/tampered changes are not stripped and the old hash constants are unchanged.
+The cache-helper harness is separately source-reviewed for fixed synthetic PNG
+bytes, explicit scratch-profile ContextVar scope/reset, native success-response
+storage, both layouts and wrong-namespace shadow controls. It never calls a
+provider or downloads an image. A fresh native execution remains a separate gate.

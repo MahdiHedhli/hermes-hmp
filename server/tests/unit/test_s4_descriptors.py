@@ -57,6 +57,7 @@ from .approved_push_bridge_witness import (
 )
 from .media_binding_world import World as PackageWorld
 from .media_binding_world import install_gateway_stubs
+from .media_cache_layout_witness import reverse_cache_layout_additions
 from .test_local_media_batch_binding import USER
 from .test_local_media_batch_binding import Env as NativeEnv
 
@@ -1609,7 +1610,8 @@ def test_the_wire_descriptor_is_exactly_kind_and_ref_and_omitted_when_absent() -
 
 
 def _sha(name: str) -> str:
-    return hashlib.sha256((PACKAGE / name).read_bytes()).hexdigest()
+    text = (PACKAGE / name).read_bytes().decode("utf-8")
+    return hashlib.sha256(reverse_cache_layout_additions(text, name).encode()).hexdigest()
 
 
 # Captured from `git show b07890e:<file>`. The two R1 guard helpers below have separately
@@ -1694,6 +1696,7 @@ def test_the_reads_and_unchanged_helpers_are_byte_identical_to_the_base(name: st
 @pytest.mark.parametrize("name", sorted(R1_GUARD_HASHES))
 def test_r1_guard_helpers_have_only_the_reviewed_additions(name: str) -> None:
     text = (PACKAGE / name).read_text(encoding="utf-8")
+    text = reverse_cache_layout_additions(text, name)
     assert hashlib.sha256(text.encode()).hexdigest() == R1_GUARD_HASHES[name]
     for addition, historical in R1_REVERSES[name]:
         assert text.count(addition) == 1
@@ -1795,6 +1798,7 @@ AR1_READINESS_ADDITIONS = (
 
 
 def reverse_readiness_additions(text: str) -> str:
+    text = reverse_cache_layout_additions(text, "bridge.py")
     for addition in AR1_READINESS_ADDITIONS:
         assert text.count(addition) == 1
         text = text.replace(addition, "", 1)
