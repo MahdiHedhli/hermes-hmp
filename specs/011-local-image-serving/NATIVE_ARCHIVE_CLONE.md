@@ -2,7 +2,8 @@
 
 This fixture-only storage optimization does not change native execution,
 authority, phase coverage or the original 12-second process refusal policy.
-It is not wired into the serving driver and has not executed a native clone.
+It is not wired into the serving driver. One fresh tiny synthetic clone has
+completed; evidence review and driver integration remain separate gates.
 
 The local macOS `cp(1)` manual explicitly allows `cp -c` to fall back to an
 ordinary copy. Therefore it cannot establish the intended no-fallback storage
@@ -42,8 +43,9 @@ alone never authorizes executing archive contents.
 
 Root's 31 fake-backend model/query cases and configured lint passed. They create tiny
 synthetic files but load no native library and perform no real clone. Independent
-source/security review and a bounded synthetic real-clone probe are required
-before driver integration or any native workload use. No storage savings,
+source/security review accepted the primitive for a bounded synthetic probe.
+Probe artifact review and separate driver integration review remain required
+before any native workload use. No storage savings,
 platform qualification, archive-cache integration or release pass is claimed.
 
 ## Preserved first tiny-probe refusal
@@ -56,3 +58,14 @@ Independent design review accepted the bounded name-only refinement because this
 non-executable archive's data fork alone is consumed by extraction/literal Git
 checks. The concrete refinement still requires review before a new tiny probe;
 driver integration and native workload use remain unaccepted.
+
+## Fresh opaque-provenance probe
+
+A fresh 8 KiB synthetic file probe at `d7244dc` completed terminal 0 through the
+reviewed `fclonefileat` path. Source and destination data-fork hashes/lengths
+matched; destination had its own inode, with owned 0600 single-link properties,
+and the allowed provenance name was present. Its opaque value was not read.
+No ordinary-copy fallback, metadata removal, existing-target overwrite, actual
+archive extraction or native Hermes workload occurred. The first strict-guard
+refusal remains preserved. Independent artifact review is pending. This is not
+measured physical-space savings, driver qualification or a release claim.
