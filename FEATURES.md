@@ -1,24 +1,25 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now includes
-reviewed socket-write readiness for the signed READY sender. It preserves the
-concurrent control reader, seals direction to the original owner and retains
-uncertain registration debt. Review found and repaired a shared initializer reset
-flaw: repeated/partial initialization can no longer erase the original state.
-This primitive sends no bytes and grants no READY/GO or production authority.
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now includes a
+reviewed fixed signed READY sender. Actual socket progress, one retained write/
+grammar intent and the original native completion-Future allocation stay joined
+to original resource/input/key facts. The original controller joins that exact
+completion before a GO-read receipt; worker GO and production startup stay closed.
 
-Root final affected regression: **1,358 passed, one skipped**, 53.57 seconds;
-focused readiness: **73 passed**; configured repository-wide lint passed.
-Independent review was read-only. An earlier run had 722 passes and one existing
-cancellation-consumer failure; its cause is unproven and the failure remains
-recorded. Later joined815 and final1358 passes do not erase that observation.
-See [evidence and limits](docs/research/presentation-owned-write-readiness-2026-11-06.md).
-Exact new-source CI is pending. Prior signing-only READY source `22bc509` passed
-[CI738](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42278046766).
+Root final affected regression: **1,375 passed, one skipped**, 56.86 seconds;
+configured repository-wide lint passed. The 17 new send cases cover actual wire
+bytes, real kernel backpressure, partial/uncertain sends, no retries, late key and
+Future/offset substitution, early GO waiting, and normal GO/CANCEL consumption.
+Independent source/test review was read-only. Interrupted unfinished control reads
+still retain separate unknown debt and prevent aggregate channel closure; a
+completed writer does not resolve that gap. See [evidence and limits](docs/research/presentation-signed-ready-write-2026-11-06.md).
+New-source CI is pending. Prior write-readiness source `f210093` passed
+[CI742](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42280521444).
+Earlier cancellation-consumer and fixture failures remain recorded, not erased.
 
-Actual signed READY sending, production resource admission/GO relay, later signed
-IO, startup, native publication, STATUS and physical/release qualification remain
-open. Character delivery is unavailable. No live host/device/settings changed.
+Production resource admission/worker GO relay, interrupted-read settlement, later
+signed IO, startup, native publication, STATUS and physical/release qualification
+remain open. Character delivery is unavailable. No live host/device/settings changed.
 
 ## Native image verification checkpoint — November 6, 2026
 

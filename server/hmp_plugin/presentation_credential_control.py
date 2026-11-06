@@ -1368,6 +1368,17 @@ class CredentialGoPhase:
             refs = CredentialCancelAdoption._current(adoption)
             completion = CredentialControlCursor.completed_current(cursor)
             CredentialCancelAdoption._completed_current(adoption, cursor, completion, refs)
+            producer = control._credential_ready_snapshot
+            if producer is not None:
+                from .presentation_credential_ready import (
+                    CredentialReadyProducer,
+                    CredentialReadyWriter,
+                )
+                _require(type(producer) is CredentialReadyProducer
+                         and control._credential_ready is producer
+                         and type(producer._writer_snapshot) is CredentialReadyWriter)
+                await CredentialReadyWriter.join_control(producer._writer_snapshot, control)
+                CredentialCancelAdoption._completed_current(adoption, cursor, completion, refs)
             _require(
                 cursor._frame_index == 0
                 and completion[6] == "GO"

@@ -40,6 +40,8 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
     )
     held = {}
     ready_case = bool(mutation and mutation.startswith("signed_control_native_ready_"))
+    write_case = bool(ready_case and "_ready_write_" in mutation)
+    write_go_case = bool(write_case and mutation.endswith(("go_join", "early_go", "shadow_wait")))
     ready_event = asyncio.Event()
     control_retained_event = asyncio.Event()
     cleanup_cause_event = asyncio.Event()
@@ -364,8 +366,39 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                             with pytest.raises(FrameError):
                                 producer.prepare_ready()
                             assert producer._record is raw
-                        assert record.grammar._ready is False and record.grammar._broker_next == 0
-                        assert control._go_receipt is None and resources._go_attempted is False
+                        if write_case:
+                            await exercise_ready_writer(producer, control, keys, monkeypatch,
+                                                        held, mutation, ready_event)
+                            if write_go_case:
+                                ready_event.set()
+                                async with asyncio.timeout_at(native.deadline_ns / 1e9):
+                                    await asyncio.wait((control._cancel_future_snapshot,
+                                                       control._allocation_snapshot.task),
+                                                      return_when=asyncio.FIRST_COMPLETED)
+                                    if not mutation.endswith("shadow_wait"):
+                                        assert control._cancel_future_snapshot.done()
+                                        consumed = await BrokerServiceSpine._v2_control(
+                                            spine, control)
+                                        assert consumed.header.kind == "CANCEL"
+                                        BrokerCancellationOwner.abort(control)
+                                    outcome = await asyncio.gather(
+                                        control._allocation_snapshot.task, return_exceptions=True)
+                                if mutation.endswith("shadow_wait"):
+                                    assert isinstance(outcome[0], FrameError)
+                                    assert control._go_receipt is None
+                                    assert held["writer_foreign_calls"] == []
+                                    del held["ready_writer"]._future_origin.add_done_callback
+                                else:
+                                    assert control._go_receipt is not None
+                                    if isinstance(outcome[0], BaseException):
+                                        raise outcome[0]
+                                    assert outcome[0].header.kind == "CANCEL"
+                                held["writer_go_join_checked"] = True
+                        assert record.grammar._ready is (write_case and held["writer_ok"])
+                        assert record.grammar._broker_next == (1 if record.grammar._ready else 0)
+                        assert (control._go_receipt is None) is (not write_go_case
+                                                               or mutation.endswith("shadow_wait"))
+                        assert resources._go_attempted is False
                         assert resources._control_snapshot._go._attempted is False
                         return ticket
                     finally:
@@ -1114,6 +1147,7 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                                              "signed_control_window") else "GO"
             if mutation.startswith("signed_control_native_"):
                 phase = "GO" if (mutation == "signed_control_native_go"
+                    or write_go_case
                     or (cleanup_case and ("after_go" in mutation or mutation.endswith("late_go")))
                     or (mutation.startswith("signed_control_native_go_chain_")
                     and not mutation.endswith("before_go"))) else "CANCEL"
@@ -1150,7 +1184,52 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
             wire = control_raw + control_frame
             if ready_case:
                 await asyncio.wait_for(ready_event.wait(), timeout=5)
-                await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, wire)
+                if write_go_case and mutation.endswith("early_go"):
+                    await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, wire)
+                    async with asyncio.timeout_at(end / 1e9):
+                        await held["writer_join_entered"].wait()
+                    assert held["native_control"]._go_receipt is None
+                    assert held["ready_writer"]._complete is False
+                    assert held["record"].grammar._ready is False
+                    held["writer_resume"].set()
+                if write_case:
+                    if mutation.endswith("kernel_wait"):
+                        padding = bytearray()
+                        while len(padding) < held["writer_padding"]:
+                            async with asyncio.timeout_at(end / 1e9):
+                                padding.extend(await asyncio.get_running_loop().sock_recv(
+                                    gateway._socket_snapshot,
+                                    held["writer_padding"] - len(padding)))
+                        assert bytes(padding) == b"S" * held["writer_padding"]
+                    count = (len(held["writer_wire"]) if write_go_case
+                             or mutation.endswith("kernel_wait")
+                             else held.get("writer_actual_bytes", 0))
+                    observed = bytearray()
+                    while len(observed) < count:
+                        async with asyncio.timeout_at(end / 1e9):
+                            observed.extend(await asyncio.get_running_loop().sock_recv(
+                                gateway._socket_snapshot, count - len(observed)))
+                    assert bytes(observed) == held["writer_wire"][:count]
+                    held["writer_wire_observed"] = bytes(observed)
+                if not (write_go_case and mutation.endswith("early_go")):
+                    await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, wire)
+                if write_go_case and not mutation.endswith("shadow_wait"):
+                    control = held["native_control"]
+                    async with asyncio.timeout_at(end / 1e9):
+                        await asyncio.wait((control._go_future_snapshot,
+                                           control._allocation_snapshot.task),
+                                          return_when=asyncio.FIRST_COMPLETED)
+                    assert control._go_future_snapshot.done()
+                    start = time.monotonic_ns()
+                    window = CancellationWindow(start, start + 250_000_000).encode()
+                    next_frame = encode_frame(binding, "CANCEL", 2, window, version=2)
+                    next_value = dict(value, phase="CANCEL", sequence=2,
+                                      frame_sha256=hashlib.sha256(next_frame).hexdigest(),
+                                      frame_length=len(next_frame))
+                    next_raw = encode_record(next_value, keys["gateway"]._private_key.sign(
+                        signing_bytes(next_value)))
+                    await asyncio.get_running_loop().sock_sendall(
+                        gateway._socket_snapshot, next_raw + next_frame)
             elif cleanup_case and "after_go" not in mutation:
                 await send_cleanup_wire(wire, len(control_raw))
             elif cleanup_case:
@@ -1501,3 +1580,205 @@ async def test_fixed_ready_signature_requires_actual_resource_input_write(local,
     held, _ = await exchange(local, tmp_path, monkeypatch,
                              "signed_control_native_ready_" + suffix)
     assert "ready_record" in held or "ready_producer" in held or held["ready_acquisition_refused"]
+
+
+async def exercise_ready_writer(producer, control, keys, monkeypatch, held, mutation, ready_event):
+    import errno
+
+    from hmp_plugin import presentation_credential_ready as module
+    from hmp_plugin.presentation_credential_ready import CredentialReadyWriter
+
+    refs = producer._refs_snapshot
+    channel = refs[4][14]
+    if mutation.endswith("wrong_task"):
+        async def foreign_factory():
+            with pytest.raises(FrameError):
+                CredentialReadyWriter.retain(producer)
+        await asyncio.create_task(foreign_factory())
+        assert producer._writer is None and channel._credential_ready_writer is None
+    writer = CredentialReadyWriter.retain(producer)
+    held["ready_writer"] = writer
+    with pytest.raises(FrameError):
+        CredentialReadyWriter.retain(producer)
+    if mutation.endswith("wrong_task"):
+        async def foreign_write():
+            with pytest.raises(FrameError):
+                await writer.write_ready()
+        await asyncio.create_task(foreign_write())
+        assert writer._attempted is False and channel._writing is False
+    held["writer_wire"] = producer._record + encode_frame(
+        refs[4][4].binding, "READY", 0, b"", version=2)
+    held["writer_actual_bytes"] = 0
+    calls = []
+    foreign_calls = []
+    held["writer_foreign_calls"] = foreign_calls
+    if mutation.endswith(("future_shadow", "foreign_fact")):
+        def foreign(*args):
+            foreign_calls.append(args)
+            raise AssertionError("foreign Future method")
+        if mutation.endswith("future_shadow"):
+            writer._future_origin.add_done_callback = foreign
+        else:
+            class ForeignFact:
+                def __getattribute__(self, name):
+                    foreign_calls.append(name)
+                    raise AssertionError("foreign input-write observation")
+            changed = (*refs[:7], ForeignFact(), *refs[8:])
+            producer._refs = producer._refs_snapshot = changed
+            writer._refs = writer._refs_snapshot = (producer, changed, *writer._refs[2:])
+        with pytest.raises(FrameError):
+            await writer.write_ready()
+        assert writer._attempted is False and not channel._writing
+        assert not foreign_calls
+        if mutation.endswith("future_shadow"):
+            del writer._future_origin.add_done_callback
+        else:
+            producer._refs = producer._refs_snapshot = refs
+            writer._refs = writer._refs_snapshot = (producer, refs, *writer._refs[2:])
+        held["writer_ok"] = False
+        held["writer_checked"] = True
+        return
+    if mutation.endswith("early_go"):
+        from hmp_plugin import presentation_readiness as readiness
+        original_wait = readiness.SelectorReadiness.wait
+        held["writer_resume"] = asyncio.Event()
+        held["writer_join_entered"] = asyncio.Event()
+        original_join = CredentialReadyWriter.join_control
+        async def observed_join(owner, controller):
+            assert owner is writer and controller is control
+            assert control._signed_cursor_snapshot._completion_snapshot is not None
+            held["writer_join_entered"].set()
+            return await original_join(owner, controller)
+        monkeypatch.setattr(CredentialReadyWriter, "join_control", observed_join)
+        async def paused_write_wait(owner, end_ns, **options):
+            if type(owner) is readiness.SelectorWriteReadiness:
+                ready_event.set()
+                async with asyncio.timeout_at(end_ns / 1e9):
+                    await held["writer_resume"].wait()
+            return await original_wait(owner, end_ns, **options)
+        monkeypatch.setattr(readiness.SelectorReadiness, "wait", paused_write_wait)
+    if mutation.endswith("deadline"):
+        from hmp_plugin.presentation_clock import NativeClockOwner
+        original_sample = NativeClockOwner.sample
+        def expired(clock):
+            value = original_sample(clock)
+            if writer._attempted and asyncio.current_task() is refs[4][15]:
+                return refs[4][4].deadline_ns
+            return value
+        monkeypatch.setattr(NativeClockOwner, "sample", expired)
+    if mutation.endswith("registration_unknown"):
+        from hmp_plugin import presentation_readiness as readiness
+        original_install = readiness._install_writer
+        def ambiguous_install(*args):
+            original_install(*args)
+            raise OSError("synthetic add outcome unknown after native registration")
+        monkeypatch.setattr(readiness, "_install_writer", ambiguous_install)
+    original_future = writer._future_origin
+    native = module._SEND
+    def send(sock, data):
+        calls.append(len(data))
+        if mutation.endswith("kernel_wait") and len(calls) == 1:
+            held["writer_padding"] = 0
+            try:
+                while True:
+                    held["writer_padding"] += native(sock, b"S" * 16384)
+            except BlockingIOError:
+                assert held["writer_padding"] > 0
+                ready_event.set()  # peer drains only this known synthetic preload
+                raise
+        if mutation.endswith(("wouldblock", "early_go", "registration_unknown")) \
+                and len(calls) == 1:
+            raise BlockingIOError(errno.EAGAIN, "synthetic known zero-progress wait")
+        if mutation.endswith("zero"):
+            return 0
+        if mutation.endswith("unknown"):
+            n = native(sock, data[:7])
+            held["writer_actual_bytes"] += n
+            raise OSError("synthetic unknown native-send outcome")
+        limit = 37 if mutation.endswith(("partial", "wouldblock")) else len(data)
+        n = native(sock, data[:limit])
+        held["writer_actual_bytes"] += n
+        if mutation.endswith("postsend_key"):
+            keys["broker"].retire()
+        if mutation.endswith("offset_drift"):
+            writer._offset = writer._offset_snapshot = writer._offset + 1
+        if mutation.endswith("future_swap"):
+            replacement = asyncio.get_running_loop().create_future()
+            held["writer_substitute_future"] = replacement
+            writer._future = writer._future_origin = replacement
+        return n
+    monkeypatch.setattr(module, "_SEND", send)
+    fails = mutation.endswith(("zero", "unknown", "postsend_key", "offset_drift",
+                               "future_swap", "deadline", "registration_unknown"))
+    if fails:
+        with pytest.raises(OSError if mutation.endswith("_write_unknown") else FrameError):
+            await writer.write_ready()
+        assert writer._complete is False and writer._failed is True
+        assert original_future.result() is False
+        assert refs[4][18]._ready is False
+        previous = list(calls)
+        with pytest.raises(FrameError):
+            await writer.write_ready()
+        assert calls == previous
+        if mutation.endswith(("unknown", "offset_drift", "future_swap", "registration_unknown")):
+            assert writer._unknown and channel._writing
+            with pytest.raises(FrameError):
+                CredentialReadyWriter._released(writer, channel)
+            if mutation.endswith("future_swap"):
+                assert not held["writer_substitute_future"].done()
+                assert original_future is writer._refs_snapshot[5][0]
+        else:
+            assert not writer._unknown and channel._writing is False
+    else:
+        await writer.write_ready()
+        assert writer._complete and writer._future_origin.result() is True
+        assert writer._offset == len(held["writer_wire"]) == held["writer_actual_bytes"]
+        assert writer._grammar_attempted and refs[4][18]._ready
+        assert channel._writing is False and writer._active is False and not writer._unknown
+        CredentialReadyWriter._released(writer, channel)
+        previous = list(calls)
+        with pytest.raises(FrameError):
+            await writer.write_ready()
+        assert calls == previous
+        if mutation.endswith(("partial", "wouldblock")):
+            assert len(calls) > 2
+        if mutation.endswith(("wouldblock", "kernel_wait")):
+            assert writer._waiter_origin._retired and not writer._waiter_origin._unknown
+    if mutation.endswith("shadow_wait"):
+        def foreign_wait(*args):
+            foreign_calls.append(args)
+            raise AssertionError("foreign wait callback")
+        writer._future_origin.add_done_callback = foreign_wait
+    held["writer_ok"] = not fails
+    assert control._go_receipt is None and refs[5]._go_attempted is False
+    held["writer_checked"] = True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+@pytest.mark.parametrize("suffix", [
+    "signed", "partial", "wouldblock", "wrong_task", "zero", "unknown",
+    "postsend_key", "offset_drift", "future_shadow", "foreign_fact",
+    "go_join", "early_go", "shadow_wait", "future_swap", "kernel_wait",
+    "deadline", "registration_unknown",
+])
+async def test_fixed_ready_write_joins_actual_native_send_without_retry(
+    local, tmp_path, monkeypatch, suffix
+):
+    held, _ = await exchange(local, tmp_path, monkeypatch,
+                            "signed_control_native_ready_write_" + suffix)
+    assert held["writer_checked"]
+    assert len(held["writer_wire_observed"]) == held["writer_actual_bytes"]
+    if held["writer_ok"] and suffix != "shadow_wait":
+        # Historical local closure is usable by the outer same-loop fixture
+        # after the service task stopped and role keys retired; no send/GO right.
+        from hmp_plugin.presentation_credential_ready import CredentialReadyWriter
+        channel = held["record"].channel_snapshot
+        CredentialReadyWriter._released(held["ready_writer"], channel)
+        cursor = held["native_control"]._signed_cursor_snapshot
+        if cursor._io_unknown:
+            # Writer retirement cannot release the distinct interrupted read.
+            assert channel._reading and not channel._closed_known
+            assert not channel._clock_closed_known
+        else:
+            assert channel._closed_known and channel._clock_closed_known

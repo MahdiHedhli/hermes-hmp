@@ -431,6 +431,7 @@ class SocketChannel:
         self._clock_closed_known = False
         self._credential_handshake = self._credential_handshake_snapshot = None
         self._credential_begin_receiver = self._credential_begin_receiver_snapshot = None
+        self._credential_ready_writer = self._credential_ready_writer_snapshot = None
         try:
             _require(type(sock) is socket.socket and type(enrollment) is StartupEnrollment
                      and type(role) is str and role in ("gateway", "broker")
@@ -625,6 +626,13 @@ class SocketChannel:
             from .presentation_credential_begin import CredentialBeginReceiver
             _require(type(receiver) is CredentialBeginReceiver)
             CredentialBeginReceiver._released(receiver, self)
+
+        writer = getattr(self, "_credential_ready_writer", None)
+        _require(writer is getattr(self, "_credential_ready_writer_snapshot", None))
+        if writer is not None:
+            from .presentation_credential_ready import CredentialReadyWriter
+            _require(type(writer) is CredentialReadyWriter)
+            CredentialReadyWriter._released(writer, self)
 
     def _credential_work_ready(self):
         self._credential_external_idle()

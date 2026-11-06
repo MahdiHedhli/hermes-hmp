@@ -75,8 +75,10 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement/review original-task write-slot readiness with immutable direction,
       opposite-reader preservation and one-shot initialization/debt retention.
       This notification primitive sends no READY bytes and grants no protocol phase.
-- [ ] Implement actual signed READY write from the retained original resource/input
-      facts with one write/grammar intent; keep production startup closed until qualified.
+- [x] Implement/review actual fixed signed READY write from retained original resource/
+      input facts, one write/grammar intent and original completion-Future allocation.
+      Same-reader GO joins that exact completion; production startup and worker relay
+      remain closed. See [write evidence and limits](../../docs/research/presentation-signed-ready-write-2026-11-06.md).
 - [x] Implement/review source signed GO/CANCEL receiver/context on the existing original
       controller task/cursor and frozen budget before any credential resource/READY
       startup. No legacy fallback, new parser task or boolean gate opening.

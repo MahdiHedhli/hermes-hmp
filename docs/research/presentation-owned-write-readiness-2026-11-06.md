@@ -39,7 +39,7 @@ refused because its final control-state predicate was false. That run is retaine
 as a failure; no root cause or causal fix is claimed for it, and the later pass
 does not erase it. Protocol deadlines were not extended and the fixture was not
 changed in this slice. Final expanded affected regression: **1,358 passed, one skipped**, 53.57 seconds.
-Exact-source CI remains separate and pending.
+Exact source `f210093` subsequently passed [CI742](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42280521444): plugin lint/tests/surface/log-hygiene/privacy and all Python 3.12/3.13/3.14 Unicode jobs.
 
 Remaining sender work must retain the producer's original resource/input/key
 facts, one fixed write/grammar intent and native syscall offsets. An uncertain

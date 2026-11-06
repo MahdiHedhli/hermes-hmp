@@ -178,3 +178,16 @@ through callbacks before/after signing. It performs no socket write, grammar
 READY, resource start or GO relay. Fixtures independently start disposable
 resources; production admission remains unqualified. Prior CI736 failures and
 reviewed fixture-order fixes remain explicit. See [evidence](../../docs/research/presentation-signed-ready-producer-2026-11-06.md).
+
+## November 6 — fixed READY write joins the original controller
+
+The retained `CredentialReadyWriter` now sends only the producer's original
+signed READY + empty HBR1 frame with concrete syscall progress and owned write
+readiness. Its original native completion Future is retained before initialization
+in immutable original references. The original controller joins that allocation
+under the original deadline before a native GO-read receipt. No worker GO relay,
+production resource admission or runtime/startup activation follows.
+
+Writer-local historical retirement does not settle an independently interrupted
+control read. Its unknown read claim continues to prevent aggregate socket/clock
+closure. See [READY write evidence and limits](../../docs/research/presentation-signed-ready-write-2026-11-06.md).

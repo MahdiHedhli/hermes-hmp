@@ -612,6 +612,11 @@ not weaken the closed plugin registration or optional-media import boundaries.
 - `presentation_credential_queued.py`: original adopted connection/key/input-receipt pre-resource queued-current check; no resource or GO permit.
 
 - `presentation_control_binding.py`: prepared original controller task/key-context handoff; preparation alone remains a hard no-IO stop.
-- `presentation_credential_control.py`: original controller-task first signed GO/CANCEL frame staging; explicit signed pre-GO CANCEL adoption joins existing native grammar/budget/receipt and owned local park/stop. Typed GO read/native receipt may precede same-task signed CANCELseq2 under original work/earliest cleanup budget; the dedicated original-service CANCEL consumer is distinct from generic work. Signed READY/resources/worker relay and production dispatch remain closed.
+- `presentation_credential_control.py`: original controller-task first signed GO/CANCEL frame staging; explicit signed pre-GO CANCEL adoption joins existing native grammar/budget/receipt and owned local park/stop. Typed GO read/native receipt may precede same-task signed CANCELseq2 under original work/earliest cleanup budget; the dedicated original-service CANCEL consumer is distinct from generic work. The actual signed READY writer is joined before a GO-read receipt when present;
+production resource admission, worker relay and dispatch remain closed.
 
-- `presentation_credential_ready.py`: fixed original-service READY signing from actual resource/input-write facts; no socket write, grammar READY, resource admission or GO relay.
+- `presentation_credential_ready.py`: fixed original-service READY producer plus retained
+  signed socket writer, original write/grammar intent, concrete progress/owned readiness,
+  original completion-Future allocation and same-reader GO join. No resource admission,
+  worker GO relay or production activation. Historical local retirement is distinct
+  from signing/current-material success; uncertain native IO retains debt.
