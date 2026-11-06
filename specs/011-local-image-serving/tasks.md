@@ -609,3 +609,74 @@ retain raw current/peak snapshots, signed deltas and prior peaks; 17 zero-new-pe
 cases do not imply zero allocation. Root's 328 focused guards/lint passed.
 Current writer/control/refusal/residual/ABA evidence remains required; C6b stays
 unchecked. No native-C, Linux, physical display, activation or release pass follows.
+
+## Current writer refresh foundation (2026-11-06)
+
+- [x] **CW1** Inert owned-actor/read-hook source and independent foundation review
+  at `89703b8`: 21 causal models, 349 combined focused checks/lint. Initial
+  ambiguous-release witness blocker repaired and independently accepted.
+- [ ] **CW2** Native fixture DB-close/restore barriers retain every actual actor
+  and uncertain borrow/release debt, including partial setup and failed hooks.
+- [ ] **CW3** Explicit public-API applicability, before/after scheduling and exact
+  first/second outcome oracles across the full declared workload/selector matrix.
+- [ ] **CW4** Independent exact-source entry review, genuine native writer/control/
+  refusal/residual/ABA execution and artifact readback; no old500count transfer.
+- [ ] **CW5** Scoped current evidence documentation; preserve unresolved native
+  non-atomic/ABA and G-M1/G-M2 and separate platform/device/release gates.
+
+[Writer contract](NATIVE_BINDING_WRITER_REFRESH.md). CW1 is foundation acceptance
+only, not C6b completion or native writer execution.
+
+## Writer integrated source and bounded pilot (2026-11-06)
+
+CW2's native DB-close/global cleanup barriers and the currently declared subset
+of CW3 oracles are implemented and independently accepted for a bounded pilot.
+At `8167016`, all 12 pilot phases and 24 first/second outcomes passed independent
+artifact/source/runtime readback. Each process balanced 39/39 borrows and closed
+its writer/hooks/DB/listener/workers; all 132 command outcomes were known.
+Root's 559 focused guards/lint passed.
+
+[Exact scope](../../docs/research/local-media-native-writer-pilot-2026-11-06.md)
+preserves the native guard refusal, surviving-selector semantics, residual stale
+acceptance and Phone-store ABA acceptance. Full 624-phase execution requires a
+reviewed storage/layout plan; native fork/reset applicability and other coverage
+remain open. CW3/CW4/CW5 and current C6b remain unchecked. No native safety
+limitation is reclassified as a fix or a physical/release qualification.
+
+### CW3 constructed child isolation candidate, 2026-11-06
+
+- [ ] Independently review `branch_child`/`reset_child` public-API synthetic
+  lineage facts and unchanged parent binding oracles; 247 focused models passed.
+- [ ] Verify the new cases on pinned native source after source acceptance.
+  Declared matrix is now 768 phases; prior 12-phase pilot remains its exact
+  historical scope. Actual gateway fork/reset admission is not covered by child
+  construction and remains separately assessed. Preserve storage and actor gates.
+
+- [ ] Read back the four child native phases at `befa0f7` independently (112
+  artifacts, eight parent outcomes); no full matrix/gateway admission claim.
+- [ ] Review pure 768-phase/384-pair planner, then implement two fresh DB scopes
+  per process with explicit closed checkpoints and unchanged deadline. Planner
+  models pass; paired execution is not implemented by the planner.
+
+- [x] Independent four-child artifact readback accepted: exact112 artifacts and
+  source/runtime/outcome/closure bindings; bounded constructed-child scope only.
+- [ ] Paired runner source implemented with two exclusive DB scopes and closed
+  checkpoints; independent source review and unchanged-budget native pilot pending.
+
+- [x] Independent paired source review accepted after canonical checkpoint type
+  repair, before native execution. Two largest-shape native processes/four phases
+  at `f6c693f` passed independent 60-artifact/checkpoint/source/runtime readback.
+- [ ] Execute and independently review all 768 declared phases with capacity
+  preflight/reserve and unchanged actor/deadline/security rules. Current bounded
+  pilots are not the full matrix; operational gateway reset admission stays distinct.
+
+- [x] Independently review full-matrix orchestration and expected-source guard:
+  one attempt per exclusive root, per-admission 32 GiB+1 GiB capacity check,
+  no deletion/retry/resume and unchanged native actor refusal/settlement.
+- [ ] Root execute all 384 pairs and independently reconcile every phase,
+  source/runtime/checkpoint identity and actor/database cleanup before matrix pass.
+
+- [ ] Reconcile terminal matrix refusal: 174 completed pairs, pair 174 over
+  original 12 seconds, same actor settled terminal 0 but permanently refused,
+  209 pairs never started. Independently verify retained artifacts and plan a
+  bounded heavy-shape partition; do not auto-resume/retry or extend the deadline.

@@ -1,3 +1,20 @@
+## Native writer matrix stopped at observation limit — November 6, 2026
+
+The 768-phase run at `21937dc` completed 174 pairs (348 phases), then stopped
+on pair 174: the largest 98-session/full-prompt Bot shape with one selector,
+`deactivate:ids0` and `deactivate:page`. Its native process exceeded the unchanged
+12-second observation limit. The original retained actor settled to terminal 0;
+both checkpoints and final report show balanced 53/53 borrows and closed
+DB/listener/workers, but this attempt remains refused. It was not retried or
+promoted to a pass, and the remaining 209 pairs were never started.
+
+The accepted paired pilot did not prove sufficient timing margin for the full
+matrix. Detailed phase timing was not captured, so the cause is not established.
+Independent refusal/prefix artifact review and a reviewed heavy-shape partition
+are next. No deadline extension, evidence deletion, deployment or release pass.
+The isolated ordinary/delegate follow-up remains source-reviewed with native
+execution pending; older statements that this matrix is running are superseded.
+
 # Roadmap
 
 ## Native binding process-memory observations reviewed — November 6, 2026
@@ -14,6 +31,28 @@ not native-C bounds, cold calls, production memory budgets or a new ceiling.
 Root's 328 focused checks/lint passed. Mint PR132 is integrated at `0e4f5bc`
 with successful final CI. Current writer/control/refusal/residual/ABA evidence,
 C6b, physical display/activation and release qualification remain open.
+
+### Writer refresh pilot checkpoint
+
+[PR134](https://github.com/MahdiHedhli/hermes-hmp/pull/134) now includes
+independently reviewed DB-close barriers and scenario oracles at `8167016`.
+The bounded 12-phase native pilot passed: 24 exact first/second outcomes,
+336 artifact/source/runtime bindings, 39/39 borrows per process and verified
+writer/hooks/DB/listener/worker closure. It exercised nine successful public
+native mutation calls, five synthetic Phone-store calls and one native guard
+refusal. Residual stale acceptance and Phone-store ABA acceptance remain
+limitations. Root's 559 focused checks/lint passed; no reviewer execution.
+The full 624-phase matrix, storage layout and native fork/reset applicability
+remain open, so C6b and delivery/release are not complete.
+[Exact pilot scope](docs/research/local-media-native-writer-pilot-2026-11-06.md).
+
+### Constructed-child and paired-runner checkpoint
+
+Four constructed branch/reset child-isolation phases at `befa0f7` passed independent source/artifact review: eight exact parent-binding outcomes, 112 artifacts and 39/39 native borrows per process with verified cleanup. These do not exercise actual gateway fork/reset admission.
+
+The paired runner at `f6c693f` passed independent source review after a type-exact checkpoint repair. Two largest-history paired processes completed four phases with fresh DB/home scopes, four durable checkpoints, 60 reviewed artifacts, 53/53 borrows per process and verified cleanup. Child isolation retained exact parent selections; Phone append/deactivation refused the concurrent read and the fresh read accepted the expected 128/127 rows. No deadline extension, retry, guard bypass or reviewer execution.
+
+The declared full matrix contains 768 unique phases in 384 pairs. Full-matrix execution, operational fork/reset applicability, C6b, activation, physical display and release qualification remain open. The related suite passed 601 checks before the finite checkpoint type repair; 304 targeted checks passed afterward, with lint clean.
 
 ## Native-bound modeled mint-memory sample reviewed — November 6, 2026
 

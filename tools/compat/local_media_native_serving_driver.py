@@ -33,6 +33,11 @@ _BINDING_SPEC = importlib.util.spec_from_file_location(
     Path(__file__).with_name("local_media_native_binding_sample.py"))
 binding_contract = importlib.util.module_from_spec(_BINDING_SPEC)
 _BINDING_SPEC.loader.exec_module(binding_contract)
+_WRITER_SPEC = importlib.util.spec_from_file_location(
+    "_media_native_writer_contract",
+    Path(__file__).with_name("local_media_native_writer_sample.py"))
+writer_contract = importlib.util.module_from_spec(_WRITER_SPEC)
+_WRITER_SPEC.loader.exec_module(writer_contract)
 _MAX_ARCHIVE = 160 * 1024 * 1024  # Tar framing is separate from source bytes.
 _MAX_SOURCE = 128 * 1024 * 1024
 _MAX_REPORT = 64 * 1024 * 1024
@@ -190,12 +195,15 @@ def _no_custom_tar(root, repository, label, receipt):
 
 def validate_report(report, native, hmp, executable_sha, *, sample_memory=False,
                     sample_binding_seed=False, binding_cost_case=None, binding_cost_selector=None,
-                    binding_mint=False, binding_rss=False):
+                    binding_mint=False, binding_rss=False, binding_writer=None):
     commands._require(type(sample_memory) is bool and type(sample_binding_seed) is bool and
                       not (sample_memory and sample_binding_seed))
     binding_contract.validate_sample_mode(
         binding_cost_case, binding_cost_selector, binding_mint, binding_rss)
     commands._require(binding_cost_case is None or sample_binding_seed)
+    writer_contract.validate_request(binding_cost_case, binding_cost_selector, binding_writer)
+    commands._require(binding_writer is None or (sample_binding_seed and
+                      not binding_mint and not binding_rss))
     expected = _TRUE | _FALSE | {"schema", "native_acquires", "native_releases",
         "descriptor_records_retained", "audit_denials", "scoped_native_sweep",
         "expected_absent_proc_probes", "os_metadata_sha256", "os_metadata_reads", "own_fd_listings",
@@ -206,7 +214,8 @@ def validate_report(report, native, hmp, executable_sha, *, sample_memory=False,
     if sample_binding_seed:
         expected = expected | {"native_binding_preparation"}
     if binding_cost_case is not None:
-        key = ("native_binding_mint" if binding_mint else
+        key = ("native_binding_writer" if binding_writer is not None else
+               "native_binding_mint" if binding_mint else
                "native_binding_rss" if binding_rss else "native_binding_cost")
         expected = expected | {key}
     commands._require(type(report) is dict and set(report) == expected and
@@ -231,10 +240,26 @@ def validate_report(report, native, hmp, executable_sha, *, sample_memory=False,
     if sample_memory:
         memory_contract.validate_memory_report(report["native_memory_observation"])
     if sample_binding_seed:
-        binding_contract.validate_preparation_report(
-            report["native_binding_preparation"], binding_cost_case)
+        if type(binding_writer) is tuple:
+            preparations = report["native_binding_preparation"]
+            commands._require(type(preparations) is list and len(preparations) == 2)
+            for preparation in preparations:
+                binding_contract.validate_preparation_report(preparation, binding_cost_case)
+        else:
+            binding_contract.validate_preparation_report(
+                report["native_binding_preparation"], binding_cost_case)
     if binding_cost_case is not None:
-        if binding_mint:
+        if binding_writer is not None:
+            if type(binding_writer) is tuple:
+                phases = report["native_binding_writer"]
+                commands._require(type(phases) is list and len(phases) == 2)
+                for phase, request in zip(phases, binding_writer, strict=True):
+                    writer_contract.validate_report(phase, binding_cost_case,
+                                                    binding_cost_selector, request)
+            else:
+                writer_contract.validate_report(report["native_binding_writer"],
+                    binding_cost_case, binding_cost_selector, binding_writer)
+        elif binding_mint:
             binding_contract.validate_mint_report(
                 report["native_binding_mint"], binding_cost_case, binding_cost_selector)
         elif binding_rss:
@@ -255,14 +280,35 @@ def _native_command(root, executable, entry, *, sample_binding_seed=False):
     return [*command, str(executable), "-I", "-B", str(entry), str(root)]
 
 
+def validate_pair_checkpoints(root, report, requests):
+    """Read back both exclusive private checkpoints; never replay a partial pair."""
+    commands._require(type(requests) is tuple and len(requests) == 2)
+    for index, request in enumerate(requests):
+        data = _read_private(root / f"writer-phase-{index}.json", 1024 * 1024)
+        checkpoint = json.loads(data, object_pairs_hook=commands._pairs)
+        expected = {"phase": index, "request": request,
+            "preparation": report["native_binding_preparation"][index],
+            "writer": report["native_binding_writer"][index], "database_closed": True}
+        commands._require(type(checkpoint) is dict and
+                          json.dumps(checkpoint, sort_keys=True, separators=(",", ":")) ==
+                          json.dumps(expected, sort_keys=True, separators=(",", ":")) and
+                          type(checkpoint.get("phase")) is int and
+                          checkpoint.get("database_closed") is True)
+
+
 def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
                 sample_binding_seed=False, binding_cost_case=None, binding_cost_selector=None,
-                    binding_mint=False, binding_rss=False):
+                    binding_mint=False, binding_rss=False, binding_writer=None,
+                    expected_hmp_commit=None):
+    commands._require(expected_hmp_commit is None or _sha(expected_hmp_commit))
     commands._require(type(sample_memory) is bool and type(sample_binding_seed) is bool and
                       not (sample_memory and sample_binding_seed))
     binding_contract.validate_sample_mode(
         binding_cost_case, binding_cost_selector, binding_mint, binding_rss)
     commands._require(binding_cost_case is None or sample_binding_seed)
+    writer_contract.validate_request(binding_cost_case, binding_cost_selector, binding_writer)
+    commands._require(binding_writer is None or (sample_binding_seed and
+                      not binding_mint and not binding_rss))
     commands._require(not binding_rss or sys.platform == "darwin")
     commands._require(type(root) is type(Path()) and root.is_absolute() and root.resolve() == root)
     info = root.stat()
@@ -285,13 +331,18 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
                     receipt["binding_mint"] = True
                 if binding_rss:
                     receipt["binding_rss"] = True
+                if binding_writer is not None:
+                    receipt["binding_writer"] = binding_writer
+                    receipt["writer_fixture_source_sha256"] = commands._digest(
+                        Path(_WRITER_SPEC.origin))
         commands._save(root / "receipt.json", receipt)
         version = _git(root, _ROOT, ["--version"], "git_version", receipt).decode().strip()
         match = re.fullmatch(r"git version (\d+)\.(\d+)\.(\d+)(?:[ .-].*)?", version)
         commands._require(match is not None and tuple(map(int, match.groups())) >= (2, 54, 0))
         receipt["git_version"] = version
         hmp_commit = _git(root, _ROOT, ["rev-parse", "HEAD"], "hmp_head", receipt).decode().strip()
-        commands._require(_sha(hmp_commit))
+        commands._require(_sha(hmp_commit) and
+                          (expected_hmp_commit is None or hmp_commit == expected_hmp_commit))
         receipt["hmp_commit"] = hmp_commit
         copies = {}
         for label, repository, commit in (("native", native_repository, native_commit),
@@ -321,6 +372,10 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
             copied_binding = root / "hmp/tools/compat/local_media_native_binding_sample.py"
             commands._require(commands._digest(copied_binding) ==
                               receipt["binding_fixture_source_sha256"])
+        if binding_writer is not None:
+            commands._require(commands._digest(
+                root / "hmp/tools/compat/local_media_native_writer_sample.py") ==
+                receipt["writer_fixture_source_sha256"])
         copied_fixture = root / "hmp/tools/compat/local_media_native_serving_fixture.py"
         commands._require(commands._digest(copied_fixture) == receipt["fixture_source_sha256"])
         commands._save(root / "source-manifest.json", copies)
@@ -337,7 +392,8 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
                     call = ("report=module.run_fixture(root, sample_binding_seed=True, "
                             f"binding_cost_case={binding_cost_case}, "
                             f"binding_cost_selector={binding_cost_selector}, "
-                            f"binding_mint={binding_mint}, binding_rss={binding_rss})")
+                            f"binding_mint={binding_mint}, binding_rss={binding_rss}, "
+                            f"binding_writer={binding_writer!r})")
             output.write(_ENTRY.replace("report=module.run_fixture(root)", call))
         executable = Path(sys.executable).absolute()  # Preserve the selected venv path.
         executable_sha = commands._digest(executable.resolve())
@@ -357,7 +413,9 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
                         sample_memory=sample_memory, sample_binding_seed=sample_binding_seed,
                         binding_cost_case=binding_cost_case,
                         binding_cost_selector=binding_cost_selector, binding_mint=binding_mint,
-                        binding_rss=binding_rss)
+                        binding_rss=binding_rss, binding_writer=binding_writer)
+        if type(binding_writer) is tuple:
+            validate_pair_checkpoints(root, report, binding_writer)
         for label, inventory in copies.items():
             commands._require(all(commands._digest(root / label / name) == value
                                   for name, value in inventory.items()))

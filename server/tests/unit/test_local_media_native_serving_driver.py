@@ -248,3 +248,57 @@ def test_archive_framing_does_not_expand_extracted_source_budget(tmp_path, monke
     assert not (tmp_path / "refused/code.py").exists()
     monkeypatch.setattr(driver, "_MAX_SOURCE", 2)
     assert driver.extract_sources(bundle, tmp_path / "accepted", COMMIT)
+
+
+@pytest.mark.parametrize("fault", [None, "missing", "swapped", "open", "bool_index",
+                                   "bool_count", "float_count", "extra"])
+def test_pair_checkpoint_readback_never_promotes_missing_or_inconsistent_phase(tmp_path, fault):
+    requests = ("control:page", "append:page")
+    report = {"native_binding_preparation": [{"database": 0}, {"database": 1}],
+              "native_binding_writer": [{"outcome": 0}, {"outcome": 1}]}
+    for index, request in enumerate(requests):
+        if fault == "missing" and index == 1:
+            continue
+        value = {"phase": index, "request": request,
+                 "preparation": report["native_binding_preparation"][index],
+                 "writer": report["native_binding_writer"][index], "database_closed": True}
+        if index == 1:
+            if fault == "swapped":
+                value["writer"] = report["native_binding_writer"][0]
+            if fault == "open":
+                value["database_closed"] = False
+            if fault == "bool_index":
+                value["phase"] = True
+            if fault == "bool_count":
+                value["writer"] = {"outcome": True}
+            if fault == "float_count":
+                value["writer"] = {"outcome": 1.0}
+            if fault == "extra":
+                value["extra"] = 1
+        path = tmp_path / f"writer-phase-{index}.json"
+        path.write_text(json.dumps(value))
+        path.chmod(0o600)
+    if fault:
+        with pytest.raises((RuntimeError, OSError)):
+            driver.validate_pair_checkpoints(tmp_path, report, requests)
+    else:
+        driver.validate_pair_checkpoints(tmp_path, report, requests)
+
+
+def test_expected_source_mismatch_refuses_before_archive_or_native_operation(tmp_path, monkeypatch):
+    root = tmp_path / "owned-source-check"
+    root.mkdir(mode=0o700)
+    calls = []
+
+    def git(directory, repo, args, role, receipt, **kwargs):
+        calls.append(role)
+        if role == "git_version":
+            return b"git version 2.54.0\n"
+        assert role == "hmp_head"
+        return ("c" * 40 + "\n").encode()
+
+    monkeypatch.setattr(driver, "_git", git)
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(root, tmp_path / "native", COMMIT, expected_hmp_commit="b" * 40)
+    assert calls == ["git_version", "hmp_head"]
+    assert not (root / "native.tar").exists() and not (root / "entry.py").exists()

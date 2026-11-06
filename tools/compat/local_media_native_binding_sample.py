@@ -381,7 +381,9 @@ def validate_rss_report(report, case, selector):
     require(all(type(row[key]) is int and row[key] == value for key, value in expected.items()))
 
 def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
-                    cost_selector=None, cost_results=None, mint=False, rss=False):
+                    cost_selector=None, cost_results=None, mint=False, rss=False,
+                    writer_module=None, writer_name=None, writer_owners=None, hook_owners=None,
+                    writer_ports=None):
     """Verify the full matrix, or both contexts of one explicitly selected cost shape.
 
     Each lineage/prompt shape owns a fresh native DB with BOTH proof sources:
@@ -393,9 +395,16 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
     from hmp_plugin.contract import ConversationRef
 
     validate_sample_mode(cost_case, cost_selector, mint, rss)
+    if writer_name is not None:
+        require(writer_module is not None and not mint and not rss and
+                type(writer_owners) is list and type(hook_owners) is list and
+                type(writer_ports) is tuple and len(writer_ports) == 2 and
+                all(callable(port) for port in writer_ports))
+        writer_module.validate_request(cost_case, cost_selector, writer_name)
     require((cost_case is None and cost_results is None) or
             (cost_case is not None and type(cost_results) is list and not cost_results))
     cost_rows = []
+    writer_evidence = None
     sidecar, binding = bound_modules(fx.rig.ctx.media_modules)
     cells = {}
     selected_shapes = [(index, shape) for index, shape in enumerate(SHAPES)
@@ -442,7 +451,9 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
                         accepted.append(len(result.accepted))
                         if (cost_case == KINDS.index(kind) * len(SHAPES) + index and
                                 cost_selector == count):
-                            if mint:
+                            if writer_name is not None:
+                                writer_evidence = (candidate, result, selected, shape)
+                            elif mint:
                                 cost_rows.append(measure_mint(fx.rig.ctx.media_registry_module,
                                     candidate, result, user=user, profile=profile))
                             elif rss:
@@ -460,8 +471,17 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
                         "proof_contexts": 2, "verified_database_prompt_count": sum(
                             item["verified_prompt_count"] for item in shapes.values()),
                         "verified_unprompted_extras": 1}
+                if writer_name is not None:
+                    require(writer_evidence is not None)
+                    candidate, reference, selected, shape = writer_evidence
+                    cost_rows.append(writer_module.run_scenario(
+                        fx, db, candidate, reference, selected, shape, extra,
+                        case=cost_case, request=writer_name, user=user, profile=profile, chat=chat,
+                        owners=writer_owners, hooks=hook_owners,
+                        acquire_native=writer_ports[0], release_native=writer_ports[1]))
             finally:
-                fx.native.world.start_conversation(profile, chat, "p1")
+                if writer_name is None or writer_module.barrier(writer_owners, hook_owners):
+                    fx.native.world.start_conversation(profile, chat, "p1")
         require(db._conn is None)
     ordered = [cells[(kind, lineage, prompt)] for kind in KINDS
                for _, (lineage, prompt) in selected_shapes]
@@ -475,7 +495,11 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
                 "prompt_chars": prompt, "selectors": cost_rows, "warmups_per_selector": 1,
                 "traces_per_selector": 1, "rss_measured": False, "mint_measured": False,
                 "writer_cases_run": 0}
-        if mint:
+        if writer_name is not None:
+            require(len(cost_rows) == 1)
+            cost = cost_rows[0]
+            writer_module.validate_report(cost, cost_case, cost_selector, writer_name)
+        elif mint:
             cost = {"case": cost_case, "kind": kind, "lineage_count": lineage,
                     "prompt_chars": prompt, "selectors": cost_rows, "modeled_loop": True,
                     "binding_measured": False, "rss_measured": False, "writer_cases_run": 0}
