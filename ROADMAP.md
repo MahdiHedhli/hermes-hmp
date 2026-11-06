@@ -15,6 +15,17 @@ Root's 328 focused checks/lint passed. Mint PR132 is integrated at `0e4f5bc`
 with successful final CI. Current writer/control/refusal/residual/ABA evidence,
 C6b, physical display/activation and release qualification remain open.
 
+### Writer refresh foundation checkpoint
+
+[PR134](https://github.com/MahdiHedhli/hermes-hmp/pull/134) adds independently
+reviewed inert actor/read-hook foundations at `89703b8`. Twenty-one causal
+ownership models and 349 combined focused checks passed. Review caught and
+root repaired ambiguous release acknowledgment before any native writer use;
+only exact True clears a retained handle. Native DB-close barriers, scenario
+oracles and the full applicable writer/residual/ABA execution remain pending.
+This is not a native concurrency or delivery/release pass.
+[Contract](specs/011-local-image-serving/NATIVE_BINDING_WRITER_REFRESH.md).
+
 ## Native-bound modeled mint-memory sample reviewed — November 6, 2026
 
 [Current evidence](docs/research/local-media-native-mint-memory-2026-11-06.md)

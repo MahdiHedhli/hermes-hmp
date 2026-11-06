@@ -609,3 +609,20 @@ retain raw current/peak snapshots, signed deltas and prior peaks; 17 zero-new-pe
 cases do not imply zero allocation. Root's 328 focused guards/lint passed.
 Current writer/control/refusal/residual/ABA evidence remains required; C6b stays
 unchecked. No native-C, Linux, physical display, activation or release pass follows.
+
+## Current writer refresh foundation (2026-11-06)
+
+- [x] **CW1** Inert owned-actor/read-hook source and independent foundation review
+  at `89703b8`: 21 causal models, 349 combined focused checks/lint. Initial
+  ambiguous-release witness blocker repaired and independently accepted.
+- [ ] **CW2** Native fixture DB-close/restore barriers retain every actual actor
+  and uncertain borrow/release debt, including partial setup and failed hooks.
+- [ ] **CW3** Explicit public-API applicability, before/after scheduling and exact
+  first/second outcome oracles across the full declared workload/selector matrix.
+- [ ] **CW4** Independent exact-source entry review, genuine native writer/control/
+  refusal/residual/ABA execution and artifact readback; no old500count transfer.
+- [ ] **CW5** Scoped current evidence documentation; preserve unresolved native
+  non-atomic/ABA and G-M1/G-M2 and separate platform/device/release gates.
+
+[Writer contract](NATIVE_BINDING_WRITER_REFRESH.md). CW1 is foundation acceptance
+only, not C6b completion or native writer execution.
