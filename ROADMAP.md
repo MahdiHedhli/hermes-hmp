@@ -1,3 +1,21 @@
+## Heavy-case fresh partition samples reviewed — November 6, 2026
+
+Two separately reviewed fresh single-phase experiments at `5c96927` completed
+under the unchanged 12-second limit. Each preserved the largest 98-session/full-
+prompt Bot shape, both proof contexts, history and one selected tool row.
+`deactivate:ids0` and `deactivate:page` each refused the concurrent binding with
+`rows_changed`, then freshly returned `ok` with an empty accepted selection.
+Independent readback accepted all 52 artifacts, source/Git/runtime/entry/cache
+bindings, 39/39 borrows per process and cleanup. No expiry or settlement-only
+success was used. The original paired attempt remains refused and unchanged.
+
+The pure remaining planner preserves all 418 never-attempted phases from pairs
+175..383 in 301 jobs, splitting only the largest shape; its source review and
+17 model cases passed. Its output is not execution authority and excludes the
+refused pair. The combined related suite passed 696 tests. Completed-prefix
+artifact audit, source-bound execution integration and supplemental coverage
+remain open. No full-matrix, delivery or release pass is claimed.
+
 ## Cached single-phase lineage sample — November 6, 2026
 
 A fresh native sample at `0397803` used the reviewed optional archive-clone path

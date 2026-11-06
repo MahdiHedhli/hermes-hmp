@@ -697,3 +697,11 @@ limitation is reclassified as a fix or a physical/release qualification.
 - [x] Independent cached sample readback accepted all 26 artifacts and source/
   runtime/clone bindings; one largest Bot ordinary-child phase only.
 - [ ] Review broader heavy single-phase partition and all remaining scope.
+
+- [x] Pure remaining partition source independently accepted: exact historical
+  catalog digest, 301 jobs / 418 unattempted phases, refused pair excluded.
+- [x] Separately reviewed two fresh single-phase experiments accepted at
+  `5c96927`: all 52 artifacts/source/runtime/entry/cache bindings and cleanup.
+  The original paired refusal remains refused, not retroactively passed.
+- [ ] Completed-prefix full artifact review and remaining-plan execution owner
+  integration/admission; supplemental144 and final composite coverage still open.
