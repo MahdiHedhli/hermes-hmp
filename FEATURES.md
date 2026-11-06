@@ -1,3 +1,13 @@
+## Native image verification checkpoint — November 6, 2026
+
+The `e8653d5` base-tail batch is stopped: 201 of 301 jobs completed (296 phases), then job 201 / original pair 323 exceeded the unchanged 12-second observation limit. That refused paired Phone case used selector 16 with `deactivate:ids1` and `eligibility:ids0`. The same retained child settled to exit 0, but no completion was published and no later job started. Independent readback verified its 28 artifacts, source/Git/runtime/cache bindings, both closed phase checkpoints, 53/53 borrows and closed DB/listener/workers/hooks, with zero audit denials or sweep. These are post-expiry diagnostics, not an accepted phase pass. The timing cause is unproven; this failure is not limited to a full-prompt shape. No retry, deadline extension or data deletion occurred.
+
+A separate source-reviewed collector is now auditing only the 201 completed jobs / 296 phases. The former 301-job collector was not run and must refuse this failed state. Completed-prefix acceptance, the 120 never-started phases, the newly refused two phases and final composite coverage remain open. The original pair-174 refusal remains unchanged.
+
+Earlier independent evidence remains bounded: original source `21937dc` has 174 accepted pairs / 348 phases; fresh source `5c96927` has two separately reviewed heavy single-phase observations, and `0397803` has one reviewed cached ordinary-child phase. These do not rehabilitate either refused attempt or establish a storage/timing bound.
+
+[HMP PR #136](https://github.com/MahdiHedhli/hermes-hmp/pull/136) prepares all 144 added ordinary/delegated-child phases with retained original expanded-catalog coordinates. The historical `heavy_only_v1` layout has 90 prospective jobs; explicitly selected `per_phase_v2` has 144 single-phase jobs with identical ordered coverage and no automatic switching. Planner and execution-owner source reviews and 45 focused tests pass; no native timing improvement is claimed. Exact source `1aa25c0` passed [CI 42202292052](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42202292052): 8,073 unit/tool tests, 190 subtests (33 skips, 18 warnings), lint, closed plugin surface and privacy checks; Unicode 17 passed 96 cases each on Python 3.12/3.13/3.14. Log hygiene had no captured acceptance logs to scan. No supplemental native execution, production activation, signed-phone image display or release qualification is claimed.
+
 ## Heavy-case fresh partition samples reviewed — November 6, 2026
 
 Two separately reviewed fresh single-phase experiments at `5c96927` completed

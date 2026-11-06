@@ -56,3 +56,44 @@ def remaining_plan(base_pairs, completed_pairs, refused_pair):
             "planned_phases": len(expected), "refused_pair": refused_pair,
             "refused_pair_replayed": False, "full_matrix_completed": False,
             "source_receipt_reconciliation_required": True}
+
+
+EXPANDED_CATALOG_SOURCE = "e8653d5e48b2270394d7a6a738cf0f6570cb6687"
+EXPANDED_PLAN_SHA256 = "0a495f4ccbfd646f7d0fddae209b6f7500ec2fecb8965290bd0b6f5751531f15"
+
+
+def supplemental_plan(expanded_pairs, *, layout="heavy_only_v1"):
+    """Pure coverage plan for the additional child-lineage scenarios only.
+
+    These are new observations, not a retry of historical base requests. No
+    source receipt, process, root, execution or production authority is supplied.
+    """
+    require(type(layout) is str and layout in ("heavy_only_v1", "per_phase_v2"))
+    require(type(expanded_pairs) is tuple and len(expanded_pairs) == 456)
+    for row in expanded_pairs:
+        require(type(row) is tuple and len(row) == 3 and
+                type(row[2]) is tuple and len(row[2]) == 2)
+        contract.validate_request(*row)
+    encoded = json.dumps(expanded_pairs, separators=(",", ":")).encode("ascii")
+    require(hashlib.sha256(encoded).hexdigest() == EXPANDED_PLAN_SHA256)
+    additions = frozenset(("ordinary_child", "delegate_child"))
+    selected = tuple((index, row) for index, row in enumerate(expanded_pairs)
+                     if all(request.split(":")[0] in additions for request in row[2]))
+    require(len(selected) == 72)
+    jobs = []
+    for origin, (case, selector, pair) in selected:
+        groups = ((0,), (1,)) if layout == "per_phase_v2" or case % 4 == 3 else ((0, 1),)
+        for phases in groups:
+            jobs.append({"origin_pair": origin, "origin_phases": phases,
+                         "case": case, "selector": selector,
+                         "request": pair[phases[0]] if len(phases) == 1 else pair})
+    expected = {(origin, phase) for origin, _ in selected for phase in (0, 1)}
+    actual = [(job["origin_pair"], phase) for job in jobs for phase in job["origin_phases"]]
+    require(len(jobs) == (144 if layout == "per_phase_v2" else 90) and
+            len(actual) == len(set(actual)) == len(expected) == 144 and set(actual) == expected)
+    return {"catalog_source": EXPANDED_CATALOG_SOURCE,
+            "catalog_sha256": EXPANDED_PLAN_SHA256,
+            "scope": "child_lineage_supplement", "layout": layout, "jobs": tuple(jobs),
+            "planned_pairs": 72, "planned_phases": 144,
+            "base_phases_included": False, "full_matrix_completed": False,
+            "execution_admission_review_required": True}

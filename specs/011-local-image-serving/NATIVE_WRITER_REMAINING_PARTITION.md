@@ -1,3 +1,7 @@
+# Current execution outcome — November 6, 2026
+
+The e8653d5 batch stopped after 201 jobs / 296 phases. Job 201 (original pair 323, case 6, selector 16) exceeded the unchanged 12-second observation limit. Its original retained child settled to exit 0, but this attempt remains refused and no later job started. Independent review accepted only its post-expiry diagnostic/source/artifact/cleanup evidence, not a phase pass. The separate completed-prefix collector is auditing 201 jobs; the full 301-job collector must refuse this failed state. Cause remains unproven and the failed case is not full-prompt. No retry or deadline extension is authorized by these observations. See [current refusal](../../docs/research/local-media-native-base-tail-refusal-2026-11-06.md). Earlier planning/checkpoints below are historical.
+
 # Pure remaining-phase partition (not execution authority)
 
 The original run at `21937dc` completed 174 pairs, then pair 174 exceeded the
