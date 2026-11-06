@@ -5,8 +5,11 @@ fetch routes over a real scratch SessionDB and native registry. Routing, host
 flag/owner authorization and compatibility remain explicitly synthetic. It has
 positive controls before wrong-device/profile, changed-file/message and revoked
 device checks; there is no provider, actual image producer, live home or phone.
-The native serving scenario has **not run**. Source-only materialization and entry
-review remain required before execution. No T12, Linux or physical gate is closed.
+The first native-serving invocation has **not completed**: literal source
+materialization passed, then native import stopped at missing `ruamel.yaml` in
+the selected test environment, before database/HTTP work. Independent source
+review accepted the materializer/entry repairs. A fresh lock-backed dependency
+environment is next. No T12, Linux or physical gate is closed.
 
 Review found and repaired SQLite URI containment, partial-setup resource retention
 and import-root/cache binding defects before native execution. The latest 32 guard
@@ -18,8 +21,7 @@ the 32 harness guards, 61 checks pass on Python 3.14. Review repaired a wrong
 working-folder handoff; configured tar filters, uncertain command settlement and
 invalid diagnostics refuse before native entry. Literal Git tree/blob and executable-mode
 checks reject archive substitutions or omissions; Git replacement objects, lazy
-fetches and protocols are disabled. Native execution remains pending
-independent source acceptance.
+fetches and protocols are disabled. No native-serving pass is claimed; dependency preparation remains pending.
 
 No host flag, device permission, app or host deployment changed. See
 [local-image task status](specs/011-local-image-serving/tasks.md).

@@ -444,3 +444,22 @@ files totaled 133,762,797 bytes, below the unchanged 128-MiB source budget.
 Independent review accepted a separate 160-MiB tar ceiling; source/file/entry
 bounds remain unchanged. All original Git actors were observed terminal. This
 setup refusal is preserved separately and is not native-serving evidence.
+
+
+### Actual materialization and native-import outcome (2026-11-06)
+
+Independent source review accepted `899f7ea` and the separate tar-framing repair.
+A fresh-root attempt on `ada0f0b` completed literal native/HMP snapshot verification
+and launched the isolated entry. The child terminated with `ModuleNotFoundError:
+No module named 'ruamel'` while importing the selected native registry's
+dependencies. This is a setup failure before database/HTTP work, not a serving
+pass or timeout. All 12 original Git/child actors were observed terminal; the two
+expected absent-config probes returned 1, and the native child returned 1.
+
+Private original artifacts remain at
+`/private/tmp/hermes-media-native-serving-framing-311-20261106-run`; they are not
+reused or modified for a subsequent attempt. Prepare a fresh source/lock-backed
+PM environment with isolated home/runtime/cache, rather than adding dependencies
+piecemeal or borrowing the live gateway environment. Preserve the original failed
+setup separately. Native serving/cost/T12, Linux, physical and activation gates
+remain open. No live config, device grant or deployment changed.
