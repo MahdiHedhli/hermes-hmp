@@ -418,15 +418,15 @@ def cost_report(case=0):
         "prompt_chars": prompt, "warmups_per_selector": 1, "traces_per_selector": 1,
         "rss_measured": False, "mint_measured": False, "writer_cases_run": 0,
         "selectors": [{"count": count, "durations_ns": [10, 11, 12],
-            "peak_traced_bytes": 100, "current_traced_bytes": 40} for count in (1, 16, 128)]}
+            "peak_traced_bytes": 100, "current_traced_bytes": 40} for count in (1,)]}
 
 
 @pytest.mark.parametrize("case", range(8))
 def test_cost_report_requires_exact_selected_workload(case):
     module = load()
-    module.validate_cost_report(cost_report(case), case)
+    module.validate_cost_report(cost_report(case), case, 1)
     with pytest.raises(RuntimeError):
-        module.validate_cost_report(cost_report(case), (case + 1) % 8)
+        module.validate_cost_report(cost_report(case), (case + 1) % 8, 1)
 
 
 @pytest.mark.parametrize("mutation", ["missing_repeat", "boolean_time", "negative_time",
@@ -455,7 +455,7 @@ def test_cost_schema_rejects_incomplete_or_overclaimed_measurement(mutation):
     else:
         report["raw_session"] = "forbidden"
     with pytest.raises(RuntimeError):
-        load().validate_cost_report(report, 0)
+        load().validate_cost_report(report, 0, 1)
 
 
 @pytest.mark.parametrize("bad", [True, -1, 8, 1.0, "0", [], {}])
@@ -472,11 +472,15 @@ def test_cost_mode_cannot_be_silently_accepted_as_preparation_or_normal_mode(tmp
     from .test_local_media_native_serving_driver import driver, good
 
     report = good()
-    report["native_binding_preparation"] = preparation_report()
+    prep = preparation_report()
+    prep["cells"] = [prep["cells"][0], prep["cells"][4]]
+    prep["databases_closed"] = 1
+    report["native_binding_preparation"] = prep
     report["native_binding_cost"] = cost_report()
     args = (report, report["native_source_hashes"], report["hmp_source_hashes"],
             report["runtime_executable_sha256"])
-    driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0)
+    driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                           binding_cost_selector=1)
     with pytest.raises(RuntimeError):
         driver.validate_report(*args, sample_binding_seed=True)
     with pytest.raises(RuntimeError):
@@ -534,3 +538,33 @@ def test_binding_exception_stops_only_its_owned_trace():
     with pytest.raises(ValueError, match="synthetic failure"):
         load().measure_binding(bind, lambda _: None)
     assert count == [5] and not tracemalloc.is_tracing()
+
+
+@pytest.mark.parametrize("case", range(8))
+def test_cost_preparation_requires_both_full_proof_contexts_for_selected_shape(case):
+    module, report = load(), preparation_report()
+    shape = case % 4
+    report["cells"] = [report["cells"][shape], report["cells"][4 + shape]]
+    report["databases_closed"] = 1
+    module.validate_preparation_report(report, case)
+    with pytest.raises(RuntimeError):
+        module.validate_preparation_report(report)  # Cannot certify the full preparation matrix.
+    report["cells"].pop()
+    with pytest.raises(RuntimeError):
+        module.validate_preparation_report(report, case)
+
+
+@pytest.mark.parametrize(("case", "selector"), [(None, 1), (0, None), (0, True), (0, 2),
+                                                (0, "1"), (0, 129), (0, 1.0)])
+def test_incomplete_or_undeclared_cost_mode_refuses_before_filesystem(case, selector, tmp_path):
+    from .test_local_media_native_serving_driver import driver
+
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40, sample_binding_seed=True,
+                           binding_cost_case=case, binding_cost_selector=selector)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_cost_report_cannot_certify_another_selector():
+    with pytest.raises(RuntimeError):
+        load().validate_cost_report(cost_report(), 0, 16)

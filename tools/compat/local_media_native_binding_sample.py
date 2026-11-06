@@ -117,15 +117,17 @@ def seed_native_shape(db, *, home, kind, lineage_count, prompt_chars):
         "legacy_rows": HISTORY_PAIRS // 2, "generated_rows": HISTORY_PAIRS // 2}
 
 
-def validate_preparation_report(report):
+def validate_preparation_report(report, cost_case=None):
+    validate_cost_case(cost_case)
+    shapes = SHAPES if cost_case is None else (SHAPES[cost_case % len(SHAPES)],)
     require(type(report) is dict and set(report) == {"cells", "timing_measured",
         "allocation_measured", "writer_cases_run", "databases_closed"} and
-        type(report["databases_closed"]) is int and report["databases_closed"] == 4 and
+        type(report["databases_closed"]) is int and report["databases_closed"] == len(shapes) and
         report["timing_measured"] is False and
         report["allocation_measured"] is False and type(report["writer_cases_run"]) is int and
         report["writer_cases_run"] == 0 and type(report["cells"]) is list and
-        len(report["cells"]) == len(KINDS) * len(SHAPES))
-    expected = [(kind, lineage, prompt) for kind in KINDS for lineage, prompt in SHAPES]
+        len(report["cells"]) == len(KINDS) * len(shapes))
+    expected = [(kind, lineage, prompt) for kind in KINDS for lineage, prompt in shapes]
     for cell, shape in zip(report["cells"], expected, strict=True):
         require(type(cell) is dict and set(cell) == {"kind", "lineage_count", "prompt_chars",
             "verified_prompt_count", "history_rows", "legacy_rows", "generated_rows",
@@ -149,6 +151,12 @@ def validate_preparation_report(report):
 
 def validate_cost_case(case):
     require(case is None or (type(case) is int and 0 <= case < len(KINDS) * len(SHAPES)))
+
+
+def validate_cost_mode(case, selector):
+    validate_cost_case(case)
+    require((case is None and selector is None) or
+            (case is not None and type(selector) is int and selector in SELECTORS))
 
 
 def measure_binding(bind, check):
@@ -190,8 +198,8 @@ def measure_binding(bind, check):
             "current_traced_bytes": current - baseline}
 
 
-def validate_cost_report(report, case):
-    validate_cost_case(case)
+def validate_cost_report(report, case, selector):
+    validate_cost_mode(case, selector)
     require(case is not None and type(report) is dict and set(report) == {
         "case", "kind", "lineage_count", "prompt_chars", "selectors", "warmups_per_selector",
         "traces_per_selector", "rss_measured", "mint_measured", "writer_cases_run"})
@@ -204,8 +212,8 @@ def validate_cost_report(report, case):
             type(report["traces_per_selector"]) is int and report["traces_per_selector"] == 1 and
             report["rss_measured"] is False and report["mint_measured"] is False and
             type(report["writer_cases_run"]) is int and report["writer_cases_run"] == 0 and
-            type(report["selectors"]) is list and len(report["selectors"]) == len(SELECTORS))
-    for row, count in zip(report["selectors"], SELECTORS, strict=True):
+            type(report["selectors"]) is list and len(report["selectors"]) == 1)
+    for row, count in zip(report["selectors"], (selector,), strict=True):
         require(type(row) is dict and set(row) == {"count", "durations_ns",
             "peak_traced_bytes", "current_traced_bytes"} and type(row["count"]) is int and
             row["count"] == count and type(row["durations_ns"]) is list and
@@ -214,8 +222,9 @@ def validate_cost_report(report, case):
             type(row["peak_traced_bytes"]) is int and type(row["current_traced_bytes"]) is int and
             row["peak_traced_bytes"] >= row["current_traced_bytes"] >= 0)
 
-def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None, cost_results=None):
-    """Verify all eight native shapes through complete binding, without measuring cost.
+def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
+                    cost_selector=None, cost_results=None):
+    """Verify the full matrix, or both contexts of one explicitly selected cost shape.
 
     Each lineage/prompt shape owns a fresh native DB with BOTH proof sources:
     canonical Bot Chat identity is never renamed/cleared, and the Phone case
@@ -225,13 +234,15 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None, cost_
     """
     from hmp_plugin.contract import ConversationRef
 
-    validate_cost_case(cost_case)
+    validate_cost_mode(cost_case, cost_selector)
     require((cost_case is None and cost_results is None) or
             (cost_case is not None and type(cost_results) is list and not cost_results))
     cost_rows = []
     sidecar, binding = bound_modules(fx.rig.ctx.media_modules)
     cells = {}
-    for index, (lineage, prompt) in enumerate(SHAPES):
+    selected_shapes = [(index, shape) for index, shape in enumerate(SHAPES)
+                       if cost_case is None or index == cost_case % len(SHAPES)]
+    for index, (lineage, prompt) in selected_shapes:
         with open_cell(index) as db:
             shapes = {kind: seed_native_shape(db, home=str(fx.native.home_path), kind=kind,
                       lineage_count=lineage, prompt_chars=prompt) for kind in KINDS}
@@ -271,7 +282,8 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None, cost_
                         result = fx.native.bridge.bind_media_batch(candidate)
                         check(result)
                         accepted.append(len(result.accepted))
-                        if cost_case == KINDS.index(kind) * len(SHAPES) + index:
+                        if (cost_case == KINDS.index(kind) * len(SHAPES) + index and
+                                cost_selector == count):
                             cost_rows.append({"count": count, **measure_binding(
                                 lambda candidate=candidate:
                                     fx.native.bridge.bind_media_batch(candidate), check)})
@@ -285,16 +297,18 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None, cost_
             finally:
                 fx.native.world.start_conversation(profile, chat, "p1")
         require(db._conn is None)
-    ordered = [cells[(kind, lineage, prompt)] for kind in KINDS for lineage, prompt in SHAPES]
+    ordered = [cells[(kind, lineage, prompt)] for kind in KINDS
+               for _, (lineage, prompt) in selected_shapes]
     report = {"cells": ordered, "timing_measured": False,
-              "allocation_measured": False, "writer_cases_run": 0, "databases_closed": len(SHAPES)}
-    validate_preparation_report(report)
+              "allocation_measured": False, "writer_cases_run": 0,
+              "databases_closed": len(selected_shapes)}
+    validate_preparation_report(report, cost_case)
     if cost_case is not None:
         kind, (lineage, prompt) = KINDS[cost_case // len(SHAPES)], SHAPES[cost_case % len(SHAPES)]
         cost = {"case": cost_case, "kind": kind, "lineage_count": lineage,
                 "prompt_chars": prompt, "selectors": cost_rows, "warmups_per_selector": 1,
                 "traces_per_selector": 1, "rss_measured": False, "mint_measured": False,
                 "writer_cases_run": 0}
-        validate_cost_report(cost, cost_case)
+        validate_cost_report(cost, cost_case, cost_selector)
         cost_results.append(cost)
     return report

@@ -157,3 +157,22 @@ measurement work into smaller owned commands while preserving both populated
 proof contexts, all four shapes and all three selectors. The successful full
 preparation evidence remains separate. Current cost source/artifact observations
 do not close mint/RSS/writer or C6b gates.
+
+### Revised per-selector execution layout (source review pending)
+
+The current source requires both `binding_cost_case=0..7` and an explicit
+`binding_cost_selector` of 1, 16 or 128. Each cost process seeds only the selected
+lineage/prompt shape, with BOTH independent Bot Chat and Phone contexts and its
+unprompted extra intact. Both contexts still pass all functional selector checks;
+only the selected kind/selector receives warmup/timing/trace work. That process
+must close its one database. Its two-case preparation report cannot validate as
+the full eight-case/four-database preparation report. Full preparation remains
+the separately accepted `891f922` evidence, not an inferred subset pass.
+
+The complete cost matrix now requires 24 explicitly pinned reports (all eight
+cases × all three selectors), still 72 timing values and 24 Python traces.
+This removes redundant other-shape seeding and repeated traces from each actor,
+not proof context, prompt volume, history size, selectors, semantics or lifecycle
+assertions. The 12-second deadline is unchanged. The earlier case-2 observation
+refusal remains permanent and is not automatically retried. Revised-source
+execution requires independent review and separate artifact/source bindings.

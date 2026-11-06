@@ -189,10 +189,10 @@ def _no_custom_tar(root, repository, label, receipt):
 
 
 def validate_report(report, native, hmp, executable_sha, *, sample_memory=False,
-                    sample_binding_seed=False, binding_cost_case=None):
+                    sample_binding_seed=False, binding_cost_case=None, binding_cost_selector=None):
     commands._require(type(sample_memory) is bool and type(sample_binding_seed) is bool and
                       not (sample_memory and sample_binding_seed))
-    binding_contract.validate_cost_case(binding_cost_case)
+    binding_contract.validate_cost_mode(binding_cost_case, binding_cost_selector)
     commands._require(binding_cost_case is None or sample_binding_seed)
     expected = _TRUE | _FALSE | {"schema", "native_acquires", "native_releases",
         "descriptor_records_retained", "audit_denials", "scoped_native_sweep",
@@ -227,9 +227,11 @@ def validate_report(report, native, hmp, executable_sha, *, sample_memory=False,
     if sample_memory:
         memory_contract.validate_memory_report(report["native_memory_observation"])
     if sample_binding_seed:
-        binding_contract.validate_preparation_report(report["native_binding_preparation"])
+        binding_contract.validate_preparation_report(
+            report["native_binding_preparation"], binding_cost_case)
     if binding_cost_case is not None:
-        binding_contract.validate_cost_report(report["native_binding_cost"], binding_cost_case)
+        binding_contract.validate_cost_report(
+            report["native_binding_cost"], binding_cost_case, binding_cost_selector)
 
 
 def _native_command(root, executable, entry, *, sample_binding_seed=False):
@@ -243,10 +245,10 @@ def _native_command(root, executable, entry, *, sample_binding_seed=False):
 
 
 def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
-                sample_binding_seed=False, binding_cost_case=None):
+                sample_binding_seed=False, binding_cost_case=None, binding_cost_selector=None):
     commands._require(type(sample_memory) is bool and type(sample_binding_seed) is bool and
                       not (sample_memory and sample_binding_seed))
-    binding_contract.validate_cost_case(binding_cost_case)
+    binding_contract.validate_cost_mode(binding_cost_case, binding_cost_selector)
     commands._require(binding_cost_case is None or sample_binding_seed)
     commands._require(type(root) is type(Path()) and root.is_absolute() and root.resolve() == root)
     info = root.stat()
@@ -264,6 +266,7 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
             receipt["binding_fixture_source_sha256"] = commands._digest(Path(_BINDING_SPEC.origin))
             if binding_cost_case is not None:
                 receipt["binding_cost_case"] = binding_cost_case
+                receipt["binding_cost_selector"] = binding_cost_selector
         commands._save(root / "receipt.json", receipt)
         version = _git(root, _ROOT, ["--version"], "git_version", receipt).decode().strip()
         match = re.fullmatch(r"git version (\d+)\.(\d+)\.(\d+)(?:[ .-].*)?", version)
@@ -314,7 +317,8 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
                 call = "report=module.run_fixture(root, sample_binding_seed=True)"
                 if binding_cost_case is not None:
                     call = ("report=module.run_fixture(root, sample_binding_seed=True, "
-                            f"binding_cost_case={binding_cost_case})")
+                            f"binding_cost_case={binding_cost_case}, "
+                            f"binding_cost_selector={binding_cost_selector})")
             output.write(_ENTRY.replace("report=module.run_fixture(root)", call))
         executable = Path(sys.executable).absolute()  # Preserve the selected venv path.
         executable_sha = commands._digest(executable.resolve())
@@ -332,7 +336,8 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
         report = json.loads(data, object_pairs_hook=commands._pairs)
         validate_report(report, copies["native"], copies["hmp"], executable_sha,
                         sample_memory=sample_memory, sample_binding_seed=sample_binding_seed,
-                        binding_cost_case=binding_cost_case)
+                        binding_cost_case=binding_cost_case,
+                        binding_cost_selector=binding_cost_selector)
         for label, inventory in copies.items():
             commands._require(all(commands._digest(root / label / name) == value
                                   for name, value in inventory.items()))
