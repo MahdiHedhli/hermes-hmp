@@ -7,6 +7,7 @@ import asyncio
 import hashlib
 import os
 import socket
+import sys
 import time
 
 import pytest
@@ -268,7 +269,8 @@ async def test_real_channel_entry_guards_respect_original_handshake_claim(pair, 
     from hmp_plugin.presentation_broker_endpoint import BrokerEndpointOwner
 
     _, keys, binding = pair
-    root = tempfile.mkdtemp(prefix="hc-", dir="/private/tmp")
+    temporary = "/private/tmp" if sys.platform == "darwin" else tempfile.gettempdir()
+    root = tempfile.mkdtemp(prefix="hc-", dir=temporary)
     listener = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     gateway_socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
     accepted = None

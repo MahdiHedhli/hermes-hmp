@@ -65,6 +65,14 @@ CONTRACT_MODULES = {
     "presentation_broker_codec.py",
     "presentation_cancel_budget.py",
     "presentation_clock.py",
+    # Reviewed role-credential source components; no production listener/admission.
+    "presentation_credential_codec.py",
+    "presentation_credential_files.py",
+    "presentation_credential_handshake.py",
+    "presentation_credential_phase.py",
+    "presentation_credential_scope.py",
+    "presentation_credential_stream.py",
+    "presentation_credential_transcript.py",
     # BR4a read-only kernel connection identity; no endpoint/service activation.
     "presentation_broker_peer.py",
     "presentation_broker_endpoint.py",

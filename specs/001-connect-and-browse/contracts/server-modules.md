@@ -572,3 +572,23 @@ See [pre-result cursor](../../046-bot-presentation-integration/PRE_RESULT_CURSOR
 read-scope fact, bounded discard/terminal-data cursor and owned minimum-deadline
 notice. It cannot grant join/closure, ACK, native credit, image emission or runtime
 admission. See [cleanup reader](../../046-bot-presentation-integration/CLEANUP_READER.md).
+
+### BI1 reviewed credential source modules (November 6, 2026)
+
+The exact package census adds only these seven independently source-reviewed
+modules; unknown Python files still fail `test_module_set_is_exactly_the_contract_tree`.
+They add no plugin registration, route, tool, provider or live service.
+
+- `presentation_credential_codec.py`: closed bounded HBA1 data records; decoding is not signature authority.
+- `presentation_credential_transcript.py`: bilateral signed transcript consistency against supplied original context/pins; not runtime admission.
+- `presentation_credential_scope.py`: scope digest from exact bounded original input3; not filesystem/native permission.
+- `presentation_credential_phase.py`: signed context/header/body consistency data; not lifecycle or custody authority.
+- `presentation_credential_stream.py`: original-header and bounded-chunk digest data; not signature, completed transfer or publication permission.
+- `presentation_credential_files.py`: startup-only private role-file acquisition/closure and retirement; no signer endpoint, key generation or runtime qualification.
+- `presentation_credential_handshake.py`: original-task/socket handshake, IO exclusion and one-attempt original native-input correlation; no production factory or unsigned phase fallback.
+
+The full paired runtime and signed direct/streaming phase paths remain unfinished.
+See [current tasks](../../046-bot-presentation-integration/TASKS.md) and the
+[credential contract](../../046-bot-presentation-integration/CREDENTIAL_ADMISSION.md).
+The census explicitly extends Hermes-free import checks to these files; it does
+not weaken the closed plugin registration or optional-media import boundaries.
