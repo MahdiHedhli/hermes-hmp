@@ -368,7 +368,13 @@ historical, not an alternative live authorization path or resolved incident.
       exact signature/frame/current role/clock/uncased budget and original actor;
       wrong actor/early query does not poison, currentness refusal stays sticky.
       Returns a read fact only; worker GO and generic work gates stay closed.
-- [ ] Implement fixed original-service signed worker-GO relay with a reciprocal
-      credential fence at the final native pipe write, actual local relay fact
-      and independent failure/containment checks. Follow
-      [SIGNED_GO_RELAY.md](SIGNED_GO_RELAY.md) before RESULT/TERMINAL integration.
+- [x] Implement/review fixed original-service signed worker-GO relay component,
+      with reciprocal final native pipe-write credential fence and local fact,
+      native count/unknown-debt preservation, original completed READY/input and
+      original actor/budget. 17 peer stages plus five field-shape tests pass;
+      actual native OK result observed independently. Production dispatch and
+      signed RESULT/TERMINAL integration remain open. See
+      [SIGNED_GO_RELAY.md](SIGNED_GO_RELAY.md).
+- [ ] Integrate the qualified fixed credential service worker-relay route with
+      signed RESULT transport and original retained TERMINAL/ACK lifecycle. No
+      unsigned fallback, decoded-claim permission or publication shortcut.

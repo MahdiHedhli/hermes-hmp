@@ -767,3 +767,14 @@ and native control checks. Wrong actor/early call cannot poison; an admitted
 currentness refusal is sticky. The return is the original native read receipt,
 not a worker relay/RESULT/terminal permit. Generic credential work gates remain
 closed. The fixed final-pipe-write relay contract is in SIGNED_GO_RELAY.md.
+
+### Original service fixed signed worker-GO relay (November 6, 2026)
+
+`presentation_credential_go_relay.py` retains the original current signed GO,
+completed READY/input and exact service/resources/pipe/process before native
+effects. A fixed typed reciprocal fence follows existing OwnedControlPipe
+current/FD/time callbacks immediately before native write. Held intent preserves
+returned counts across alias drift; full65/known close/post-current only yields
+local control delivery, not execution ACK or RESULT/TERMINAL/publication. No
+production caller or generic credential-work gate is enabled. Unknown/partial
+work is consumed, refuses retries and retains separate protocol debt.

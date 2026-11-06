@@ -212,6 +212,7 @@ class BrokerCancellationOwner:
         self._go_allocation = self._go_allocation_snapshot = None
         self._go_initialized = self._go_initialized_snapshot = None
         self._go_relay_intent = self._go_relay_completed = False
+        self._credential_go_relay = self._credential_go_relay_snapshot = None
         self._cancel_future = self._cancel_future_snapshot = None
         self._cancel_allocation = self._cancel_allocation_snapshot = None
         self._cancel_initialized = self._cancel_initialized_snapshot = None

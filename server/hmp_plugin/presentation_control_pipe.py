@@ -72,6 +72,7 @@ class OwnedControlPipe:
         self._current = current
         self._lock = threading.Lock()
         self._input_attempted = False
+        self._credential_go_relay = self._credential_go_relay_snapshot = None
         self._input_ready = False
         self._input_write_observation = self._input_write_observation_origin = None
         self._close_attempted = False
@@ -185,7 +186,18 @@ class OwnedControlPipe:
             or now >= self._deadline
         ):
             raise FrameError("BI1_CONTROL_GO_REFUSED")
-        return os.write(fd, data)
+        relay = self._credential_go_relay_snapshot
+        if relay is not None:
+            from .presentation_credential_go_relay import CredentialGoRelay
+            if type(relay) is not CredentialGoRelay or self._credential_go_relay is not relay:
+                raise FrameError("BI1_CONTROL_CREDENTIAL_GO_REFUSED")
+            claim = CredentialGoRelay._presend(relay, self, fd, data)
+        elif self._credential_go_relay is not None:
+            raise FrameError("BI1_CONTROL_CREDENTIAL_GO_REFUSED")
+        count = os.write(fd, data)
+        if relay is not None:
+            CredentialGoRelay._record_write(relay, claim, count)
+        return count
 
     def write_input(self, packet: bytes) -> None:
         self._enter()

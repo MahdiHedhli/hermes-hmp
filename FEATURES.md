@@ -1,3 +1,21 @@
+## Fixed signed worker-GO relay component — November 6, 2026
+
+Bot-character transport now has a reviewed original-service worker relay, with
+fixed credential/actor/budget checks immediately before the existing native
+control-pipe write. Actual 65-byte delivery, known pipe close and post-current
+checks yield only a local control fact. Short/unknown writes, late key/task/
+control/READY-binding changes and post-write alias drift cannot retry or mint
+completion; actual returned counts survive drift.
+
+Seventeen private-peer stages and five shape-tripwire cases pass. One stage
+observes the disposable fixed worker's actual native OK result, separately from
+any client transfer. Full final regression: **1,576 passed, one skipped**, 93.62
+seconds; lint passed. Independent read-only review accepted the final repairs.
+No production caller/generic gate, client RESULT, terminal/ACK or publication
+is enabled. No host/device/build/settings changed. Complete character delivery
+still needs signed RESULT/lifecycle/startup and physical/release qualification;
+historical broker intermittency remains unresolved despite this passing run.
+
 ## Original-service current GO read — November 6, 2026
 
 Bot-character transport now lets the original broker service revalidate its

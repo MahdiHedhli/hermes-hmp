@@ -36,10 +36,11 @@ DATA only; qualified runtime custody and IO permission remain separate gates.
 
 ## Signed worker relay prerequisite
 
-The current credential controller records GO but does not relay it to the fixed
-worker. The original-service current GO read validator is implemented; it adds
-no execution permission. Complete the reviewed [fixed native relay contract](SIGNED_GO_RELAY.md)
-before claiming signed RESULT or normal OK TERMINAL. Keep terminal-write/ACK and
+The current credential controller records GO; the original-service current GO
+validator and fixed native relay component are implemented/reviewed separately.
+Production dispatch is not enabled. Integrate the reviewed
+[fixed native relay contract](SIGNED_GO_RELAY.md) with actual signed RESULT
+transport before claiming normal OK TERMINAL. Keep terminal-write/ACK and
 production startup qualification separate; never replace the native control
 pipe's final current/FD/time checks with a signature-only allowance.
 

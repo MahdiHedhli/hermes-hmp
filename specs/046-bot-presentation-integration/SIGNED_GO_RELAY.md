@@ -1,7 +1,9 @@
 # Signed GO to fixed worker relay
 
-Status: original-service current GO read validation implemented and reviewed;
-worker relay remains unimplemented. This contract does not enable a native write.
+Status: original-service current GO read and fixed native relay component are
+implemented/reviewed. Production service dispatch, RESULT/TERMINAL and startup
+qualification remain open. See
+[component evidence](../../docs/research/presentation-signed-go-relay-2026-11-06.md).
 Inspected base: bbcd2876cc0354ba3eba0e2f0499e1d2a7fc96e0.
 
 ## Actual dependency before RESULT and TERMINAL
