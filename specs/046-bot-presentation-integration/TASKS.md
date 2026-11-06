@@ -1,5 +1,25 @@
 # BI1 integration tasks
 
+## Current credential direction
+
+The independently reviewed local role-credential contract supersedes the
+unfinished Mach production-admission tasks below. Those dated tasks remain
+historical, not an alternative live authorization path or resolved incident.
+
+- [x] Implement and independently review data-only HBA1 codec, four-record signed
+      transcript consistency and original input3 scope binding (`7c37b4f`).
+      Root ran 167 focused tests; independent review was source/test read-only.
+- [ ] Implement typed paired startup/key custody and bounded handshake on the
+      original channel/task/cursor, with known local write completion facts.
+- [ ] Integrate signed phase commitments with original native phase owners;
+      complete actual GO, all character output variants, transfer/custody,
+      TERMINAL/ACK/journal/DRAIN/PRE_EMIT and authenticated HTTP publication.
+- [ ] Implement the separately bounded existing-state STATUS contract.
+- [ ] Complete independent runtime/security acceptance and separately authorized
+      installation, physical-device and release qualification.
+
+## Historical endpoint and Mach research
+
 - [x] Review and execute one owned-child native request/typed-retirement path:
       root20 checks, independent source/toolchain/25-artifact readback accepted.
       Child cleanup is reported; parent wait/retirement/endpoint release observed.
