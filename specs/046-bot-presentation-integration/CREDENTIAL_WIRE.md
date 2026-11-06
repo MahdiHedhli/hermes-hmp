@@ -237,3 +237,37 @@ with 967 affected tests passed and one skipped. It retains its own exact reads,
 signed-record/header/input checks, original deadline and unknown-read debt. It
 returns checked data/local IO closure only; production service/native adoption
 and full signed transport remain open. See [evidence and limits](../../docs/research/presentation-credential-begin-receiver-2026-11-06.md).
+
+## Distinct conserved admission and work ends
+
+The broker's original local accept/handshake/BEGIN-read end is an admission cap:
+use the earlier of that cap and the original signed work end for the handshake,
+all BEGIN reads and registry/input adoption. Adoption must FINISH while that
+original earlier cap is still current. A successful read alone is not adoption.
+
+The operation's work end remains the exact input3/signed `work_end_ns` established
+before the handshake. Subsequent native/registry work may use only that pre-existing
+end, independently checked by its native authority; never derive it from `now`,
+renew it at adoption, or rewrite the input to match a shorter local read cap.
+Thus a valid input can have a later original work end than the shorter local
+admission cap, provided admission completes under both and all native gates hold.
+This distinction is specific to the new role-credential path; legacy dispatch's
+existing stricter `input deadline <= admission_end` predicate remains unchanged.
+Neither end grants permission, cleanup-budget renewal or unqualified GO.
+
+## Sticky connection adoption is mandatory for future phase integration
+
+The new service adoption seam consumes exactly one connection attempt. If a
+registry reservation or input bind succeeds and a later current-authority check
+fails, the original ticket/receipt is retained; the original connection's
+`credential_adoption_failed` remains true and `credential_adoption_complete`
+remains false. A queued ticket may still be known by the registry. Its existence
+or capacity-only `resources_startable` result is NOT credential authority.
+
+Every future credential resource/GO path MUST retain that same original
+connection/registry/ticket/receiver join, require complete=true and failed=false,
+and independently check its current native phase/key/generation/work deadline.
+Neither a caller boolean nor a new/copy connection may satisfy this gate. No
+credential resource/GO path is opened by the source-only adoption seam; existing
+unsigned phase IO remains refused. Do not generically poison/retry/free a ticket
+merely to make its status match the separate failed connection attempt.

@@ -1,26 +1,24 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now includes the
-reviewed original broker-task signed BEGIN receive cursor, in addition to the
-original-work signer and two-stage input checks. It owns one bounded cursor,
-checks the signature/header before body reads, conserves the original deadline,
-refuses channel reuse during uncertain reads and safely drops failed payloads.
-Final affected regression: **967 passed, one skipped**, 27.92 seconds;
-repository-wide configured lint passed. Independent review was source-only.
-See [evidence and limits](docs/research/presentation-credential-begin-receiver-2026-11-06.md).
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now contains the
+reviewed original-service one-attempt credential input adoption seam. It preserves
+the exact connection/task/registry/receiver join, replay/capacity gates, original
+deadlines and one-time input binding. Late failures retain their ticket/receipt
+with a sticky connection refusal. No worker or GO is started.
+Final expanded affected regression: **1,099 passed, one skipped**, 27.90 seconds,
+including existing registry/replay tests; configured lint passed. Independent
+review was source-only. See [evidence and limits](docs/research/presentation-credential-service-adoption-2026-11-06.md).
 
-No production factory uses this receiver yet. It returns checked data and local
-IO completion, not native input adoption or registry/worker permission. Remaining
-service/native admission, signed phases/direct writers/cleanup, production
-startup/capacity/rotation, native publication, STATUS and physical/release
-qualification are open. Desktop character delivery is not yet available;
-unsigned transport remains closed. No live host/device changed. Earlier signer
-source `80fb5b1` passed [CI708](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42251968757):
-8,259 tests and 190 subtests. Input-check source `3c7fa4c` passed
-[CI710](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42252824575): 8,275 tests
-and 190 subtests. Each passed plugin checks and Unicode jobs on Python 3.12–3.14,
-with 33 skips and 18 warnings in its plugin run. Neither qualifies this newer
-receive-cursor source.
+The preceding receiver source `87bc9a9` passed
+[CI712](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42254661824): 8,286 tests,
+190 subtests, 33 skips and 18 warnings, plus plugin checks and Unicode jobs on
+Python 3.12–3.14. That does not qualify the newer adoption source.
+
+No production dispatcher uses this seam yet. Runtime/source/key admission,
+remaining signed phases/direct writers/cleanup, resource/GO/result/terminal/native
+publication, STATUS and physical/release qualification remain open. A queued
+registry ticket is not phase permission. Desktop character delivery is not yet
+available; unsigned transport remains closed. No live host/device changed.
 
 ## Native image verification checkpoint — November 6, 2026
 

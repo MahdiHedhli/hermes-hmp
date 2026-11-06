@@ -35,8 +35,12 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement/review the standalone original broker signed-record/read cursor
       and current role context, actual bounded socket reads and safe failure cleanup.
       Affected regression: 967 passed, one skipped. No native input adoption.
-- [ ] Integrate that cursor with the original production service actor and complete
-      input/native validation before registry or resource effects.
+- [x] Implement/review original service connection/registry one-attempt queue and
+      input-receipt adoption, current receiver revalidation and sticky late failure.
+      Expanded affected regression: 1,099 passed, one skipped; no resources/GO.
+- [ ] Wire only through qualified production startup/service dispatch; preserve
+      the exact original adopted connection plus current native phase authority
+      before any credential resource/GO path. Ticket/capacity alone is insufficient.
 - [ ] Integrate operator-selected paired runtime/source/credential startup,
       capacity and rotation with the retained handshake on its original channel,
       task/cursor and known local write completion facts.

@@ -127,7 +127,7 @@ class CredentialBeginReceiver:
     def __repr__(self):
         return "<CredentialBeginReceiver payload-and-context-redacted>"
 
-    def _local(self):
+    def _metadata(self):
         _require(
             type(self) is CredentialBeginReceiver
             and self._initialized is True
@@ -251,10 +251,9 @@ class CredentialBeginReceiver:
             and len(self._buffer) <= self._target <= _LIMIT
             and type(self._read_intent) is bool
             and type(self._started) is bool
-            and self._complete is False
-            and self._release is None
-            and self._result is None
-            and self._result_snapshot is None
+            and type(self._complete) is bool
+            and self._result is self._result_snapshot
+            and (self._result is None or type(self._result) is ConsistentBeginInput)
             and type(self._consumed) is int
             and self._consumed is self._consumed_snapshot
             and 0 <= self._consumed <= _LIMIT
@@ -271,6 +270,68 @@ class CredentialBeginReceiver:
             self._consumed
             == len(self._buffer) + (0 if self._pending is None else len(self._pending))
         )
+
+    def _local(self):
+        CredentialBeginReceiver._metadata(self)
+        _require(
+            self._complete is False
+            and self._release is None
+            and self._result is None
+            and self._result_snapshot is None
+        )
+
+    def _completed_current(self):
+        """Original actor's current checked input; never native/worker permission."""
+        CredentialBeginReceiver._metadata(self)
+        CredentialBeginReceiver._released(self, self._original_channel)
+        CredentialHandshakeOwner._guard(self._handshake)
+        CredentialBeginReceiver._metadata(self)
+        CredentialBeginReceiver._released(self, self._original_channel)
+        _require(self._started is True and self._target == self._consumed == len(self._buffer))
+        prefix = raw = frame = checked = result = claim = None
+        failed = False
+        try:
+            prefix = bytes(self._buffer[:8])
+            auth_end = 8 + payload_size(prefix)
+            raw, frame = bytes(self._buffer[:auth_end]), bytes(self._buffer[auth_end:])
+            checked = check_begin_frame(
+                raw,
+                frame,
+                sender_public=self._pins[0],
+                receiver_public=self._pins[1],
+                expected_context=self._expected,
+                binding=self._binding,
+            )
+            result = self._result_snapshot
+            _require(type(result.packet) is bytes and result.packet == checked.packet)
+            claim = result.commitment
+            from .presentation_credential_phase import ConsistentCommitment
+
+            _require(
+                type(claim) is ConsistentCommitment
+                and type(claim.canonical_json) is bytes
+                and type(claim.frame_sha256) is str
+                and type(claim.frame_length) is int
+            )
+            _require(
+                (claim.canonical_json, claim.frame_sha256, claim.frame_length)
+                == (
+                    checked.commitment.canonical_json,
+                    checked.commitment.frame_sha256,
+                    checked.commitment.frame_length,
+                )
+            )
+            CredentialHandshakeOwner._guard(self._handshake)
+            CredentialBeginReceiver._metadata(self)
+            CredentialBeginReceiver._released(self, self._original_channel)
+            _require(self._result_snapshot is result)
+            return result
+        except BaseException:
+            failed = True
+        finally:
+            prefix = raw = frame = checked = result = claim = None
+        if failed:
+            raise FrameError("BI1_CREDENTIAL_BEGIN_CURRENT_REFUSED") from None
 
     def _guard(self):
         CredentialBeginReceiver._local(self)

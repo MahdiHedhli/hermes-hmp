@@ -1248,6 +1248,10 @@ class _Connection:
         self.control_task = None
         self.accept_unknown = False
         self.terminal = None
+        self.credential_adoption_attempted = False
+        self.credential_adoption_complete = False
+        self.credential_adoption_failed = False
+        self.credential_grammar_snapshot = None
 
 
 class ServiceAcquisitionError(FrameError):
@@ -1274,7 +1278,7 @@ class BrokerServiceSpine:
         self._records: list[_Connection] = []
         self._records_snapshot = self._records
         self._accepting = self._stopping = self._refused = self._integrity_lost = False
-        self._registry = None
+        self._registry = self._registry_snapshot = None
         self._accept_task = None
         self._accept_wait = None
         self._accept_registration_unknown = False
@@ -1300,7 +1304,7 @@ class BrokerServiceSpine:
         # One registry per service lifetime, never per connection. Its replay
         # bitmap remains even after a terminal unlaunched tombstone is ACKed.
         registry = BrokerRegistry.__new__(BrokerRegistry)
-        self._registry = registry
+        self._registry = self._registry_snapshot = registry
         registry.__init__(enrollment.scope, parser_package=parser_package)
 
     def _metadata(self) -> None:
@@ -1554,6 +1558,107 @@ class BrokerServiceSpine:
         _, _, end, failed = CancellationBudget.inspect(owner._scope_snapshot[3])
         _require(owner._retired is False and end is None and not failed)
         _task_allows_work()
+
+    def _adopt_credential_begin(self, record):
+        """One original service connection's checked input; no worker/GO start.
+
+        Source-only seam: production role startup and complete signed phase IO
+        must be integrated before the dispatcher may call it.
+        """
+        from .presentation_credential_begin import CredentialBeginReceiver
+        from .presentation_remote_cleanup import _TASK
+
+        _require(type(self) is BrokerServiceSpine and type(record) is _Connection)
+        BrokerServiceSpine._metadata(self)
+        _require(sum(owned is record for owned in self._records_snapshot) == 1
+                 and type(record.task) is _TASK and asyncio.current_task() is record.task
+                 and record.credential_adoption_attempted is False
+                 and record.credential_adoption_complete is False
+                 and record.credential_adoption_failed is False)
+        record.credential_adoption_attempted = True  # never reset, before native effects
+        registry = self._registry_snapshot
+        channel = record.channel_snapshot
+        receiver = None
+        task = record.task
+        ticket = grammar = packet = result = first = row = None
+        failed = cancelled = False
+
+        def retained():
+            BrokerServiceSpine._metadata(self)
+            _require(self._registry is registry and self._registry_snapshot is registry
+                     and self._refused is False and self._stopping is False
+                     and self._integrity_lost is False
+                     and sum(owned is record for owned in self._records_snapshot) == 1
+                     and record.task is task and asyncio.current_task() is task
+                     and _TASK.cancelling(task) == 0
+                     and record.channel is channel and record.channel_snapshot is channel
+                     and record.socket is channel._socket_snapshot
+                     and channel._enrollment_snapshot is self._enrollment_snapshot
+                     and self._enrollment_snapshot.protocol_version == 2
+                     and channel._credential_begin_receiver is receiver
+                     and channel._credential_begin_receiver_snapshot is receiver
+                     and receiver._task is task and receiver._original_channel is channel
+                     and record.local_closed is False and record.clock_closed is False
+                     and record.accept_unknown is False
+                     and record.cancel_owner is None and record.result_writer is None
+                     and record.result_writer_snapshot is None and record.control_task is None
+                     and record.terminal is None
+                     and record.credential_adoption_attempted is True
+                     and record.credential_adoption_complete is False
+                     and record.credential_adoption_failed is False
+                     and record.ticket is ticket and record.grammar is grammar
+                     and record.credential_grammar_snapshot is grammar)
+
+        try:
+            _require(type(registry) is BrokerRegistry and self._registry is registry
+                     and type(channel) is SocketChannel and record.channel is channel)
+            receiver = channel._credential_begin_receiver_snapshot
+            _require(type(receiver) is CredentialBeginReceiver
+                     and channel._credential_begin_receiver is receiver)
+            retained()
+            BrokerServiceSpine._current(self)
+            result = CredentialBeginReceiver._completed_current(receiver)
+            retained()
+            binding = receiver._binding_snapshot
+            packet = result.packet
+            row = decode_input_v3(packet)
+            _require(row["iid"] == binding.iid)
+            # Admission remains under receiver's earlier original local end;
+            # registry work conserves the independently signed original end.
+            grammar = OperationGrammar.__new__(OperationGrammar)
+            record.grammar = record.credential_grammar_snapshot = grammar
+            OperationGrammar.__init__(grammar, binding, role="broker", protocol_version=2)
+            first = BrokerFrame(BrokerHeader(binding, "BEGIN", 0, len(packet), 2), packet)
+            OperationGrammar.observe(grammar, first, sender="client")
+            BrokerServiceSpine._current(self)
+            _require(CredentialBeginReceiver._completed_current(receiver) is result)
+            retained()
+            ticket = BrokerRegistry.reserve(registry, binding, row["profile"], row["operation"],
+                                            row["deadline_ns"])
+            record.ticket = ticket  # retain exact original result before any postcheck
+            retained()
+            _require(CredentialBeginReceiver._completed_current(receiver) is result)
+            BrokerServiceSpine._current(self)
+            _require(CredentialBeginReceiver._completed_current(receiver) is result)
+            retained()
+            BrokerRegistry.bind_input_receipt_once(registry, ticket, packet)
+            BrokerServiceSpine._current(self)
+            _require(CredentialBeginReceiver._completed_current(receiver) is result)
+            retained()
+            record.credential_adoption_complete = True
+            return ticket  # queued input only, no worker/resources/GO authority
+        except asyncio.CancelledError:
+            failed = cancelled = True
+        except BaseException:
+            failed = True
+        finally:
+            packet = result = first = row = None
+            if failed:
+                record.credential_adoption_failed = True
+        if cancelled:
+            raise asyncio.CancelledError from None
+        if failed:
+            raise FrameError("BI1_BROKER_CREDENTIAL_ADOPTION_REFUSED") from None
 
     async def _dispatch_v2(self, record, admission_end_ns):
         from .presentation_broker_cancel import BrokerCancellationOwner
