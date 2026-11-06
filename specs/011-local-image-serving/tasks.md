@@ -598,3 +598,14 @@ cover fresh production registry/Binding/descriptor allocation with shared inputs
 not input-index construction, binding, S4 authorization/event-loop, RSS/native-C
 or full-capacity registry memory. Root's 277 focused guards/lint passed.
 Current RSS/writer/control/refusal/residual/ABA work and C6b remain open.
+
+## Current binding RSS observations (2026-11-06)
+
+At `e299092`, all 24 fresh-process warm-binding RSS cases completed and passed
+independent artifact/source review: 672 artifact bindings, 36/36 borrows per
+process and known commands/database/listener/worker closure.
+[Method/results](../../docs/research/local-media-native-binding-rss-2026-11-06.md)
+retain raw current/peak snapshots, signed deltas and prior peaks; 17 zero-new-peak
+cases do not imply zero allocation. Root's 328 focused guards/lint passed.
+Current writer/control/refusal/residual/ABA evidence remains required; C6b stays
+unchecked. No native-C, Linux, physical display, activation or release pass follows.

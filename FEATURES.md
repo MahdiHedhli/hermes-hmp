@@ -1,3 +1,18 @@
+## Native binding process-memory observations reviewed — November 6, 2026
+
+[Current RSS evidence](docs/research/local-media-native-binding-rss-2026-11-06.md)
+at `e299092` covers all 24 fresh-process kind/shape/selector pairs. Independent
+read-only review accepted 672 artifact hashes/private modes, source/literal Git/
+runtime/report identities, arithmetic and cleanup. Each process balanced 36/36
+borrows and closed its databases/listener/workers. Current RSS deltas ranged
+from −622,592 to 10,059,776 bytes; new cumulative peak growth from 0 to 3,948,544.
+Prior preparation peaks remain explicit, including 17 zero-new-peak cases that
+do not imply zero allocation. These are warm sequential process observations,
+not native-C bounds, cold calls, production memory budgets or a new ceiling.
+Root's 328 focused checks/lint passed. Mint PR132 is integrated at `0e4f5bc`
+with successful final CI. Current writer/control/refusal/residual/ABA evidence,
+C6b, physical display/activation and release qualification remain open.
+
 ## Native-bound modeled mint-memory sample reviewed — November 6, 2026
 
 [Current evidence](docs/research/local-media-native-mint-memory-2026-11-06.md)

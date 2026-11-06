@@ -56,3 +56,14 @@ and dispatch/lifecycle contracts without reviewer execution. No native RSS
 sample has run yet. Require exact-source execution and independent artifact
 readback before recording a sampled result. Earlier timed-out cost evidence
 stays permanently refused, separate from this new measurement stage.
+
+## Execution checkpoint
+
+All 24 current-source pairs at `e299092` completed: self-process RSS arithmetic,
+36/36 borrows, actual workload/original DB and listener/worker closure, no
+observation expiry. Root checked hashes/private modes and current report/source/
+runtime bindings; independent read-only aggregate review accepted all 672
+artifacts, source/literal Git/runtime/report bindings, arithmetic and cleanup.
+[Exact observations](../../docs/research/local-media-native-binding-rss-2026-11-06.md)
+retain signed deltas and prior peaks, including 17 zero-NEW-peak cases, without
+claiming zero allocations or an isolated bound. Current writer/C6b remain open.
