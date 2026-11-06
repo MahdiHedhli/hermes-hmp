@@ -329,7 +329,11 @@ def run_fixture(root):
                     _require(status == 200 and body == VALID_PNG)
                     fx.after_p1.append(change_file)
                     status, _, _ = await fx.get(client, refs[4], dev=owner)
-                    _require(status == 404 and changed["file"])
+                    if status != 404 or not changed["file"]:
+                        raise RuntimeError("fixture_file_mutation_refused:" + json.dumps({
+                            "status": status, "hook_ran": changed["file"],
+                            "p1_calls": fx.p1_in, "p2_calls": fx.p2_in,
+                            "p1_result_types": fx.p1_results}))
                     report["between_phase_file_change_refused"] = True
                     fx.after_p1.clear()
                     status, _, body = await fx.get(client, refs[6], dev=owner)
