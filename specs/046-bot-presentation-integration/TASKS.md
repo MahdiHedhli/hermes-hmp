@@ -10,9 +10,10 @@
       RemoteOperationOwner without admitting synthetic_no_go or decoded data.
       See [selected issuer direction](RUNTIME_ISSUER.md).
 
-- [ ] Complete independent artifact review and CI for the fresh-child native
+- [x] Complete independent artifact review and CI for the fresh-child native
       sender experiment. Root's single actual Darwin run plus portable checks
-      passes 57 cases; production authority remains unqualified. Historical
+      passes 57 cases; PR117 is integrated with all four CI jobs green (7,286 tests).
+      Production authority remains unqualified. Historical
       first-route recipient uncertainty remains open. See
       [native sender evidence](NATIVE_SENDER_AUDIT.md).
 

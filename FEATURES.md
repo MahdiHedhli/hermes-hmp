@@ -15,6 +15,13 @@ This experiment does not qualify a production issuer, character-serving route or
 phone image feature. Desktop characters and host-local images remain unfinished.
 See the [native experiment contract](specs/046-bot-presentation-integration/NATIVE_SENDER_AUDIT.md).
 
+Source `ee8b6d4` is integrated through PR117. Exact-source
+[CI42141744767](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42141744767)
+passes all four jobs: **7,286 passed, 31 skipped, 18 warnings, 190 subtests**,
+plus Unicode jobs. Linux skips do not replace the separate root Darwin case.
+The subsequent native endpoint owner is incomplete, uncommitted source with
+model-only validation; it is not loaded by HMP or a production issuer.
+
 ## Owned-peer lifetime experiment — November 6, 2026
 
 A new disposable Darwin probe exercises observer registration followed by a fresh
