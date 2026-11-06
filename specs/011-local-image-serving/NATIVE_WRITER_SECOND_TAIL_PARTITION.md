@@ -4,7 +4,9 @@ This is a pure evidence-scope planner, not a resume or execution API. The
 `e8653d5` base-tail batch is terminal-failed after 201 completed jobs / 296 phases.
 Its job 201, original base pair 323, remains refused after the same retained
 child settled to terminal zero. Original base pair 174 remains refused too.
-The completed prefix has been collected; independent artifact review is pending.
+The completed prefix is independently accepted: all 201 jobs / 296 phases,
+5,416 artifacts and 2,526,369 copied source identities matched. This accepts
+only the completed prefix, not either refused attempt or full scope.
 
 `unattempted_after_refusal` accepts only the exact original 301-job base-tail
 catalog reconstructed from the digest-pinned historical 384-pair inventory and
