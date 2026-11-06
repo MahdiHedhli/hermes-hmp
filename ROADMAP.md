@@ -16,6 +16,12 @@ qualification remain open.
 See the [credential contract and checkpoint](specs/046-bot-presentation-integration/CREDENTIAL_WIRE.md).
 The local role-credential direction supersedes the unfinished Mach production
 admission proposal; historical Mach evidence and its unresolved incident remain.
+The retained credential handshake and channel IO/close exclusion are now
+independently source-reviewed at `922c04d`; the final focused regression passed
+452 tests with one skip. Actor tests use synthetic keys/sockets with native
+qualification mocked. Paired runtime admission, phase/native authority and full
+character delivery remain unfinished. See [handshake source evidence and limits](docs/research/presentation-credential-handshake-2026-11-06.md).
+
 No live installation, configuration or permission change accompanied this work.
 
 ## Native image verification checkpoint — November 6, 2026
