@@ -1,25 +1,12 @@
-## Image verification scope — November 6, 2026
+## Native image verification checkpoint — November 6, 2026
 
-The original source `21937dc` has independently accepted evidence for 174 pairs /
-348 phases. Its next paired attempt remains refused after the original process
-observation limit; terminal exit does not turn that attempt into a pass. Two
-separately reviewed fresh heavy single-phase observations at `5c96927` are
-separate evidence, not rehabilitation of the old attempt.
+The `e8653d5` base-tail batch is stopped: 201 of 301 jobs completed (296 phases), then job 201 / original pair 323 exceeded the unchanged 12-second observation limit. That refused paired Phone case used selector 16 with `deactivate:ids1` and `eligibility:ids0`. The same retained child settled to exit 0, but no completion was published and no later job started. Independent readback verified its 28 artifacts, source/Git/runtime/cache bindings, both closed phase checkpoints, 53/53 borrows and closed DB/listener/workers/hooks, with zero audit denials or sweep. These are post-expiry diagnostics, not an accepted phase pass. The timing cause is unproven; this failure is not limited to a full-prompt shape. No retry, deadline extension or data deletion occurred.
 
-The source-bound 301-job / 418-phase base-tail batch is running at frozen
-`e8653d5`; completion and full artifact review are pending. Its terminal evidence
-collector has independent source-review acceptance and has not been executed.
-A separate pure supplemental planner at `ecfb0f0` preserves all 144 added
-ordinary/delegated-child phases in 90 prospective jobs. Its 23 pure tests, lint
-and independent source review pass; it supplies no execution authority.
-Supplemental native execution, composite coverage acceptance, production image
-activation and physical/release qualification remain open. Earlier checkpoint
-sections below retain their dated scope and are not fresh completion claims.
+A separate source-reviewed collector is now auditing only the 201 completed jobs / 296 phases. The former 301-job collector was not run and must refuse this failed state. Completed-prefix acceptance, the 120 never-started phases, the newly refused two phases and final composite coverage remain open. The original pair-174 refusal remains unchanged.
 
-The explicit supplemental-only runner is also source-reviewed: 13 fake-driver
-failure/admission causals plus 23 pure partition tests and lint pass. It requires
-fresh roots, source/cache pins and per-job capacity checks, and never resumes a
-failed attempt. Native supplemental execution has not started.
+Earlier independent evidence remains bounded: original source `21937dc` has 174 accepted pairs / 348 phases; fresh source `5c96927` has two separately reviewed heavy single-phase observations, and `0397803` has one reviewed cached ordinary-child phase. These do not rehabilitate either refused attempt or establish a storage/timing bound.
+
+[HMP PR #136](https://github.com/MahdiHedhli/hermes-hmp/pull/136) prepares all 144 added ordinary/delegated-child phases in 90 prospective jobs, retaining original expanded-catalog coordinates. Planner and execution-owner source reviews and 36 focused tests pass. Exact source `1aa25c0` passed [CI 42202292052](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42202292052): 8,073 unit/tool tests, 190 subtests (33 skips, 18 warnings), lint, closed plugin surface and privacy checks; Unicode 17 passed 96 cases each on Python 3.12/3.13/3.14. Log hygiene had no captured acceptance logs to scan. No supplemental native execution, production activation, signed-phone image display or release qualification is claimed.
 
 ## Heavy-case fresh partition samples reviewed — November 6, 2026
 
