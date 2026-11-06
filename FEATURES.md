@@ -12,6 +12,15 @@ Review found and repaired SQLite URI containment, partial-setup resource retenti
 and import-root/cache binding defects before native execution. The latest 32 guard
 checks pass on Python 3.11 and 3.14; an overlapping descriptor/fetch regression run
 passes 277 tests. These are guard/synthetic results, not native serving evidence.
+The separate source materializer and fixed isolated entry now have 28 portable
+checks, including an actual entry run with a stub fixture only. Together with
+the 32 harness guards, 60 checks pass on Python 3.14. Review repaired a wrong
+working-folder handoff; configured tar filters, uncertain command settlement and
+invalid diagnostics refuse before native entry. Literal Git tree/blob and executable-mode
+checks reject archive substitutions or omissions; Git replacement objects, lazy
+fetches and protocols are disabled. Native execution remains pending
+independent source acceptance.
+
 No host flag, device permission, app or host deployment changed. See
 [local-image task status](specs/011-local-image-serving/tasks.md).
 

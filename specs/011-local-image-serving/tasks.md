@@ -413,3 +413,27 @@ S4/S5/guard regression run passes after changing test helpers to retain partial
 Rig/Env owners before constructor effects. Real fixture-store fault coverage
 proves cleanup after a post-store setup failure. Source guard results do not tick
 S4/S5/T12/R2/R3; source/native/device/activation scope remains separate.
+
+
+### Materializer and entry checkpoint (2026-11-06)
+
+`tools/compat/local_media_native_serving_driver.py` prepares private source-only
+Git archives and a fixed isolated child entry. It refuses custom tar filters,
+unsafe archive members and noncanonical report shapes. The retained command
+runner treats expired observation as refusal and waits on the same child; it does
+not restart work. The entry selects the private working folder before importing
+the copied harness. Selected dependency/site startup remains a trusted premise.
+
+Root passes 28 driver checks, including a real isolated entry subprocess with a
+stdlib-only stub (no native module/database), and 32 existing harness guards:
+60 combined checks on Python 3.14.4. These checks do not execute Git/native serving
+commands. The initial wrong-working-folder handoff was independently identified
+and repaired. Whole materializer/entry review and the first real native sample
+remain pending; no serving, T12, Linux, phone or activation gate is closed.
+
+Literal tree/blob binding now rejects export-attribute omissions, substitutions,
+extra source entries and wrong executable modes. Git replacement objects, lazy
+fetching, protocols, prompts and fsmonitor are disabled; the selected Git minimum
+is 2.54.0. A bounded 8-MiB tree read leaves the command runner default 64-KiB
+limit unchanged for existing callers. Root also passes the 56 portable command
+runner regression checks; its Darwin native case was deliberately not rerun.

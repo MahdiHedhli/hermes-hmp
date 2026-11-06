@@ -88,10 +88,10 @@ def _digest(path, limit=512 * 1024 * 1024):
     return value.hexdigest()
 
 
-def _read(path):
+def _read(path, limit=_LIMIT):
     info = path.lstat()
     _require(stat.S_ISREG(info.st_mode) and info.st_nlink == 1 and info.st_uid == os.geteuid()
-             and stat.S_IMODE(info.st_mode) == 0o600 and info.st_size <= _LIMIT)
+             and stat.S_IMODE(info.st_mode) == 0o600 and info.st_size <= limit)
     return path.read_bytes()
 
 
@@ -104,7 +104,8 @@ def _save(path, value):
     os.replace(temporary, path)
 
 
-def _owned(command, directory, role, receipt):
+def _owned(command, directory, role, receipt, *, stdout_limit=_LIMIT):
+    _require(type(stdout_limit) is int and _LIMIT <= stdout_limit <= 8 * 1024 * 1024)
     state = {"process": _POPEN.__new__(_POPEN), "command": tuple(command), "wait_known": False}
     _RETAINED.append(state)  # includes partial Popen construction, before effects
     record = {"role": role, "command": list(command), "wait_known": False}
@@ -160,7 +161,7 @@ def _owned(command, directory, role, receipt):
     record["stdout_sha256"], record["stderr_sha256"] = _digest(stdout), _digest(stderr)
     _save(directory / "receipt.json", receipt)
     _require(code == 0 and not record.get("settlement_only_used", False))
-    return _read(stdout)
+    return _read(stdout, stdout_limit)
 
 
 def _selected_path(raw):
