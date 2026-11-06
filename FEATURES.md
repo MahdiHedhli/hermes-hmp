@@ -15,8 +15,12 @@ service/native admission, signed phases/direct writers/cleanup, production
 startup/capacity/rotation, native publication, STATUS and physical/release
 qualification are open. Desktop character delivery is not yet available;
 unsigned transport remains closed. No live host/device changed. Earlier signer
-CI708 and input-check CI710 were still running at the last observation; neither
-qualifies this newer receive-cursor source.
+source `80fb5b1` passed [CI708](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42251968757):
+8,259 tests and 190 subtests. Input-check source `3c7fa4c` passed
+[CI710](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42252824575): 8,275 tests
+and 190 subtests. Each passed plugin checks and Unicode jobs on Python 3.12–3.14,
+with 33 skips and 18 warnings in its plugin run. Neither qualifies this newer
+receive-cursor source.
 
 ## Native image verification checkpoint — November 6, 2026
 

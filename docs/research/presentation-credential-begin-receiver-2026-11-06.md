@@ -47,3 +47,11 @@ phase/direct-writer/cleanup paths, exact completed transfers, GO, terminal ACK/
 journal/native publication, STATUS and physical/release qualification. No host,
 key installation, permission, model, job, provider or device changed. The earlier
 destination-custody incident is not resolved by this receiver.
+
+## Earlier exact-source CI readback
+
+Signer source `80fb5b1` CI708 plugin job128009138935 passed 8,259 tests,
+190 subtests, 33 skips and 18 warnings in 408.65 seconds. Input-check source
+`3c7fa4c` CI710 plugin job128012143359 passed 8,275 tests and 190 subtests,
+33 skips and 18 warnings in 342.87 seconds. All three Unicode jobs and plugin
+steps passed in both runs. This does not qualify receiver source `87bc9a9`.
