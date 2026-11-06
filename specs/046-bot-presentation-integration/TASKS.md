@@ -49,6 +49,9 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement/review the no-IO original controller allocation/key-context
       preparation handoff, with work guards hard-closed and partial objects retained.
       Affected regression: 1,120 passed, one skipped. This is NOT a signed reader.
+- [x] Implement/review role-material checks on the actual controller reader Task,
+      original control scope and callback-safe reference seals, without borrowing
+      creator authority. 1,123 affected passed, one skipped; no phase/IO permission.
 - [ ] Implement the actual signed GO/CANCEL receiver/context on the existing original
       controller task/cursor and frozen budget before any credential resource/READY
       startup. No legacy fallback, new parser task or boolean gate opening.

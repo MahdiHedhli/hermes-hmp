@@ -1,23 +1,23 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) includes the
-reviewed original controller task/key-context preparation handoff. It retains
-actual native allocation/creator/loop and original queued scope before publication,
-with callback-safe reference checks. It cannot read or authorize work: its Task
-stops explicitly before bytes, and work guards refuse even before it runs.
-Affected regression: **1,120 passed, one skipped**, 29.73 seconds; configured lint
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) includes reviewed
+role-material checks on the actual original controller Task, separate from its
+creator. It preserves original service/registry/input/budget/control-scope and
+current key/process/generation links, with post-callback reference seals.
+Affected regression: **1,123 passed, one skipped**, 30.66 seconds; configured lint
 passed. Independent review was source-only.
-See [evidence and limits](docs/research/presentation-prepared-control-binding-2026-11-06.md).
+See [evidence and limits](docs/research/presentation-control-reader-material-2026-11-06.md).
 
-Actual signed GO/CANCEL parsing/receipts, resource/READY startup, remaining
-signed/direct IO, production startup, native publication, STATUS and physical/
-release qualification remain open. Character delivery is not yet available;
-legacy unsigned fallback stays refused. No live host/device changed.
+These checks grant no phase/time/IO permission. The actual Task still stops before
+bytes, signatures or GO/CANCEL receipts; all reader/work guards remain closed.
+Signed cursor, resource/READY, remaining signed/direct IO, production startup,
+native publication, STATUS and physical/release qualification remain open.
+Character delivery is not yet available. No live host/device changed.
 
-Earlier fallback refusal `98d6c3b` passed
-[CI720](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42261624061): 8,309 tests,
+Earlier preparation `fcfda9a` passed
+[CI722](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42264159081): 8,313 tests,
 190 subtests, 33 skips, 18 warnings; plugin checks and Python 3.12–3.14 Unicode
-jobs passed. That result does not qualify the newer preparation source.
+jobs passed. That result does not qualify the newer reader-material source.
 
 ## Native image verification checkpoint — November 6, 2026
 

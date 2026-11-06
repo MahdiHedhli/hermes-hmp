@@ -231,12 +231,31 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 "control_binding",
                 "control_binding_creator_drift",
                 "control_binding_reader_drift",
+                "control_binding_material_key",
+                "control_binding_material_control",
+                "control_binding_material_budget",
             ):
                 from hmp_plugin.presentation_broker_cancel import BrokerCancellationOwner
                 from hmp_plugin.presentation_cancel_budget import CancellationBudget
+                from hmp_plugin.presentation_control_binding import PreparedControlBinding
 
-                budget_before = CancellationBudget.inspect(native.cleanup_budget)
+                original_budget = native.cleanup_budget_snapshot
+                budget_before = CancellationBudget.inspect(original_budget)
                 grammar_before = dict(record.grammar.__dict__)
+                material = PreparedControlBinding.reader_material_current
+                held["material_passed"] = False
+
+                def observed_material(binding):
+                    assert asyncio.current_task() is binding._allocation.task
+                    assert asyncio.current_task() is not binding._creator
+                    with pytest.raises(FrameError):
+                        PreparedControlBinding.creator_current(binding)
+                    material(binding)
+                    held["material_passed"] = True
+
+                monkeypatch.setattr(
+                    PreparedControlBinding, "reader_material_current", observed_material
+                )
                 control = BrokerCancellationOwner.prepare_credential(work)
                 held["prepared_control"] = control
                 prepared = control._credential_binding_snapshot
@@ -253,7 +272,7 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 with pytest.raises(FrameError):
                     BrokerCancellationOwner.prepare_credential(work)
                 original_task = control._allocation_snapshot.task
-                if mutation != "control_binding":
+                if mutation in ("control_binding_creator_drift", "control_binding_reader_drift"):
                     from hmp_plugin.presentation_clock import NativeClockOwner
                     from hmp_plugin.presentation_control_binding import PreparedControlBinding
 
@@ -278,12 +297,36 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                             PreparedControlBinding.creator_current(prepared)
                     else:
                         prepared._allocation = Foreign()
+                if mutation == "control_binding_material_key":
+                    keys["broker"].retire()
+                elif mutation in (
+                    "control_binding_material_control",
+                    "control_binding_material_budget",
+                ):
+                    current = BrokerServiceSpine._current
+                    callbacks = []
+                    held["binding_callbacks"] = callbacks
+
+                    class ForeignMaterial:
+                        def __getattribute__(self, name):
+                            callbacks.append(name)
+                            raise AssertionError("foreign reader material getter")
+
+                    def material_changed(service):
+                        current(service)
+                        if asyncio.current_task() is original_task:
+                            if mutation == "control_binding_material_control":
+                                prepared._control_snapshot = ForeignMaterial()
+                            else:
+                                native.cleanup_budget = ForeignMaterial()
+
+                    monkeypatch.setattr(BrokerServiceSpine, "_current", material_changed)
                 outcome = await asyncio.gather(original_task, return_exceptions=True)
                 assert len(outcome) == 1 and isinstance(outcome[0], FrameError)
                 assert control._failed is True and control._wire_received == 0
                 assert control._go_receipt is None and control._cancel_receipt is None
                 assert channel._reading is False and control._buffer_origin == b""
-                assert CancellationBudget.inspect(native.cleanup_budget) == budget_before
+                assert CancellationBudget.inspect(original_budget) == budget_before
                 assert record.grammar.__dict__ == grammar_before
             return ticket
         except FrameError:
@@ -331,6 +374,9 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
             "control_binding",
             "control_binding_creator_drift",
             "control_binding_reader_drift",
+            "control_binding_material_key",
+            "control_binding_material_control",
+            "control_binding_material_budget",
         ):
             held["ticket"] = await task
         else:
@@ -500,6 +546,7 @@ async def test_prepared_credential_control_binds_original_task_and_performs_no_i
     assert held["record"].cancel_owner is control
     assert control._credential_binding_snapshot._refs is held["work"]._refs_snapshot
     assert local[0]._registry_snapshot._record(held["ticket"]).resources is None
+    assert held["material_passed"] is True
 
 
 @pytest.mark.asyncio
@@ -512,6 +559,26 @@ async def test_prepared_control_rejects_foreign_context_without_getters_or_io(
 ):
     held, calls = await exchange(local, tmp_path, monkeypatch, mutation)
     assert held["binding_callbacks"] == [] and calls == [held["ticket"]]
+    control = held["prepared_control"]
+    assert control._failed is True and control._wire_received == 0
+    assert control._go_receipt is None and control._cancel_receipt is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "control_binding_material_key",
+        "control_binding_material_control",
+        "control_binding_material_budget",
+    ],
+)
+async def test_controller_reader_material_rejects_revocation_and_callback_drift(
+    local, tmp_path, monkeypatch, mutation
+):
+    held, _ = await exchange(local, tmp_path, monkeypatch, mutation)
+    assert held["material_passed"] is False and held.get("binding_callbacks", []) == []
     control = held["prepared_control"]
     assert control._failed is True and control._wire_received == 0
     assert control._go_receipt is None and control._cancel_receipt is None

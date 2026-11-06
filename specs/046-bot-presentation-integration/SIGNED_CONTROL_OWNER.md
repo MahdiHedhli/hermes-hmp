@@ -107,3 +107,12 @@ and every reader/work guard stays hard-closed. Original constructor/refusal and
 local cleanup boundaries remain separate. Root affected regression: 1,120 passed,
 one skipped; independent source/test review accepted only this preparation slice.
 See [evidence and limits](../../docs/research/presentation-prepared-control-binding-2026-11-06.md).
+
+## Reader-material checkpoint
+
+The actual prepared controller Task now checks original role material/current
+service/socket/registry references without borrowing creator-only guards. It is
+material-only; signed phase/deadline/read-cursor checks remain unimplemented, and
+the Task still hard-stops before IO/receipts. Root affected regression: 1,123
+passed, one skipped; independent read-only review accepted this limited slice.
+See [evidence and limits](../../docs/research/presentation-control-reader-material-2026-11-06.md).
