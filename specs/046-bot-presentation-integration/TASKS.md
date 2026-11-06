@@ -19,6 +19,9 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement/review the one-attempt original native-input correlation join,
       with actual policy-thread/shared-slot model, final-current refusal causals
       and 640-pass/one-skip affected regression. This grants no phase authority.
+- [x] Implement/review bounded data-only full-frame streaming digest, all seven
+      phase bodies/max result and one-shot/drift/thread refusal cases; expanded
+      affected regression 658 passed, one skipped. This is not cursor/native authority.
 - [ ] Integrate operator-selected paired runtime/source/credential startup,
       capacity and rotation with the retained handshake on its original channel,
       task/cursor and known local write completion facts.

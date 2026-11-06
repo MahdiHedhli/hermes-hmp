@@ -212,3 +212,12 @@ held pins/context and stream/hash its own cursor. Reconstructing a data object
 is not signature proof. BEGIN scope must be independently derived before any
 registry/resource effect. Actual native and lifecycle authority remain separate;
 no signer, GO admission, completed transfer or runtime capability is added.
+
+### Streaming digest source checkpoint
+
+The independently reviewed data-only `CommittedFrameDigest` checks exact original
+prefix/header and bounded chunks without retaining another full body buffer.
+Root's expanded affected regression passed 658 tests, one skipped; configured
+lint passed. See [evidence and limits](../../docs/research/presentation-credential-stream-2026-11-06.md).
+The receiver still must supply actual signature-checked retained context and its
+original cursor; no digest data is a phase/native/transfer or publication permit.
