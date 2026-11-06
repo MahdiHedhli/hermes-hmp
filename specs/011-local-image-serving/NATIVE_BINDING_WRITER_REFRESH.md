@@ -20,7 +20,7 @@ not manufactured into native coverage. Cheap `get_session_list_row` exists but
 omits parent links and cannot replace the strict parent-walk facts or resolve
 G-M1 by itself. No new upstream requirement is invented for this test refresh.
 
-## Owned actor foundation (implemented, not a native writer pass)
+## Owned actor foundation (historical pre-integration checkpoint)
 
 `local_media_native_writer_sample.py` is inert on import. `OwnedWriter` retains
 its actual Thread in the caller's owner list BEFORE start effects. An explicit
@@ -54,8 +54,10 @@ methods/native source are not modified.
 
 Caller integration MUST add these actors to the workload DB/fixture closure
 barrier, retain partial setup, and settle/verify them before hook restoration or
-home/selection restoration. That integration is not yet implemented and no
-native actor/data operation has run. This foundation alone cannot close a DB,
+home/selection restoration. At this historical foundation checkpoint, integration
+was not yet implemented and no native actor/data operation had run. The integrated pilot
+result below supersedes this status, without closing the full matrix. The
+foundation alone cannot close a DB,
 produce a successful writer report or qualify any scenario.
 
 ## Remaining scenario runner and acceptance
@@ -85,7 +87,7 @@ produce a successful writer report or qualify any scenario.
   then independently read back exact source/runtime/artifact bindings. Never
   relabel historical phases, retry an ambiguous write or extend the deadline.
 
-## Checkpoint
+## Historical foundation checkpoint
 
 Root's 21 causal actor/hook model cases passed; configured lint is tracked with
 this source. They create owned local test threads with synthetic callbacks,
@@ -103,7 +105,7 @@ Independent rereview accepted the repair and foundation-only scope. Native
 integration, DB-close barriers and scenario oracles still require review before
 any execution; no native pass is inferred.
 
-## Integrated runner candidate (not yet accepted/executed)
+## Integrated runner contract (bounded pilot accepted; full matrix open)
 
 An explicit `binding_writer="scenario:seam"` requires seed mode, exact case 0..7
 and selector 1/16/128, and excludes cost/mint/RSS combinations. Validated fixed
@@ -147,7 +149,7 @@ withheld under that debt. Worker admission/commit acknowledgment/join remain
 separate; missing hooks, job errors or unknown release cannot be counted as a
 refusal success even if a bridge swallows an instrumentation exception.
 
-Currently declared requests span624 phase pairs: six general scenarios at three
+Currently declared requests span 624 phase pairs: six general scenarios at three
 brackets plus residual/ABA last-read cases for both kinds, and ambiguity/kind-swap/
 title-guard/archive cases only for Bot Chat, across four full shapes and three
 selectors. This does NOT yet complete native fork/reset/other applicability
@@ -156,8 +158,8 @@ scenario oracles are complete. No unsupported reverse kind switch is manufacture
 by clearing a protected canonical title.
 
 Root's focused model/guard checks and lint are recorded with the source receipt.
-Independent integrated source review is required before a bounded fresh native
-pilot. Pilot results cannot substitute for the full matrix. A single source copy
+Independent integrated source review preceded the bounded native pilot reported
+below. Pilot results cannot substitute for the full matrix. A single source copy
 currently occupies about 311 MiB, so a full 624-copy run must not be started without
 a reviewed storage/execution layout that preserves all phase coverage and the
 unchanged 12-second per-actor budget. No protected prior evidence is deleted to
@@ -166,8 +168,8 @@ make space, no deadline is extended and no ambiguous native write is retried.
 Integrated source review accepted a BOUNDED pilot, with no reviewer execution.
 The explicit ContextVar copy is captured before thread creation and independently
 accepted; a causal profileA->readerB change proves the worker still sees A.
-Root's 559 combined focused guards/models and configured lint passed. No native
-writer phase has run at this checkpoint. The initial pilot is12 separately owned
+Root's 559 combined focused guards/models and configured lint passed. Before the pilot, no native
+writer phase had run. The accepted pilot used 12 separately owned
 single-phase processes, including public native controls/history/eligibility/
 tip movement/guard and synthetic Phone-store, residual/ABA cases; it is not the
 624-phase matrix or fork/reset qualification. Every failure remains a refusal.
@@ -175,12 +177,36 @@ tip movement/guard and synthetic Phone-store, residual/ABA cases; it is not the
 ## Bounded pilot result
 
 All 12 pilot phases at `8167016` completed and passed independent source/artifact
-readback:24 first/second outcomes,336 artifact hashes/private modes, native/HMP
-SHA/literal Git and helper/runtime/report bindings,39/39 native borrows per
-process, actual writer/hooks/DB/listener/worker closure and132 known commands.
+readback: 24 first/second outcomes, 336 artifact hashes/private modes, native/HMP
+SHA/literal Git and helper/runtime/report bindings, 39/39 native borrows per
+process, actual writer/hooks/DB/listener/worker closure and 132 known commands.
 Nine successful public native mutation calls, five synthetic Phone-store calls
 and one native guard refusal were verified. Residual stale acceptance and
 Phone-store ABA acceptance remain limitations. No expiry/retry/guard bypass.
 [Exact scope/outcomes](../../docs/research/local-media-native-writer-pilot-2026-11-06.md).
-Full 624/storage/fork-reset coverage and C6b remain open;559 model/guard tests
+Full 624/storage/fork-reset coverage and C6b remain open; 559 model/guard tests
 and configured lint passed separately. No reviewer execution or release pass.
+
+## Fork/reset source applicability checkpoint
+
+Read-only inspection of pinned native `ed1afb08` distinguishes three contracts.
+`hermes_state_sessions.py:544` exposes `promote_to_session_reset`, which marks
+a durable reset boundary and returns a boolean, including guarded failure as
+False. A writer scenario must require exact successful return and independently
+read back the boundary; a return alone cannot prove child publication or routing.
+`hermes_state_local_lineage.py:167` resets a coordinated local target using a
+current epoch and persisted policy receipt. `hermes_state_mutation_reset.py:12`
+executes reset inside native mutation authority, including orphan-worker and
+advanceability guards. These are not interchangeable with session creation.
+
+The explicit-fork reader in `hermes_state_messages.py:1904` requires branch or
+delegate markers to match the actual parent; reset markers count only when its
+include-reset option is requested. Compression can copy model configuration, so
+presence of a marker alone does not prove a fork. Fixture construction through
+public session APIs would test constructed lineage facts, not actual gateway
+fork/reset admission, and must be labeled separately. No coordinated receipt,
+epoch, worker authority or native SQL is fabricated to bypass these contracts.
+
+Next implementation must map the actual HMP binding reads to these distinctions
+and establish first/fresh-second oracles before adding scenarios. No new native
+fork/reset execution or pass is claimed by this source inspection.
