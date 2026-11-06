@@ -705,3 +705,14 @@ preparation once, preserves earliest cleanup end and withholds output after key,
 metadata or deadline drift. Exact primitive types precede comparison/iteration.
 No pre-READY signing, socket write, remote custody, release or startup permission
 follows from this owner; local cleanup remains independent of role retirement.
+
+### After-READY original-cleanup signed CANCEL writer (November 6, 2026)
+
+`presentation_credential_cancel_write.py` transmits only the exact retained CANCEL
+commitment/frame on the original cleanup Task and frozen native preparation.
+Whole bounded signed-wire progress and settled/current role/actor/budget checks
+precede the existing completion bool and private local fact. Both earlier writers
+use typed reciprocal slot descriptions. Unknown IO cannot retry/renew or settle
+closure. Historical local IO requires the original cleanup actor or actually done
+Task with original context. No remote ACK/custody, pre-READY path or production
+sender dispatch follows.

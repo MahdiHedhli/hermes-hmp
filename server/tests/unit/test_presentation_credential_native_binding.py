@@ -554,6 +554,7 @@ async def begin_gateway(local, monkeypatch):
         reader = channel._credential_ready_receiver_snapshot
         transition = None if reader is None else reader._transition_snapshot
         go_writer = channel._credential_go_writer_snapshot
+        cancel_writer = channel._credential_cancel_writer_snapshot
         release_drift = False
         if go_writer is not None:
             go_base = go_writer._scope_snapshot.signed_scope.ready_scope.read_scope.write_scope
@@ -565,6 +566,8 @@ async def begin_gateway(local, monkeypatch):
                     or (reader is not None and reader._io_unknown)
                     or (transition is not None and transition._failed)
                     or (go_writer is not None and (go_writer._unknown or go_writer._failed))
+                    or (cancel_writer is not None
+                        and (cancel_writer._unknown or cancel_writer._failed))
                     or release_drift)
             assert not channel._closed_known
             # Fixture-owned disposal only, never a channel/native release fact.

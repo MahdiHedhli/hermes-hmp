@@ -159,8 +159,14 @@ class NativeGoWriter:
                  and self._waiter is self._waiter_origin
                  and self._fact is self._fact_snapshot
                  and all(type(v) is bool for v in (self._attempted, self._active, self._inflight,
-                                                   self._failed, self._unknown, self._complete))
-                 and b.channel._writing is self._active)
+                                                   self._failed, self._unknown, self._complete)))
+        writing = self._active
+        cancel_writer = getattr(b.channel, "_credential_cancel_writer_snapshot", None)
+        if self._complete and self._active is False and cancel_writer is not None:
+            from .presentation_credential_cancel_write import NativeCancelWriter
+            _require(type(cancel_writer) is NativeCancelWriter)
+            writing = NativeCancelWriter._go_writing(cancel_writer, self)
+        _require(b.channel._writing is writing)
         if self._complete:
             _require(type(self._fact) is _GoWriteFact and self._fact.mint is _GO_WRITE_MINT
                      and self._fact.intent is s.intent and self._offset == len(s.wire)

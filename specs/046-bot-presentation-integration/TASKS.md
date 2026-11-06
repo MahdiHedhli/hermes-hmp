@@ -314,3 +314,7 @@ historical, not an alternative live authorization path or resolved incident.
       one native preparation/window, seq1/seq2, no interval renewal. Eight focused
       cases, selected887 and lint pass; independent read-only review accepted.
       Socket transport, pre-READY cancellation and remote custody remain open.
+
+- [x] Qualify bounded after-READY signed CANCEL socket writer on the same native
+      preparation/window: twelve causal cases, 1,500 affected/one skipped, lint
+      and independent final repair review pass. Routing/pre-READY/custody remain open.

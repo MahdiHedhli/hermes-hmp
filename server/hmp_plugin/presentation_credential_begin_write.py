@@ -217,7 +217,12 @@ class NativeBeginWriter:
                      self._unknown, self._complete, self._completion_attempted)))
         writing = self._active
         go_writer = getattr(s.channel, "_credential_go_writer_snapshot", None)
-        if self._complete and self._active is False and go_writer is not None:
+        cancel_writer = getattr(s.channel, "_credential_cancel_writer_snapshot", None)
+        if self._complete and self._active is False and cancel_writer is not None:
+            from .presentation_credential_cancel_write import NativeCancelWriter
+            _require(type(cancel_writer) is NativeCancelWriter)
+            writing = NativeCancelWriter._begin_writing(cancel_writer, self)
+        elif self._complete and self._active is False and go_writer is not None:
             from .presentation_credential_go_write import NativeGoWriter
             _require(type(go_writer) is NativeGoWriter)
             writing = NativeGoWriter._begin_writing(go_writer, self)

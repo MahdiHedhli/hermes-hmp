@@ -78,6 +78,7 @@ class NativeCancelCommitment:
         owner._sequence = owner._sequence_snapshot = None
         owner._expected = owner._expected_snapshot = None
         owner._raw = owner._raw_snapshot = None
+        owner._writer = owner._writer_snapshot = None
         cleanup._credential_cancel_commitment = owner
         cleanup._credential_cancel_commitment_snapshot = owner
         try:
@@ -134,7 +135,6 @@ class NativeCancelCommitment:
                      and self._end == s.cleanup._cancel_end_snapshot
                      and self._sequence == s.cleanup._cancel_sequence_snapshot
                      and s.cleanup._cancel_write_attempted is True
-                     and s.cleanup._cancel_write_completed is False
                      and type(self._expected) is tuple and len(self._expected) == len(_EXPECTED)
                      and all(type(row) is tuple and len(row) == 2 and type(row[0]) is str
                              and type(row[1]) is (
@@ -158,6 +158,12 @@ class NativeCancelCommitment:
         else:
             _require(self._frame is None and self._end is None and self._sequence is None
                      and self._expected is None)
+        _require(type(s.cleanup._cancel_write_completed) is bool)
+        if s.cleanup._cancel_write_completed:
+            from .presentation_credential_cancel_write import NativeCancelWriter
+            _require(type(self._writer_snapshot) is NativeCancelWriter
+                     and self._writer is self._writer_snapshot)
+            NativeCancelWriter._native_completed(self._writer_snapshot, self)
         if self._complete:
             _require(self._prepared is True and type(self._raw) is bytes
                      and 0 < len(self._raw) <= 2048)
@@ -169,7 +175,8 @@ class NativeCancelCommitment:
         s = NativeCancelCommitment._metadata(self)
         b = s.ready_scope.read_scope.write_scope
         _require(asyncio.current_task() is s.allocation.task
-                 and _TASK.cancelling(s.allocation.task) == 0 and self._failed is False)
+                 and _TASK.cancelling(s.allocation.task) == 0 and self._failed is False
+                 and s.cleanup._cancel_write_completed is False)
         material = NativePhaseWorkOwner._cleanup_material(s.producer, s.cleanup)
         _require(material[0] is b.remote and material[2] is b.channel)
         remaining = RemoteCleanupOwner._remaining(s.cleanup)

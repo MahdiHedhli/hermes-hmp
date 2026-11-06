@@ -49,6 +49,13 @@ from .test_presentation_supervisor import context as context
     "dispatch_cleanup_sign_wrong_actor", "dispatch_cleanup_sign_key",
     "dispatch_cleanup_sign_expired", "dispatch_cleanup_sign_expired_prepared",
     "dispatch_cleanup_sign_expected_row", "dispatch_cleanup_sign_foreign_end",
+    "dispatch_cleanup_sign_write", "dispatch_cleanup_sign_write_after_go",
+    "dispatch_cleanup_sign_write_partial", "dispatch_cleanup_sign_write_eagain",
+    "dispatch_cleanup_sign_write_unknown", "dispatch_cleanup_sign_write_key",
+    "dispatch_cleanup_sign_write_tail_key",
+    "dispatch_cleanup_sign_write_foreign_intent_after_go",
+    "dispatch_cleanup_sign_write_zero", "dispatch_cleanup_sign_write_registration",
+    "dispatch_cleanup_sign_write_wrong_actor", "dispatch_cleanup_sign_write_tail_cancel",
 ])
 async def test_original_work_ready_read_requires_its_complete_signed_begin(
     context, begin_gateway, tmp_path, monkeypatch, mutation
@@ -698,8 +705,7 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                     from hmp_plugin.presentation_broker_service import SocketChannel
                     from hmp_plugin.presentation_cancel_budget import CancellationBudget
 
-                    if mutation in ("dispatch_cleanup_material_after_go",
-                                    "dispatch_cleanup_sign_after_go"):
+                    if mutation.endswith("_after_go"):
                         assert await remote.go() is True
                         held["cleanup_prior_go_wire"] = peer.recv(65536)
                         assert held["cleanup_prior_go_wire"]
@@ -789,9 +795,10 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
 
                                 monkeypatch.setattr(cancel, "signing_bytes",
                                                     replaced_cancel_metadata)
-                            success = mutation in ("dispatch_cleanup_sign",
-                                                   "dispatch_cleanup_sign_after_go",
-                                                   "dispatch_cleanup_sign_wrong_actor")
+                            success = (mutation in ("dispatch_cleanup_sign",
+                                                    "dispatch_cleanup_sign_after_go",
+                                                    "dispatch_cleanup_sign_wrong_actor")
+                                       or mutation.startswith("dispatch_cleanup_sign_write"))
                             try:
                                 if success:
                                     raw = commitment.prepare()
@@ -804,7 +811,7 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                                         binding=remote._binding_snapshot)
                                     assert header.kind == "CANCEL" and header.body_length == 16
                                     assert header.sequence == (
-                                        2 if mutation == "dispatch_cleanup_sign_after_go" else 1)
+                                        2 if mutation.endswith("_after_go") else 1)
                                     assert commitment._end_snapshot == before[2]
                                 else:
                                     with pytest.raises(FrameError):
@@ -820,7 +827,145 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                             assert after[0] == before[0] and after[2] == before[2]
                             assert after[3] is False and after[1] >= before[1]
                             assert held.get("foreign_cancel_calls", []) == []
-                            assert cleanup._cancel_write_completed is False
+                            if mutation.startswith("dispatch_cleanup_sign_write"):
+                                import errno
+
+                                from hmp_plugin import presentation_credential_cancel_write as write
+
+                                if mutation == "dispatch_cleanup_sign_write_wrong_actor":
+                                    async def wrong_cancel_writer():
+                                        with pytest.raises(FrameError):
+                                            write.NativeCancelWriter.retain(commitment)
+                                    await asyncio.create_task(wrong_cancel_writer())
+                                    assert commitment._writer is None
+                                writer = write.NativeCancelWriter.retain(commitment)
+                                held["cancel_writer"] = writer
+                                if mutation == "dispatch_cleanup_sign_write_wrong_actor":
+                                    async def wrong_cancel_write():
+                                        with pytest.raises(FrameError):
+                                            await writer.write_cancel()
+                                    await asyncio.create_task(wrong_cancel_write())
+                                    assert writer._attempted is False and writer._failed is False
+                                send = write._SEND
+                                held["cancel_send_calls"] = 0
+
+                                def changed_cancel_send(sock, data):
+                                    held["cancel_send_calls"] += 1
+                                    if mutation == "dispatch_cleanup_sign_write_zero":
+                                        return 0
+                                    if (mutation in ("dispatch_cleanup_sign_write_eagain",
+                                                     "dispatch_cleanup_sign_write_registration")
+                                            and held["cancel_send_calls"] == 1):
+                                        raise BlockingIOError(errno.EAGAIN, "synthetic CANCEL wait")
+                                    if mutation == "dispatch_cleanup_sign_write_partial":
+                                        limit = 41
+                                    elif mutation == "dispatch_cleanup_sign_write_unknown":
+                                        limit = 7
+                                    else:
+                                        limit = len(data)
+                                    count = send(sock, data[:limit])
+                                    if mutation == "dispatch_cleanup_sign_write_unknown":
+                                        raise OSError("synthetic uncertain CANCEL send")
+                                    if mutation == "dispatch_cleanup_sign_write_key":
+                                        keys["gateway"].retire()
+                                    return count
+
+                                monkeypatch.setattr(write, "_SEND", changed_cancel_send)
+                                if mutation == "dispatch_cleanup_sign_write_registration":
+                                    from hmp_plugin import presentation_readiness as readiness
+
+                                    install = readiness._install_writer
+
+                                    def unknown_cancel_registration(*args):
+                                        install(*args)
+                                        raise OSError("synthetic uncertain CANCEL registration")
+
+                                    monkeypatch.setattr(readiness, "_install_writer",
+                                                        unknown_cancel_registration)
+                                if mutation in ("dispatch_cleanup_sign_write_tail_key",
+                                                "dispatch_cleanup_sign_write_tail_cancel",
+                                                "dispatch_cleanup_sign_write_foreign_intent_after_go"):
+                                    timeout = write._TIMEOUT
+                                    held["foreign_cancel_intent_calls"] = []
+
+                                    class ForeignCancelGoIntent:
+                                        def __getattribute__(self, name):
+                                            held["foreign_cancel_intent_calls"].append(name)
+                                            raise AssertionError("foreign CANCEL GO intent getter")
+
+                                    def changed_cancel_timeout(sock):
+                                        value = timeout(sock)
+                                        if (writer._attempted
+                                                and not held.get("cancel_tail_changed")):
+                                            held["cancel_tail_changed"] = True
+                                            if mutation == "dispatch_cleanup_sign_write_tail_key":
+                                                keys["gateway"].retire()
+                                            elif mutation.endswith("_tail_cancel"):
+                                                signed = writer._scope_snapshot.signed_scope
+                                                assert signed.allocation.task.cancel() is True
+                                            else:
+                                                scope = writer._scope_snapshot
+                                                forged = scope.go._replace(
+                                                    intent=ForeignCancelGoIntent())
+                                                channel._go_write_fact = forged
+                                                channel._go_write_fact_snapshot = forged
+                                                changed = scope._replace(go=forged)
+                                                writer._scope = writer._scope_snapshot = changed
+                                                with pytest.raises(FrameError):
+                                                    writer._begin_writing(
+                                                        scope.signed_scope.ready_scope.read_scope.writer)
+                                                assert held["foreign_cancel_intent_calls"] == []
+                                        return value
+
+                                    monkeypatch.setattr(write, "_TIMEOUT", changed_cancel_timeout)
+                                write_success = mutation not in (
+                                    "dispatch_cleanup_sign_write_unknown",
+                                    "dispatch_cleanup_sign_write_key",
+                                    "dispatch_cleanup_sign_write_tail_key",
+                                    "dispatch_cleanup_sign_write_foreign_intent_after_go",
+                                    "dispatch_cleanup_sign_write_zero",
+                                    "dispatch_cleanup_sign_write_registration",
+                                    "dispatch_cleanup_sign_write_tail_cancel")
+                                if write_success:
+                                    await writer.write_cancel()
+                                else:
+                                    with pytest.raises((FrameError, AuthorityRefusalError,
+                                                        OSError)):
+                                        await writer.write_cancel()
+                                with pytest.raises(FrameError):
+                                    await writer.write_cancel()
+                                try:
+                                    actual_wire = peer.recv(65536)
+                                except BlockingIOError:
+                                    actual_wire = b""
+                                expected_wire = writer._scope_snapshot.wire
+                                assert actual_wire == expected_wire[:len(actual_wire)]
+                                assert writer._complete is write_success
+                                assert writer._failed is not write_success
+                                assert writer._unknown is (mutation in (
+                                    "dispatch_cleanup_sign_write_unknown",
+                                    "dispatch_cleanup_sign_write_foreign_intent_after_go",
+                                    "dispatch_cleanup_sign_write_registration"))
+                                assert cleanup._cancel_write_completed is write_success
+                                assert writer._scope_snapshot.end == before[2]
+                                if write_success:
+                                    assert writer._offset == len(expected_wire)
+                                elif mutation == "dispatch_cleanup_sign_write_unknown":
+                                    assert writer._offset == 0 and len(actual_wire) == 7
+                                elif mutation in ("dispatch_cleanup_sign_write_tail_key",
+                                                  "dispatch_cleanup_sign_write_tail_cancel",
+                                                  "dispatch_cleanup_sign_write_foreign_intent_after_go"):
+                                    assert writer._offset == 0 and actual_wire == b""
+                                    assert held["cancel_send_calls"] == 0
+                                    assert held["foreign_cancel_intent_calls"] == []
+                                elif mutation in ("dispatch_cleanup_sign_write_zero",
+                                                  "dispatch_cleanup_sign_write_registration"):
+                                    assert writer._offset == 0 and actual_wire == b""
+                                    assert held["cancel_send_calls"] == 1
+                                else:
+                                    assert writer._offset == len(expected_wire)
+                            else:
+                                assert cleanup._cancel_write_completed is False
                             assert cleanup._cancel_write_attempted is (
                                 mutation != "dispatch_cleanup_sign_expired")
                             raise FrameError("SYNTHETIC_CANCEL_SIGNING_ONLY_NO_IO")
@@ -872,8 +1017,13 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 RemoteCleanupOwner.request(cleanup)
                 # Actual owned cleanup may retain UNKNOWN: signed cleanup relay
                 # is not integrated by this READY-only dispatch slice.
-                async with asyncio.timeout(2):
-                    result = await asyncio.shield(cleanup._allocations_snapshot[0].task)
+                try:
+                    async with asyncio.timeout(2):
+                        result = await asyncio.shield(cleanup._allocations_snapshot[0].task)
+                except asyncio.CancelledError:
+                    assert mutation == "dispatch_cleanup_sign_write_tail_cancel"
+                    assert cleanup._allocations_snapshot[0].task.cancelled()
+                    result = False  # actual cancelled cleanup is not settlement evidence
                 assert type(result) is bool
                 original_allocations = held.get("original_cleanup_allocations",
                                                 cleanup._allocations_snapshot)
@@ -916,8 +1066,7 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 assert remote._cleanup_owner_snapshot._credential_work_snapshot._exchange_failed
             async with asyncio.timeout(2):
                 await peer_task
-            if mutation in ("dispatch_cleanup_material_after_go",
-                                    "dispatch_cleanup_sign_after_go"):
+            if mutation.startswith("dispatch_cleanup_") and mutation.endswith("_after_go"):
                 assert remote._go_admission_used is True
             elif mutation.startswith("dispatch_go_"):
                 assert remote._go_admission_used is True

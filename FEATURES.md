@@ -1,3 +1,25 @@
+## Signed CANCEL write checkpoint — November 6, 2026
+
+The original cleanup writer now transmits only the retained signed CANCEL plus
+native frame under the same consumed preparation and frozen end. Actual bounded
+byte progress, settled IO and final role/actor/budget checks precede the native
+completion bool and private local fact. Partial/uncertain writes retain debt
+without retry or deadline renewal. Both prior writers use typed CANCEL slot
+handoffs; local closure does not become a remote ACK or custody proof.
+
+Twelve direct writer cases and **1,500 affected tests passed, one skipped**,
+75.26 seconds; configured lint passed. Independent read-only review accepted GO
+intent typing and final descriptor-tail role/budget/actor repairs. Tripwires prove
+zero foreign callbacks or sends after late retirement/cancellation. Prior signer
+`86667eb` passed [CI766](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42300606324).
+Current writer CI is not yet qualified.
+
+Production CANCEL routing, pre-READY cancellation, remote closure/results/terminal
+custody, worker relay/startup/native publication/STATUS and physical/release
+qualification remain open. Character delivery remains unavailable. No live host,
+settings/device or installed build changed.
+See [evidence and limits](docs/research/presentation-cancel-write-2026-11-06.md).
+
 ## After-READY CANCEL signing checkpoint — November 6, 2026
 
 The original cleanup signer now consumes exactly one native CANCEL preparation
