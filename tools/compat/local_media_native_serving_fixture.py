@@ -220,6 +220,7 @@ def run_fixture(root):
     import hermes_state_registry as native_registry
     import pytest
     from aiohttp.test_utils import TestClient, TestServer
+    from unit.test_s4_descriptors import USER
     from unit.test_s5_media_fetch import FORBIDDEN_HEADERS, VALID_PNG, VALID_PNG_B, Fx
 
     from hmp_plugin import media_fetch
@@ -255,6 +256,7 @@ def run_fixture(root):
 
     try:
         Fx.__init__(fx, root / "rig", patch, kind="phone", images=3)
+        fx.native.world.approve(USER, "beta")  # Synthetic per-bot scope for ref-isolation test.
         db_path = fx.native.home_path / "state.db"
         _require(db_path.read_bytes() == b"")  # Only the helper's synthetic placeholder.
         db_path.unlink()
@@ -310,7 +312,11 @@ def run_fixture(root):
                         headers["X-Content-Type-Options"] == "nosniff" and
                         all(k not in headers for k in FORBIDDEN_HEADERS))
                     report["exact_authenticated_bytes_headers"] = True
-                    other = await fx.rig.pair(client, owner=False)
+                    other = await fx.rig.pair(client)
+                    other_refs = await fx.mint(client, other)
+                    status, _, body = await fx.get(client, other_refs[2], dev=other)
+                    _require(status == 200 and body == VALID_PNG)
+                    report["other_device_positive_control"] = True
                     status, _, _ = await fx.get(client, refs[2], dev=other)
                     _require(status == 404)
                     report["other_device_refused"] = True
