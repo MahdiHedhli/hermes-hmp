@@ -453,7 +453,7 @@ A fresh-root attempt on `ada0f0b` completed literal native/HMP snapshot verifica
 and launched the isolated entry. The child terminated with `ModuleNotFoundError:
 No module named 'ruamel'` while importing the selected native registry's
 dependencies. This is a setup failure before database/HTTP work, not a serving
-pass or timeout. All 12 original Git/child actors were observed terminal; the two
+pass or timeout. All 11 recorded command actors were observed terminal; the two
 expected absent-config probes returned 1, and the native child returned 1.
 
 Private original artifacts remain at
@@ -479,3 +479,26 @@ shipping manifests and the server project, and advances only that package in the
 server lock. Native source/locks are unchanged; no live plugin installation or
 provider configuration occurs. Combined plugin-resolution qualification remains
 separate from an isolated native sample with the pinned HTTP library present.
+
+
+## Bounded native serving sample completed (2026-11-06)
+
+Root completed the fresh Darwin sample at HMP `3d7d08c` / native `ed1afb08`:
+real native scratch storage/registry, descriptor mint and authenticated image
+fetch, with synthetic authority/compatibility. HTTP byte/header controls, eligible
+second-device positive control, foreign device/profile refusal, changed file and
+cleared message refusal, between-phase bot revocation and device revocation
+completed. Borrows/releases 25/25, native close, zero scoped sweep, listener close
+and actual worker joins were observed. Eleven command actors were terminal plus
+the outer controller; no timeout/settlement path occurred. Independent read-only artifact
+review accepted the exact bindings and bounded observations; no reviewer execution.
+A separate 320-case descriptor/fetch/guard regression passed on Python 3.14.9 and
+aiohttp 3.14.5 (23.40 seconds).
+
+[The sample report](../../docs/research/local-media-native-serving-sample-2026-11-06.md)
+records source/runtime pins, 28 synthetic Darwin probe absences, three own-FD
+listings, two public OS metadata reads and the exact limits. Thirteen terminal
+attempts are preserved; only one is a validated completion. Earlier incorrect
+late-file/row expectations were corrected to the established S5 contract, not
+made into a new production guarantee. Native cost/T12, Linux, actual producer,
+full plugin PM union, physical rendering and activation gates remain unchecked.

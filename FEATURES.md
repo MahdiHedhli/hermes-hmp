@@ -1,3 +1,22 @@
+## Bounded native image-serving sample completed — November 6, 2026
+
+One fresh Darwin sample completed on HMP `3d7d08c` / native `ed1afb08`, using
+pinned Python 3.14.9 and aiohttp 3.14.5. Real native scratch storage and HMP
+HTTP routes served the seeded image with exact headers and refused foreign
+device/profile references, changed-file/message fetches and revoked access.
+Native borrows/releases balanced 25/25; the database closed, the listener/workers
+settled and the scoped native sweep was zero. This is synthetic-authority fixture
+evidence, not phone display, actual producer, T12, Linux or production activation.
+
+The sample discloses 28 synthetic absent `/proc` probes, three real own-FD
+listings and two bounded public OS metadata reads; zero unexpected denials is
+not a claim of zero outside-path attempts or an OS sandbox. Late edits after
+image copying retain the established non-atomic contract. See
+[exact evidence and limits](docs/research/local-media-native-serving-sample-2026-11-06.md).
+Independent read-only artifact review accepted the bounded evidence. A separate
+320-case descriptor/fetch/guard regression passed on the pinned Python 3.14.9
+and patched HTTP library. No app/host deployment or permission changed.
+
 ## Clean-host HTTP dependency repair — November 6, 2026
 
 Native source `ed1afb08` makes aiohttp optional. A fresh base/dev/test PM
