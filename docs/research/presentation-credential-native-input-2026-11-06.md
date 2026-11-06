@@ -64,3 +64,21 @@ observing retained prefix bytes before cancellation, with the original unknown
 debt/no-release assertions preserved. The final affected regression on this
 cleanup passed 640 tests, one skipped, in 25.88 seconds. These are root execution
 results; independent review inspected source/ASTs/tests without project execution.
+
+## Original work-task reservation follow-up
+
+A reviewed no-IO BEGIN seam now follows actual native PRE_GO/BEGIN_INTENT on
+the existing work allocation, calls original send admission once and retains
+the same `_BeginWriteIntent`. It checks original caller reciprocity/cancellation
+and post-native socket/value/identity/deadline state. No signature, native write,
+completed-write fact, worker or GO is produced. Root's expanded affected
+regression passed 928 tests, one skipped, in 27.37 seconds. See the
+[work-task producer contract](../../specs/046-bot-presentation-integration/PHASE_WORK_OWNER.md).
+
+Separately, exact baseline source `9788b68` passed [CI run 42246085048](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42246085048):
+8,247 tests, 33 skips, 18 warnings and 190 subtests; configured lint, closed
+plugin surface and privacy passed, with Unicode checks on Python 3.12/3.13/3.14.
+Log hygiene had no captured logs to scan. That baseline full CI does not
+qualify this later source edit or any production/device/runtime behavior.
+The earlier `cc8a70f` CI failure remains historical: its two test portability/
+explicit-census failures were corrected without weakening exact-set checks.

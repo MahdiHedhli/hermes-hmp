@@ -549,7 +549,7 @@ class CredentialHandshakeOwner:
         self._guard()
         return binding
 
-    def _native_join_fence(self, remote):
+    def _native_join_fence(self, remote, *, phase=None):
         """Typed local state after native callbacks; no clock/permission grant."""
         from .presentation_authority import ListenerFence
         from .presentation_jobs import CapturedLease, RemotePhase, State, _Job
@@ -557,6 +557,9 @@ class CredentialHandshakeOwner:
         from .presentation_policy_thread import PolicyThreadOwner
         from .presentation_remote import RemoteOperationOwner
 
+        if phase is None:
+            phase = RemotePhase.BOUND
+        _require(phase is RemotePhase.BOUND or phase is RemotePhase.BEGIN_INTENT)
         _require(type(remote) is RemoteOperationOwner)
         RemoteOperationOwner._retained_local(remote)
         record, work = remote._record_snapshot, remote._record_snapshot.policy_work
@@ -634,7 +637,7 @@ class CredentialHandshakeOwner:
             type(job) is _Job
             and job.lease is lease
             and job.state is State.STARTING
-            and job.remote_phase is RemotePhase.BOUND
+            and job.remote_phase is phase
             and job.go_sent is False
             and job.emit_revoked is False
             and job.credit_released is False

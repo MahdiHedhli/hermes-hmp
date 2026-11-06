@@ -650,6 +650,8 @@ class RemoteOperationOwner:
             frame = BrokerFrame(BrokerHeader(self._binding, "BEGIN", 0, len(self._packet),
                                             self._protocol),
                                 self._packet)
+            if self._credential_handshake is not None:
+                SocketChannel._reserve_credential_begin(self._channel, self)
             await SocketChannel.send(self._channel, frame, self._end, owner=self)
             self._send_completed = True
             self._check(RemotePhase.BEGIN_INTENT)

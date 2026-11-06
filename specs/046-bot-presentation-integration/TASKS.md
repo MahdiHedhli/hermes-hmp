@@ -22,6 +22,12 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement/review bounded data-only full-frame streaming digest, all seven
       phase bodies/max result and one-shot/drift/thread refusal cases; expanded
       affected regression 658 passed, one skipped. This is not cursor/native authority.
+- [x] Implement/review original work-task no-IO BEGIN intent reservation after
+      actual PRE_GO; caller/duplicate/intent/no-write assertions retained and
+      affected regression 928 passed, one skipped.
+- [ ] Implement the fixed work-role signing producer in the caller/start-barrier
+      gap, preserving original work allocation and the SAME reserved intent.
+      See [actual task/producer contract](PHASE_WORK_OWNER.md).
 - [ ] Integrate operator-selected paired runtime/source/credential startup,
       capacity and rotation with the retained handshake on its original channel,
       task/cursor and known local write completion facts.

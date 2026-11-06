@@ -88,7 +88,7 @@ async def handshake(prepared, tmp_path):
 
 @pytest.mark.asyncio
 async def test_handshake_binds_exact_native_packet_and_original_shared_slot(
-    context, v2gateway, tmp_path
+    context, v2gateway, tmp_path, monkeypatch
 ):
     prepared = await prepare(context, v2gateway)
     authority, operation, _, channel, peer, _, packet, _ = prepared
@@ -104,6 +104,27 @@ async def test_handshake_binds_exact_native_packet_and_original_shared_slot(
         assert record.remote_operation is remote
         assert record.owner.inspect_remote(record.handle) is RemotePhase.BOUND
         assert record.owner.inspect(record.handle)[0] is State.STARTING
+        # Caller has no work-task authority, even with the original remote.
+        with pytest.raises(FrameError):
+            channel._reserve_credential_begin(remote)
+        assert channel._begin_write_intent is None and remote._send_claimed is False
+        original_reserve = SocketChannel._reserve_credential_begin
+        observed_intents = []
+
+        def observed_reserve(owned_channel, owned_remote):
+            intent = original_reserve(owned_channel, owned_remote)
+            cleanup = owned_remote._cleanup_owner_snapshot
+            assert asyncio.current_task() is cleanup._allocations_snapshot[1].task
+            assert asyncio.current_task() is not cleanup._caller_snapshot
+            assert cleanup._caller_snapshot is owner._task
+            assert owned_channel._writing is False and owned_channel._begin_write_fact is None
+            with pytest.raises(FrameError):
+                original_reserve(owned_channel, owned_remote)
+            assert owned_channel._begin_write_intent is intent
+            observed_intents.append(intent)
+            return intent
+
+        monkeypatch.setattr(SocketChannel, "_reserve_credential_begin", observed_reserve)
         # This join grants no unsigned fallback while phase integration is open.
         with pytest.raises(FrameError, match="PHASE_INTEGRATION_REQUIRED"):
             await channel.send_go(remote)
@@ -113,7 +134,12 @@ async def test_handshake_binds_exact_native_packet_and_original_shared_slot(
             await remote.begin_ready()
         assert remote._failed and record.remote_operation is remote
         assert record.owner.inspect(record.handle)[0] is State.UNKNOWN
-        assert channel._begin_write_intent is None
+        intent = channel._begin_write_intent
+        assert observed_intents == [intent]
+        assert intent is channel._begin_write_intent_snapshot
+        assert intent.remote is remote and intent.packet is packet and intent.binding is binding
+        assert intent.end_ns == remote._end_snapshot and intent.version == 2
+        assert channel._writing is False and channel._begin_write_fact is None
         assert remote._go_admission is None and record.child is None
         try:
             received = peer.recv(1)

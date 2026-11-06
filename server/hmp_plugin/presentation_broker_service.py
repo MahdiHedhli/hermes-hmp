@@ -737,6 +737,78 @@ class SocketChannel:
         finally:
             self._reading = False
 
+    def _reserve_credential_begin(self, remote):
+        """Reserve original BEGIN without writing or granting transport permission.
+
+        Called only on the native cleanup owner's actual work allocation after
+        the original PRE_GO/BEGIN_INTENT transition. No caller frame/digest and
+        no reset: the eventual signed transport must consume this same intent.
+        """
+        from .presentation_credential_handshake import CredentialHandshakeOwner
+        from .presentation_jobs import RemotePhase
+        from .presentation_remote import RemoteOperationOwner
+        from .presentation_remote_cleanup import _TASK, RemoteCleanupOwner
+
+        _require(type(self) is SocketChannel and type(remote) is RemoteOperationOwner)
+        RemoteOperationOwner._retained_local(remote)
+        credential = remote._credential_handshake_snapshot
+        cleanup = remote._cleanup_owner_snapshot
+        _require(type(credential) is CredentialHandshakeOwner
+                 and type(cleanup) is RemoteCleanupOwner
+                 and remote._channel_snapshot is self
+                 and self._credential_handshake is credential
+                 and self._credential_handshake_snapshot is credential)
+        RemoteCleanupOwner.authorize_work(cleanup)
+        _require(cleanup._caller_snapshot is credential._task
+                 and _TASK.cancelling(cleanup._caller_snapshot) == 0)
+        CredentialHandshakeOwner._released(credential, self)
+        CredentialHandshakeOwner._native_input_local(
+            credential, remote, remote._credential_binding_snapshot)
+        CredentialHandshakeOwner._native_join_fence(
+            credential, remote, phase=RemotePhase.BEGIN_INTENT)
+        RemoteOperationOwner._check(remote, RemotePhase.BEGIN_INTENT)
+        _require(self._begin_write_intent is None and self._begin_write_intent_snapshot is None
+                 and self._begin_write_fact is None and self._begin_write_fact_snapshot is None
+                 and self._reading is False and self._writing is False
+                 and self._work_write_retired is False
+                 and remote._begin_attempted is True and remote._send_claimed is False)
+        frame = BrokerFrame(BrokerHeader(remote._binding_snapshot, "BEGIN", 0,
+                            len(remote._packet_snapshot), 2), remote._packet_snapshot)
+        # Existing original admission, not a second implementation of it.
+        RemoteOperationOwner._authorize_channel(
+            remote, self, "send", remote._binding_snapshot, remote._end_snapshot, frame)
+        # Native/clock callbacks above cannot change the original local scope
+        # before its no-IO reservation is retained.
+        RemoteCleanupOwner.authorize_work(cleanup)
+        RemoteOperationOwner._retained_local(remote)
+        CredentialHandshakeOwner._native_input_local(
+            credential, remote, remote._credential_binding_snapshot)
+        row = CredentialHandshakeOwner._native_join_fence(
+            credential, remote, phase=RemotePhase.BEGIN_INTENT)
+        _require(cleanup._caller_snapshot is credential._task
+                 and _TASK.cancelling(cleanup._caller_snapshot) == 0
+                 and type(remote._end_snapshot) is int
+                 and remote._end_snapshot == row["deadline_ns"]
+                 and self._socket_snapshot is self._socket
+                 and self._socket_snapshot is remote._seal_snapshot[9]
+                 and self._values_snapshot is self._values
+                 and self._values_snapshot is remote._seal_snapshot[8]
+                 and self._identity_snapshot is self._identity
+                 and self._identity_snapshot is remote._seal_snapshot[10]
+                 and self._credential_handshake is credential
+                 and self._credential_handshake_snapshot is credential
+                 and remote._send_claimed is True and remote._send_completed is False
+                 and remote._receive_claimed is False
+                 and self._begin_write_intent is None and self._begin_write_intent_snapshot is None
+                 and self._begin_write_fact is None and self._begin_write_fact_snapshot is None
+                 and self._reading is False and self._writing is False
+                 and self._work_write_retired is False)
+        intent = _BeginWriteIntent(remote, self, self._socket_snapshot, self._values_snapshot,
+            self._identity_snapshot, remote._binding_snapshot, remote._packet_snapshot,
+            remote._end_snapshot, 2, object())
+        self._begin_write_intent = self._begin_write_intent_snapshot = intent
+        return intent  # not a completed write, signature, worker admission or GO fact
+
     async def send(self, frame: BrokerFrame, end_ns: int, *, owner=None) -> None:
         self._bindings()
         if self._terminal_owner is not None:
