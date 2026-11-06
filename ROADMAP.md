@@ -29,6 +29,18 @@ The full 624-phase matrix, storage layout and native fork/reset applicability
 remain open, so C6b and delivery/release are not complete.
 [Exact pilot scope](docs/research/local-media-native-writer-pilot-2026-11-06.md).
 
+### Constructed-child and paired-runner checkpoint
+
+Four constructed branch/reset child-isolation phases at `befa0f7` passed
+independent source/artifact review: eight exact parent-binding outcomes,
+112 artifacts and 39/39 native borrows per process with verified cleanup.
+These do not exercise actual gateway fork/reset admission. The declared matrix
+now contains 768 unique phases. A 384-pair runner is implemented for source
+review, with separate fresh DB/home scopes and durable closed checkpoints;
+paired native execution and full coverage are still pending. Root's 601 related
+checks passed before the checkpoint type-hardening delta; 304 targeted checks
+passed after it. No delivery, device or release qualification is claimed.
+
 ## Native-bound modeled mint-memory sample reviewed — November 6, 2026
 
 [Current evidence](docs/research/local-media-native-mint-memory-2026-11-06.md)

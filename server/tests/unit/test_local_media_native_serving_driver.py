@@ -250,7 +250,8 @@ def test_archive_framing_does_not_expand_extracted_source_budget(tmp_path, monke
     assert driver.extract_sources(bundle, tmp_path / "accepted", COMMIT)
 
 
-@pytest.mark.parametrize("fault", [None, "missing", "swapped", "open", "bool_index", "extra"])
+@pytest.mark.parametrize("fault", [None, "missing", "swapped", "open", "bool_index",
+                                   "bool_count", "float_count", "extra"])
 def test_pair_checkpoint_readback_never_promotes_missing_or_inconsistent_phase(tmp_path, fault):
     requests = ("control:page", "append:page")
     report = {"native_binding_preparation": [{"database": 0}, {"database": 1}],
@@ -268,6 +269,10 @@ def test_pair_checkpoint_readback_never_promotes_missing_or_inconsistent_phase(t
                 value["database_closed"] = False
             if fault == "bool_index":
                 value["phase"] = True
+            if fault == "bool_count":
+                value["writer"] = {"outcome": True}
+            if fault == "float_count":
+                value["writer"] = {"outcome": 1.0}
             if fault == "extra":
                 value["extra"] = 1
         path = tmp_path / f"writer-phase-{index}.json"

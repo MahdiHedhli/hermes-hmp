@@ -289,7 +289,9 @@ def validate_pair_checkpoints(root, report, requests):
         expected = {"phase": index, "request": request,
             "preparation": report["native_binding_preparation"][index],
             "writer": report["native_binding_writer"][index], "database_closed": True}
-        commands._require(type(checkpoint) is dict and checkpoint == expected and
+        commands._require(type(checkpoint) is dict and
+                          json.dumps(checkpoint, sort_keys=True, separators=(",", ":")) ==
+                          json.dumps(expected, sort_keys=True, separators=(",", ":")) and
                           type(checkpoint.get("phase")) is int and
                           checkpoint.get("database_closed") is True)
 
