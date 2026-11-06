@@ -1,4 +1,31 @@
-# Typed dead-reply retirement — source/model candidate
+# Owned request and typed retirement — bounded native evidence
+
+After independent harness source review, root completed one actual Darwin run:
+20 checks passed in 0.97 seconds, comprising one native case and 19 portable/
+driver checks. A fixed spawned child receives the parent's explicitly assigned
+private endpoint, creates its own reply receiver and sends one fixed request.
+The parent matches the kernel sender to that exact child before positive EOF.
+After exact child wait and reported child cleanup, the parent observes and retires
+the dead reply, closes its own endpoint, observes final name absence and disposes
+the owner. Pipe/attribute/action cleanup is recorded, within the original bound,
+with no settlement-only outcome. No reply/challenge, public name or service is used.
+
+Child assignment/reference/reply cleanup is an exit-zero report, distinct from
+parent-observed wait, typed retirement and endpoint release. No failing/late path
+or general kernel hard-latency bound is qualified by this positive run. Original
+source, compiler, selected SDK headers, binary and 25 private artifacts are bound
+in `/private/tmp/hermes-owned-request-native-311-20261106.json`. One fake-driver
+receipt is explicitly separate from one actual native receipt. Independent
+artifact review accepted six source hashes, all 25 artifacts and five terminal
+commands; no reviewer execution is claimed.
+
+The current owner remains inactive. Independently selected startup/runtime/right
+provenance, original lifetime enrollment, native phase/control binding, live-right
+cleanup, terminal/ACK, authenticated routes and physical image parity remain open.
+This does not resolve the earlier unknown-recipient incident or qualify production
+admission. Full desktop characters and host-local images remain unfinished.
+
+## Typed dead-reply retirement — source/model foundation
 
 The current extension adds one cleanup-only attempt for the sole copied reply
 in a closed simple received header. It observes the held name's exact DEAD_NAME
@@ -19,8 +46,9 @@ Independent source/model review accepted this slice, without reviewer execution.
 The direct C model covers 70 scenarios; root's portable selections pass 17 pytest
 checks on Python 3.11.15 and 3.14.4 (one model test plus schema/driver checks).
 Actual native cases were deselected. Whole configured lint, C syntax and
-plugin/privacy gates pass. No native request or retirement execution qualifies
-this candidate. Earlier native lifecycle evidence below binds older source only.
+plugin/privacy gates pass. At the source/model checkpoint no native request or retirement evidence was
+available; the later bounded observation above is separate. Earlier lifecycle
+evidence below binds its original older source.
 HMP does not load the owner; there is no exposed endpoint, reply sending,
 production admission or operation/terminal authority.
 

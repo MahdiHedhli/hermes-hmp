@@ -1,5 +1,10 @@
 # BI1 integration tasks
 
+- [x] Review and execute one owned-child native request/typed-retirement path:
+      root20 checks, independent source/toolchain/25-artifact readback accepted.
+      Child cleanup is reported; parent wait/retirement/endpoint release observed.
+      No production authority or native failure-path qualification follows.
+
 - [x] Implement/review typed-dead-only reply retirement with held-name queries,
       one typed decrement, actual-effect capture and timely-close fact. Cover
       live/uncertain refusal, errors, reentry and expiry in the 70-scenario model.

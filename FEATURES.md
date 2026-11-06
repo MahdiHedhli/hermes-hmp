@@ -1,3 +1,15 @@
+## Owned native request and retirement — November 6, 2026
+
+Root completed one independently source-reviewed Darwin request/retirement run:
+**20 passed in 0.97 seconds**, one native case and 19 portable/driver checks.
+Kernel sender matched the exact owned child before EOF; exact child wait, reported
+child cleanup, parent dead-reply retirement, endpoint removal and disposal were
+observed within the original deadline. Independent artifact review accepted source, selected toolchain and artifact
+bindings; no reviewer execution.
+No reply/challenge, public endpoint, deployment or production authority is added.
+Startup/runtime provenance, lifetime/phase binding, terminal/ACK and physical image
+delivery remain open. See [bounded native evidence](native/README.md).
+
 ## Typed dead-reply retirement — November 6, 2026
 
 The new source/model slice retires only a held reply proven to be one dead-name
