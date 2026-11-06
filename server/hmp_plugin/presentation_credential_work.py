@@ -104,9 +104,14 @@ class NativePhaseWorkOwner:
     def __repr__(self):
         return "<NativePhaseWorkOwner payload-and-credentials-redacted>"
 
-    def _material_local(self):
+    def _retained_material(self):
         from .presentation_remote import RemoteOperationOwner
-        from .presentation_remote_cleanup import RemoteCleanupOwner
+        from .presentation_remote_cleanup import (
+            _TASK,
+            RemoteCleanupOwner,
+            _TaskAllocation,
+            _TaskSlot,
+        )
 
         _require(
             type(self) is NativePhaseWorkOwner
@@ -144,7 +149,6 @@ class NativePhaseWorkOwner:
             and type(remote) is RemoteOperationOwner
             and type(selection) is RoleKeySelection
         )
-        RemoteCleanupOwner.authorize_work(cleanup)
         _require(
             self._context is self._context_snapshot
             and type(self._context) is tuple
@@ -152,14 +156,22 @@ class NativePhaseWorkOwner:
             and all(type(v) is int for v in self._context)
             and self._context == (os.getpid(), os.geteuid(), threading.get_ident())
         )
+        _require(type(cleanup._allocations_snapshot) is tuple
+                 and len(cleanup._allocations_snapshot) == 2
+                 and cleanup._allocations is cleanup._allocations_snapshot
+                 and all(type(v) is _TaskAllocation for v in cleanup._allocations_snapshot)
+                 and type(cleanup._slots_snapshot) is tuple
+                 and len(cleanup._slots_snapshot) == 2
+                 and cleanup._slots is cleanup._slots_snapshot
+                 and all(type(v) is _TaskSlot for v in cleanup._slots_snapshot)
+                 and type(allocation) is _TaskAllocation and type(allocation.task) is _TASK
+                 and type(slot) is _TaskSlot)
         _require(
             cleanup._remote_snapshot is remote
             and cleanup._allocations_snapshot[1] is allocation
             and cleanup._slots_snapshot[1] is slot
-            and asyncio.current_task() is allocation.task
             and cleanup._caller_snapshot is handshake._task
             and type(handshake._task) is asyncio.Task
-            and asyncio.Task.cancelling(handshake._task) == 0
         )
         _require(
             type(handshake) is CredentialHandshakeOwner
@@ -295,6 +307,64 @@ class NativePhaseWorkOwner:
         CredentialHandshakeOwner._native_input_local(handshake, remote, join)
         _require(self._record is self._record_snapshot and self._intent is self._intent_snapshot)
         return remote, handshake, channel, clock
+
+    def _material_local(self):
+        """Fixed original live-work admission; retained material alone grants none."""
+        from .presentation_remote_cleanup import _TASK, RemoteCleanupOwner, _TaskAllocation
+
+        _require(type(self) is NativePhaseWorkOwner and type(self._refs) is tuple
+                 and self._refs is self._refs_snapshot and len(self._refs) == 12
+                 and type(self._refs[6]) is _TaskAllocation
+                 and type(self._refs[6].task) is _TASK
+                 and asyncio.current_task() is self._refs[6].task
+                 and _TASK.cancelling(self._refs[6].task) == 0
+                 and type(self._refs[0]) is RemoteCleanupOwner
+                 and type(self._refs[2]) is CredentialHandshakeOwner
+                 and type(self._refs[2]._task) is _TASK
+                 and _TASK.cancelling(self._refs[2]._task) == 0)
+        refs = self._refs_snapshot
+        cleanup = refs[0]
+        RemoteCleanupOwner.authorize_work(cleanup)
+        result = NativePhaseWorkOwner._retained_material(self)
+        RemoteCleanupOwner.authorize_work(cleanup)
+        _require(self._refs is refs and self._refs_snapshot is refs
+                 and asyncio.current_task() is refs[6].task
+                 and _TASK.cancelling(refs[6].task) == 0
+                 and _TASK.cancelling(refs[2]._task) == 0)
+        return result
+
+    def _cleanup_material(self, cleanup):
+        """Original cleanup actor/current role only; no work/policy/GO revival."""
+        from .presentation_remote_cleanup import _TASK, RemoteCleanupOwner, _TaskAllocation
+
+        _require(type(self) is NativePhaseWorkOwner and type(cleanup) is RemoteCleanupOwner
+                 and type(self._refs) is tuple and self._refs is self._refs_snapshot
+                 and len(self._refs) == 12 and self._refs[0] is cleanup
+                 and type(self._refs[6]) is _TaskAllocation
+                 and type(self._refs[6].task) is _TASK)
+        refs = self._refs_snapshot
+        _require(type(cleanup._allocations_snapshot) is tuple
+                 and len(cleanup._allocations_snapshot) == 2
+                 and type(cleanup._allocations_snapshot[0]) is _TaskAllocation
+                 and type(cleanup._allocations_snapshot[0].task) is _TASK
+                 and asyncio.current_task() is cleanup._allocations_snapshot[0].task
+                 and _TASK.cancelling(cleanup._allocations_snapshot[0].task) == 0
+                 and cleanup._intent is True and cleanup._unknown is False
+                 and cleanup._work_joined is True and _TASK.done(self._refs[6].task))
+        allocation = cleanup._allocations_snapshot[0]
+        RemoteCleanupOwner._guard(cleanup)
+        result = NativePhaseWorkOwner._retained_material(self)
+        RemoteCleanupOwner._cancel_actor(cleanup, result[2])
+        _require(all(a is b for a, b in zip(
+            NativePhaseWorkOwner._retained_material(self), result, strict=True)))
+        RemoteCleanupOwner._guard(cleanup)
+        _require(self._refs is refs and self._refs_snapshot is refs
+                 and cleanup._allocations_snapshot[0] is allocation
+                 and asyncio.current_task() is allocation.task
+                 and _TASK.cancelling(allocation.task) == 0
+                 and cleanup._intent is True and cleanup._unknown is False
+                 and cleanup._work_joined is True and _TASK.done(refs[6].task))
+        return result
 
     def _local(self):
         remote, handshake, channel, clock = NativePhaseWorkOwner._material_local(self)

@@ -42,6 +42,9 @@ from .test_presentation_supervisor import context as context
     "dispatch_go_write_release_cleanup", "dispatch_go_write_release_allocation",
     "dispatch_go_live", "dispatch_go_live_key", "dispatch_go_live_cancel",
     "dispatch_go_live_error", "dispatch_go_live_future", "dispatch_go_live_final_key",
+    "dispatch_cleanup_material", "dispatch_cleanup_material_key",
+    "dispatch_cleanup_material_wrong_actor", "dispatch_cleanup_material_after_go",
+    "dispatch_cleanup_material_allocations", "dispatch_cleanup_material_slots",
 ])
 async def test_original_work_ready_read_requires_its_complete_signed_begin(
     context, begin_gateway, tmp_path, monkeypatch, mutation
@@ -350,7 +353,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 return writer
 
             monkeypatch.setattr(NativeBeginWriter, "retain", classmethod(dispatch_writer))
-            if mutation == "dispatch_ready" or mutation.startswith("dispatch_go_"):
+            if (mutation == "dispatch_ready" or mutation.startswith("dispatch_go_")
+                    or mutation.startswith("dispatch_cleanup_")):
                 assert await remote.begin_ready() is True
                 cleanup = remote._cleanup_owner_snapshot
                 producer = cleanup._credential_work_snapshot
@@ -686,16 +690,80 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                         assert header.kind == "GO" and header.sequence == 1
                     else:
                         assert commitment._raw is None and "go_raw" not in held
+                if mutation.startswith("dispatch_cleanup_"):
+                    from hmp_plugin.presentation_broker_service import SocketChannel
+                    from hmp_plugin.presentation_cancel_budget import CancellationBudget
+
+                    if mutation == "dispatch_cleanup_material_after_go":
+                        assert await remote.go() is True
+                        held["cleanup_prior_go_wire"] = peer.recv(65536)
+                        assert held["cleanup_prior_go_wire"]
+
+                    async def material_only_cancel(owned_channel, owned_cleanup):
+                        assert owned_channel is channel and owned_cleanup is cleanup
+                        held["cleanup_material_called"] = True
+                        held["original_cleanup_allocations"] = cleanup._allocations_snapshot
+                        before = CancellationBudget.inspect(cleanup._refs_snapshot[8])
+                        assert before[2] is not None
+                        if mutation == "dispatch_cleanup_material_wrong_actor":
+                            async def wrong_cleanup_role():
+                                with pytest.raises(FrameError):
+                                    producer._cleanup_material(cleanup)
+                            await asyncio.create_task(wrong_cleanup_role())
+                        if mutation in ("dispatch_cleanup_material_allocations",
+                                        "dispatch_cleanup_material_slots"):
+                            from hmp_plugin import presentation_remote_cleanup as cleanup_module
+
+                            native_timeout = cleanup_module._SOCKET_TIMEOUT
+                            held["material_foreign_calls"] = []
+
+                            class ForeignCleanupRows:
+                                def __getitem__(self, key):
+                                    held["material_foreign_calls"].append(key)
+                                    raise AssertionError("foreign cleanup rows indexed")
+
+                            def replaced_tail(sock):
+                                result = native_timeout(sock)
+                                if mutation == "dispatch_cleanup_material_allocations":
+                                    foreign = ForeignCleanupRows()
+                                    cleanup._allocations = cleanup._allocations_snapshot = foreign
+                                else:
+                                    foreign = ForeignCleanupRows()
+                                    cleanup._slots = cleanup._slots_snapshot = foreign
+                                return result
+
+                            monkeypatch.setattr(cleanup_module, "_SOCKET_TIMEOUT", replaced_tail)
+                            with pytest.raises(FrameError):
+                                producer._cleanup_material(cleanup)
+                            assert held["material_foreign_calls"] == []
+                        elif mutation == "dispatch_cleanup_material_key":
+                            keys["gateway"].retire()
+                            with pytest.raises(FrameError):
+                                producer._cleanup_material(cleanup)
+                        else:
+                            material = producer._cleanup_material(cleanup)
+                            assert material[0] is remote and material[2] is channel
+                            assert cleanup._allocations_snapshot[1].task.done()
+                        assert CancellationBudget.inspect(cleanup._refs_snapshot[8]) == before
+                        assert cleanup._cancel_write_attempted is False
+                        assert cleanup._cancel_wire is None
+                        raise FrameError("SYNTHETIC_CLEANUP_ROLE_ONLY_NO_SIGN_OR_IO")
+
+                    monkeypatch.setattr(SocketChannel, "send_cancel", material_only_cancel)
                 RemoteCleanupOwner.request(cleanup)
                 # Actual owned cleanup may retain UNKNOWN: signed cleanup relay
                 # is not integrated by this READY-only dispatch slice.
                 async with asyncio.timeout(2):
                     result = await asyncio.shield(cleanup._allocations_snapshot[0].task)
                 assert type(result) is bool
-                assert cleanup._allocations_snapshot[1].task.done()
+                original_allocations = held.get("original_cleanup_allocations",
+                                                cleanup._allocations_snapshot)
+                assert original_allocations[1].task.done()
                 held["joined_work_outcome"] = await asyncio.gather(
-                    cleanup._allocations_snapshot[1].task, return_exceptions=True)
+                    original_allocations[1].task, return_exceptions=True)
                 assert result is True or cleanup._unknown is True
+                if mutation.startswith("dispatch_cleanup_"):
+                    assert held.get("cleanup_material_called") is True
                 if mutation in ("dispatch_go_write_release_cleanup",
                                 "dispatch_go_write_release_allocation"):
                     held["release_foreign_callbacks"] = []
@@ -729,7 +797,9 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 assert remote._cleanup_owner_snapshot._credential_work_snapshot._exchange_failed
             async with asyncio.timeout(2):
                 await peer_task
-            if mutation.startswith("dispatch_go_"):
+            if mutation == "dispatch_cleanup_material_after_go":
+                assert remote._go_admission_used is True
+            elif mutation.startswith("dispatch_go_"):
                 assert remote._go_admission_used is True
                 if "go_writer" not in held:
                     assert channel._go_write_intent is None and channel._go_write_fact is None

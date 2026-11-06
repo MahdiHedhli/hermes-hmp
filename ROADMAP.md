@@ -1,3 +1,23 @@
+## Cleanup role-material checkpoint — November 6, 2026
+
+The fixed original cleanup Task can now validate current role/input/transcript
+material after joined work and policy retirement, without borrowing live-work
+permission. Existing work actor/caller/native authorization checks remain around
+the separate work entry. The cleanup entry requires original allocation, frozen
+intent, known work join, write-quiescence/cancel facts and current role material.
+It signs/sends nothing and cannot revive policy/GO authority.
+
+Six direct cleanup actor/tail cases and **878 selected affected tests** passed,
+43.35 seconds; configured lint passed. Independent read-only review accepted
+allocation/slot tuple/type/identity fences after native-tail substitution tests
+proved zero foreign indexing and unchanged budget/no network attempt. This is
+material-only source qualification, not authenticated CANCEL completion.
+
+CANCEL signing/transport, results/terminal custody, worker relay, startup/native
+publication/STATUS and physical/release qualification remain open. Character
+delivery remains unavailable. No live host/device/settings or installed build changed.
+See [evidence and limits](docs/research/presentation-cleanup-role-material-2026-11-06.md).
+
 ## Internal signed GO dispatch checkpoint — November 6, 2026
 
 The original credential work path now composes signed GO transport through the

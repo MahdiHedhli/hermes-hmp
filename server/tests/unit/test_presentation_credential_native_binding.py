@@ -144,7 +144,7 @@ async def test_handshake_binds_exact_native_packet_and_original_shared_slot(
         def observed_init(producer, cleanup):
             original_init(producer, cleanup)
             assert asyncio.current_task() is cleanup._caller_snapshot
-            with pytest.raises(AuthorityRefusalError):
+            with pytest.raises(FrameError):
                 NativePhaseWorkOwner._guard(producer)
             assert producer._attempted is False
             caller_refusals.append(True)

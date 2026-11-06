@@ -93,3 +93,14 @@ It validates bounded broker READY context/signature/empty-frame hash under the
 original clock/deadline. Current read data is NOT native READY admission: a fresh
 PRE_GO/native phase transition remains separate. Production caller/generic channel
 gates remain unchanged. See [read evidence and limits](../../docs/research/presentation-signed-ready-read-2026-11-06.md).
+
+## Fixed cleanup material seam (November 6, 2026)
+
+Common retained role/input/transcript references do not authorize a Task or work
+phase. `_material_local` preserves original live-work and caller checks around
+native authorize_work. `_cleanup_material` instead requires the original cleanup
+allocation, known joined work, frozen intent/budget, write-quiescence/cancel facts
+and current role material. It never revives retired policy/work authority. Exact
+allocation/slot tuple/type/identity fences precede every structural index after
+native cleanup boundaries. This seam signs/sends nothing; signed CANCEL transport
+and remote cleanup qualification remain unfinished.

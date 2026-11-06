@@ -305,3 +305,7 @@ historical, not an alternative live authorization path or resolved incident.
       wait is fenced; no unsigned RESULT fallback/result token or execution credit.
 - [ ] Integrate authenticated cleanup/result/terminal custody and actual broker
       worker relay before qualifying complete character delivery/startup/release.
+
+- [x] Qualify bounded fixed original-cleanup current role material separately from work
+      authority: six direct actor/tail cases and independent read-only review pass;
+      selected878 and lint pass. CANCEL signer/writer remains open.
