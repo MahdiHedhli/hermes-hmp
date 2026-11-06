@@ -89,8 +89,8 @@ def supplemental_plan(expanded_pairs, *, layout="heavy_only_v1"):
                          "request": pair[phases[0]] if len(phases) == 1 else pair})
     expected = {(origin, phase) for origin, _ in selected for phase in (0, 1)}
     actual = [(job["origin_pair"], phase) for job in jobs for phase in job["origin_phases"]]
-    require(len(jobs) == (144 if layout == "per_phase_v2" else 90) and len(actual) == len(set(actual)) == len(expected) == 144
-            and set(actual) == expected)
+    require(len(jobs) == (144 if layout == "per_phase_v2" else 90) and
+            len(actual) == len(set(actual)) == len(expected) == 144 and set(actual) == expected)
     return {"catalog_source": EXPANDED_CATALOG_SOURCE,
             "catalog_sha256": EXPANDED_PLAN_SHA256,
             "scope": "child_lineage_supplement", "layout": layout, "jobs": tuple(jobs),
