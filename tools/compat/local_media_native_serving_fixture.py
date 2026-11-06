@@ -201,13 +201,14 @@ def _builtin_mime_types():
     mimetypes._db = mimetypes.MimeTypes(filenames=())
     mimetypes.init(files=[])
 
-def run_fixture(root, *, sample_memory=False):
+def run_fixture(root, *, sample_memory=False, sample_binding_seed=False):
     """One native scratch DB, real routes/registry, synthetic transport authority.
 
     Python audit restrictions are test guards, NOT an OS sandbox or complete
     native-library IO observation. This does not qualify live startup/auth/grants.
     """
-    _require(type(sample_memory) is bool)
+    _require(type(sample_memory) is bool and type(sample_binding_seed) is bool and
+             not (sample_memory and sample_binding_seed))
     _require(sys.flags.isolated == 1 and sys.dont_write_bytecode is True)
     _require(type(root) is type(Path()) and root.is_absolute() and root.resolve() == root)
     info = root.stat()
@@ -473,6 +474,18 @@ def run_fixture(root, *, sample_memory=False):
                     status, _, _ = await fx.get(client, refs[fresh], dev=owner)
                     _require(status == 401)
                     report["revoked_device_refused"] = True
+                    if sample_binding_seed:
+                        import importlib.util
+
+                        from unit.test_local_media_batch_binding import CHAT
+
+                        path = _ROOT / "tools/compat/local_media_native_binding_sample.py"
+                        spec = importlib.util.spec_from_file_location(
+                            "_private_media_binding", path)
+                        helper = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(helper)
+                        report["native_binding_preparation"] = helper.run_preparation(
+                            fx, db, user=USER, profile=PROFILE, chat=CHAT)
                     if sample_memory:
                         import importlib.util
 
