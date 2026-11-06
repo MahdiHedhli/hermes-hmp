@@ -17,7 +17,8 @@ RESERVE_BYTES = 32 * 1024 ** 3
 PROCESS_ALLOWANCE_BYTES = 1024 ** 3
 
 
-def run_matrix(root, native_repository, native_commit, expected_hmp_commit):
+def run_matrix(root, native_repository, native_commit, expected_hmp_commit, *,
+               scope="full"):
     """Run all pairs once; any failure retains its root and prevents later admission.
 
     Capacity is an admission check, not a reservation or hard storage bound.
@@ -25,6 +26,7 @@ def run_matrix(root, native_repository, native_commit, expected_hmp_commit):
     provided; an uncertain outcome needs explicit reconciliation outside this runner.
     """
     require = driver.commands._require
+    require(type(scope) is str and scope in ("full", "divergence_supplement"))
     require(type(root) is type(Path()) and root.is_absolute() and root.resolve() == root and
             driver._sha(native_commit) and driver._sha(expected_hmp_commit))
     info = root.lstat()
@@ -32,7 +34,13 @@ def run_matrix(root, native_repository, native_commit, expected_hmp_commit):
             stat.S_IMODE(info.st_mode) == 0o700 and not any(root.iterdir()))
     plan = driver.writer_contract.paired_plan()
     require(type(plan) is tuple and len(plan) == 456)
-    state = {"schema": 1, "stage": "prepared", "expected_hmp_commit": expected_hmp_commit,
+    if scope == "divergence_supplement":
+        additions = ("ordinary_child", "delegate_child")
+        plan = tuple(row for row in plan if
+                     all(request.split(":")[0] in additions for request in row[2]))
+        require(len(plan) == 72)
+    state = {"schema": 1, "stage": "prepared", "scope": scope,
+             "scope_execution_completed": False, "expected_hmp_commit": expected_hmp_commit,
              "native_commit": native_commit, "processes_planned": len(plan),
              "phases_planned": 2 * len(plan), "completed": [], "current": None,
              "reserve_bytes": RESERVE_BYTES, "process_allowance_bytes": PROCESS_ALLOWANCE_BYTES,
@@ -70,7 +78,9 @@ def run_matrix(root, native_repository, native_commit, expected_hmp_commit):
         state["stage"] = "pair_completed"
         state["current"] = None
         driver.commands._save(checkpoint, state)
-    state["stage"] = "matrix_completed_artifact_review_pending"
-    state["full_matrix_completed"] = True
+    state["stage"] = ("matrix_completed_artifact_review_pending" if scope == "full" else
+                      "supplement_completed_artifact_review_pending")
+    state["scope_execution_completed"] = True
+    state["full_matrix_completed"] = scope == "full"
     driver.commands._save(checkpoint, state)
     return state

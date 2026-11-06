@@ -684,3 +684,9 @@ limitation is reclassified as a fix or a physical/release qualification.
   inventory, preserving separately running 768-phase source/evidence binding.
 - [ ] Native supplemental execution/reuse audit after source acceptance; do not
   relabel previous artifacts as the new runner or claim actual gateway admission.
+
+- [x] Independent base/new Git/AST/inventory reuse audit accepted for explicit
+  two-source evidence only; no execution completion inferred.
+- [ ] Review explicit 72-pair supplemental scope, whose completed result cannot
+  assert full-matrix completion. Execute after prior full run settles; retain
+  separate source bindings, artifacts and independent readback.

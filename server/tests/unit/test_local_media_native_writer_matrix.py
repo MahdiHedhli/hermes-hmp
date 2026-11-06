@@ -92,3 +92,29 @@ def test_wrong_source_cannot_promote_completion_or_admit_next_pair(tmp_path, mon
     saved = json.loads((root / "matrix-state.json").read_text())
     assert len(calls) == 1 and not saved["completed"]
     assert saved["stage"] == "pair_failed_no_retry"
+
+
+def test_supplement_runs_only_additions_without_claiming_full_matrix(tmp_path, monkeypatch):
+    module, root, calls = fixture(tmp_path, monkeypatch)
+    result = module.run_matrix(root, tmp_path / "native", "a" * 40, "b" * 40,
+                               scope="divergence_supplement")
+    assert result["scope_execution_completed"] is True
+    assert result["full_matrix_completed"] is False and result["production_qualified"] is False
+    assert result["stage"] == "supplement_completed_artifact_review_pending"
+    assert len(calls) == len(result["completed"]) == 72
+    phases = [(kw["binding_cost_case"], kw["binding_cost_selector"], request)
+              for _, kw in calls for request in kw["binding_writer"]]
+    expected = {(case, selector, scenario + ":" + seam)
+                for case in range(8) for selector in (1, 16, 128)
+                for scenario in ("ordinary_child", "delegate_child")
+                for seam in module.driver.writer_contract.SEAMS}
+    assert len(phases) == len(set(phases)) == len(expected) == 144
+    assert set(phases) == expected
+
+
+@pytest.mark.parametrize("scope", [None, True, "resume", "all", ""])
+def test_unknown_execution_scope_refuses_before_state_or_pair_creation(tmp_path, monkeypatch, scope):
+    module, root, calls = fixture(tmp_path, monkeypatch)
+    with pytest.raises(RuntimeError):
+        module.run_matrix(root, tmp_path / "native", "a" * 40, "b" * 40, scope=scope)
+    assert calls == [] and not tuple(root.iterdir())
