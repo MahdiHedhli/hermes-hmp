@@ -463,3 +463,19 @@ PM environment with isolated home/runtime/cache, rather than adding dependencies
 piecemeal or borrowing the live gateway environment. Preserve the original failed
 setup separately. Native serving/cost/T12, Linux, physical and activation gates
 remain open. No live config, device grant or deployment changed.
+
+
+### Clean native runtime exposed missing plugin dependency (2026-11-06)
+
+Fresh explicit-source PM builds succeeded at pinned Python 3.14.9 with unchanged
+native source/locks. The first selected only `test` (pytest is actually in `dev`);
+a new `dev`/`test` output then reached the harness but lacked aiohttp. Each attempt
+was terminal before DB/HTTP work; none is a serving pass.
+
+This latter failure reproduced a packaging issue: native `ed1afb08` declares
+aiohttp only in optional extras, while HMP's root/subdir manifests omitted it.
+A focused repair explicitly declares the bounded patched HTTP dependency in both
+shipping manifests and the server project, and advances only that package in the
+server lock. Native source/locks are unchanged; no live plugin installation or
+provider configuration occurs. Combined plugin-resolution qualification remains
+separate from an isolated native sample with the pinned HTTP library present.

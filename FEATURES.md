@@ -1,3 +1,19 @@
+## Clean-host HTTP dependency repair — November 6, 2026
+
+Native source `ed1afb08` makes aiohttp optional. A fresh base/dev/test PM
+environment reproduced its absence before any native database or HTTP work.
+HMP's root and subdirectory manifests previously assumed it was a core package;
+both now explicitly declare `aiohttp>=3.14.5,<4`, matching the server project.
+The lock update changes only aiohttp 3.14.3 to 3.14.5. The patched floor matches
+the current native optional pin and avoids the older dependency's published
+[advisory](https://github.com/aio-libs/aiohttp/security/advisories/GHSA-9xw5-w5jj-pvcg).
+No exploitation or installed-library status is inferred.
+
+This is a dependency requirement, not a Hermes build allowlist or device grant.
+An older host pin conflicting with this floor must report a real resolver conflict;
+no unsupported dependency is silently installed. Source review, clean combined
+installation, native serving and device qualification remain distinct.
+
 ## Host-local image native-serving harness — November 6, 2026
 
 A fresh harness candidate now targets the existing descriptor and authenticated
