@@ -1,0 +1,888 @@
+"""Preparation contract models only; no Hermes, database, file, HTTP or provider operations."""
+import importlib.util
+import json
+import sys
+import threading
+import types
+from pathlib import Path
+
+import pytest
+
+PATH = Path(__file__).resolve().parents[3] / "tools/compat/local_media_native_binding_sample.py"
+
+
+def load():
+    spec = importlib.util.spec_from_file_location("_binding_sample_guard_tests", PATH)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+class DBModel:
+    """Record only the proposed public call contract, never model native performance."""
+
+    def __init__(self, *, drop_prompt=False):
+        self.sessions = {}
+        self.messages = []
+        self.calls = []
+        self.drop_prompt = drop_prompt
+
+    def get_session(self, sid):
+        self.calls.append(("get_session", sid))
+        row = self.sessions.get(sid)
+        return None if row is None else dict(row)
+
+    def create_session(self, sid, source, *, parent_session_id=None, system_prompt=None):
+        self.calls.append(("create_session", sid))
+        self.sessions[sid] = {"id": sid, "parent_session_id": parent_session_id,
+            "system_prompt": None if self.drop_prompt else system_prompt, "source": source}
+        return sid
+
+    def end_session(self, sid, reason):
+        self.calls.append(("end_session", sid))
+        self.sessions[sid]["end_reason"] = reason
+
+    def set_session_hidden(self, sid, hidden):
+        self.sessions[sid]["hidden"] = int(hidden)
+        return True
+
+    def set_session_title(self, sid, title):
+        self.sessions[sid]["title"] = title
+        return True
+
+    def get_compression_lineage(self, root):
+        chain = [root]
+        while True:
+            children = [sid for sid, row in self.sessions.items()
+                        if row.get("parent_session_id") == chain[-1]]
+            if not children:
+                return chain
+            assert len(children) == 1
+            chain.append(children[0])
+
+    def resolve_resume_session_id(self, root):
+        return self.get_compression_lineage(root)[-1]
+
+    def append_message(self, sid, role, **kwargs):
+        row_id = len(self.messages) + 1
+        self.messages.append({"id": row_id, "session_id": sid, "role": role, **kwargs})
+        return row_id
+
+    def get_messages(self, sid, *, limit):
+        return [row for row in self.messages if row["session_id"] == sid][:limit]
+
+
+def test_import_is_inert():
+    before = set(sys.modules)
+    assert callable(load().seed_native_shape)
+    assert not any(name.startswith(("hermes_", "psutil", "sqlite3", "aiohttp"))
+                   for name in set(sys.modules) - before)
+
+
+def test_bound_modules_uses_actual_nested_listener_snapshot():
+    chain = tuple(types.ModuleType(f"fixture_{index}") for index in range(7))
+    assert load().bound_modules((chain, (chain[0],))) == (chain[0], chain[6])
+
+
+@pytest.mark.parametrize("case", ["flat", "list", "missing", "wrong_bridge_length",
+                                 "wrong_reads_length", "foreign_sidecar", "not_module"])
+def test_wrong_listener_snapshot_refuses_before_using_module_attributes(case):
+    chain = tuple(types.ModuleType(f"fixture_{index}") for index in range(7))
+    bound = (chain, (chain[0],))
+    if case == "flat":
+        bound = chain
+    elif case == "list":
+        bound = list(bound)
+    elif case == "missing":
+        bound = None
+    elif case == "wrong_bridge_length":
+        bound = (chain[:-1], (chain[0],))
+    elif case == "wrong_reads_length":
+        bound = (chain, ())
+    elif case == "foreign_sidecar":
+        bound = (chain, (types.ModuleType("foreign"),))
+    else:
+        bound = ((object(), *chain[1:]), (chain[0],))
+    with pytest.raises(RuntimeError):
+        load().bound_modules(bound)
+
+
+@pytest.mark.parametrize("kind", ["phone", "bot_chat"])
+@pytest.mark.parametrize(("lineage", "prompt"), [(2, 0), (2, 262144), (98, 0), (98, 262144)])
+def test_declared_shape_has_realistic_lineage_distinct_prompts_and_both_cache_paths(
+    tmp_path, kind, lineage, prompt
+):
+    module, db = load(), DBModel()
+    missing_home = tmp_path / "not_materialized"
+    report = module.seed_native_shape(db, home=str(missing_home), kind=kind,
+                                     lineage_count=lineage, prompt_chars=prompt)
+    assert len(db.sessions) == lineage
+    assert report["verified_prompt_count"] == (lineage if prompt else 0)
+    assert report["history_rows"] == len(db.messages) == 258
+    tools = [row for row in db.messages if row["role"] == "tool"]
+    paths = [json.loads(row["content"])["image"] for row in tools]
+    assert sum("/cache/images/" in path for path in paths) == 64
+    assert sum("/cache/generated/images/" in path for path in paths) == 64
+    assert not missing_home.exists()
+    for count in (1, 16, 128):
+        selected = module.select_tool_ids(report["tool_ids"], count)
+        assert selected == tuple(row["id"] for row in reversed(tools[-count:]))
+    if kind == "bot_chat":
+        assert db.sessions[report["root"]]["hidden"] == 1
+        assert db.sessions[report["tip"]]["title"] == "Bot Chat"
+    else:
+        assert all("title" not in row and "hidden" not in row for row in db.sessions.values())
+
+
+@pytest.mark.parametrize("over", [
+    {"kind": "other"}, {"kind": None}, {"lineage_count": True}, {"lineage_count": 99},
+    {"prompt_chars": False}, {"prompt_chars": 1}, {"lineage_count": 2, "prompt_chars": 262145},
+    {"home": "relative"}, {"home": "/a/../b"}, {"home": "/a/./b"},
+    {"home": "/a//b"}, {"home": "/a/"}, {"home": "/a\0b"}, {"home": "/"},
+])
+def test_bad_shape_refuses_before_first_native_call(over):
+    module, db = load(), DBModel()
+    options = {"home": "/private/synthetic", "kind": "phone",
+               "lineage_count": 2, "prompt_chars": 0}
+    options.update(over)
+    with pytest.raises(RuntimeError):
+        module.seed_native_shape(db, **options)
+    assert db.calls == [] and db.sessions == {} and db.messages == []
+
+
+def test_an_existing_last_session_refuses_before_any_write():
+    module, db = load(), DBModel()
+    sid = "synthetic-c6b-phone-98-0-097"
+    db.sessions[sid] = {"id": sid, "kept": True}
+    with pytest.raises(RuntimeError):
+        module.seed_native_shape(db, home="/private/synthetic", kind="phone",
+                                 lineage_count=98, prompt_chars=0)
+    assert db.sessions == {sid: {"id": sid, "kept": True}} and db.messages == []
+    assert all(name == "get_session" for name, _ in db.calls)
+
+
+def test_missing_public_prompt_field_cannot_produce_false_large_prompt_pass():
+    module, db = load(), DBModel(drop_prompt=True)
+    with pytest.raises(RuntimeError):
+        module.seed_native_shape(db, home="/private/synthetic", kind="phone",
+                                 lineage_count=98, prompt_chars=262144)
+    assert db.messages == []  # Fails actual public prompt verification, before image rows.
+
+
+@pytest.mark.parametrize("bad", [True, 0, 2, 129, "128", None])
+def test_undeclared_selector_count_refuses(bad):
+    with pytest.raises(RuntimeError):
+        load().select_tool_ids(tuple(range(1, 129)), bad)
+
+
+def preparation_report():
+    return {"cells": [{"kind": kind, "lineage_count": lineage, "prompt_chars": prompt,
+        "verified_prompt_count": lineage if prompt else 0, "history_rows": 258,
+        "legacy_rows": 64, "generated_rows": 64, "selector_counts": [1, 16, 128],
+        "accepted_counts": [1, 16, 128], "proof_contexts": 2,
+        "verified_database_prompt_count": 2 * lineage if prompt else 0,
+        "verified_unprompted_extras": 1}
+        for kind in ("bot_chat", "phone")
+        for lineage, prompt in ((2, 0), (2, 262144), (98, 0), (98, 262144))],
+        "timing_measured": False, "allocation_measured": False, "writer_cases_run": 0,
+        "databases_closed": 4}
+
+
+def test_preparation_schema_requires_all_eight_shapes_and_no_measurement_claim():
+    load().validate_preparation_report(preparation_report())
+
+
+@pytest.mark.parametrize("case", ["missing_shape", "wrong_order", "missing_prompt",
+                                 "wrong_acceptance", "boolean_count", "extra_field",
+                                 "timing_claim", "allocation_claim", "writer_claim",
+                                 "database_not_closed", "absent_other_proof",
+                                 "missing_database_prompts",
+                                 "missing_extra"])
+def test_preparation_schema_refuses_incomplete_or_overclaimed_results(case):
+    report = preparation_report()
+    if case == "missing_shape":
+        report["cells"].pop()
+    elif case == "wrong_order":
+        report["cells"].reverse()
+    elif case == "missing_prompt":
+        report["cells"][1]["verified_prompt_count"] = 0
+    elif case == "wrong_acceptance":
+        report["cells"][0]["accepted_counts"] = [1, 16, 127]
+    elif case == "boolean_count":
+        report["cells"][0]["selector_counts"] = [True, 16, 128]
+    elif case == "extra_field":
+        report["cells"][0]["raw_path"] = "/not_permitted"
+    elif case == "timing_claim":
+        report["timing_measured"] = True
+    elif case == "allocation_claim":
+        report["allocation_measured"] = True
+    elif case == "writer_claim":
+        report["writer_cases_run"] = 1
+    elif case == "absent_other_proof":
+        report["cells"][0]["proof_contexts"] = 1
+    elif case == "missing_database_prompts":
+        report["cells"][1]["verified_database_prompt_count"] = 2
+    elif case == "missing_extra":
+        report["cells"][0]["verified_unprompted_extras"] = 0
+    else:
+        report["databases_closed"] = 3
+    with pytest.raises(RuntimeError):
+        load().validate_preparation_report(report)
+
+
+def test_driver_requires_explicit_seed_mode_and_rejects_combined_modes(tmp_path):
+    from .test_local_media_native_serving_driver import driver, good
+
+    report = good()
+    native, hmp, executable = (report["native_source_hashes"], report["hmp_source_hashes"],
+                               report["runtime_executable_sha256"])
+    report["native_binding_preparation"] = preparation_report()
+    driver.validate_report(report, native, hmp, executable, sample_binding_seed=True)
+    with pytest.raises(RuntimeError):
+        driver.validate_report(report, native, hmp, executable)
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40,
+                           sample_memory=True, sample_binding_seed=True)
+    assert not tuple(tmp_path.iterdir())
+
+
+def cell_fixture(tmp_path, *, release_result=True, close=True):
+    from .test_local_media_native_serving_fixture import load as load_fixture
+
+    tmp_path.chmod(0o700)
+    original = tmp_path / "original-profile"
+    stats = [(0, 0, 0)]
+    native = types.SimpleNamespace(home_path=original, home=str(original),
+        world=types.SimpleNamespace(runner=types.SimpleNamespace(homes={"alpha": original})))
+    fx = types.SimpleNamespace(native=native,
+                               service=types.SimpleNamespace(stats=lambda: stats[0]))
+    acquired, released = [], []
+
+    def acquire(path):
+        db = types.SimpleNamespace(_conn=object())
+        acquired.append((path, db))
+        return db
+
+    def release(db):
+        released.append(db)
+        if release_result and close:
+            db._conn = None
+        return release_result
+
+    registry = types.SimpleNamespace(acquire=acquire, release=release)
+    borrowed, selection, owners = {"acquired": 0, "released": 0}, [None], []
+    module = load_fixture()
+
+    def context(index=0):
+        return module._binding_cell(tmp_path.resolve(), fx, registry, borrowed,
+                                    threading.Lock(), selection, owners, index, "alpha")
+
+    return types.SimpleNamespace(context=context, fx=fx, original=original, stats=stats,
+        borrowed=borrowed, selection=selection, owners=owners, acquired=acquired, released=released)
+
+
+def test_fresh_cell_closes_before_restoring_original_scope_and_cannot_be_reused(tmp_path):
+    model = cell_fixture(tmp_path)
+    with model.context() as db:
+        path = tmp_path / "binding-cells/cell-0/state.db"
+        assert model.selection[0] == (path, db)
+        assert model.fx.native.home_path == path.parent
+        assert model.fx.native.world.runner.homes["alpha"] == path.parent
+        assert model.released == []
+    assert db._conn is None and model.released == [db] and model.owners[0]["closed"] is True
+    assert model.selection == [None] and model.fx.native.home_path == model.original
+    assert model.fx.native.world.runner.homes["alpha"] == model.original
+    with pytest.raises(FileExistsError), model.context():
+        pytest.fail("existing cell must not acquire a new database")
+    assert len(model.acquired) == 1
+
+
+def test_fourth_cell_has_independent_ownership_and_closure(tmp_path):
+    model = cell_fixture(tmp_path)
+    with model.context(3) as db:
+        assert model.selection[0][0] == tmp_path / "binding-cells/cell-3/state.db"
+    assert db._conn is None and model.owners[0]["closed"] is True
+
+
+@pytest.mark.parametrize("index", [True, -1, 4, 100])
+def test_undeclared_cell_index_refuses_before_allocation(tmp_path, index):
+    model = cell_fixture(tmp_path)
+    with pytest.raises(RuntimeError), model.context(index):
+        pytest.fail("invalid cell index must not allocate")
+    assert model.acquired == [] and not (tmp_path / "binding-cells").exists()
+
+
+@pytest.mark.parametrize("case", ["borrower", "worker"])
+def test_cell_refuses_before_allocation_when_original_work_remains(tmp_path, case):
+    model = cell_fixture(tmp_path)
+    if case == "borrower":
+        model.borrowed["acquired"] = 1
+    else:
+        model.stats[0] = (1, 1, 1)
+    with pytest.raises(RuntimeError), model.context():
+        pytest.fail("must refuse before entering")
+    assert model.acquired == [] and model.owners == []
+    assert not (tmp_path / "binding-cells").exists()
+
+
+@pytest.mark.parametrize("case", ["borrower", "worker", "release_false", "connection_open"])
+def test_unsettled_cell_retains_its_owner_and_scope_instead_of_closing_or_restoring(tmp_path, case):
+    model = cell_fixture(tmp_path, release_result=case != "release_false",
+                         close=case != "connection_open")
+    with pytest.raises(RuntimeError), model.context() as db:
+        if case == "borrower":
+            model.borrowed["acquired"] = 1
+        elif case == "worker":
+            model.stats[0] = (1, 1, 1)
+    assert model.owners[0]["db"] is db and model.owners[0]["closed"] is False
+    assert db._conn is not None and model.selection[0][1] is db
+    assert model.fx.native.home_path != model.original
+    assert len(model.released) == (0 if case in ("borrower", "worker") else 1)
+
+
+def test_cell_closes_and_restores_after_user_work_raises_without_converting_failure(tmp_path):
+    model = cell_fixture(tmp_path)
+    with pytest.raises(ValueError, match="fixed synthetic failure"), model.context() as db:
+        raise ValueError("fixed synthetic failure")
+    assert db._conn is None and model.owners[0]["closed"] is True
+    assert model.selection == [None] and model.fx.native.home_path == model.original
+
+
+def test_cell_refuses_symlinked_base_before_native_acquisition(tmp_path):
+    model = cell_fixture(tmp_path)
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    (tmp_path / "binding-cells").symlink_to(foreign, target_is_directory=True)
+    with pytest.raises(RuntimeError), model.context():
+        pytest.fail("must refuse the substituted parent")
+    assert not tuple(foreign.iterdir()) and model.acquired == []
+
+
+def test_binding_command_supplies_only_owned_tmpdir_without_forwarding_ambient_values(
+    tmp_path, monkeypatch
+):
+    from .test_local_media_native_serving_driver import driver
+
+    monkeypatch.setenv("TMPDIR", "/foreign_not_forwarded")
+    monkeypatch.setenv("HERMES_SCRATCH_DIR", "/foreign_marker_not_forwarded")
+    args = (tmp_path, tmp_path / "python", tmp_path / "entry.py")
+    normal = driver._native_command(*args)
+    seeded = driver._native_command(*args, sample_binding_seed=True)
+    assert not any(arg.startswith("TMPDIR=") for arg in normal)
+    assert seeded == [*normal[:-5], "TMPDIR=" + str(tmp_path / "tmp"), *normal[-5:]]
+    assert all("foreign" not in arg and not arg.startswith("HERMES_SCRATCH_DIR=")
+               for arg in seeded)
+
+
+@pytest.mark.parametrize("case", ["valid", "foreign", "marker", "absent", "public_mode"])
+def test_binding_tmpdir_guard_before_native_bootstrap(tmp_path, case):
+    from .test_local_media_native_serving_fixture import load as load_fixture
+
+    temp = tmp_path / "tmp"
+    if case != "absent":
+        temp.mkdir(mode=0o700)
+    env = {"TMPDIR": str(temp)}
+    if case == "foreign":
+        env["TMPDIR"] = "/foreign_not_read"
+    elif case == "marker":
+        env["HERMES_SCRATCH_DIR"] = str(temp)
+    elif case == "public_mode":
+        temp.chmod(0o755)
+    if case == "valid":
+        load_fixture()._binding_tmpdir(tmp_path, env)
+    else:
+        with pytest.raises((RuntimeError, FileNotFoundError)):
+            load_fixture()._binding_tmpdir(tmp_path, env)
+
+
+@pytest.mark.parametrize("lineage", [2, 98])
+def test_shared_database_keeps_both_independent_prompted_lineages(lineage):
+    module, db = load(), DBModel()
+    shapes = [module.seed_native_shape(db, home="/private/synthetic", kind=kind,
+              lineage_count=lineage, prompt_chars=262144) for kind in module.KINDS]
+    prompts = [row["system_prompt"] for row in db.sessions.values()]
+    assert len(prompts) == len(set(prompts)) == 2 * lineage
+    assert len(db.messages) == 516
+    for shape in shapes:
+        assert len(db.get_compression_lineage(shape["root"])) == lineage
+        assert db.resolve_resume_session_id(shape["root"]) == shape["tip"]
+        assert len(db.get_messages(shape["tip"], limit=1000)) == 258
+    assert db.sessions[shapes[0]["tip"]]["title"] == "Bot Chat"
+    assert "title" not in db.sessions[shapes[1]["tip"]]
+
+
+def cost_report(case=0):
+    module = load()
+    lineage, prompt = module.SHAPES[case % 4]
+    return {"case": case, "kind": module.KINDS[case // 4], "lineage_count": lineage,
+        "prompt_chars": prompt, "warmups_per_selector": 1, "traces_per_selector": 1,
+        "rss_measured": False, "mint_measured": False, "writer_cases_run": 0,
+        "selectors": [{"count": count, "durations_ns": [10, 11, 12],
+            "peak_traced_bytes": 100, "current_traced_bytes": 40} for count in (1,)]}
+
+
+@pytest.mark.parametrize("case", range(8))
+def test_cost_report_requires_exact_selected_workload(case):
+    module = load()
+    module.validate_cost_report(cost_report(case), case, 1)
+    with pytest.raises(RuntimeError):
+        module.validate_cost_report(cost_report(case), (case + 1) % 8, 1)
+
+
+@pytest.mark.parametrize("mutation", ["missing_repeat", "boolean_time", "negative_time",
+    "wrong_selector", "missing_selector", "current_above_peak", "rss", "mint", "writer", "extra"])
+def test_cost_schema_rejects_incomplete_or_overclaimed_measurement(mutation):
+    report = cost_report()
+    row = report["selectors"][0]
+    if mutation == "missing_repeat":
+        row["durations_ns"].pop()
+    elif mutation == "boolean_time":
+        row["durations_ns"][0] = True
+    elif mutation == "negative_time":
+        row["durations_ns"][0] = -1
+    elif mutation == "wrong_selector":
+        row["count"] = 2
+    elif mutation == "missing_selector":
+        report["selectors"].pop()
+    elif mutation == "current_above_peak":
+        row["current_traced_bytes"] = 101
+    elif mutation == "rss":
+        report["rss_measured"] = True
+    elif mutation == "mint":
+        report["mint_measured"] = True
+    elif mutation == "writer":
+        report["writer_cases_run"] = 1
+    else:
+        report["raw_session"] = "forbidden"
+    with pytest.raises(RuntimeError):
+        load().validate_cost_report(report, 0, 1)
+
+
+@pytest.mark.parametrize("bad", [True, -1, 8, 1.0, "0", [], {}])
+def test_invalid_cost_case_refused_before_native_or_filesystem_access(tmp_path, bad):
+    from .test_local_media_native_serving_driver import driver
+
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40,
+                           sample_binding_seed=True, binding_cost_case=bad)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_cost_mode_cannot_be_silently_accepted_as_preparation_or_normal_mode(tmp_path):
+    from .test_local_media_native_serving_driver import driver, good
+
+    report = good()
+    prep = preparation_report()
+    prep["cells"] = [prep["cells"][0], prep["cells"][4]]
+    prep["databases_closed"] = 1
+    report["native_binding_preparation"] = prep
+    report["native_binding_cost"] = cost_report()
+    args = (report, report["native_source_hashes"], report["hmp_source_hashes"],
+            report["runtime_executable_sha256"])
+    driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                           binding_cost_selector=1)
+    with pytest.raises(RuntimeError):
+        driver.validate_report(*args, sample_binding_seed=True)
+    with pytest.raises(RuntimeError):
+        driver.validate_report(*args, binding_cost_case=0)
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40, binding_cost_case=0)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_measurement_has_one_warmup_three_untraced_calls_and_separate_trace():
+    import tracemalloc
+
+    calls, checked = [], []
+
+    def bind():
+        calls.append(tracemalloc.is_tracing())
+        return bytearray(4096)
+
+    def check(result):
+        assert len(result) == 4096
+        checked.append(tracemalloc.is_tracing())
+
+    result = load().measure_binding(bind, check)
+    assert calls == [False, False, False, False, True]
+    assert checked == [False] * 5
+    assert len(result["durations_ns"]) == 3
+    assert result["peak_traced_bytes"] >= result["current_traced_bytes"] >= 4096
+    assert not tracemalloc.is_tracing()
+
+
+def test_existing_trace_is_preserved_and_binding_never_called():
+    import tracemalloc
+
+    tracemalloc.start()
+    try:
+        with pytest.raises(RuntimeError):
+            load().measure_binding(lambda: pytest.fail("must not bind"), lambda _: None)
+        assert tracemalloc.is_tracing()
+    finally:
+        tracemalloc.stop()
+
+
+def test_binding_exception_stops_only_its_owned_trace():
+    import tracemalloc
+
+    count = [0]
+
+    def bind():
+        count[0] += 1
+        if count[0] == 5:
+            assert tracemalloc.is_tracing()
+            raise ValueError("synthetic failure")
+        return object()
+
+    with pytest.raises(ValueError, match="synthetic failure"):
+        load().measure_binding(bind, lambda _: None)
+    assert count == [5] and not tracemalloc.is_tracing()
+
+
+@pytest.mark.parametrize("case", range(8))
+def test_cost_preparation_requires_both_full_proof_contexts_for_selected_shape(case):
+    module, report = load(), preparation_report()
+    shape = case % 4
+    report["cells"] = [report["cells"][shape], report["cells"][4 + shape]]
+    report["databases_closed"] = 1
+    module.validate_preparation_report(report, case)
+    with pytest.raises(RuntimeError):
+        module.validate_preparation_report(report)  # Cannot certify the full preparation matrix.
+    report["cells"].pop()
+    with pytest.raises(RuntimeError):
+        module.validate_preparation_report(report, case)
+
+
+@pytest.mark.parametrize(("case", "selector"), [(None, 1), (0, None), (0, True), (0, 2),
+                                                (0, "1"), (0, 129), (0, 1.0)])
+def test_incomplete_or_undeclared_cost_mode_refuses_before_filesystem(case, selector, tmp_path):
+    from .test_local_media_native_serving_driver import driver
+
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40, sample_binding_seed=True,
+                           binding_cost_case=case, binding_cost_selector=selector)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_cost_report_cannot_certify_another_selector():
+    with pytest.raises(RuntimeError):
+        load().validate_cost_report(cost_report(), 0, 16)
+
+
+def mint_report(case=0, count=1):
+    module = load()
+    lineage, prompt = module.SHAPES[case % 4]
+    return {"case": case, "kind": module.KINDS[case // 4], "lineage_count": lineage,
+        "prompt_chars": prompt, "modeled_loop": True, "binding_measured": False,
+        "rss_measured": False, "writer_cases_run": 0,
+        "selectors": [{"count": count, "peak_traced_bytes": 200, "current_traced_bytes": 100,
+            "refs_verified": count, "shared_fields_verified": True, "before_explicit_gc": True}]}
+
+
+@pytest.mark.parametrize("case", range(8))
+@pytest.mark.parametrize("count", (1, 16, 128))
+def test_mint_schema_pins_every_kind_shape_selector(case, count):
+    module = load()
+    module.validate_mint_report(mint_report(case, count), case, count)
+    with pytest.raises(RuntimeError):
+        module.validate_mint_report(mint_report(case, count), (case + 1) % 8, count)
+
+
+@pytest.mark.parametrize("change", ["missing_refs", "after_gc", "not_shared", "negative_peak",
+                                  "binding_claim", "rss_claim", "writer_claim", "raw_ref"])
+def test_mint_schema_refuses_incomplete_or_overclaimed_evidence(change):
+    report = mint_report()
+    row = report["selectors"][0]
+    if change == "missing_refs":
+        row["refs_verified"] = 0
+    elif change == "after_gc":
+        row["before_explicit_gc"] = False
+    elif change == "not_shared":
+        row["shared_fields_verified"] = False
+    elif change == "negative_peak":
+        row["peak_traced_bytes"] = -1
+    elif change == "binding_claim":
+        report["binding_measured"] = True
+    elif change == "rss_claim":
+        report["rss_measured"] = True
+    elif change == "writer_claim":
+        report["writer_cases_run"] = 1
+    else:
+        row["ref"] = "synthetic-opaque-value-must-not-be-reported"
+    with pytest.raises(RuntimeError):
+        load().validate_mint_report(report, 0, 1)
+
+
+def modeled_mint_inputs(count):
+    candidate = types.SimpleNamespace(provenance_consistent=True,
+        user_id="synthetic-mint-user", profile="alpha",
+        candidates=tuple(types.SimpleNamespace(tool_row_id=i, raw_digest=bytes([i]) * 32)
+                         for i in range(1, count + 1)))
+    bound = types.SimpleNamespace(sidecar=candidate, ok=True,
+        accepted=tuple(range(count, 0, -1)), kind=types.SimpleNamespace(value="phone"),
+        session_id="synthetic-mint-session", tip="synthetic-mint-tip")
+    return candidate, bound
+
+
+@pytest.mark.parametrize("count", (1, 16, 128))
+def test_mint_trace_uses_fresh_actual_registry_and_shared_fields_before_gc(monkeypatch, count):
+    import gc
+    import tracemalloc
+
+    from hmp_plugin import local_media_registry as registry
+
+    original, owned, observations = registry.LocalMediaRegistry, [], []
+    collect = gc.collect
+
+    def fresh():
+        assert tracemalloc.is_tracing()
+        result = original()
+        owned.append(result)
+        return result
+
+    def collect_before():
+        observations.append(tracemalloc.is_tracing())
+        return collect()
+
+    monkeypatch.setattr(registry, "LocalMediaRegistry", fresh)
+    monkeypatch.setattr(gc, "collect", collect_before)
+    candidate, bound = modeled_mint_inputs(count)
+    for _ in range(2):
+        report = load().measure_mint(registry, candidate, bound,
+            user=candidate.user_id, profile=candidate.profile)
+        assert report["count"] == report["refs_verified"] == count
+        assert report["before_explicit_gc"] is report["shared_fields_verified"] is True
+        assert report["peak_traced_bytes"] >= report["current_traced_bytes"] > 0
+    assert observations == [False, False] and len(owned) == 2 and owned[0] is not owned[1]
+    assert len(owned[0]._entries) == len(owned[1]._entries) == count
+    assert not tracemalloc.is_tracing()
+
+
+def test_mint_exception_settles_owned_trace(monkeypatch):
+    import tracemalloc
+
+    from hmp_plugin import local_media_registry as registry
+
+    def fail():
+        assert tracemalloc.is_tracing()
+        raise ValueError("synthetic registry construction failure")
+
+    monkeypatch.setattr(registry, "LocalMediaRegistry", fail)
+    candidate, bound = modeled_mint_inputs(1)
+    with pytest.raises(ValueError, match="synthetic registry construction failure"):
+        load().measure_mint(registry, candidate, bound,
+            user=candidate.user_id, profile=candidate.profile)
+    assert not tracemalloc.is_tracing()
+
+
+def test_mint_preserves_existing_trace_without_creating_registry(monkeypatch):
+    import tracemalloc
+
+    from hmp_plugin import local_media_registry as registry
+
+    monkeypatch.setattr(registry, "LocalMediaRegistry", lambda: pytest.fail("must not construct"))
+    candidate, bound = modeled_mint_inputs(1)
+    tracemalloc.start()
+    try:
+        with pytest.raises(RuntimeError):
+            load().measure_mint(registry, candidate, bound,
+                user=candidate.user_id, profile=candidate.profile)
+        assert tracemalloc.is_tracing()
+    finally:
+        tracemalloc.stop()
+
+
+@pytest.mark.parametrize("mint", [True, 1, None, "true"])
+def test_mint_requires_explicit_boolean_and_pinned_case_before_filesystem(tmp_path, mint):
+    from .test_local_media_native_serving_driver import driver
+
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40,
+                           sample_binding_seed=True, binding_mint=mint)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_driver_cannot_confuse_modeled_mint_with_complete_binding_cost():
+    from .test_local_media_native_serving_driver import driver, good
+
+    report = good()
+    prep = preparation_report()
+    prep["cells"], prep["databases_closed"] = [prep["cells"][0], prep["cells"][4]], 1
+    report["native_binding_preparation"] = prep
+    report["native_binding_mint"] = mint_report()
+    args = (report, report["native_source_hashes"], report["hmp_source_hashes"],
+            report["runtime_executable_sha256"])
+    driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                           binding_cost_selector=1, binding_mint=True)
+    with pytest.raises(RuntimeError):
+        driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                               binding_cost_selector=1)
+
+
+def rss_report(case=0, count=1):
+    module = load()
+    lineage, prompt = module.SHAPES[case % 4]
+    return {"case": case, "kind": module.KINDS[case // 4], "lineage_count": lineage,
+        "prompt_chars": prompt, "platform": "darwin", "rss_unit": "bytes",
+        "includes_prior_peak": True, "isolated_native_allocation_bound": False,
+        "tracing_enabled": False, "mint_measured": False, "writer_cases_run": 0,
+        "selectors": [{"count": count, **module.rss_values(100, 200, 90, 220)}]}
+
+
+def test_rss_accounting_retains_prior_peak_and_negative_current_delta():
+    values = load().rss_values(100, 200, 90, 220)
+    assert values["current_delta"] == -10
+    assert values["peak_growth"] == 20
+    assert values["peak_above_current_baseline"] == 120
+    assert load().rss_values(100, 200, 100, 200)["peak_growth"] == 0
+    assert load().rss_values(100, 200, 100, 200)["peak_above_current_baseline"] == 100
+
+
+@pytest.mark.parametrize("values", [(True, 200, 90, 220), (0, 200, 90, 220),
+    (100, 99, 90, 220), (100, 200, 250, 220), (100, 200, 90, 199), (100.0, 200, 90, 220)])
+def test_rss_witness_refuses_invalid_units_types_or_nonmonotonic_peak(values):
+    with pytest.raises(RuntimeError):
+        load().rss_values(*values)
+
+
+@pytest.mark.parametrize("case", range(8))
+@pytest.mark.parametrize("count", (1, 16, 128))
+def test_rss_report_pins_every_kind_shape_selector(case, count):
+    module = load()
+    module.validate_rss_report(rss_report(case, count), case, count)
+    with pytest.raises(RuntimeError):
+        module.validate_rss_report(rss_report(case, count), (case + 1) % 8, count)
+
+
+@pytest.mark.parametrize("change", ["false_peak_growth", "false_current_delta", "hide_prior_peak",
+    "claim_native_bound", "wrong_platform", "wrong_unit", "tracing", "mint", "writer", "raw_data"])
+def test_rss_report_refuses_unjustified_accounting_or_scope_claims(change):
+    report = rss_report()
+    if change == "false_peak_growth":
+        report["selectors"][0]["peak_growth"] = 120
+    elif change == "false_current_delta":
+        report["selectors"][0]["current_delta"] = 0
+    elif change == "hide_prior_peak":
+        report["includes_prior_peak"] = False
+    elif change == "claim_native_bound":
+        report["isolated_native_allocation_bound"] = True
+    elif change == "wrong_platform":
+        report["platform"] = "linux"
+    elif change == "wrong_unit":
+        report["rss_unit"] = "KiB"
+    elif change == "tracing":
+        report["tracing_enabled"] = True
+    elif change == "mint":
+        report["mint_measured"] = True
+    elif change == "writer":
+        report["writer_cases_run"] = 1
+    else:
+        report["session_id"] = "private"
+    with pytest.raises(RuntimeError):
+        load().validate_rss_report(report, 0, 1)
+
+
+@pytest.mark.parametrize(("rss", "mint", "case", "selector"), [
+    (True, True, 0, 1), (1, False, 0, 1), (None, False, 0, 1),
+    (True, False, None, None), (True, False, 0, None), (True, False, 0, True)])
+def test_rss_mode_refuses_ambiguity_before_filesystem(tmp_path, rss, mint, case, selector):
+    from .test_local_media_native_serving_driver import driver
+
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40, sample_binding_seed=True,
+            binding_cost_case=case, binding_cost_selector=selector,
+            binding_mint=mint, binding_rss=rss)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_rss_platform_refuses_before_filesystem_or_native_import(monkeypatch, tmp_path):
+    from .test_local_media_native_serving_driver import driver
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40, sample_binding_seed=True,
+                           binding_cost_case=0, binding_cost_selector=1, binding_rss=True)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_driver_cannot_confuse_cumulative_rss_with_cost_or_mint():
+    from .test_local_media_native_serving_driver import driver, good
+
+    report = good()
+    prep = preparation_report()
+    prep["cells"], prep["databases_closed"] = [prep["cells"][0], prep["cells"][4]], 1
+    report["native_binding_preparation"] = prep
+    report["native_binding_rss"] = rss_report()
+    args = (report, report["native_source_hashes"], report["hmp_source_hashes"],
+            report["runtime_executable_sha256"])
+    driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                           binding_cost_selector=1, binding_rss=True)
+    for options in ({}, {"binding_mint": True}):
+        with pytest.raises(RuntimeError):
+            driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                                   binding_cost_selector=1, **options)
+
+
+def test_rss_observes_only_self_and_holds_result_through_both_after_snapshots(monkeypatch):
+    import gc
+    import os
+    import resource
+    import weakref
+
+    events, held = [], []
+    memory, peaks = iter((100, 90)), iter((200, 220))
+
+    def current():
+        value = next(memory)
+        if value == 90:
+            assert held[0]() is not None
+        events.append("rss")
+        return types.SimpleNamespace(rss=value)
+
+    def process(pid):
+        assert pid == os.getpid()
+        events.append("self")
+        return types.SimpleNamespace(memory_info=current)
+
+    def usage(who):
+        assert who == resource.RUSAGE_SELF
+        value = next(peaks)
+        if value == 220:
+            assert held[0]() is not None
+        events.append("peak")
+        return types.SimpleNamespace(ru_maxrss=value)
+
+    class Result:
+        pass
+
+    def bind():
+        events.append("bind")
+        result = Result()
+        held.append(weakref.ref(result))
+        return result
+
+    def check(result):
+        assert held[0]() is result
+        events.append("validate")
+
+    fake = types.ModuleType("psutil")
+    fake.Process = process
+    monkeypatch.setitem(sys.modules, "psutil", fake)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(resource, "getrusage", usage)
+    monkeypatch.setattr(gc, "collect", lambda: events.append("gc"))
+    assert load().measure_binding_rss(bind, check) == load().rss_values(100, 200, 90, 220)
+    assert events == ["self", "gc", "rss", "peak", "bind", "rss", "peak", "validate"]
+
+
+def test_rss_never_runs_a_binding_under_existing_trace():
+    import tracemalloc
+
+    tracemalloc.start()
+    try:
+        with pytest.raises(RuntimeError):
+            load().measure_binding_rss(lambda: pytest.fail("must not bind"), lambda _: None)
+        assert tracemalloc.is_tracing()
+    finally:
+        tracemalloc.stop()

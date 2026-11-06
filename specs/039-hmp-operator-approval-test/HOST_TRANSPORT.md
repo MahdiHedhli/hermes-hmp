@@ -1,5 +1,12 @@
 # AT1-T003 — Private local operator connection
 
+November 4 current-source update: CLI, scoped routes and listener binding are now
+integrated in the development source. A captured native timeout-metadata mismatch
+is repaired and sampled against exported current helpers; see
+[NATIVE_COMPATIBILITY.md](NATIVE_COMPATIBILITY.md). This does not establish live
+deployment, operator IPC or paired-phone delivery. The earlier proposal and its
+transport/security requirements below remain historical design context.
+
 Status: private listener/routes source proposal on clean union9535, with the separately
 accepted authority/service and CLI components as exact prerequisites. Definitions are
 not execution admission, current gateway deployment or native/device qualification.

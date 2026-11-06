@@ -14,7 +14,7 @@ Reviewer-owned. Unchecked until an independent reviewer marks an item; the autho
 - [ ] Constants are labelled new choices; memory ceilings are provisional.
 - [ ] Ref grammar, TTL, caps, idempotent mint and the 128 limit are exact.
 - [ ] Permit lifetimes under cancellation are stated.
-- [ ] E1 and the Linux leaf run are stated as sampled evidence; delivery review, C6b/T12 sample evidence and device acceptance are stated as pending; no shipping, enablement or qualification claim is made.
+- [ ] E1, the Linux leaf run and the T12 Darwin memory measurement are stated as scoped sampled evidence; delivery review, C6b and device acceptance remain pending; no shipping, enablement or broad platform qualification claim is made.
 - [ ] Conformance rows list every future test as unimplemented.
 - [ ] Public text contains no private path, personal identifier, secret or transcript.
 - [ ] Superseded S6/S6a/S6b text is preserved as historical and not presented as current; the accepted M3 listener binding is described as source-only, with descriptor emission, fetching and device acceptance still open.
@@ -23,5 +23,5 @@ Reviewer-owned. Unchecked until an independent reviewer marks an item; the autho
 ## Open gates (not satisfiable by documents)
 
 - [ ] Independent review of this contract revision.
-- [ ] C6b exact-native cost and T12 memory sample evidence recorded (evidence, not a per-version gate).
+- [ ] C6b exact-native cost/concurrent-writer and T12 memory sample evidence recorded (evidence, not a per-version gate). T12's pinned Darwin measurement is now recorded; the joint row stays open for C6b.
 - [ ] Independent review of the exact candidate (M3 and S5), owner-authorized install and flag, and device acceptance.

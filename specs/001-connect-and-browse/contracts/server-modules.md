@@ -132,6 +132,24 @@ server/
     server.py                     # aiohttp app, route table (F1 subset), middlewares: peer policy (TR-4),
                                   #   size limits, rate limits (TR-6), error shaping (ERR-1), compat refusal (ERR-2a)
     readiness.py                  # v1.6 AR1: fixed closed readiness DTO mapping only; no authority or I/O
+    presentation.py               # BI1 optional pure bounded projection; no route, authority, or I/O
+    presentation_files.py         # BI1 optional worker-only fixed-name FD reader; no owner, route, or startup I/O
+    presentation_posix.py         # Explicit worker POSIX backend; no implicit activation or authority
+    presentation_native.py        # Explicit owned native-auth observation service; not route-bound
+    presentation_pipeline.py      # Worker-only fixed-read/parser/raster/DTO composition, not authority
+    presentation_budget.py        # Nonresetting worker work counters
+    presentation_worker_control.py # Bounded child input/GO codec; no authority or process owner
+    presentation_go.py            # Exact one-use synchronous write on an owned nonblocking pipe
+    presentation_child_launch.py  # Fixed isolated launch policy; no child/source attestation
+    presentation_worker.py        # Child-only GO/scope/process/result flow; no process owner
+    presentation_input_v2.py      # Closed parent policy/projection input, schema2 only
+    presentation_yaml.py          # BI1 optional pure bounded event reducer; no YAML provider, file I/O, or route
+    presentation_yaml_adapter.py  # Worker-only actual streaming parser; bounded closed projection
+    presentation_jobs.py          # BI1 private frame/owner core; native authority and child supervisor unbound
+    presentation_authority.py     # BI1 private parent-only authority custody; native read-only service unbound
+    presentation_raster.py        # BI1 optional worker-only bounded raster fork; no reader or route import
+    unicode17.py                  # BI1 pure Unicode 17 normalization/grapheme/category provider; no import I/O
+    unicode17_data.py             # BI1 fixed generated Unicode 17 tuple tables; see UNICODE_LICENSE.txt
     controls_requests.py          # AR1 ControlsRequestStore: bounded exact-origin request/CAS SQL only
                                   #   through Store.transaction(); no independent connection or writer;
                                   #   request history is not current Controls authority; no remote decision
@@ -460,3 +478,97 @@ push, native/provider action, source pin, grant or permission change is introduc
 
 Definitions and expected source census require independent review and root execution.
 Native/helper/socket/current device and release qualifications remain separate.
+
+- `presentation_child.py`: fixed isolated processing entry, private own-code namespace; no gateway initializer or native authority. Parent provenance/custody and route activation remain unbound.
+
+- `presentation_pipes.py`: exclusive nonblocking bounded result/diagnostic pipe ownership; actual EOF/close only, no process wait/group/authority claim.
+
+- `presentation_process.py`: fixed launch attempt custody, exact terminal waitpid and one signal-zero group observation. No destructive signal, runtime qualification or native route binding.
+
+- `presentation_control_pipe.py`: owned nonblocking schema2 input/one GO/control closure; binding only, no native authorization or process termination.
+
+- `presentation_input_v3.py`: closed input3 parent-policy/work transfer; no legacy decoder fallback or native authority. Actual entry migration/result2 remain pending.
+
+- `presentation_output_v2.py`: closed result2 eight-total accounting and retained-parent comparison. Counter/cleanup claims do not prove authority, IO or resource custody.
+
+- `presentation_parent_policy.py`: retained directory-only no-follow policy observation and exact precharged success schedule; actual native permission, job reservation/thread join and one-use transfer remain binder obligations.
+
+- `presentation_policy_thread.py`: retained actual directory-policy worker/start/join observations; task completion/cancellation does not settle it. Native job reservation/authority/transfer remain binder obligations.
+
+- `presentation_policy_binding.py`: one retained policy work per existing admitted authority operation, actual join then fresh native PRE_GO observation; no route, transfer, child launch or clean-abort provided yet.
+
+
+### BI1 private result-candidate transport module (November 5, 2026)
+
+`presentation_result_transport.py` is the independently reviewed retained writer/
+reader boundary described in [RESULT_TRANSPORT.md](../../046-bot-presentation-integration/RESULT_TRANSPORT.md).
+It imports no Hermes internals and adds no route, tool, registration, provider or
+network destination. Original service/work tasks use existing authenticated Unix
+channels, admission credits, qualified clock/budget and result2 buffer. The
+closed module set includes it explicitly; the exact-tree, Hermes-free import and
+optional local-media isolation checks remain enforced. Validation produces only
+a private job candidate/token; publication, native terminal proof and release
+remain inaccessible through this module.
+
+### BI1 local started-reader claim data (November 5, 2026)
+
+`presentation_terminal_claim.py` binds immutable input receipts before reader
+effects and retains one local producer over actual child-wait, pipe/control
+closure and signal-retirement observations. Its bounded canonical codec carries
+data only; decoded bytes cannot settle started debt or authorize publication.
+It imports no Hermes internals and adds no route, tool, registration, provider
+or network destination. The exact closed module set admits it explicitly,
+retaining Hermes-free and optional local-media isolation checks. See
+[STARTED_TERMINAL.md](../../046-bot-presentation-integration/STARTED_TERMINAL.md).
+Shared process-group membership is not a group-absence proof; remote joined
+proof, COMPLETE/ACK, native release and public rendering remain closed.
+
+### BI1 owned readiness notification (November 5, 2026)
+
+`presentation_readiness.py` owns one default-selector read-registration attempt
+on an exact borrowed socket/FD/backend and original task/thread/process scope.
+Its callback notifies only Future(None), never receives bytes or starts a Task.
+It preserves foreign read/write subscriptions and refuses uncertain retirement.
+There is no route, tool, provider, socket close or native authority import. The
+module is explicitly admitted to the closed module set; exact-tree, Hermes-free
+and optional local-media isolation checks remain enforced. HMP receive paths and
+retained cursor integration are not activated by admitting this primitive.
+
+
+### BI1 normal RESULT cursor integration (November 5, 2026)
+
+The existing `presentation_result_transport.py` now uses owned readiness plus
+concrete nonblocking receive on its original work Task. Retained bounded framing,
+consumption and commit offsets survive awaits; original custody alone is wiped
+on refusal. Unknown registration/syscall/commit outcome retains the read claim.
+No dependency, route, registration or network destination is added. Service/control
+receive paths, cleanup-reader activation, terminal acceptance and release remain
+separate gates. See [cursor ownership](../../046-bot-presentation-integration/READINESS_CURSOR.md).
+
+### BI1 broker control readiness integration (November 5, 2026)
+
+The existing `presentation_broker_cancel.py` now retains cumulative framing and
+uses immediate concrete nonblocking receive plus owned readiness on EAGAIN only.
+This preserves queued GO/CANCEL priority, partial framing across original work
+expiry, and unknown IO/read claims. A valid elapsed readiness end returns a known
+no-registration timeout. Existing native-clock/budget checks decide continuation;
+no new interval or authority follows from the timeout. No module/dependency,
+route, destination or ACK/release activation is added. See [control cursor](../../046-bot-presentation-integration/BROKER_CONTROL_CURSOR.md).
+
+
+### BI1 selected-v2 pre-result framing (November 5, 2026)
+
+Existing `presentation_broker_service.py` retains bounded original-task BEGIN/READY
+framing with readiness only on EAGAIN. The existing remote owner supplies a
+callback-free final local custody fence after channel clock sampling. Readiness
+metadata proof precedes later current/native checks for all selected-v2 callers.
+No module, dependency, route, permission or network destination is added; v1
+remains unchanged. No cleanup/terminal/release qualification follows from framing.
+See [pre-result cursor](../../046-bot-presentation-integration/PRE_RESULT_CURSOR.md).
+
+### Cooperative cleanup reader (reviewed bounded source)
+
+`presentation_cleanup_reader.py` owns the same-task post-GO transition, original
+read-scope fact, bounded discard/terminal-data cursor and owned minimum-deadline
+notice. It cannot grant join/closure, ACK, native credit, image emission or runtime
+admission. See [cleanup reader](../../046-bot-presentation-integration/CLEANUP_READER.md).

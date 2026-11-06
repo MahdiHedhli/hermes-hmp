@@ -1,0 +1,123 @@
+# Joined terminal transport: remaining lifecycle contract
+
+This is the implementation contract for full character delivery, not a reduced
+feature or a qualification receipt. The envelope codec/transcript alone enable
+no terminal dispatch, ACK permission, image emission or registry/native release.
+
+## Current concrete prerequisites
+
+The gateway's reviewed post-GO cleanup retains its original reader while sending
+one CANCEL. Its [pre-READY extension](PRE_READY_CLEANUP.md) has bounded source
+review, local regression and exact-source CI; it is integrated through PR113.
+The broker now publishes a typed cancellation-adoption notice and retains the
+same controller/cumulative cursor in a bounded park after CANCEL. Service cleanup
+waits for that notice rather than Task completion; local FD/clock retirement still
+requires stopping and joining the original Task. This is the
+[controller continuation prerequisite](BROKER_CONTINUATION.md), not ACK parsing.
+Neither side may simply append a new reader for aborted TERMINAL/ACK. Do not lose partial framing,
+create a competing reader or treat full-task join as proof of a different fact.
+The independently qualified producer/receiver factory is also not implemented;
+StartupEnrollment generation, clock qualification, same UID and decoded fields
+cannot replace it. Native read service/PRE_EMIT and all ownership planes remain
+required before public character routes.
+
+The next prerequisite is the [actual startup/runtime issuer](RUNTIME_ISSUER.md),
+not another decoded-data token. Its proposed contract separates external trusted
+installation selection and observed manager/peer/lifetime custody from the
+existing synthetic_no_go verifier. Issuance and composed actual transcript remain
+unimplemented; this link grants no transport authority.
+
+The [local handoff freeze](LOCAL_HANDOFF_FREEZE.md) is integrated as source
+797dbbc through PR114 with exact-source green CI42129488493. It supplies immutable
+DATA only; qualified runtime custody and IO permission remain separate gates.
+
+## Envelope and earliest first cause
+
+Freeze canonical STARTED_READER_HANDOFF bytes with a closed historical claim and
+nullable sender cleanup stamp. ABORTED and any already-caused sender require the
+actual original minimum stamp, including a historical OK captured before a later
+cause. Actual sender must derive it from the same retained CancellationBudget,
+not caller arithmetic. Original binding/challenge/epoch/input/source/domain/
+installation/deadline must match qualified original custody at both ends.
+
+The bounded envelope receive uses only the original known local ceiling; the
+sender stamp is not known until those bounded bytes are decoded. Validate common
+clock/domain and current receiver time before inheritance. Adopt and recheck only
+min(existing end, sender end) before any SUBSEQUENT cleanup/resource/ACK IO. An
+already-expired sender end yields UNKNOWN; receiving it cannot retroactively prove
+timely cleanup/closure. Future-dated stamps cannot renew time. Null normal data is not a cleanup allowance; a local
+cause still freezes the original budget and later events can only shorten it.
+ACK correlation hashes exact frozen envelope bytes, including the sender stamp.
+No retransmission, modified envelope or appended frame after a torn write.
+
+## Gateway: retain the original reader into cleanup-only mode
+
+The [write-quiescence prerequisite](WRITE_QUIESCENCE.md) now composes with the
+reviewed [post-GO cleanup reader](CLEANUP_READER.md) for one CANCEL while the
+original RESULT task drains. The [pre-READY source candidate](PRE_READY_CLEANUP.md)
+extends that coupling before GO and passes exact-source CI42124526459. ACK and
+terminal acceptance remain unimplemented, and this contract is not deployment proof.
+Keep the original retained work Task as the sole stream reader; existing cleanup
+Task is the sole planned CANCEL/ACK writer (only CANCEL is implemented).
+Replacing whole-task-join before sending requires the exact one-use
+write-quiescence barrier owned by the original work allocation/channel/budget. It must establish completed BEGIN, no pending
+client write, and either no GO attempt or the original completed GO-write fact.
+An IO flag alone is not quiescence. Allocate/retain partial Future/Task/barrier
+ownership before effects, with existing initializer failure and cancellation rules.
+
+On first cause, retire publication and ordinary work immediately. No work clock,
+GO, fresh result candidate or reauthentication success can revive the operation.
+Original work transitions cooperatively to cleanup-only reading only after exact
+write quiescence. The cleanup writer may then send CANCEL while that same Task
+continues the one retained read cursor. A torn/uncertain BEGIN/GO never receives
+an appended CANCEL or an invented quiescence fact; retain UNKNOWN debt instead.
+Foreign scope/task/channel/generation or lost barrier acknowledgement cannot
+transfer the cursor or permission to another operation.
+
+The selected-v2 pre-result and normal RESULT readers now retain framing progress
+through their reviewed readiness/cursor integrations; RESULT also retains its
+original digest. The post-GO RESULT cursor now continues as bounded discard
+under its original cleanup scope. The integrated pre-READY extension retains
+its exact original cursor; it never resets offsets or starts a replacement reader.
+Partial RESULT uses the existing credited accumulator; after revocation it is
+bounded discard, never a new candidate. TERMINAL has the bounded envelope ceiling.
+All active IO timeouts must shorten to the same earliest cleanup end before later
+IO, using retained original timeout ownership and a reviewed wake/reschedule
+boundary. A pending original work timeout cannot leave a read running past the
+cleanup end. If quiescence/rescheduling/IO join is uncertain, keep UNKNOWN rather
+than opening another reader or creating a new timer/allowance.
+
+## Broker: continue the same control cursor after CANCEL
+
+Retain a separate cancellation-notification Future before task effects. After
+header-first retirement and complete exact CANCEL-window adoption, notify the
+service through that original fact, clear only the consumed cursor bytes and
+continue the SAME controller Task toward ACK. No replacement ACK reader/task.
+The service's original Task owns local reader cleanup and one-use terminal send.
+It may send only actual retained producer facts after known non-torn prior writes,
+under remaining original work time or the earliest cleanup interval.
+
+The cancellation-notice/park portion above is implemented; no park wake currently
+grants further I/O. ACK parsing remains unimplemented and must be bounded and tied to the exact terminal-write completion fact,
+original authenticated gateway/boot/channel and separately qualified receiver
+permission. A syntactically matching digest is not permission. Lost/partial early
+ACK, timeout, drift and uncertainty retain journal debt. Journal retirement never
+drops native headers/job credits/policy ownership. After ACK/control completion,
+join original Tasks and observe distinct local socket/clock closure; EOF alone
+closes no other ownership plane.
+
+## Required qualification and causal checks
+
+Review whole coupling before enabling dispatch: normal/abort preREADY, postREADY,
+partial RESULT and postRESULT; CANCEL during read/write and after frozen terminal;
+torn/lost terminal/ACK; expired/earlier/future stamps and duplicate causes; partial
+initialization, write-quiescence/timeout/cursor drift; no concurrent readers;
+wrong instance/profile/device/boot/generation and revocation. Prove no callbacks
+or cleanup effects reach another operation. Keep original payloads bounded and
+wipe all owned aliases without touching replacements. Qualify actual producer
+runtime/reaper/manager and native authority separately from synthetic fixtures.
+
+Only joined accepted remote closure may feed a distinct native completion path.
+Fresh PRE_EMIT, parent/native DRAIN and credential retirement remain mandatory.
+V2 STATUS needs a separate boot-bound journal-only lookup/ACK contract and must
+never renew expired work, replay a result or grant image access.

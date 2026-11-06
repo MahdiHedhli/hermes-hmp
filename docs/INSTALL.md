@@ -115,19 +115,47 @@ To change that decision later, use `hermes hmp devices list` on the host to find
 
 The plugin belongs to the Hermes instance where it is installed. Do not copy its instance keys or device store between hosts. See [Host hardening](../server/HOST_HARDENING.md) before exposing any Hermes host service.
 
-## Host-local generated images (planned, not implemented)
+## Host-local generated images (candidate; not activated)
 
-Image delivery does not exist yet; there is nothing to enable for it. The source-reviewed M2 slice
-adds `hermes hmp compat` probe eligibility and offline issue drafting. M3 listener-scoped binding is also independently source-reviewed at `f737197`; it does not add delivery. When delivery is built
-(draft contract: [spec 011](../specs/011-local-image-serving/spec.md)), it will be default off and for
-approval-owner devices only. It will need the host switch `platforms.hmp.extra.local_media.enabled`, a
-Hermes at or above `v0.21.5` (or a development build) that provides the session lookup APIs it reads, and the
-usual per-bot authorization. It will not use a build list, fingerprint or qualification manifest, and a
-disabled direct-send switch will not close it. The `local_media` compat line is `available` or
-`unavailable (<fixed reason>)`; `available` means required APIs passed inspection, not that an image can
-be fetched. Compat does not read the host flag or report `disabled`. The runtime binder now checks in-memory module coherence and retains listener-bound references; descriptors, fetching, complete binding-cost and memory evidence, and device acceptance are unfinished. The offline issue draft
-labels the failure as operator-reported and cannot attest the requester or flag. Assistant `MEDIA:` text
-remains ordinary text. No image-delivery review or release is claimed.
+Descriptor minting and authenticated fetch code exist in the feature candidate.
+It supports both legacy `cache/images` and current `cache/generated/images`
+through separate closed layouts, with no namespace fallback. A
+[current native cache-helper sample](research/local-media-native-cache-layouts-2026-11-06.md)
+completed alongside the legacy control.
+One [bounded native-storage/route sample](research/local-media-native-serving-sample-2026-11-06.md)
+completed with synthetic authority, and a separate descriptor/fetch regression
+passed. These results do not qualify phone display, an actual image producer,
+large-image memory/deadlines, Linux, full plugin-PM installation or production
+activation. Do not infer availability on an installed host or phone from them.
+
+The complete shipping manifest dependency union has separately
+[built with the pinned native core graph](research/local-media-native-pm-union-2026-11-06.md)
+in a fresh private PM environment. This excludes core-project installation and
+uses a dependency-only plugin member; it is not a plugin loading or host
+activation check. The original native source and locks stayed unchanged.
+
+A [native-backed four-fetch memory sample](research/local-media-native-memory-2026-11-06.md)
+also passed the unchanged provisional ceilings on its pinned Darwin runtime,
+including cancelled handlers with late workers. Bounded streaming clients are
+included in the measured process. This records the sampled Darwin T12 measurement,
+not Linux, phone, release or activation qualification.
+
+The candidate is default off and restricted to approval-owner devices; jobs/model
+controls alone do not grant that ownership. It also needs
+`platforms.hmp.extra.local_media.enabled`, Hermes at or above `v0.21.5` (or a
+development build) providing the required session APIs, and per-bot authorization.
+It uses minimum-version/API eligibility, not a build list or qualification
+manifest; a disabled direct-send switch does not close it. The `local_media` compat
+line reports API eligibility, not the host flag, device permission or successful
+image delivery. Runtime binding checks in-memory module coherence and retains
+listener-scoped references. The sample's exact source pins are measurements, not
+a requirement to qualify every future Hermes version.
+
+Assistant `MEDIA:` paths remain ordinary text and cannot authorize a host file
+read. Candidate delivery derives references from strict same-profile
+`image_generate` tool records and performs bounded authenticated image loading;
+it does not publish files or fall back to a public URL. See
+[spec 011](../specs/011-local-image-serving/spec.md) for the contract and open gates.
 
 ## Scheduled jobs preview
 

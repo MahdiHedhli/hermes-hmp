@@ -1484,10 +1484,11 @@ class HermesReadBridge:
                     return None
                 if not secrets.compare_digest(claim.tool_digest, digest):
                     return None
-                name = candidate.derive_flat_name(claim.image, home)
-                if name is None:
+                location = candidate.derive_cache_location(claim.image, home)
+                if location is None:
                     return None
-                read = file_safety.read_profile_cache_image(home, name)
+                layout, name = location
+                read = file_safety.read_profile_cache_image(home, name, cache_layout=layout)
                 if read.outcome is not file_safety.Outcome.OK:
                     return None
                 data = read.unvalidated_raster_bytes()

@@ -1,7 +1,7 @@
 """Finite fake-native controls for the synthetic approval producer contract.
 
 These tests use only in-memory modules, queues, barriers, and rows. They do not import Hermes.
-The module remains unwired to a CLI, route, or Phone adapter.
+These tests do not exercise the separately bound CLI, routes or Phone adapter.
 """
 
 from __future__ import annotations
@@ -48,6 +48,7 @@ class _FakeNative:
         self.withdraw_calls: list[tuple[str, str, str]] = []
         self.block_after_notify = True
         self.bad_callback = False
+        self.callback_extra: dict[str, object] = {}
         self.bad_result: dict[str, object] | None = None
         self.resolve_count: object = 1
         self.withdraw_override: object | None = None
@@ -116,6 +117,7 @@ class _FakeNative:
         if self.callback_gate is not None:
             self.callback_gate.wait(3.0)
         callback_data = dict(approval_data)
+        callback_data.update(self.callback_extra)
         if self.bad_callback:
             callback_data["request_id"] = "wrong"
         try:
@@ -307,9 +309,8 @@ def test_begin_receipt_has_actual_deadline_before_callback_and_is_immutable(
         assert begun.timeout_ms == 2_000 and begun.deadline_monotonic == now + 2.0
         await _wait_until(native.has_entries)
         assert rows.rows == {}
-        assert (
-            await service.outcome(begun.handle, TARGET.device_id)
-            == TestOutcome(TestStatus.PENDING)
+        assert await service.outcome(begun.handle, TARGET.device_id) == TestOutcome(
+            TestStatus.PENDING
         )
         with pytest.raises(FrozenInstanceError):
             begun.timeout_ms = 1  # type: ignore[misc]
@@ -328,7 +329,8 @@ def test_begin_receipt_has_actual_deadline_before_callback_and_is_immutable(
 
 @pytest.mark.parametrize("winner", ["once", "deny", "cancel"])
 def test_control_receipts_keep_first_intent_and_never_admit_replay(
-    monkeypatch: pytest.MonkeyPatch, winner: str,
+    monkeypatch: pytest.MonkeyPatch,
+    winner: str,
 ) -> None:
     native = _FakeNative(monkeypatch)
     native.resolve_gate = threading.Event()
@@ -356,13 +358,11 @@ def test_control_receipts_keep_first_intent_and_never_admit_replay(
             assert duplicate.admission == "duplicate"
         assert (await service.cancel_test(begun.handle, TARGET.device_id)).admission == "duplicate"
         assert (
-            (await service.answer_test(begun.handle, "other-device", "once")).admission
-            == "unavailable"
-        )
+            await service.answer_test(begun.handle, "other-device", "once")
+        ).admission == "unavailable"
         assert (
-            (await service.answer_test("0" * 64, TARGET.device_id, "once")).admission
-            == "unavailable"
-        )
+            await service.answer_test("0" * 64, TARGET.device_id, "once")
+        ).admission == "unavailable"
         assert (
             (await service.answer_test(begun.handle, TARGET.device_id, "always")).admission  # type: ignore[arg-type]
             == "unavailable"
@@ -380,9 +380,8 @@ def test_control_receipts_keep_first_intent_and_never_admit_replay(
             expected = TestStatus.ONCE_ACKNOWLEDGED if winner == "once" else TestStatus.DENIED
         assert await service.close_and_join() == TestCleanupReceipt(True, TestOutcome(expected))
         assert (
-            (await service.answer_test(begun.handle, TARGET.device_id, "once")).admission
-            == "unavailable"
-        )
+            await service.answer_test(begun.handle, TARGET.device_id, "once")
+        ).admission == "unavailable"
         assert rows.rows == {} and native.queues == {} and slot.operation is None
 
     _run(scenario())
@@ -409,17 +408,14 @@ def test_receipts_refuse_missing_row_and_expired_controls_before_resolver(
         await _wait_until(lambda: bool(rows.rows))
         clock[0] = begun.deadline_monotonic
         assert (
-            (await service.answer_test(begun.handle, TARGET.device_id, "once")).admission
-            == "unavailable"
-        )
+            await service.answer_test(begun.handle, TARGET.device_id, "once")
+        ).admission == "unavailable"
         assert (
-            (await service.cancel_test(begun.handle, TARGET.device_id)).admission
-            == "unavailable"
-        )
+            await service.cancel_test(begun.handle, TARGET.device_id)
+        ).admission == "unavailable"
         assert native.resolver_calls == []
-        assert (
-            await service.close_and_join()
-            == TestCleanupReceipt(True, TestOutcome(TestStatus.EXPIRED))
+        assert await service.close_and_join() == TestCleanupReceipt(
+            True, TestOutcome(TestStatus.EXPIRED)
         )
         assert [call[2] for call in native.withdraw_calls] == ["operator_deadline"]
         assert rows.rows == {} and native.queues == {} and slot.operation is None
@@ -429,7 +425,8 @@ def test_receipts_refuse_missing_row_and_expired_controls_before_resolver(
 
 @pytest.mark.parametrize("phase", ["wait", "control", "cleanup"])
 def test_partial_thread_start_never_fabricates_join_or_releases_owned_capacity(
-    monkeypatch: pytest.MonkeyPatch, phase: str,
+    monkeypatch: pytest.MonkeyPatch,
+    phase: str,
 ) -> None:
     native = _FakeNative(monkeypatch)
     if phase == "wait":
@@ -479,9 +476,8 @@ def test_partial_thread_start_never_fabricates_join_or_releases_owned_capacity(
         assert not observer.done() and started[0] not in joined_threads
         assert await replacement.begin_test(TARGET, 1_000) == TestOutcome(TestStatus.UNAVAILABLE)
         # A different producer on the very same loop cannot close or join the owned operation.
-        assert (
-            await replacement.close_and_join()
-            == TestCleanupReceipt(True, TestOutcome(TestStatus.CANCELLED))
+        assert await replacement.close_and_join() == TestCleanupReceipt(
+            True, TestOutcome(TestStatus.CANCELLED)
         )
         assert not observer.done() and started[0].is_alive()
         if phase == "control":
@@ -504,7 +500,8 @@ def test_partial_thread_start_never_fabricates_join_or_releases_owned_capacity(
 
 @pytest.mark.parametrize("observer_end", ["cancel", "timeout"])
 def test_owner_observer_detaches_without_cancelling_actual_cleanup(
-    monkeypatch: pytest.MonkeyPatch, observer_end: str,
+    monkeypatch: pytest.MonkeyPatch,
+    observer_end: str,
 ) -> None:
     native = _FakeNative(monkeypatch)
     native.list_gate_at_call = 2
@@ -516,9 +513,8 @@ def test_owner_observer_detaches_without_cancelling_actual_cleanup(
         assert type(begun) is TestBeginReceipt
         await _wait_until(lambda: bool(rows.rows))
         assert (
-            (await service.answer_test(begun.handle, TARGET.device_id, "deny")).admission
-            == "accepted"
-        )
+            await service.answer_test(begun.handle, TARGET.device_id, "deny")
+        ).admission == "accepted"
         await _wait_until(native.list_entered.is_set)
         observer = asyncio.create_task(service.close_and_join())
         await asyncio.sleep(0)
@@ -533,17 +529,15 @@ def test_owner_observer_detaches_without_cancelling_actual_cleanup(
         assert slot.operation is not None and native.list_entered.is_set()
         replacement = _service(native, rows, slot)
         assert await replacement.begin_test(TARGET, 1_000) == TestOutcome(TestStatus.UNAVAILABLE)
-        assert (
-            await service.outcome(begun.handle, TARGET.device_id)
-            == TestOutcome(TestStatus.CLEANUP_PENDING)
+        assert await service.outcome(begun.handle, TARGET.device_id) == TestOutcome(
+            TestStatus.CLEANUP_PENDING
         )
         native.list_gate.set()
         # No cleanup is restarted: callbacks continue without an observer, then a later owner
         # observes the actual completed proof and original deny outcome.
         await _wait_until(lambda: slot.operation is None)
-        assert (
-            await service.close_and_join()
-            == TestCleanupReceipt(True, TestOutcome(TestStatus.DENIED))
+        assert await service.close_and_join() == TestCleanupReceipt(
+            True, TestOutcome(TestStatus.DENIED)
         )
         assert native.list_calls == 2 and native.withdraw_calls == []
         assert rows.rows == {} and native.queues == {}
@@ -553,7 +547,8 @@ def test_owner_observer_detaches_without_cancelling_actual_cleanup(
 
 @pytest.mark.parametrize("failure", ["absence", "removal", "binding"])
 def test_failed_cleanup_mints_no_receipt_and_keeps_capacity_after_observer_cancel(
-    monkeypatch: pytest.MonkeyPatch, failure: str,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: str,
 ) -> None:
     native = _FakeNative(monkeypatch)
     rows, slot = _MemoryRows(), _ProcessSlot()
@@ -579,9 +574,8 @@ def test_failed_cleanup_mints_no_receipt_and_keeps_capacity_after_observer_cance
         observer = asyncio.create_task(service.close_and_join())
         await asyncio.sleep(0)
         assert not observer.done()
-        assert (
-            await service.outcome(begun.handle, TARGET.device_id)
-            == TestOutcome(TestStatus.CLEANUP_PENDING)
+        assert await service.outcome(begun.handle, TARGET.device_id) == TestOutcome(
+            TestStatus.CLEANUP_PENDING
         )
         observer.cancel()
         with pytest.raises(asyncio.CancelledError):
@@ -618,15 +612,13 @@ def test_previous_owner_receipt_cannot_close_new_producers_operation(
         assert await previous.close_and_join() == first
         assert await previous.close() == first.outcome
         assert (
-            (await previous.answer_test(next_begin.handle, TARGET.device_id, "once")).admission
-            == "unavailable"
-        )
+            await previous.answer_test(next_begin.handle, TARGET.device_id, "once")
+        ).admission == "unavailable"
         assert second_notice.request_id in rows.rows and native.withdraw_calls == []
         assert await previous.outcome(begun.handle, TARGET.device_id) == first.outcome
         await replacement.answer_test(next_begin.handle, TARGET.device_id, "once")
-        assert (
-            await replacement.close_and_join()
-            == TestCleanupReceipt(True, TestOutcome(TestStatus.ONCE_ACKNOWLEDGED))
+        assert await replacement.close_and_join() == TestCleanupReceipt(
+            True, TestOutcome(TestStatus.ONCE_ACKNOWLEDGED)
         )
         assert slot.operation is None and rows.rows == {} and native.queues == {}
 
@@ -1269,9 +1261,7 @@ def test_native_binding_substitution_refuses_control_without_touching_other_queu
         try:
             assert (
                 await service.answer_test(handle, TARGET.device_id, "once")
-            ) == TestControlReceipt(
-                "unavailable", TestOutcome(TestStatus.PENDING)
-            )
+            ) == TestControlReceipt("unavailable", TestOutcome(TestStatus.PENDING))
             assert await service.cancel_test(handle, TARGET.device_id) == TestControlReceipt(
                 "unavailable", TestOutcome(TestStatus.PENDING)
             )
@@ -1288,5 +1278,60 @@ def test_native_binding_substitution_refuses_control_without_touching_other_queu
         )
         assert native.queues == {"unrelated-session": [foreign]}
         assert rows.rows == {} and slot.operation is None
+
+    _run(scenario())
+
+
+@pytest.mark.parametrize("native_timeout", [0, 300, (1 << 31) - 1])
+def test_native_timeout_metadata_never_renews_operator_deadline(monkeypatch, native_timeout):
+    native = _FakeNative(monkeypatch)
+    native.callback_extra = {"timeout_s": native_timeout}
+    rows, slot = _MemoryRows(), _ProcessSlot()
+
+    async def scenario():
+        service = _service(native, rows, slot)
+        begun = await service.begin_test(TARGET, 2000)
+        assert type(begun) is TestBeginReceipt
+        await _wait_until(lambda: bool(rows.rows))
+        assert next(iter(rows.rows.values())).deadline_monotonic == begun.deadline_monotonic
+        op = service._owned_operation
+        assert op is not None and op.deadline == begun.deadline_monotonic
+        service._clock = lambda: begun.deadline_monotonic
+        service._deadline_fired(op)
+        assert await service.close_and_join() == TestCleanupReceipt(
+            True, TestOutcome(TestStatus.EXPIRED)
+        )
+        assert native.resolver_calls == [] and rows.rows == {} and native.queues == {}
+        assert slot.operation is None
+
+    _run(scenario())
+
+
+@pytest.mark.parametrize(
+    "extra",
+    [
+        {"timeout_s": True},
+        {"timeout_s": "300"},
+        {"timeout_s": 300.0},
+        {"timeout_s": None},
+        {"timeout_s": -1},
+        {"timeout_s": 1 << 40},
+        {"timeout_s": 300, "unknown": True},
+    ],
+)
+def test_invalid_native_timeout_or_unknown_callback_field_refuses(monkeypatch, extra):
+    native = _FakeNative(monkeypatch)
+    native.callback_extra = extra
+    rows, slot = _MemoryRows(), _ProcessSlot()
+
+    async def scenario():
+        service = _service(native, rows, slot)
+        begun = await service.begin_test(TARGET, 2000)
+        assert type(begun) is TestBeginReceipt
+        await _wait_until(lambda: native.waiter_exited.is_set())
+        receipt = await service.close_and_join()
+        assert receipt.joined and receipt.outcome.status is TestStatus.UNAVAILABLE
+        assert rows.rows == {} and native.queues == {} and native.resolver_calls == []
+        assert slot.operation is None
 
     _run(scenario())

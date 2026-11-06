@@ -1448,7 +1448,9 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   to an object with `success` equal to `true`, no `error` key, and `image` a `str` of 1..4096
   characters without NUL; and the lexical name derivation passes. One shared result function serves
   mint and fetch. Name derivation is lexical only: `image` must start with the routed profile home
-  string plus `/cache/images/`, and the remainder must be a flat, bounded name. There is no
+  string plus `/cache/images/` or `/cache/generated/images/`, and the remainder must be a flat,
+  bounded name (root C1a). These are separate closed layouts: the complete raw tool-result digest
+  binds the namespace before fetch, and a missing/refused layout never searches the other. There is no
   `resolve()`, no legacy `image_cache`, no legacy-preferring or mkdir helper. A symlinked or
   differently spelled home refuses at fetch; mint checks spelling lexically and cannot prove
   non-symlink without filesystem access. The existing database-file check remains permitted.
@@ -1580,14 +1582,18 @@ paths, or local `MEDIA:` resolution (assistant `MEDIA:` text stays text).
   - **E1 (lexical producer string):** the bounded exact-build fixture passes for its stated producer and
     scratch layout, as recorded in [the task evidence](../../../specs/011-local-image-serving/tasks.md#e1-bounded-producer-evidence-2026-10-01).
     It compares the raw producer string lexically with the captured routed home plus
-    `/cache/images/`, without path normalization. Other producer spellings are uncharacterized; a
+    `/cache/images/` or `/cache/generated/images/` under C1a, without path normalization. The
+    current native cache-helper sample covers the latter with a distinct legacy shadow control.
+    Other producer spellings are uncharacterized; a
     mismatch refuses that candidate on every build.
   - **Linux file-leaf run (`PLATFORM_GAP` for the rest):** the bounded non-root tmpfs file-leaf run passes,
     as recorded in [the scoped evidence](../../research/local-media-linux-leaf-evidence-2026-10-01.md).
     That covers only the leaf check on its stated platform. Native Linux serving and broader
     platform coverage remain unqualified; no Linux support claim follows.
-  - **C6b and T12 (pending sample evidence):** exact-native complete binding cost with concurrent-writer
-    evidence, and memory on sampled builds against the provisional ceilings of LM-18, are measured once per
+  - **C6b and T12 (sample evidence):** exact-native complete binding cost with concurrent-writer
+    evidence remains pending. A bounded Darwin native-backed four-fetch/cancellation memory
+    T12 measurement against LM-18 is [recorded](../../research/local-media-native-memory-2026-11-06.md);
+    it does not qualify other platforms or release. Cost and memory are measured once per
     feature release candidate. A failure changes the implementation, not a ceiling or an allowlist. The
     runtime protections are the in-code bounds that apply on every version (LM-5, LM-9, LM-11, LM-14).
   - Independent security review of the exact candidate, owner-authorized install and flag, and physical-

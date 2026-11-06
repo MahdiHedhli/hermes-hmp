@@ -1,7 +1,8 @@
-"""AT1 finite operator observation, not registered until independent binding review.
+"""AT1 finite operator observation over the scoped same-UID host transport.
 
 Only the same-UID host transport sends selectors. No native producer, metadata,
 phone credential, grants, migration, provider or process is created here.
+Installed-runtime and physical paired-card qualification remain separate.
 """
 
 from __future__ import annotations

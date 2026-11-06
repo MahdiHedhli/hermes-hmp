@@ -4,7 +4,8 @@
 > process anchor and preload qualification (S6/S6a/S6b). Their records below are **historical evidence about the
 > retired design**, not current policy and not runtime behavior. See
 > [Minimum-version conversion](ROOT_DECISIONS.md#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02)
-> and the slices M0-M3 below. The feature is **unimplemented**.
+> and the slices M0-M3 below. Descriptor/fetch source and bounded native samples
+> now exist; activation, physical acceptance and full release qualification remain open.
 
 `[ ]` means not started or not independently reviewed. Workers do not self-certify. No implementation task starts before the contract revision (P0) is reviewed. A worker meeting unspecified behavior records a gap marker instead of inventing a rule.
 
@@ -56,9 +57,10 @@ dependency action.
 
 (The older headings "M1 Host" and "M2 Convergence" below are original document-phase names and are unrelated to slices M1-M3 above.) Later slices stay open exactly as listed under them: C6b exact-native cost and
 concurrent-writer evidence (release-candidate evidence, not a per-version allowlist), S4 descriptor emission, S5
-route, T12 memory on sampled builds, R2 independent exact-candidate review, and R3 owner-authorized install, flag
-and physical-device acceptance. C6b and T12 sample evidence, independent review and device acceptance are pending;
-the feature is not enabled by any of them.
+route, R2 independent exact-candidate review, and R3 owner-authorized install, flag
+and physical-device acceptance. C6b, independent delivery review and device acceptance remain pending;
+the T12 sampled Darwin memory measurement is now recorded below. No evidence row
+enables the feature or certifies another platform.
 
 ### Acceptance matrix for M2/M3
 
@@ -102,7 +104,7 @@ candidate and sample; that evidence does not prove behavior on future builds.
 - [ ] **S5** Route, dedicated executor, permits, `ContextVar` copy for both phases, constants, streaming, phase one, phase two, synchronous final section (T3, T9-T11, T13, T15-T17). Needs S1, S3, S6.
   Source slice independently reviewed and accepted after bounded amendments (2026-10-02; full task not ticked): the always-registered route, per-app executor/permits, both native bridge phases and synchronous final section. Clean locked CI: 3613 passed, 16 native-dependent skips, one existing warning. Synthetic four-fetch memory passed the unchanged provisional limits; native T12, native serving, phone binary loading, device and release evidence remain open. See [the S5 acceptance scope](ROOT_DECISIONS.md#s5-bounded-source-acceptance-2026-10-02).
 - [ ] **T** Causal suite T1-T18 on a fake bridge and an exact-build disposable-home fixture.
-- [ ] **T12** Memory measurement run recorded against the provisional ceilings.
+- [x] **T12** Memory measurement run recorded against the unchanged provisional ceilings: HMP `8f16c1f` / native `ed1afb08`, Python 3.14.9/aiohttp 3.14.5, Darwin; four active and four cancelled-late-worker 8 MiB fetches. Independent source/artifact review accepted the [scoped sample](../../docs/research/local-media-native-memory-2026-11-06.md). Combined-process clients count toward the bounds; no native-allocation, Linux, device, activation or release qualification follows. The fixture's `t12_qualified: false` remains a refusal to self-certify broader qualification.
 - [x] **PG** Linux errno mapping for the file leaf only. Root reviewed and independently reran the accepted 89 tests plus 91 supplemental real-kernel checks on non-root Linux CPython 3.14.7/tmpfs. See the bounded evidence below; native HMP serving remains unqualified.
 
 ## M2 Convergence
@@ -391,3 +393,219 @@ S5's full serving task and T12 stay unchecked. The synthetic four-by-8-MiB
 route measurement covers its stated macOS allocation/lifecycle scenario only;
 native sample serving/cost/T12, Linux serving and phone/device/release evidence
 remain open. No live install or flag was changed.
+
+
+## Fresh native-serving harness candidate (2026-11-06)
+
+`tools/compat/local_media_native_serving_fixture.py` prepares the S4/S5 serving
+sample over native SessionDB/registry with real HMP routes and synthetic transport
+routing/authorization/compatibility. It has not executed native imports or DB work.
+It is not T12, Linux, physical acceptance or live activation evidence.
+
+Independent repair review accepted canonical scratch SQLite URI handling, retained
+partial setup and bounded source inventory. Both native and HMP/test trees must be
+private source-only copies: no symlink directories, bytecode, alternate import
+artifacts or preloaded foreign HMP/native/test modules. Selected module file
+origins are checked; dependency/site startup remains a trusted-runtime premise,
+and Python audit hooks are not an OS sandbox. The materializer and exact entry
+still require review before the first native run.
+
+Root passes 32 guard tests on Python 3.11.15 and 3.14.4. An overlapping 277-case
+S4/S5/guard regression run passes after changing test helpers to retain partial
+Rig/Env owners before constructor effects. Real fixture-store fault coverage
+proves cleanup after a post-store setup failure. Source guard results do not tick
+S4/S5/T12/R2/R3; source/native/device/activation scope remains separate.
+
+
+### Materializer and entry checkpoint (2026-11-06)
+
+`tools/compat/local_media_native_serving_driver.py` prepares private source-only
+Git archives and a fixed isolated child entry. It refuses custom tar filters,
+unsafe archive members and noncanonical report shapes. The retained command
+runner treats expired observation as refusal and waits on the same child; it does
+not restart work. The entry selects the private working folder before importing
+the copied harness. Selected dependency/site startup remains a trusted premise.
+
+Root passes 29 driver checks, including a real isolated entry subprocess with a
+stdlib-only stub (no native module/database), and 32 existing harness guards:
+61 combined checks on Python 3.14.4. These checks do not execute Git/native serving
+commands. The initial wrong-working-folder handoff was independently identified
+and repaired. Whole materializer/entry review and the first real native sample
+remain pending; no serving, T12, Linux, phone or activation gate is closed.
+
+Literal tree/blob binding now rejects export-attribute omissions, substitutions,
+extra source entries and wrong executable modes. Git replacement objects, lazy
+fetching, protocols, prompts and fsmonitor are disabled; the selected Git minimum
+is 2.54.0. A bounded 8-MiB tree read leaves the command runner default 64-KiB
+limit unchanged for existing callers. Root also passes the 56 portable command
+runner regression checks; its Darwin native case was deliberately not rerun.
+
+The first controlled materialization stopped before native entry: 143,421,440-byte
+tar framing exceeded the initial 128-MiB archive ceiling, while its 12,185 source
+files totaled 133,762,797 bytes, below the unchanged 128-MiB source budget.
+Independent review accepted a separate 160-MiB tar ceiling; source/file/entry
+bounds remain unchanged. All original Git actors were observed terminal. This
+setup refusal is preserved separately and is not native-serving evidence.
+
+
+### Actual materialization and native-import outcome (2026-11-06)
+
+Independent source review accepted `899f7ea` and the separate tar-framing repair.
+A fresh-root attempt on `ada0f0b` completed literal native/HMP snapshot verification
+and launched the isolated entry. The child terminated with `ModuleNotFoundError:
+No module named 'ruamel'` while importing the selected native registry's
+dependencies. This is a setup failure before database/HTTP work, not a serving
+pass or timeout. All 11 recorded command actors were observed terminal; the two
+expected absent-config probes returned 1, and the native child returned 1.
+
+Private original artifacts remain at
+`/private/tmp/hermes-media-native-serving-framing-311-20261106-run`; they are not
+reused or modified for a subsequent attempt. Prepare a fresh source/lock-backed
+PM environment with isolated home/runtime/cache, rather than adding dependencies
+piecemeal or borrowing the live gateway environment. Preserve the original failed
+setup separately. Native serving/cost/T12, Linux, physical and activation gates
+remain open. No live config, device grant or deployment changed.
+
+
+### Clean native runtime exposed missing plugin dependency (2026-11-06)
+
+Fresh explicit-source PM builds succeeded at pinned Python 3.14.9 with unchanged
+native source/locks. The first selected only `test` (pytest is actually in `dev`);
+a new `dev`/`test` output then reached the harness but lacked aiohttp. Each attempt
+was terminal before DB/HTTP work; none is a serving pass.
+
+This latter failure reproduced a packaging issue: native `ed1afb08` declares
+aiohttp only in optional extras, while HMP's root/subdir manifests omitted it.
+A focused repair explicitly declares the bounded patched HTTP dependency in both
+shipping manifests and the server project, and advances only that package in the
+server lock. Native source/locks are unchanged; no live plugin installation or
+provider configuration occurs. Combined plugin-resolution qualification remains
+separate from an isolated native sample with the pinned HTTP library present.
+
+
+## Bounded native serving sample completed (2026-11-06)
+
+Root completed the fresh Darwin sample at HMP `3d7d08c` / native `ed1afb08`:
+real native scratch storage/registry, descriptor mint and authenticated image
+fetch, with synthetic authority/compatibility. HTTP byte/header controls, eligible
+second-device positive control, foreign device/profile refusal, changed file and
+cleared message refusal, between-phase bot revocation and device revocation
+completed. Borrows/releases 25/25, native close, zero scoped sweep, listener close
+and actual worker joins were observed. Eleven command actors were terminal plus
+the outer controller; no timeout/settlement path occurred. Independent read-only artifact
+review accepted the exact bindings and bounded observations; no reviewer execution.
+A separate 320-case descriptor/fetch/guard regression passed on Python 3.14.9 and
+aiohttp 3.14.5 (23.40 seconds).
+
+[The sample report](../../docs/research/local-media-native-serving-sample-2026-11-06.md)
+records source/runtime pins, 28 synthetic Darwin probe absences, three own-FD
+listings, two public OS metadata reads and the exact limits. Thirteen terminal
+attempts are preserved; only one is a validated completion. Earlier incorrect
+late-file/row expectations were corrected to the established S5 contract, not
+made into a new production guarantee. Native cost/T12, Linux, actual producer,
+full plugin PM union, physical rendering and activation gates remain unchecked.
+
+
+## C1a current native cache compatibility (2026-11-06)
+
+Current native `ed1afb08` writes generated images to `cache/generated/images`;
+the legacy-only HMP selector discarded them. The independently reviewed C1a
+amendment now supports exactly that root plus `cache/images`, with flat names,
+raw-digest namespace binding, descriptor-pinned ancestor revalidation and no
+fallback. Existing ownership, flags, minimum/API policy and limits are unchanged.
+Historical source hash constants remain intact behind an exact reviewed inverse.
+
+The source `d6c79d6` native sample used the actual cache writer and response helper
+three times under scratch profile ContextVar scope, restored each token, then
+completed real native storage/HMP serving controls across both layouts. Source,
+28 artifacts, runtime, closed report and cleanup bindings were independently
+accepted read-only. Sixteen focused layout/witness checks and a separate 800-case
+regression passed.
+
+[The sample record](../../docs/research/local-media-native-cache-layouts-2026-11-06.md)
+distinguishes native cache-helper evidence from provider generation, deferred/
+Desktop runtime scope, cost/T12, Linux, complete plugin PM, phone rendering and
+activation; those gates remain open. No live permissions, settings or deployment
+changed.
+
+## Exact shipping dependency-union sample (2026-11-06)
+
+PR128 integrated at `4bab0cd` after both full exact-source CI runs passed all
+jobs (7,415 tests, 33 skips, 18 warnings, 190 subtests plus Unicode jobs).
+The two omitted historical active-batch witnesses now use the exact reviewed
+inverse, preserving byte reads and original SHA constants.
+
+One isolated native PM build resolved and installed the three shipping HMP
+manifest dependencies with the pinned native core graph. All 12,189 original
+inputs remained unchanged. This closes only the sampled dependency-union build
+gap; full plugin installation/loading and activation remain separate. The first
+environment-preflight refusal is preserved. See
+[the PM sample](../../docs/research/local-media-native-pm-union-2026-11-06.md).
+At that dependency-union checkpoint, C6b/T12, Linux, production provider/Desktop
+scope and physical display/activation remained unchecked. The later T12 sampled
+Darwin observation below supersedes only that measurement status; no broader
+S4/S5/R2/R3 completion is inferred.
+
+## Native four-fetch memory observation (2026-11-06)
+
+One source `8f16c1f` sample now records four simultaneous 8 MiB native-backed
+fetches and four cancelled handlers whose actual late workers retained all
+permits. Both cases refused the eligible fifth request without new phase-one
+work. Active/cancelled traced peaks 42,702,643 / 42,648,222 bytes and RSS increments
+41,615,360 / 12,533,760 bytes pass the unchanged 96 / 128 MiB ceilings. The
+combined process includes bounded streaming clients; each case has its own trace
+session, while RSS high-water is cumulative. Native borrows/releases 46/46,
+database close, zero scoped sweep, listener close and actual worker joins passed.
+
+Independent read-only review accepted 28 artifact bindings, source/literal Git
+identities, runtime and terminal report/receipt. Root's separate 114 guard cases
+passed; reviewer execution is not claimed. This completes the T12 sampled Darwin
+measurement row, not platform, provider, device or release qualification. No
+broader source/release checkbox is closed. See
+[the exact record](../../docs/research/local-media-native-memory-2026-11-06.md).
+
+## C6b current native refresh: reuse established work (2026-11-06)
+
+The independently confirmed [source reuse audit](../../docs/research/local-media-binding-reuse-audit-2026-11-06.md)
+finds all eight measured capture/classification/binding bridge methods and the
+complete binding/registry/Reads files byte-identical to the historical complete-
+binding study. No implementation rewrite is needed for those methods. Current
+scanner/sidecar/candidate code and three owning native read implementations
+differ. Reuse the established shapes and writer/control/residual assertions, but
+refresh the current native helper/DB lifecycle, timing and allocation evidence.
+The old 500 writer phases are historical evidence, not a new current run.
+C6b remains open; no extra HTTP/provider/Linux/device prerequisite is added to it.
+
+## Current complete-binding cost stage (2026-11-06)
+
+At `85c83f8`, all 24 selected workload pairs completed: 72 warm timing values,
+24 Python allocation traces, both proof contexts and exact full prompts. Each
+process balanced 40/40 borrows and closed its workload/original databases and
+listener/workers. [Exact method and results](../../docs/research/local-media-native-binding-cost-2026-11-06.md).
+Independent aggregate artifact review accepted all 24 reports, 672 artifact
+and source/Git/runtime bindings; 235 focused guards/lint passed.
+The earlier observation-expired actor settled but remains refused. Current
+mint-memory, RSS and writer/control/refusal/residual/ABA stages remain open.
+C6b and delivery/release rows remain unchecked. No live activation occurred.
+
+## Current modeled mint-memory stage (2026-11-06)
+
+At `6453386`, all 24 native-bound modeled mint samples completed and passed
+independent artifact/source review: 1,160 refs, 672 artifact bindings, 35/35
+borrows per run, closed DBs/listener/workers and no observation expiry.
+[Method/results](../../docs/research/local-media-native-mint-memory-2026-11-06.md)
+cover fresh production registry/Binding/descriptor allocation with shared inputs,
+not input-index construction, binding, S4 authorization/event-loop, RSS/native-C
+or full-capacity registry memory. Root's 277 focused guards/lint passed.
+Current RSS/writer/control/refusal/residual/ABA work and C6b remain open.
+
+## Current binding RSS observations (2026-11-06)
+
+At `e299092`, all 24 fresh-process warm-binding RSS cases completed and passed
+independent artifact/source review: 672 artifact bindings, 36/36 borrows per
+process and known commands/database/listener/worker closure.
+[Method/results](../../docs/research/local-media-native-binding-rss-2026-11-06.md)
+retain raw current/peak snapshots, signed deltas and prior peaks; 17 zero-new-peak
+cases do not imply zero allocation. Root's 328 focused guards/lint passed.
+Current writer/control/refusal/residual/ABA evidence remains required; C6b stays
+unchecked. No native-C, Linux, physical display, activation or release pass follows.

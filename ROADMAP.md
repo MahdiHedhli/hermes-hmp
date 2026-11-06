@@ -1,10 +1,54 @@
 # Roadmap
 
+## Native binding process-memory observations reviewed — November 6, 2026
+
+[Current RSS evidence](docs/research/local-media-native-binding-rss-2026-11-06.md)
+at `e299092` covers all 24 fresh-process kind/shape/selector pairs. Independent
+read-only review accepted 672 artifact hashes/private modes, source/literal Git/
+runtime/report identities, arithmetic and cleanup. Each process balanced 36/36
+borrows and closed its databases/listener/workers. Current RSS deltas ranged
+from −622,592 to 10,059,776 bytes; new cumulative peak growth from 0 to 3,948,544.
+Prior preparation peaks remain explicit, including 17 zero-new-peak cases that
+do not imply zero allocation. These are warm sequential process observations,
+not native-C bounds, cold calls, production memory budgets or a new ceiling.
+Root's 328 focused checks/lint passed. Mint PR132 is integrated at `0e4f5bc`
+with successful final CI. Current writer/control/refusal/residual/ABA evidence,
+C6b, physical display/activation and release qualification remain open.
+
+## Native-bound modeled mint-memory sample reviewed — November 6, 2026
+
+[Current evidence](docs/research/local-media-native-mint-memory-2026-11-06.md)
+at `6453386` covers 24 fresh isolated samples and 1,160 verified refs using
+production registry/Binding/descriptor types over actual native binding results.
+Independent source/artifact review accepted all 672 top-level artifacts, source/
+literal Git/runtime/report identities, known commands and cleanup. Each process
+balanced 35/35 native borrows. Traced peaks were 3,844/14,224/81,616 bytes for
+1/16/128 refs, retained before explicit cleanup with shared field objects.
+This is a modeled mint loop, not input preparation, native binding, S4 route/
+authorization/event-loop cost, RSS/native-C or full-capacity registry memory.
+Root's 277 focused checks/lint passed. Current RSS and writer/control/refusal/
+residual/ABA work remain required; C6b and delivery/release stay open. PR131's
+binding-cost work is integrated at `4925e06` with all final CI jobs successful.
+No live settings, grants, providers, gateway, app install or release changed.
+
+## Current complete-binding cost checkpoint — November 6, 2026
+
+The [current native sample](docs/research/local-media-native-binding-cost-2026-11-06.md)
+completed all 24 Bot Chat/Phone workload-selector pairs at `85c83f8`, yielding
+72 warm timing values and 24 Python allocation samples. Both proof contexts and
+full verified prompts are retained per database; 40/40 borrows, database and
+listener/worker closure held in each process. Independent aggregate artifact
+review accepted all 672 artifact and source/runtime/report bindings. Exact-source
+CI is tracked separately. The earlier observation
+expiry remains a refused run, not a pass. Current mint-memory, RSS and writer/
+control/residual/ABA evidence remain required, so C6b stays open. No phone image
+display, production activation or release qualification is claimed.
+
 HMP follows the [feature list](FEATURES.md), [unified gateway research](HermesUnifiedGatewayResearch.md), and [requests for Nous](NOUS_GATEWAY_OBSERVATIONS.md). The research describes a target architecture, not a remote API available to HMP today. As of September 29, Nous [PR #106742](https://github.com/NousResearch/hermes-agent/pull/106742) is open with conflicts; its [entry-point plan](https://gist.github.com/unsupportedpastels/765f9d551ce88ee01630c18367763e75) places authenticated remote clients in a later cutover.
 
 | Investment | Work | Boundary |
 | --- | --- | --- |
-| Current qualified Hermes | Pairing, Bot Chat reads and guarded sends, read-only setup and bot health checks, and owner-gated scheduled jobs and default-model previews. | Requalify each Hermes build and bridge fingerprint. Keep the owner and per-bot gates; do not widen the legacy send route to arbitrary sessions. |
+| Current qualified Hermes | Pairing, Bot Chat reads and guarded sends, read-only setup and bot health checks, and owner-gated scheduled jobs and default-model previews. | Use the minimum supported version and required APIs; tested-sample evidence is not a per-version allowlist. Keep the owner and per-bot gates; do not widen the legacy send route to arbitrary sessions. |
 | Release hardening | Integrate the draft features, run isolated gateway fixtures, then review the exact release candidate and device artifacts. | No live-host switch or external beta based solely on source tests. |
 | Plugin updates | Add a read-only release-aware HMP update and compatibility check, then an explicit pinned update with rollback ([issue #18](https://github.com/MahdiHedhli/hermes-hmp/issues/18)). | `hermes update` does not advance the pinned plugin. Never silently update HMP across an unqualified Hermes boundary. |
 | Installer footprint | Keep the current full-tree security scan and explain its caution findings to operators. | A quieter bare install needs Hermes to support a verified install file set; do not suppress scans or hide executable tests. |

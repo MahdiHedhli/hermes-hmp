@@ -13,9 +13,14 @@ description: >
 author: Hermes Bot Mobile
 # Hermes PM installs Python dependencies only from a declaration next to this manifest: a subdir
 # install (`hermes plugins install <repo>#server/hmp_plugin`) copies this folder alone, so
-# `server/pyproject.toml` does not travel. `aiohttp` and `cryptography` are Hermes core
-# dependencies. `qrcode` is the operator CLI's terminal QR renderer (T032; cli.py only). Its floor
+# `server/pyproject.toml` does not travel. Declare aiohttp explicitly: modern Hermes
+# puts it in optional extras, so a base-only host does not provide it. cryptography remains
+# a core dependency on the supported native source. `qrcode` is the operator CLI's
+# terminal QR renderer (T032; cli.py only). Its floor
 # is 7.4.2, the version Hermes pins for its core extras: PM locks every plugin against the union of
 # core extras, so a higher floor cannot be admitted (reviews/dependencies.md, `qrcode`).
 python_dependencies:
+  - "aiohttp>=3.14.5,<4"
   - "qrcode>=7.4.2,<9"
+  # BI1 disposable worker only: bounded token/event parser, no object construction.
+  - "PyYAML>=6,<7"

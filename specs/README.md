@@ -32,7 +32,7 @@ are never renumbered; always refer to a spec by its full directory name.
 | `008-bot-health-check` | Read-only bot channel health |
 | `009-owner-pairing-controls` | Per-device jobs and model controls decision |
 | `010-bot-chat-history-start` | Bot Chat history paging (SES-2a) |
-| `011-local-image-serving` | Host-local generated images (§7e draft, not implemented) |
+| `011-local-image-serving` | Host-local generated images (§7e draft; source and native sampling implemented, delivery/activation/device qualification open) |
 | `013-minimum-version-compatibility` | Minimum supported Hermes version policy |
 | `015-approval-notification-inputs` | In-process insertion, settlement and visibility inputs; source accepted, push unwired |
 | `034-approval-minimum-version-admission` | Approvals and Phone chat under the minimum-version policy |

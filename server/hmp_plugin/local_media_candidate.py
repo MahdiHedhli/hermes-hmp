@@ -7,7 +7,8 @@ digest and id helpers, and the carrier module. It does no I/O of any kind.
 
 A candidate is **not authority**. This module answers one question per row: did this strict
 `image_generate` tool row pass the 64 KiB bound and the one accepted parser, and does its `image`
-lexically sit directly under `<home>/cache/images/`? If so the row is a `MediaCandidate` holding
+lexically sit in one of the two closed same-profile native image-cache layouts? If so the row is a
+`MediaCandidate` holding
 only the row id and the scanner's canonical tool digest. The image string, the flat name, the home
 and the raw content are used for that pass/fail test and dropped; none is carried or logged. A
 later handler must rescan the active history and compare the row id and digest before it mints.
@@ -26,7 +27,7 @@ from collections.abc import Mapping, Sequence
 from typing import Final
 
 from . import local_media_active_scan as _scan
-from .local_media_file_safety import classify_candidate
+from .local_media_file_safety import CacheLayout, classify_candidate
 from .local_media_result import parse_image_result
 from .local_media_sidecar import (
     MAX_CANDIDATES_PER_RESPONSE,
@@ -58,6 +59,22 @@ def derive_flat_name(image: str, home: str) -> str | None:
     return name if classify_candidate(name) is None else None
 
 
+
+def derive_cache_location(image: str, home: str) -> tuple[CacheLayout, str] | None:
+    """Select one literal native cache layout; never normalize or search a fallback."""
+    legacy = derive_flat_name(image, home)
+    if legacy is not None:
+        return CacheLayout.LEGACY, legacy
+    if type(image) is not str or not _valid_home(home):
+        return None
+    prefix = home + "/cache/generated/images/"
+    if not image.startswith(prefix):
+        return None
+    generated_name = image[len(prefix):]
+    if classify_candidate(generated_name) is not None:
+        return None
+    return CacheLayout.GENERATED, generated_name
+
 def raw_tool_candidate(item: Mapping[object, object], home: str) -> MediaCandidate | None:
     """The candidate for one native row, or `None`. Total: it never raises and never logs."""
     try:
@@ -78,7 +95,7 @@ def raw_tool_candidate(item: Mapping[object, object], home: str) -> MediaCandida
         if type(content) is not str:
             return None
         image = parse_image_result(content)  # the one bounded, accepted parse
-        if type(image) is not str or derive_flat_name(image, home) is None:
+        if type(image) is not str or derive_cache_location(image, home) is None:
             return None
         digest = _scan._tool_digest(row_id, IMAGE_TOOL, call_id, content)
         return MediaCandidate(row_id, digest)

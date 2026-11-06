@@ -27,6 +27,8 @@ from hmp_plugin import local_media_active_batch as batch
 from hmp_plugin import local_media_active_scan as scan
 from hmp_plugin import local_media_candidate as cand
 
+from .media_cache_layout_witness import reverse_cache_layout_additions
+
 PACKAGE = Path(batch.__file__).parent
 HOME = "/srv/hermes/profiles/p1"
 IMG = HOME + "/cache/images/"
@@ -1098,7 +1100,11 @@ R1_REVERSES = {
 
 @pytest.mark.parametrize("name", sorted(FROZEN))
 def test_frozen_modules_are_byte_identical(name: str) -> None:
-    body = (PACKAGE / name).read_bytes()
+    # Remove only the exact reviewed cache-layout delta before checking the
+    # unchanged historical R1 and original source witnesses.
+    body = reverse_cache_layout_additions(
+        (PACKAGE / name).read_bytes().decode("utf-8"), name
+    ).encode("utf-8")
     if name in R1_GUARD_HASHES:
         assert hashlib.sha256(body).hexdigest() == R1_GUARD_HASHES[name]
         text = body.decode("utf-8")
