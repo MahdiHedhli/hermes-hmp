@@ -23,7 +23,8 @@ commands = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = commands
 _SPEC.loader.exec_module(commands)
 _FIXTURE = Path(__file__).with_name("local_media_native_serving_fixture.py")
-_MAX_ARCHIVE = 128 * 1024 * 1024
+_MAX_ARCHIVE = 160 * 1024 * 1024  # Tar framing is separate from source bytes.
+_MAX_SOURCE = 128 * 1024 * 1024
 _MAX_REPORT = 64 * 1024 * 1024
 _MAX_ENTRIES = 20000
 _MAX_TREE = 8 * 1024 * 1024
@@ -91,7 +92,7 @@ def extract_sources(archive, destination, commit, literal=None):
                 commands._require(normalized in literal and member.mode ==
                     (0o700 if literal[normalized][0] == "100755" else 0o600))
             total += member.size
-            commands._require(total <= _MAX_ARCHIVE)
+            commands._require(total <= _MAX_SOURCE)
             target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
             source = stream.extractfile(member)
             commands._require(source is not None)

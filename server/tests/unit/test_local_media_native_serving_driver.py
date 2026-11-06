@@ -235,3 +235,14 @@ def test_exported_executable_mode_must_match_literal_tree(tmp_path):
     with pytest.raises(driver.commands.NativeSenderFixtureError):
         driver.extract_sources(bundle, tmp_path / "source", COMMIT,
                                {"code.py": ("100755", "a" * 40)})
+
+
+def test_archive_framing_does_not_expand_extracted_source_budget(tmp_path, monkeypatch):
+    bundle = tmp_path / "source.tar"
+    archive(bundle, {"code.py": b"12"})
+    monkeypatch.setattr(driver, "_MAX_SOURCE", 1)
+    with pytest.raises(driver.commands.NativeSenderFixtureError):
+        driver.extract_sources(bundle, tmp_path / "refused", COMMIT)
+    assert not (tmp_path / "refused/code.py").exists()
+    monkeypatch.setattr(driver, "_MAX_SOURCE", 2)
+    assert driver.extract_sources(bundle, tmp_path / "accepted", COMMIT)

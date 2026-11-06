@@ -424,9 +424,9 @@ runner treats expired observation as refusal and waits on the same child; it doe
 not restart work. The entry selects the private working folder before importing
 the copied harness. Selected dependency/site startup remains a trusted premise.
 
-Root passes 28 driver checks, including a real isolated entry subprocess with a
+Root passes 29 driver checks, including a real isolated entry subprocess with a
 stdlib-only stub (no native module/database), and 32 existing harness guards:
-60 combined checks on Python 3.14.4. These checks do not execute Git/native serving
+61 combined checks on Python 3.14.4. These checks do not execute Git/native serving
 commands. The initial wrong-working-folder handoff was independently identified
 and repaired. Whole materializer/entry review and the first real native sample
 remain pending; no serving, T12, Linux, phone or activation gate is closed.
@@ -437,3 +437,10 @@ fetching, protocols, prompts and fsmonitor are disabled; the selected Git minimu
 is 2.54.0. A bounded 8-MiB tree read leaves the command runner default 64-KiB
 limit unchanged for existing callers. Root also passes the 56 portable command
 runner regression checks; its Darwin native case was deliberately not rerun.
+
+The first controlled materialization stopped before native entry: 143,421,440-byte
+tar framing exceeded the initial 128-MiB archive ceiling, while its 12,185 source
+files totaled 133,762,797 bytes, below the unchanged 128-MiB source budget.
+Independent review accepted a separate 160-MiB tar ceiling; source/file/entry
+bounds remain unchanged. All original Git actors were observed terminal. This
+setup refusal is preserved separately and is not native-serving evidence.

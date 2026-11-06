@@ -12,9 +12,9 @@ Review found and repaired SQLite URI containment, partial-setup resource retenti
 and import-root/cache binding defects before native execution. The latest 32 guard
 checks pass on Python 3.11 and 3.14; an overlapping descriptor/fetch regression run
 passes 277 tests. These are guard/synthetic results, not native serving evidence.
-The separate source materializer and fixed isolated entry now have 28 portable
+The separate source materializer and fixed isolated entry now have 29 portable
 checks, including an actual entry run with a stub fixture only. Together with
-the 32 harness guards, 60 checks pass on Python 3.14. Review repaired a wrong
+the 32 harness guards, 61 checks pass on Python 3.14. Review repaired a wrong
 working-folder handoff; configured tar filters, uncertain command settlement and
 invalid diagnostics refuse before native entry. Literal Git tree/blob and executable-mode
 checks reject archive substitutions or omissions; Git replacement objects, lazy
@@ -1378,3 +1378,10 @@ HMP is the Hermes gateway plugin used by the [HermesBot Mobile](https://hermes-b
 | Partly available | Session management | Read-only browsing exists. Metadata writes and non-destructive branching need a stable canonical remote contract. |
 
 See the [roadmap](ROADMAP.md), [unified gateway research](HermesUnifiedGatewayResearch.md), [wire contract](docs/architecture/contracts/HMP_V1.md), and [upstream requests for Nous Research](NOUS_GATEWAY_OBSERVATIONS.md).
+
+The first controlled materialization stopped before native entry: 143,421,440-byte
+tar framing exceeded the initial 128-MiB archive ceiling, while its 12,185 source
+files totaled 133,762,797 bytes, below the unchanged 128-MiB source budget.
+Independent review accepted a separate 160-MiB tar ceiling; source/file/entry
+bounds remain unchanged. All original Git actors were observed terminal. This
+setup refusal is preserved separately and is not native-serving evidence.
