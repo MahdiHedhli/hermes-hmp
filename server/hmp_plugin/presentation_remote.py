@@ -59,6 +59,8 @@ class RemoteOperationOwner:
         self._binding = self._binding_snapshot = binding
         self._packet = self._packet_snapshot = packet
         self._failed = False
+        self._credential_handshake = self._credential_handshake_snapshot = None
+        self._credential_binding = self._credential_binding_snapshot = None
         self._begin_attempted = False
         self._go_admission = self._go_admission_snapshot = None
         self._go_admission_used = False
@@ -152,6 +154,14 @@ class RemoteOperationOwner:
                 raise AuthorityRefusalError
             self._lease_values = self._lease_values_snapshot = self._lease_tuple(record.lease)
             self._seal = self._seal_snapshot = self._references()
+            credential = getattr(channel, "_credential_handshake", None)
+            if credential is not None:
+                from .presentation_credential_handshake import CredentialHandshakeOwner
+                if type(credential) is not CredentialHandshakeOwner:
+                    raise AuthorityRefusalError
+                self._credential_handshake = self._credential_handshake_snapshot = credential
+                self._credential_binding = self._credential_binding_snapshot = (
+                    CredentialHandshakeOwner._bind_native_input(credential, self))
             channel.claim_remote(self)  # monotonic ownership before any exchange effect
             self._initialized = True
             self._check(RemotePhase.BOUND)
@@ -246,6 +256,23 @@ class RemoteOperationOwner:
                 or type(r.fence) is not ListenerFence or type(r.policy_work) is not NativePolicyWork
                 or a._clock is not time.monotonic or r.owner._clock is not time.monotonic):
             raise AuthorityRefusalError
+        credential = self._credential_handshake
+        if (credential is not self._credential_handshake_snapshot
+                or self._credential_binding is not self._credential_binding_snapshot):
+            raise AuthorityRefusalError
+        if credential is None:
+            if self._credential_binding is not None or getattr(c, "_credential_handshake", None) is not None:
+                raise AuthorityRefusalError
+        else:
+            from .presentation_credential_handshake import CredentialHandshakeOwner
+            if (type(credential) is not CredentialHandshakeOwner
+                    or c._credential_handshake is not credential
+                    or c._credential_handshake_snapshot is not credential):
+                raise AuthorityRefusalError
+            if self._initialized is False and self._credential_binding is None:
+                pass  # construction-only join; _check cannot admit work before initialization
+            else:
+                CredentialHandshakeOwner._native_input_local(credential, self, self._credential_binding)
         work = r.policy_work
         # Index5 is a resolved JobOwner context: never resolve it until these
         # callback-free local references have passed. _references checks it later.

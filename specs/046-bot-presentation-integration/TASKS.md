@@ -16,8 +16,12 @@ historical, not an alternative live authorization path or resolved incident.
       IO/close claim, with synthetic socket tests and 452-pass/one-skip focused
       regression. Native qualification is mocked in the actor tests; no production
       factory or phase/native permission follows.
-- [ ] Implement typed paired startup/key custody and bounded handshake on the
-      original channel/task/cursor, with known local write completion facts.
+- [x] Implement/review the one-attempt original native-input correlation join,
+      with actual policy-thread/shared-slot model, final-current refusal causals
+      and 640-pass/one-skip affected regression. This grants no phase authority.
+- [ ] Integrate operator-selected paired runtime/source/credential startup,
+      capacity and rotation with the retained handshake on its original channel,
+      task/cursor and known local write completion facts.
 - [ ] Integrate signed phase commitments with original native phase owners;
       complete actual GO, all character output variants, transfer/custody,
       TERMINAL/ACK/journal/DRAIN/PRE_EMIT and authenticated HTTP publication.

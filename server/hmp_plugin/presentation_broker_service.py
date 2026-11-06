@@ -618,6 +618,13 @@ class SocketChannel:
             _require(type(owner) is CredentialHandshakeOwner)
             CredentialHandshakeOwner._released(owner, self)
 
+    def _credential_work_ready(self):
+        self._credential_external_idle()
+        # No unsigned body fallback after a credential exchange. A future typed
+        # phase transport must replace this refusal, never a boolean switch.
+        if getattr(self, "_credential_handshake", None) is not None:
+            raise FrameError("BI1_CREDENTIAL_PHASE_INTEGRATION_REQUIRED")
+
     def close_clock(self) -> bool:
         """Distinct local clock-FD fact; socket close alone never establishes it."""
         try:
@@ -662,7 +669,7 @@ class SocketChannel:
         self._check()  # failed authentication leaves the same allocation retained
 
     def _authorize_io(self, owner, direction, binding, end_ns, frame=None):
-        self._credential_external_idle()
+        self._credential_work_ready()
         if self._remote_owner is None:
             _require(owner is None)
             return
@@ -799,7 +806,7 @@ class SocketChannel:
                  and type(intent.wire) is bytes and type(intent.token) is object)
 
     async def send_go(self, remote):
-        self._credential_external_idle()
+        self._credential_work_ready()
         from .presentation_jobs import RemotePhase
         from .presentation_remote import RemoteOperationOwner
         from .presentation_remote_cleanup import _LOOP, RemoteCleanupOwner
@@ -839,7 +846,7 @@ class SocketChannel:
         """One cleanup-only CANCEL; ordinary retired work IO stays refused."""
         from .presentation_remote_cleanup import _LOOP, RemoteCleanupOwner
 
-        self._credential_external_idle()
+        self._credential_work_ready()
         _require(type(owner) is RemoteCleanupOwner)
         data = RemoteCleanupOwner._prepare_cancel(owner, self)
         self._writing = True

@@ -13,6 +13,7 @@ import json
 import os
 import secrets
 import threading
+from typing import NamedTuple
 
 from cryptography.exceptions import InvalidSignature
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey, Ed25519PublicKey
@@ -22,11 +23,29 @@ from .presentation_broker_service import SocketChannel, StartupEnrollment
 from .presentation_clock import ClockDomain, NativeClockOwner
 from .presentation_credential_codec import decode_record, encode_record, payload_size, signing_bytes
 from .presentation_credential_files import RoleKeySelection, StartupRoleKeyFiles, _HeldFile
-from .presentation_credential_transcript import channel_digest, check_transcript
+from .presentation_credential_transcript import ConsistentTranscript, channel_digest, check_transcript
+from .presentation_credential_scope import InputScopeDigest, derive_input_scope
+from .presentation_input_v3 import decode_input_v3
 from .presentation_jobs import FrameError
 
 
 _HANDSHAKE_IO_RELEASE = object()
+_NATIVE_INPUT_JOIN = object()
+
+
+class _NativeInputJoin(NamedTuple):
+    mint: object
+    handshake: object
+    remote: object
+    authority: object
+    operation: object
+    record: object
+    packet: bytes
+    binding: BrokerBinding
+    scope: InputScopeDigest
+
+    def __repr__(self):
+        return "<NativeInputJoin native-context-redacted>"
 
 
 class HandshakeAcquisitionError(FrameError):
@@ -75,6 +94,9 @@ class CredentialHandshakeOwner:
         self._cursor_values = b""
         self._wire_bytes = self._wire_bytes_snapshot = 0
         self._release_fact = None
+        self._transcript = self._transcript_snapshot = None
+        self._native_input = self._native_input_snapshot = None
+        self._native_input_attempted = False
         self._channel = channel
         self._keys = keys
         self._binding = self._binding_snapshot = binding
@@ -293,6 +315,158 @@ class CredentialHandshakeOwner:
                  and self._write_complete == self._write_intents
                  and len(self._records) == 4 and not self._cursor)
 
+    def _operation_binding(self):
+        """Current correlation from retained successful records, not a permit."""
+        self._guard()
+        self._released(self._original_channel)
+        result = self._transcript
+        _require(type(result) is ConsistentTranscript and result is self._transcript_snapshot)
+        # Derive from original signed bytes, never a returned/caller data object.
+        channel = channel_digest(self._records[0], self._records[1])
+        _require(type(result.channel) is str and result.channel == channel)
+        common = self._common
+        original = self._binding_snapshot
+        binding = BrokerBinding(common["iid"], common["listener"], original.broker,
+                                channel, common["operation_id"])
+        self._guard()
+        return binding
+
+    def _native_join_fence(self, remote):
+        """Typed local state after native callbacks; no clock/permission grant."""
+        from .presentation_authority import ListenerFence
+        from .presentation_jobs import CapturedLease, _Job, RemotePhase, State
+        from .presentation_parent_policy import ParentPolicyReadOwner, _HeldDirectory
+        from .presentation_policy_thread import PolicyThreadOwner
+        from .presentation_remote import RemoteOperationOwner
+
+        _require(type(remote) is RemoteOperationOwner)
+        RemoteOperationOwner._retained_local(remote)
+        record, work = remote._record_snapshot, remote._record_snapshot.policy_work
+        thread, policy, seal = work._thread, work._policy, remote._seal_snapshot
+        _require(type(thread) is PolicyThreadOwner and thread is seal[13]
+                 and type(policy) is ParentPolicyReadOwner and policy is seal[14]
+                 and thread.policy is policy
+                 and thread.joined is True and thread.uncertain is False
+                 and thread._attempted is True and thread._started is True and thread._failure is None
+                 and work._invalid is False and work._postchecked is True
+                 and work._transfer_attempted is True and work._construction_finished is True
+                 and work._closed_pretransfer is False
+                 and policy.uncertain is False and policy._pending_fd is None)
+        packet = remote._packet_snapshot
+        _require(type(packet) is bytes and work._packet is packet and work._packet_snapshot is packet)
+        row = decode_input_v3(packet)
+        _require(type(policy._held) is list and len(policy._held) == len(row["directory_policy"])
+                 and all(type(held) is _HeldDirectory and held.closed is True
+                         and held.close_attempted is True for held in policy._held))
+        _require(type(record.fence) is ListenerFence and record.fence._retired is False
+                 and type(record.fence._epoch) is int and type(record.fence_epoch) is int
+                 and record.fence._epoch == record.fence_epoch
+                 and type(record.lease) is CapturedLease)
+        lease = record.lease
+        _require(all(type(value) is str for value in (lease.iid, lease.device_id, lease.user_id,
+                     lease.family_id, lease.profile, lease.credential_digest, lease.native_binding))
+                 and type(lease.epoch) is int and type(record.owner._epoch) is int
+                 and record.owner._epoch == lease.epoch
+                 and record.owner._disabled is False and remote._authority_snapshot._disabled is False)
+        CapturedLease.__post_init__(lease)
+        _require(_typed_tuple(remote._lease_values_snapshot, (str,) * 7 + (int,))
+                 and remote._lease_values is remote._lease_values_snapshot
+                 and RemoteOperationOwner._lease_tuple(lease) == remote._lease_values_snapshot)
+        job = remote._job_origin_snapshot
+        _require(type(job) is _Job and job.lease is lease and job.state is State.STARTING
+                 and job.remote_phase is RemotePhase.BOUND and job.go_sent is False
+                 and job.emit_revoked is False and job.credit_released is False
+                 and job.child is None and record.child is None
+                 and type(record.initial_home) is str and type(record.deadline) is float
+                 and type(job.operation) is str and type(job.profile) is str
+                 and type(job.challenge) is str and type(job.deadline) is float)
+        # reserve() freezes min(original request, later JobOwner ceiling);
+        # equality would incorrectly reject that conserved earlier deadline.
+        _require(job.operation == row["operation"] and job.profile == row["profile"]
+                 and job.challenge == row["challenge"] and lease.epoch == row["epoch"]
+                 and record.deadline <= job.deadline
+                 and row["deadline_ns"] == int(record.deadline * 1_000_000_000))
+        # Existing closure property is now safe to read: its nested flags and
+        # held-directory members are typed and known closed above.
+        _require(work.resources_closed is True)
+        return row
+
+    def _bind_native_input(self, remote):
+        """Join original INITIAL/policy input to this exchange exactly once.
+
+        This records correlation only. Existing native/job checks stay mandatory;
+        unsigned BEGIN/GO remain closed until signed phase transport is integrated.
+        """
+        from .presentation_authority import ParentAuthorityAdapter, OpaqueOperation
+        from .presentation_policy_binding import NativePolicyWork
+        from .presentation_jobs import CapturedLease
+        from .presentation_remote import RemoteOperationOwner
+
+        _require(type(self) is CredentialHandshakeOwner and self._native_input_attempted is False)
+        self._native_input_attempted = True  # first attempt never resets, even on refusal
+        self._guard()
+        _require(self._role == "gateway" and self._native_input is None
+                 and self._native_input_snapshot is None and type(remote) is RemoteOperationOwner)
+        RemoteOperationOwner._retained_local(remote)
+        authority, operation, record = remote._authority_snapshot, remote._operation_snapshot, remote._record_snapshot
+        _require(type(authority) is ParentAuthorityAdapter and type(operation) is OpaqueOperation
+                 and authority._record(operation) is record and record.remote_operation is remote
+                 and remote._channel_snapshot is self._original_channel
+                 and remote._initialized is False and record.initial_complete is True
+                 and type(record.policy_work) is NativePolicyWork)
+        work = record.policy_work
+        packet, binding = remote._packet_snapshot, remote._binding_snapshot
+        _require(type(packet) is bytes and packet is work._packet and packet is work._packet_snapshot
+                 and work._postchecked is True and work._transfer_attempted is True)
+        self._native_join_fence(remote)
+        _require(authority._current(record) is True)
+        self._local_seal()
+        self._native_join_fence(remote)
+        expected_binding = self._operation_binding()
+        _binding(binding)
+        _require(binding == expected_binding)
+        row = self._native_join_fence(remote)
+        _require(type(record.lease) is CapturedLease and type(record.lease.profile) is str
+                 and type(record.initial_home) is str and type(record.deadline) is float)
+        _require(row["iid"] == self._common["iid"]
+                 and row["deadline_ns"] == self._common["work_end_ns"]
+                 and row["deadline_ns"] == int(record.deadline * 1_000_000_000)
+                 and row["profile"] == record.lease.profile
+                 and row["home"] == record.initial_home)
+        scope = derive_input_scope(packet, binding)
+        self._guard()
+        self._native_join_fence(remote)
+        # The original local native/job seal follows the last callback-bearing
+        # clock check; signatures cannot repair a replaced record/policy input.
+        _require(authority._current(record) is True)
+        self._local_seal()
+        self._native_join_fence(remote)
+        _require(authority._record(operation) is record and record.remote_operation is remote
+                 and record.policy_work is work and remote._packet_snapshot is packet
+                 and remote._binding_snapshot is binding and work._packet is packet
+                 and work._packet_snapshot is packet and work._postchecked is True
+                 and work._transfer_attempted is True and work.resources_closed is True
+                 and self._native_input_attempted is True
+                 and self._native_input is None and self._native_input_snapshot is None)
+        fact = _NativeInputJoin(_NATIVE_INPUT_JOIN, self, remote, authority, operation,
+                               record, packet, binding, scope)
+        self._native_input = self._native_input_snapshot = fact
+        return fact
+
+    def _native_input_local(self, remote, fact):
+        """Reference-only join check; not current native/phase authorization."""
+        from .presentation_remote import RemoteOperationOwner
+        _require(type(self) is CredentialHandshakeOwner and type(remote) is RemoteOperationOwner
+                 and type(fact) is _NativeInputJoin
+                 and self._native_input_attempted is True
+                 and fact is self._native_input and fact is self._native_input_snapshot
+                 and fact.mint is _NATIVE_INPUT_JOIN and fact.handshake is self and fact.remote is remote
+                 and self._original_channel is remote._channel_snapshot
+                 and fact.authority is remote._authority_snapshot
+                 and fact.operation is remote._operation_snapshot and fact.record is remote._record_snapshot
+                 and fact.packet is remote._packet_snapshot and fact.binding is remote._binding_snapshot
+                 and type(fact.scope) is InputScopeDigest)
+
     async def _send(self):
         self._guard()
         _require(self._started is True and self._complete is False)
@@ -433,6 +607,7 @@ class CredentialHandshakeOwner:
                                       broker_public=public["broker"], expected_context=self._common)
             _require(len(self._write_complete) == 2 and self._write_complete == self._write_intents)
             self._guard()
+            self._transcript = self._transcript_snapshot = result
             self._complete = True
             self._release_fact = _HANDSHAKE_IO_RELEASE
             return result

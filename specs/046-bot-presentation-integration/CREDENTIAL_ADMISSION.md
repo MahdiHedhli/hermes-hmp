@@ -258,3 +258,13 @@ skipped. See [the evidence and limits](../../docs/research/presentation-credenti
 Only a historical known-complete local IO fact releases the socket claim;
 unknown retains original debt. No runtime factory, phase/native authority or
 production feature is enabled by this source component.
+
+## Original native input correlation checkpoint
+
+The one-attempt handshake/native-input handoff is independently source-reviewed;
+the final affected regression passed 640 tests, one skipped. It joins the exact
+original policy packet and native job slot with typed post-callback fences.
+See [evidence and limits](../../docs/research/presentation-credential-native-input-2026-11-06.md).
+Unsigned phases remain refused until original streaming and direct broker IO
+paths receive the typed signed transport; this is not native authorization or
+production runtime admission.
