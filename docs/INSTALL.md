@@ -117,6 +117,8 @@ The plugin belongs to the Hermes instance where it is installed. Do not copy its
 
 ## Host-local generated images (candidate; not activated)
 
+Current checkpoints: [bounded C6b native evidence](research/local-media-c6b-root-acceptance-2026-11-06.md) and [exact HMP source/runtime-package review](research/local-media-delivery-source-review-2026-11-06.md) are accepted. These do not establish installation, loaded-listener availability, mobile display or release qualification. Preserve existing flag values and device rights during any separately authorized deployment.
+
 Descriptor minting and authenticated fetch code exist in the feature candidate.
 It supports both legacy `cache/images` and current `cache/generated/images`
 through separate closed layouts, with no namespace fallback. A

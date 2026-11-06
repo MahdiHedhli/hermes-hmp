@@ -7,7 +7,7 @@
 > and the slices M0-M3 below. Descriptor/fetch source and bounded native samples
 > now exist; activation, physical acceptance and full release qualification remain open.
 
-**Current November 6 disposition:** [C6b scoped native-evidence acceptance](../../docs/research/local-media-c6b-root-acceptance-2026-11-06.md) is complete. Earlier dated stage statements that C6b remains open are historical checkpoints. Full S4/S5 delivery acceptance, R2/R3, activation, devices and release remain open.
+**Current November 6 disposition:** [C6b scoped native-evidence acceptance](../../docs/research/local-media-c6b-root-acceptance-2026-11-06.md) is complete. Earlier dated stage statements that C6b remains open are historical checkpoints. HMP R2 source and runtime-package review are also complete. Full S4/S5 delivery acceptance, plugin loading, R3/current-listener activation, clients/devices and release remain open.
 
 `[ ]` means not started or not independently reviewed. Workers do not self-certify. No implementation task starts before the contract revision (P0) is reviewed. A worker meeting unspecified behavior records a gap marker instead of inventing a rule.
 
@@ -57,11 +57,11 @@ dependency action.
   the 114 legacy tests as the architecture allows. Exit for the listener source slice: bounded A7-A12 and A14 evidence, then **mandatory independent
   exact-candidate security review**. Root accepted exact `f737197` after independent review: 3047 unit cases passed, three existing S4 contract-table failures and 16 native-dependent skips remained. This closes the listener source slice only; the route portions of A8/A10/A11 stay with S4/S5.
 
-(The older headings "M1 Host" and "M2 Convergence" below are original document-phase names and are unrelated to slices M1-M3 above.) Later slices stay open exactly as listed under them: C6b exact-native cost and
+(The older headings "M1 Host" and "M2 Convergence" below are original document-phase names and are unrelated to slices M1-M3 above.) At the original M3 checkpoint, later slices remained C6b exact-native cost and
 concurrent-writer evidence (release-candidate evidence, not a per-version allowlist), S4 descriptor emission, S5
 route, R2 independent exact-candidate review, and R3 owner-authorized install, flag
-and physical-device acceptance. C6b, independent delivery review and device acceptance remain pending;
-the T12 sampled Darwin memory measurement is now recorded below. No evidence row
+and physical-device acceptance. The current November 6 disposition above now records scoped C6b and HMP R2 acceptance. Full delivery and device acceptance remain open;
+the T12 sampled Darwin memory measurement is recorded below. No evidence row
 enables the feature or certifies another platform.
 
 ### Acceptance matrix for M2/M3
@@ -111,7 +111,7 @@ candidate and sample; that evidence does not prove behavior on future builds.
 
 ## M2 Convergence
 
-- [ ] **R2** Independent security review of the exact candidate.
+- [x] **R2** Independent exact HMP local-media source security review at `5e247a6` / native `ed1afb08`; 21 production files and their composition accepted, with known limits retained. The runtime-only 109-file package is independently verified. This is not full S4/S5 delivery, mobile/build/device, plugin-loading or R3 activation qualification. See [source/package evidence](../../docs/research/local-media-delivery-source-review-2026-11-06.md).
 - [ ] **R3** Owner-authorized install, live flag and physical-device acceptance. No build-list or manifest entry is required. Any live Hermes change needs separate owner authorization.
 
 ## S1 reviewed source identity (2026-10-01)
