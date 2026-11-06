@@ -1,4 +1,4 @@
-"""Prepared original controller allocation/key binding; no signed reader yet.
+"""Original controller allocation/key binding; no phase or resource permit.
 
 This source-only handoff cannot read bytes, mint GO/CANCEL receipts or authorize
 resources. Prepared native Task allocation is not a runnable signed transport.
@@ -163,7 +163,7 @@ class PreparedControlBinding:
         PreparedControlBinding.creator_current(self)
         self._bound = True
 
-    def _reader_local(self):
+    def _actor_local(self, *, reader):
         from .presentation_broker_registry import BrokerRegistry, _Record
         from .presentation_broker_service import BrokerServiceSpine, SocketChannel, _Connection
         from .presentation_cancel_budget import CancellationBudget
@@ -180,10 +180,13 @@ class PreparedControlBinding:
             and self._initialized is True
             and self._bound is True
         )
+        _require(type(reader) is bool)
         PreparedControlBinding._allocation_current(self)
+        actor = self._allocation.task if reader else self._creator
         _require(
-            asyncio.current_task() is self._allocation.task
-            and _TASK.cancelling(self._allocation.task) == 0
+            type(actor) is _TASK
+            and asyncio.current_task() is actor
+            and _TASK.cancelling(actor) == 0
             and type(self._refs) is tuple
             and len(self._refs) == 19
             and self._refs is self._refs_snapshot
@@ -343,18 +346,32 @@ class PreparedControlBinding:
         )
         return refs
 
-    def reader_material_current(self):
-        """Original reader's live role material only; no phase/time/IO permit."""
+    def _reader_local(self):
+        return PreparedControlBinding._actor_local(self, reader=True)
+
+    def _creator_local(self):
+        return PreparedControlBinding._actor_local(self, reader=False)
+
+    def _material_current(self, *, reader):
         from .presentation_broker_registry import BrokerRegistry
         from .presentation_broker_service import BrokerServiceSpine, SocketChannel
 
-        refs = PreparedControlBinding._reader_local(self)
+        _require(type(reader) is bool)
+        refs = PreparedControlBinding._actor_local(self, reader=reader)
         BrokerServiceSpine._current(refs[0])
-        PreparedControlBinding._reader_local(self)
+        _require(PreparedControlBinding._actor_local(self, reader=reader) is refs)
         SocketChannel._check(refs[14])
-        _require(PreparedControlBinding._reader_local(self) is refs)
+        _require(PreparedControlBinding._actor_local(self, reader=reader) is refs)
         BrokerRegistry._check(refs[2])
-        _require(PreparedControlBinding._reader_local(self) is refs)
+        _require(PreparedControlBinding._actor_local(self, reader=reader) is refs)
+
+    def reader_material_current(self):
+        """Original reader's live role material only; no phase/time/IO permit."""
+        PreparedControlBinding._material_current(self, reader=True)
+
+    def creator_material_current(self):
+        """Original service creator material; never borrows reader IO authority."""
+        PreparedControlBinding._material_current(self, reader=False)
 
     def reader_closed(self):
         """Intentional hard stop until the actual signed cursor is implemented."""

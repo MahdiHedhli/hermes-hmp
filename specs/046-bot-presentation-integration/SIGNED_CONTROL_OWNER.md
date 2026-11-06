@@ -1,6 +1,6 @@
 # Signed GO/CANCEL handoff before credential resource startup
 
-Status: implementation contract; signed control is NOT implemented. Legacy raw
+Status: partial source integration; signed GO/full control lifecycle is NOT implemented. Legacy raw
 control and result paths must refuse a credential-attached channel. Resource/READY
 startup remains closed until the concrete signed control receiver is retained.
 This changes no minimum-version policy and disables no legacy unsigned channel.
@@ -136,3 +136,13 @@ The original notification Future is not sufficient on later owner failure, and
 ordinary `cancel_receipt`/service `_v2_control` remain closed. Dedicated service
 receipt validation, signed GO, after-GO/cleanup-time reads and resource/READY
 startup remain open. See [bounded evidence](../../docs/research/presentation-signed-pre-go-cancel-2026-11-06.md).
+
+## Dedicated service cancellation consumer checkpoint
+
+The credential branch in service `_v2_control` now uses the exact original creator
+and `CredentialCancelAdoption.wait_notice`, with one attempt latched before native
+checks, original Task/Future/receipt seals across await, complete signed-frame
+revalidation, actual native park verification and original cleanup time. Generic
+work guards and ordinary `cancel_receipt` remain closed. Wrong caller/spine cannot
+consume the original attempt; late authority failure cannot retry after restoration.
+See [evidence and limits](../../docs/research/presentation-signed-cancel-service-consumer-2026-11-06.md).

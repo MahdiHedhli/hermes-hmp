@@ -1,22 +1,23 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) includes reviewed
-signed pre-GO CANCEL adoption on the original controller Task: exact authenticated
-read, existing native grammar/budget/receipt and owned local park/stop. It preserves
-the earlier cleanup end and permits solely local stop after key retirement.
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) includes the reviewed
+dedicated service consumer for signed pre-GO cancellation. It verifies the original
+creator/spine, role material, signed frame, native receipt/Future and actual parked
+Task, with one consumed attempt and original cleanup time. Generic work/GO guards
+remain closed.
 
-Affected regression: **1,151 passed, one skipped**, 32.13 seconds; final focused
-module **55 passed**, 5.31 seconds, including post-notification failure. Configured
-lint passed. Independent source/test review was read-only. See
-[evidence and limits](docs/research/presentation-signed-pre-go-cancel-2026-11-06.md).
+Affected regression: **1,159 passed, one skipped**, 33.29 seconds; focused module
+**62 passed**, 5.51 seconds; configured lint passed. Independent review was
+source/test read-only. See [evidence and limits](docs/research/presentation-signed-cancel-service-consumer-2026-11-06.md).
 
-Ordinary service receipt consumers still refuse this credential path; tests use
-the original internal Future plus actual local stop. A completed notification
-alone is insufficient if the owner later fails. Dedicated service receipt
-validation, signed GO/READY/resources, after-GO and cleanup-time control, remaining
-signed IO, production startup, native publication, STATUS and device/release
-qualification remain open. Character delivery remains unavailable. No live host,
-mobile build, device, permission, provider or key installation changed.
+Signed GO/READY/resources, after-GO and cleanup-time control, later signed IO,
+production startup, native publication, STATUS and physical/release qualification
+remain open. Character delivery remains unavailable. No live host, mobile build,
+device, permission, provider or key installation changed.
+
+Earlier native CANCEL source `f01fa22` passed all plugin and Python3.12–3.14 Unicode
+jobs in [CI730](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42269880336).
+That does not qualify this newer service-consumer source.
 
 ## Native image verification checkpoint — November 6, 2026
 

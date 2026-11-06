@@ -3,7 +3,8 @@
 Source-only staging, not a working GO/CANCEL lifecycle. First-frame reading
 alone grants no native effects. The explicit pre-GO CANCEL adoption joins that
 original read to native grammar/budget/receipt and owned local park/stop only.
-Service receipt consumers, signed GO/resources and production dispatch stay closed.
+A dedicated original-service CANCEL validator is separate from reader IO;
+signed GO/resources and production dispatch stay closed.
 """
 
 from __future__ import annotations
@@ -125,7 +126,7 @@ class CredentialControlCursor:
     def __repr__(self):
         return "<CredentialControlCursor no-native-receipt context-redacted>"
 
-    def _local(self):
+    def _local(self, *, creator=False):
         from .presentation_broker_cancel import BrokerCancellationOwner
         from .presentation_control_binding import PreparedControlBinding
 
@@ -141,7 +142,11 @@ class CredentialControlCursor:
             and self._control._signed_cursor is self
             and self._control._signed_cursor_snapshot is self
         )
-        PreparedControlBinding._reader_local(self._binding_snapshot)
+        _require(type(creator) is bool)
+        if creator:
+            PreparedControlBinding._creator_local(self._binding_snapshot)
+        else:
+            PreparedControlBinding._reader_local(self._binding_snapshot)
         _require(
             type(self._expected) is tuple
             and self._expected is self._expected_snapshot
@@ -453,11 +458,11 @@ class CredentialControlCursor:
         if failed:
             raise FrameError("BI1_CREDENTIAL_CONTROL_READ_REFUSED") from None
 
-    def _completed_local(self, completion):
+    def _completed_local(self, completion, *, creator=False):
         """Callback-free seal against held original completed cursor facts."""
         from .presentation_broker_codec import BrokerHeader
 
-        CredentialControlCursor._local(self)
+        CredentialControlCursor._local(self, creator=creator)
         _require(
             self._started is True
             and self._complete is True
@@ -498,16 +503,19 @@ class CredentialControlCursor:
             and self._end_snapshot is end
         )
 
-    def completed_current(self):
-        """Original reader's checked local transfer, never a caller-supplied permit."""
+    def _completion_current(self, *, creator):
+        """Original actor's checked local transfer, never a caller-supplied permit."""
         from .presentation_control_binding import PreparedControlBinding
 
-        _require(type(self) is CredentialControlCursor)
+        _require(type(self) is CredentialControlCursor and type(creator) is bool)
         completion = self._completion_snapshot
-        CredentialControlCursor._completed_local(self, completion)
+        CredentialControlCursor._completed_local(self, completion, creator=creator)
         raw, frame, _, _, _, _, phase, _ = completion
-        PreparedControlBinding.reader_material_current(self._binding_snapshot)
-        CredentialControlCursor._completed_local(self, completion)
+        if creator:
+            PreparedControlBinding.creator_material_current(self._binding_snapshot)
+        else:
+            PreparedControlBinding.reader_material_current(self._binding_snapshot)
+        CredentialControlCursor._completed_local(self, completion, creator=creator)
         commitment = check_commitment(
             raw,
             sender_public=self._pins[0],
@@ -516,9 +524,18 @@ class CredentialControlCursor:
         )
         checked = check_complete_frame(commitment, frame, binding=self._broker_binding)
         _require(checked.kind == phase and checked.body_length == (0 if phase == "GO" else 16))
-        PreparedControlBinding.reader_material_current(self._binding_snapshot)
-        CredentialControlCursor._completed_local(self, completion)
+        if creator:
+            PreparedControlBinding.creator_material_current(self._binding_snapshot)
+        else:
+            PreparedControlBinding.reader_material_current(self._binding_snapshot)
+        CredentialControlCursor._completed_local(self, completion, creator=creator)
         return completion
+
+    def completed_current(self):
+        return CredentialControlCursor._completion_current(self, creator=False)
+
+    def creator_completed_current(self):
+        return CredentialControlCursor._completion_current(self, creator=True)
 
 
 class CredentialCancelAdoption:
@@ -551,12 +568,137 @@ class CredentialCancelAdoption:
         owner._cursor = owner._cursor_snapshot = cursor
         owner._refs = owner._refs_snapshot = binding._refs_snapshot
         owner._attempted = owner._complete = False
+        owner._consume_attempted = owner._consume_complete = owner._consume_failed = False
+        from .presentation_broker_cancel import _native_future_methods
+        from .presentation_remote_cleanup import _FUTURE, _TaskAllocation
+
+        allocation = control._allocation_snapshot
+        cancel, park = control._cancel_allocation_snapshot, control._park_allocation_snapshot
+        _require(
+            type(allocation) is _TaskAllocation
+            and allocation is binding._allocation
+            and type(cancel) is tuple
+            and len(cancel) == 1
+            and type(park) is tuple
+            and len(park) == 1
+            and type(cancel[0]) is _FUTURE
+            and type(park[0]) is _FUTURE
+        )
+        owner._notice_refs = owner._notice_refs_snapshot = (
+            allocation,
+            cancel[0],
+            park[0],
+            cancel,
+            park,
+            control._cancel_initialized_snapshot,
+            control._park_initialized_snapshot,
+            control._task_initialized_snapshot,
+            control._scope_snapshot,
+        )
+        owner._native_receipt_origin = None
+        CredentialCancelAdoption._notice_local(owner)
+        _native_future_methods(cancel[0])
+        _native_future_methods(park[0])
         return owner
 
     def __repr__(self):
         return "<CredentialCancelAdoption no-GO-authority context-redacted>"
 
-    def _local(self):
+    def _notice_local(self):
+        """Original native Future/receipt metadata, with no callback-bearing IO."""
+        from .presentation_broker_cancel import (
+            _CANCEL_RECEIPT_MINT,
+            _CancelReceipt,
+            _native_future_methods,
+        )
+        from .presentation_broker_codec import BrokerFrame, BrokerHeader, _row
+        from .presentation_cancel_budget import CancellationWindow
+        from .presentation_remote_cleanup import _FUTURE, _TaskAllocation
+
+        _require(type(self) is CredentialCancelAdoption)
+        control = self._control_snapshot
+        from .presentation_broker_cancel import BrokerCancellationOwner
+
+        _require(type(control) is BrokerCancellationOwner and self._control is control)
+        held = self._notice_refs_snapshot
+        _require(
+            type(held) is tuple
+            and len(held) == 9
+            and self._notice_refs is held
+            and type(held[0]) is _TaskAllocation
+            and type(held[1]) is _FUTURE
+            and type(held[2]) is _FUTURE
+            and type(held[3]) is tuple
+            and len(held[3]) == 1
+            and held[3][0] is held[1]
+            and type(held[4]) is tuple
+            and len(held[4]) == 1
+            and held[4][0] is held[2]
+            and all(type(v) is object for v in held[5:8])
+            and type(held[8]) is tuple
+            and len(held[8]) == 10
+        )
+        _require(
+            control._allocation is held[0]
+            and control._allocation_snapshot is held[0]
+            and control._cancel_future is held[1]
+            and control._cancel_future_snapshot is held[1]
+            and control._park_future is held[2]
+            and control._park_future_snapshot is held[2]
+            and control._cancel_allocation is held[3]
+            and control._cancel_allocation_snapshot is held[3]
+            and control._park_allocation is held[4]
+            and control._park_allocation_snapshot is held[4]
+            and control._cancel_initialized is held[5]
+            and control._cancel_initialized_snapshot is held[5]
+            and control._park_initialized is held[6]
+            and control._park_initialized_snapshot is held[6]
+            and control._task_initialized is held[7]
+            and control._task_initialized_snapshot is held[7]
+            and control._scope is held[8]
+            and control._scope_snapshot is held[8]
+        )
+        _native_future_methods(held[0].task)
+        _native_future_methods(held[1])
+        _native_future_methods(held[2])
+        notice = self._native_receipt_origin
+        if notice is None:
+            _require(control._cancel_receipt is None and control._cancel_receipt_snapshot is None)
+            return
+        _require(
+            type(notice) is _CancelReceipt
+            and notice.mint is _CANCEL_RECEIPT_MINT
+            and control._cancel_receipt is notice
+            and control._cancel_receipt_snapshot is notice
+            and notice.scope is held[8]
+            and notice.allocation is held[0]
+            and notice.future is held[1]
+            and notice.park is held[2]
+            and type(notice.frame) is BrokerFrame
+            and type(notice.frame.header) is BrokerHeader
+            and type(notice.frame.body) is bytes
+            and notice.frame is control._frame
+            and notice.frame is control._frame_snapshot
+            and type(notice.window) is CancellationWindow
+            and type(notice.timeout) is asyncio.Timeout
+            and notice.timeout is control._timeout_snapshot
+            and control._timeout is notice.timeout
+            and type(notice.end) is int
+            and type(control._park_end_snapshot) is int
+            and control._park_end is control._park_end_snapshot
+            and notice.end == control._park_end_snapshot
+        )
+        _row(notice.frame.header)
+        _require(
+            notice.frame.header.kind == "CANCEL"
+            and notice.frame.header.sequence == 1
+            and notice.frame.header.version == 2
+            and notice.frame.header.body_length == 16
+            and len(notice.frame.body) == 16
+            and CancellationWindow.encode(notice.window) == notice.frame.body
+        )
+
+    def _local(self, *, creator=False):
         from .presentation_broker_cancel import BrokerCancellationOwner
         from .presentation_control_binding import PreparedControlBinding
 
@@ -581,11 +723,22 @@ class CredentialCancelAdoption:
             and type(self._attempted) is bool
             and type(self._complete) is bool
         )
-        PreparedControlBinding._reader_local(self._binding_snapshot)
-        CredentialControlCursor._local(self._cursor_snapshot)
+        _require(type(creator) is bool)
+        if creator:
+            PreparedControlBinding._creator_local(self._binding_snapshot)
+        else:
+            PreparedControlBinding._reader_local(self._binding_snapshot)
+        _require(
+            all(
+                type(v) is bool
+                for v in (self._consume_attempted, self._consume_complete, self._consume_failed)
+            )
+        )
+        CredentialCancelAdoption._notice_local(self)
+        CredentialControlCursor._local(self._cursor_snapshot, creator=creator)
         if self._cursor_snapshot._complete is True:
             CredentialControlCursor._completed_local(
-                self._cursor_snapshot, self._cursor_snapshot._completion_snapshot
+                self._cursor_snapshot, self._cursor_snapshot._completion_snapshot, creator=creator
             )
 
     def _current(self):
@@ -699,6 +852,7 @@ class CredentialCancelAdoption:
                 control._timeout_snapshot,
                 end,
             )
+            self._native_receipt_origin = notice
             control._cancel_receipt = control._cancel_receipt_snapshot = notice
             control._parked = True
             control._park_end = control._park_end_snapshot = end
@@ -741,3 +895,137 @@ class CredentialCancelAdoption:
                     BrokerCancellationOwner._local_cause(control)
                 if control._parked is True:
                     control._io_unknown = True
+
+    def _creator_current(self, spine):
+        from .presentation_broker_cancel import BrokerCancellationOwner
+        from .presentation_broker_service import BrokerServiceSpine
+        from .presentation_control_binding import PreparedControlBinding
+
+        CredentialCancelAdoption._local(self, creator=True)
+        refs, control, binding = self._refs_snapshot, self._control_snapshot, self._binding_snapshot
+        _require(type(spine) is BrokerServiceSpine and spine is refs[0])
+        PreparedControlBinding.creator_material_current(binding)
+        CredentialCancelAdoption._local(self, creator=True)
+        BrokerCancellationOwner._guard(control, cleanup=True)
+        CredentialCancelAdoption._local(self, creator=True)
+        _require(
+            self._refs_snapshot is refs
+            and self._control_snapshot is control
+            and self._binding_snapshot is binding
+            and control._failed is False
+            and control._io_unknown is False
+            and control._go_receipt_snapshot is None
+        )
+        return refs
+
+    def _consume_scope(self, spine):
+        from .presentation_broker_cancel import BrokerCancellationOwner
+        from .presentation_broker_service import BrokerServiceSpine, _Connection
+        from .presentation_control_binding import PreparedControlBinding
+        from .presentation_remote_cleanup import _TASK
+
+        _require(
+            type(self) is CredentialCancelAdoption
+            and type(self._refs) is tuple
+            and len(self._refs) == 19
+            and self._refs is self._refs_snapshot
+        )
+        refs = self._refs_snapshot
+        _require(
+            type(spine) is BrokerServiceSpine
+            and refs[0] is spine
+            and type(refs[1]) is _Connection
+            and type(refs[15]) is _TASK
+            and refs[1].task is refs[15]
+            and asyncio.current_task() is refs[15]
+            and type(refs[16]) is asyncio.SelectorEventLoop
+            and asyncio.get_running_loop() is refs[16]
+            and type(self._binding) is PreparedControlBinding
+            and self._binding is self._binding_snapshot
+            and self._binding._creator is refs[15]
+            and self._binding._refs_snapshot is refs
+            and type(self._control) is BrokerCancellationOwner
+            and self._control is self._control_snapshot
+            and self._control._signed_cancel is self
+            and self._control._signed_cancel_snapshot is self
+        )
+        return refs
+
+    async def wait_notice(self, spine):
+        """One original-service receipt consumption; no generic work/GO permission."""
+        from .presentation_broker_cancel import (
+            _CANCEL_RECEIPT_MINT,
+            BrokerCancellationOwner,
+            _CancelReceipt,
+        )
+        from .presentation_broker_codec import encode_frame
+        from .presentation_cancel_budget import CancellationBudget
+        from .presentation_clock import NativeClockOwner
+        from .presentation_remote_cleanup import _FUTURE, _TASK
+
+        # Known wrong actor/scope cannot consume the original service attempt.
+        refs = CredentialCancelAdoption._consume_scope(self, spine)
+        _require(self._consume_attempted is False)
+        control, cursor = self._control_snapshot, self._cursor_snapshot
+        self._consume_attempted = True
+        try:
+            _require(CredentialCancelAdoption._creator_current(self, spine) is refs)
+            _require(self._control_snapshot is control and self._cursor_snapshot is cursor)
+            held = self._notice_refs_snapshot
+            task, future = held[0].task, held[1]
+            await asyncio.wait((task, future), return_when=asyncio.FIRST_COMPLETED)
+            _require(CredentialCancelAdoption._creator_current(self, spine) is refs)
+            _require(
+                self._control_snapshot is control
+                and self._cursor_snapshot is cursor
+                and control._allocation_snapshot.task is task
+                and control._cancel_future_snapshot is future
+            )
+            if not _FUTURE.done(future):
+                _TASK.result(task)
+                _require(False)
+            completion = CredentialControlCursor.creator_completed_current(cursor)
+            _require(CredentialCancelAdoption._creator_current(self, spine) is refs)
+            _require(self._control_snapshot is control and self._cursor_snapshot is cursor)
+            CredentialControlCursor._completed_local(cursor, completion, creator=True)
+            notice = control._cancel_receipt_snapshot
+            _require(
+                type(notice) is _CancelReceipt
+                and notice.mint is _CANCEL_RECEIPT_MINT
+                and _FUTURE.result(future) is notice
+                and control._notice_completed is True
+                and self._complete is True
+                and self._attempted is True
+                and self._consume_failed is False
+                and control._retired is True
+                and control._stop_intent_snapshot is None
+                and not _TASK.done(task)
+                and _TASK.cancelling(task) == 0
+                and _TASK._fut_waiter.__get__(task, _TASK) is control._park_future_snapshot
+                and completion[6] == "CANCEL"
+                and encode_frame(
+                    control._scope_snapshot[1], "CANCEL", 1, notice.frame.body, version=2
+                )
+                == completion[1]
+            )
+            now = NativeClockOwner.cleanup_sample(refs[13])
+            _require(CredentialCancelAdoption._creator_current(self, spine) is refs)
+            _require(
+                self._control_snapshot is control
+                and self._cursor_snapshot is cursor
+                and control._cancel_receipt_snapshot is notice
+                and control._allocation_snapshot.task is task
+                and control._cancel_future_snapshot is future
+                and _FUTURE.result(future) is notice
+                and not _TASK.done(task)
+                and _TASK.cancelling(task) == 0
+                and _TASK._fut_waiter.__get__(task, _TASK) is control._park_future_snapshot
+            )
+            CredentialControlCursor._completed_local(cursor, completion, creator=True)
+            _require(CancellationBudget.remaining_ns(refs[17], now) > 0)
+            self._consume_complete = True
+            return notice.frame
+        except BaseException:
+            self._consume_failed = True
+            BrokerCancellationOwner.refuse_notice(control)
+            raise

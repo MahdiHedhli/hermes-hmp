@@ -303,6 +303,129 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
 
                     monkeypatch.setattr(BrokerServiceSpine, "_current", retired_notice)
                 waiter = control._cancel_future_snapshot
+                if mutation.startswith("signed_control_native_service_"):
+                    from hmp_plugin.presentation_credential_control import CredentialCancelAdoption
+                    adoption = control._signed_cancel_snapshot
+                    if mutation == "signed_control_native_service_initial_drift":
+                        current = BrokerServiceSpine._current
+                        calls = []
+
+                        def initial_drift(service):
+                            current(service)
+                            if (adoption._consume_attempted
+                                    and asyncio.current_task() is record.task):
+                                calls.append(True)
+                                service._refused = True
+
+                        monkeypatch.setattr(BrokerServiceSpine, "_current", initial_drift)
+                        with pytest.raises(FrameError):
+                            await CredentialCancelAdoption.wait_notice(adoption, spine)
+                        assert adoption._consume_attempted is True
+                        assert adoption._consume_failed is True and not waiter.done()
+                        assert adoption._attempted is False and control._cancel_receipt is None
+                        # White-box restoration tests the consumed-attempt fence;
+                        # production does not restore retired/refused state.
+                        spine._refused = False
+                        control._failed = control._retired = False
+                        count = len(calls)
+                        with pytest.raises(FrameError):
+                            await CredentialCancelAdoption.wait_notice(adoption, spine)
+                        assert len(calls) == count
+                        monkeypatch.setattr(BrokerServiceSpine, "_current", current)
+                        BrokerCancellationOwner.abort(control)
+                        await asyncio.gather(control._allocation_snapshot.task,
+                                             return_exceptions=True)
+                        return ticket
+                    if mutation == "signed_control_native_service_final_future_drift":
+                        guard = BrokerCancellationOwner._guard
+                        qualified = SocketChannel._qualified_clock
+                        active, callbacks = [], []
+
+                        class ForeignFinalFuture:
+                            def __getattribute__(self, name):
+                                callbacks.append(name)
+                                raise AssertionError("foreign final future getter")
+
+                        def guarded(owner, **options):
+                            active.append(True)
+                            try:
+                                return guard(owner, **options)
+                            finally:
+                                active.pop()
+
+                        def changed_clock(channel):
+                            clock = qualified(channel)
+                            if (active and adoption._consume_attempted is True
+                                    and asyncio.current_task() is record.task):
+                                control._cancel_future = control._cancel_future_snapshot = (
+                                    ForeignFinalFuture())
+                            return clock
+
+                        monkeypatch.setattr(BrokerCancellationOwner, "_guard", guarded)
+                        monkeypatch.setattr(SocketChannel, "_qualified_clock", changed_clock)
+                        with pytest.raises(FrameError):
+                            await CredentialCancelAdoption.wait_notice(adoption, spine)
+                        assert callbacks == [] and not waiter.done()
+                        assert adoption._consume_attempted is True
+                        assert adoption._consume_failed is True
+                        BrokerCancellationOwner.abort(control)
+                        await asyncio.gather(control._allocation_snapshot.task,
+                                             return_exceptions=True)
+                        return ticket
+                    if mutation == "signed_control_native_service_wrong_task":
+                        async def foreign_consumer():
+                            with pytest.raises(FrameError):
+                                await CredentialCancelAdoption.wait_notice(adoption, spine)
+                        await asyncio.create_task(foreign_consumer())
+                        assert adoption._consume_attempted is False
+                    if mutation == "signed_control_native_service_wrong_spine":
+                        foreign_spine = BrokerServiceSpine.__new__(BrokerServiceSpine)
+                        with pytest.raises(FrameError):
+                            await CredentialCancelAdoption.wait_notice(adoption, foreign_spine)
+                        assert adoption._consume_attempted is False
+                    if mutation in ("signed_control_native_service_retired",
+                                    "signed_control_native_service_foreign_future"):
+                        current = BrokerServiceSpine._current
+                        callbacks = []
+
+                        class ForeignFuture:
+                            def __getattribute__(self, name):
+                                callbacks.append(name)
+                                raise AssertionError("foreign future getter")
+
+                        def changed_consumer(service):
+                            current(service)
+                            if (adoption._consume_attempted is True
+                                    and control._notice_completed is True
+                                    and asyncio.current_task() is record.task):
+                                if mutation == "signed_control_native_service_retired":
+                                    keys["broker"].retire()
+                                else:
+                                    control._cancel_future = control._cancel_future_snapshot = (
+                                        ForeignFuture())
+
+                        monkeypatch.setattr(BrokerServiceSpine, "_current", changed_consumer)
+                        with pytest.raises(FrameError):
+                            await BrokerServiceSpine._v2_control(spine, control)
+                        assert adoption._consume_complete is False
+                        assert adoption._consume_failed is True and callbacks == []
+                        assert waiter.done()  # historical notification is not usable authority
+                        BrokerCancellationOwner.abort(control)
+                        await asyncio.gather(control._allocation_snapshot.task,
+                                             return_exceptions=True)
+                        return ticket
+                    consumed = await BrokerServiceSpine._v2_control(spine, control)
+                    assert consumed is control._cancel_receipt_snapshot.frame
+                    assert adoption._consume_complete is True
+                    with pytest.raises(FrameError):
+                        await CredentialCancelAdoption.wait_notice(adoption, spine)
+                    assert control._go_receipt is None and native.start_attempted is False
+                    BrokerCancellationOwner.abort(control)
+                    outcome = await asyncio.gather(control._allocation_snapshot.task,
+                                                   return_exceptions=True)
+                    assert outcome == [consumed] and control._stop_known is True
+                    held["consumed_native_notice"] = consumed
+                    return ticket
                 done, _ = await asyncio.wait(
                     (waiter, control._allocation_snapshot.task), timeout=0.5,
                     return_when=asyncio.FIRST_COMPLETED)
@@ -517,6 +640,8 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                     assert asyncio.current_task() is not binding._creator
                     with pytest.raises(FrameError):
                         PreparedControlBinding.creator_current(binding)
+                    with pytest.raises(FrameError):
+                        PreparedControlBinding.creator_material_current(binding)
                     material(binding)
                     held["material_passed"] = True
 
@@ -918,5 +1043,20 @@ async def test_original_signed_control_cursor_without_native_receipts(local, tmp
 ])
 async def test_signed_cancel_native_receipt_and_owned_local_stop(local, tmp_path, monkeypatch,
                                                                mutation):
+    held, _ = await exchange(local, tmp_path, monkeypatch, mutation)
+    assert "native_control" in held
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+@pytest.mark.parametrize("mutation", [
+    "signed_control_native_service_cancel", "signed_control_native_service_wrong_task",
+    "signed_control_native_service_wrong_spine", "signed_control_native_service_retired",
+    "signed_control_native_service_foreign_future",
+    "signed_control_native_service_initial_drift",
+    "signed_control_native_service_final_future_drift",
+])
+async def test_original_service_consumes_only_current_signed_cancel(local, tmp_path, monkeypatch,
+                                                                  mutation):
     held, _ = await exchange(local, tmp_path, monkeypatch, mutation)
     assert "native_control" in held

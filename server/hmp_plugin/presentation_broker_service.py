@@ -1533,6 +1533,13 @@ class BrokerServiceSpine:
 
         _require(type(owner) is BrokerCancellationOwner)
         try:
+            if owner._credential_binding_snapshot is not None:
+                from .presentation_credential_control import CredentialCancelAdoption
+
+                adoption = owner._signed_cancel_snapshot
+                _require(type(adoption) is CredentialCancelAdoption
+                         and owner._signed_cancel is adoption)
+                return await CredentialCancelAdoption.wait_notice(adoption, self)
             BrokerCancellationOwner._guard(owner)
             task, notice = owner._allocation_snapshot.task, owner._cancel_future_snapshot
             await asyncio.wait((task, notice), return_when=asyncio.FIRST_COMPLETED)

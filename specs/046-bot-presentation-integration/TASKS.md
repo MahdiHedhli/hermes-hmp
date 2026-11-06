@@ -59,7 +59,7 @@ historical, not an alternative live authorization path or resolved incident.
       and owned local controller park/stop; 1,151 affected passed, one skipped;
       final focused55 includes unusable post-notification failure. This does not
       integrate ordinary service receipt consumers or release native debt.
-- [ ] Implement the dedicated original-service receipt validator/consumer without
+- [x] Implement/review the dedicated original-service receipt validator/consumer without
       relaxing generic credential work guards; reject stale/revoked/late failures.
 - [ ] Implement the actual signed GO/CANCEL receiver/context on the existing original
       controller task/cursor and frozen budget before any credential resource/READY

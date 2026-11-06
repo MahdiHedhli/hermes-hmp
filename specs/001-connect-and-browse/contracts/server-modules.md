@@ -600,4 +600,4 @@ not weaken the closed plugin registration or optional-media import boundaries.
 - `presentation_credential_queued.py`: original adopted connection/key/input-receipt pre-resource queued-current check; no resource or GO permit.
 
 - `presentation_control_binding.py`: prepared original controller task/key-context handoff; preparation alone remains a hard no-IO stop.
-- `presentation_credential_control.py`: original controller-task first signed GO/CANCEL frame staging; explicit signed pre-GO CANCEL adoption joins existing native grammar/budget/receipt and owned local park/stop. Ordinary service receipt consumers, GO/resources and production dispatch remain closed.
+- `presentation_credential_control.py`: original controller-task first signed GO/CANCEL frame staging; explicit signed pre-GO CANCEL adoption joins existing native grammar/budget/receipt and owned local park/stop. The dedicated original-service CANCEL receipt consumer is distinct from generic work; GO/resources and production dispatch remain closed.
