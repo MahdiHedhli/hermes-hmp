@@ -1,3 +1,21 @@
+## Image verification scope — November 6, 2026
+
+The original source `21937dc` has independently accepted evidence for 174 pairs /
+348 phases. Its next paired attempt remains refused after the original process
+observation limit; terminal exit does not turn that attempt into a pass. Two
+separately reviewed fresh heavy single-phase observations at `5c96927` are
+separate evidence, not rehabilitation of the old attempt.
+
+The source-bound 301-job / 418-phase base-tail batch is running at frozen
+`e8653d5`; completion and full artifact review are pending. Its terminal evidence
+collector has independent source-review acceptance and has not been executed.
+A separate pure supplemental planner at `ecfb0f0` preserves all 144 added
+ordinary/delegated-child phases in 90 prospective jobs. Its 23 pure tests, lint
+and independent source review pass; it supplies no execution authority.
+Supplemental native execution, composite coverage acceptance, production image
+activation and physical/release qualification remain open. Earlier checkpoint
+sections below retain their dated scope and are not fresh completion claims.
+
 ## Heavy-case fresh partition samples reviewed — November 6, 2026
 
 Two separately reviewed fresh single-phase experiments at `5c96927` completed
