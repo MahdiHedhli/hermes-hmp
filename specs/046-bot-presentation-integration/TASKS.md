@@ -343,3 +343,8 @@ historical, not an alternative live authorization path or resolved incident.
       READY wait: exact minted selector proof, original Task done+cancelled for
       historical release, payload-free count fact and wiped bytes. Seven causals
       and 104 READY-reader module tests pass; no pre-READY CANCEL/ACK enabled.
+
+- [x] Implement/review distinct BEGIN-derived pre-READY CANCEL signing-only owner:
+      original cleanup Task, completed BEGIN/cancelled read, earliest native seq1
+      preparation and reciprocal signer exclusion. Final reader-release custody
+      seals reject key/unknown/intent drift. Transport/ACK/publication stay open.

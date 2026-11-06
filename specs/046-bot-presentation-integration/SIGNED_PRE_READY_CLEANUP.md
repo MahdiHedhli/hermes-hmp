@@ -1,14 +1,17 @@
 # Signed pre-READY cleanup integration
 
 Status: first local READY-wait retirement prerequisite implemented and reviewed;
-pre-READY signing/transport remains a plan, not an enabled route.
+the distinct BEGIN-derived signing-only owner is also implemented/reviewed.
+Pre-READY transport remains unimplemented, not an enabled route.
 See [source evidence](../../docs/research/presentation-ready-cancel-retirement-2026-11-06.md).
 Pinned inspected source: bdb3adff9fcfee52fa384f59ac1b438d5b754eb4.
 Preserve complete desktop character delivery; this prerequisite is not a substitute.
 
 ## Exact current gap
 
-`NativeCancelCommitment.retain` requires a completed `NativeReadyTransition`.
+The existing post-READY `NativeCancelCommitment.retain` requires a completed
+`NativeReadyTransition`; the separate `NativePreReadyCancelCommitment` now derives
+signed data from completed BEGIN plus exact cancelled-reader retirement.
 `NativeCancelWriter` derives its original BEGIN scope through that transition.
 Neither can safely be called with a fabricated READY object before READY arrives.
 `NativePhaseWorkOwner._cleanup_material` also requires the original work Task

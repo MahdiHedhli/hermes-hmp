@@ -46,6 +46,8 @@ class NativeCancelCommitment:
                  and type(cleanup._allocations_snapshot[0].task) is _TASK
                  and asyncio.current_task() is cleanup._allocations_snapshot[0].task
                  and _TASK.cancelling(cleanup._allocations_snapshot[0].task) == 0
+                 and cleanup._pre_ready_cancel_commitment is None
+                 and cleanup._pre_ready_cancel_commitment_snapshot is None
                  and cleanup._credential_cancel_commitment is None
                  and cleanup._credential_cancel_commitment_snapshot is None
                  and cleanup._cancel_write_attempted is False

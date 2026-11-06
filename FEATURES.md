@@ -1,3 +1,21 @@
+## BEGIN-derived pre-READY cancellation signer — November 6, 2026
+
+Bot-character transport now has a distinct signing-only owner for cancellation
+before READY. It joins the actual completed signed BEGIN, known retired original
+READY read, original cleanup actor and existing earliest native cleanup window.
+No fake READY transition or GO attempt is allowed. Current role, actor, budget
+and cleanup custody are sealed after native/crypto boundaries; failed owners
+cannot be replaced or retried. No socket transport or remote ACK is enabled.
+
+Independent read-only review accepted the final custody repair. Eleven causals
+cover empty/partial-prefix success and key, actor, expiry, native preparation,
+foreign field and final cleanup-custody refusals. Selected regression: **936
+passed** (54.84s); final reader module including the extra partial case: **115
+passed** (21.98s). Lint passed. These are selected-source checks, not a new full
+regression or physical qualification. No host/device/build changed. Pre-READY
+writer/route, production startup, result/terminal custody and full character
+availability remain open; historical broker intermittency remains unresolved.
+
 ## Original READY cancellation retirement — November 6, 2026
 
 Bot-character transport can now retire a cancelled original signed READY wait

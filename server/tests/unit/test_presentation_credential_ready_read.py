@@ -29,7 +29,12 @@ from .test_presentation_supervisor import context as context
     "oversize_auth", "eof", "unknown_recv", "target_drift", "count_drift", "buffer_drift",
     "current_key", "admission_refusal", "wrong_actor", "missing_write", "deadline",
     "cancel_wait", "cancel_wait_partial", "cancel_wait_key", "cancel_wait_generic",
-    "cancel_wait_foreign_end", "cancel_wait_progress", "cancel_wait_subclass", "pin_drift",
+    "cancel_wait_foreign_end", "cancel_wait_progress", "cancel_wait_subclass",
+    "cancel_wait_sign", "cancel_wait_sign_partial", "cancel_wait_sign_key",
+    "cancel_wait_sign_wrong_actor", "cancel_wait_sign_expired", "cancel_wait_sign_tail_key",
+    "cancel_wait_sign_prepare_error", "cancel_wait_sign_foreign_sequence",
+    "cancel_wait_sign_read_tail_key", "cancel_wait_sign_read_tail_unknown",
+    "cancel_wait_sign_read_tail_intent", "pin_drift",
     "native_ready", "native_wrong_actor", "native_observe_false",
     "native_observe_key", "native_transition_error", "native_transition_key", "native_data_drift",
     "composed_ready", "composed_signature", "composed_wrong_actor",
@@ -86,7 +91,7 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 received.extend(part)
             assert bytes(received) == b.wire
             if mutation.startswith("cancel_wait"):
-                if mutation == "cancel_wait_partial":
+                if mutation in ("cancel_wait_partial", "cancel_wait_sign_partial"):
                     await asyncio.get_running_loop().sock_sendall(peer, b"HBAX")
                 await read_wait.wait()
                 b.allocation.task.cancel()  # synthetic owned task only
@@ -203,6 +208,113 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                     assert held["admission_calls"] == 1
                 raise
             held["receiver"] = receiver
+            if mutation.startswith("cancel_wait_sign"):
+                from hmp_plugin.presentation_broker_service import SocketChannel
+                from hmp_plugin.presentation_credential_pre_ready_cancel import (
+                    NativePreReadyCancelCommitment,
+                )
+                from hmp_plugin.presentation_remote_cleanup import RemoteCleanupOwner
+
+                async def pre_ready_data_only(owned_channel, cleanup):
+                    assert owned_channel is channel
+                    held["pre_ready_called"] = True
+                    if mutation == "cancel_wait_sign_wrong_actor":
+                        async def wrong_signer():
+                            with pytest.raises(FrameError):
+                                NativePreReadyCancelCommitment.retain(cleanup)
+                        await asyncio.create_task(wrong_signer())
+                        assert cleanup._pre_ready_cancel_commitment_snapshot is None
+                    if mutation == "cancel_wait_sign_key":
+                        keys["gateway"].retire()
+                        with pytest.raises(FrameError):
+                            NativePreReadyCancelCommitment.retain(cleanup)
+                        signer = cleanup._pre_ready_cancel_commitment_snapshot
+                    else:
+                        try:
+                            signer = NativePreReadyCancelCommitment.retain(cleanup)
+                        except BaseException as error:
+                            held["pre_ready_error"] = error
+                            raise
+                        if mutation.startswith("cancel_wait_sign_read_tail_"):
+                            released = NativeReadyReceiver._released
+                            calls = []
+
+                            def retired_read_tail(owned, transport):
+                                result = released(owned, transport)
+                                if owned is receiver:
+                                    calls.append(True)
+                                    if len(calls) == 2:
+                                        if mutation.endswith("_key"):
+                                            keys["gateway"].retire()
+                                        elif mutation.endswith("_unknown"):
+                                            cleanup._unknown = True
+                                        else:
+                                            cleanup._intent = False
+                                return result
+
+                            monkeypatch.setattr(NativeReadyReceiver, "_released", retired_read_tail)
+                            with pytest.raises(FrameError):
+                                NativePreReadyCancelCommitment._guard(signer)
+                            assert len(calls) == 2 and signer._attempted is False
+                            with pytest.raises(FrameError):
+                                signer.prepare()
+                        elif mutation in ("cancel_wait_sign_tail_key",
+                                        "cancel_wait_sign_prepare_error",
+                                        "cancel_wait_sign_foreign_sequence"):
+                            prepare_cancel = RemoteCleanupOwner._prepare_cancel
+                            held["pre_ready_sequence_getters"] = []
+
+                            class ForeignSequence:
+                                def __eq__(self, other):
+                                    held["pre_ready_sequence_getters"].append("eq")
+                                    raise AssertionError("foreign sequence comparison")
+
+                            def changed_preparation(owned, transport):
+                                if mutation == "cancel_wait_sign_prepare_error":
+                                    raise FrameError("SYNTHETIC_PREPARATION_REFUSED")
+                                frame = prepare_cancel(owned, transport)
+                                if mutation == "cancel_wait_sign_tail_key":
+                                    keys["gateway"].retire()
+                                else:
+                                    owned._cancel_sequence = owned._cancel_sequence_snapshot = (
+                                        ForeignSequence())
+                                return frame
+
+                            monkeypatch.setattr(RemoteCleanupOwner, "_prepare_cancel",
+                                                changed_preparation)
+                            with pytest.raises(FrameError):
+                                signer.prepare()
+                            assert held["pre_ready_sequence_getters"] == []
+                        elif mutation == "cancel_wait_sign_expired":
+                            remaining = RemoteCleanupOwner._remaining
+                            monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                lambda owned: 0.0 if owned is cleanup else remaining(owned))
+                            with pytest.raises(FrameError):
+                                signer.prepare()
+                        else:
+                            raw = signer.prepare()
+                            held["pre_ready_signed"] = raw
+                            value = json.loads(decode_record(raw).canonical_json)
+                            assert value["phase"] == "CANCEL" and value["sequence"] == 1
+                            assert value["work_end_ns"] == writer._scope_snapshot.intent.end_ns
+                            assert cleanup._cancel_write_completed is False
+                            assert producer._ready_transition_snapshot is None
+                            assert channel._go_write_intent_snapshot is None
+                    held["pre_ready_signer"] = signer
+                    with pytest.raises(FrameError):
+                        NativePreReadyCancelCommitment.retain(cleanup)
+                    with pytest.raises(FrameError):
+                        signer.prepare()
+                    raise FrameError("SYNTHETIC_PRE_READY_DATA_ONLY_NO_TRANSPORT")
+
+                async def observed_pre_ready_data_only(owned_channel, cleanup):
+                    try:
+                        return await pre_ready_data_only(owned_channel, cleanup)
+                    except BaseException as error:
+                        held["pre_ready_callback_error"] = error
+                        raise
+
+                monkeypatch.setattr(SocketChannel, "send_cancel", observed_pre_ready_data_only)
             assert remote._send_completed and remote._receive_claimed
             with pytest.raises(FrameError):
                 NativeReadyReceiver.retain(writer)
@@ -226,7 +338,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
 
                 async def observe_wait(waiter, end_ns, **options):
                     if (waiter._origin_scope.task is writer._scope_snapshot.allocation.task
-                            and (mutation != "cancel_wait_partial" or receiver._consumed == 4)):
+                            and (mutation not in ("cancel_wait_partial", "cancel_wait_sign_partial")
+                                 or receiver._consumed == 4)):
                         read_wait.set()
                     try:
                         return await wait(waiter, end_ns, **options)
@@ -1317,6 +1430,10 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
         monkeypatch.setattr(NativePhaseWorkOwner, "exchange_ready", source_only_exchange)
         with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
             await remote.begin_ready()
+        if mutation.startswith("cancel_wait_sign"):
+            async with asyncio.timeout(2):
+                assert await asyncio.shield(
+                    remote._cleanup_owner_snapshot._allocations_snapshot[0].task) is False
         async with asyncio.timeout(2):
             await peer_task  # fixture rendezvous bound, not a protocol deadline
         if mutation.startswith("composed_"):
@@ -1336,7 +1453,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
         native_case = mutation.startswith("native_")
         succeeds = mutation in ("ready", "fragmented", "wrong_actor", "missing_write")
         read_complete = succeeds or mutation == "current_key" or native_case
-        known_cancel = mutation in ("cancel_wait", "cancel_wait_partial", "cancel_wait_key")
+        known_cancel = (mutation in ("cancel_wait", "cancel_wait_partial", "cancel_wait_key")
+                        or mutation.startswith("cancel_wait_sign"))
         io_unknown = not read_complete and mutation != "admission_refusal" and not known_cancel
         assert receiver._complete is read_complete
         assert receiver._failed is (not read_complete or mutation in (
@@ -1383,7 +1501,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 assert receiver._completion is None and receiver._failed
                 stopped = receiver._cancel_release_origin
                 assert not hasattr(stopped, "values")
-                assert stopped.consumed == (4 if mutation == "cancel_wait_partial" else 0)
+                assert stopped.consumed == (4 if mutation in (
+                    "cancel_wait_partial", "cancel_wait_sign_partial") else 0)
                 assert not receiver._buffer_origin and receiver._buffer_values == b""
                 error = held["read_error"]
                 assert type(error) is asyncio.CancelledError and error.__context__ is None
@@ -1421,6 +1540,15 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 NativeReadyReceiver._released(receiver, channel)
         if mutation.startswith("cancel_wait"):
             assert held["cancel_getters"] == []
+        if mutation.startswith("cancel_wait_sign"):
+            assert held["pre_ready_called"]
+            if "pre_ready_signer" not in held:
+                raise held["pre_ready_callback_error"]
+            signer = held["pre_ready_signer"]
+            assert signer._complete is (mutation in (
+                "cancel_wait_sign", "cancel_wait_sign_partial", "cancel_wait_sign_wrong_actor"))
+            assert signer._raw_snapshot is held.get("pre_ready_signed")
+            assert channel._credential_cancel_writer_snapshot is None
         if mutation == "pin_drift":
             assert held["pin_callbacks"] == [] and receiver._consumed == 0
         with pytest.raises(FrameError):

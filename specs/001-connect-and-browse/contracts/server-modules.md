@@ -721,6 +721,17 @@ The internal credential `send_cancel` route composes fixed after-READY signing a
 transport only on the original cleanup Task/channel. It retains the partial signer
 before native checks and consumes one preparation. Actual reader/consumer tests
 correlate seq/window/end without broker ACK, worker relay or resource release.
-Known no-IO role refusal currently retains automatic local-cleanup debt; uncertain
-IO stays conservative. Production startup and full terminal/cleanup qualification
+Known no-IO signing refusal has independently checked local-only retirement;
+remote UNKNOWN and uncertain IO stay conservative. Production startup and full terminal/cleanup qualification
 remain open.
+
+### Distinct BEGIN-derived pre-READY CANCEL commitment (November 6, 2026)
+
+`presentation_credential_pre_ready_cancel.py` retains a separate data-only signer
+on the original cleanup allocation before native/crypto checks. It joins the
+completed original signed BEGIN and exact cancelled READY-read retirement, with
+no READY transition or GO attempt. The existing native preparation consumes the
+already-frozen earliest seq1/window under original quiescence/cause/clock gates.
+Actual BEGIN signature/current role/material/budget checks surround signing;
+failed or consumed owners cannot retry. No socket writer, native completion, ACK,
+remote release or production route is provided. Post-READY signing remains separate.
