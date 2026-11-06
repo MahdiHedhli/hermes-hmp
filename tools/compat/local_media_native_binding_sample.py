@@ -34,6 +34,18 @@ def select_tool_ids(tool_ids, count):
     return tuple(reversed(tool_ids[-count:]))
 
 
+def bound_modules(bound):
+    """Use the listener's actual `(bridge cache, reads cache)` snapshot shape."""
+    from types import ModuleType
+
+    require(type(bound) is tuple and len(bound) == 2)
+    chain, reads = bound
+    require(type(chain) is tuple and len(chain) == 7 and type(reads) is tuple and len(reads) == 1
+            and all(type(member) is ModuleType for member in (*chain, *reads))
+            and reads[0] is chain[0])
+    return chain[0], chain[6]
+
+
 def seed_native_shape(db, *, home, kind, lineage_count, prompt_chars):
     """Use public native APIs and verify real prompt/lineage/history fields.
 
@@ -136,7 +148,7 @@ def run_preparation(fx, db, *, user, profile, chat):
     """
     from hmp_plugin.contract import ConversationRef
 
-    sidecar = fx.rig.ctx.media_modules[0]
+    sidecar, binding = bound_modules(fx.rig.ctx.media_modules)
     cells = []
     for kind in KINDS:
         for lineage, prompt in SHAPES:
@@ -162,7 +174,7 @@ def run_preparation(fx, db, *, user, profile, chat):
                     candidates=tuple(item for item in rows.candidates
                                      if item.tool_row_id in wanted))
                 result = fx.native.bridge.bind_media_batch(candidate)
-                require(type(result) is fx.rig.ctx.media_modules[6].MediaBatchBinding and
+                require(type(result) is binding.MediaBatchBinding and
                         result.reason == "ok" and result.kind is not None and
                         result.kind.value == kind and
                         result.accepted == selected)

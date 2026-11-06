@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import sys
+import types
 from pathlib import Path
 
 import pytest
@@ -68,6 +69,34 @@ def test_import_is_inert():
     assert callable(load().seed_native_shape)
     assert not any(name.startswith(("hermes_", "psutil", "sqlite3", "aiohttp"))
                    for name in set(sys.modules) - before)
+
+
+def test_bound_modules_uses_actual_nested_listener_snapshot():
+    chain = tuple(types.ModuleType(f"fixture_{index}") for index in range(7))
+    assert load().bound_modules((chain, (chain[0],))) == (chain[0], chain[6])
+
+
+@pytest.mark.parametrize("case", ["flat", "list", "missing", "wrong_bridge_length",
+                                 "wrong_reads_length", "foreign_sidecar", "not_module"])
+def test_wrong_listener_snapshot_refuses_before_using_module_attributes(case):
+    chain = tuple(types.ModuleType(f"fixture_{index}") for index in range(7))
+    bound = (chain, (chain[0],))
+    if case == "flat":
+        bound = chain
+    elif case == "list":
+        bound = list(bound)
+    elif case == "missing":
+        bound = None
+    elif case == "wrong_bridge_length":
+        bound = (chain[:-1], (chain[0],))
+    elif case == "wrong_reads_length":
+        bound = (chain, ())
+    elif case == "foreign_sidecar":
+        bound = (chain, (types.ModuleType("foreign"),))
+    else:
+        bound = ((object(), *chain[1:]), (chain[0],))
+    with pytest.raises(RuntimeError):
+        load().bound_modules(bound)
 
 
 @pytest.mark.parametrize("kind", ["phone", "bot_chat"])

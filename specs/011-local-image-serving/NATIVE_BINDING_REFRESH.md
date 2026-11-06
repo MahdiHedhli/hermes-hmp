@@ -42,13 +42,21 @@ controls. It explicitly says `timing_measured: false`,
 C6b or masquerade as a performance/writer run. Normal serving and memory modes
 keep their existing report contracts; modes cannot be combined or truthy-coerced.
 
-Root's 154 preparation/model/structure/driver checks and configured lint pass.
+Root's 162 preparation/model/structure/driver checks and configured lint pass.
 Independent source review accepted one fresh isolated seed-mode native sample,
 without reviewer execution. Native execution and artifact review are pending
 until separately recorded. The original 12-second command-observation budget,
 source/runtime checks, audit restrictions and retained actor/database/worker
 settlement remain unchanged. An expiry is a refusal; it never authorizes actor
 replacement or an automatic retry.
+
+The first native attempt at `13341b7` terminated with failure: the fixture
+mistook the listener's nested `(bridge cache, reads cache)` snapshot for a flat
+module list. Its logs and known exit are preserved, with no performance result.
+The independently reviewed correction uses the exact existing nested shape and
+shared sidecar identity, with eight additional causal guards. The declared
+matrix, acceptance assertions, cleanup and observation budget are unchanged;
+one fresh second attempt is separate from the original failure.
 
 ## Remaining measurement stages
 
