@@ -210,3 +210,22 @@ epoch, worker authority or native SQL is fabricated to bypass these contracts.
 Next implementation must map the actual HMP binding reads to these distinctions
 and establish first/fresh-second oracles before adding scenarios. No new native
 fork/reset execution or pass is claimed by this source inspection.
+
+## Constructed child isolation candidate (not native-qualified)
+
+The source runner now declares `branch_child` and `reset_child` at each of the
+three read brackets for both contexts. Each constructs a fresh child through
+public `create_session`, using the matching `_branched_from` or `_reset_from`
+parent marker, then appends one synthetic message. It verifies stored parent,
+marker, active child message and unchanged parent resume target. Both first and
+fresh second bindings must retain the exact original parent selection/kind.
+No parent termination, native routing, coordinated reset or gateway admission
+is invoked. This is child isolation coverage, not operational fork/reset coverage.
+
+These 144 additional phase pairs expand the declared source matrix from 624 to
+768. The existing 12-phase pilot is unchanged and contains none of these new
+cases. Root's 247 focused actor/request/oracle and child-fact model tests passed;
+models reject existing child identity, wrong parent/marker, absent child history
+and parent hijack. Independent source review and bounded native evidence remain
+required before these cases count as verified. Storage-layout work must preserve
+all 768 declared phases plus any further applicable scenarios.

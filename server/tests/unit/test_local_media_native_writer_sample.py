@@ -555,3 +555,56 @@ def test_writer_uses_captured_profile_context_instead_of_a_later_reader_value():
         scope.reset(token)
     assert seen == ["private-profile-at-construction"]
     assert scope.get() == "missing"
+
+
+@pytest.mark.parametrize("scenario", ["branch_child", "reset_child"])
+@pytest.mark.parametrize("kind", ["phone", "bot_chat"])
+def test_constructed_children_preserve_parent_binding_oracle(scenario, kind):
+    module = load()
+    for seam in module.SEAMS:
+        module.validate_request(0 if kind == "bot_chat" else 4, 16, scenario + ":" + seam)
+    expected = ("ok", kind, (9,))
+    assert module.expected_outcomes(scenario, kind, (9,)) == (expected, expected)
+
+
+@pytest.mark.parametrize("scenario", ["branch_child", "reset_child"])
+@pytest.mark.parametrize("fault", [None, "existing", "wrong_parent", "wrong_marker",
+                                   "no_message", "hijack"])
+def test_child_construction_requires_fresh_identity_marker_history_and_parent_isolation(
+    scenario, fault
+):
+    module = load()
+    calls = []
+    marker = "_branched_from" if scenario == "branch_child" else "_reset_from"
+
+    class DB:
+        def get_session(self, sid):
+            if not calls:
+                return {} if fault == "existing" else None
+            return {"id": sid,
+                    "parent_session_id": "foreign" if fault == "wrong_parent" else "parent",
+                    "model_config": {marker: "foreign" if fault == "wrong_marker" else "parent"}}
+
+        def create_session(self, sid, source, **kwargs):
+            calls.append(("create", sid, source, kwargs))
+            return sid
+
+        def append_message(self, sid, role, **kwargs):
+            calls.append(("append", sid, role, kwargs))
+            return 77
+
+        def get_active_message_ids(self, sid):
+            return [] if fault == "no_message" else [77]
+
+        def resolve_resume_session_id(self, sid):
+            return "foreign" if fault == "hijack" else sid
+
+    if fault:
+        with pytest.raises(RuntimeError):
+            module.construct_isolated_child(DB(), "parent", scenario)
+        if fault == "existing":
+            assert calls == []
+    else:
+        assert module.construct_isolated_child(DB(), "parent", scenario) == 2
+        assert [call[0] for call in calls] == ["create", "append"]
+        assert calls[0][3] == {"parent_session_id": "parent", "model_config": {marker: "parent"}}

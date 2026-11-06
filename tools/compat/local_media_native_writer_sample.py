@@ -173,7 +173,8 @@ class ReadHooks:
 SEAMS = {"ids0": ("after", "get_active_message_ids", 1),
          "page": ("before", "get_messages", 1),
          "ids1": ("before", "get_active_message_ids", 2)}
-GENERAL = ("control", "append", "deactivate", "eligibility", "tip_move", "aba")
+GENERAL = ("control", "append", "deactivate", "eligibility", "tip_move", "aba",
+           "branch_child", "reset_child")
 BOT_ONLY = ("ambiguous", "kind_swap", "title_guard", "archive")
 
 
@@ -205,7 +206,7 @@ def expected_outcomes(scenario, kind, selected):
     ok = ("ok", kind, selected)
     def closed(reason):
         return (reason, None, ())
-    if scenario in ("control", "aba", "title_guard"):
+    if scenario in ("control", "aba", "title_guard", "branch_child", "reset_child"):
         return ok, ok
     if scenario == "append":
         return closed("rows_changed"), ok
@@ -218,6 +219,29 @@ def expected_outcomes(scenario, kind, selected):
     if scenario == "kind_swap":
         return closed("tip_changed"), ("ok", "phone", selected)
     return ok, closed("not_eligible")  # residual, after the last genuine native read
+
+
+def construct_isolated_child(handle, tip, scenario):
+    """Public-API synthetic child facts, NOT gateway branch/reset admission or routing."""
+    require(scenario in ("branch_child", "reset_child"))
+    child = "synthetic-c6b-writer-" + scenario
+    marker = "_branched_from" if scenario == "branch_child" else "_reset_from"
+    require(handle.get_session(child) is None)
+    require(handle.create_session(child, "api_server", parent_session_id=tip,
+                                  model_config={marker: tip}) == child)
+    row = handle.get_session(child)
+    require(type(row) is dict and row.get("id") == child and
+            row.get("parent_session_id") == tip)
+    config = row.get("model_config")
+    if type(config) is str:
+        import json
+        config = json.loads(config)
+    require(type(config) is dict and config.get(marker) == tip)
+    message = handle.append_message(child, "user", content="SYNTHETIC_ISOLATED_CHILD_ONLY")
+    require(type(message) is int and message > 0 and
+            message in handle.get_active_message_ids(child) and
+            handle.resolve_resume_session_id(tip) == tip)
+    return 2
 
 
 def _checked_outcome(value, reference, candidate, expected):
@@ -312,6 +336,8 @@ def run_scenario(fx, db, candidate, reference, selected, shape, extra, *,
                     hidden(handle, True)
                 else:
                     phone_to(root)
+        elif scenario in ("branch_child", "reset_child"):
+            facts["native_mutations_verified"] += construct_isolated_child(handle, tip, scenario)
         elif scenario == "tip_move":
             child = "synthetic-c6b-writer-compression-child"
             require(handle.get_session(child) is None)
@@ -411,7 +437,7 @@ def validate_report(report, case, selector, request):
         amount = 2 if scenario == "aba" else 1
         native, store = (amount, 0) if kind == "bot_chat" else (0, amount)
     else:
-        native, store = (2 if scenario == "tip_move" else 1), 0
+        native, store = (2 if scenario in ("tip_move", "branch_child", "reset_child") else 1), 0
     require(type(report["native_mutations_verified"]) is int and
             report["native_mutations_verified"] == native and
             type(report["synthetic_store_calls"]) is int and

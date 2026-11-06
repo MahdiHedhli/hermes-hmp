@@ -642,3 +642,12 @@ acceptance and Phone-store ABA acceptance. Full 624-phase execution requires a
 reviewed storage/layout plan; native fork/reset applicability and other coverage
 remain open. CW3/CW4/CW5 and current C6b remain unchecked. No native safety
 limitation is reclassified as a fix or a physical/release qualification.
+
+### CW3 constructed child isolation candidate, 2026-11-06
+
+- [ ] Independently review `branch_child`/`reset_child` public-API synthetic
+  lineage facts and unchanged parent binding oracles; 247 focused models passed.
+- [ ] Verify the new cases on pinned native source after source acceptance.
+  Declared matrix is now 768 phases; prior 12-phase pilot remains its exact
+  historical scope. Actual gateway fork/reset admission is not covered by child
+  construction and remains separately assessed. Preserve storage and actor gates.
