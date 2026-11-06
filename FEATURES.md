@@ -1,3 +1,17 @@
+## Bot-character credential source checkpoint — November 6, 2026
+
+Independently reviewed source commit `7c37b4f` adds bounded credential record
+parsing, bilateral signed-transcript consistency and scope hashing from the
+original validated input3. The focused suite passed 167 tests; review inspected
+source/tests without independently rerunning them. These are data-only building
+blocks, not runtime enrollment, native authority or finished character delivery.
+Typed startup/key custody, original cursor/phase integration, full GO/result/
+TERMINAL/ACK/native publication and device/release qualification remain open.
+See the [credential contract and checkpoint](specs/046-bot-presentation-integration/CREDENTIAL_WIRE.md).
+The local role-credential direction supersedes the unfinished Mach production
+admission proposal; historical Mach evidence and its unresolved incident remain.
+No live installation, configuration or permission change accompanied this work.
+
 ## Native image verification checkpoint — November 6, 2026
 
 Independent review accepted the 120 never-started base-phase observations at exact source `5e247a6`: all 3,120 artifacts, 1,508,640 copied-source SHA/literal Git identities, 240 outcomes, 1,200 known commands without expiry/settlement, and 39/39 borrows with closed DB/listener/workers/hooks/writers. It also accepted two separately reviewed fresh Phone observations for base pair 323 (case 6, selector 16): 52 artifacts, 25,144 copied files and 20 known commands; deactivation refused then freshly accepted 15 rows, while changed eligibility refused then remained ineligible. These are bounded native observations, not production or device qualification.
