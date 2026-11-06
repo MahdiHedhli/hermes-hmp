@@ -657,3 +657,8 @@ limitation is reclassified as a fix or a physical/release qualification.
 - [ ] Review pure 768-phase/384-pair planner, then implement two fresh DB scopes
   per process with explicit closed checkpoints and unchanged deadline. Planner
   models pass; paired execution is not implemented by the planner.
+
+- [x] Independent four-child artifact readback accepted: exact112 artifacts and
+  source/runtime/outcome/closure bindings; bounded constructed-child scope only.
+- [ ] Paired runner source implemented with two exclusive DB scopes and closed
+  checkpoints; independent source review and unchanged-budget native pilot pending.

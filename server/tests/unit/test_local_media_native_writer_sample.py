@@ -633,3 +633,60 @@ def test_pair_plan_preserves_every_declared_phase_without_execution():
 def test_inventory_refuses_invalid_case_before_planning(case):
     with pytest.raises(RuntimeError):
         load().declared_requests(case)
+
+
+@pytest.mark.parametrize("scenario_pair", [(), ("control:page",),
+    ("control:page", "control:page"), ("control:page", "bad:page"),
+    ["control:page", "append:page"], ("control:page", None),
+    (("control:page", "append:page"), "deactivate:page")])
+def test_invalid_pair_refuses_before_source_or_filesystem(tmp_path, scenario_pair):
+    from .test_local_media_native_serving_driver import driver
+
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40, sample_binding_seed=True,
+            binding_cost_case=0, binding_cost_selector=1, binding_writer=scenario_pair)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_all_planned_pairs_are_explicitly_validated_before_admission():
+    module = load()
+    for case, selector, pair in module.paired_plan():
+        module.validate_request(case, selector, pair)
+
+
+@pytest.mark.parametrize("fault", [None, "one_preparation", "one_writer", "wrong_order",
+                                   "wrong_outcome", "single_mode"])
+def test_pair_report_requires_two_independently_valid_ordered_phases(fault):
+    import copy
+
+    from .test_local_media_native_binding_sample import preparation_report
+    from .test_local_media_native_serving_driver import driver, good
+
+    report, prep = good(), preparation_report()
+    prep["cells"], prep["databases_closed"] = [prep["cells"][0], prep["cells"][4]], 1
+    first, second = writer_report(), writer_report()
+    second["request"] = "title_guard:page"
+    second["native_mutations_verified"] = 0
+    second["native_guard_refused"] = True
+    report["native_binding_preparation"] = [prep, copy.deepcopy(prep)]
+    report["native_binding_writer"] = [first, second]
+    mode = ("control:page", "title_guard:page")
+    if fault == "one_preparation":
+        report["native_binding_preparation"].pop()
+    if fault == "one_writer":
+        report["native_binding_writer"].pop()
+    if fault == "wrong_order":
+        report["native_binding_writer"].reverse()
+    if fault == "wrong_outcome":
+        second["second"]["accepted_count"] = 0
+    if fault == "single_mode":
+        mode = "control:page"
+    args = (report, report["native_source_hashes"], report["hmp_source_hashes"],
+            report["runtime_executable_sha256"])
+    if fault:
+        with pytest.raises(RuntimeError):
+            driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                                   binding_cost_selector=1, binding_writer=mode)
+    else:
+        driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                               binding_cost_selector=1, binding_writer=mode)

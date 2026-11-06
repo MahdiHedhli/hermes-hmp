@@ -225,9 +225,10 @@ def _binding_tmpdir(root, env):
 
 @contextmanager
 def _binding_cell(root, fx, registry, borrowed, lock, selection, owners, index, profile,
-                  writer_barrier=None):
+                  writer_barrier=None, cell_limit=4):
     """Own one fresh synthetic-profile DB; restore scope only after actual closure."""
-    _require(type(index) is int and 0 <= index < 4 and fx.service.stats() == (0, 0, 0) and
+    _require(type(cell_limit) is int and cell_limit in (4, 8) and
+             type(index) is int and 0 <= index < cell_limit and fx.service.stats() == (0, 0, 0) and
              _writers_safe(writer_barrier))
     with lock:
         _require(borrowed["acquired"] == borrowed["released"])
@@ -426,11 +427,15 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False,
         _require(release(value) is None)
         return True
 
+    binding_phase = [0]
+
     def open_binding_cell(index):
         _require(sample_binding_seed)
         return _binding_cell(root, fx, native_registry, borrowed, lock,
-                             binding_selection, binding_owners, index, PROFILE,
-                             writer_barrier=writer_barrier)
+                             binding_selection, binding_owners,
+                             index + 4 * binding_phase[0], PROFILE,
+                             writer_barrier=writer_barrier,
+                             cell_limit=8 if type(binding_writer) is tuple else 4)
 
     try:
         Fx.__init__(fx, root / "rig", patch, kind="phone", images=3)
@@ -578,22 +583,49 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False,
                             "_private_media_binding", path)
                         helper = importlib.util.module_from_spec(spec)
                         spec.loader.exec_module(helper)
-                        costs = [] if binding_cost_case is not None else None
-                        report["native_binding_preparation"] = helper.run_preparation(
-                            fx, open_binding_cell, user=USER, profile=PROFILE, chat=CHAT,
-                            cost_case=binding_cost_case, cost_selector=binding_cost_selector,
-                            cost_results=costs, mint=binding_mint, rss=binding_rss,
-                            writer_module=writer_contract, writer_name=binding_writer,
-                            writer_owners=writer_owners, hook_owners=hook_owners,
-                            writer_ports=(acquire, writer_release))
+                        paired = type(binding_writer) is tuple
+                        requests = binding_writer if paired else (binding_writer,)
+                        preparations, observations = [], []
+                        for phase_index, request in enumerate(requests):
+                            binding_phase[0] = phase_index
+                            costs = [] if binding_cost_case is not None else None
+                            preparation = helper.run_preparation(
+                                fx, open_binding_cell, user=USER, profile=PROFILE, chat=CHAT,
+                                cost_case=binding_cost_case, cost_selector=binding_cost_selector,
+                                cost_results=costs, mint=binding_mint, rss=binding_rss,
+                                writer_module=writer_contract, writer_name=request,
+                                writer_owners=writer_owners, hook_owners=hook_owners,
+                                writer_ports=(acquire, writer_release))
+                            preparations.append(preparation)
+                            expected_cells = ((4 if binding_cost_case is None else 1) *
+                                              (phase_index + 1))
+                            _require(len(binding_owners) == expected_cells and
+                                     all(owner["closed"] for owner in binding_owners) and
+                                     _writers_safe(writer_barrier))
+                            if binding_cost_case is not None:
+                                _require(len(costs) == 1)
+                                observations.append(costs[0])
+                            if paired:
+                                # Exclusive durable checkpoint only AFTER actual scope closure.
+                                checkpoint = {"phase": phase_index, "request": request,
+                                    "preparation": preparation, "writer": costs[0],
+                                    "database_closed": True}
+                                data = (json.dumps(checkpoint, sort_keys=True) + "\n").encode()
+                                _require(len(data) <= 1024 * 1024)
+                                checkpoint_path = root / f"writer-phase-{phase_index}.json"
+                                fd = os.open(checkpoint_path, os.O_WRONLY | os.O_CREAT |
+                                             os.O_EXCL | os.O_NOFOLLOW, 0o600)
+                                with os.fdopen(fd, "wb") as stream:
+                                    stream.write(data)
+                                    stream.flush()
+                                    os.fsync(stream.fileno())
+                        report["native_binding_preparation"] = (
+                            preparations if paired else preparations[0])
                         if binding_cost_case is not None:
-                            _require(len(costs) == 1)
                             key = ("native_binding_writer" if binding_writer is not None else
                                    "native_binding_mint" if binding_mint else
                                    "native_binding_rss" if binding_rss else "native_binding_cost")
-                            report[key] = costs[0]
-                        _require(len(binding_owners) == (4 if binding_cost_case is None else 1) and
-                                 all(owner["closed"] for owner in binding_owners))
+                            report[key] = observations if paired else observations[0]
                     if sample_memory:
                         import importlib.util
 

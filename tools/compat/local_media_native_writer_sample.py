@@ -181,6 +181,12 @@ BOT_ONLY = ("ambiguous", "kind_swap", "title_guard", "archive")
 def validate_request(case, selector, request):
     if request is None:
         return
+    if type(request) is tuple:
+        require(len(request) == 2 and all(type(item) is str for item in request) and
+                request[0] != request[1])
+        for item in request:
+            validate_request(case, selector, item)
+        return
     require(type(case) is int and 0 <= case < 8 and type(selector) is int and
             selector in (1, 16, 128) and type(request) is str)
     allowed = [f"{scenario}:{seam}" for scenario in GENERAL for seam in SEAMS]

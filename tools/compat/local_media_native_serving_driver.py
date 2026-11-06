@@ -240,12 +240,25 @@ def validate_report(report, native, hmp, executable_sha, *, sample_memory=False,
     if sample_memory:
         memory_contract.validate_memory_report(report["native_memory_observation"])
     if sample_binding_seed:
-        binding_contract.validate_preparation_report(
-            report["native_binding_preparation"], binding_cost_case)
+        if type(binding_writer) is tuple:
+            preparations = report["native_binding_preparation"]
+            commands._require(type(preparations) is list and len(preparations) == 2)
+            for preparation in preparations:
+                binding_contract.validate_preparation_report(preparation, binding_cost_case)
+        else:
+            binding_contract.validate_preparation_report(
+                report["native_binding_preparation"], binding_cost_case)
     if binding_cost_case is not None:
         if binding_writer is not None:
-            writer_contract.validate_report(report["native_binding_writer"],
-                binding_cost_case, binding_cost_selector, binding_writer)
+            if type(binding_writer) is tuple:
+                phases = report["native_binding_writer"]
+                commands._require(type(phases) is list and len(phases) == 2)
+                for phase, request in zip(phases, binding_writer, strict=True):
+                    writer_contract.validate_report(phase, binding_cost_case,
+                                                    binding_cost_selector, request)
+            else:
+                writer_contract.validate_report(report["native_binding_writer"],
+                    binding_cost_case, binding_cost_selector, binding_writer)
         elif binding_mint:
             binding_contract.validate_mint_report(
                 report["native_binding_mint"], binding_cost_case, binding_cost_selector)
@@ -265,6 +278,20 @@ def _native_command(root, executable, entry, *, sample_binding_seed=False):
     if sample_binding_seed:
         command.append("TMPDIR=" + str(root / "tmp"))
     return [*command, str(executable), "-I", "-B", str(entry), str(root)]
+
+
+def validate_pair_checkpoints(root, report, requests):
+    """Read back both exclusive private checkpoints; never replay a partial pair."""
+    commands._require(type(requests) is tuple and len(requests) == 2)
+    for index, request in enumerate(requests):
+        data = _read_private(root / f"writer-phase-{index}.json", 1024 * 1024)
+        checkpoint = json.loads(data, object_pairs_hook=commands._pairs)
+        expected = {"phase": index, "request": request,
+            "preparation": report["native_binding_preparation"][index],
+            "writer": report["native_binding_writer"][index], "database_closed": True}
+        commands._require(type(checkpoint) is dict and checkpoint == expected and
+                          type(checkpoint.get("phase")) is int and
+                          checkpoint.get("database_closed") is True)
 
 
 def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
@@ -382,6 +409,8 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
                         binding_cost_case=binding_cost_case,
                         binding_cost_selector=binding_cost_selector, binding_mint=binding_mint,
                         binding_rss=binding_rss, binding_writer=binding_writer)
+        if type(binding_writer) is tuple:
+            validate_pair_checkpoints(root, report, binding_writer)
         for label, inventory in copies.items():
             commands._require(all(commands._digest(root / label / name) == value
                                   for name, value in inventory.items()))

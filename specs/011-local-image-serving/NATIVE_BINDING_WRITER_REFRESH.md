@@ -250,3 +250,26 @@ DB/home scopes, settle and close the first before the second, preserve partial
 outcome evidence, and retain the original process deadline/refusal policy. The
 second phase must never reuse or reset a mutated first-phase database. Review
 and bounded heaviest-shape execution must precede any full matrix launch.
+
+## Paired runner candidate (source review pending)
+
+An exact two-string tuple selects paired mode; duplicate, nested, unknown or
+partial requests refuse before source or filesystem effects. Each phase uses
+its own exclusive DB/home (second index offset by four), full dual-context
+preparation and original selector. All retained actors/hooks must be safe and
+all scope owners physically closed before the first checkpoint and next phase.
+Existing single request/cost/mint/RSS contracts stay separate.
+
+After scope closure, each phase writes one exclusive private checkpoint,
+flushes and fsyncs it. Successful combined readback requires both ordered
+preparation/writer reports plus exact checkpoint matches. A first checkpoint
+left by a later failure is evidence only, never a successful combined result or
+a retry trigger. Source/runtime inventories and private artifact readback still
+bind the whole process. The original 12-second process refusal/settlement
+policy is unchanged; paired performance has not been demonstrated. No paired
+native execution is allowed before independent exact-source acceptance.
+
+The four constructed-child artifacts at `befa0f7` passed independent readback:
+112 hashes/bytes/private modes, all copied native/HMP SHA and literal Git IDs,
+helper/runtime bindings, eight exact parent outcomes, 39/39 borrows each, and
+writer/hooks/DB/listener closure. This closes that bounded evidence review only.
