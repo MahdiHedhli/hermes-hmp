@@ -675,3 +675,8 @@ limitation is reclassified as a fix or a physical/release qualification.
   no deletion/retry/resume and unchanged native actor refusal/settlement.
 - [ ] Root execute all 384 pairs and independently reconcile every phase,
   source/runtime/checkpoint identity and actor/database cleanup before matrix pass.
+
+- [ ] Reconcile terminal matrix refusal: 174 completed pairs, pair 174 over
+  original 12 seconds, same actor settled terminal 0 but permanently refused,
+  209 pairs never started. Independently verify retained artifacts and plan a
+  bounded heavy-shape partition; do not auto-resume/retry or extend the deadline.

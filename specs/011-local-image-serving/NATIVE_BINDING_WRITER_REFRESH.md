@@ -313,3 +313,21 @@ first/later failures, no retry and source mismatch before archive/native work.
 Catastrophic I/O may prevent the newest journal write; original per-process
 receipts/checkpoints stay authoritative and must be reconciled without automatic
 resume. No execution completion is inferred from source acceptance.
+
+## Native writer matrix stopped at observation limit — November 6, 2026
+
+The 768-phase run at `21937dc` completed 174 pairs (348 phases), then stopped
+on pair 174: the largest 98-session/full-prompt Bot shape with one selector,
+`deactivate:ids0` and `deactivate:page`. Its native process exceeded the unchanged
+12-second observation limit. The original retained actor settled to terminal 0;
+both checkpoints and final report show balanced 53/53 borrows and closed
+DB/listener/workers, but this attempt remains refused. It was not retried or
+promoted to a pass, and the remaining 209 pairs were never started.
+
+The accepted paired pilot did not prove sufficient timing margin for the full
+matrix. Detailed phase timing was not captured, so the cause is not established.
+Independent refusal/prefix artifact review and a reviewed heavy-shape partition
+are next. No deadline extension, evidence deletion, deployment or release pass.
+The isolated ordinary/delegate follow-up remains source-reviewed with native
+execution pending; older statements that this matrix is running are superseded.
+
