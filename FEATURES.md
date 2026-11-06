@@ -5,8 +5,14 @@ parsing, bilateral signed-transcript consistency and scope hashing from the
 original validated input3. The focused suite passed 167 tests; review inspected
 source/tests without independently rerunning them. These are data-only building
 blocks, not runtime enrollment, native authority or finished character delivery.
-Typed startup/key custody, original cursor/phase integration, full GO/result/
-TERMINAL/ACK/native publication and device/release qualification remain open.
+Later reviewed source `46c697c` adds signed phase/body consistency; `33beebe`
+adds bounded startup-only role key-file custody, with all descriptors closed
+before readiness and irreversible retirement. The expanded focused suite passed
+213 tests; the strengthened process-context descriptor case passed the targeted
+30-test loader suite afterward. These checks grant no signing/native authority.
+Typed paired startup, runtime/rotation qualification, original cursor/phase
+integration, full GO/result/TERMINAL/ACK/native publication and device/release
+qualification remain open.
 See the [credential contract and checkpoint](specs/046-bot-presentation-integration/CREDENTIAL_WIRE.md).
 The local role-credential direction supersedes the unfinished Mach production
 admission proposal; historical Mach evidence and its unresolved incident remain.

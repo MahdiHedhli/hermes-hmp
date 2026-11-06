@@ -9,6 +9,9 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement and independently review data-only HBA1 codec, four-record signed
       transcript consistency and original input3 scope binding (`7c37b4f`).
       Root ran 167 focused tests; independent review was source/test read-only.
+- [x] Implement/review data-only signed phase/body checks (`46c697c`) and
+      startup-only role key-file acquisition/retirement (`33beebe`), with no
+      signer or runtime permission. Root's expanded focused suite passed 213.
 - [ ] Implement typed paired startup/key custody and bounded handshake on the
       original channel/task/cursor, with known local write completion facts.
 - [ ] Integrate signed phase commitments with original native phase owners;
