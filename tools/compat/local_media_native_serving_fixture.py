@@ -201,12 +201,13 @@ def _builtin_mime_types():
     mimetypes._db = mimetypes.MimeTypes(filenames=())
     mimetypes.init(files=[])
 
-def run_fixture(root):
+def run_fixture(root, *, sample_memory=False):
     """One native scratch DB, real routes/registry, synthetic transport authority.
 
     Python audit restrictions are test guards, NOT an OS sandbox or complete
     native-library IO observation. This does not qualify live startup/auth/grants.
     """
+    _require(type(sample_memory) is bool)
     _require(sys.flags.isolated == 1 and sys.dont_write_bytecode is True)
     _require(type(root) is type(Path()) and root.is_absolute() and root.resolve() == root)
     info = root.stat()
@@ -294,6 +295,7 @@ def run_fixture(root):
     import hermes_state_registry as native_registry
     import pytest
     from agent.image_gen_provider import save_b64_image, success_response
+    from aiohttp import web
     from aiohttp.test_utils import TestClient, TestServer
     from hermes_constants import (
         get_hermes_home_override,
@@ -349,7 +351,7 @@ def run_fixture(root):
         image_paths = {}
         materializations = [0]
 
-        def seed_image(number):
+        def seed_image(number, image_data=VALID_PNG):
             if number == 2:
                 image_path = fx.write(number, VALID_PNG)
                 content = {"success": True, "image": str(image_path)}
@@ -357,7 +359,7 @@ def run_fixture(root):
                 before = get_hermes_home_override()
                 token = set_hermes_home_override(fx.native.home_path)
                 try:
-                    image_path = save_b64_image(base64.b64encode(VALID_PNG).decode("ascii"),
+                    image_path = save_b64_image(base64.b64encode(image_data).decode("ascii"),
                                                prefix="xai_grok-imagine-image")
                 finally:
                     reset_hermes_home_override(token)
@@ -366,7 +368,7 @@ def run_fixture(root):
                 location = local_media_candidate.derive_cache_location(
                     str(image_path), str(fx.native.home_path))
                 _require(location == (local_media_file_safety.CacheLayout.GENERATED,
-                                      image_path.name) and image_path.read_bytes() == VALID_PNG)
+                                      image_path.name) and image_path.read_bytes() == image_data)
                 materializations[0] += 1
                 report["native_cache_materializer"] = True
                 content = success_response(image=str(image_path), model="fixture-offline",
@@ -397,6 +399,14 @@ def run_fixture(root):
 
         async def scenario():
             app = fx.rig.env.app()
+            memory_handlers = []
+            if sample_memory:
+                @web.middleware
+                async def observe_memory_handler(request, handler):
+                    if "/media/" in request.path:
+                        memory_handlers.append(asyncio.current_task())
+                    return await handler(request)
+                app.middlewares.append(observe_memory_handler)
             fx.app = app
             fx._remember_media_service(app[media_fetch.MEDIA_SERVICE_KEY])
             server = TestServer(app, host="127.0.0.1")
@@ -463,6 +473,23 @@ def run_fixture(root):
                     status, _, _ = await fx.get(client, refs[fresh], dev=owner)
                     _require(status == 401)
                     report["revoked_device_refused"] = True
+                    if sample_memory:
+                        import importlib.util
+
+                        path = _ROOT / "tools/compat/local_media_native_memory_sample.py"
+                        spec = importlib.util.spec_from_file_location("_private_media_memory", path)
+                        helper = importlib.util.module_from_spec(spec)
+                        spec.loader.exec_module(helper)
+                        # Pinned aiohttp retries idempotent requests after a stale
+                        # connection by default. Never replay a cancelled sample.
+                        prior_retry = client.session._retry_connection
+                        _require(type(prior_retry) is bool)
+                        client.session._retry_connection = False
+                        try:
+                            report["native_memory_observation"] = await helper.run_memory_sample(
+                                fx, client, seed_image, memory_handlers, VALID_PNG)
+                        finally:
+                            client.session._retry_connection = prior_retry
                 finally:
                     fx._close_media_admissions_and_release_gates()
                     await client.close()

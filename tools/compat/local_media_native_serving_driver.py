@@ -23,6 +23,11 @@ commands = importlib.util.module_from_spec(_SPEC)
 sys.modules[_SPEC.name] = commands
 _SPEC.loader.exec_module(commands)
 _FIXTURE = Path(__file__).with_name("local_media_native_serving_fixture.py")
+_MEMORY_SPEC = importlib.util.spec_from_file_location(
+    "_media_native_memory_contract",
+    Path(__file__).with_name("local_media_native_memory_sample.py"))
+memory_contract = importlib.util.module_from_spec(_MEMORY_SPEC)
+_MEMORY_SPEC.loader.exec_module(memory_contract)
 _MAX_ARCHIVE = 160 * 1024 * 1024  # Tar framing is separate from source bytes.
 _MAX_SOURCE = 128 * 1024 * 1024
 _MAX_REPORT = 64 * 1024 * 1024
@@ -178,12 +183,15 @@ def _no_custom_tar(root, repository, label, receipt):
     raise commands.NativeSenderFixtureError()
 
 
-def validate_report(report, native, hmp, executable_sha):
+def validate_report(report, native, hmp, executable_sha, *, sample_memory=False):
+    commands._require(type(sample_memory) is bool)
     expected = _TRUE | _FALSE | {"schema", "native_acquires", "native_releases",
         "descriptor_records_retained", "audit_denials", "scoped_native_sweep",
         "expected_absent_proc_probes", "os_metadata_sha256", "os_metadata_reads", "own_fd_listings",
         "native_cache_materializations",
         "native_source_hashes", "hmp_source_hashes", "runtime_executable_sha256"}
+    if sample_memory:
+        expected = expected | {"native_memory_observation"}
     commands._require(type(report) is dict and set(report) == expected and
         type(report.get("schema")) is int and
         report["schema"] == 1 and all(report.get(k) is True for k in _TRUE) and
@@ -196,15 +204,19 @@ def validate_report(report, native, hmp, executable_sha):
         re.fullmatch(r"[0-9a-f]{64}", report["os_metadata_sha256"]) is not None and
         1 <= report["os_metadata_reads"] <= 8 and 1 <= report["own_fd_listings"] <= 4096 and
         report["expected_absent_proc_probes"] > 0 and
-        report["native_cache_materializations"] == 3 and report["native_acquires"] > 0 and
+        report["native_cache_materializations"] == (7 if sample_memory else 3) and
+        report["native_acquires"] > 0 and
         report["native_acquires"] == report["native_releases"] and
-        0 <= report["descriptor_records_retained"] <= 8 and
+        0 <= report["descriptor_records_retained"] <= (32 if sample_memory else 8) and
         report["audit_denials"] == report["scoped_native_sweep"] == 0 and
         report.get("native_source_hashes") == native and report.get("hmp_source_hashes") == hmp and
         report.get("runtime_executable_sha256") == executable_sha)
+    if sample_memory:
+        memory_contract.validate_memory_report(report["native_memory_observation"])
 
 
-def run_fixture(root, native_repository, native_commit):
+def run_fixture(root, native_repository, native_commit, *, sample_memory=False):
+    commands._require(type(sample_memory) is bool)
     commands._require(type(root) is type(Path()) and root.is_absolute() and root.resolve() == root)
     info = root.stat()
     commands._require(info.st_uid == os.geteuid() and stat.S_IMODE(info.st_mode) == 0o700 and
@@ -215,6 +227,8 @@ def run_fixture(root, native_repository, native_commit):
         receipt = {"schema": 1, "commands": [], "native_commit": native_commit,
                    "production_qualified": False,
                    "fixture_source_sha256": commands._digest(_FIXTURE)}
+        if sample_memory:
+            receipt["memory_fixture_source_sha256"] = commands._digest(Path(_MEMORY_SPEC.origin))
         commands._save(root / "receipt.json", receipt)
         version = _git(root, _ROOT, ["--version"], "git_version", receipt).decode().strip()
         match = re.fullmatch(r"git version (\d+)\.(\d+)\.(\d+)(?:[ .-].*)?", version)
@@ -243,13 +257,19 @@ def run_fixture(root, native_repository, native_commit):
             "server/tests/unit/test_s5_media_fetch.py", "server/tests/unit/test_s4_descriptors.py",
             "server/tests/unit/hmp_kit.py", "tools/compat/local_media_native_serving_fixture.py"}
             <= set(copies["hmp"]))
+        if sample_memory:
+            copied_memory = root / "hmp/tools/compat/local_media_native_memory_sample.py"
+            commands._require(commands._digest(copied_memory) ==
+                              receipt["memory_fixture_source_sha256"])
         copied_fixture = root / "hmp/tools/compat/local_media_native_serving_fixture.py"
         commands._require(commands._digest(copied_fixture) == receipt["fixture_source_sha256"])
         commands._save(root / "source-manifest.json", copies)
         entry = root / "entry.py"
         fd = os.open(entry, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         with os.fdopen(fd, "w") as output:
-            output.write(_ENTRY)
+            commands._require(_ENTRY.count("report=module.run_fixture(root)") == 1)
+            output.write(_ENTRY.replace("report=module.run_fixture(root)",
+                "report=module.run_fixture(root, sample_memory=True)") if sample_memory else _ENTRY)
         executable = Path(sys.executable).absolute()  # Preserve the selected venv path.
         executable_sha = commands._digest(executable.resolve())
         raw = commands._owned(["/usr/bin/env", "-i", "PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C",
@@ -264,7 +284,8 @@ def run_fixture(root, native_repository, native_commit):
         data = _read_private(root / "native-serving-report.json", _MAX_REPORT)
         commands._require(hashlib.sha256(data).hexdigest() == marker["report_sha256"])
         report = json.loads(data, object_pairs_hook=commands._pairs)
-        validate_report(report, copies["native"], copies["hmp"], executable_sha)
+        validate_report(report, copies["native"], copies["hmp"], executable_sha,
+                        sample_memory=sample_memory)
         for label, inventory in copies.items():
             commands._require(all(commands._digest(root / label / name) == value
                                   for name, value in inventory.items()))
