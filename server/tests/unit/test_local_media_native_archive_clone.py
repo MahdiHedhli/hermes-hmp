@@ -41,7 +41,11 @@ def fixture(tmp_path, monkeypatch, fault=None):
             source.write_bytes(b"z" * source.stat().st_size)
 
     monkeypatch.setattr(module, "_call_clone", backend)
-    monkeypatch.setattr(module, "_has_xattrs", lambda fd: fault == "xattrs")
+    def attributes(fd):
+        return module._parse_attribute_names(b"com.apple.ResourceFork\0" if fault == "xattrs"
+                                             else b"com.apple.provenance\0")
+
+    monkeypatch.setattr(module, "_attribute_names", attributes)
     monkeypatch.setattr(module.sys, "platform", "darwin")
     return module, source, target, digest, calls, fds
 
@@ -101,3 +105,75 @@ def test_untrusted_input_refuses_before_backend_and_preserves_existing_files(
     assert calls == []
     if fault == "existing_target":
         assert target.read_bytes() == b"PRESERVE"
+
+
+@pytest.mark.parametrize("raw", [b"com.apple.quarantine\0", b"com.apple.ResourceFork\0",
+    b"com.apple.provenance", b"com.apple.provenance\0\0", b"\0", b"\xff\0",
+    b"com.apple.provenance\0com.apple.provenance\0", b"z" * 129, "wrong type"])
+def test_unknown_duplicate_malformed_or_oversized_attribute_names_refuse(raw):
+    with pytest.raises(RuntimeError):
+        load()._parse_attribute_names(raw)
+
+
+def test_only_empty_or_exact_provenance_name_is_metadata_not_value_authority():
+    module = load()
+    assert module._parse_attribute_names(b"") == ()
+    assert module._parse_attribute_names(b"com.apple.provenance\0") == (
+        b"com.apple.provenance",)
+
+
+def test_attribute_name_drift_before_clone_refuses_without_backend(tmp_path, monkeypatch):
+    module, source, target, digest, calls, _ = fixture(tmp_path, monkeypatch)
+    values = iter(((), (b"com.apple.provenance",)))
+    monkeypatch.setattr(module, "_attribute_names", lambda fd: next(values))
+    with pytest.raises(RuntimeError):
+        module.clone_archive(source, target, digest)
+    assert calls == [] and not target.exists()
+
+
+def test_target_attribute_name_mismatch_keeps_output_and_never_retries(tmp_path, monkeypatch):
+    module, source, target, digest, calls, _ = fixture(tmp_path, monkeypatch)
+    values = iter(((), (), (), (b"com.apple.provenance",)))
+    monkeypatch.setattr(module, "_attribute_names", lambda fd: next(values))
+    with pytest.raises(RuntimeError):
+        module.clone_archive(source, target, digest)
+    assert calls == [b"native.tar"] and target.exists()
+
+
+@pytest.mark.parametrize("size, actual, raw, valid", [
+    (129, None, b"", False), (-1, None, b"", False),
+    (3, 2, b"x\0\0", False), (3, -1, b"x\0\0", False),
+    (21, 21, b"com.apple.provenance\0", True), (0, None, b"", True)])
+def test_descriptor_name_query_bounds_allocation_and_requires_exact_return(
+    monkeypatch, size, actual, raw, valid
+):
+    import sys
+    import types
+
+    module, allocations, calls = load(), [], []
+
+    class Function:
+        def __call__(self, fd, buffer, count, options):
+            assert fd == 123 and options == 0
+            calls.append(count)
+            return size if buffer is None else actual
+
+    function = Function()
+
+    def allocate(count):
+        allocations.append(count)
+        assert count <= module.MAX_ATTRIBUTE_NAMES_BYTES
+        return types.SimpleNamespace(raw=raw)
+
+    fake = types.SimpleNamespace(CDLL=lambda *a, **kw: types.SimpleNamespace(flistxattr=function),
+        c_int=int, c_void_p=object, c_size_t=int, c_ssize_t=int,
+        create_string_buffer=allocate, get_errno=lambda: 95)
+    monkeypatch.setitem(sys.modules, "ctypes", fake)
+    if valid:
+        expected = (b"com.apple.provenance",) if size else ()
+        assert module._attribute_names(123) == expected
+    else:
+        with pytest.raises((RuntimeError, OSError)):
+            module._attribute_names(123)
+    assert allocations == ([size] if 0 < size <= module.MAX_ATTRIBUTE_NAMES_BYTES else [])
+    assert len(calls) == (2 if allocations else 1)
