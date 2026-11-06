@@ -705,3 +705,5 @@ limitation is reclassified as a fix or a physical/release qualification.
   The original paired refusal remains refused, not retroactively passed.
 - [ ] Completed-prefix full artifact review and remaining-plan execution owner
   integration/admission; supplemental144 and final composite coverage still open.
+
+- [x] Independently review the pure [child-lineage supplement partition](NATIVE_WRITER_SUPPLEMENT_PARTITION.md): preserve all 144 added phases in 90 prospective jobs, exact expanded-catalog coordinates, heavy-only splitting and no execution authority. Root 23 pure partition cases and independent source review pass; native supplemental execution/admission and final composite coverage remain open.
