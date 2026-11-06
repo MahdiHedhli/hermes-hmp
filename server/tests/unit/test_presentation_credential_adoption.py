@@ -29,7 +29,8 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
     spine, enrollment, connect, make_packet, _, _ = local
     darwin_model(monkeypatch)
     keys = key_pair(tmp_path, enrollment.installation_generation)
-    end = time.monotonic_ns() + 1_800_000_000
+    cleanup_case = bool(mutation and mutation.startswith("signed_control_native_cleanup_"))
+    end = time.monotonic_ns() + (400_000_000 if cleanup_case else 1_800_000_000)
     gateway = SocketChannel(
         connect(),
         replace(enrollment, gateway_pid=os.getpid(), service_pid=os.getpid() + 1),
@@ -238,7 +239,10 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 budget = native.cleanup_budget_snapshot
                 before = CancellationBudget.inspect(budget)
                 grammar_before = dict(record.grammar.__dict__)
-                go_chain = mutation.startswith("signed_control_native_go_chain_")
+                cleanup = mutation.startswith("signed_control_native_cleanup_")
+                go_chain = (mutation.startswith("signed_control_native_go_chain_")
+                            or (cleanup and ("after_go" in mutation
+                                             or mutation.endswith("late_go"))))
                 if go_chain:
                     control = BrokerCancellationOwner.stage_credential_go_control(work)
                     if mutation != "signed_control_native_go_chain_missing_ready":
@@ -313,6 +317,82 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
 
                     monkeypatch.setattr(BrokerServiceSpine, "_current", retired_notice)
                 waiter = control._cancel_future_snapshot
+                if cleanup:
+                    from hmp_plugin.presentation_clock import NativeClockOwner
+                    from hmp_plugin.presentation_readiness import SelectorReadiness
+                    wait = SelectorReadiness.wait
+                    waits = []
+                    held["cleanup_waits"] = waits
+
+                    async def observed_wait(waiter, cutoff, **options):
+                        if asyncio.current_task() is control._allocation_snapshot.task:
+                            cursor = control._signed_cursor_snapshot
+                            waits.append((cutoff, cursor._consumed, cursor._target,
+                                          id(cursor._buffer_origin)))
+                        try:
+                            return await wait(waiter, cutoff, **options)
+                        except TimeoutError:
+                            if mutation.endswith("unknown_readiness"):
+                                waiter._unknown = True
+                            raise
+
+                    monkeypatch.setattr(SelectorReadiness, "wait", observed_wait)
+                    if mutation.endswith("earlier_cause"):
+                        BrokerCancellationOwner._local_cause(control)
+                        held["cleanup_initial_end"] = CancellationBudget.inspect(budget)[2]
+                    if mutation.endswith(("sample_error", "guard_timeout")):
+                        sample = NativeClockOwner.sample
+
+                        def failed_sample(clock):
+                            if asyncio.current_task() is control._allocation_snapshot.task:
+                                cursor = control._signed_cursor_snapshot
+                                if mutation.endswith("sample_error") or cursor._waiter is not None:
+                                    if mutation.endswith("guard_timeout"):
+                                        raise TimeoutError("synthetic guard failure, not expiry")
+                                    raise RuntimeError("synthetic clock failure, not expiry")
+                            return sample(clock)
+
+                        monkeypatch.setattr(NativeClockOwner, "sample", failed_sample)
+                    rejected = mutation.endswith(("expired_tail", "retired_tail", "late_go",
+                                                   "bad_signature", "unknown_readiness",
+                                                   "sample_error", "guard_timeout"))
+                    if rejected:
+                        with pytest.raises(FrameError):
+                            await BrokerServiceSpine._v2_control(spine, control)
+                        assert not waiter.done() and control._cancel_receipt is None
+                        assert record.grammar._cancel is False
+                        assert native.start_attempted is False and native.resources is None
+                        if mutation.endswith(("sample_error", "guard_timeout")):
+                            assert CancellationBudget.inspect(budget)[2] is None
+                            assert waits == []
+                        if mutation.endswith("unknown_readiness"):
+                            assert len(waits) == 1
+                        BrokerCancellationOwner.abort(control)
+                        await asyncio.gather(control._allocation_snapshot.task,
+                                             return_exceptions=True)
+                    else:
+                        consumed = await BrokerServiceSpine._v2_control(spine, control)
+                        notice = waiter.result()
+                        assert consumed is notice.frame and control._retired is True
+                        assert notice.end <= end + 250_000_000
+                        if mutation.endswith("earlier_cause"):
+                            assert notice.end == held["cleanup_initial_end"]
+                        else:
+                            assert notice.end == end + 250_000_000
+                            assert any(row[0] == end for row in waits)
+                            assert any(row[0] == end + 250_000_000 for row in waits)
+                            work_wait = next(row for row in waits if row[0] == end)
+                            cleanup_wait = next(row for row in waits
+                                                if row[0] == end + 250_000_000)
+                            assert work_wait[1:] == cleanup_wait[1:]  # same offset/target/buffer
+                        assert native.deadline_ns == end  # signed work end is never rewritten
+                        assert native.start_attempted is False and native.resources is None
+                        BrokerCancellationOwner.abort(control)
+                        outcome = await asyncio.gather(control._allocation_snapshot.task,
+                                                       return_exceptions=True)
+                        assert outcome == [consumed] and control._stop_known is True
+                    held["cleanup_checked"] = True
+                    return ticket
                 if go_chain:
                     if mutation.endswith(("index_drift", "expired", "retired")):
                         from hmp_plugin.presentation_clock import NativeClockOwner
@@ -845,10 +925,36 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
         if mutation and mutation.startswith("signed_control_"):
             from hmp_plugin.presentation_cancel_budget import CancellationWindow
 
+            async def send_cleanup_wire(wire_bytes, auth_length):
+                if mutation.endswith("late_go"):
+                    split = 0
+                elif mutation.endswith(("header", "earlier_cause")):
+                    split = auth_length + 9
+                elif mutation.endswith("body"):
+                    split = len(wire_bytes) - 8
+                else:
+                    split = 8
+                if mutation.endswith("sample_error"):
+                    split = len(wire_bytes)
+                if split:
+                    await asyncio.get_running_loop().sock_sendall(
+                        gateway._socket_snapshot, wire_bytes[:split])
+                if split < len(wire_bytes):
+                    if mutation.endswith("earlier_cause"):
+                        await asyncio.sleep(0.1)
+                    else:
+                        offset = 0.30 if mutation.endswith("expired_tail") else 0.015
+                        await asyncio.sleep(max(0, (end - time.monotonic_ns()) / 1e9) + offset)
+                    if mutation.endswith("retired_tail"):
+                        keys["broker"].retire()
+                    await asyncio.get_running_loop().sock_sendall(
+                        gateway._socket_snapshot, wire_bytes[split:])
+
             phase = "CANCEL" if mutation in ("signed_control_cancel", "signed_control_hash",
                                              "signed_control_window") else "GO"
             if mutation.startswith("signed_control_native_"):
                 phase = "GO" if (mutation == "signed_control_native_go"
+                    or (cleanup_case and ("after_go" in mutation or mutation.endswith("late_go")))
                     or (mutation.startswith("signed_control_native_go_chain_")
                     and not mutation.endswith("before_go"))) else "CANCEL"
             body = CancellationWindow(end - 250_000_000, end).encode() if phase == "CANCEL" else b""
@@ -857,6 +963,10 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 if mutation == "signed_control_native_future_window":
                     start += 1_000_000_000
                 body = CancellationWindow(start, start + 250_000_000).encode()
+                if cleanup_case:
+                    start = (time.monotonic_ns() + 50_000_000
+                             if mutation.endswith("earlier_cause") else end)
+                    body = CancellationWindow(start, start + 250_000_000).encode()
             if mutation == "signed_control_window":
                 body = b"\0" * 16
             control_frame = encode_frame(binding, phase, 1, body, version=2)
@@ -871,13 +981,26 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 control_value["broker_boot"] = "f" * len(control_value["broker_boot"])
             control_raw = encode_record(control_value, keys["gateway"]._private_key.sign(
                 signing_bytes(control_value)))
-            if mutation in ("signed_control_signature", "signed_control_native_signature"):
+            if (mutation in ("signed_control_signature", "signed_control_native_signature")
+                    or (cleanup_case and mutation.endswith("bad_signature"))):
                 control_raw = control_raw[:-1] + bytes([control_raw[-1] ^ 1])
             if mutation == "signed_control_hash":
                 control_frame = control_frame[:-1] + bytes([control_frame[-1] ^ 1])
             held["signed_auth_length"] = len(control_raw)
             wire = control_raw + control_frame
-            if mutation == "signed_control_fragmented":
+            if cleanup_case and "after_go" not in mutation:
+                await send_cleanup_wire(wire, len(control_raw))
+            elif cleanup_case:
+                await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, wire)
+                window2 = CancellationWindow(end, end + 250_000_000).encode()
+                frame2 = encode_frame(binding, "CANCEL", 2, window2, version=2)
+                value2 = dict(value, phase="CANCEL", sequence=2,
+                              frame_sha256=hashlib.sha256(frame2).hexdigest(),
+                              frame_length=len(frame2))
+                raw2 = encode_record(value2, keys["gateway"]._private_key.sign(
+                    signing_bytes(value2)))
+                await send_cleanup_wire(raw2 + frame2, len(raw2))
+            elif mutation == "signed_control_fragmented":
                 for part in (wire[:4], wire[4:8], wire[8:-1], wire[-1:]):
                     await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, part)
                     await asyncio.sleep(0)
@@ -1176,3 +1299,17 @@ async def test_signed_go_receipt_then_same_cursor_cancel_without_worker_relay(lo
                                                                             monkeypatch, mutation):
     held, _ = await exchange(local, tmp_path, monkeypatch, mutation)
     assert "native_control" in held
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+@pytest.mark.parametrize("suffix", [
+    "before_auth", "before_header", "before_body", "after_go_auth", "after_go_header",
+    "after_go_body", "earlier_cause", "expired_tail", "retired_tail", "late_go",
+    "bad_signature", "unknown_readiness", "sample_error", "guard_timeout",
+])
+async def test_original_cleanup_time_cursor_without_budget_renewal(local, tmp_path, monkeypatch,
+                                                                 suffix):
+    held, _ = await exchange(local, tmp_path, monkeypatch,
+                             "signed_control_native_cleanup_" + suffix)
+    assert held["cleanup_checked"] is True

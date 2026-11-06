@@ -64,13 +64,14 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement/review authenticated GO read/native receipt followed by one signed
       CANCELseq2 on the SAME original controller cursor under original work time;
       pre-GO CANCELseq1 remains supported. Modeled READY is not resource qualification.
-- [ ] Implement authenticated cleanup-time control under the original earliest
+- [x] Implement/review authenticated cleanup-time control under the original earliest
       budget, including partial auth/header/body expiry and original cause retention.
 - [ ] Implement fixed signed READY producer/write from actual admitted resources
       and original staged input; keep production resource startup closed until qualified.
-- [ ] Implement the actual signed GO/CANCEL receiver/context on the existing original
+- [x] Implement/review source signed GO/CANCEL receiver/context on the existing original
       controller task/cursor and frozen budget before any credential resource/READY
       startup. No legacy fallback, new parser task or boolean gate opening.
+      Source fixture acceptance does not qualify signed READY/resources or production startup.
 - [ ] Wire only through qualified production startup/service dispatch; preserve
       the exact original adopted connection plus current native phase authority
       before any credential resource/GO path. Ticket/capacity alone is insufficient.

@@ -179,7 +179,7 @@ class BrokerCancellationOwner:
 
     @classmethod
     def stage_credential_go_control(cls, queued):
-        """GO/read receipts and next CANCEL under work time; no resource relay."""
+        """GO/read receipts and next CANCEL under original budget; no resource relay."""
         from .presentation_credential_control import CredentialGoPhase
 
         if cls is not BrokerCancellationOwner:

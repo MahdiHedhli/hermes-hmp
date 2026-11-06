@@ -1,25 +1,24 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
 [Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) includes reviewed
-signed GO read/native receipt and same-task next CANCELseq2 under original work
-time, with pre-GO CANCELseq1 preserved. The original GO proof remains joined to
-native cancellation and the dedicated service consumer. No worker GO relay or
-resource-start permission is granted.
+cleanup-time signed control. The SAME original reader crosses known work expiry
+only after settled readiness and qualified clock checks, retaining partial cursor
+state and the earliest native cleanup end. Only authenticated CANCEL may continue;
+late GO, unknown retirement and clock errors refuse without a renewed timer.
 
-Affected regression: **1,167 passed, one skipped**, 34.60 seconds; focused module
-**70 passed**, 7.48 seconds; configured lint passed. Independent review was
-source/test read-only. See [evidence and limits](docs/research/presentation-signed-go-control-chain-2026-11-06.md).
+Affected regression: **1,181 passed, one skipped**, 39.68 seconds; final focused
+module **84 passed**, 12.61 seconds; configured lint passed. Independent review
+was source/test read-only. See [evidence and limits](docs/research/presentation-signed-control-cleanup-time-2026-11-06.md).
 
-READY in these fixtures is an explicit synthetic prior grammar fact, not signed
-READY/resource evidence. Cleanup-time control, signed READY from actual admitted
-resources/input, resource/worker relay, later signed IO, production startup,
-native publication, STATUS and physical/release qualification remain open.
-Character delivery is unavailable. No live host/device/mobile build/permission/
-provider/key installation changed.
+Signed READY tied to actual admitted resources/input, resource/worker GO relay,
+later signed result/terminal/ACK IO, production startup, native publication,
+STATUS and physical/release qualification remain open. READY in these fixtures
+is a synthetic prior grammar fact. Character delivery remains unavailable.
+No live host/device/mobile build/permission/provider/key installation changed.
 
-Earlier service-consumer source `9ce0b27` passed all plugin and Python3.12–3.14
-Unicode jobs in [CI732](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42271266946).
-That does not qualify this newer control-chain source.
+Earlier control-chain source `41ceb9a` passed all plugin and Python3.12–3.14
+Unicode jobs in [CI734](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42272783316).
+That does not qualify this newer cleanup-time source.
 
 ## Native image verification checkpoint — November 6, 2026
 

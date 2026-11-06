@@ -255,27 +255,78 @@ class CredentialControlCursor:
                 and len(self._buffer) + len(self._pending) == self._consumed
             )
 
-    def _guard(self):
-        from .presentation_cancel_budget import CancellationBudget
+    def _time_current(self):
+        """Original actor/time/budget only; known expiry may freeze local cleanup."""
+        from .presentation_broker_cancel import BrokerCancellationOwner
+        from .presentation_cancel_budget import CLEANUP_NS, MAX_NS, CancellationBudget
         from .presentation_clock import NativeClockOwner
         from .presentation_control_binding import PreparedControlBinding
 
         CredentialControlCursor._local(self)
-        _require(self._complete is False)
         binding = self._binding_snapshot
         PreparedControlBinding.reader_material_current(binding)
         CredentialControlCursor._local(self)
         refs = binding._refs_snapshot
-        # This stage is first-frame-only, under the original work end. Remote
-        # cleanup adoption is NOT implemented and cannot renew this read cap.
+        control = self._control_snapshot
         before = CancellationBudget.inspect(refs[17])
-        _require(before[0] == self._end and before[2] is None and before[3] is False)
-        now = NativeClockOwner.sample(refs[13])
+        _require(before[0] == self._end and before[3] is False)
+        adoption = control._signed_cancel_snapshot
+        if adoption is None:
+            # Standalone first-frame staging has no native cleanup owner and
+            # retains its original strict work-time-only contract.
+            _require(control._signed_cancel is None and before[2] is None)
+            now = NativeClockOwner.sample(refs[13])
+            CredentialControlCursor._local(self)
+            PreparedControlBinding.reader_material_current(binding)
+            CredentialControlCursor._local(self)
+            _require(
+                type(now) is int
+                and 0 <= now < self._end
+                and CancellationBudget.inspect(refs[17]) == before
+            )
+            return now, self._end, before
+        _require(type(adoption) is CredentialCancelAdoption and control._signed_cancel is adoption)
+        _require(CredentialCancelAdoption._current(adoption) is refs)
+        if before[2] is None and control._retired is False:
+            # A generic sampling failure is NOT known expiry and cannot mint a
+            # cleanup interval. Only an exact qualified sample crosses here.
+            now = NativeClockOwner.sample(refs[13])
+            CredentialControlCursor._local(self)
+            _require(CredentialCancelAdoption._current(adoption) is refs)
+            _require(
+                type(now) is int
+                and 0 <= now <= MAX_NS
+                and CancellationBudget.inspect(refs[17]) == before
+            )
+            if now < self._end:
+                return now, self._end, before
+        # Expiry or a pre-existing original local cause retires work BEFORE
+        # further reads. local() preserves the earliest end, never now+timeout.
+        if control._retired is False or CancellationBudget.inspect(refs[17])[2] is None:
+            BrokerCancellationOwner._local_cause(control)
+        _require(CredentialCancelAdoption._current(adoption) is refs)
+        state = CancellationBudget.inspect(refs[17])
+        end = state[2]
+        _require(
+            control._retired is True
+            and type(end) is int
+            and 0 < end <= self._end + CLEANUP_NS
+            and state[3] is False
+        )
+        now = NativeClockOwner.cleanup_sample(refs[13])
         CredentialControlCursor._local(self)
-        PreparedControlBinding.reader_material_current(binding)
-        CredentialControlCursor._local(self)
-        _require(type(now) is int and 0 <= now < self._end)
-        _require(CancellationBudget.inspect(refs[17]) == before)
+        _require(CredentialCancelAdoption._current(adoption) is refs)
+        _require(
+            type(now) is int
+            and 0 <= now <= MAX_NS
+            and CancellationBudget.inspect(refs[17]) == state
+        )
+        _require(CancellationBudget.remaining_ns(refs[17], now) > 0)
+        return now, end, CancellationBudget.inspect(refs[17])
+
+    def _guard(self):
+        _require(type(self) is CredentialControlCursor and self._complete is False)
+        return CredentialControlCursor._time_current(self)[1]
 
     async def _take(self, target):
         import errno
@@ -284,7 +335,7 @@ class CredentialControlCursor:
         from .presentation_broker_cancel import _SOCKET_RECV
         from .presentation_broker_service import _SOCKET_FILENO, _SOCKET_TIMEOUT
         from .presentation_cancel_budget import CancellationBudget
-        from .presentation_readiness import SelectorReadiness
+        from .presentation_readiness import SelectorReadiness, _WakeBinding
 
         part = None
         buffer = self._buffer_origin
@@ -354,7 +405,40 @@ class CredentialControlCursor:
                     waiter = SelectorReadiness.__new__(SelectorReadiness)
                     self._waiter = waiter
                     SelectorReadiness.__init__(waiter, self._socket)
-                    await SelectorReadiness.wait(waiter, self._end)
+                    origin, future = waiter._origin_scope, waiter._future_origin
+                    cutoff = CredentialControlCursor._guard(self)
+                    try:
+                        await SelectorReadiness.wait(waiter, cutoff)
+                    except TimeoutError as error:
+                        # Continue only a known original readiness retirement
+                        # (or known no-registration expiry), never unknown debt.
+                        _require(
+                            type(error) is TimeoutError
+                            and self._waiter is waiter
+                            and getattr(waiter, "_initialized", False) is True
+                            and waiter._unknown is False
+                            and type(waiter._attempted) is bool
+                            and type(waiter._retired) is bool
+                            and waiter._origin_scope is origin
+                            and waiter._future_origin is future
+                            and type(waiter._wake_binding_origin) is _WakeBinding
+                            and waiter._wake_binding_origin.scope is origin
+                            and waiter._wake_binding_origin.future is None
+                            and waiter._wake_binding_origin.end is cutoff
+                            and waiter._wake_binding is waiter._wake_binding_origin
+                            and (
+                                (waiter._attempted is True and waiter._retired is True)
+                                or (
+                                    waiter._attempted is False
+                                    and waiter._retired is False
+                                    and waiter._handle is None
+                                    and waiter._handle_snapshot is None
+                                )
+                            )
+                        )
+                        now, _, _ = CredentialControlCursor._time_current(self)
+                        _require(now >= cutoff)  # independently known original wait expiry
+                        continue
                     _require(
                         self._waiter is waiter
                         and waiter._initialized is True
@@ -428,6 +512,10 @@ class CredentialControlCursor:
                 raw, sender_public=self._pins[0], receiver_public=self._pins[1], expected=expected
             )
             CredentialControlCursor._guard(self)
+            # Expired/retired work may receive only authenticated cleanup
+            # control, never a late GO or renewal from a signed claim.
+            if self._control_snapshot._retired is True:
+                _require(parsed["phase"] == "CANCEL")
             auth_end = len(raw)
             framed = await CredentialControlCursor._take(self, auth_end + 8)
             header_end = auth_end + 8 + header_size(framed[auth_end:])
@@ -492,7 +580,7 @@ class CredentialControlCursor:
             raise FrameError("BI1_CREDENTIAL_CONTROL_READ_REFUSED") from None
 
     async def read_after_go(self):
-        """Same actual controller cursor, second CANCEL only; no cleanup-time reads yet."""
+        """Same original controller cursor, second CANCEL under its frozen budget."""
         from .presentation_broker_cancel import BrokerCancellationOwner
 
         CredentialControlCursor._local(self)
@@ -601,7 +689,7 @@ class CredentialControlCursor:
 
 
 class CredentialCancelAdoption:
-    """Original pre-GO signed CANCEL to native receipt/park, no resource authority."""
+    """Original signed CANCEL to native receipt/park, no resource authority."""
 
     @classmethod
     def retain(cls, control):
@@ -866,9 +954,8 @@ class CredentialCancelAdoption:
                 and refs[18]._client_next == cursor._frame_index + 1
                 and refs[18]._go is (cursor._frame_index == 1)
                 and refs[18]._cancel is False
-                and control._retired is False
             )
-            raw, frame_bytes, header, _, _, _, _phase, work_end = completed
+            raw, frame_bytes, header, _, _, _, _phase, _work_end = completed
             # Derive the native frame from the authenticated bytes, not from a
             # caller-created BrokerFrame or mutable decoder object.
             from .presentation_broker_codec import decode_header
@@ -884,11 +971,12 @@ class CredentialCancelAdoption:
             )
             body = frame_bytes[end:]
             window = CancellationWindow.decode(body)
-            now = NativeClockOwner.sample(refs[13])
+            now, cutoff, time_state = CredentialControlCursor._time_current(cursor)
             CredentialCancelAdoption._completed_current(self, cursor, completed, refs)
             _require(
                 type(now) is int
-                and 0 <= now < work_end
+                and 0 <= now < cutoff
+                and CancellationBudget.inspect(refs[17]) == time_state
                 and cursor._completion_snapshot is completed
                 and cursor._raw is raw
                 and cursor._frame is frame_bytes
@@ -897,7 +985,8 @@ class CredentialCancelAdoption:
             )
             # Consume intent before the first native lifecycle/budget mutation.
             self._attempted = True
-            BrokerCancellationOwner._local_cause(control)
+            if control._retired is False:
+                BrokerCancellationOwner._local_cause(control)
             CredentialCancelAdoption._completed_current(self, cursor, completed, refs)
             frame = BrokerFrame(native_header, body)
             OperationGrammar.observe(refs[18], frame, sender="client")

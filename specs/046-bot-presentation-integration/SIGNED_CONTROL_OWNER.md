@@ -157,3 +157,14 @@ Reads remain under original work time; cleanup-time control, signed READY write,
 resource/worker relay and production admission are unimplemented. Unit READY is
 an explicit modeled grammar fact, not resource or signed transport evidence.
 See [evidence and limits](../../docs/research/presentation-signed-go-control-chain-2026-11-06.md).
+
+## Cleanup-time control checkpoint
+
+The original signed cursor now crosses a known work deadline into the SAME native
+earlier cleanup budget. It continues only after exact original readiness retirement
+or known no-registration expiry plus qualified clock confirmation. Initialization
+and guard errors cannot masquerade as wait expiry; unknown debt never retries.
+Only authenticated CANCEL may continue, original offsets/targets/buffers remain
+unchanged, and remote inheritance cannot extend the first cause. Source receiver
+acceptance remains separate from signed READY/resources/worker relay and runtime
+startup. See [evidence and limits](../../docs/research/presentation-signed-control-cleanup-time-2026-11-06.md).
