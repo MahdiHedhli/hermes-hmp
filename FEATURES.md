@@ -1,3 +1,14 @@
+## Known signing-refusal local cleanup checkpoint — November 6, 2026
+
+The bot-character transport now retires local socket/clock resources after a
+proven no-IO signing refusal, using the original cleanup actor and time allowance.
+Remote cleanup remains unconfirmed. Expired budgets, cancelled actors and uncertain
+reads gain no closure credit. Independent review accepted the source; 100 focused
+tests passed. Full regression: 1,518 passed, one skipped, one pre-existing
+wrong-spine case failed; isolated rerun passed, cause unresolved. Lint passed.
+This is source progress, not deployed character/image availability.
+Production startup, result/terminal custody and physical qualification remain open.
+
 ## Internal signed CANCEL routing checkpoint — November 6, 2026
 
 The retained credential cleanup route now composes signed CANCEL on the original
@@ -12,7 +23,8 @@ failures are retained in the evidence; updated tests distinguish dedicated signe
 routing, legitimate automatic CANCEL suffixes and historical close facts from new
 validation after metadata drift.
 
-Known no-IO role/signing refusal still retains automatic local-cleanup debt; no
+At this earlier routing checkpoint, known no-IO role/signing refusal retained
+automatic local-cleanup debt (resolved in the follow-up above); no
 close is claimed merely because a role-neutral helper exists. Uncertain IO and
 remote custody remain separate. Production startup, pre-READY cancellation,
 results/terminal custody, worker relay/native publication/STATUS and physical/

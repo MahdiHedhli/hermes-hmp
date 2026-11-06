@@ -327,7 +327,9 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Finalize bounded internal signed CANCEL routing: original cleanup actor,
       partial-owner retention before native effects, no retries/unsigned fallback.
       Five direct route + two actual peer-correlation cases/source review pass;
-      full1,516/one skipped and lint pass. Known no-IO signing refusal local cleanup debt
-      remains explicit; do not infer closure from independent helper availability.
-- [ ] Complete automatic solely-local cleanup after known no-IO signing refusal,
-      retaining unknown send/readiness and remote custody as separate debt.
+      full1,516/one skipped and lint pass. The subsequent known no-IO local-close
+      follow-up is recorded separately below; remote settlement remains unproven.
+- [x] Complete/review automatic solely-local cleanup after known no-IO signing
+      refusal, with exact original actor/frozen budget and repeated no-IO seals.
+      Expiry/cancellation/unknown-read causals retain debt; remote UNKNOWN and
+      original refusal survive actual local close. 100 focused tests passed.

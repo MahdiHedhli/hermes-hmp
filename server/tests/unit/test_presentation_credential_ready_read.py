@@ -61,7 +61,8 @@ from .test_presentation_supervisor import context as context
     "dispatch_cleanup_sign_write_wrong_actor", "dispatch_cleanup_sign_write_tail_cancel",
     "dispatch_cleanup_route", "dispatch_cleanup_route_after_go",
     "dispatch_cleanup_route_key", "dispatch_cleanup_route_wrong_actor",
-    "dispatch_cleanup_route_initial_failure",
+    "dispatch_cleanup_route_initial_failure", "dispatch_cleanup_route_key_expired",
+    "dispatch_cleanup_route_key_cancelled", "dispatch_cleanup_route_key_read_debt",
 ])
 async def test_original_work_ready_read_requires_its_complete_signed_begin(
     context, begin_gateway, tmp_path, monkeypatch, mutation
@@ -1127,8 +1128,43 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                                                 failed_initial_actor)
                             monkeypatch.setattr(NativeCancelCommitment, "retain",
                                                 classmethod(observed_failed_retain))
-                        if mutation == "dispatch_cleanup_route_key":
+                        if mutation.startswith("dispatch_cleanup_route_key"):
                             keys["gateway"].retire()
+                        if mutation == "dispatch_cleanup_route_key_expired":
+                            remaining = RemoteCleanupOwner._remaining
+
+                            def expired_local_refusal(owned):
+                                value = remaining(owned)
+                                signer = cleanup._credential_cancel_commitment_snapshot
+                                if owned is cleanup and signer is not None and signer._failed:
+                                    return 0.0
+                                return value
+
+                            monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                                expired_local_refusal)
+                        if mutation in ("dispatch_cleanup_route_key_cancelled",
+                                        "dispatch_cleanup_route_key_read_debt"):
+                            from hmp_plugin.presentation_credential_cancel_commitment import (
+                                NativeCancelCommitment,
+                            )
+
+                            retain_failed = NativeCancelCommitment.retain
+
+                            def changed_failed_signer(cls, owned):
+                                try:
+                                    return retain_failed(owned)
+                                except FrameError:
+                                    signer = cleanup._credential_cancel_commitment_snapshot
+                                    assert signer is not None and signer._failed
+                                    if mutation == "dispatch_cleanup_route_key_cancelled":
+                                        assert signer._scope_snapshot.allocation.task.cancel()
+                                    else:
+                                        receiver = channel._credential_ready_receiver_snapshot
+                                        receiver._io_unknown = True
+                                    raise
+
+                            monkeypatch.setattr(NativeCancelCommitment, "retain",
+                                                classmethod(changed_failed_signer))
                     else:
                         monkeypatch.setattr(SocketChannel, "send_cancel", material_only_cancel)
                 RemoteCleanupOwner.request(cleanup)
@@ -1138,7 +1174,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                     async with asyncio.timeout(2):
                         result = await asyncio.shield(cleanup._allocations_snapshot[0].task)
                 except asyncio.CancelledError:
-                    assert mutation == "dispatch_cleanup_sign_write_tail_cancel"
+                    assert mutation in ("dispatch_cleanup_sign_write_tail_cancel",
+                                        "dispatch_cleanup_route_key_cancelled")
                     assert cleanup._allocations_snapshot[0].task.cancelled()
                     result = False  # actual cancelled cleanup is not settlement evidence
                 assert type(result) is bool
@@ -1158,12 +1195,19 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
 
                     commitment = cleanup._credential_cancel_commitment_snapshot
                     assert commitment is not None
-                    if mutation in ("dispatch_cleanup_route_key",
-                                    "dispatch_cleanup_route_initial_failure"):
+                    if (mutation.startswith("dispatch_cleanup_route_key")
+                            or mutation == "dispatch_cleanup_route_initial_failure"):
                         assert result is False and cleanup._unknown is True
                         assert held["route_send_calls"] == 0 and held["route_wire"] == b""
                         assert commitment._failed and not commitment._complete
-                        assert not cleanup._socket_closed and not cleanup._clock_closed
+                        local_closed = mutation in (
+                            "dispatch_cleanup_route_key", "dispatch_cleanup_route_initial_failure")
+                        assert cleanup._socket_closed is local_closed
+                        assert cleanup._clock_closed is local_closed
+                        assert channel._closed_known is local_closed
+                        assert channel._clock_closed_known is local_closed
+                        if not local_closed:
+                            assert channel._close_attempted is False
                     else:
                         assert result is True and cleanup._unknown is False
                         assert cleanup._socket_closed and cleanup._clock_closed

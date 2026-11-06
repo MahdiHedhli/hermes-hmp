@@ -648,6 +648,70 @@ class RemoteCleanupOwner:
             raise AuthorityRefusalError
         return remaining
 
+    def _close_known_signing_refusal(self, channel):
+        """Local transport only after a failed no-IO signer; never remote settlement."""
+        from .presentation_credential_cancel_commitment import NativeCancelCommitment
+
+        try:
+            if type(self) is not RemoteCleanupOwner or type(channel) is not SocketChannel:
+                return False
+            signer = self._credential_cancel_commitment_snapshot
+            if (type(signer) is not NativeCancelCommitment
+                    or self._credential_cancel_commitment is not signer
+                    or signer._failed is not True or signer._raw is not None
+                    or signer._raw_snapshot is not None or signer._writer is not None
+                    or signer._writer_snapshot is not None
+                    or channel._credential_cancel_writer is not None
+                    or channel._credential_cancel_writer_snapshot is not None
+                    or self._cancel_write_completed is not False):
+                return False
+            scope = NativeCancelCommitment._metadata(signer)
+            if (scope.cleanup is not self or scope.cleanup_refs[3] is not channel
+                    or asyncio.current_task() is not scope.allocation.task
+                    or _TASK.cancelling(scope.allocation.task) != 0
+                    or self._intent is not True or self._unknown is not False
+                    or self._work_joined is not True):
+                return False
+            RemoteCleanupOwner._guard(self)
+            if RemoteCleanupOwner._remaining(self) <= 0:
+                return False
+            RemoteCleanupOwner._guard(self)
+            if (self._credential_cancel_commitment is not signer
+                    or self._credential_cancel_commitment_snapshot is not signer
+                    or signer._failed is not True or signer._raw is not None
+                    or signer._raw_snapshot is not None or signer._writer is not None
+                    or signer._writer_snapshot is not None
+                    or channel._credential_cancel_writer is not None
+                    or channel._credential_cancel_writer_snapshot is not None
+                    or self._cancel_write_completed is not False
+                    or NativeCancelCommitment._metadata(signer) is not scope
+                    or asyncio.current_task() is not scope.allocation.task
+                    or _TASK.cancelling(scope.allocation.task) != 0
+                    or self._intent is not True or self._unknown is not False
+                    or channel._reading is not False or channel._writing is not False):
+                return False
+            # close() independently proves all retained channel IO is settled.
+            self._socket_closed = SocketChannel.close(channel) is True
+            if not self._socket_closed or RemoteCleanupOwner._remaining(self) <= 0:
+                return False
+            RemoteCleanupOwner._guard(self)
+            if (self._credential_cancel_commitment is not signer
+                    or self._credential_cancel_commitment_snapshot is not signer
+                    or signer._failed is not True or signer._raw is not None
+                    or signer._raw_snapshot is not None or signer._writer is not None
+                    or signer._writer_snapshot is not None
+                    or channel._credential_cancel_writer is not None
+                    or channel._credential_cancel_writer_snapshot is not None
+                    or self._cancel_write_completed is not False
+                    or NativeCancelCommitment._metadata(signer) is not scope
+                    or asyncio.current_task() is not scope.allocation.task
+                    or _TASK.cancelling(scope.allocation.task) != 0):
+                return False
+            self._clock_closed = SocketChannel.close_clock(channel) is True
+            return self._socket_closed and self._clock_closed
+        except BaseException:
+            return False  # original refusal/cause survives; never retry local native intent
+
     async def _send_credential_cancel(self, channel):
         """One fixed original cleanup route; never unsigned fallback or remote ACK."""
         from .presentation_credential_cancel_commitment import NativeCancelCommitment
@@ -682,7 +746,8 @@ class RemoteCleanupOwner:
             if RemoteCleanupOwner._remaining(self) <= 0:
                 raise AuthorityRefusalError
         except BaseException:
-            self._unknown = True
+            RemoteCleanupOwner._close_known_signing_refusal(self, channel)
+            self._unknown = True  # remote cleanup remains unconfirmed even after local close
             if (type(channel) is SocketChannel and type(self._refs_snapshot) is tuple
                     and len(self._refs_snapshot) == 12 and self._refs is self._refs_snapshot
                     and channel is self._refs_snapshot[3]):
