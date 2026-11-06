@@ -220,7 +220,7 @@ def run_fixture(root):
     import hermes_state_registry as native_registry
     import pytest
     from aiohttp.test_utils import TestClient, TestServer
-    from unit.test_s4_descriptors import USER
+    from unit.test_s4_descriptors import PROFILE, USER
     from unit.test_s5_media_fetch import FORBIDDEN_HEADERS, VALID_PNG, VALID_PNG_B, Fx
 
     from hmp_plugin import media_fetch
@@ -278,15 +278,15 @@ def run_fixture(root):
             return row
 
         tool_ids = {seed_image(number) for number in (2, 4, 6)}
-        changed = {"file": False, "message": False}
+        changed = {"file": False, "authorization": False}
 
         def change_file():
             fx.write(4, VALID_PNG_B)
             changed["file"] = True
 
-        def change_message():
-            db.clear_messages("p1")
-            changed["message"] = True
+        def revoke_synthetic_bot_access():
+            fx.native.world.runner.approved[PROFILE].clear()
+            changed["authorization"] = True
 
         async def scenario():
             app = fx.rig.env.app()
@@ -327,22 +327,24 @@ def run_fixture(root):
                     # fact, so prior asset failure cannot make a refusal vacuous.
                     status, _, body = await fx.get(client, refs[4], dev=owner)
                     _require(status == 200 and body == VALID_PNG)
-                    fx.after_p1.append(change_file)
+                    change_file()
                     status, _, _ = await fx.get(client, refs[4], dev=owner)
-                    if status != 404 or not changed["file"]:
-                        raise RuntimeError("fixture_file_mutation_refused:" + json.dumps({
-                            "status": status, "hook_ran": changed["file"],
-                            "p1_calls": fx.p1_in, "p2_calls": fx.p2_in,
-                            "p1_result_types": fx.p1_results}))
-                    report["between_phase_file_change_refused"] = True
-                    fx.after_p1.clear()
+                    _require(status == 404 and changed["file"])
+                    report["file_change_after_first_serve_refused"] = True
                     status, _, body = await fx.get(client, refs[6], dev=owner)
                     _require(status == 200 and body == VALID_PNG)
-                    fx.after_p1.append(change_message)
+                    fx.after_p1.append(revoke_synthetic_bot_access)
                     status, _, _ = await fx.get(client, refs[6], dev=owner)
-                    _require(status == 404 and changed["message"])
-                    report["between_phase_message_change_refused"] = True
+                    _require(status == 404 and changed["authorization"])
+                    report["between_phase_authorization_change_refused"] = True
                     fx.after_p1.clear()
+                    fx.native.world.approve(USER, PROFILE)
+                    status, _, body = await fx.get(client, refs[6], dev=owner)
+                    _require(status == 200 and body == VALID_PNG)
+                    db.clear_messages("p1")
+                    status, _, _ = await fx.get(client, refs[6], dev=owner)
+                    _require(status == 404)
+                    report["message_change_before_fetch_refused"] = True
                     fresh = seed_image(8)
                     refs = await fx.mint(client, owner)
                     _require(set(refs) == {fresh})

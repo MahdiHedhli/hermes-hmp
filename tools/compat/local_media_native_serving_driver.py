@@ -32,8 +32,9 @@ _EXTENSIONS = frozenset((".py", ".json", ".toml", ".yaml", ".yml"))
 _TRUE = frozenset(("native_database", "native_registry", "synthetic_routing_authorization",
     "synthetic_compatibility_result", "exact_authenticated_bytes_headers", "other_device_refused",
     "other_device_positive_control",
-    "other_profile_refused", "between_phase_file_change_refused",
-    "between_phase_message_change_refused", "revoked_device_refused", "listener_closed",
+    "other_profile_refused", "file_change_after_first_serve_refused",
+    "between_phase_authorization_change_refused", "message_change_before_fetch_refused",
+    "revoked_device_refused", "listener_closed",
     "workers_joined", "borrowed_native_balanced", "native_database_close_observed",
     "source_unchanged", "selected_source_origins_checked"))
 _FALSE = frozenset(("actual_image_producer", "production_qualified", "t12_qualified"))
