@@ -190,6 +190,36 @@ def validate_request(case, selector, request):
     require(request in allowed)
 
 
+def declared_requests(case):
+    """Closed full request inventory; no filesystem, native calls or actor admission."""
+    require(type(case) is int and 0 <= case < 8)
+    requests = tuple(f"{scenario}:{seam}" for scenario in GENERAL for seam in SEAMS)
+    requests += ("residual:last", "aba:last")
+    if case < 4:
+        requests += tuple(f"{scenario}:{seam}" for scenario in BOT_ONLY for seam in SEAMS)
+    require(len(requests) == len(set(requests)))
+    return requests
+
+
+def paired_plan():
+    """Plan every declared phase once, two fresh DB scopes per future process.
+
+    This only plans. It never reuses a mutated DB, launches a process, increases
+    its deadline, or declares the paired fixture implemented/qualified.
+    """
+    plan = []
+    for case in range(8):
+        requests = declared_requests(case)
+        require(len(requests) % 2 == 0)
+        for selector in (1, 16, 128):
+            for start in range(0, len(requests), 2):
+                pair = requests[start:start + 2]
+                for request in pair:
+                    validate_request(case, selector, request)
+                plan.append((case, selector, pair))
+    return tuple(plan)
+
+
 def barrier(owners, hooks):
     return (type(owners) is list and type(hooks) is list and
             all(type(owner) is OwnedWriter and owner.safe_to_close() for owner in owners) and

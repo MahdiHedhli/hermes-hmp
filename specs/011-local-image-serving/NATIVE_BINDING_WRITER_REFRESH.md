@@ -229,3 +229,24 @@ models reject existing child identity, wrong parent/marker, absent child history
 and parent hijack. Independent source review and bounded native evidence remain
 required before these cases count as verified. Storage-layout work must preserve
 all 768 declared phases plus any further applicable scenarios.
+
+### Child native checkpoint and paired inventory
+
+Four root-operated phases at `befa0f7` completed: Bot branch/ids0 (1 selector),
+Phone reset/page (16), Bot reset/ids1 (98 sessions with full prompts, 128), and
+Phone branch/page (same large shape, 128). All eight first/fresh-second bindings
+preserved exact original parent selections. Each phase verified two public
+mutation calls, 39/39 native borrows and normal writer/hooks/database/listener
+closure. The 112 top-level artifacts are collected for independent readback;
+artifact review is pending. These are constructed child facts, not live gateway
+branch/reset admission or completion of the full matrix.
+
+The pure `paired_plan` inventory enumerates all 768 distinct declared phases once
+in 384 pairs, keeping each pair within one case and selector. Its causal models
+check completeness, uniqueness, Bot-only applicability and invalid-case refusal;
+253 focused tests and lint pass. This creates no actor or file. A paired runner
+is NOT implemented or approved by this inventory. It must allocate two exclusive
+DB/home scopes, settle and close the first before the second, preserve partial
+outcome evidence, and retain the original process deadline/refusal policy. The
+second phase must never reuse or reset a mutated first-phase database. Review
+and bounded heaviest-shape execution must precede any full matrix launch.

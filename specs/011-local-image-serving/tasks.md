@@ -651,3 +651,9 @@ limitation is reclassified as a fix or a physical/release qualification.
   Declared matrix is now 768 phases; prior 12-phase pilot remains its exact
   historical scope. Actual gateway fork/reset admission is not covered by child
   construction and remains separately assessed. Preserve storage and actor gates.
+
+- [ ] Read back the four child native phases at `befa0f7` independently (112
+  artifacts, eight parent outcomes); no full matrix/gateway admission claim.
+- [ ] Review pure 768-phase/384-pair planner, then implement two fresh DB scopes
+  per process with explicit closed checkpoints and unchanged deadline. Planner
+  models pass; paired execution is not implemented by the planner.

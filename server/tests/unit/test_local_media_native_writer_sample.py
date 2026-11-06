@@ -608,3 +608,28 @@ def test_child_construction_requires_fresh_identity_marker_history_and_parent_is
         assert module.construct_isolated_child(DB(), "parent", scenario) == 2
         assert [call[0] for call in calls] == ["create", "append"]
         assert calls[0][3] == {"parent_session_id": "parent", "model_config": {marker: "parent"}}
+
+
+def test_pair_plan_preserves_every_declared_phase_without_execution():
+    module = load()
+    before = set(threading.enumerate())
+    plan = module.paired_plan()
+    assert set(threading.enumerate()) == before
+    assert len(plan) == 384
+    phases = [(case, selector, request) for case, selector, pair in plan for request in pair]
+    expected = {(case, selector, request) for case in range(8) for selector in (1, 16, 128)
+                for request in module.declared_requests(case)}
+    assert len(phases) == len(set(phases)) == len(expected) == 768
+    assert set(phases) == expected
+    assert all(type(pair) is tuple and len(pair) == 2 and pair[0] != pair[1]
+               for _, _, pair in plan)
+    assert all(case < 4 for case, _, request in phases
+               if request.split(":")[0] in module.BOT_ONLY)
+    assert len(module.declared_requests(0)) == 38
+    assert len(module.declared_requests(4)) == 26
+
+
+@pytest.mark.parametrize("case", [True, -1, 8, None, "0"])
+def test_inventory_refuses_invalid_case_before_planning(case):
+    with pytest.raises(RuntimeError):
+        load().declared_requests(case)
