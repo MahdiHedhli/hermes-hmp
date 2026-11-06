@@ -31,6 +31,8 @@ struct hmp_admission_owner {
     bool initialize_attempted, close_attempted;
     bool receive_owned, send_owned, uncertain, busy, integrity_refused;
     bool request_attempted, request_received, request_copyout_unknown;
+    bool request_simple_reply_only, reply_retirement_attempted;
+    bool reply_released, reply_retired_timely;
     mach_port_t request_reply;
     pid_t observed_pid;
     uid_t observed_uid;
@@ -142,7 +144,9 @@ static bool close_owner(hmp_admission_owner *o) {
     /* Retained received rights must not be implicitly destroyed as endpoint
      * cleanup. In particular SEND_ONCE disposal may notify a foreign endpoint.
      * No generic message-disposal authority exists in this foundation yet. */
-    if (o->request_received || o->request_copyout_unknown || o->uncertain) return false;
+    if ((o->request_received && !(o->request_simple_reply_only && o->reply_released &&
+        o->reply_retired_timely && o->request_reply == MACH_PORT_NULL)) ||
+        o->request_copyout_unknown || o->uncertain) return false;
     if (clock_ns() >= o->cleanup_end || o->integrity_refused) return false;
     if (o->receive_owned) {
         kern_return_t r = mach_port_mod_refs(mach_task_self(), o->endpoint,
@@ -174,7 +178,8 @@ bool hmp_admission_owner_dispose(hmp_admission_owner **owner) {
     if (owner == NULL || !enter(*owner)) return false;
     hmp_admission_owner *o = *owner;
     if (o->state != HMP_ADMISSION_CLOSED || !o->close_attempted ||
-        o->receive_owned || o->send_owned || o->uncertain || o->integrity_refused)
+        o->receive_owned || o->send_owned || o->uncertain || o->integrity_refused ||
+        (o->request_received && !o->reply_retired_timely))
         return leave(o, false);
     *owner = NULL;
     free(o);
@@ -212,6 +217,9 @@ static bool observe_request(hmp_admission_owner *o) {
         header->msgh_bits != MACH_MSGH_BITS(MACH_MSG_TYPE_PORT_SEND_ONCE, MACH_MSG_TYPE_PORT_SEND) ||
         header->msgh_local_port != o->endpoint || !MACH_PORT_VALID(o->request_reply) ||
         header->msgh_voucher_port != MACH_PORT_NULL || header->msgh_id != HMP_REQUEST_ID) return false;
+    /* This is ownership shape, not admission: a later body/trailer refusal
+     * still leaves only this one copied reply right, plus the borrowed local. */
+    o->request_simple_reply_only = true;
     size_t offset = ((size_t)header->msgh_size + 3u) & ~(size_t)3u;
     if (offset > sizeof(o->request_buffer.bytes) - sizeof(mach_msg_audit_trailer_t)) return false;
     mach_msg_audit_trailer_t trailer;
@@ -238,5 +246,45 @@ static bool observe_request(hmp_admission_owner *o) {
 bool hmp_admission_owner_observe_request(hmp_admission_owner *o) {
     if (!enter(o)) return false;
     bool result = observe_request(o);
+    return leave(o, result);
+}
+
+static bool retire_dead_reply(hmp_admission_owner *o) {
+    if (o->reply_retirement_attempted || o->close_attempted) {
+        o->state = HMP_ADMISSION_REFUSED;
+        return false;
+    }
+    o->reply_retirement_attempted = true;
+    o->state = HMP_ADMISSION_REFUSED;
+    if (!o->request_received || !o->request_simple_reply_only || o->request_copyout_unknown ||
+        o->uncertain || o->integrity_refused || !MACH_PORT_VALID(o->request_reply)) return false;
+    const mach_port_t held_reply = o->request_reply;
+    if (clock_ns() >= o->cleanup_end || o->integrity_refused) return false;
+    mach_port_type_t type = 0;
+    kern_return_t r = mach_port_type(mach_task_self(), held_reply, &type);
+    if (r != KERN_SUCCESS) { o->uncertain = true; return false; }
+    if (clock_ns() >= o->cleanup_end || o->integrity_refused ||
+        o->request_reply != held_reply || type != MACH_PORT_TYPE_DEAD_NAME) return false;
+    mach_port_urefs_t refs = 0;
+    r = mach_port_get_refs(mach_task_self(), held_reply, MACH_PORT_RIGHT_DEAD_NAME, &refs);
+    if (r != KERN_SUCCESS) { o->uncertain = true; return false; }
+    if (clock_ns() >= o->cleanup_end || o->integrity_refused ||
+        o->request_reply != held_reply || refs != 1) return false;
+    /* The typed kernel operation independently refuses a live SEND_ONCE right;
+     * no polymorphic deallocate/destructor or retry may replace this operation.
+     * Exclusive retained-name ownership excludes release/replacement by another
+     * in-process actor; this is not arbitrary memory-corruption protection. */
+    r = mach_port_mod_refs(mach_task_self(), held_reply, MACH_PORT_RIGHT_DEAD_NAME, -1);
+    if (r != KERN_SUCCESS) { o->uncertain = true; return false; }
+    o->reply_released = true; /* Record actual effect before the next boundary. */
+    o->request_reply = MACH_PORT_NULL;
+    if (clock_ns() >= o->cleanup_end || o->integrity_refused) return false;
+    o->reply_retired_timely = true;
+    return true;
+}
+
+bool hmp_admission_owner_retire_dead_reply(hmp_admission_owner *o) {
+    if (!enter(o)) return false;
+    bool result = retire_dead_reply(o);
     return leave(o, result);
 }

@@ -12,11 +12,13 @@ static int receive_count, send_count;
 static unsigned long long fake_now = 1000000000;
 static void *active;
 static int receive_mode, receive_calls;
+static int retire_mode, reply_calls, retire_native_reentry, expire_clock;
 static void reenter(void);
 static int model_clock(clockid_t id, struct timespec *t) {
     (void)id;
     ++sample;
     if (sample == reenter_clock) reenter();
+    if (sample == expire_clock) fake_now += 201;
     t->tv_sec = (time_t)(fake_now / 1000000000);
     t->tv_nsec = (long)(fake_now % 1000000000);
     return 0;
@@ -49,6 +51,13 @@ kern_return_t mach_port_insert_right(mach_port_t t, mach_port_t p, mach_port_t q
     return KERN_SUCCESS;
 }
 kern_return_t mach_port_mod_refs(mach_port_t t, mach_port_t p, int kind, int delta) {
+    if (p == 92) {
+        assert(t == 7 && kind == MACH_PORT_RIGHT_DEAD_NAME && delta == -1);
+        ++reply_calls;
+        if (retire_mode == 8 || retire_mode == 9) return 5;
+        if (retire_native_reentry == reply_calls) reenter();
+        return KERN_SUCCESS;
+    }
     assert(t == 7 && p == 91 && kind == MACH_PORT_RIGHT_RECEIVE && delta == -1);
     ++native_calls;
     if (fail_native == native_calls) return 5;
@@ -62,6 +71,25 @@ kern_return_t mach_port_deallocate(mach_port_t t, mach_port_t p) {
     if (fail_native == native_calls) return 5;
     --send_count;
     if (reenter_native == native_calls) reenter();
+    return KERN_SUCCESS;
+}
+
+kern_return_t mach_port_type(mach_port_t t, mach_port_t p, mach_port_type_t *type) {
+    assert(t == 7 && p == 92);
+    ++reply_calls;
+    if (retire_mode == 6) return 5;
+    *type = retire_mode == 2 ? MACH_PORT_TYPE_SEND_ONCE :
+        (retire_mode == 3 ? 0 : MACH_PORT_TYPE_DEAD_NAME);
+    if (retire_native_reentry == reply_calls) reenter();
+    return KERN_SUCCESS;
+}
+kern_return_t mach_port_get_refs(mach_port_t t, mach_port_t p, int kind,
+                                 mach_port_urefs_t *refs) {
+    assert(t == 7 && p == 92 && kind == MACH_PORT_RIGHT_DEAD_NAME);
+    ++reply_calls;
+    if (retire_mode == 7) return 5;
+    *refs = retire_mode == 4 ? 0 : (retire_mode == 5 ? 2 : 1);
+    if (retire_native_reentry == reply_calls) reenter();
     return KERN_SUCCESS;
 }
 
@@ -253,6 +281,69 @@ int main(void) {
         assert(!hmp_admission_owner_close(o) && !hmp_admission_owner_dispose(&o));
         assert(receive_calls == expected && native_calls == 2);
     }
-    puts("47 causal model scenarios passed; no native Mach calls");
+    reenter_clock = 0;
+    /* Typed DEAD_NAME retirement: live or malformed/uncertain rights do not
+     * enter a polymorphic destructor; body refusal does not invent extra rights. */
+    for (int mode = 1; mode <= 12; ++mode) {
+        retire_mode = mode;
+        receive_mode = mode == 10 ? 5 : (mode == 11 ? 3 : (mode == 12 ? 8 : 1));
+        reply_calls = sample = native_calls = receive_count = send_count = receive_calls = 0;
+        o = hmp_admission_owner_allocate(); active = o;
+        assert(hmp_admission_owner_initialize(o, fake_now + 100, fake_now + 200));
+        bool observed = hmp_admission_owner_observe_request(o);
+        assert(observed == (mode < 10));
+        bool retired = hmp_admission_owner_retire_dead_reply(o);
+        assert(retired == (mode == 1 || mode == 12));
+        int expected = mode >= 10 && mode <= 11 ? 0 :
+            (mode == 2 || mode == 3 || mode == 6 ? 1 :
+             (mode == 4 || mode == 5 || mode == 7 ? 2 : 3));
+        assert(reply_calls == expected);
+        assert(!hmp_admission_owner_retire_dead_reply(o) && reply_calls == expected);
+        if (retired) {
+            assert(o->reply_released && o->reply_retired_timely && o->request_reply == 0);
+            assert(hmp_admission_owner_close(o) && native_calls == 4);
+            assert(hmp_admission_owner_dispose(&o));
+        } else {
+            assert(!o->reply_released && !o->reply_retired_timely);
+            assert(!hmp_admission_owner_close(o) && !hmp_admission_owner_dispose(&o));
+            assert(native_calls == 2);
+        }
+    }
+    retire_mode = 1;
+    /* Reentry at each query/release return boundary. Returned release is
+     * recorded even though timely retirement and subsequent cleanup refuse. */
+    for (int boundary = 1; boundary <= 3; ++boundary) {
+        retire_native_reentry = boundary;
+        receive_mode = 1;
+        reply_calls = sample = native_calls = receive_count = send_count = receive_calls = 0;
+        o = hmp_admission_owner_allocate(); active = o;
+        assert(hmp_admission_owner_initialize(o, fake_now + 100, fake_now + 200));
+        assert(hmp_admission_owner_observe_request(o));
+        assert(!hmp_admission_owner_retire_dead_reply(o));
+        assert(reply_calls == boundary && o->reply_released == (boundary == 3));
+        assert(!o->reply_retired_timely && o->integrity_refused);
+        assert(!hmp_admission_owner_retire_dead_reply(o));
+        assert(!hmp_admission_owner_close(o) && !hmp_admission_owner_dispose(&o));
+        assert(reply_calls == boundary && native_calls == 2);
+    }
+    retire_native_reentry = 0;
+    for (int kind = 0; kind < 2; ++kind) {
+        for (int boundary = 1; boundary <= 4; ++boundary) {
+            reenter_clock = expire_clock = 0;
+            reply_calls = sample = native_calls = receive_count = send_count = receive_calls = 0;
+            o = hmp_admission_owner_allocate(); active = o;
+            assert(hmp_admission_owner_initialize(o, fake_now + 100, fake_now + 200));
+            assert(hmp_admission_owner_observe_request(o));
+            sample = 0;
+            if (kind == 0) reenter_clock = boundary; else expire_clock = boundary;
+            assert(!hmp_admission_owner_retire_dead_reply(o));
+            assert(reply_calls == boundary - 1);
+            assert(o->reply_released == (boundary == 4) && !o->reply_retired_timely);
+            assert(!hmp_admission_owner_retire_dead_reply(o));
+            assert(!hmp_admission_owner_close(o) && !hmp_admission_owner_dispose(&o));
+            assert(reply_calls == boundary - 1 && native_calls == 2);
+        }
+    }
+    puts("70 causal model scenarios passed; no native Mach calls");
     return 0;
 }

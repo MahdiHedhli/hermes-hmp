@@ -1,5 +1,10 @@
 # BI1 integration tasks
 
+- [x] Implement/review typed-dead-only reply retirement with held-name queries,
+      one typed decrement, actual-effect capture and timely-close fact. Cover
+      live/uncertain refusal, errors, reentry and expiry in the 70-scenario model.
+      This does not qualify native requests or general live-right disposal.
+
 - [x] Implement observation-only retained request receipt and closed header/trailer
       validation, with source review and 47 causal model scenarios. Received or
       uncertain copied rights block close/disposal; no message authority follows.

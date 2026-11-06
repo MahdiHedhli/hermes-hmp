@@ -1,3 +1,14 @@
+## Typed dead-reply retirement — November 6, 2026
+
+The new source/model slice retires only a held reply proven to be one dead-name
+reference, using a typed DEAD_NAME decrement. It records actual release before
+later checks and permits close only after timely retirement. Live or uncertain
+rights remain debt; no destructor, notification fallback or automatic retry.
+Independent source/model review accepted the slice. Its 70 causal scenarios pass
+within 17 portable pytest checks on Python 3.11 and 3.14; no new native execution.
+Production startup, live-right disposal, phase/control binding and physical image
+delivery remain unfinished. See [native evidence limits](native/README.md).
+
 ## Retained request observation — November 6, 2026
 
 The new source candidate receives one fixed request into its original retained

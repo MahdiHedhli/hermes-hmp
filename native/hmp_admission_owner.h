@@ -26,10 +26,17 @@ hmp_admission_state hmp_admission_owner_state(hmp_admission_owner *);
 /* One fixed request observation, never admission. Endpoint remains unexported.
  * Actual input is restricted to owned fixture reply destinations until startup
  * and right provenance exist. Received rights/buffer remain retained; close and
- * disposal refuse until a separately reviewed message-disposal owner is added.
+ * disposal require actual timely typed-dead-reply retirement below. Live or
+ * uncertain rights remain unresolved debt.
  * Even send-once disposal can notify its destination. No reply is sent here.
  */
 bool hmp_admission_owner_observe_request(hmp_admission_owner *);
+/* One cleanup-only attempt for the sole copied reply in a closed simple header.
+ * Requires actual DEAD_NAME/type + one-ref observations, then a typed DEAD_NAME
+ * decrement. Never disposes a live right or sends a notification by fallback.
+ * Exclusive ownership of the retained name is a runtime prerequisite.
+ */
+bool hmp_admission_owner_retire_dead_reply(hmp_admission_owner *);
 /* Close never authorizes another effect after its original cleanup deadline.
  * Unknown/late release is retained, not retried or represented as clean closure.
  */

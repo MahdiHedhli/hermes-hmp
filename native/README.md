@@ -1,6 +1,32 @@
-# Retained request observation — source-only extension
+# Typed dead-reply retirement — source/model candidate
 
-The current candidate adds one fixed request receive to the original owner. It
+The current extension adds one cleanup-only attempt for the sole copied reply
+in a closed simple received header. It observes the held name's exact DEAD_NAME
+type and one reference, then calls `mach_port_mod_refs(DEAD_NAME, -1)`. The typed
+primitive refuses a live right rather than dispatching to send-once notification.
+There is no polymorphic reply deallocation, destructor or fallback. Exclusive
+ownership of the original held name is a runtime premise, not protection against
+arbitrary in-process corruption.
+
+The actual release is recorded before post-call clock/reentry checks. Only a
+timely retirement fact permits subsequent endpoint close. Native errors, live or
+wrong types, other refcounts, invalid ownership shape, unknown copyout, expiry and
+reentry retain debt with no retry. A simple rejected body can still have its sole
+dead reply safely retired; that cleanup fact never admits the rejected request.
+General live-right/message disposal and startup/right provenance remain open.
+
+Independent source/model review accepted this slice, without reviewer execution.
+The direct C model covers 70 scenarios; root's portable selections pass 17 pytest
+checks on Python 3.11.15 and 3.14.4 (one model test plus schema/driver checks).
+Actual native cases were deselected. Whole configured lint, C syntax and
+plugin/privacy gates pass. No native request or retirement execution qualifies
+this candidate. Earlier native lifecycle evidence below binds older source only.
+HMP does not load the owner; there is no exposed endpoint, reply sending,
+production admission or operation/terminal authority.
+
+## Earlier retained request observation — source-only extension
+
+Source `48a3764` adds one fixed request receive to the original owner. It
 retains the complete kernel buffer and returned reply name before clock/reentry
 checks. It validates exact received dispositions, endpoint, frame and bounded
 audit trailer. Observation grants no startup or operation authority. Any received

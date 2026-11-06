@@ -33,4 +33,4 @@ def test_retained_owner_native_boundary_model(tmp_path):
     result = subprocess.run([str(binary)], env=env, capture_output=True,
                             timeout=5, check=False)
     assert result.returncode == 0, result.stderr.decode(errors="replace")
-    assert result.stdout == b"47 causal model scenarios passed; no native Mach calls\n"
+    assert result.stdout == b"70 causal model scenarios passed; no native Mach calls\n"

@@ -49,3 +49,14 @@ typedef struct {
 kern_return_t mach_msg(mach_msg_header_t *, mach_msg_option_t, mach_msg_size_t,
                       mach_msg_size_t, mach_port_t, mach_msg_timeout_t, mach_port_t);
 #endif
+
+#ifndef HMP_TEST_DEAD_RIGHT_H
+#define HMP_TEST_DEAD_RIGHT_H
+typedef uint32_t mach_port_type_t;
+typedef uint32_t mach_port_urefs_t;
+#define MACH_PORT_RIGHT_DEAD_NAME 4
+#define MACH_PORT_TYPE_DEAD_NAME (1u << 20)
+#define MACH_PORT_TYPE_SEND_ONCE (1u << 18)
+kern_return_t mach_port_type(mach_port_t, mach_port_t, mach_port_type_t *);
+kern_return_t mach_port_get_refs(mach_port_t, mach_port_t, int, mach_port_urefs_t *);
+#endif
