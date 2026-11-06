@@ -333,3 +333,8 @@ historical, not an alternative live authorization path or resolved incident.
       refusal, with exact original actor/frozen budget and repeated no-IO seals.
       Expiry/cancellation/unknown-read causals retain debt; remote UNKNOWN and
       original refusal survive actual local close. 100 focused tests passed.
+
+- [ ] Implement signed pre-READY cleanup under the explicit original READY-wait
+      retirement and distinct BEGIN-derived signer contract in
+      [SIGNED_PRE_READY_CLEANUP.md](SIGNED_PRE_READY_CLEANUP.md). No fabricated
+      READY transition, replacement reader, unsigned fallback or ACK inference.

@@ -899,7 +899,26 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                         await asyncio.gather(control._allocation_snapshot.task,
                                              return_exceptions=True)
                         return ticket
-                    consumed = await BrokerServiceSpine._v2_control(spine, control)
+                    try:
+                        consumed = await BrokerServiceSpine._v2_control(spine, control)
+                    except FrameError as refusal:
+                        # Preserve the actual service refusal. Record the original
+                        # controller outcome rather than guessing timeout from a
+                        # later failed/unknown flag; this never retries or repairs.
+                        controller = control._allocation_snapshot.task
+                        outcome = "pending"
+                        if controller.done():
+                            if controller.cancelled():
+                                outcome = "cancelled"
+                            else:
+                                error = controller.exception()
+                                outcome = ("returned" if error is None
+                                           else type(error).__name__)
+                        refusal.add_note("original controller outcome: " + outcome)
+                        refusal.add_note(
+                            f"notice_completed={control._notice_completed!r}; "
+                            f"failed={control._failed!r}; io_unknown={control._io_unknown!r}")
+                        raise
                     assert consumed is control._cancel_receipt_snapshot.frame
                     assert adoption._consume_complete is True
                     with pytest.raises(FrameError):

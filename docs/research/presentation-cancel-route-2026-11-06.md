@@ -57,3 +57,9 @@ after native cleanup guard. Its exact isolated rerun passed (one test, 0.73s).
 The timing/cause remains unproven; this is not a full-suite pass. A formatting
 edit also initially caused a collection indentation error; it was corrected
 before that completed full run. Configured lint now passes.
+
+Follow-up investigation: 14 service cases passed with duplicate collection, and
+all 130 adoption cases passed after adding test-only exception notes. The notes
+preserve the original service exception and report the actual original controller
+Task outcome and retained notice/failure/debt flags if it recurs. They neither
+repair state nor extend deadlines. Failure remains unresolved, not reclassified.

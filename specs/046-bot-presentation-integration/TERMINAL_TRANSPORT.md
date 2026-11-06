@@ -21,11 +21,13 @@ StartupEnrollment generation, clock qualification, same UID and decoded fields
 cannot replace it. Native read service/PRE_EMIT and all ownership planes remain
 required before public character routes.
 
-The next prerequisite is the [actual startup/runtime issuer](RUNTIME_ISSUER.md),
-not another decoded-data token. Its proposed contract separates external trusted
-installation selection and observed manager/peer/lifetime custody from the
-existing synthetic_no_go verifier. Issuance and composed actual transcript remain
-unimplemented; this link grants no transport authority.
+The current startup direction is [local role credentials](CREDENTIAL_ADMISSION.md).
+The [runtime issuer proposal](RUNTIME_ISSUER.md) is historical Mach research,
+not an alternative admission route. Signed BEGIN/READY/GO and post-READY CANCEL
+have bounded source integration; production installation/startup remains open.
+The next signed cleanup prerequisite is the [original pre-READY read-retirement
+and BEGIN-derived cancellation contract](SIGNED_PRE_READY_CLEANUP.md). Its plan
+confers no IO, terminal, ACK or publication authority.
 
 The [local handoff freeze](LOCAL_HANDOFF_FREEZE.md) is integrated as source
 797dbbc through PR114 with exact-source green CI42129488493. It supplies immutable

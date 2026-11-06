@@ -1,3 +1,17 @@
+## Signed pre-READY integration checkpoint — November 6, 2026
+
+The next bot-character transport task now has an exact source-backed contract:
+retire the original READY wait only with its minted local cancellation proof,
+then derive a distinct signed CANCEL from the completed original BEGIN. No fake
+READY state, second reader, unsigned fallback or remote settlement is permitted.
+This is a plan, not implemented or deployed behavior. See
+[SIGNED_PRE_READY_CLEANUP.md](specs/046-bot-presentation-integration/SIGNED_PRE_READY_CLEANUP.md).
+
+The intermittent wrong-spine failure remains unresolved. All 130 broker adoption
+tests passed in the diagnostic run; 14 repeated service cases passed separately.
+Test-only failure notes now preserve the original controller outcome if it recurs,
+without retrying or changing protocol state. Lint passed; no full-suite claim.
+
 ## Known signing-refusal local cleanup checkpoint — November 6, 2026
 
 The bot-character transport now retires local socket/clock resources after a
