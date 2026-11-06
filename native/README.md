@@ -22,8 +22,18 @@ syntax checks and configured Ruff pass. Independent repaired-source/model review
 accepted the repaired lifecycle, with explicit native-call totals added to each
 clock-boundary case so the prevented next effect is checked. No reviewer execution
 is claimed. These model results are not kernel, message or runtime qualification;
-no actual native lifecycle harness has run for this source. Wrong-thread refusal
-and the kernel receive-to-dead-name transition remain unobserved.
+after independent harness source review, root completed one actual Darwin
+lifecycle run: 17 passing checks in 0.84 seconds (one actual native case plus
+16 portable/driver checks). It observed own receive/send references, wrong-thread
+refusal followed by known join, the receive-to-one-dead-name transition, timely
+close, idempotent close, final name absence and disposal. The fixed harness sends
+no messages and uses no global names or services. The separate fake-driver receipt
+is not native evidence. Independent artifact review accepted all six source hashes, 19 artifacts,
+compiler/SDK/binary bindings and five terminal commands; no reviewer execution.
+
+Exact source, compiler, SDK, binary and private artifacts are recorded in
+`/private/tmp/hermes-admission-native-311-20261106.json`. This is lifecycle
+observation only; no message exchange or production startup is qualified.
 
 Remaining implementation: retained reply-right and receive-cursor ownership,
 closed header/disposition/error contracts, original audit incarnation and lifetime

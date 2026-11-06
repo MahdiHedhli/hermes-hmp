@@ -1,3 +1,15 @@
+## Native endpoint lifecycle — November 6, 2026
+
+Following independent source review, root completed one actual Darwin lifecycle
+run: **17 passed in 0.84 seconds** (one native case plus 16 portable/driver checks).
+Own receive/send references, wrong-thread refusal and join, the receive-to-dead-name
+transition, final name absence and disposal were observed. No messages, global
+names or services are used. Independent artifact review accepted exact source/artifact bindings and bounded
+observations; no reviewer execution is claimed. The endpoint
+owner remains inactive; startup, message/control authority, terminal/ACK and
+physical image qualification remain open. This does not resolve the earlier
+unknown-recipient incident. See [native ownership status](native/README.md).
+
 ## Native sender identity experiment — November 6, 2026
 
 Following independent source review, one isolated root Darwin run passes **57
