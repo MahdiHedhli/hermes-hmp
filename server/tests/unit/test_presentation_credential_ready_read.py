@@ -1529,6 +1529,10 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
         monkeypatch.setattr(NativePhaseWorkOwner, "exchange_ready", source_only_exchange)
         with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
             await remote.begin_ready()
+        if mutation in ("cancel_wait", "cancel_wait_partial", "cancel_wait_key"):
+            async with asyncio.timeout(2):
+                held["automatic_pre_ready_closed"] = await asyncio.shield(
+                    remote._cleanup_owner_snapshot._allocations_snapshot[0].task)
         if mutation.startswith("cancel_wait_sign"):
             async with asyncio.timeout(2):
                 cleanup_task = remote._cleanup_owner_snapshot._allocations_snapshot[0].task
@@ -1643,6 +1647,31 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 NativeReadyReceiver._released(receiver, channel)
         if mutation.startswith("cancel_wait"):
             assert held["cancel_getters"] == []
+        if mutation in ("cancel_wait", "cancel_wait_partial", "cancel_wait_key"):
+            cleanup = remote._cleanup_owner_snapshot
+            signer = cleanup._pre_ready_cancel_commitment_snapshot
+            assert signer is not None
+            if mutation == "cancel_wait_key":
+                assert held["automatic_pre_ready_closed"] is False
+                assert cleanup._unknown and not cleanup._socket_closed
+                assert signer._failed and signer._raw_snapshot is None
+                assert signer._writer_snapshot is None and not cleanup._cancel_write_attempted
+            else:
+                assert held["automatic_pre_ready_closed"] is True
+                assert cleanup._socket_closed and cleanup._clock_closed
+                cancel_writer = signer._writer_snapshot
+                assert cancel_writer._complete and cleanup._cancel_write_completed
+                wire = cancel_writer._scope_snapshot.wire
+                observed = bytearray()
+                async with asyncio.timeout(2):
+                    while len(observed) < len(wire):
+                        part = await asyncio.get_running_loop().sock_recv(
+                            peer, len(wire) - len(observed))
+                        assert part
+                        observed.extend(part)
+                assert bytes(observed) == wire
+            assert cleanup._credential_cancel_commitment_snapshot is None
+            assert cleanup._credential_work_snapshot._ready_transition_snapshot is None
         if mutation.startswith("cancel_wait_sign"):
             assert held["pre_ready_called"]
             if "pre_ready_signer" not in held:

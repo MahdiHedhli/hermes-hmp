@@ -747,3 +747,10 @@ completion bool. Unknown IO cannot retry or borrow historical closure. Known
 local retirement after original cleanup completion is independent of key revocation.
 The explicit SocketChannel release branch accepts only the fixed new writer type.
 No automatic pre-READY route, broker ACK/resource release or startup is enabled.
+
+The original credential cleanup route now chooses this fixed pre-READY component
+only from the retained exact producer's absent READY transition; the component
+independently requires original completed BEGIN and cancelled read proof. Failed
+proof never falls back to post-READY or unsigned transport. Three actual private
+peer stages correlate seq/window/end without worker execution or remote closure.
+Pre-READY known-no-IO signing refusal local-close debt remains explicit.

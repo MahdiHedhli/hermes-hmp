@@ -329,8 +329,8 @@ historical, not an alternative live authorization path or resolved incident.
       Five direct route + two actual peer-correlation cases/source review pass;
       full1,516/one skipped and lint pass. The subsequent known no-IO local-close
       follow-up is recorded separately below; remote settlement remains unproven.
-- [x] Complete/review automatic solely-local cleanup after known no-IO signing
-      refusal, with exact original actor/frozen budget and repeated no-IO seals.
+- [x] Complete/review automatic solely-local cleanup after known no-IO post-READY
+      signing refusal, with exact original actor/frozen budget and repeated no-IO seals.
       Expiry/cancellation/unknown-read causals retain debt; remote UNKNOWN and
       original refusal survive actual local close. 100 focused tests passed.
 
@@ -353,3 +353,10 @@ historical, not an alternative live authorization path or resolved incident.
       Task/end, with native count/fact reciprocity, typed BEGIN slot handoff and
       thirteen known/unknown/current-custody causals. Automatic route/correlation
       and remote ACK/resource/native publication remain open.
+
+- [x] Compose/review original pre-READY signed CANCEL route and actual broker
+      seq1/window/end correlation before READY, preserving existing READY/GO
+      paths. Three peer and 31 component cancellation cases pass. No ACK,
+      worker GO or remote/native settlement is inferred.
+- [ ] Qualify automatic solely-local cleanup after a known no-IO pre-READY
+      signing refusal; original remote UNKNOWN and uncertain IO stay distinct.

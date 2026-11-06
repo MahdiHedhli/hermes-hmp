@@ -1,3 +1,20 @@
+## Original pre-READY cancellation route — November 6, 2026
+
+Bot-character transport now routes signed CANCEL before READY through the exact
+original BEGIN-derived signer/writer, original cleanup Task and frozen end.
+Selection uses retained producer state; failed proof cannot fall back to another
+signer or unsigned transport. Three actual private-broker stages (before READY,
+after READY, after GO) prove exact seq1/seq1/seq2 receipt and cleanup-window/end
+correlation. Worker GO stays unattempted and registry PENDING is not ACK/CLOSED.
+
+Independent read-only review accepted the route. Thirty-one component cases and
+three peer cases pass. Full affected regression: **1,552 passed, one skipped**,
+85.78 seconds; lint passed. Native peer/authority/clock are modeled; no production
+startup or physical qualification is inferred. No host/device/build changed.
+Pre-READY known-no-IO signing-refusal local-close debt, startup, results/terminal,
+worker relay/publication and complete character delivery remain open. Historical
+broker intermittency remains unresolved despite this passing run.
+
 ## Pre-READY cancellation writer — November 6, 2026
 
 Bot-character transport now has a distinct bounded writer for the original

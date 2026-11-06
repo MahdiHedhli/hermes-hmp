@@ -732,17 +732,43 @@ class RemoteCleanupOwner:
                 or channel is not self._refs_snapshot[3]):
             raise AuthorityRefusalError
         try:
-            signer = NativeCancelCommitment.retain(self)
-            NativeCancelCommitment.prepare(signer)
-            writer = NativeCancelWriter.retain(signer)
-            await NativeCancelWriter.write_cancel(writer)
-            scope = NativeCancelWriter._metadata(writer)
-            if (scope.signed_scope.cleanup is not self
-                    or scope.signed_scope.cleanup_refs[3] is not channel
-                    or self._cancel_write_completed is not True
-                    or writer._complete is not True):
-                raise AuthorityRefusalError
-            NativeCancelWriter._released(writer, channel)
+            from .presentation_credential_work import NativePhaseWorkOwner
+
+            producer = self._credential_work_snapshot
+            if (type(producer) is NativePhaseWorkOwner
+                    and self._credential_work is producer
+                    and producer._ready_transition_snapshot is None
+                    and producer._ready_transition is None):
+                from .presentation_credential_pre_ready_cancel import (
+                    NativePreReadyCancelCommitment,
+                )
+                from .presentation_credential_pre_ready_cancel_write import (
+                    NativePreReadyCancelWriter,
+                )
+
+                signer = NativePreReadyCancelCommitment.retain(self)
+                NativePreReadyCancelCommitment.prepare(signer)
+                writer = NativePreReadyCancelWriter.retain(signer)
+                await NativePreReadyCancelWriter.write_cancel(writer)
+                scope = NativePreReadyCancelWriter._metadata(writer)
+                if (scope.signed_scope.cleanup is not self
+                        or scope.signed_scope.cleanup_refs[3] is not channel
+                        or self._cancel_write_completed is not True
+                        or writer._complete is not True):
+                    raise AuthorityRefusalError
+                NativePreReadyCancelWriter._released(writer, channel)
+            else:
+                signer = NativeCancelCommitment.retain(self)
+                NativeCancelCommitment.prepare(signer)
+                writer = NativeCancelWriter.retain(signer)
+                await NativeCancelWriter.write_cancel(writer)
+                scope = NativeCancelWriter._metadata(writer)
+                if (scope.signed_scope.cleanup is not self
+                        or scope.signed_scope.cleanup_refs[3] is not channel
+                        or self._cancel_write_completed is not True
+                        or writer._complete is not True):
+                    raise AuthorityRefusalError
+                NativeCancelWriter._released(writer, channel)
             RemoteCleanupOwner._guard(self)
             if RemoteCleanupOwner._remaining(self) <= 0:
                 raise AuthorityRefusalError
