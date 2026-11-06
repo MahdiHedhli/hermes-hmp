@@ -226,6 +226,16 @@ def validate_report(report, native, hmp, executable_sha, *, sample_memory=False,
         binding_contract.validate_preparation_report(report["native_binding_preparation"])
 
 
+def _native_command(root, executable, entry, *, sample_binding_seed=False):
+    commands._require(type(sample_binding_seed) is bool)
+    command = ["/usr/bin/env", "-i", "PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C",
+        "HOME=" + str(root / "user-home"), "HERMES_HOME=" + str(root / "home"),
+        "HERMES_RUNTIME_DIR=" + str(root / "runtime")]
+    if sample_binding_seed:
+        command.append("TMPDIR=" + str(root / "tmp"))
+    return [*command, str(executable), "-I", "-B", str(entry), str(root)]
+
+
 def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
                 sample_binding_seed=False):
     commands._require(type(sample_memory) is bool and type(sample_binding_seed) is bool and
@@ -295,10 +305,10 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
             output.write(_ENTRY.replace("report=module.run_fixture(root)", call))
         executable = Path(sys.executable).absolute()  # Preserve the selected venv path.
         executable_sha = commands._digest(executable.resolve())
-        raw = commands._owned(["/usr/bin/env", "-i", "PATH=/usr/bin:/bin", "LANG=C", "LC_ALL=C",
-            "HOME=" + str(root / "user-home"), "HERMES_HOME=" + str(root / "home"),
-            "HERMES_RUNTIME_DIR=" + str(root / "runtime"), str(executable), "-I", "-B", str(entry),
-            str(root)], root, "native_serving", receipt)
+        if sample_binding_seed:
+            (root / "tmp").mkdir(mode=0o700)
+        raw = commands._owned(_native_command(root, executable, entry,
+            sample_binding_seed=sample_binding_seed), root, "native_serving", receipt)
         marker = json.loads(raw, object_pairs_hook=commands._pairs)
         commands._require(type(marker) is dict and set(marker) ==
                           {"schema", "completed", "report_sha256"} and

@@ -323,3 +323,40 @@ def test_cell_refuses_symlinked_base_before_native_acquisition(tmp_path):
     with pytest.raises(RuntimeError), model.context():
         pytest.fail("must refuse the substituted parent")
     assert not tuple(foreign.iterdir()) and model.acquired == []
+
+
+def test_binding_command_supplies_only_owned_tmpdir_without_forwarding_ambient_values(
+    tmp_path, monkeypatch
+):
+    from .test_local_media_native_serving_driver import driver
+
+    monkeypatch.setenv("TMPDIR", "/foreign_not_forwarded")
+    monkeypatch.setenv("HERMES_SCRATCH_DIR", "/foreign_marker_not_forwarded")
+    args = (tmp_path, tmp_path / "python", tmp_path / "entry.py")
+    normal = driver._native_command(*args)
+    seeded = driver._native_command(*args, sample_binding_seed=True)
+    assert not any(arg.startswith("TMPDIR=") for arg in normal)
+    assert seeded == [*normal[:-5], "TMPDIR=" + str(tmp_path / "tmp"), *normal[-5:]]
+    assert all("foreign" not in arg and not arg.startswith("HERMES_SCRATCH_DIR=")
+               for arg in seeded)
+
+
+@pytest.mark.parametrize("case", ["valid", "foreign", "marker", "absent", "public_mode"])
+def test_binding_tmpdir_guard_before_native_bootstrap(tmp_path, case):
+    from .test_local_media_native_serving_fixture import load as load_fixture
+
+    temp = tmp_path / "tmp"
+    if case != "absent":
+        temp.mkdir(mode=0o700)
+    env = {"TMPDIR": str(temp)}
+    if case == "foreign":
+        env["TMPDIR"] = "/foreign_not_read"
+    elif case == "marker":
+        env["HERMES_SCRATCH_DIR"] = str(temp)
+    elif case == "public_mode":
+        temp.chmod(0o755)
+    if case == "valid":
+        load_fixture()._binding_tmpdir(tmp_path, env)
+    else:
+        with pytest.raises((RuntimeError, FileNotFoundError)):
+            load_fixture()._binding_tmpdir(tmp_path, env)

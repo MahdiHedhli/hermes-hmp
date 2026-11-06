@@ -43,7 +43,7 @@ controls and six actually closed databases. It explicitly says `timing_measured:
 C6b or masquerade as a performance/writer run. Normal serving and memory modes
 keep their existing report contracts; modes cannot be combined or truthy-coerced.
 
-Root's 172 preparation/model/lifetime/structure/driver checks and configured lint pass.
+Root's 178 preparation/model/lifetime/structure/driver checks and configured lint pass.
 Independent source review accepted one fresh isolated seed-mode native sample,
 without reviewer execution. Native execution and artifact review are pending
 until separately recorded. The original 12-second command-observation budget,
@@ -69,6 +69,20 @@ after balanced borrows, idle media workers, successful native release and actual
 connection closure; uncertain closure retains the owner and cannot satisfy the
 closed report. Earlier failures remain preserved. One fresh third attempt is
 separate from both original failures; timing/allocation/writer evidence stays open.
+
+The third attempt at `429ed6b` terminated with a containment refusal: native
+bootstrap tried to prepare a detached scratch-prune process. Its `/dev/null`
+open was blocked before spawning; the caught denial still correctly prevents
+acceptance. No process or outside-write guard is relaxed.
+
+For one fresh fourth attempt, only seed mode receives a controller-created
+private canonical `TMPDIR=<root>/tmp` (0700), verified before native imports and
+with no `HERMES_SCRATCH_DIR` marker. Native `apply_scratch_tmp_env` documents and
+implements the user/OS-temp early return before scratch creation or pruning.
+No host temp value is forwarded, maintenance stamp forged, native code patched,
+or container/skip-permission flag set. Normal serving/memory mode commands are
+unchanged. Independent source review accepted this initialization correction;
+earlier attempts remain refusals, never performance results.
 
 ## Remaining measurement stages
 

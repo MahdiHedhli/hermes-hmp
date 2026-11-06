@@ -208,6 +208,12 @@ def _private_directory(path):
              info.st_uid == os.geteuid() and stat.S_IMODE(info.st_mode) == 0o700)
 
 
+def _binding_tmpdir(root, env):
+    """Native bootstrap honors a user/OS TMPDIR; never permit detached pruning."""
+    _require(env.get("TMPDIR") == str(root / "tmp") and "HERMES_SCRATCH_DIR" not in env)
+    _private_directory(root / "tmp")
+
+
 @contextmanager
 def _binding_cell(root, fx, registry, borrowed, lock, selection, owners, index, profile):
     """Own one fresh synthetic-profile DB; restore scope only after actual closure."""
@@ -263,6 +269,8 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False):
         _require(os.environ.get(key) == str(root / leaf))
         (root / leaf).mkdir(mode=0o700, exist_ok=True)
     _require_fresh_source_modules(sys.modules)
+    if sample_binding_seed:
+        _binding_tmpdir(root, os.environ)
     _require(root / "hmp" == _ROOT)
     pins = _inventory_sources(source)
     hmp_pins = _inventory_sources(_ROOT)
