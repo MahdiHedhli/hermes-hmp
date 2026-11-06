@@ -52,6 +52,9 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement/review role-material checks on the actual controller reader Task,
       original control scope and callback-safe reference seals, without borrowing
       creator authority. 1,123 affected passed, one skipped; no phase/IO permission.
+- [x] Implement/review the original-task first signed control frame cursor, with
+      signature/header/body/scope validation, callback-safe byte custody and no
+      native receipt/grammar/window/resource effects. Full lifecycle remains below.
 - [ ] Implement the actual signed GO/CANCEL receiver/context on the existing original
       controller task/cursor and frozen budget before any credential resource/READY
       startup. No legacy fallback, new parser task or boolean gate opening.
