@@ -19,6 +19,7 @@ from types import ModuleType
 from urllib.parse import unquote, urlsplit
 
 _ROOT = Path(__file__).resolve().parents[2]
+_OS_METADATA = Path("/System/Library/CoreServices/SystemVersion.plist")
 
 
 def _require(ok):
@@ -142,7 +143,25 @@ def _absent_darwin_proc_probe(raw, writing):
     # Native directory hardening unconditionally probes Linux container files.
     # Return the ordinary Darwin absence without opening any outside file.
     return (sys.platform == "darwin" and not writing and type(raw) is str and
-            raw in ("/proc/1/cgroup", "/proc/self/mountinfo"))
+            raw in ("/proc/1/cgroup", "/proc/self/mountinfo", f"/proc/{os.getpid()}/stat"))
+
+
+def _absent_darwin_proc_listing(raw):
+    return sys.platform == "darwin" and type(raw) is str and raw == "/proc/self/fd"
+
+
+def _own_darwin_fd_listing(raw):
+    return sys.platform == "darwin" and type(raw) is str and raw == "/dev/fd"
+
+
+def _public_os_metadata_read(raw, writing):
+    if sys.platform != "darwin" or writing or type(raw) is not str or raw != str(_OS_METADATA):
+        return False
+    info = _OS_METADATA.lstat()
+    _require(stat.S_ISREG(info.st_mode) and info.st_uid == 0 and info.st_nlink == 1 and
+             not info.st_mode & 0o222 and info.st_size <= 65536 and
+             _OS_METADATA.resolve() == _OS_METADATA)
+    return True
 
 def _refuse_with_diagnostic(denied, code):
     if len(denied) < 16:
@@ -197,6 +216,7 @@ def run_fixture(root):
     (root / "home/config.yaml").write_text("sessions:\n  cjk_fts: false\n")
     denied = []
     absent_proc_probes = [0]
+    os_metadata_reads, own_fd_listings = [0], [0]
     allowed_endpoint = [None]
     reads = (root, _ROOT, Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve())
 
@@ -213,7 +233,11 @@ def run_fixture(root):
                 raise FileNotFoundError("fixture_darwin_linux_proc_absent")
             if write and not _inside(path, root):
                 refuse("write_outside_scratch")
-            if not _inside(path, root) and (path.name == ".env" or not any(
+            if _public_os_metadata_read(args[0], write):
+                if os_metadata_reads[0] >= 8:
+                    refuse("os_metadata_budget")
+                os_metadata_reads[0] += 1
+            elif not _inside(path, root) and (path.name == ".env" or not any(
                     _inside(path, permitted) for permitted in reads)):
                 refuse("read_outside_fixture_sources")
         elif event in ("os.link", "os.symlink"):
@@ -226,6 +250,14 @@ def run_fixture(root):
                     Path(os.fsdecode(args[0])).resolve(), root):
                 refuse("mutation_outside_scratch")
         elif event in ("os.listdir", "os.scandir"):
+            if _absent_darwin_proc_listing(args[0]):
+                absent_proc_probes[0] += 1
+                raise FileNotFoundError("fixture_darwin_linux_proc_absent")
+            if _own_darwin_fd_listing(args[0]):
+                if own_fd_listings[0] >= 4096:
+                    refuse("own_fd_listing_budget")
+                own_fd_listings[0] += 1
+                return  # Names only for this fresh child; no descriptor bytes are opened.
             if isinstance(args[0], (str, bytes, os.PathLike)) and not any(
                     _inside(Path(os.fsdecode(args[0])).resolve(), permitted)
                     for permitted in reads):
@@ -430,7 +462,11 @@ def run_fixture(root):
             "denial_codes": denied, "default_state_created": (root / "home/state.db").exists()}))
     _require(_inventory_sources(source) == pins and _inventory_sources(_ROOT) == hmp_pins)
     _check_import_origins(dict(sys.modules), source, _ROOT)
+    os_metadata_sha = _digest(_OS_METADATA)
     report.update(audit_denials=0, synthetic_absent_linux_proc_probes=True,
+                  fixture_public_os_metadata_allowed=True,
+                  os_metadata_sha256=os_metadata_sha, os_metadata_reads=os_metadata_reads[0],
+                  own_fd_listings=own_fd_listings[0],
                   expected_absent_proc_probes=absent_proc_probes[0],
                   source_unchanged=True, selected_source_origins_checked=True,
                   native_source_hashes=pins,

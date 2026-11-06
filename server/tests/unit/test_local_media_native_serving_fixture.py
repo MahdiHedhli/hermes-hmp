@@ -260,3 +260,17 @@ def test_read_mode_cannot_disguise_mutating_open_flags(flags):
     module = load()
     assert module._open_writes("r", os.O_RDONLY | flags) is True
     assert module._open_writes("rb", os.O_RDONLY) is False
+
+
+def test_os_probe_exceptions_remain_exact_and_readonly():
+    module = load()
+    assert module._absent_darwin_proc_probe(f"/proc/{os.getpid()}/stat", False) is (
+        sys.platform == "darwin")
+    assert module._absent_darwin_proc_probe("/proc/999999999/stat", False) is False
+    assert module._absent_darwin_proc_listing("/proc/self/fd") is (sys.platform == "darwin")
+    assert module._own_darwin_fd_listing("/dev/fd") is (sys.platform == "darwin")
+    for value in ("/dev", "/dev/fd/0", "/proc/1/fd", "/proc/self/fd/0", b"/dev/fd"):
+        assert module._own_darwin_fd_listing(value) is False
+        assert module._absent_darwin_proc_listing(value) is False
+    assert module._public_os_metadata_read(str(module._OS_METADATA), True) is False
+    assert module._public_os_metadata_read("/etc/passwd", False) is False
