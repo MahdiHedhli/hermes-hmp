@@ -141,3 +141,19 @@ These are warm costs, not cold-call measurements. Independent source review
 accepted the mode without reviewer execution. The existing 12-second actor-observation deadline and all source, private-TMPDIR,
 audit and lifecycle restrictions remain unchanged. Expired actors are retained
 to actual terminal settlement and refused, never retried automatically.
+
+### First cost execution outcome
+
+At source `b220085`, short-lineage Bot Chat cases 0/1 completed with real cost
+observations. Case 2 (98 sessions, no large prompt) exceeded the unchanged
+12-second actor observation limit. The controller retained that same actor to
+known exit zero, then refused the experiment permanently. A report produced
+after expiry does not become accepted measurement evidence. The sequential
+controller stopped; cases 3–7 were not started. No automatic retry, actor
+replacement or deadline extension occurred.
+
+This is incomplete cost coverage. A revised execution layout must separate
+measurement work into smaller owned commands while preserving both populated
+proof contexts, all four shapes and all three selectors. The successful full
+preparation evidence remains separate. Current cost source/artifact observations
+do not close mint/RSS/writer or C6b gates.
