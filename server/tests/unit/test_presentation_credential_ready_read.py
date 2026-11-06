@@ -45,6 +45,10 @@ from .test_presentation_supervisor import context as context
     "dispatch_cleanup_material", "dispatch_cleanup_material_key",
     "dispatch_cleanup_material_wrong_actor", "dispatch_cleanup_material_after_go",
     "dispatch_cleanup_material_allocations", "dispatch_cleanup_material_slots",
+    "dispatch_cleanup_sign", "dispatch_cleanup_sign_after_go",
+    "dispatch_cleanup_sign_wrong_actor", "dispatch_cleanup_sign_key",
+    "dispatch_cleanup_sign_expired", "dispatch_cleanup_sign_expired_prepared",
+    "dispatch_cleanup_sign_expected_row", "dispatch_cleanup_sign_foreign_end",
 ])
 async def test_original_work_ready_read_requires_its_complete_signed_begin(
     context, begin_gateway, tmp_path, monkeypatch, mutation
@@ -694,7 +698,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                     from hmp_plugin.presentation_broker_service import SocketChannel
                     from hmp_plugin.presentation_cancel_budget import CancellationBudget
 
-                    if mutation == "dispatch_cleanup_material_after_go":
+                    if mutation in ("dispatch_cleanup_material_after_go",
+                                    "dispatch_cleanup_sign_after_go"):
                         assert await remote.go() is True
                         held["cleanup_prior_go_wire"] = peer.recv(65536)
                         assert held["cleanup_prior_go_wire"]
@@ -705,6 +710,120 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                         held["original_cleanup_allocations"] = cleanup._allocations_snapshot
                         before = CancellationBudget.inspect(cleanup._refs_snapshot[8])
                         assert before[2] is not None
+                        if mutation.startswith("dispatch_cleanup_sign"):
+                            from hmp_plugin import (
+                                presentation_credential_cancel_commitment as cancel,
+                            )
+                            from hmp_plugin.presentation_credential_phase import (
+                                check_commitment,
+                                check_complete_frame,
+                            )
+
+                            if mutation == "dispatch_cleanup_sign_wrong_actor":
+                                async def wrong_cancel_signer():
+                                    with pytest.raises(FrameError):
+                                        cancel.NativeCancelCommitment.retain(cleanup)
+                                await asyncio.create_task(wrong_cancel_signer())
+                                assert cleanup._credential_cancel_commitment is None
+                            commitment = cancel.NativeCancelCommitment.retain(cleanup)
+                            held["cancel_commitment"] = commitment
+                            with pytest.raises(FrameError):
+                                cancel.NativeCancelCommitment.retain(cleanup)
+                            if mutation == "dispatch_cleanup_sign_key":
+                                encode = cancel.encode_record
+
+                                def retire_cancel_key(*args):
+                                    raw = encode(*args)
+                                    keys["gateway"].retire()
+                                    return raw
+
+                                monkeypatch.setattr(cancel, "encode_record", retire_cancel_key)
+                            if mutation in ("dispatch_cleanup_sign_expired",
+                                            "dispatch_cleanup_sign_expired_prepared"):
+                                remaining = RemoteCleanupOwner._remaining
+                                prepare_native = RemoteCleanupOwner._prepare_cancel
+
+                                def observed_native_prepare(owned, owned_channel):
+                                    frame = prepare_native(owned, owned_channel)
+                                    if owned is cleanup:
+                                        held["native_cancel_prepared"] = True
+                                    return frame
+
+                                monkeypatch.setattr(RemoteCleanupOwner, "_prepare_cancel",
+                                                    observed_native_prepare)
+
+                                def no_cancel_time(owned):
+                                    value = remaining(owned)
+                                    if (owned is cleanup and commitment._attempted
+                                            and (mutation == "dispatch_cleanup_sign_expired"
+                                                 or held.get("native_cancel_prepared"))):
+                                        return 0.0
+                                    return value
+
+                                monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                                    no_cancel_time)
+                            if mutation in ("dispatch_cleanup_sign_expected_row",
+                                            "dispatch_cleanup_sign_foreign_end"):
+                                sign_data = cancel.signing_bytes
+                                held["foreign_cancel_calls"] = []
+
+                                class ForeignCancelData:
+                                    def __iter__(self):
+                                        held["foreign_cancel_calls"].append("iter")
+                                        raise AssertionError("foreign CANCEL rows iterated")
+
+                                    def __eq__(self, other):
+                                        held["foreign_cancel_calls"].append("eq")
+                                        raise AssertionError("foreign CANCEL end compared")
+
+                                def replaced_cancel_metadata(statement):
+                                    data = sign_data(statement)
+                                    if mutation == "dispatch_cleanup_sign_expected_row":
+                                        rows = (ForeignCancelData(),
+                                                *commitment._expected_snapshot[1:])
+                                        commitment._expected = commitment._expected_snapshot = rows
+                                    else:
+                                        foreign = ForeignCancelData()
+                                        cleanup._cancel_end = cleanup._cancel_end_snapshot = foreign
+                                    return data
+
+                                monkeypatch.setattr(cancel, "signing_bytes",
+                                                    replaced_cancel_metadata)
+                            success = mutation in ("dispatch_cleanup_sign",
+                                                   "dispatch_cleanup_sign_after_go",
+                                                   "dispatch_cleanup_sign_wrong_actor")
+                            try:
+                                if success:
+                                    raw = commitment.prepare()
+                                    scope = commitment._scope_snapshot
+                                    checked = check_commitment(raw, sender_public=scope.pins[0],
+                                        receiver_public=scope.pins[1],
+                                        expected=dict(commitment._expected_snapshot))
+                                    header = check_complete_frame(checked,
+                                        commitment._frame_snapshot,
+                                        binding=remote._binding_snapshot)
+                                    assert header.kind == "CANCEL" and header.body_length == 16
+                                    assert header.sequence == (
+                                        2 if mutation == "dispatch_cleanup_sign_after_go" else 1)
+                                    assert commitment._end_snapshot == before[2]
+                                else:
+                                    with pytest.raises(FrameError):
+                                        commitment.prepare()
+                                    assert commitment._raw is None
+                            finally:
+                                with pytest.raises(FrameError):
+                                    commitment.prepare()
+                            assert commitment._attempted is True
+                            assert commitment._complete is success
+                            assert commitment._failed is not success
+                            after = CancellationBudget.inspect(cleanup._refs_snapshot[8])
+                            assert after[0] == before[0] and after[2] == before[2]
+                            assert after[3] is False and after[1] >= before[1]
+                            assert held.get("foreign_cancel_calls", []) == []
+                            assert cleanup._cancel_write_completed is False
+                            assert cleanup._cancel_write_attempted is (
+                                mutation != "dispatch_cleanup_sign_expired")
+                            raise FrameError("SYNTHETIC_CANCEL_SIGNING_ONLY_NO_IO")
                         if mutation == "dispatch_cleanup_material_wrong_actor":
                             async def wrong_cleanup_role():
                                 with pytest.raises(FrameError):
@@ -797,7 +916,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 assert remote._cleanup_owner_snapshot._credential_work_snapshot._exchange_failed
             async with asyncio.timeout(2):
                 await peer_task
-            if mutation == "dispatch_cleanup_material_after_go":
+            if mutation in ("dispatch_cleanup_material_after_go",
+                                    "dispatch_cleanup_sign_after_go"):
                 assert remote._go_admission_used is True
             elif mutation.startswith("dispatch_go_"):
                 assert remote._go_admission_used is True

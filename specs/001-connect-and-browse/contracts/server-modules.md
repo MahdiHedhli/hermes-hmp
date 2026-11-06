@@ -695,3 +695,13 @@ before and fixed current material afterward. `RemoteCleanupOwner` publishes only
 local GO readiness then parks the original work Task on the exact fenced native
 cause Future; unsigned result fallback is not attempted. No result token, worker
 execution, startup factory or production activation is provided by this slice.
+
+### After-READY fixed CANCEL commitment (November 6, 2026)
+
+`presentation_credential_cancel_commitment.py` signs only the exact native
+`_prepare_cancel` result on the original cleanup allocation: actual seq1/seq2,
+16-byte frozen window/body hash and original signed work context. It consumes
+preparation once, preserves earliest cleanup end and withholds output after key,
+metadata or deadline drift. Exact primitive types precede comparison/iteration.
+No pre-READY signing, socket write, remote custody, release or startup permission
+follows from this owner; local cleanup remains independent of role retirement.

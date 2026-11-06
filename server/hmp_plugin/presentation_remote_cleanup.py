@@ -112,6 +112,7 @@ class RemoteCleanupOwner:
 
         self._remote = self._remote_snapshot = remote
         self._credential_work = self._credential_work_snapshot = None
+        self._credential_cancel_commitment = self._credential_cancel_commitment_snapshot = None
         self._initialized = self._run_attempted = self._intent = False
         self._unknown = self._work_joined = self._socket_closed = self._clock_closed = False
         self._cancel_attempted = self._sampling = False

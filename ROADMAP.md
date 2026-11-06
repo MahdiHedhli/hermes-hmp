@@ -1,3 +1,23 @@
+## After-READY CANCEL signing checkpoint — November 6, 2026
+
+The original cleanup signer now consumes exactly one native CANCEL preparation
+and binds its actual seq1/seq2, frozen 16-byte window and frame hash to original
+signed work context. Current role/cleanup checks and earliest end remain separate
+from retired work authority. Partial preparation is retained; no retry or renewed
+interval follows. This owner signs data only, with no socket completion credit.
+
+Eight direct signing cases and **887 selected affected tests** passed, 44.67 seconds;
+configured lint passed. Independent read-only review accepted the after-READY
+scope. Key retirement, expiry before/after preparation and malformed row/end
+tripwires withhold signed output, invoke no foreign callbacks and preserve the
+budget's original work/end values. Signing an after-READY CANCEL does not qualify
+pre-READY cancellation, remote custody, release or production deployment.
+
+CANCEL transport, pre-READY cancellation, signed results/terminal custody, worker
+relay/startup/native publication/STATUS and physical/release qualification remain
+open. Character delivery remains unavailable. No host/device/settings/build changed.
+See [evidence and limits](docs/research/presentation-cancel-commitment-2026-11-06.md).
+
 ## Cleanup role-material checkpoint — November 6, 2026
 
 The fixed original cleanup Task can now validate current role/input/transcript

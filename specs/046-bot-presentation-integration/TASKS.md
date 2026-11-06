@@ -309,3 +309,8 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Qualify bounded fixed original-cleanup current role material separately from work
       authority: six direct actor/tail cases and independent read-only review pass;
       selected878 and lint pass. CANCEL signer/writer remains open.
+
+- [x] Qualify bounded after-READY fixed CANCEL signing on original cleanup Task:
+      one native preparation/window, seq1/seq2, no interval renewal. Eight focused
+      cases, selected887 and lint pass; independent read-only review accepted.
+      Socket transport, pre-READY cancellation and remote custody remain open.
