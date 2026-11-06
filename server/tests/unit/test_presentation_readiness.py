@@ -511,3 +511,289 @@ async def test_foreign_create_future_dispatch_is_refused_before_future_init(pair
         with pytest.raises(readiness.ReadinessAcquisitionError):
             readiness.SelectorReadiness(pair[0])
     assert calls == []
+
+
+def _fill_send_buffer(sock):
+    total = 0
+    while True:
+        try:
+            total += sock.send(b"SYNTHETIC_BACKPRESSURE" * 1024)
+        except BlockingIOError:
+            return total
+
+
+async def test_write_notification_preserves_current_reader_and_sends_nothing(pair):
+    left, right = pair
+    loop = asyncio.get_running_loop()
+    loop.add_reader(left.fileno(), lambda: None)
+    reader = loop._selector.get_key(left.fileno()).data[0]
+    owner = readiness.SelectorWriteReadiness(left)
+    assert await owner.wait(end()) is None
+    assert owner._retired and not owner._unknown
+    slots = loop._selector.get_key(left.fileno()).data
+    assert slots[0] is reader and slots[1] is None
+    with pytest.raises(BlockingIOError):
+        right.recv(1)  # notification never writes even one byte
+    with pytest.raises(FrameError):
+        await owner.wait(end())
+
+
+async def test_write_backpressure_waits_for_kernel_capacity_and_preserves_reader(pair):
+    left, right = pair
+    total = _fill_send_buffer(left)
+    assert total > 0
+    loop = asyncio.get_running_loop()
+    loop.add_reader(left.fileno(), lambda: None)
+    retained = []
+    async def writer():
+        owner = readiness.SelectorWriteReadiness(left)
+        retained.append(owner)
+        await owner.wait(end())
+    task = asyncio.create_task(writer())
+    await asyncio.sleep(0)
+    owner = retained[0]
+    assert owner._attempted and not owner._future_snapshot.done() and not task.done()
+    loop.add_reader(left.fileno(), lambda: None)  # changed legitimate opposite owner
+    reader = loop._selector.get_key(left.fileno()).data[0]
+    received = 0
+    while received < total:
+        received += len(right.recv(min(65536, total - received)))
+    await task
+    slots = loop._selector.get_key(left.fileno()).data
+    assert owner._retired and not owner._unknown
+    assert slots[0] is reader and slots[1] is None
+    with pytest.raises(BlockingIOError):
+        right.recv(1)
+
+
+async def test_write_timeout_retires_writer_only_without_renewal(pair):
+    left, _ = pair
+    _fill_send_buffer(left)
+    loop = asyncio.get_running_loop()
+    loop.add_reader(left.fileno(), lambda: None)
+    reader = loop._selector.get_key(left.fileno()).data[0]
+    owner = readiness.SelectorWriteReadiness(left)
+    deadline = time.monotonic_ns() + 50_000_000
+    with pytest.raises(TimeoutError):
+        await owner.wait(deadline)
+    assert owner._retired or not owner._attempted
+    assert not owner._unknown
+    assert loop._selector.get_key(left.fileno()).data == (reader, None)
+
+
+async def test_preexisting_write_owner_is_never_replaced_or_removed(pair):
+    left, _ = pair
+    loop = asyncio.get_running_loop()
+    loop.add_writer(left.fileno(), lambda: None)
+    writer = loop._selector.get_key(left.fileno()).data[1]
+    owner = readiness.SelectorWriteReadiness(left)
+    with pytest.raises(FrameError):
+        await owner.wait(end())
+    assert loop._selector.get_key(left.fileno()).data[1] is writer
+    assert not owner._attempted and not owner._retired
+
+
+@pytest.mark.parametrize("after", [False, True])
+async def test_partial_writer_registration_preserves_debt_and_opposite_reader(
+    pair, monkeypatch, after
+):
+    left, _ = pair
+    loop = asyncio.get_running_loop()
+    loop.add_reader(left.fileno(), lambda: None)
+    reader = loop._selector.get_key(left.fileno()).data[0]
+    install = readiness._install_writer
+    def fail(*args):
+        if after:
+            install(*args)
+        raise OSError("synthetic partial writer add")
+    monkeypatch.setattr(readiness, "_install_writer", fail)
+    owner = readiness.SelectorWriteReadiness(left)
+    with pytest.raises(FrameError):
+        await owner.wait(end())
+    assert owner._unknown and owner._attempted
+    assert owner._retired is after  # only actual owned add permits known retirement
+    assert loop._selector.get_key(left.fileno()).data == (reader, None)
+
+
+async def test_write_direction_class_drift_cannot_remove_reader(pair):
+    left, _ = pair
+    loop = asyncio.get_running_loop()
+    loop.add_reader(left.fileno(), lambda: None)
+    reader = loop._selector.get_key(left.fileno()).data[0]
+    owner = readiness.SelectorWriteReadiness(left)
+    owner.__class__ = readiness.SelectorReadiness
+    with pytest.raises(FrameError):
+        await owner.wait(end())
+    assert loop._selector.get_key(left.fileno()).data == (reader, None)
+    assert not owner._attempted and owner._unknown
+
+
+async def test_write_actor_cannot_move_to_another_task(pair):
+    owner = readiness.SelectorWriteReadiness(pair[0])
+    async def foreign():
+        with pytest.raises(FrameError):
+            await owner.wait(end())
+    await asyncio.create_task(foreign())
+    assert not owner._attempted and owner._unknown
+
+
+async def test_write_dispatch_override_refuses_before_foreign_native_effect(pair, monkeypatch):
+    loop = asyncio.get_running_loop()
+    owner = readiness.SelectorWriteReadiness(pair[0])
+    calls = []
+    def foreign(*args):
+        calls.append(args)
+        raise AssertionError("foreign writer dispatch")
+    monkeypatch.setattr(loop, "_add_writer", foreign)
+    with pytest.raises(FrameError):
+        await owner.wait(end())
+    assert calls == [] and not owner._attempted and owner._unknown
+
+
+async def test_replaced_write_registration_never_removes_foreign_writer(pair):
+    left, _ = pair
+    _fill_send_buffer(left)
+    loop = asyncio.get_running_loop()
+    retained = []
+    async def writer():
+        owner = readiness.SelectorWriteReadiness(left)
+        retained.append(owner)
+        await owner.wait(end())
+    task = asyncio.create_task(writer())
+    await asyncio.sleep(0)
+    owner = retained[0]
+    loop.add_writer(left.fileno(), lambda: None)
+    foreign = loop._selector.get_key(left.fileno()).data[1]
+    owner._future_snapshot.set_result(None)
+    with pytest.raises(FrameError):
+        await task
+    assert owner._unknown and not owner._retired
+    assert loop._selector.get_key(left.fileno()).data[1] is foreign
+
+
+async def test_opposite_read_change_during_writer_retirement_remains_unknown(pair, monkeypatch):
+    left, _ = pair
+    loop = asyncio.get_running_loop()
+    loop.add_reader(left.fileno(), lambda: None)
+    original = readiness._remove_writer
+    def remove(*args):
+        result = original(*args)
+        loop.add_reader(left.fileno(), lambda: None)
+        return result
+    monkeypatch.setattr(readiness, "_remove_writer", remove)
+    owner = readiness.SelectorWriteReadiness(left)
+    with pytest.raises(FrameError):
+        await owner.wait(end())
+    assert owner._unknown and not owner._retired
+    assert loop._selector.get_key(left.fileno()).data[1] is None
+    assert loop._selector.get_key(left.fileno()).data[0] is not None
+
+
+async def test_external_write_wait_cancellation_retires_only_owned_write_slot(pair):
+    left, _ = pair
+    _fill_send_buffer(left)
+    loop = asyncio.get_running_loop()
+    loop.add_reader(left.fileno(), lambda: None)
+    reader = loop._selector.get_key(left.fileno()).data[0]
+    retained = []
+    async def writer():
+        owner = readiness.SelectorWriteReadiness(left)
+        retained.append(owner)
+        await owner.wait(end())
+    task = asyncio.create_task(writer())
+    await asyncio.sleep(0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert retained[0]._retired and not retained[0]._unknown
+    assert loop._selector.get_key(left.fileno()).data == (reader, None)
+
+
+async def test_write_wake_dominates_capacity_without_sending(pair):
+    owner = readiness.SelectorWriteReadiness(pair[0])
+    wake = asyncio.get_running_loop().create_future()
+    wake.set_result(None)
+    with pytest.raises(readiness.ReadinessWakeError):
+        await owner.wait(end(), wake=wake)
+    assert not owner._attempted and not owner._unknown
+    with pytest.raises(BlockingIOError):
+        pair[1].recv(1)
+
+
+async def test_read_owner_does_not_claim_or_check_unrelated_writer_dispatch(pair, monkeypatch):
+    left, right = pair
+    owner = readiness.SelectorReadiness(left)
+    loop = asyncio.get_running_loop()
+    def foreign(*args):
+        raise AssertionError("read readiness called writer dispatch")
+    monkeypatch.setattr(loop, "_add_writer", foreign)
+    right.send(b"SYNTHETIC_READ_UNCHANGED")
+    await owner.wait(end())
+    assert owner._retired and not owner._unknown
+    assert left.recv(64) == b"SYNTHETIC_READ_UNCHANGED"
+
+
+@pytest.mark.parametrize("kind", ["read", "write"])
+@pytest.mark.parametrize("partial", [False, True])
+async def test_reinitialization_preserves_original_future_scope_and_acquisition_debt(
+    pair, monkeypatch, kind, partial
+):
+    cls = readiness.SelectorReadiness if kind == "read" else readiness.SelectorWriteReadiness
+    owner = cls.__new__(cls)
+    initialize = readiness._initialize_future
+    allocations = []
+    def once(future, loop):
+        allocations.append(future)
+        if partial:
+            raise OSError("synthetic ambiguous original Future initialization")
+        initialize(future, loop)
+    monkeypatch.setattr(readiness, "_initialize_future", once)
+    if partial:
+        with pytest.raises(readiness.ReadinessAcquisitionError):
+            cls.__init__(owner, pair[0])
+    else:
+        cls.__init__(owner, pair[0])
+    snapshot = dict(vars(owner))
+    with pytest.raises(FrameError):
+        cls.__init__(owner, pair[1])
+    assert set(vars(owner)) == set(snapshot)
+    assert all(vars(owner)[key] is value for key, value in snapshot.items())
+    assert allocations == [owner._future_origin]
+    assert owner._unknown is partial
+
+
+@pytest.mark.parametrize("kind", ["read", "write"])
+async def test_same_task_reinitialization_during_native_add_preserves_exact_registration(
+    pair, monkeypatch, kind
+):
+    left, right = pair
+    loop = asyncio.get_running_loop()
+    cls = readiness.SelectorReadiness if kind == "read" else readiness.SelectorWriteReadiness
+    slot = 0 if kind == "read" else 1
+    if kind == "read":
+        loop.add_writer(left.fileno(), lambda: None)
+        right.send(b"SYNTHETIC_REINIT_READ")
+    else:
+        loop.add_reader(left.fileno(), lambda: None)
+    opposite = loop._selector.get_key(left.fileno()).data[1 - slot]
+    name = "_install_reader" if kind == "read" else "_install_writer"
+    original = getattr(readiness, name)
+    owner = cls(left)
+    rejected = []
+    def install(*args):
+        result = original(*args)
+        handle = loop._selector.get_key(left.fileno()).data[slot]
+        snapshot = dict(vars(owner))
+        with pytest.raises(FrameError):
+            cls.__init__(owner, right)
+        assert all(vars(owner)[key] is value for key, value in snapshot.items())
+        assert set(vars(owner)) == set(snapshot)
+        assert loop._selector.get_key(left.fileno()).data[slot] is handle
+        assert owner._attempted and not owner._retired
+        rejected.append(True)
+        return result
+    monkeypatch.setattr(readiness, name, install)
+    await owner.wait(end())
+    assert rejected == [True] and owner._retired and not owner._unknown
+    slots = loop._selector.get_key(left.fileno()).data
+    assert slots[slot] is None and slots[1 - slot] is opposite

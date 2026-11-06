@@ -535,6 +535,18 @@ and optional local-media isolation checks remain enforced. HMP receive paths and
 retained cursor integration are not activated by admitting this primitive.
 
 
+### BI1 owned write readiness (November 6, 2026)
+
+The same module now exposes exact `SelectorWriteReadiness` for a single borrowed
+write-slot notification. Immutable scope seals read/write direction to the exact
+concrete class; there is no caller-selected authority flag. Writer registration,
+callback and retirement preserve the concurrent reader. Unknown acquisition or
+retirement retains debt, and initialization cannot reset a retained owner even
+after a partial Future acquisition. Both directions retain original task, socket,
+FD/backend, process/thread and deadline checks. No bytes are sent, no READY grammar
+is advanced and no production caller is enabled by this prerequisite.
+
+
 ### BI1 normal RESULT cursor integration (November 5, 2026)
 
 The existing `presentation_result_transport.py` now uses owned readiness plus

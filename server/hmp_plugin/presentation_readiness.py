@@ -1,4 +1,4 @@
-"""Owned selector-readiness notification only; never recv, authority or closure.
+"""Owned selector-readiness notification only; never IO, authority or closure.
 
 The original protocol task must separately validate its mode/budget, receive and
 commit cursor progress without another await. No task is created and no payload is captured.
@@ -30,6 +30,9 @@ _FILENO = socket.socket.fileno
 _NOW = time.monotonic_ns
 _ADD_READER = _LOOP._add_reader
 _REMOVE_READER = _LOOP._remove_reader
+_ADD_WRITER = _LOOP._add_writer
+_REMOVE_WRITER = _LOOP._remove_writer
+_WRITE_METHODS = {"_add_writer": _ADD_WRITER, "_remove_writer": _REMOVE_WRITER}
 _LOOP_METHODS = {name: getattr(_LOOP, name) for name in (
     "_add_reader", "_remove_reader", "_check_closed", "is_closed", "get_debug",
     "call_soon", "_call_soon", "call_at", "time", "_timer_handle_cancelled",
@@ -56,6 +59,22 @@ def _remove_reader(loop, fd):
     return _REMOVE_READER(loop, fd)
 
 
+def _install_writer(loop, fd, callback, token):
+    return _ADD_WRITER(loop, fd, callback, token)
+
+
+def _remove_writer(loop, fd):
+    return _REMOVE_WRITER(loop, fd)
+
+
+def _interest(owner):
+    # Direction is fixed by an exact concrete owner class, never a caller flag.
+    if type(owner) is SelectorReadiness:
+        return "read"
+    _require(type(owner) is SelectorWriteReadiness)
+    return "write"
+
+
 def _fd_identity(fd):
     row = os.fstat(fd)
     return row.st_dev, row.st_ino, stat.S_IFMT(row.st_mode)
@@ -72,7 +91,8 @@ def _scheduler_safe(loop):
                  and method.__func__ is _LOOP_METHODS[name])
 
 
-def _dispatch_safe(loop, selector):
+def _dispatch_safe(loop, selector, *, interest="read"):
+    _require(type(interest) is str and interest in ("read", "write"))
     # Exact concrete class methods still redispatch internally. Fence those
     # mutable instance entry points BEFORE they can affect another registration.
     _scheduler_safe(loop)
@@ -84,6 +104,12 @@ def _dispatch_safe(loop, selector):
         for name, function in methods.items():
             method = getattr(owner, name)
             _require(type(method) is MethodType and method.__self__ is owner
+                     and method.__func__ is function)
+
+    if interest == "write":
+        for name, function in _WRITE_METHODS.items():
+            method = getattr(loop, name)
+            _require(type(method) is MethodType and method.__self__ is loop
                      and method.__func__ is function)
 
 
@@ -99,6 +125,7 @@ class _Scope(NamedTuple):
     backend_identity: tuple
     task: object
     context: tuple
+    interest: str
 
     def __repr__(self):
         return "<ReadinessScope redacted>"
@@ -130,7 +157,11 @@ class SelectorReadiness:
     """One borrowed FD/read-slot attempt, retained by caller before initialization."""
 
     def __init__(self, sock):
-        _require(type(self) is SelectorReadiness)
+        interest = _interest(self)
+        # A retained partial acquisition is debt, not a reusable constructor.
+        # Reject before resetting even one field or allocating another Future.
+        _require(not object.__getattribute__(self, "__dict__"))
+        self._initialization_started = True
         self._scope = self._scope_snapshot = self._origin_scope = None
         self._future = self._future_snapshot = self._future_origin = None
         self._future_initialized = False
@@ -151,7 +182,7 @@ class SelectorReadiness:
             selector = loop._selector
             _require(type(selector) is selectors.DefaultSelector
                      and type(selector._selector) is _BACKEND)
-            _dispatch_safe(loop, selector)  # before Future initialization can call loop hooks
+            _dispatch_safe(loop, selector, interest=interest)  # before Future hooks
             fd = _FILENO(sock)
             _require(type(fd) is int and fd >= 0 and os.get_blocking(fd) is False
                      and sock.gettimeout() == 0.0 and os.get_inheritable(fd) is False)
@@ -162,7 +193,7 @@ class SelectorReadiness:
             self._scope = self._scope_snapshot = self._origin_scope = _Scope(
                 sock, fd, identity, loop, selector, selector._fd_to_key, backend, backend_fd,
                 _fd_identity(backend_fd), task,
-                (os.getpid(), threading.get_ident()))
+                (os.getpid(), threading.get_ident()), interest)
             self._future = self._future_snapshot = self._future_origin = _FUTURE.__new__(_FUTURE)
             _initialize_future(self._future_snapshot, loop)
             self._future_initialized = True
@@ -176,10 +207,13 @@ class SelectorReadiness:
         return "<SelectorReadiness no-payload redacted>"
 
     def _guard(self, *, actor=True):
-        _require(type(self) is SelectorReadiness and type(actor) is bool)
+        interest = _interest(self)
+        _require(type(actor) is bool)
         s = self._scope
-        _require(self._initialized is True and type(s) is _Scope
+        _require(self._initialization_started is True
+                 and self._initialized is True and type(s) is _Scope
                  and s is self._scope_snapshot and s is self._origin_scope
+                 and type(s.interest) is str and s.interest == interest
                  and type(s.sock) is socket.socket and type(s.fd) is int
                  and type(s.identity) is tuple and len(s.identity) == 3
                  and all(type(v) is int for v in s.identity)
@@ -233,7 +267,7 @@ class SelectorReadiness:
         SelectorReadiness._guard(self, actor=actor)
         SelectorReadiness._wake_guard(self)
         s = self._scope_snapshot
-        _dispatch_safe(s.loop, s.selector)
+        _dispatch_safe(s.loop, s.selector, interest=s.interest)
         _require(_FILENO(s.sock) == s.fd and _fd_identity(s.fd) == s.identity
                  and os.get_blocking(s.fd) is False and s.sock.gettimeout() == 0.0
                  and os.get_inheritable(s.fd) is False
@@ -242,7 +276,9 @@ class SelectorReadiness:
         SelectorReadiness._guard(self, actor=actor)
 
     def _slots(self):
+        interest = _interest(self)
         s = self._scope_snapshot
+        _require(type(s) is _Scope and type(s.interest) is str and s.interest == interest)
         try:
             key = _SELECTOR_METHODS["get_key"](s.selector, s.fd)
         except KeyError:
@@ -252,7 +288,7 @@ class SelectorReadiness:
                  and ((type(key.fileobj) is int and key.fileobj == s.fd)
                       or key.fileobj is s.sock)
                  and type(key.data) is tuple and len(key.data) == 2)
-        return key.data
+        return key.data if interest == "read" else (key.data[1], key.data[0])
 
     def _owned(self, handle):
         _require(type(handle) is _HANDLE and handle._loop is self._scope_snapshot.loop
@@ -298,7 +334,7 @@ class SelectorReadiness:
 
     def _retire(self):
         # Foreign actors cannot even cancel this owner's metadata Future.
-        _require(type(self) is SelectorReadiness)
+        interest = _interest(self)
         origin = self._origin_scope
         _require(type(origin) is _Scope and origin.context == (os.getpid(), threading.get_ident())
                  and asyncio.get_running_loop() is origin.loop
@@ -312,7 +348,8 @@ class SelectorReadiness:
             self._handle = self._handle_snapshot = handle
             self._handle_args = self._handle_args_snapshot = handle._args
             s = self._scope_snapshot
-            _require(_remove_reader(s.loop, s.fd) is True)
+            remove = _remove_reader if interest == "read" else _remove_writer
+            _require(remove(s.loop, s.fd) is True)
             SelectorReadiness._native(self)
             read_after, write_after = SelectorReadiness._slots(self)
             _require(read_after is None and write_after is writer)
@@ -350,11 +387,12 @@ class SelectorReadiness:
         if _NOW() >= end_ns:
             raise TimeoutError  # known no-registration expiry, not ownership uncertainty
         current, _ = SelectorReadiness._slots(self)
-        _require(current is None)  # never replace another reader
+        _require(current is None)  # never replace another owner of this direction
         self._attempted = True  # registration intent before the possibly partial native add
         try:
             s = self._scope_snapshot
-            _install_reader(s.loop, s.fd, self._callback_snapshot, self._token_snapshot)
+            install = _install_reader if s.interest == "read" else _install_writer
+            install(s.loop, s.fd, self._callback_snapshot, self._token_snapshot)
             SelectorReadiness._native(self)
             handle, _ = SelectorReadiness._slots(self)
             SelectorReadiness._owned(self, handle)
@@ -390,3 +428,14 @@ class SelectorReadiness:
             SelectorReadiness._retire(self)
             if not self._retired or self._unknown:
                 raise FrameError("BI1_READINESS_RETIREMENT_UNKNOWN") from None
+
+
+class SelectorWriteReadiness(SelectorReadiness):
+    """One borrowed FD/write-slot notification; no send or protocol authority.
+
+    The immutable scope seals the direction. Retirement preserves the concurrent
+    read subscription; an uncertain registration remains owned debt.
+    """
+
+    def __repr__(self):
+        return "<SelectorWriteReadiness no-payload redacted>"

@@ -72,6 +72,9 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Repair CI736 fixture cause/GO ordering without changing protocol deadlines;
       prior exact-source failures remain recorded; exact replacement `22bc509`
       passed CI738 plugin and Python 3.12/3.13/3.14 Unicode jobs.
+- [x] Implement/review original-task write-slot readiness with immutable direction,
+      opposite-reader preservation and one-shot initialization/debt retention.
+      This notification primitive sends no READY bytes and grants no protocol phase.
 - [ ] Implement actual signed READY write from the retained original resource/input
       facts with one write/grammar intent; keep production startup closed until qualified.
 - [x] Implement/review source signed GO/CANCEL receiver/context on the existing original
