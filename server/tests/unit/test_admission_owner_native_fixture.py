@@ -56,7 +56,7 @@ def test_complete_driver_hash_readback_without_native_commands(tmp_path, monkeyp
     compiler = tmp_path / "compiler"
     compiler.write_bytes(b"model compiler, never executed")
     sdk = tmp_path / "sdk"
-    for name in ("mach/mach.h", "mach/mach_port.h", "mach/port.h", "pthread.h"):
+    for name in ("mach/mach.h", "mach/mach_port.h", "mach/port.h", "pthread.h", "bsm/libbsm.h"):
         path = sdk / "usr/include" / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(b"model header")
@@ -76,6 +76,7 @@ def test_complete_driver_hash_readback_without_native_commands(tmp_path, monkeyp
         if role == "libraries":
             return (str(directory / "native-owner") + ":\n"
                     "\t/usr/lib/libSystem.B.dylib (compatibility version 1, current version 1)\n"
+                    "\t/usr/lib/libbsm.0.dylib (compatibility version 1, current version 1)\n"
                     ).encode()
         assert role == "native_observation"
         return json.dumps(good()).encode()

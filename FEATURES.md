@@ -1,3 +1,14 @@
+## Retained request observation — November 6, 2026
+
+The new source candidate receives one fixed request into its original retained
+owner, validates closed header/trailer data and retains message/right debt before
+post-call checks. It sends no reply and permits no cleanup of received rights.
+The direct C model covers 47 causal scenarios; 17 portable pytest checks pass on
+Python 3.11 and 3.14. Native request/revised-harness execution remains unqualified.
+No startup, operation or terminal authority is granted. Endpoint exposure, trusted
+startup/right origin, message disposal, phase/control binding and physical image
+parity remain open. See [native source and evidence scope](native/README.md).
+
 ## Native endpoint lifecycle — November 6, 2026
 
 Following independent source review, root completed one actual Darwin lifecycle

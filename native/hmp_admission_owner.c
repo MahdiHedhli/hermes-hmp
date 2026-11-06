@@ -1,13 +1,26 @@
 /* Endpoint ownership only. This source is not loaded by HMP and supplies no
- * startup attestation, message receiver, handshake, right export or IO permit.
+ * startup attestation, handshake, right export or IO permit. Request receipt is
+ * observation-only with retained message debt; no production receiver admitted.
  */
 #include "hmp_admission_owner.h"
 
 #include <mach/mach.h>
+#include <bsm/libbsm.h>
+#include <string.h>
 #include <pthread.h>
 #include <stdlib.h>
 #include <time.h>
 #include <unistd.h>
+
+enum { HMP_REQUEST_ID = 0x484d4101, HMP_REQUEST_LIMIT = 1024 };
+struct hmp_initial_request {
+    mach_msg_header_t header;
+    uint32_t schema, phase;
+    unsigned char reserved[32];
+};
+_Static_assert(sizeof(mach_msg_header_t) == 24, "Unsupported Mach header ABI");
+_Static_assert(sizeof(struct hmp_initial_request) == 64, "Unexpected request padding");
+_Static_assert(sizeof(mach_msg_audit_trailer_t) == 52, "Unsupported audit trailer ABI");
 
 struct hmp_admission_owner {
     pid_t process;
@@ -17,6 +30,15 @@ struct hmp_admission_owner {
     mach_port_t endpoint;
     bool initialize_attempted, close_attempted;
     bool receive_owned, send_owned, uncertain, busy, integrity_refused;
+    bool request_attempted, request_received, request_copyout_unknown;
+    mach_port_t request_reply;
+    pid_t observed_pid;
+    uid_t observed_uid;
+    int observed_pidversion;
+    union {
+        mach_msg_header_t alignment;
+        unsigned char bytes[HMP_REQUEST_LIMIT + MAX_TRAILER_SIZE];
+    } request_buffer;
 };
 
 static uint64_t clock_ns(void) {
@@ -99,7 +121,8 @@ bool hmp_admission_owner_initialize(hmp_admission_owner *o, uint64_t end,
 
 hmp_admission_state hmp_admission_owner_state(hmp_admission_owner *o) {
     if (!enter(o)) return HMP_ADMISSION_REFUSED;
-    if (o->state == HMP_ADMISSION_ENDPOINT && clock_ns() >= o->work_end)
+    if ((o->state == HMP_ADMISSION_ENDPOINT || o->state == HMP_ADMISSION_REQUEST_OBSERVED)
+        && clock_ns() >= o->work_end)
         o->state = HMP_ADMISSION_REFUSED;
     (void)leave(o, true);
     return o->state;
@@ -116,6 +139,10 @@ static bool close_owner(hmp_admission_owner *o) {
         o->state = HMP_ADMISSION_CLOSED;
         return true;
     }
+    /* Retained received rights must not be implicitly destroyed as endpoint
+     * cleanup. In particular SEND_ONCE disposal may notify a foreign endpoint.
+     * No generic message-disposal authority exists in this foundation yet. */
+    if (o->request_received || o->request_copyout_unknown || o->uncertain) return false;
     if (clock_ns() >= o->cleanup_end || o->integrity_refused) return false;
     if (o->receive_owned) {
         kern_return_t r = mach_port_mod_refs(mach_task_self(), o->endpoint,
@@ -152,4 +179,64 @@ bool hmp_admission_owner_dispose(hmp_admission_owner **owner) {
     *owner = NULL;
     free(o);
     return true;
+}
+
+static bool observe_request(hmp_admission_owner *o) {
+    if (o->state != HMP_ADMISSION_ENDPOINT || o->request_attempted ||
+        o->close_attempted || o->integrity_refused) {
+        o->state = HMP_ADMISSION_REFUSED;
+        return false;
+    }
+    o->request_attempted = true;
+    o->state = HMP_ADMISSION_REFUSED;
+    uint64_t now = clock_ns();
+    if (now >= o->work_end || o->integrity_refused) return false;
+    uint64_t milliseconds = (o->work_end - now + 999999) / 1000000;
+    /* One finite receive, no retry/cursor replacement; same original deadline. */
+    mach_msg_timeout_t timeout = (mach_msg_timeout_t)(milliseconds > 1000 ? 1000 : milliseconds);
+    mach_msg_header_t *header = (mach_msg_header_t *)o->request_buffer.bytes;
+    kern_return_t r = mach_msg(header, MACH_RCV_MSG | MACH_RCV_TIMEOUT |
+        MACH_RCV_TRAILER_TYPE(MACH_MSG_TRAILER_FORMAT_0) |
+        MACH_RCV_TRAILER_ELEMENTS(MACH_RCV_TRAILER_AUDIT), 0,
+        (mach_msg_size_t)sizeof(o->request_buffer), o->endpoint, timeout, MACH_PORT_NULL);
+    if (r != MACH_MSG_SUCCESS) {
+        if (r != MACH_RCV_TIMED_OUT) o->request_copyout_unknown = o->uncertain = true;
+        return false;
+    }
+    /* Actual kernel output and its complete buffer belong to the owner BEFORE
+     * clock/reentry/shape checks. No guessed destructor, release or send. */
+    o->request_received = true;
+    o->request_reply = header->msgh_remote_port;
+    if (clock_ns() >= o->work_end || o->integrity_refused) return false;
+    if (header->msgh_size != sizeof(struct hmp_initial_request) ||
+        header->msgh_bits != MACH_MSGH_BITS(MACH_MSG_TYPE_PORT_SEND_ONCE, MACH_MSG_TYPE_PORT_SEND) ||
+        header->msgh_local_port != o->endpoint || !MACH_PORT_VALID(o->request_reply) ||
+        header->msgh_voucher_port != MACH_PORT_NULL || header->msgh_id != HMP_REQUEST_ID) return false;
+    size_t offset = ((size_t)header->msgh_size + 3u) & ~(size_t)3u;
+    if (offset > sizeof(o->request_buffer.bytes) - sizeof(mach_msg_audit_trailer_t)) return false;
+    mach_msg_audit_trailer_t trailer;
+    memcpy(&trailer, o->request_buffer.bytes + offset, sizeof(trailer));
+    if (trailer.msgh_trailer_type != MACH_MSG_TRAILER_FORMAT_0 ||
+        trailer.msgh_trailer_size != sizeof(trailer)) return false;
+    struct hmp_initial_request request;
+    memcpy(&request, header, sizeof(request));
+    if (request.schema != 1 || request.phase != 1) return false;
+    for (size_t i = 0; i < sizeof(request.reserved); ++i)
+        if (request.reserved[i] != 0) return false;
+    pid_t pid = audit_token_to_pid(trailer.msgh_audit);
+    uid_t uid = audit_token_to_euid(trailer.msgh_audit);
+    int version = audit_token_to_pidversion(trailer.msgh_audit);
+    if (pid <= 1 || pid == o->process || uid == 0 || uid != geteuid() || version < 0 ||
+        clock_ns() >= o->work_end || o->integrity_refused) return false;
+    o->observed_pid = pid;
+    o->observed_uid = uid;
+    o->observed_pidversion = version;
+    o->state = HMP_ADMISSION_REQUEST_OBSERVED;
+    return true;
+}
+
+bool hmp_admission_owner_observe_request(hmp_admission_owner *o) {
+    if (!enter(o)) return false;
+    bool result = observe_request(o);
+    return leave(o, result);
 }

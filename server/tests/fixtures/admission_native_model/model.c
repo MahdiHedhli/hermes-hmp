@@ -11,6 +11,7 @@ static int sample, reenter_clock, reenter_native, fail_native, native_calls;
 static int receive_count, send_count;
 static unsigned long long fake_now = 1000000000;
 static void *active;
+static int receive_mode, receive_calls;
 static void reenter(void);
 static int model_clock(clockid_t id, struct timespec *t) {
     (void)id;
@@ -62,6 +63,56 @@ kern_return_t mach_port_deallocate(mach_port_t t, mach_port_t p) {
     --send_count;
     if (reenter_native == native_calls) reenter();
     return KERN_SUCCESS;
+}
+
+pid_t audit_token_to_pid(audit_token_t token) { return (pid_t)token.val[0]; }
+uid_t audit_token_to_euid(audit_token_t token) { return (uid_t)token.val[1]; }
+int audit_token_to_pidversion(audit_token_t token) { return (int)token.val[2]; }
+kern_return_t mach_msg(mach_msg_header_t *header, mach_msg_option_t opts,
+                      mach_msg_size_t send_size, mach_msg_size_t receive_size,
+                      mach_port_t endpoint, mach_msg_timeout_t timeout, mach_port_t notify) {
+    assert(receive_mode > 0 && endpoint == 91 && send_size == 0 && notify == 0);
+    assert(opts == (MACH_RCV_MSG | MACH_RCV_TIMEOUT));
+    assert(receive_size >= 64 + sizeof(mach_msg_audit_trailer_t) && timeout > 0);
+    ++receive_calls;
+    if (receive_mode == 2) return MACH_RCV_TIMED_OUT;
+    if (receive_mode == 3) return 0x10004004; /* unknown copyout outcome */
+    struct hmp_initial_request request = {0};
+    request.header.msgh_bits = MACH_MSGH_BITS(18, 17);
+    request.header.msgh_size = sizeof(request);
+    request.header.msgh_local_port = 91;
+    request.header.msgh_remote_port = 92;
+    request.header.msgh_id = HMP_REQUEST_ID;
+    request.schema = request.phase = 1;
+    struct mach_trailer_model { mach_msg_audit_trailer_t value; } trailer = {0};
+    trailer.value.msgh_trailer_size = sizeof(trailer.value);
+    trailer.value.msgh_audit.val[0] = (uint32_t)getpid() + 100;
+    trailer.value.msgh_audit.val[1] = 501;
+    trailer.value.msgh_audit.val[2] = 5;
+    if (receive_mode == 4) request.header.msgh_bits = MACH_MSGH_BITS(17, 17);
+    if (receive_mode == 5) request.header.msgh_bits |= 0x80000000;
+    if (receive_mode == 6) request.header.msgh_size = 1024;
+    if (receive_mode == 7) trailer.value.msgh_trailer_size = 0;
+    if (receive_mode == 8) request.reserved[0] = 1;
+    if (receive_mode == 9) trailer.value.msgh_audit.val[1] = 502;
+    if (receive_mode == 10) trailer.value.msgh_audit.val[0] = (uint32_t)getpid();
+    if (receive_mode == 13) request.header.msgh_remote_port = MACH_PORT_NULL;
+    if (receive_mode == 14) request.header.msgh_local_port = 90;
+    if (receive_mode == 15) request.header.msgh_voucher_port = 93;
+    if (receive_mode == 16) request.header.msgh_id = 0;
+    if (receive_mode == 17) request.schema = 2;
+    if (receive_mode == 18) request.phase = 2;
+    if (receive_mode == 19) trailer.value.msgh_trailer_type = 1;
+    if (receive_mode == 20) trailer.value.msgh_audit.val[2] = UINT32_MAX;
+    if (receive_mode == 21) trailer.value.msgh_audit.val[1] = 0;
+    if (receive_mode == 22) trailer.value.msgh_audit.val[0] = 1;
+    if (receive_mode == 23) trailer.value.msgh_trailer_size += 4;
+    if (receive_mode == 24) request.header.msgh_bits |= 0x10000000;
+    memcpy(header, &request, sizeof(request));
+    memcpy((unsigned char *)header + sizeof(request), &trailer.value, sizeof(trailer.value));
+    if (receive_mode == 11) fake_now += 201;
+    if (receive_mode == 12) reenter();
+    return MACH_MSG_SUCCESS;
 }
 
 int main(void) {
@@ -157,6 +208,51 @@ int main(void) {
         assert(native_calls == 0 && hmp_admission_owner_close(o));
         assert(hmp_admission_owner_dispose(&o));
     }
-    puts("20 causal model scenarios passed; no native Mach calls");
+    /* One receive cursor; success and invalid/late/reentrant output retain the
+     * full message/reply. No close, destructor or send is permitted afterwards. */
+    for (int mode = 1; mode <= 24; ++mode) {
+        receive_mode = mode;
+        receive_calls = sample = native_calls = receive_count = send_count = 0;
+        o = hmp_admission_owner_allocate(); active = o;
+        assert(hmp_admission_owner_initialize(o, fake_now + 100, fake_now + 200));
+        bool observed = hmp_admission_owner_observe_request(o);
+        assert(observed == (mode == 1));
+        assert(receive_calls == 1 && native_calls == 2);
+        if (mode == 1) assert(o->state == HMP_ADMISSION_REQUEST_OBSERVED);
+        assert(!hmp_admission_owner_observe_request(o));
+        assert(receive_calls == 1 && native_calls == 2);
+        if (mode != 2 && mode != 3) {
+            assert(o->request_received && o->request_reply == (mode == 13 ? 0u : 92u));
+            assert(!hmp_admission_owner_close(o) && !hmp_admission_owner_dispose(&o));
+            assert(native_calls == 2);
+        } else if (mode == 3) {
+            assert(o->request_copyout_unknown && o->uncertain);
+            assert(!hmp_admission_owner_close(o) && native_calls == 2);
+        } else {
+            assert(!o->request_received && !o->request_copyout_unknown);
+            assert(hmp_admission_owner_close(o) && hmp_admission_owner_dispose(&o));
+        }
+        if (o != NULL) assert(!hmp_admission_owner_observe_request(o));
+        assert(receive_calls == 1);
+    }
+    /* Three request clock boundaries: before receive, after ownership capture,
+     * and before publishing the observation. No next effect or late success. */
+    for (int boundary = 4; boundary <= 6; ++boundary) {
+        receive_mode = 1;
+        reenter_clock = boundary;
+        sample = native_calls = receive_count = send_count = receive_calls = 0;
+        o = hmp_admission_owner_allocate(); active = o;
+        assert(hmp_admission_owner_initialize(o, fake_now + 100, fake_now + 200));
+        assert(!hmp_admission_owner_observe_request(o));
+        int expected = boundary == 4 ? 0 : 1;
+        assert(receive_calls == expected && native_calls == 2);
+        assert(o->request_received == (expected == 1));
+        if (expected == 1) assert(o->request_reply == 92);
+        assert(o->integrity_refused && o->state == HMP_ADMISSION_REFUSED);
+        assert(!hmp_admission_owner_observe_request(o));
+        assert(!hmp_admission_owner_close(o) && !hmp_admission_owner_dispose(&o));
+        assert(receive_calls == expected && native_calls == 2);
+    }
+    puts("47 causal model scenarios passed; no native Mach calls");
     return 0;
 }

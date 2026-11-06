@@ -50,17 +50,15 @@ def run_fixture(directory):
         ["/usr/bin/xcrun", "--sdk", "macosx", "--show-sdk-path"], directory, "sdk", receipt))
     receipt["compiler_sha256"] = commands._digest(compiler)
     receipt["sdk_headers"] = {p: commands._digest(sdk / "usr/include" / p) for p in (
-        "mach/mach.h", "mach/mach_port.h", "mach/port.h", "pthread.h")}
+        "mach/mach.h", "mach/mach_port.h", "mach/port.h", "pthread.h", "bsm/libbsm.h")}
     binary = directory / "native-owner"
     commands._owned([str(compiler), "-std=c11", "-Wall", "-Wextra", "-Werror", "-pthread",
         "-isysroot", str(sdk), "-I", str(_ROOT / "native"), str(Path(__file__).with_suffix(".c")),
-        "-o", str(binary)], directory, "build", receipt)
+        "-lbsm", "-o", str(binary)], directory, "build", receipt)
     os.chmod(binary, 0o700)
     receipt["binary_sha256"] = commands._digest(binary)
     raw = commands._owned(["/usr/bin/otool", "-L", str(binary)], directory, "libraries", receipt)
-    lines = raw.decode("utf-8").splitlines()
-    commands._require(len(lines) == 2 and lines[0] == str(binary) + ":" and
-        lines[1].strip().startswith("/usr/lib/libSystem.B.dylib (compatibility version "))
+    receipt["linked_os_libraries"] = commands._libraries(raw, binary)
     raw = commands._owned([str(binary)], directory, "native_observation", receipt)
     receipt["observation"] = validate(raw)
     commands._require(all(commands._digest(Path(p)) == value for p, value in pins.items()))

@@ -1,4 +1,26 @@
-# Retained native admission owner — incomplete source foundation
+# Retained request observation — source-only extension
+
+The current candidate adds one fixed request receive to the original owner. It
+retains the complete kernel buffer and returned reply name before clock/reentry
+checks. It validates exact received dispositions, endpoint, frame and bounded
+audit trailer. Observation grants no startup or operation authority. Any received
+message or uncertain copyout prevents close/disposal: retained message debt is
+not explicit cleanup. No reply, destructor or generic notification is emitted by
+these paths. The endpoint remains unexported and no production receiver is admitted.
+Future actual input must use explicitly owned fixture reply destinations; even
+send-once disposal can notify its destination.
+
+The direct C model now covers 47 scenarios, including 24 request outcomes and
+all three request clock boundaries, with exact next-effect and one-cursor checks.
+Root's portable selection passes 17 pytest checks on Python 3.11.15 and 3.14.4;
+the real native case was deselected. These use a fake Mach/trailer ABI, not kernel
+flags or identity evidence. Independent source review accepted the retained-debt
+slice and requested these additional causal cases; no reviewer execution.
+The revised native driver pins/links libbsm. Neither a real request receive nor
+the revised own-right native harness has run for this candidate. Earlier native
+evidence below binds its original source, not this extension.
+
+## Earlier retained native endpoint foundation
 
 `hmp_admission_owner.c` implements private Darwin endpoint ownership only. HMP does
 not load or package it, and it has no public route, port export, message exchange,

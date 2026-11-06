@@ -1,5 +1,12 @@
 # BI1 integration tasks
 
+- [x] Implement observation-only retained request receipt and closed header/trailer
+      validation, with source review and 47 causal model scenarios. Received or
+      uncertain copied rights block close/disposal; no message authority follows.
+- [ ] Review and implement original message/reply disposal ownership and qualify
+      actual owned-destination request/error/reentry behavior before a live
+      receiver. Account for kernel send-once notifications and process teardown.
+
 - [x] Implement and independently review the retained native endpoint foundation
       and causal boundary model (PR118), then observe one own-right native
       lifecycle run (PR119: 17 checks, independent artifact readback). This
