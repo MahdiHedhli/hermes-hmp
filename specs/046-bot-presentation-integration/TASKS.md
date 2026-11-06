@@ -1,5 +1,11 @@
 # BI1 integration tasks
 
+- [x] Implement and independently review the retained native endpoint foundation
+      and causal boundary model (PR118), then observe one own-right native
+      lifecycle run (PR119: 17 checks, independent artifact readback). This
+      completes only endpoint lifecycle, not admission/message authority;
+      exact-source CI and production composition remain separate.
+
 - [ ] Implement the reviewed retained Mach boot/channel admission owner with
       endpoint, reply-right, audit incarnation, original lifetime and deadline
       ownership. Keep it observation-only until independently selected startup

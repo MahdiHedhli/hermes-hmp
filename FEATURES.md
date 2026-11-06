@@ -4,9 +4,10 @@ Following independent source review, root completed one actual Darwin lifecycle
 run: **17 passed in 0.84 seconds** (one native case plus 16 portable/driver checks).
 Own receive/send references, wrong-thread refusal and join, the receive-to-dead-name
 transition, final name absence and disposal were observed. No messages, global
-names or services are used. Independent artifact review accepted exact source/artifact bindings and bounded
-observations; no reviewer execution is claimed. The endpoint
-owner remains inactive; startup, message/control authority, terminal/ACK and
+names or services are used. Independent artifact review accepted exact source and
+artifact bindings and bounded observations; no reviewer execution is claimed.
+Source `51c6158` is proposed in PR119, stacked on endpoint owner PR118; both exact
+CI plugin suites are pending. The endpoint owner remains inactive; startup, message/control authority, terminal/ACK and
 physical image qualification remain open. This does not resolve the earlier
 unknown-recipient incident. See [native ownership status](native/README.md).
 
@@ -31,8 +32,9 @@ Source `ee8b6d4` is integrated through PR117. Exact-source
 [CI42141744767](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42141744767)
 passes all four jobs: **7,286 passed, 31 skipped, 18 warnings, 190 subtests**,
 plus Unicode jobs. Linux skips do not replace the separate root Darwin case.
-The subsequent native endpoint owner is incomplete, uncommitted source with
-model-only validation; it is not loaded by HMP or a production issuer.
+The subsequent native endpoint owner in PR118/PR119 has reviewed model and bounded
+native lifecycle evidence. Message/startup/control integration is incomplete;
+it is not loaded by HMP or a production issuer.
 
 ## Owned-peer lifetime experiment — November 6, 2026
 
