@@ -103,6 +103,7 @@ class NativeReadyReceiver:
         owner._pending = owner._pending_origin = None
         owner._waiter = owner._waiter_origin = None
         owner._last_read = None
+        owner._transition = owner._transition_snapshot = None
         owner._completion = owner._completion_origin = None
         writer._ready_receiver = writer._ready_receiver_snapshot = owner
         base.channel._credential_ready_receiver = owner

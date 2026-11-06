@@ -1,26 +1,22 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
 [Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now includes
-reviewed signed READY reception on the original native work allocation, derived
-only from completed signed/native BEGIN evidence. One existing native receive
-claim, original deadline/cursor and broker signature/context/empty-frame hash are
-joined. Failed/partial/unknown reads cannot mint native READY or retry; late native
-claim failures retain their original linear state. Generic credential gates stay closed.
+reviewed original-work native READY transition after completed signed READY and
+fresh PRE_GO authorization. Actual native STARTING/READY state, successful native
+return, current keys and fixed post-transition scope are required. Failures after
+mutation are terminal with no rollback/retry. No GO permission is created.
 
-Root final affected regression: **1,429 passed, one skipped**, 64.17 seconds;
-configured repository-wide lint passed. New READY-reader cases: **20 passed**,
-covering valid/fragmented input, malformed/foreign/stale context, EOF/unknown recv,
-postcallback count/target/buffer drift, late keys/pins/claim refusal, wrong actors,
-forged completion flag, deadline and cancellation. Failure context/immutable aliases
-are cleared; only the original buffer is wiped. Independent review was read-only.
-See [evidence and limits](docs/research/presentation-signed-ready-read-2026-11-06.md).
-New-source CI is pending. Prior signed BEGIN writer `5b8f40a` passed
-[CI748](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42288772458).
+Final affected regression: **1,438 passed, one skipped**, 63.41 seconds;
+configured lint passed. Independent read-only review's foreign-equality phase
+finding was repaired with identity checks and a zero-callback tripwire. Earlier
+836-pass/one-failure cancellation observation remains unexplained and recorded;
+later passes do not erase it. The fixture now surfaces the underlying completed
+control-task outcome rather than reading an unfinished notification Future.
+See [evidence and limits](docs/research/presentation-native-ready-transition-2026-11-06.md).
 
-Read success is not a fresh PRE_GO/native READY transition. Production wiring,
-later signed phases, resource admission/worker GO relay, startup, native publication,
-STATUS and physical/release qualification remain open. Character delivery is
-unavailable. No live host/device/settings or mobile build changed.
+Production dispatch, later signed phases, resource admission/worker GO relay,
+startup, native publication, STATUS and physical/release qualification remain
+open. Character delivery is unavailable. No host/device/settings/mobile build changed.
 
 ## Native image verification checkpoint — November 6, 2026
 

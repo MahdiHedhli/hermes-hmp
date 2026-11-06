@@ -36,6 +36,7 @@ class NativePhaseWorkOwner:
         _require(type(self) is NativePhaseWorkOwner and "_ready" not in vars(self))
         self._ready = self._attempted = self._failed = False
         self._writer = self._writer_snapshot = None
+        self._ready_transition = self._ready_transition_snapshot = None
         self._record = self._record_snapshot = None
         self._intent = self._intent_snapshot = None
         self._cleanup = cleanup
@@ -101,7 +102,7 @@ class NativePhaseWorkOwner:
     def __repr__(self):
         return "<NativePhaseWorkOwner payload-and-credentials-redacted>"
 
-    def _local(self):
+    def _material_local(self):
         from .presentation_remote import RemoteOperationOwner
         from .presentation_remote_cleanup import RemoteCleanupOwner
 
@@ -290,10 +291,25 @@ class NativePhaseWorkOwner:
         )
         CredentialHandshakeOwner._released(handshake, channel)
         CredentialHandshakeOwner._native_input_local(handshake, remote, join)
-        CredentialHandshakeOwner._native_join_fence(
-            handshake, remote, phase=RemotePhase.BEGIN_INTENT
-        )
         _require(self._record is self._record_snapshot and self._intent is self._intent_snapshot)
+        return remote, handshake, channel, clock
+
+    def _local(self):
+        remote, handshake, channel, clock = NativePhaseWorkOwner._material_local(self)
+        CredentialHandshakeOwner._native_join_fence(
+            handshake, remote, phase=RemotePhase.BEGIN_INTENT)
+        return remote, handshake, channel, clock
+
+    def _ready_local(self):
+        """Fixed post-transition material/current join; never a caller-selected phase."""
+        from .presentation_credential_ready_transition import NativeReadyTransition
+
+        remote, handshake, channel, clock = NativePhaseWorkOwner._material_local(self)
+        transition = self._ready_transition_snapshot
+        _require(type(transition) is NativeReadyTransition and self._ready_transition is transition)
+        NativeReadyTransition._post_local(transition, self)
+        CredentialHandshakeOwner._native_join_fence(handshake, remote, phase=RemotePhase.READY)
+        NativeReadyTransition._post_local(transition, self)
         return remote, handshake, channel, clock
 
     def _guard(self):

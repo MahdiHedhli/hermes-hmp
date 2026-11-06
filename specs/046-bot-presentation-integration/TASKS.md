@@ -274,3 +274,8 @@ historical, not an alternative live authorization path or resolved incident.
 - [ ] Run exact native/transport/UI causal checks and independent security review.
 - [ ] Update host/app candidate, deploy authorized dogfood and qualify physical phones.
 - [ ] Reconcile app/plugin feature inventories and upstream Gist with verified scope.
+
+- [x] Complete bounded independent source review and affected regression of
+      original-task native READY transition after signed READY plus fresh PRE_GO:
+      1,438 passed/one skipped; phase identity tripwire included. Production
+      wiring/GO remain closed; earlier cancellation failure cause remains unproven.

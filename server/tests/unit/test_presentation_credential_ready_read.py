@@ -29,7 +29,8 @@ from .test_presentation_supervisor import context as context
     "ready", "fragmented", "signature", "scope", "sequence", "hash", "wrong_phase",
     "oversize_auth", "eof", "unknown_recv", "target_drift", "count_drift", "buffer_drift",
     "current_key", "admission_refusal", "wrong_actor", "missing_write", "deadline",
-    "cancel_wait", "pin_drift",
+    "cancel_wait", "pin_drift", "native_ready", "native_wrong_actor", "native_observe_false",
+    "native_observe_key", "native_transition_error", "native_transition_key", "native_data_drift",
 ])
 async def test_original_work_ready_read_requires_its_complete_signed_begin(
     context, begin_gateway, tmp_path, monkeypatch, mutation
@@ -216,17 +217,85 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
             held["ready_fact"] = fact
             assert authority._record(operation).owner.inspect_remote(
                 authority._record(operation).handle) is RemotePhase.BEGIN_INTENT
-            # Stop before unimplemented native PRE_GO/READY transition or GO.
+            if mutation.startswith("native_"):
+                from hmp_plugin.presentation_authority import ParentAuthorityAdapter
+                from hmp_plugin.presentation_credential_ready_transition import (
+                    NativeReadyTransition,
+                )
+                from hmp_plugin.presentation_credential_work import NativePhaseWorkOwner
+                from hmp_plugin.presentation_jobs import JobOwner
+                if mutation == "native_wrong_actor":
+                    async def foreign_factory():
+                        with pytest.raises(FrameError):
+                            NativeReadyTransition.retain(receiver)
+                    await asyncio.create_task(foreign_factory())
+                    assert receiver._transition is None
+                transition = NativeReadyTransition.retain(receiver)
+                held["native_transition"] = transition
+                with pytest.raises(FrameError):
+                    NativeReadyTransition.retain(receiver)
+                if mutation == "native_wrong_actor":
+                    async def foreign_run():
+                        with pytest.raises(FrameError):
+                            await transition.run()
+                    await asyncio.create_task(foreign_run())
+                    assert transition._attempted is False
+                observe = ParentAuthorityAdapter._observe
+                mutate = JobOwner.remote_transition
+                async def changed_observe(adapter, record, phase):
+                    result = await observe(adapter, record, phase)
+                    if phase == "PRE_GO" and transition._observe_attempted:
+                        held["observe_calls"] = held.get("observe_calls", 0) + 1
+                        if mutation == "native_observe_false":
+                            return False
+                        if mutation == "native_observe_key":
+                            keys["gateway"].retire()
+                        if mutation == "native_data_drift":
+                            receiver._buffer_origin[0] ^= 1
+                            receiver._buffer_values = bytes(receiver._buffer_origin)
+                    return result
+                def changed_mutate(job_owner, handle, owned, phase):
+                    result = mutate(job_owner, handle, owned, phase)
+                    if owned is remote and phase is RemotePhase.READY:
+                        held["mutate_calls"] = held.get("mutate_calls", 0) + 1
+                        if mutation == "native_transition_key":
+                            keys["gateway"].retire()
+                        if mutation == "native_transition_error":
+                            raise FrameError("SYNTHETIC_POST_NATIVE_READY_ERROR")
+                    return result
+                monkeypatch.setattr(ParentAuthorityAdapter, "_observe", changed_observe)
+                monkeypatch.setattr(JobOwner, "remote_transition", changed_mutate)
+                try:
+                    await transition.run()
+                    held["native_receipt"] = transition.current_phase()
+                    # Original BEGIN-only material guard must not borrow READY authority.
+                    with pytest.raises(FrameError):
+                        NativePhaseWorkOwner._local(producer)
+                finally:
+                    held["phase_at_transition_boundary"] = (
+                        authority._record(operation).owner.inspect_remote(
+                            authority._record(operation).handle))
+                    monkeypatch.setattr(ParentAuthorityAdapter, "_observe", observe)
+                    monkeypatch.setattr(JobOwner, "remote_transition", mutate)
+                    before_calls = (held.get("observe_calls", 0), held.get("mutate_calls", 0))
+                    with pytest.raises(FrameError):
+                        await transition.run()
+                    assert before_calls == (held.get("observe_calls", 0),
+                                            held.get("mutate_calls", 0))
+            # Stop before production dispatch or GO.
             raise FrameError("SYNTHETIC_READY_READ_ONLY")
         monkeypatch.setattr(SocketChannel, "send", source_only_send)
         with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
             await remote.begin_ready()
         await peer_task
         receiver = held["receiver"]
+        native_case = mutation.startswith("native_")
         succeeds = mutation in ("ready", "fragmented", "wrong_actor", "missing_write")
-        read_complete = succeeds or mutation == "current_key"
+        read_complete = succeeds or mutation == "current_key" or native_case
         io_unknown = not read_complete and mutation != "admission_refusal"
-        assert receiver._complete is read_complete and receiver._failed is not succeeds
+        assert receiver._complete is read_complete
+        assert receiver._failed is (not read_complete or mutation in (
+            "current_key", "native_observe_key"))
         assert receiver._io_unknown is io_unknown
         assert channel._reading is io_unknown
         assert remote._send_completed and remote._receive_claimed
@@ -241,7 +310,27 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
             assert bytes(fact.buffer) == held["ready_wire"]
             assert fact.scope.write_scope is held["writer"]._scope_snapshot
             assert fact.count == fact.target == len(held["ready_wire"])
-        if not io_unknown:
+        if native_case:
+            transition = held["native_transition"]
+            native_success = mutation in ("native_ready", "native_wrong_actor")
+            mutated = native_success or mutation in (
+                "native_transition_key", "native_transition_error")
+            assert transition._complete is native_success
+            assert transition._failed is not native_success
+            assert transition._attempted and transition._observe_attempted
+            assert held["observe_calls"] == 1
+            assert held.get("mutate_calls", 0) == int(mutated)
+            assert transition._native_attempted is mutated
+            phase = held["phase_at_transition_boundary"]
+            assert phase is (RemotePhase.READY if mutated else RemotePhase.BEGIN_INTENT)
+            assert authority._record(operation).owner.inspect_remote(
+                authority._record(operation).handle) is RemotePhase.UNKNOWN
+            assert (held.get("native_receipt") is not None) is native_success
+            assert (transition._receipt is not None) is native_success
+        if mutation == "native_data_drift":
+            with pytest.raises(FrameError):
+                NativeReadyReceiver._released(receiver, channel)
+        elif not io_unknown:
             NativeReadyReceiver._released(receiver, channel)
         else:
             assert receiver._completion is None

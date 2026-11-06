@@ -559,7 +559,8 @@ class CredentialHandshakeOwner:
 
         if phase is None:
             phase = RemotePhase.BOUND
-        _require(phase is RemotePhase.BOUND or phase is RemotePhase.BEGIN_INTENT)
+        _require(phase is RemotePhase.BOUND or phase is RemotePhase.BEGIN_INTENT
+                 or phase is RemotePhase.READY)
         _require(type(remote) is RemoteOperationOwner)
         RemoteOperationOwner._retained_local(remote)
         record, work = remote._record_snapshot, remote._record_snapshot.policy_work

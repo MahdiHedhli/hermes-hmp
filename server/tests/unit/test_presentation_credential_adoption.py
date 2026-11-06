@@ -918,6 +918,13 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 success = mutation in ("signed_control_native_cancel",
                                        "signed_control_native_retire_parked")
                 if success:
+                    # FIRST_COMPLETED may be the control task refusing, rather
+                    # than the notification. Preserve that actual failure cause.
+                    if not waiter.done():
+                        completed_control = control._allocation_snapshot.task
+                        assert completed_control in done
+                        completed_control.result()
+                        pytest.fail("control returned without its cancellation notice")
                     notice = waiter.result()
                     assert type(notice) is _CancelReceipt and notice.mint is _CANCEL_RECEIPT_MINT
                     assert notice is control._cancel_receipt_snapshot

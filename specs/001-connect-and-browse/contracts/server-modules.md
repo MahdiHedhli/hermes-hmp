@@ -660,3 +660,11 @@ read completion/current check grants no native READY transition, resource or GO
 permission. Unknown/partial/cancelled reads retain debt; context-free failure wipes
 only the original buffer. Production callers and generic credential gates stay
 unchanged. See [evidence and limits](../../docs/research/presentation-signed-ready-read-2026-11-06.md).
+
+`presentation_credential_ready_transition.py` retains the original signed READY
+reader and its completed native BEGIN allocation. It performs fresh PRE_GO,
+then exactly one native READY mutation on that original work task. Its fixed
+post-state material guard requires actual STARTING/READY ledger state, no GO or
+child, current keys and signed READY, original clock/deadline and a known native
+return. Unknown outcomes remain terminal; no rollback, retry, production caller,
+resource admission or worker GO authority is supplied.

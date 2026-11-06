@@ -549,15 +549,19 @@ async def begin_gateway(local, monkeypatch):
     finally:
         writer = channel._credential_begin_writer_snapshot
         reader = channel._credential_ready_receiver_snapshot
-        if ((writer is not None and writer._unknown)
-                or (reader is not None and reader._io_unknown)):
-            assert not channel.close() and not channel._closed_known
+        transition = None if reader is None else reader._transition_snapshot
+        closed = channel.close()
+        if not closed:
+            assert ((writer is not None and writer._unknown)
+                    or (reader is not None and reader._io_unknown)
+                    or (transition is not None and transition._failed))
+            assert not channel._closed_known
             # Fixture-owned disposal only, never a channel/native release fact.
             # No test flag or protocol evidence is restored to make close pass.
             sock.close()
             assert NativeClockOwner.close_local(channel._clock_owner_snapshot)
         else:
-            assert channel.close() and channel.close_clock()
+            assert channel.close_clock()
         sock.close()
         peer.close()
         assert await spine.stop_local_sockets()
@@ -756,3 +760,16 @@ async def test_original_work_signed_begin_transport_preserves_reserved_intent(
         assert broker.close() and broker.close_clock()
         for key in keys.values():
             key.retire()
+
+
+def test_native_join_phase_rejects_foreign_comparison_without_callbacks():
+    calls = []
+
+    class ForeignPhase:
+        def __eq__(self, other):
+            calls.append(other)
+            raise AssertionError("foreign phase equality invoked")
+
+    with pytest.raises(FrameError):
+        CredentialHandshakeOwner._native_join_fence(None, None, phase=ForeignPhase())
+    assert calls == []
