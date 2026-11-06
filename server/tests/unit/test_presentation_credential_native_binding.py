@@ -161,6 +161,9 @@ async def test_handshake_binds_exact_native_packet_and_original_shared_slot(
 
         monkeypatch.setattr(NativePhaseWorkOwner, "__init__", observed_init)
         monkeypatch.setattr(NativePhaseWorkOwner, "prepare_begin", observed_prepare)
+        async def stop_after_preparation(producer):
+            raise FrameError("SYNTHETIC_PREPARATION_ONLY_NO_IO")
+        monkeypatch.setattr(NativePhaseWorkOwner, "exchange_ready", stop_after_preparation)
         # This join grants no unsigned fallback while phase integration is open.
         with pytest.raises(FrameError, match="PHASE_INTEGRATION_REQUIRED"):
             await channel.send_go(remote)
@@ -624,7 +627,6 @@ async def test_original_work_signed_begin_transport_preserves_reserved_intent(
     try:
         remote = authority.bind_remote(operation, channel, owner._operation_binding(), packet)
         native_send = module._SEND
-        original_send = SocketChannel.send
         original_authorize = RemoteOperationOwner._authorize_send_completion
         completion_calls = []
         def authorized(owned, *args):
@@ -659,11 +661,8 @@ async def test_original_work_signed_begin_transport_preserves_reserved_intent(
                 writer._offset = writer._offset_snapshot = writer._offset + 1
             return n
         monkeypatch.setattr(module, "_SEND", send)
-        async def qualified_test_send(owned_channel, frame, end, *, owner=None):
-            if owned_channel is not channel:
-                return await original_send(owned_channel, frame, end, owner=owner)
-            assert owner is remote
-            producer = remote._cleanup_owner_snapshot._credential_work_snapshot
+        async def qualified_test_exchange(producer):
+            assert producer is remote._cleanup_owner_snapshot._credential_work_snapshot
             assert asyncio.current_task() is producer._refs_snapshot[6].task
             assert asyncio.current_task() is not producer._cleanup._caller_snapshot
             writer = NativeBeginWriter.retain(producer)
@@ -699,10 +698,10 @@ async def test_original_work_signed_begin_transport_preserves_reserved_intent(
                     assert held["guard_calls"] == 1 and held["calls"] == 0
                 held["count"] = writer._offset
                 held["fact"] = channel._begin_write_fact_snapshot
-            # End the isolated qualification before unimplemented signed READY.
-            # Actual production SocketChannel.send remains unchanged/closed.
+            # End isolated BEGIN qualification before the signed READY reader.
             raise FrameError("SYNTHETIC_BEGIN_TRANSPORT_ONLY")
-        monkeypatch.setattr(SocketChannel, "send", qualified_test_send)
+        from hmp_plugin.presentation_credential_work import NativePhaseWorkOwner
+        monkeypatch.setattr(NativePhaseWorkOwner, "exchange_ready", qualified_test_exchange)
         with pytest.raises((FrameError, AuthorityRefusalError)):
             await remote.begin_ready()
         writer = held["writer"]

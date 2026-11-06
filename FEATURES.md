@@ -1,3 +1,19 @@
+## Internal signed READY dispatch checkpoint — November 6, 2026
+
+The credential branch now uses the signed exchange through the existing original
+work/caller READY barrier, with explicit producer/remote/transition receipt joins.
+Three direct cases cover valid signed READY, bad signature and cleanup request
+winning during fresh PRE_GO. Generic GO/CANCEL/result fallbacks remain closed;
+startup/key selection and resource admission remain unqualified.
+
+Full affected regression before the final explicit producer/remote identity check:
+**1,444 passed, one skipped**, 65.99 seconds. After that check, **172 focused tests**
+passed in 13.57 seconds; configured lint passed. Independent read-only review
+accepted the dispatch slice and final identity-check readback. Earlier
+unexplained cancellation failure remains recorded. No live host/device/settings
+or installed mobile build changed. Character delivery remains unavailable.
+See [evidence and limits](docs/research/presentation-signed-ready-dispatch-2026-11-06.md).
+
 ## Bot-character delivery source checkpoint — November 6, 2026
 
 [Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now includes

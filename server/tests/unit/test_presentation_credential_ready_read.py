@@ -11,7 +11,6 @@ import pytest
 
 from hmp_plugin.presentation_authority import AuthorityRefusalError
 from hmp_plugin.presentation_broker_codec import encode_frame
-from hmp_plugin.presentation_broker_service import SocketChannel
 from hmp_plugin.presentation_credential_begin_write import NativeBeginWriter
 from hmp_plugin.presentation_credential_codec import decode_record, encode_record, signing_bytes
 from hmp_plugin.presentation_credential_ready_read import NativeReadyReceiver
@@ -32,6 +31,7 @@ from .test_presentation_supervisor import context as context
     "cancel_wait", "pin_drift", "native_ready", "native_wrong_actor", "native_observe_false",
     "native_observe_key", "native_transition_error", "native_transition_key", "native_data_drift",
     "composed_ready", "composed_signature", "composed_wrong_actor",
+    "dispatch_ready", "dispatch_signature", "dispatch_cancel",
 ])
 async def test_original_work_ready_read_requires_its_complete_signed_begin(
     context, begin_gateway, tmp_path, monkeypatch, mutation
@@ -74,7 +74,7 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 value.update(phase="GO", frame_sha256=hashlib.sha256(frame).hexdigest(),
                              frame_length=len(frame))
             raw = encode_record(value, keys["broker"]._private_key.sign(signing_bytes(value)))
-            if mutation in ("signature", "composed_signature"):
+            if mutation in ("signature", "composed_signature", "dispatch_signature"):
                 raw = raw[:-1] + bytes([raw[-1] ^ 1])
             wire = raw + frame
             if mutation == "oversize_auth":
@@ -95,7 +95,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
     try:
         remote = authority.bind_remote(operation, channel,
                                        handshake_owner._operation_binding(), packet)
-        original_send = SocketChannel.send
+        from hmp_plugin.presentation_credential_work import NativePhaseWorkOwner
+        original_exchange = NativePhaseWorkOwner.exchange_ready
         if mutation == "admission_refusal":
             from hmp_plugin.presentation_remote import RemoteOperationOwner
             authorize = RemoteOperationOwner._authorize_channel
@@ -106,10 +107,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                     raise FrameError("SYNTHETIC_LATE_RECEIVE_CLAIM_REFUSAL")
                 return result
             monkeypatch.setattr(RemoteOperationOwner, "_authorize_channel", refused)
-        async def source_only_send(owned_channel, frame, end, *, owner=None):
-            if owned_channel is not channel:
-                return await original_send(owned_channel, frame, end, owner=owner)
-            producer = remote._cleanup_owner_snapshot._credential_work_snapshot
+        async def source_only_exchange(producer):
+            assert producer is remote._cleanup_owner_snapshot._credential_work_snapshot
             if mutation.startswith("composed_"):
                 retain = NativeBeginWriter.retain
 
@@ -123,12 +122,12 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 if mutation == "composed_wrong_actor":
                     async def wrong_exchange():
                         with pytest.raises(FrameError):
-                            await producer.exchange_ready()
+                            await original_exchange(producer)
                     await asyncio.create_task(wrong_exchange())
                     assert producer._exchange_attempted is False
                     assert producer._writer is None
                 try:
-                    held["exchange_receipt"] = await producer.exchange_ready()
+                    held["exchange_receipt"] = await original_exchange(producer)
                 finally:
                     held["exchange_producer"] = producer
                     held["exchange_phase"] = authority._record(operation).owner.inspect_remote(
@@ -136,7 +135,7 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                     state = (producer._exchange_attempted, producer._exchange_complete,
                              producer._exchange_failed)
                     with pytest.raises(FrameError):
-                        await producer.exchange_ready()
+                        await original_exchange(producer)
                     assert state == (producer._exchange_attempted, producer._exchange_complete,
                                      producer._exchange_failed)
                 raise FrameError("SYNTHETIC_COMPOSED_READY_STOP_BEFORE_GO")
@@ -315,7 +314,67 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                                             held.get("mutate_calls", 0))
             # Stop before production dispatch or GO.
             raise FrameError("SYNTHETIC_READY_READ_ONLY")
-        monkeypatch.setattr(SocketChannel, "send", source_only_send)
+        if mutation.startswith("dispatch_"):
+            from hmp_plugin.presentation_remote_cleanup import RemoteCleanupOwner
+
+            retain = NativeBeginWriter.retain
+            if mutation == "dispatch_cancel":
+                from hmp_plugin.presentation_authority import ParentAuthorityAdapter
+
+                observe = ParentAuthorityAdapter._observe
+
+                async def cancel_before_ready(adapter, record, phase):
+                    result = await observe(adapter, record, phase)
+                    reader = channel._credential_ready_receiver_snapshot
+                    if phase == "PRE_GO" and reader is not None and reader._complete:
+                        held["cancel_before_ready"] = True
+                        RemoteCleanupOwner.request(remote._cleanup_owner_snapshot)
+                    return result
+
+                monkeypatch.setattr(ParentAuthorityAdapter, "_observe", cancel_before_ready)
+
+            def dispatch_writer(cls, producer):
+                writer = retain(producer)
+                held["writer"] = writer
+                writer_retained.set()
+                return writer
+
+            monkeypatch.setattr(NativeBeginWriter, "retain", classmethod(dispatch_writer))
+            if mutation == "dispatch_ready":
+                assert await remote.begin_ready() is True
+                cleanup = remote._cleanup_owner_snapshot
+                producer = cleanup._credential_work_snapshot
+                assert producer._exchange_complete and not producer._exchange_failed
+                assert cleanup._ready_fact is cleanup._ready_fact_snapshot
+                assert cleanup._ready_snapshot.result() is True
+                assert not cleanup._allocations_snapshot[1].task.done()
+                assert authority._record(operation).owner.inspect_remote(
+                    authority._record(operation).handle) is RemotePhase.READY
+                assert remote._go_admission is None and authority._record(operation).child is None
+                with pytest.raises(FrameError):
+                    channel._credential_work_ready()
+                RemoteCleanupOwner.request(cleanup)
+                # Actual owned cleanup may retain UNKNOWN: signed cleanup relay
+                # is not integrated by this READY-only dispatch slice.
+                async with asyncio.timeout(2):
+                    result = await asyncio.shield(cleanup._allocations_snapshot[0].task)
+                assert type(result) is bool
+                assert cleanup._allocations_snapshot[1].task.done()
+                assert result is True or cleanup._unknown is True
+            else:
+                with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
+                    await remote.begin_ready()
+                if mutation == "dispatch_cancel":
+                    assert held["cancel_before_ready"] is True
+                assert remote._cleanup_owner_snapshot._ready_fact is None
+                assert remote._cleanup_owner_snapshot._credential_work_snapshot._exchange_failed
+            async with asyncio.timeout(2):
+                await peer_task
+            assert remote._go_admission is None and authority._record(operation).child is None
+            assert authority._record(operation).owner.inspect_remote(
+                authority._record(operation).handle) is RemotePhase.UNKNOWN
+            return
+        monkeypatch.setattr(NativePhaseWorkOwner, "exchange_ready", source_only_exchange)
         with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
             await remote.begin_ready()
         async with asyncio.timeout(2):

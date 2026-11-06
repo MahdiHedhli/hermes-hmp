@@ -659,6 +659,20 @@ class RemoteOperationOwner:
                         or self._cleanup_owner_snapshot._credential_work is not producer):
                     raise AuthorityRefusalError
                 NativePhaseWorkOwner.prepare_begin(producer)
+                receipt = await NativePhaseWorkOwner.exchange_ready(producer)
+                from .presentation_credential_ready_transition import NativeReadyTransition
+
+                transition = producer._ready_transition_snapshot
+                if (type(transition) is not NativeReadyTransition
+                        or producer._ready_transition is not transition):
+                    raise AuthorityRefusalError
+                scope = NativeReadyTransition._metadata(transition)
+                if (scope.producer is not producer
+                        or scope.read_scope.write_scope.remote is not self
+                        or NativeReadyTransition.current_phase(transition) is not receipt):
+                    raise AuthorityRefusalError
+                self._check(RemotePhase.READY)
+                return True  # signed READY only; generic GO/resource gates remain closed
             await SocketChannel.send(self._channel, frame, self._end, owner=self)
             self._send_completed = True
             self._check(RemotePhase.BEGIN_INTENT)
