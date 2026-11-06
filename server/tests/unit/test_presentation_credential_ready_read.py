@@ -31,6 +31,7 @@ from .test_presentation_supervisor import context as context
     "current_key", "admission_refusal", "wrong_actor", "missing_write", "deadline",
     "cancel_wait", "pin_drift", "native_ready", "native_wrong_actor", "native_observe_false",
     "native_observe_key", "native_transition_error", "native_transition_key", "native_data_drift",
+    "composed_ready", "composed_signature", "composed_wrong_actor",
 ])
 async def test_original_work_ready_read_requires_its_complete_signed_begin(
     context, begin_gateway, tmp_path, monkeypatch, mutation
@@ -73,7 +74,7 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 value.update(phase="GO", frame_sha256=hashlib.sha256(frame).hexdigest(),
                              frame_length=len(frame))
             raw = encode_record(value, keys["broker"]._private_key.sign(signing_bytes(value)))
-            if mutation == "signature":
+            if mutation in ("signature", "composed_signature"):
                 raw = raw[:-1] + bytes([raw[-1] ^ 1])
             wire = raw + frame
             if mutation == "oversize_auth":
@@ -109,6 +110,36 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
             if owned_channel is not channel:
                 return await original_send(owned_channel, frame, end, owner=owner)
             producer = remote._cleanup_owner_snapshot._credential_work_snapshot
+            if mutation.startswith("composed_"):
+                retain = NativeBeginWriter.retain
+
+                def observed_retain(cls, owned):
+                    writer = retain(owned)
+                    held["writer"] = writer
+                    writer_retained.set()
+                    return writer
+
+                monkeypatch.setattr(NativeBeginWriter, "retain", classmethod(observed_retain))
+                if mutation == "composed_wrong_actor":
+                    async def wrong_exchange():
+                        with pytest.raises(FrameError):
+                            await producer.exchange_ready()
+                    await asyncio.create_task(wrong_exchange())
+                    assert producer._exchange_attempted is False
+                    assert producer._writer is None
+                try:
+                    held["exchange_receipt"] = await producer.exchange_ready()
+                finally:
+                    held["exchange_producer"] = producer
+                    held["exchange_phase"] = authority._record(operation).owner.inspect_remote(
+                        authority._record(operation).handle)
+                    state = (producer._exchange_attempted, producer._exchange_complete,
+                             producer._exchange_failed)
+                    with pytest.raises(FrameError):
+                        await producer.exchange_ready()
+                    assert state == (producer._exchange_attempted, producer._exchange_complete,
+                                     producer._exchange_failed)
+                raise FrameError("SYNTHETIC_COMPOSED_READY_STOP_BEFORE_GO")
             writer = NativeBeginWriter.retain(producer)
             held["writer"] = writer
             writer_retained.set()
@@ -287,7 +318,21 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
         monkeypatch.setattr(SocketChannel, "send", source_only_send)
         with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
             await remote.begin_ready()
-        await peer_task
+        async with asyncio.timeout(2):
+            await peer_task  # fixture rendezvous bound, not a protocol deadline
+        if mutation.startswith("composed_"):
+            producer = held["exchange_producer"]
+            succeeds = mutation != "composed_signature"
+            assert producer._exchange_attempted is True
+            assert producer._exchange_complete is succeeds
+            assert producer._exchange_failed is not succeeds
+            assert (held.get("exchange_receipt") is not None) is succeeds
+            assert held["exchange_phase"] is (
+                RemotePhase.READY if succeeds else RemotePhase.BEGIN_INTENT)
+            assert remote._go_admission is None and authority._record(operation).child is None
+            with pytest.raises(FrameError):
+                channel._credential_work_ready()
+            return
         receiver = held["receiver"]
         native_case = mutation.startswith("native_")
         succeeds = mutation in ("ready", "fragmented", "wrong_actor", "missing_write")

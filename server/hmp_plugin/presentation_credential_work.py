@@ -37,6 +37,7 @@ class NativePhaseWorkOwner:
         self._ready = self._attempted = self._failed = False
         self._writer = self._writer_snapshot = None
         self._ready_transition = self._ready_transition_snapshot = None
+        self._exchange_attempted = self._exchange_complete = self._exchange_failed = False
         self._record = self._record_snapshot = None
         self._intent = self._intent_snapshot = None
         self._cleanup = cleanup
@@ -413,4 +414,37 @@ class NativePhaseWorkOwner:
             return raw  # signed data only; no write-completion/GO permission
         except BaseException:
             self._failed = True
+            raise
+
+
+    async def exchange_ready(self):
+        """Compose signed BEGIN/READY on original work only; no GO/startup authority."""
+        from .presentation_credential_begin_write import NativeBeginWriter
+        from .presentation_credential_ready_read import NativeReadyReceiver
+        from .presentation_credential_ready_transition import NativeReadyTransition
+        from .presentation_remote_cleanup import _TaskAllocation
+
+        _require(type(self) is NativePhaseWorkOwner
+                 and type(self._refs) is tuple and len(self._refs) == 12
+                 and self._refs is self._refs_snapshot
+                 and type(self._refs[6]) is _TaskAllocation
+                 and asyncio.current_task() is self._refs[6].task)
+        NativePhaseWorkOwner._local(self)  # original task, not a caller/cleanup borrower
+        _require(self._exchange_attempted is False and self._exchange_failed is False
+                 and self._exchange_complete is False)
+        self._exchange_attempted = True  # before the first callback/native IO
+        try:
+            writer = NativeBeginWriter.retain(self)
+            await NativeBeginWriter.write_begin(writer)
+            receiver = NativeReadyReceiver.retain(writer)
+            await NativeReadyReceiver.run(receiver)
+            transition = NativeReadyTransition.retain(receiver)
+            await NativeReadyTransition.run(transition)
+            receipt = NativeReadyTransition.current_phase(transition)
+            _require(self._exchange_attempted is True and self._exchange_failed is False
+                     and self._exchange_complete is False)
+            self._exchange_complete = True
+            return receipt  # native READY only, never GO or resource admission
+        except BaseException:
+            self._exchange_failed = True
             raise

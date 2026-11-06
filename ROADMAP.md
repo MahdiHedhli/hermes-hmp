@@ -18,6 +18,13 @@ Production dispatch, later signed phases, resource admission/worker GO relay,
 startup, native publication, STATUS and physical/release qualification remain
 open. Character delivery is unavailable. No host/device/settings/mobile build changed.
 
+Original-task exchange composition now joins the reviewed signed BEGIN writer,
+READY reader and fresh PRE_GO/native READY transition in one one-attempt method.
+Independent read-only review accepted it, including early exact-task rejection.
+Selected affected regression: **841 passed**, 37.97 seconds; lint passed. This
+is narrower than the prior 1,438-test transition regression and grants no startup
+or GO authority. Production selection remains closed.
+
 ## Native image verification checkpoint — November 6, 2026
 
 Independent review accepted the 120 never-started base-phase observations at exact source `5e247a6`: all 3,120 artifacts, 1,508,640 copied-source SHA/literal Git identities, 240 outcomes, 1,200 known commands without expiry/settlement, and 39/39 borrows with closed DB/listener/workers/hooks/writers. It also accepted two separately reviewed fresh Phone observations for base pair 323 (case 6, selector 16): 52 artifacts, 25,144 copied files and 20 known commands; deactivation refused then freshly accepted 15 rows, while changed eligibility refused then remained ineligible. These are bounded native observations, not production or device qualification.

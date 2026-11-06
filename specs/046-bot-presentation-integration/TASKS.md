@@ -279,3 +279,8 @@ historical, not an alternative live authorization path or resolved incident.
       original-task native READY transition after signed READY plus fresh PRE_GO:
       1,438 passed/one skipped; phase identity tripwire included. Production
       wiring/GO remain closed; earlier cancellation failure cause remains unproven.
+
+- [x] Qualify bounded original-task signed exchange composition (BEGIN writer, READY
+      reader, fresh PRE_GO/native READY): three focused cases, 841 selected
+      affected tests and lint pass; independent read-only review accepted.
+      Production selection/startup and GO stay closed.

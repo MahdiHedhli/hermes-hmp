@@ -32,3 +32,24 @@ plus physical/release qualification. Character delivery remains unavailable.
 
 Final exact-source affected regression: **1,438 passed, one skipped**, 63.41 seconds.
 Configured repository-wide lint and diff whitespace checks passed.
+
+## Original-task exchange composition
+
+`NativePhaseWorkOwner.exchange_ready` composes the reviewed signed BEGIN writer,
+signed READY receiver and fresh PRE_GO/native READY transition on the same
+original retained work allocation. Exact allocation/task admission precedes native
+authorization; a foreign actor does not consume the attempt. The exchange latches
+once before IO and retains each partial owner through existing fields; failure
+is sticky, with no fallback, rollback or retry. It returns only the native READY
+receipt. Production caller/startup selection and GO remain closed.
+
+Three focused cases pass: complete signed exchange, invalid broker signature,
+and foreign actor rejected before the valid original task proceeds. The first
+wrong-actor fixture expected FrameError but initially encountered native
+AuthorityRefusalError and waited indefinitely for its peer start Event. That run
+was intentionally interrupted after two passes; it is not qualification. Pure
+actor admission now precedes native checks, and a two-second fixture rendezvous
+bound exposes such setup failures without changing any protocol deadline.
+Independent read-only review accepted the composition and final entry fence.
+Selected affected regression: **841 passed**, 37.97 seconds; configured lint passed.
+This selected scope is narrower than the prior transition regression.
