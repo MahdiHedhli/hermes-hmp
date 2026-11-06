@@ -669,3 +669,9 @@ limitation is reclassified as a fix or a physical/release qualification.
 - [ ] Execute and independently review all 768 declared phases with capacity
   preflight/reserve and unchanged actor/deadline/security rules. Current bounded
   pilots are not the full matrix; operational gateway reset admission stays distinct.
+
+- [x] Independently review full-matrix orchestration and expected-source guard:
+  one attempt per exclusive root, per-admission 32 GiB+1 GiB capacity check,
+  no deletion/retry/resume and unchanged native actor refusal/settlement.
+- [ ] Root execute all 384 pairs and independently reconcile every phase,
+  source/runtime/checkpoint identity and actor/database cleanup before matrix pass.

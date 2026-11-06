@@ -298,7 +298,9 @@ def validate_pair_checkpoints(root, report, requests):
 
 def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
                 sample_binding_seed=False, binding_cost_case=None, binding_cost_selector=None,
-                    binding_mint=False, binding_rss=False, binding_writer=None):
+                    binding_mint=False, binding_rss=False, binding_writer=None,
+                    expected_hmp_commit=None):
+    commands._require(expected_hmp_commit is None or _sha(expected_hmp_commit))
     commands._require(type(sample_memory) is bool and type(sample_binding_seed) is bool and
                       not (sample_memory and sample_binding_seed))
     binding_contract.validate_sample_mode(
@@ -339,7 +341,8 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
         commands._require(match is not None and tuple(map(int, match.groups())) >= (2, 54, 0))
         receipt["git_version"] = version
         hmp_commit = _git(root, _ROOT, ["rev-parse", "HEAD"], "hmp_head", receipt).decode().strip()
-        commands._require(_sha(hmp_commit))
+        commands._require(_sha(hmp_commit) and
+                          (expected_hmp_commit is None or hmp_commit == expected_hmp_commit))
         receipt["hmp_commit"] = hmp_commit
         copies = {}
         for label, repository, commit in (("native", native_repository, native_commit),

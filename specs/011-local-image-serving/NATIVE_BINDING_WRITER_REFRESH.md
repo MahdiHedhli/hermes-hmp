@@ -294,3 +294,22 @@ hard storage bound: full execution must check available capacity before each
 fresh process, preserve prior evidence, and stop rather than exhaust the volume
 or delete protected evidence. Source-copy optimization or staged evidence
 retention must be reviewed separately if capacity cannot preserve a reserve.
+
+## Full matrix controller source accepted
+
+`local_media_native_writer_matrix.py` runs all 384 explicit pairs sequentially,
+with exclusive retained roots and an expected HMP source SHA checked by the
+driver against actual HEAD before any archive/native operation. Before each
+new pair, free space must cover a 32 GiB reserve plus 1 GiB process allowance.
+This is admission only, not a filesystem quota or reservation. No evidence is
+deleted, failed attempt retried, deadline extended or partial run resumed.
+A failure retains its attempted index/root and prevents all later admission;
+capacity refusal occurs before creating the next pair root. Complete execution
+remains artifact-review-pending and production qualification remains false.
+
+Independent read-only source review accepted the orchestrator and source-pin
+check. Models verify exact 768-phase inventory, exclusive roots, capacity stops,
+first/later failures, no retry and source mismatch before archive/native work.
+Catastrophic I/O may prevent the newest journal write; original per-process
+receipts/checkpoints stay authoritative and must be reconciled without automatic
+resume. No execution completion is inferred from source acceptance.
