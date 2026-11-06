@@ -585,6 +585,7 @@ async def begin_gateway(local, monkeypatch):
 @pytest.mark.parametrize("mutation", [
     "signed", "partial", "wouldblock", "zero", "unknown", "max_packet", "initial_guard",
     "completion_error", "post_send_key", "offset_drift", "wrong_actor", "registration_unknown",
+    "tail_key", "tail_cancel", "tail_policy", "tail_listener",
 ])
 async def test_original_work_signed_begin_transport_preserves_reserved_intent(
     context, begin_gateway, tmp_path, monkeypatch, mutation
@@ -625,7 +626,8 @@ async def test_original_work_signed_begin_transport_preserves_reserved_intent(
     wire_ready = asyncio.Event()
     async def receive_known_wire():
         await wire_ready.wait()
-        expected = (0 if mutation in ("zero", "initial_guard", "registration_unknown") else
+        expected = (0 if mutation in ("zero", "initial_guard", "registration_unknown",
+                                     "tail_key", "tail_cancel", "tail_policy", "tail_listener") else
                     7 if mutation == "unknown" else len(held["writer"]._scope_snapshot.wire))
         actual = bytearray()
         async with asyncio.timeout_at(held["writer"]._scope_snapshot.intent.end_ns / 1e9):
@@ -699,6 +701,26 @@ async def test_original_work_signed_begin_transport_preserves_reserved_intent(
                 monkeypatch.setattr(NativePhaseWorkOwner, "_guard", fail_initial)
             with pytest.raises(FrameError):
                 NativeBeginWriter.retain(producer)
+            if mutation in ("tail_key", "tail_cancel", "tail_policy", "tail_listener"):
+                timeout = module._TIMEOUT
+
+                def changed_tail(sock):
+                    value = timeout(sock)
+                    if writer._attempted:
+                        held["tail_checks"] = held.get("tail_checks", 0) + 1
+                    if held.get("tail_checks") == 2 and not held.get("tail_changed"):
+                        held["tail_changed"] = True
+                        if mutation == "tail_key":
+                            keys["gateway"].retire()
+                        elif mutation == "tail_cancel":
+                            assert writer._scope_snapshot.allocation.task.cancel() is True
+                        elif mutation == "tail_policy":
+                            authority._record(operation).policy_work._invalid = True
+                        else:
+                            authority._record(operation).fence.retire()
+                    return value
+
+                monkeypatch.setattr(module, "_TIMEOUT", changed_tail)
             try:
                 await writer.write_begin()
             finally:
@@ -713,7 +735,7 @@ async def test_original_work_signed_begin_transport_preserves_reserved_intent(
             raise FrameError("SYNTHETIC_BEGIN_TRANSPORT_ONLY")
         from hmp_plugin.presentation_credential_work import NativePhaseWorkOwner
         monkeypatch.setattr(NativePhaseWorkOwner, "exchange_ready", qualified_test_exchange)
-        with pytest.raises((FrameError, AuthorityRefusalError)):
+        with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
             await remote.begin_ready()
         writer = held["writer"]
         scope = writer._scope_snapshot
@@ -724,8 +746,11 @@ async def test_original_work_signed_begin_transport_preserves_reserved_intent(
         assert scope.intent is writer._scope_snapshot.intent
         assert scope.raw is scope.producer._record_snapshot
         zero_known_progress = mutation in ("zero", "unknown", "initial_guard",
-                                           "registration_unknown")
+                                           "registration_unknown", "tail_key", "tail_cancel",
+                                           "tail_policy", "tail_listener")
         assert held["count"] == (0 if zero_known_progress else len(scope.wire))
+        if mutation in ("tail_key", "tail_cancel", "tail_policy", "tail_listener"):
+            assert held["calls"] == 0 and held["actual"] == b""
         assert bytes(held["actual"]) == scope.wire[:len(held["actual"])]
         assert await receiver_task == bytes(held["actual"])
         assert completion_calls == ([remote] if succeeded or mutation == "completion_error" else [])

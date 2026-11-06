@@ -38,6 +38,9 @@ from .test_presentation_supervisor import context as context
     "dispatch_go_write", "dispatch_go_write_partial", "dispatch_go_write_eagain",
     "dispatch_go_write_unknown", "dispatch_go_write_key",
     "dispatch_go_write_zero", "dispatch_go_write_registration", "dispatch_go_write_initial",
+    "dispatch_go_write_tail_key", "dispatch_go_write_tail_cancel",
+    "dispatch_go_write_tail_policy", "dispatch_go_write_tail_listener",
+    "dispatch_go_write_tail_admission",
     "dispatch_go_write_wrong_actor", "dispatch_go_write_intent_drift",
     "dispatch_go_write_release_cleanup", "dispatch_go_write_release_allocation",
     "dispatch_go_live", "dispatch_go_live_key", "dispatch_go_live_cancel",
@@ -591,6 +594,33 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                                     return count
 
                                 monkeypatch.setattr(go_write, "_SEND", changed_go_send)
+                                if mutation.startswith("dispatch_go_write_tail_"):
+                                    timeout = go_write._TIMEOUT
+
+                                    def changed_go_tail(sock):
+                                        value = timeout(sock)
+                                        if writer._attempted and not held.get("go_tail_changed"):
+                                            held["go_tail_changed"] = True
+                                            if mutation == "dispatch_go_write_tail_key":
+                                                keys["gateway"].retire()
+                                            elif mutation == "dispatch_go_write_tail_cancel":
+                                                allocation = writer._scope_snapshot.signed_scope
+                                                task = allocation.ready_scope.read_scope.write_scope
+                                                assert task.allocation.task.cancel() is True
+                                            elif mutation == "dispatch_go_write_tail_policy":
+                                                record = authority._record(operation)
+                                                record.policy_work._invalid = True
+                                            elif mutation == "dispatch_go_write_tail_listener":
+                                                authority._record(operation).fence.retire()
+                                            else:
+                                                admission = remote._go_admission_snapshot
+                                                changed = admission._replace(
+                                                    packet=bytes(bytearray(admission.packet)))
+                                                remote._go_admission = changed
+                                                remote._go_admission_snapshot = changed
+                                        return value
+
+                                    monkeypatch.setattr(go_write, "_TIMEOUT", changed_go_tail)
                                 if mutation == "dispatch_go_write_registration":
                                     from hmp_plugin import presentation_readiness as readiness
 
@@ -649,7 +679,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                         raise FrameError("SYNTHETIC_GO_SIGNING_ONLY_NO_WIRE")
 
                     monkeypatch.setattr(NativePhaseWorkOwner, "exchange_go", signed_go_only)
-                    with pytest.raises((FrameError, AuthorityRefusalError, OSError)):
+                    with pytest.raises((FrameError, AuthorityRefusalError, OSError,
+                                        asyncio.CancelledError)):
                         await remote.go()
                     commitment = held["go_commitment"]
                     go_success = (mutation in ("dispatch_go_sign", "dispatch_go_wrong_actor")
@@ -673,7 +704,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                         assert writer._failed is not write_success
                         assert writer._unknown is (mutation in (
                             "dispatch_go_write_unknown", "dispatch_go_write_registration",
-                            "dispatch_go_write_intent_drift"))
+                            "dispatch_go_write_intent_drift",
+                            "dispatch_go_write_tail_admission"))
                         expected_wire = writer._scope_snapshot.wire
                         assert held["go_actual_wire"] == expected_wire[:len(held["go_actual_wire"])]
                         if write_success:
@@ -683,8 +715,12 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                             assert writer._offset == 0 and len(held["go_actual_wire"]) == 7
                         elif mutation in (
                             "dispatch_go_write_zero", "dispatch_go_write_registration",
-                            "dispatch_go_write_initial"):
+                            "dispatch_go_write_initial", "dispatch_go_write_tail_key",
+                            "dispatch_go_write_tail_cancel", "dispatch_go_write_tail_policy",
+                            "dispatch_go_write_tail_listener", "dispatch_go_write_tail_admission"):
                             assert writer._offset == 0 and held["go_actual_wire"] == b""
+                            if mutation.startswith("dispatch_go_write_tail_"):
+                                assert held["go_send_calls"] == 0
                         else:
                             assert writer._offset == len(expected_wire)
                     if go_success:

@@ -266,7 +266,13 @@ class NativeBeginWriter:
                      == s.channel._identity_snapshot
                  and os.get_blocking(fd) is False and _TIMEOUT(s.sock) == 0.0
                  and os.get_inheritable(fd) is False)
-        _require(NativeBeginWriter._metadata(self) is s)
+        RemoteOperationOwner._pre_result_local(s.remote, s.channel, s.intent.end_ns)
+        material = NativePhaseWorkOwner._retained_material(s.producer)
+        _require(material[0] is s.remote and material[2] is s.channel
+                 and asyncio.current_task() is s.allocation.task
+                 and _TASK.cancelling(s.allocation.task) == 0
+                 and _TASK.cancelling(s.refs[2]._task) == 0
+                 and NativeBeginWriter._metadata(self) is s)
         return s
 
     def _settled(self):

@@ -1,3 +1,23 @@
+## Work-writer final-tail repair checkpoint — November 6, 2026
+
+New synthetic tests confirmed final descriptor-tail gaps in earlier writers:
+base `8ac1edf` sent 2,586 BEGIN bytes and 1,617 GO bytes after late key retirement
+or work-task cancellation. No live traffic was involved. Fixed callback-free
+custody/policy/clock/budget fences now precede retained role and original actor/
+caller checks after all descriptor callbacks. Refusal preserves original intent
+and debt rather than sending or retrying.
+
+Nine new zero-send causals plus two existing CANCEL tail cases passed. Selected
+affected regression: **909 passed**, 48.13 seconds; configured lint passed after
+a test-only line-wrap/local-name correction. Independent read-only source review
+accepted the repair. Earlier green runs remain historical and did not cover this
+boundary; the failing byte observations are retained explicitly.
+
+This is a source repair, with no host/device/settings/build deployment. Production
+CANCEL routing, remote results/custody/worker relay/startup/native publication and
+physical/release qualification remain open. Character delivery is unavailable.
+See [evidence and limits](docs/research/presentation-work-write-tail-2026-11-06.md).
+
 ## Signed CANCEL write checkpoint — November 6, 2026
 
 The original cleanup writer now transmits only the retained signed CANCEL plus

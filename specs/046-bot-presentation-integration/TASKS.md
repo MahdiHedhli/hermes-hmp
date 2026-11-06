@@ -318,3 +318,8 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Qualify bounded after-READY signed CANCEL socket writer on the same native
       preparation/window: twelve causal cases, 1,500 affected/one skipped, lint
       and independent final repair review pass. Routing/pre-READY/custody remain open.
+
+- [x] Qualify bounded BEGIN/GO final descriptor-tail audit repairs: reproduced unsafe
+      synthetic writes retained (BEGIN2586/GO1617); fixed pure custody + role/actor
+      seals and nine new zero-send causals pass independent source review.
+      Selected909 and lint pass; no live deployment qualification follows.

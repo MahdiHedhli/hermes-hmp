@@ -18,8 +18,10 @@ from .presentation_broker_service import (
 )
 from .presentation_credential_go import NativeGoCommitment
 from .presentation_credential_phase import check_commitment, check_complete_frame
+from .presentation_credential_work import NativePhaseWorkOwner
 from .presentation_jobs import FrameError
 from .presentation_readiness import SelectorReadiness, SelectorWriteReadiness
+from .presentation_remote import RemoteOperationOwner
 from .presentation_remote_cleanup import _TASK, RemoteCleanupOwner
 
 _SEND = socket.socket.send
@@ -199,7 +201,13 @@ class NativeGoWriter:
                  and (fd, row.st_dev, row.st_ino, stat.S_IFMT(row.st_mode))
                      == b.channel._identity_snapshot
                  and os.get_blocking(fd) is False and _TIMEOUT(b.sock) == 0.0
-                 and os.get_inheritable(fd) is False
+                 and os.get_inheritable(fd) is False)
+        RemoteOperationOwner._go_intent_local(b.remote, b.channel, b.intent.end_ns)
+        material = NativePhaseWorkOwner._retained_material(signed.producer)
+        _require(material[0] is b.remote and material[2] is b.channel
+                 and asyncio.current_task() is b.allocation.task
+                 and _TASK.cancelling(b.allocation.task) == 0
+                 and _TASK.cancelling(b.refs[2]._task) == 0
                  and NativeGoWriter._metadata(self) is s)
         return s
 
