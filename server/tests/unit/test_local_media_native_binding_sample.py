@@ -32,7 +32,7 @@ class DBModel:
         row = self.sessions.get(sid)
         return None if row is None else dict(row)
 
-    def create_session(self, sid, source, *, parent_session_id, system_prompt):
+    def create_session(self, sid, source, *, parent_session_id=None, system_prompt=None):
         self.calls.append(("create_session", sid))
         self.sessions[sid] = {"id": sid, "parent_session_id": parent_session_id,
             "system_prompt": None if self.drop_prompt else system_prompt, "source": source}
@@ -51,10 +51,17 @@ class DBModel:
         return True
 
     def get_compression_lineage(self, root):
-        return list(self.sessions)
+        chain = [root]
+        while True:
+            children = [sid for sid, row in self.sessions.items()
+                        if row.get("parent_session_id") == chain[-1]]
+            if not children:
+                return chain
+            assert len(children) == 1
+            chain.append(children[0])
 
     def resolve_resume_session_id(self, root):
-        return list(self.sessions)[-1]
+        return self.get_compression_lineage(root)[-1]
 
     def append_message(self, sid, role, **kwargs):
         row_id = len(self.messages) + 1
@@ -101,7 +108,7 @@ def test_wrong_listener_snapshot_refuses_before_using_module_attributes(case):
 
 
 @pytest.mark.parametrize("kind", ["phone", "bot_chat"])
-@pytest.mark.parametrize(("lineage", "prompt"), [(2, 0), (98, 0), (98, 262144)])
+@pytest.mark.parametrize(("lineage", "prompt"), [(2, 0), (2, 262144), (98, 0), (98, 262144)])
 def test_declared_shape_has_realistic_lineage_distinct_prompts_and_both_cache_paths(
     tmp_path, kind, lineage, prompt
 ):
@@ -129,7 +136,7 @@ def test_declared_shape_has_realistic_lineage_distinct_prompts_and_both_cache_pa
 
 @pytest.mark.parametrize("over", [
     {"kind": "other"}, {"kind": None}, {"lineage_count": True}, {"lineage_count": 99},
-    {"prompt_chars": False}, {"prompt_chars": 1}, {"lineage_count": 2, "prompt_chars": 262144},
+    {"prompt_chars": False}, {"prompt_chars": 1}, {"lineage_count": 2, "prompt_chars": 262145},
     {"home": "relative"}, {"home": "/a/../b"}, {"home": "/a/./b"},
     {"home": "/a//b"}, {"home": "/a/"}, {"home": "/a\0b"}, {"home": "/"},
 ])
@@ -172,20 +179,25 @@ def preparation_report():
     return {"cells": [{"kind": kind, "lineage_count": lineage, "prompt_chars": prompt,
         "verified_prompt_count": lineage if prompt else 0, "history_rows": 258,
         "legacy_rows": 64, "generated_rows": 64, "selector_counts": [1, 16, 128],
-        "accepted_counts": [1, 16, 128]}
-        for kind in ("bot_chat", "phone") for lineage, prompt in ((2, 0), (98, 0), (98, 262144))],
+        "accepted_counts": [1, 16, 128], "proof_contexts": 2,
+        "verified_database_prompt_count": 2 * lineage if prompt else 0,
+        "verified_unprompted_extras": 1}
+        for kind in ("bot_chat", "phone")
+        for lineage, prompt in ((2, 0), (2, 262144), (98, 0), (98, 262144))],
         "timing_measured": False, "allocation_measured": False, "writer_cases_run": 0,
-        "databases_closed": 6}
+        "databases_closed": 4}
 
 
-def test_preparation_schema_requires_all_six_shapes_and_no_measurement_claim():
+def test_preparation_schema_requires_all_eight_shapes_and_no_measurement_claim():
     load().validate_preparation_report(preparation_report())
 
 
 @pytest.mark.parametrize("case", ["missing_shape", "wrong_order", "missing_prompt",
                                  "wrong_acceptance", "boolean_count", "extra_field",
                                  "timing_claim", "allocation_claim", "writer_claim",
-                                 "database_not_closed"])
+                                 "database_not_closed", "absent_other_proof",
+                                 "missing_database_prompts",
+                                 "missing_extra"])
 def test_preparation_schema_refuses_incomplete_or_overclaimed_results(case):
     report = preparation_report()
     if case == "missing_shape":
@@ -193,7 +205,7 @@ def test_preparation_schema_refuses_incomplete_or_overclaimed_results(case):
     elif case == "wrong_order":
         report["cells"].reverse()
     elif case == "missing_prompt":
-        report["cells"][2]["verified_prompt_count"] = 0
+        report["cells"][1]["verified_prompt_count"] = 0
     elif case == "wrong_acceptance":
         report["cells"][0]["accepted_counts"] = [1, 16, 127]
     elif case == "boolean_count":
@@ -206,8 +218,14 @@ def test_preparation_schema_refuses_incomplete_or_overclaimed_results(case):
         report["allocation_measured"] = True
     elif case == "writer_claim":
         report["writer_cases_run"] = 1
+    elif case == "absent_other_proof":
+        report["cells"][0]["proof_contexts"] = 1
+    elif case == "missing_database_prompts":
+        report["cells"][1]["verified_database_prompt_count"] = 2
+    elif case == "missing_extra":
+        report["cells"][0]["verified_unprompted_extras"] = 0
     else:
-        report["databases_closed"] = 5
+        report["databases_closed"] = 3
     with pytest.raises(RuntimeError):
         load().validate_preparation_report(report)
 
@@ -277,6 +295,21 @@ def test_fresh_cell_closes_before_restoring_original_scope_and_cannot_be_reused(
     with pytest.raises(FileExistsError), model.context():
         pytest.fail("existing cell must not acquire a new database")
     assert len(model.acquired) == 1
+
+
+def test_fourth_cell_has_independent_ownership_and_closure(tmp_path):
+    model = cell_fixture(tmp_path)
+    with model.context(3) as db:
+        assert model.selection[0][0] == tmp_path / "binding-cells/cell-3/state.db"
+    assert db._conn is None and model.owners[0]["closed"] is True
+
+
+@pytest.mark.parametrize("index", [True, -1, 4, 100])
+def test_undeclared_cell_index_refuses_before_allocation(tmp_path, index):
+    model = cell_fixture(tmp_path)
+    with pytest.raises(RuntimeError), model.context(index):
+        pytest.fail("invalid cell index must not allocate")
+    assert model.acquired == [] and not (tmp_path / "binding-cells").exists()
 
 
 @pytest.mark.parametrize("case", ["borrower", "worker"])
@@ -360,3 +393,19 @@ def test_binding_tmpdir_guard_before_native_bootstrap(tmp_path, case):
     else:
         with pytest.raises((RuntimeError, FileNotFoundError)):
             load_fixture()._binding_tmpdir(tmp_path, env)
+
+
+@pytest.mark.parametrize("lineage", [2, 98])
+def test_shared_database_keeps_both_independent_prompted_lineages(lineage):
+    module, db = load(), DBModel()
+    shapes = [module.seed_native_shape(db, home="/private/synthetic", kind=kind,
+              lineage_count=lineage, prompt_chars=262144) for kind in module.KINDS]
+    prompts = [row["system_prompt"] for row in db.sessions.values()]
+    assert len(prompts) == len(set(prompts)) == 2 * lineage
+    assert len(db.messages) == 516
+    for shape in shapes:
+        assert len(db.get_compression_lineage(shape["root"])) == lineage
+        assert db.resolve_resume_session_id(shape["root"]) == shape["tip"]
+        assert len(db.get_messages(shape["tip"], limit=1000)) == 258
+    assert db.sessions[shapes[0]["tip"]]["title"] == "Bot Chat"
+    assert "title" not in db.sessions[shapes[1]["tip"]]

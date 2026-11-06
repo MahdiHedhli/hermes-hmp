@@ -217,7 +217,7 @@ def _binding_tmpdir(root, env):
 @contextmanager
 def _binding_cell(root, fx, registry, borrowed, lock, selection, owners, index, profile):
     """Own one fresh synthetic-profile DB; restore scope only after actual closure."""
-    _require(type(index) is int and 0 <= index < 6 and fx.service.stats() == (0, 0, 0))
+    _require(type(index) is int and 0 <= index < 4 and fx.service.stats() == (0, 0, 0))
     with lock:
         _require(borrowed["acquired"] == borrowed["released"])
     _private_directory(root)
@@ -545,7 +545,7 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False):
                         spec.loader.exec_module(helper)
                         report["native_binding_preparation"] = helper.run_preparation(
                             fx, open_binding_cell, user=USER, profile=PROFILE, chat=CHAT)
-                        _require(len(binding_owners) == 6 and
+                        _require(len(binding_owners) == 4 and
                                  all(owner["closed"] for owner in binding_owners))
                     if sample_memory:
                         import importlib.util

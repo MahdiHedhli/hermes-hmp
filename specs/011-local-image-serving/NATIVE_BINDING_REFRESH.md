@@ -17,6 +17,7 @@ The fixed matrix is Bot Chat and own Phone, each with:
 | Lineage sessions | Synthetic prompt characters per session |
 |---:|---:|
 | 2 | 0 |
+| 2 | 262,144 |
 | 98 | 0 |
 | 98 | 262,144 |
 
@@ -32,13 +33,14 @@ rows: 258 rows total, independent of selector count. Half the raw image fields
 use each accepted cache layout. No image path is opened or materialized by this
 preparation. Actual native bridge reads provide the candidates/tip; complete
 binding must classify correctly and accept exactly the selected 1, 16 and 128
-tool IDs in every shape. Synthetic Phone routing is fixture-local. Each shape
-owns a separate fresh database: no canonical Bot Chat title is renamed/cleared,
-and Phone classification cannot inherit another case's canonical title.
+tool IDs in every shape. Synthetic Phone routing is fixture-local. Each lineage/prompt shape owns a fresh database containing both independent
+Bot Chat and Phone lineages plus one unprompted extra session. No canonical
+Bot Chat title is renamed/cleared. Both proof contexts are populated for every
+measurement; the contrary proof cannot become cheap through an absent conversation.
 No grant, actual model/provider or live setting changes.
 
-The report is closed and requires all six shapes and 18 successful selection
-controls and six actually closed databases. It explicitly says `timing_measured: false`,
+The report is closed and requires all eight logical cases and 24 successful selection
+controls and four actually closed databases. It explicitly says `timing_measured: false`,
 `allocation_measured: false`, `writer_cases_run: 0`. Preparation cannot close
 C6b or masquerade as a performance/writer run. Normal serving and memory modes
 keep their existing report contracts; modes cannot be combined or truthy-coerced.
@@ -93,3 +95,16 @@ and writer counts remain historical; no native result is inferred from model
 tests, source equality, serving success or T12. No new HTTP/provider/Linux/device
 prerequisite is attached to C6b. Release, activation and physical gates remain
 separate, as do G-M1/G-M2 and non-atomic residual/ABA limitations.
+
+## Coverage correction after preparation attempt four
+
+Attempt four at `0934a723` completed and its artifacts were independently accepted
+for six cases only. It did not include the two-session large-prompt workload or
+both populated proof contexts in each database. That evidence remains scoped
+to its original subset; no timing/allocation/writer claim follows.
+
+The current preparation adds that missing workload for both kinds and shares
+each of four disposable databases between the two proof sources. Large-prompt
+databases therefore verify four and 196 distinct full prompts respectively,
+matching the documented original workload. Source/model verification and fresh
+native artifact review of this expanded matrix must be recorded separately.

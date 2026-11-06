@@ -7,7 +7,7 @@ This preparation alone is not a timing, allocation or concurrent-writer result.
 
 PROMPT_CHARS = 262144
 HISTORY_PAIRS = 128
-SHAPES = ((2, 0), (98, 0), (98, PROMPT_CHARS))
+SHAPES = ((2, 0), (2, PROMPT_CHARS), (98, 0), (98, PROMPT_CHARS))
 KINDS = ("bot_chat", "phone")
 SELECTORS = (1, 16, 128)
 
@@ -120,7 +120,7 @@ def seed_native_shape(db, *, home, kind, lineage_count, prompt_chars):
 def validate_preparation_report(report):
     require(type(report) is dict and set(report) == {"cells", "timing_measured",
         "allocation_measured", "writer_cases_run", "databases_closed"} and
-        type(report["databases_closed"]) is int and report["databases_closed"] == 6 and
+        type(report["databases_closed"]) is int and report["databases_closed"] == 4 and
         report["timing_measured"] is False and
         report["allocation_measured"] is False and type(report["writer_cases_run"]) is int and
         report["writer_cases_run"] == 0 and type(report["cells"]) is list and
@@ -129,38 +129,50 @@ def validate_preparation_report(report):
     for cell, shape in zip(report["cells"], expected, strict=True):
         require(type(cell) is dict and set(cell) == {"kind", "lineage_count", "prompt_chars",
             "verified_prompt_count", "history_rows", "legacy_rows", "generated_rows",
-            "selector_counts", "accepted_counts"})
+            "selector_counts", "accepted_counts", "proof_contexts",
+            "verified_database_prompt_count", "verified_unprompted_extras"})
         require(type(cell["kind"]) is str and
                 all(type(cell[key]) is int for key in ("lineage_count", "prompt_chars",
-                    "verified_prompt_count", "history_rows", "legacy_rows", "generated_rows")))
+                    "verified_prompt_count", "history_rows", "legacy_rows", "generated_rows",
+                    "proof_contexts", "verified_database_prompt_count",
+                    "verified_unprompted_extras")))
         require((cell["kind"], cell["lineage_count"], cell["prompt_chars"]) == shape and
                 cell["verified_prompt_count"] == (shape[1] if shape[2] else 0) and
-                cell["history_rows"] == 258 and cell["legacy_rows"] == cell["generated_rows"] == 64)
+                cell["history_rows"] == 258 and cell["legacy_rows"] == cell["generated_rows"] == 64
+                and cell["proof_contexts"] == 2 and cell["verified_unprompted_extras"] == 1 and
+                cell["verified_database_prompt_count"] == (2 * shape[1] if shape[2] else 0))
         for key in ("selector_counts", "accepted_counts"):
             require(type(cell[key]) is list and all(type(value) is int for value in cell[key])
                     and cell[key] == list(SELECTORS))
 
 
 def run_preparation(fx, open_cell, *, user, profile, chat):
-    """Verify all six native shapes through complete binding, without measuring cost.
+    """Verify all eight native shapes through complete binding, without measuring cost.
 
-    Each shape owns a fresh native DB: canonical Bot Chat identity is never
-    renamed/cleared. Synthetic routing-store changes stay inside this fixture.
+    Each lineage/prompt shape owns a fresh native DB with BOTH proof sources:
+    canonical Bot Chat identity is never renamed/cleared, and the Phone case
+    cannot avoid a full contrary Bot Chat proof by omitting the canonical chat.
+    Synthetic routing-store changes stay inside this fixture.
     No current default model/provider/grant is changed.
     """
     from hmp_plugin.contract import ConversationRef
 
     sidecar, binding = bound_modules(fx.rig.ctx.media_modules)
-    cells = []
-    index = 0
-    for kind in KINDS:
-        for lineage, prompt in SHAPES:
-            with open_cell(index) as db:
-                shape = seed_native_shape(db, home=str(fx.native.home_path), kind=kind,
-                                          lineage_count=lineage, prompt_chars=prompt)
-                try:
-                    fx.native.world.start_conversation(profile, chat, shape["root"]
-                                                       if kind == "phone" else "p1")
+    cells = {}
+    for index, (lineage, prompt) in enumerate(SHAPES):
+        with open_cell(index) as db:
+            shapes = {kind: seed_native_shape(db, home=str(fx.native.home_path), kind=kind,
+                      lineage_count=lineage, prompt_chars=prompt) for kind in KINDS}
+            extra = f"synthetic-c6b-unprompted-extra-{lineage}-{prompt}"
+            require(db.get_session(extra) is None and
+                    db.create_session(extra, "api_server") == extra)
+            extra_row = db.get_session(extra)
+            require(type(extra_row) is dict and extra_row.get("id") == extra and
+                    extra_row.get("system_prompt") in (None, ""))
+            try:
+                fx.native.world.start_conversation(profile, chat, shapes["phone"]["root"])
+                for kind in KINDS:
+                    shape = shapes[kind]
                     ref = ConversationRef(user_id=user, profile=profile, session_id=shape["root"])
                     rows = fx.native.bridge.latest_with_media(ref, 500)
                     info = fx.native.bridge.lineage(ref)
@@ -184,14 +196,18 @@ def run_preparation(fx, open_cell, *, user, profile, chat):
                                 result.reason == "ok" and result.kind is not None and
                                 result.kind.value == kind and result.accepted == selected)
                         accepted.append(len(result.accepted))
-                finally:
-                    fx.native.world.start_conversation(profile, chat, "p1")
-            require(db._conn is None)
-            index += 1
-            cells.append({key: shape[key] for key in ("kind", "lineage_count", "prompt_chars",
-                "verified_prompt_count", "history_rows", "legacy_rows", "generated_rows")}
-                | {"selector_counts": list(SELECTORS), "accepted_counts": accepted})
-    report = {"cells": cells, "timing_measured": False,
-              "allocation_measured": False, "writer_cases_run": 0, "databases_closed": index}
+                    cells[(kind, lineage, prompt)] = {key: shape[key] for key in (
+                        "kind", "lineage_count", "prompt_chars", "verified_prompt_count",
+                        "history_rows", "legacy_rows", "generated_rows")} | {
+                        "selector_counts": list(SELECTORS), "accepted_counts": accepted,
+                        "proof_contexts": 2, "verified_database_prompt_count": sum(
+                            item["verified_prompt_count"] for item in shapes.values()),
+                        "verified_unprompted_extras": 1}
+            finally:
+                fx.native.world.start_conversation(profile, chat, "p1")
+        require(db._conn is None)
+    ordered = [cells[(kind, lineage, prompt)] for kind in KINDS for lineage, prompt in SHAPES]
+    report = {"cells": ordered, "timing_measured": False,
+              "allocation_measured": False, "writer_cases_run": 0, "databases_closed": len(SHAPES)}
     validate_preparation_report(report)
     return report
