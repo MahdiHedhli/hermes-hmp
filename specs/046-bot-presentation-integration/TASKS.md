@@ -358,5 +358,8 @@ historical, not an alternative live authorization path or resolved incident.
       seq1/window/end correlation before READY, preserving existing READY/GO
       paths. Three peer and 31 component cancellation cases pass. No ACK,
       worker GO or remote/native settlement is inferred.
-- [ ] Qualify automatic solely-local cleanup after a known no-IO pre-READY
-      signing refusal; original remote UNKNOWN and uncertain IO stay distinct.
+- [x] Implement/review automatic solely-local cleanup after known no-IO pre-READY
+      signing refusal; fixed reciprocal owner/no-output/no-writer proofs repeat
+      after native budget boundaries. Expiry/cancelled actor/unknown read deny
+      new credit; post-socket expiry retains only actual socket close. Remote
+      UNKNOWN/original refusal remain; 13 focused route/refusal cases pass.

@@ -28,7 +28,9 @@ from .test_presentation_supervisor import context as context
     "ready", "fragmented", "signature", "scope", "sequence", "hash", "wrong_phase",
     "oversize_auth", "eof", "unknown_recv", "target_drift", "count_drift", "buffer_drift",
     "current_key", "admission_refusal", "wrong_actor", "missing_write", "deadline",
-    "cancel_wait", "cancel_wait_partial", "cancel_wait_key", "cancel_wait_generic",
+    "cancel_wait", "cancel_wait_partial", "cancel_wait_key", "cancel_wait_key_expired",
+    "cancel_wait_key_cancelled", "cancel_wait_key_read_debt", "cancel_wait_key_clock_expired",
+    "cancel_wait_generic",
     "cancel_wait_foreign_end", "cancel_wait_progress", "cancel_wait_subclass",
     "cancel_wait_sign", "cancel_wait_sign_partial", "cancel_wait_sign_key",
     "cancel_wait_sign_wrong_actor", "cancel_wait_sign_expired", "cancel_wait_sign_tail_key",
@@ -423,6 +425,43 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                         await receiver.run()
                 await asyncio.create_task(wrong_reader())
                 assert not receiver._started and not receiver._failed and not channel._reading
+            if mutation.startswith("cancel_wait_key_"):
+                from hmp_plugin.presentation_credential_pre_ready_cancel import (
+                    NativePreReadyCancelCommitment,
+                )
+                from hmp_plugin.presentation_remote_cleanup import RemoteCleanupOwner
+
+                cleanup = remote._cleanup_owner_snapshot
+                if mutation in ("cancel_wait_key_expired", "cancel_wait_key_clock_expired"):
+                    remaining = RemoteCleanupOwner._remaining
+
+                    def expired_failed_signer(owned):
+                        result = remaining(owned)
+                        signer = cleanup._pre_ready_cancel_commitment_snapshot
+                        if (owned is cleanup and signer is not None and signer._failed
+                                and (mutation == "cancel_wait_key_expired"
+                                     or channel._closed_known)):
+                            return 0.0
+                        return result
+
+                    monkeypatch.setattr(RemoteCleanupOwner, "_remaining", expired_failed_signer)
+                else:
+                    retain = NativePreReadyCancelCommitment.retain
+
+                    def changed_refusal(cls, owned):
+                        try:
+                            return retain(owned)
+                        except FrameError:
+                            signer = cleanup._pre_ready_cancel_commitment_snapshot
+                            assert signer is not None and signer._failed
+                            if mutation == "cancel_wait_key_cancelled":
+                                assert cleanup._allocations_snapshot[0].task.cancel()
+                            else:
+                                receiver._io_unknown = True
+                            raise
+
+                    monkeypatch.setattr(NativePreReadyCancelCommitment, "retain",
+                                        classmethod(changed_refusal))
             if mutation.startswith("cancel_wait"):
                 from hmp_plugin import presentation_readiness as readiness
                 wait = readiness.SelectorReadiness.wait
@@ -452,7 +491,7 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                             raise ForeignCancelled(error.retirement) from None
                         if mutation == "cancel_wait_progress":
                             receiver._consumed += 1
-                        if mutation == "cancel_wait_key":
+                        if mutation.startswith("cancel_wait_key"):
                             keys["gateway"].retire()
                         raise
                 monkeypatch.setattr(readiness.SelectorReadiness, "wait", observe_wait)
@@ -1529,10 +1568,15 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
         monkeypatch.setattr(NativePhaseWorkOwner, "exchange_ready", source_only_exchange)
         with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
             await remote.begin_ready()
-        if mutation in ("cancel_wait", "cancel_wait_partial", "cancel_wait_key"):
+        if (mutation in ("cancel_wait", "cancel_wait_partial")
+                or mutation.startswith("cancel_wait_key")):
             async with asyncio.timeout(2):
-                held["automatic_pre_ready_closed"] = await asyncio.shield(
-                    remote._cleanup_owner_snapshot._allocations_snapshot[0].task)
+                cleanup_task = remote._cleanup_owner_snapshot._allocations_snapshot[0].task
+                try:
+                    held["automatic_pre_ready_closed"] = await asyncio.shield(cleanup_task)
+                except asyncio.CancelledError:
+                    assert mutation == "cancel_wait_key_cancelled" and cleanup_task.cancelled()
+                    held["automatic_pre_ready_closed"] = False  # no settlement inferred
         if mutation.startswith("cancel_wait_sign"):
             async with asyncio.timeout(2):
                 cleanup_task = remote._cleanup_owner_snapshot._allocations_snapshot[0].task
@@ -1560,14 +1604,17 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
         native_case = mutation.startswith("native_")
         succeeds = mutation in ("ready", "fragmented", "wrong_actor", "missing_write")
         read_complete = succeeds or mutation == "current_key" or native_case
-        known_cancel = (mutation in ("cancel_wait", "cancel_wait_partial", "cancel_wait_key")
-                        or mutation.startswith("cancel_wait_sign"))
+        known_cancel = (mutation in ("cancel_wait", "cancel_wait_partial")
+                        or mutation.startswith(("cancel_wait_key", "cancel_wait_sign")))
+        if mutation == "cancel_wait_key_read_debt":
+            known_cancel = False
         io_unknown = not read_complete and mutation != "admission_refusal" and not known_cancel
         assert receiver._complete is read_complete
         assert receiver._failed is (not read_complete or mutation in (
             "current_key", "native_observe_key"))
         assert receiver._io_unknown is io_unknown
-        assert channel._reading is io_unknown
+        assert channel._reading is (False if mutation == "cancel_wait_key_read_debt"
+                                    else io_unknown)
         assert remote._send_completed and remote._receive_claimed
         assert remote._go_admission is None and authority._record(operation).child is None
         assert receiver._admission_attempted and receiver._claim_attempted
@@ -1628,7 +1675,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
             assert not receiver._scope_origin.buffer and receiver._pending is None
             error = held["read_error"]
             error_type = (asyncio.CancelledError if mutation in (
-                "cancel_wait_generic", "cancel_wait_progress") else FrameError)
+                "cancel_wait_generic", "cancel_wait_progress", "cancel_wait_key_read_debt")
+                else FrameError)
             assert type(error) is error_type
             assert error.__context__ is None
             trace = error.__traceback__
@@ -1647,13 +1695,21 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 NativeReadyReceiver._released(receiver, channel)
         if mutation.startswith("cancel_wait"):
             assert held["cancel_getters"] == []
-        if mutation in ("cancel_wait", "cancel_wait_partial", "cancel_wait_key"):
+        if (mutation in ("cancel_wait", "cancel_wait_partial")
+                or mutation.startswith("cancel_wait_key")):
             cleanup = remote._cleanup_owner_snapshot
             signer = cleanup._pre_ready_cancel_commitment_snapshot
             assert signer is not None
-            if mutation == "cancel_wait_key":
+            if mutation.startswith("cancel_wait_key"):
                 assert held["automatic_pre_ready_closed"] is False
-                assert cleanup._unknown and not cleanup._socket_closed
+                socket_closed = mutation in ("cancel_wait_key", "cancel_wait_key_clock_expired")
+                clock_closed = mutation == "cancel_wait_key"
+                assert cleanup._unknown and cleanup._socket_closed is socket_closed
+                assert cleanup._clock_closed is clock_closed
+                assert channel._closed_known is socket_closed
+                assert channel._clock_closed_known is clock_closed
+                if not socket_closed:
+                    assert channel._close_attempted is False
                 assert signer._failed and signer._raw_snapshot is None
                 assert signer._writer_snapshot is None and not cleanup._cancel_write_attempted
             else:

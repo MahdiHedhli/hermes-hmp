@@ -753,4 +753,8 @@ only from the retained exact producer's absent READY transition; the component
 independently requires original completed BEGIN and cancelled read proof. Failed
 proof never falls back to post-READY or unsigned transport. Three actual private
 peer stages correlate seq/window/end without worker execution or remote closure.
-Pre-READY known-no-IO signing refusal local-close debt remains explicit.
+Pre-READY known-no-IO signing refusal now shares the fixed original-actor local
+retirement predicate with the post-READY owner; the other signer slot must be
+absent. Complete no-output/no-writer/current cleanup proofs repeat after native
+budget checks, and socket close independently proves IO settlement. Original
+refusal and remote UNKNOWN remain even after actual socket/clock close.

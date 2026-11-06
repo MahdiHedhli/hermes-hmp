@@ -1,3 +1,20 @@
+## Pre-READY signing-refusal local cleanup — November 6, 2026
+
+Known no-I/O pre-READY signing refusal now retires local transport through a
+fixed original-owner predicate shared with the post-READY path. It admits only
+one retained failed signer with no signed output/writer/native completion,
+rechecks original actor/custody and budget after native boundaries, and lets
+socket close independently prove settled I/O. Original refusal and remote
+UNKNOWN remain even when the socket and clock actually close; no CANCEL/retry
+or resource/terminal release is inferred.
+
+Independent read-only review and 13 focused cases pass. Full affected regression:
+**1,556 passed, one skipped**, 84.02 seconds; lint passed. Expiry/cancelled cleanup/
+unknown read earn no new close credit; expiry after socket close preserves only
+that actual partial fact. No host/device/build/settings changes. Full character
+availability still needs startup, results/terminal/worker relay/publication and
+physical/release qualification. Earlier broker intermittency remains unresolved.
+
 ## Original pre-READY cancellation route — November 6, 2026
 
 Bot-character transport now routes signed CANCEL before READY through the exact

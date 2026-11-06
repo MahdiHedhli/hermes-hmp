@@ -6,6 +6,8 @@ A distinct bounded pre-READY writer is now implemented/reviewed as a component.
 The original automatic credential route and bounded private-broker correlation
 are now implemented/reviewed as source. Production startup, qualified remote ACK
 and full lifecycle remain open; this is not deployment or publication authority.
+Known no-IO pre-READY signing refusal also has reviewed local-only retirement,
+with repeated fixed-owner/budget proofs and remote UNKNOWN preserved.
 See [source evidence](../../docs/research/presentation-ready-cancel-retirement-2026-11-06.md).
 Pinned inspected source: bdb3adff9fcfee52fa384f59ac1b438d5b754eb4.
 Preserve complete desktop character delivery; this prerequisite is not a substitute.
