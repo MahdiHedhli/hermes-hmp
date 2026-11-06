@@ -2,7 +2,8 @@
 
 Status: first local READY-wait retirement prerequisite implemented and reviewed;
 the distinct BEGIN-derived signing-only owner is also implemented/reviewed.
-Pre-READY transport remains unimplemented, not an enabled route.
+A distinct bounded pre-READY writer is now implemented/reviewed as a component.
+Automatic route/broker correlation remains unimplemented, not an enabled route.
 See [source evidence](../../docs/research/presentation-ready-cancel-retirement-2026-11-06.md).
 Pinned inspected source: bdb3adff9fcfee52fa384f59ac1b438d5b754eb4.
 Preserve complete desktop character delivery; this prerequisite is not a substitute.

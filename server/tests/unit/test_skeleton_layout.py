@@ -83,6 +83,7 @@ CONTRACT_MODULES = {
     "presentation_credential_go_write.py",
     "presentation_credential_cancel_commitment.py",
     "presentation_credential_pre_ready_cancel.py",
+    "presentation_credential_pre_ready_cancel_write.py",
     "presentation_credential_cancel_write.py",
     "presentation_credential_queued.py",
     "presentation_control_binding.py",

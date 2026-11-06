@@ -735,3 +735,15 @@ already-frozen earliest seq1/window under original quiescence/cause/clock gates.
 Actual BEGIN signature/current role/material/budget checks surround signing;
 failed or consumed owners cannot retry. No socket writer, native completion, ACK,
 remote release or production route is provided. Post-READY signing remains separate.
+
+### Distinct pre-READY CANCEL writer (November 6, 2026)
+
+`presentation_credential_pre_ready_cancel_write.py` retains one bounded seq1
+wire on the original cleanup actor and frozen native window. A fixed typed BEGIN
+slot handoff permits only that original writer's active flag, without recursion
+or phase authority. Actual native send counts, settled waits and current original
+role/custody/budget checks precede the private completion fact and existing native
+completion bool. Unknown IO cannot retry or borrow historical closure. Known
+local retirement after original cleanup completion is independent of key revocation.
+The explicit SocketChannel release branch accepts only the fixed new writer type.
+No automatic pre-READY route, broker ACK/resource release or startup is enabled.

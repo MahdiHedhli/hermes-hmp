@@ -649,8 +649,12 @@ class SocketChannel:
         _require(cancel_writer is getattr(self, "_credential_cancel_writer_snapshot", None))
         if cancel_writer is not None:
             from .presentation_credential_cancel_write import NativeCancelWriter
-            _require(type(cancel_writer) is NativeCancelWriter)
-            NativeCancelWriter._released(cancel_writer, self)
+            from .presentation_credential_pre_ready_cancel_write import NativePreReadyCancelWriter
+            if type(cancel_writer) is NativePreReadyCancelWriter:
+                NativePreReadyCancelWriter._released(cancel_writer, self)
+            else:
+                _require(type(cancel_writer) is NativeCancelWriter)
+                NativeCancelWriter._released(cancel_writer, self)
 
         go_writer = getattr(self, "_credential_go_writer", None)
         _require(go_writer is getattr(self, "_credential_go_writer_snapshot", None))

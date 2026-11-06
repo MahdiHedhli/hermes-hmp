@@ -1,3 +1,20 @@
+## Pre-READY cancellation writer — November 6, 2026
+
+Bot-character transport now has a distinct bounded writer for the original
+BEGIN-derived seq1 CANCEL. It uses the original cleanup Task and earliest frozen
+window, records actual send counts and only marks local transmission complete
+after the exact full wire and settled/current custody checks. Unknown sends or
+registration retain debt and cannot retry. Local known-IO retirement remains
+separate from remote ACK, including after signing-key revocation.
+
+Independent read-only review and 13 focused causal cases pass. Full affected
+regression: **1,551 passed, one skipped**, 83.14 seconds; lint passed. Actual
+peer bytes match retained signed wire. No automatic pre-READY route, remote
+settlement, startup/result/terminal or complete character availability follows.
+No host/device/build/settings changed. Earlier broker intermittency remains
+unresolved despite this passing run. Route integration and broker correlation
+are next; physical/release qualification remains separate.
+
 ## BEGIN-derived pre-READY cancellation signer — November 6, 2026
 
 Bot-character transport now has a distinct signing-only owner for cancellation

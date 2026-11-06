@@ -80,6 +80,7 @@ class NativePreReadyCancelCommitment:
         owner._frame = owner._frame_snapshot = None
         owner._end = owner._end_snapshot = None
         owner._raw = owner._raw_snapshot = None
+        owner._writer = owner._writer_snapshot = None
         # Retain before native guards/crypto. A refusal never permits replacement.
         cleanup._pre_ready_cancel_commitment = owner
         cleanup._pre_ready_cancel_commitment_snapshot = owner
@@ -128,7 +129,7 @@ class NativePreReadyCancelCommitment:
                  and s.begin.channel._go_write_intent is None
                  and s.begin.channel._go_write_fact_snapshot is None
                  and s.begin.channel._go_write_fact is None
-                 and s.cleanup._cancel_write_completed is False
+                 and type(s.cleanup._cancel_write_completed) is bool
                  and all(type(v) is bool for v in (
                      self._attempted, self._prepared, self._complete, self._failed))
                  and self._frame is self._frame_snapshot and self._end is self._end_snapshot
@@ -161,6 +162,11 @@ class NativePreReadyCancelCommitment:
                          CancellationWindow(self._end - CLEANUP_NS, self._end).encode(), version=2))
         else:
             _require(self._frame is None and self._end is None)
+        if s.cleanup._cancel_write_completed:
+            from .presentation_credential_pre_ready_cancel_write import NativePreReadyCancelWriter
+            _require(type(self._writer_snapshot) is NativePreReadyCancelWriter
+                     and self._writer is self._writer_snapshot)
+            NativePreReadyCancelWriter._native_completed(self._writer_snapshot, self)
         if self._complete:
             _require(self._prepared is True and type(self._raw) is bytes
                      and 0 < len(self._raw) <= 2048)
@@ -171,7 +177,8 @@ class NativePreReadyCancelCommitment:
     def _guard(self):
         s = NativePreReadyCancelCommitment._metadata(self)
         _require(asyncio.current_task() is s.allocation.task
-                 and _TASK.cancelling(s.allocation.task) == 0 and self._failed is False)
+                 and _TASK.cancelling(s.allocation.task) == 0 and self._failed is False
+                 and s.cleanup._cancel_write_completed is False)
         material = NativePhaseWorkOwner._cleanup_material(s.producer, s.cleanup)
         _require(material[0] is s.begin.remote and material[2] is s.begin.channel)
         NativeReadyReceiver._released(s.receiver, s.begin.channel)

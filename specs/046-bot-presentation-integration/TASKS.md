@@ -348,3 +348,8 @@ historical, not an alternative live authorization path or resolved incident.
       original cleanup Task, completed BEGIN/cancelled read, earliest native seq1
       preparation and reciprocal signer exclusion. Final reader-release custody
       seals reject key/unknown/intent drift. Transport/ACK/publication stay open.
+
+- [x] Implement/review fixed pre-READY signed CANCEL writer on the original cleanup
+      Task/end, with native count/fact reciprocity, typed BEGIN slot handoff and
+      thirteen known/unknown/current-custody causals. Automatic route/correlation
+      and remote ACK/resource/native publication remain open.
