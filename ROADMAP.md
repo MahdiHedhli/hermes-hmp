@@ -12,7 +12,10 @@ review was source/test read-only. See [evidence and limits](docs/research/presen
 
 Prior source 9dcda68 CI736 failed two timed fixture assertions (8,372 passed). This
 source includes independently reviewed causal-order repairs, without changing the
-250ms protocol interval or accepting expired results. New-source CI is pending.
+250ms protocol interval or accepting expired results. Exact source `22bc509` passed
+[CI738](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42278046766):
+plugin lint/tests/surface/log-hygiene/privacy checks and all three Unicode jobs
+(Python 3.12, 3.13 and 3.14).
 Actual signed READY sending, production resource admission/GO relay, later signed
 IO, startup, native publication, STATUS and physical/release qualification remain
 open. Character delivery is unavailable. No live host/device/settings changed.

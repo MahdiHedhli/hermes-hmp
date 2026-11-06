@@ -70,7 +70,8 @@ historical, not an alternative live authorization path or resolved incident.
       started/staged fixture resources and native completed-input write observation.
       1,262 affected passed, one skipped; no socket/grammar/resource admission grant.
 - [x] Repair CI736 fixture cause/GO ordering without changing protocol deadlines;
-      prior exact-source failures remain recorded; replacement CI is pending.
+      prior exact-source failures remain recorded; exact replacement `22bc509`
+      passed CI738 plugin and Python 3.12/3.13/3.14 Unicode jobs.
 - [ ] Implement actual signed READY write from the retained original resource/input
       facts with one write/grammar intent; keep production startup closed until qualified.
 - [x] Implement/review source signed GO/CANCEL receiver/context on the existing original

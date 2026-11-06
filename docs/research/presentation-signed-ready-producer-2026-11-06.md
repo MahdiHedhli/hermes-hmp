@@ -65,7 +65,12 @@ notification before generating the next CANCEL window. That fixture notification
 is not a production execution acknowledgement. Both waits remain bounded by the
 original work end. No protocol deadline or 250ms interval is lengthened, expiry
 refusals remain, and earliest-end assertions are preserved. Independent read-only
-review accepted the ordering repair. The new exact-source CI result is pending.
+review accepted the ordering repair. Exact replacement source `22bc509` passed
+[CI738](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42278046766):
+plugin job 128099433240 completed successfully, including lint, unit/tool tests,
+closed surface, log hygiene and privacy checks. Unicode jobs on Python 3.12,
+3.13 and 3.14 also completed successfully. This does not retroactively change
+CI736 or establish production/physical qualification.
 
 Remaining: actual signed READY write with retained write/grammar facts, production
 resource admission and worker GO relay, later signed result/terminal/ACK IO,
