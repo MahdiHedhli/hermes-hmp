@@ -22,6 +22,13 @@ independently source-reviewed at `922c04d`; the final focused regression passed
 qualification mocked. Paired runtime admission, phase/native authority and full
 character delivery remain unfinished. See [handshake source evidence and limits](docs/research/presentation-credential-handshake-2026-11-06.md).
 
+The original native-input correlation handoff is independently reviewed at
+`693c51f`, with **640 affected tests passed, one skipped**. The exact policy packet,
+original job slot and earlier conserved deadline are retained; final native-state
+mutations refuse before minting a join. This adds no native phase permission or
+unsigned fallback. [Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138)
+tracks the remaining complete delivery work; see [handoff evidence](docs/research/presentation-credential-native-input-2026-11-06.md).
+
 No live installation, configuration or permission change accompanied this work.
 
 ## Native image verification checkpoint — November 6, 2026
