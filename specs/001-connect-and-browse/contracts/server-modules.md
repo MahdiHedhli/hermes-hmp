@@ -594,3 +594,5 @@ The census explicitly extends Hermes-free import checks to these files; it does
 not weaken the closed plugin registration or optional-media import boundaries.
 
 - `presentation_credential_work.py`: original native work-task fixed BEGIN signing producer; no transport, GO or publication permission.
+
+- `presentation_credential_begin.py`: retained original broker-task signed BEGIN read cursor; no native input adoption or worker authority.

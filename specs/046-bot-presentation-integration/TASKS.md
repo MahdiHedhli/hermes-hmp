@@ -32,8 +32,11 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement/review fixed BEGIN unadopted signed-claim staging and complete
       input3/frame/hash/scope/deadline data checks. Affected regression: 956 passed,
       one skipped. No broker cursor/native-adoption authority follows.
-- [ ] Retain the actual broker signed-record/read cursor and current role context,
-      complete input/native validation before registry or resource effects.
+- [x] Implement/review the standalone original broker signed-record/read cursor
+      and current role context, actual bounded socket reads and safe failure cleanup.
+      Affected regression: 967 passed, one skipped. No native input adoption.
+- [ ] Integrate that cursor with the original production service actor and complete
+      input/native validation before registry or resource effects.
 - [ ] Integrate operator-selected paired runtime/source/credential startup,
       capacity and rotation with the retained handshake on its original channel,
       task/cursor and known local write completion facts.

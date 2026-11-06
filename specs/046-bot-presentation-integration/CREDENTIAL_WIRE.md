@@ -229,3 +229,11 @@ reviewed; affected regression passed 956 tests, one skipped. Signed hash claims
 remain unadopted until whole-frame/input3/scope/deadline consistency succeeds.
 Actual original broker cursor/native admission and complete transport remain
 unfinished. See [evidence and limits](../../docs/research/presentation-credential-begin-input-2026-11-06.md).
+
+## Original BEGIN cursor source checkpoint
+
+The standalone original broker-task receive cursor is independently reviewed,
+with 967 affected tests passed and one skipped. It retains its own exact reads,
+signed-record/header/input checks, original deadline and unknown-read debt. It
+returns checked data/local IO closure only; production service/native adoption
+and full signed transport remain open. See [evidence and limits](../../docs/research/presentation-credential-begin-receiver-2026-11-06.md).

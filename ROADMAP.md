@@ -1,21 +1,22 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) contains the
-reviewed fixed original-work BEGIN signer and now two-stage BEGIN/input consistency
-checks. The broker can verify the signed held context/header first, then separately
-validate the exact bounded input packet, hashes, scope and deadline. Returned
-objects are data; they grant no native input adoption or worker authority.
-Final affected regression: **956 passed, one skipped**, 27.17 seconds; configured
-repository-wide lint passed. Independent review read source/tests only.
-See [the new prerequisite and limits](docs/research/presentation-credential-begin-input-2026-11-06.md).
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now includes the
+reviewed original broker-task signed BEGIN receive cursor, in addition to the
+original-work signer and two-stage input checks. It owns one bounded cursor,
+checks the signature/header before body reads, conserves the original deadline,
+refuses channel reuse during uncertain reads and safely drops failed payloads.
+Final affected regression: **967 passed, one skipped**, 27.92 seconds;
+repository-wide configured lint passed. Independent review was source-only.
+See [evidence and limits](docs/research/presentation-credential-begin-receiver-2026-11-06.md).
 
-The transport gate remains CLOSED. Actual broker cursor/native adoption, remaining
-signed phases/direct writers/cleanup, production startup/capacity/rotation,
-native publication, STATUS and physical/release qualification remain open.
-Desktop character delivery is not yet available. No live host/device changed.
-Signer source `80fb5b1` CI708 is still in progress; earlier reservation source
-`6c31d43` passed [CI702](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42248707404).
-Neither is CI qualification of this newer input-check change.
+No production factory uses this receiver yet. It returns checked data and local
+IO completion, not native input adoption or registry/worker permission. Remaining
+service/native admission, signed phases/direct writers/cleanup, production
+startup/capacity/rotation, native publication, STATUS and physical/release
+qualification are open. Desktop character delivery is not yet available;
+unsigned transport remains closed. No live host/device changed. Earlier signer
+CI708 and input-check CI710 were still running at the last observation; neither
+qualifies this newer receive-cursor source.
 
 ## Native image verification checkpoint — November 6, 2026
 
