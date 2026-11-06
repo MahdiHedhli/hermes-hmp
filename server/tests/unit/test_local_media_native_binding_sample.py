@@ -2,6 +2,7 @@
 import importlib.util
 import json
 import sys
+import threading
 import types
 from pathlib import Path
 
@@ -173,7 +174,8 @@ def preparation_report():
         "legacy_rows": 64, "generated_rows": 64, "selector_counts": [1, 16, 128],
         "accepted_counts": [1, 16, 128]}
         for kind in ("bot_chat", "phone") for lineage, prompt in ((2, 0), (98, 0), (98, 262144))],
-        "timing_measured": False, "allocation_measured": False, "writer_cases_run": 0}
+        "timing_measured": False, "allocation_measured": False, "writer_cases_run": 0,
+        "databases_closed": 6}
 
 
 def test_preparation_schema_requires_all_six_shapes_and_no_measurement_claim():
@@ -182,7 +184,8 @@ def test_preparation_schema_requires_all_six_shapes_and_no_measurement_claim():
 
 @pytest.mark.parametrize("case", ["missing_shape", "wrong_order", "missing_prompt",
                                  "wrong_acceptance", "boolean_count", "extra_field",
-                                 "timing_claim", "allocation_claim", "writer_claim"])
+                                 "timing_claim", "allocation_claim", "writer_claim",
+                                 "database_not_closed"])
 def test_preparation_schema_refuses_incomplete_or_overclaimed_results(case):
     report = preparation_report()
     if case == "missing_shape":
@@ -201,8 +204,10 @@ def test_preparation_schema_refuses_incomplete_or_overclaimed_results(case):
         report["timing_measured"] = True
     elif case == "allocation_claim":
         report["allocation_measured"] = True
-    else:
+    elif case == "writer_claim":
         report["writer_cases_run"] = 1
+    else:
+        report["databases_closed"] = 5
     with pytest.raises(RuntimeError):
         load().validate_preparation_report(report)
 
@@ -221,3 +226,100 @@ def test_driver_requires_explicit_seed_mode_and_rejects_combined_modes(tmp_path)
         driver.run_fixture(tmp_path, tmp_path, "a" * 40,
                            sample_memory=True, sample_binding_seed=True)
     assert not tuple(tmp_path.iterdir())
+
+
+def cell_fixture(tmp_path, *, release_result=True, close=True):
+    from .test_local_media_native_serving_fixture import load as load_fixture
+
+    tmp_path.chmod(0o700)
+    original = tmp_path / "original-profile"
+    stats = [(0, 0, 0)]
+    native = types.SimpleNamespace(home_path=original, home=str(original),
+        world=types.SimpleNamespace(runner=types.SimpleNamespace(homes={"alpha": original})))
+    fx = types.SimpleNamespace(native=native,
+                               service=types.SimpleNamespace(stats=lambda: stats[0]))
+    acquired, released = [], []
+
+    def acquire(path):
+        db = types.SimpleNamespace(_conn=object())
+        acquired.append((path, db))
+        return db
+
+    def release(db):
+        released.append(db)
+        if release_result and close:
+            db._conn = None
+        return release_result
+
+    registry = types.SimpleNamespace(acquire=acquire, release=release)
+    borrowed, selection, owners = {"acquired": 0, "released": 0}, [None], []
+    module = load_fixture()
+
+    def context(index=0):
+        return module._binding_cell(tmp_path.resolve(), fx, registry, borrowed,
+                                    threading.Lock(), selection, owners, index, "alpha")
+
+    return types.SimpleNamespace(context=context, fx=fx, original=original, stats=stats,
+        borrowed=borrowed, selection=selection, owners=owners, acquired=acquired, released=released)
+
+
+def test_fresh_cell_closes_before_restoring_original_scope_and_cannot_be_reused(tmp_path):
+    model = cell_fixture(tmp_path)
+    with model.context() as db:
+        path = tmp_path / "binding-cells/cell-0/state.db"
+        assert model.selection[0] == (path, db)
+        assert model.fx.native.home_path == path.parent
+        assert model.fx.native.world.runner.homes["alpha"] == path.parent
+        assert model.released == []
+    assert db._conn is None and model.released == [db] and model.owners[0]["closed"] is True
+    assert model.selection == [None] and model.fx.native.home_path == model.original
+    assert model.fx.native.world.runner.homes["alpha"] == model.original
+    with pytest.raises(FileExistsError), model.context():
+        pytest.fail("existing cell must not acquire a new database")
+    assert len(model.acquired) == 1
+
+
+@pytest.mark.parametrize("case", ["borrower", "worker"])
+def test_cell_refuses_before_allocation_when_original_work_remains(tmp_path, case):
+    model = cell_fixture(tmp_path)
+    if case == "borrower":
+        model.borrowed["acquired"] = 1
+    else:
+        model.stats[0] = (1, 1, 1)
+    with pytest.raises(RuntimeError), model.context():
+        pytest.fail("must refuse before entering")
+    assert model.acquired == [] and model.owners == []
+    assert not (tmp_path / "binding-cells").exists()
+
+
+@pytest.mark.parametrize("case", ["borrower", "worker", "release_false", "connection_open"])
+def test_unsettled_cell_retains_its_owner_and_scope_instead_of_closing_or_restoring(tmp_path, case):
+    model = cell_fixture(tmp_path, release_result=case != "release_false",
+                         close=case != "connection_open")
+    with pytest.raises(RuntimeError), model.context() as db:
+        if case == "borrower":
+            model.borrowed["acquired"] = 1
+        elif case == "worker":
+            model.stats[0] = (1, 1, 1)
+    assert model.owners[0]["db"] is db and model.owners[0]["closed"] is False
+    assert db._conn is not None and model.selection[0][1] is db
+    assert model.fx.native.home_path != model.original
+    assert len(model.released) == (0 if case in ("borrower", "worker") else 1)
+
+
+def test_cell_closes_and_restores_after_user_work_raises_without_converting_failure(tmp_path):
+    model = cell_fixture(tmp_path)
+    with pytest.raises(ValueError, match="fixed synthetic failure"), model.context() as db:
+        raise ValueError("fixed synthetic failure")
+    assert db._conn is None and model.owners[0]["closed"] is True
+    assert model.selection == [None] and model.fx.native.home_path == model.original
+
+
+def test_cell_refuses_symlinked_base_before_native_acquisition(tmp_path):
+    model = cell_fixture(tmp_path)
+    foreign = tmp_path / "foreign"
+    foreign.mkdir()
+    (tmp_path / "binding-cells").symlink_to(foreign, target_is_directory=True)
+    with pytest.raises(RuntimeError), model.context():
+        pytest.fail("must refuse the substituted parent")
+    assert not tuple(foreign.iterdir()) and model.acquired == []

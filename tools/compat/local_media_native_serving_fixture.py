@@ -15,6 +15,7 @@ import os
 import stat
 import sys
 import threading
+from contextlib import contextmanager
 from pathlib import Path
 from types import ModuleType
 from urllib.parse import unquote, urlsplit
@@ -201,6 +202,47 @@ def _builtin_mime_types():
     mimetypes._db = mimetypes.MimeTypes(filenames=())
     mimetypes.init(files=[])
 
+def _private_directory(path):
+    info = path.lstat()
+    _require(path.resolve() == path and stat.S_ISDIR(info.st_mode) and
+             info.st_uid == os.geteuid() and stat.S_IMODE(info.st_mode) == 0o700)
+
+
+@contextmanager
+def _binding_cell(root, fx, registry, borrowed, lock, selection, owners, index, profile):
+    """Own one fresh synthetic-profile DB; restore scope only after actual closure."""
+    _require(type(index) is int and 0 <= index < 6 and fx.service.stats() == (0, 0, 0))
+    with lock:
+        _require(borrowed["acquired"] == borrowed["released"])
+    _private_directory(root)
+    base = root / "binding-cells"
+    base.mkdir(mode=0o700, exist_ok=True)
+    _private_directory(base)
+    home = base / f"cell-{index}"
+    home.mkdir(mode=0o700)  # Exclusive: never reuse or follow another cell's path.
+    path = home / "state.db"
+    prior = (fx.native.home_path, fx.native.home,
+             fx.native.world.runner.homes[profile], selection[0])
+    owner = {"db": None, "closed": False, "prior": prior}
+    owners.append(owner)  # Retain ownership before native allocation.
+    cell_db = registry.acquire(path)
+    owner["db"] = cell_db
+    fx.native.home_path, fx.native.home = home, str(home)
+    fx.native.world.runner.homes[profile] = home
+    selection[0] = (path, cell_db)
+    try:
+        yield cell_db
+    finally:
+        # No restore/close while a borrower or original media worker remains.
+        with lock:
+            _require(borrowed["acquired"] == borrowed["released"])
+        _require(fx.service.stats() == (0, 0, 0))
+        _require(registry.release(cell_db) is True and cell_db._conn is None)
+        owner["closed"] = True
+        (fx.native.home_path, fx.native.home,
+         fx.native.world.runner.homes[profile], selection[0]) = prior
+
+
 def run_fixture(root, *, sample_memory=False, sample_binding_seed=False):
     """One native scratch DB, real routes/registry, synthetic transport authority.
 
@@ -324,19 +366,28 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False):
     # No worker exists during setup. This becomes false before actual async work,
     # and true again only after original owned workers are known joined.
     owners = {"server": None, "client": None, "workers_joined": True}
+    binding_selection = [None]
+    binding_owners = []
 
     def acquire(path):
-        _require(Path(path).resolve() == db_path.resolve())
+        selected_path, selected_db = binding_selection[0] or (db_path, db)
+        _require(Path(path).resolve() == selected_path.resolve())
         result = native_registry.acquire(path)
-        _require(result is db)
+        _require(result is selected_db)
         with lock:
             borrowed["acquired"] += 1
         return result
 
     def release(value):
-        _require(value is db and native_registry.release(value) is True)
+        _, selected_db = binding_selection[0] or (db_path, db)
+        _require(value is selected_db and native_registry.release(value) is True)
         with lock:
             borrowed["released"] += 1
+
+    def open_binding_cell(index):
+        _require(sample_binding_seed)
+        return _binding_cell(root, fx, native_registry, borrowed, lock,
+                             binding_selection, binding_owners, index, PROFILE)
 
     try:
         Fx.__init__(fx, root / "rig", patch, kind="phone", images=3)
@@ -485,7 +536,9 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False):
                         helper = importlib.util.module_from_spec(spec)
                         spec.loader.exec_module(helper)
                         report["native_binding_preparation"] = helper.run_preparation(
-                            fx, db, user=USER, profile=PROFILE, chat=CHAT)
+                            fx, open_binding_cell, user=USER, profile=PROFILE, chat=CHAT)
+                        _require(len(binding_owners) == 6 and
+                                 all(owner["closed"] for owner in binding_owners))
                     if sample_memory:
                         import importlib.util
 

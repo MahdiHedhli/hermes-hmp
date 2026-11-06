@@ -32,17 +32,18 @@ rows: 258 rows total, independent of selector count. Half the raw image fields
 use each accepted cache layout. No image path is opened or materialized by this
 preparation. Actual native bridge reads provide the candidates/tip; complete
 binding must classify correctly and accept exactly the selected 1, 16 and 128
-tool IDs in every shape. Synthetic Phone routing is fixture-local. Each Bot Chat
-title is cleared after its case; no grant, actual model/provider or live setting
-changes.
+tool IDs in every shape. Synthetic Phone routing is fixture-local. Each shape
+owns a separate fresh database: no canonical Bot Chat title is renamed/cleared,
+and Phone classification cannot inherit another case's canonical title.
+No grant, actual model/provider or live setting changes.
 
 The report is closed and requires all six shapes and 18 successful selection
-controls. It explicitly says `timing_measured: false`,
+controls and six actually closed databases. It explicitly says `timing_measured: false`,
 `allocation_measured: false`, `writer_cases_run: 0`. Preparation cannot close
 C6b or masquerade as a performance/writer run. Normal serving and memory modes
 keep their existing report contracts; modes cannot be combined or truthy-coerced.
 
-Root's 162 preparation/model/structure/driver checks and configured lint pass.
+Root's 172 preparation/model/lifetime/structure/driver checks and configured lint pass.
 Independent source review accepted one fresh isolated seed-mode native sample,
 without reviewer execution. Native execution and artifact review are pending
 until separately recorded. The original 12-second command-observation budget,
@@ -57,6 +58,17 @@ The independently reviewed correction uses the exact existing nested shape and
 shared sidecar identity, with eight additional causal guards. The declared
 matrix, acceptance assertions, cleanup and observation budget are unchanged;
 one fresh second attempt is separate from the original failure.
+
+The second attempt at `6a587f7` also terminated with failure: the native
+canonical-identity guard refuses title clearing, even though the public setter's
+generic docstring permits empty titles for other sessions. No guard is bypassed.
+The independently reviewed repair creates six private databases with exclusive
+paths and retained seed ownership. Both exact home/path/DB selection and native
+borrow counts are scoped to the current cell. Original scope is restored only
+after balanced borrows, idle media workers, successful native release and actual
+connection closure; uncertain closure retains the owner and cannot satisfy the
+closed report. Earlier failures remain preserved. One fresh third attempt is
+separate from both original failures; timing/allocation/writer evidence stays open.
 
 ## Remaining measurement stages
 

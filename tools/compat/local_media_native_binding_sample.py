@@ -119,7 +119,9 @@ def seed_native_shape(db, *, home, kind, lineage_count, prompt_chars):
 
 def validate_preparation_report(report):
     require(type(report) is dict and set(report) == {"cells", "timing_measured",
-        "allocation_measured", "writer_cases_run"} and report["timing_measured"] is False and
+        "allocation_measured", "writer_cases_run", "databases_closed"} and
+        type(report["databases_closed"]) is int and report["databases_closed"] == 6 and
+        report["timing_measured"] is False and
         report["allocation_measured"] is False and type(report["writer_cases_run"]) is int and
         report["writer_cases_run"] == 0 and type(report["cells"]) is list and
         len(report["cells"]) == len(KINDS) * len(SHAPES))
@@ -139,52 +141,57 @@ def validate_preparation_report(report):
                     and cell[key] == list(SELECTORS))
 
 
-def run_preparation(fx, db, *, user, profile, chat):
+def run_preparation(fx, open_cell, *, user, profile, chat):
     """Verify all six native shapes through complete binding, without measuring cost.
 
-    Synthetic routing-store changes stay inside this fixture. Each canonical
-    title is cleared after its own case so the Phone proof has an independent
-    negative Bot Chat proof. No current default model/provider/grant is changed.
+    Each shape owns a fresh native DB: canonical Bot Chat identity is never
+    renamed/cleared. Synthetic routing-store changes stay inside this fixture.
+    No current default model/provider/grant is changed.
     """
     from hmp_plugin.contract import ConversationRef
 
     sidecar, binding = bound_modules(fx.rig.ctx.media_modules)
     cells = []
+    index = 0
     for kind in KINDS:
         for lineage, prompt in SHAPES:
-            shape = seed_native_shape(db, home=str(fx.native.home_path), kind=kind,
-                                      lineage_count=lineage, prompt_chars=prompt)
-            fx.native.world.start_conversation(profile, chat, shape["root"] if kind == "phone"
-                                               else "p1")
-            ref = ConversationRef(user_id=user, profile=profile, session_id=shape["root"])
-            rows = fx.native.bridge.latest_with_media(ref, 500)
-            info = fx.native.bridge.lineage(ref)
-            require(type(rows) is sidecar.BridgeMediaRows and len(rows.rows) == 258 and
-                    rows.query.query_tip == shape["tip"] == info.lineage_tip and
-                    {item.tool_row_id for item in rows.candidates} == set(shape["tool_ids"]))
-            accepted = []
-            for count in SELECTORS:
-                selected = select_tool_ids(shape["tool_ids"], count)
-                wanted = frozenset(selected)
-                candidate = sidecar.MediaSidecar(status=sidecar.SidecarStatus.CANDIDATES,
-                    origin=sidecar.MediaOrigin.OWN_CONVERSATION if kind == "phone"
-                    else sidecar.MediaOrigin.BROWSED_SESSION, user_id=user, profile=profile,
-                    session_id=shape["root"], query_tip=rows.query.query_tip,
-                    lineage_tip=info.lineage_tip,
-                    candidates=tuple(item for item in rows.candidates
-                                     if item.tool_row_id in wanted))
-                result = fx.native.bridge.bind_media_batch(candidate)
-                require(type(result) is binding.MediaBatchBinding and
-                        result.reason == "ok" and result.kind is not None and
-                        result.kind.value == kind and
-                        result.accepted == selected)
-                accepted.append(len(result.accepted))
+            with open_cell(index) as db:
+                shape = seed_native_shape(db, home=str(fx.native.home_path), kind=kind,
+                                          lineage_count=lineage, prompt_chars=prompt)
+                try:
+                    fx.native.world.start_conversation(profile, chat, shape["root"]
+                                                       if kind == "phone" else "p1")
+                    ref = ConversationRef(user_id=user, profile=profile, session_id=shape["root"])
+                    rows = fx.native.bridge.latest_with_media(ref, 500)
+                    info = fx.native.bridge.lineage(ref)
+                    require(type(rows) is sidecar.BridgeMediaRows and len(rows.rows) == 258 and
+                            rows.query.query_tip == shape["tip"] == info.lineage_tip and
+                            {item.tool_row_id for item in rows.candidates} ==
+                            set(shape["tool_ids"]))
+                    accepted = []
+                    for count in SELECTORS:
+                        selected = select_tool_ids(shape["tool_ids"], count)
+                        wanted = frozenset(selected)
+                        candidate = sidecar.MediaSidecar(status=sidecar.SidecarStatus.CANDIDATES,
+                            origin=sidecar.MediaOrigin.OWN_CONVERSATION if kind == "phone"
+                            else sidecar.MediaOrigin.BROWSED_SESSION, user_id=user, profile=profile,
+                            session_id=shape["root"], query_tip=rows.query.query_tip,
+                            lineage_tip=info.lineage_tip,
+                            candidates=tuple(item for item in rows.candidates
+                                             if item.tool_row_id in wanted))
+                        result = fx.native.bridge.bind_media_batch(candidate)
+                        require(type(result) is binding.MediaBatchBinding and
+                                result.reason == "ok" and result.kind is not None and
+                                result.kind.value == kind and result.accepted == selected)
+                        accepted.append(len(result.accepted))
+                finally:
+                    fx.native.world.start_conversation(profile, chat, "p1")
+            require(db._conn is None)
+            index += 1
             cells.append({key: shape[key] for key in ("kind", "lineage_count", "prompt_chars",
                 "verified_prompt_count", "history_rows", "legacy_rows", "generated_rows")}
                 | {"selector_counts": list(SELECTORS), "accepted_counts": accepted})
-            if kind == "bot_chat":
-                require(db.set_session_title(shape["tip"], "") is True)
     report = {"cells": cells, "timing_measured": False,
-              "allocation_measured": False, "writer_cases_run": 0}
+              "allocation_measured": False, "writer_cases_run": 0, "databases_closed": index}
     validate_preparation_report(report)
     return report
