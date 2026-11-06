@@ -40,6 +40,7 @@ _LOOP_METHODS = {name: getattr(_LOOP, name) for name in (
 _SELECTOR_METHODS = {name: getattr(selectors.DefaultSelector, name) for name in (
     "get_key", "register", "modify", "unregister", "_fileobj_lookup")}
 _CANCEL_HANDLE = _HANDLE.cancel
+_CANCEL_RETIREMENT_MINT = object()
 
 
 def _require(value):
@@ -138,6 +139,28 @@ class _WakeBinding(NamedTuple):
 
     def __repr__(self):
         return "<ReadinessWakeBinding metadata-only redacted>"
+
+
+class _CancelledWaitRetirement(NamedTuple):
+    mint: object
+    owner: object
+    scope: _Scope
+    future: object
+    binding: _WakeBinding
+    handle: object
+    handle_args: tuple
+    end: int
+
+    def __repr__(self):
+        return "<CancelledWaitRetirement local-no-payload>"
+
+
+class _ReadinessCancelledError(asyncio.CancelledError):
+    """Original task cancellation after its exact readiness interest retired."""
+
+    def __init__(self, retirement):
+        super().__init__()
+        self.retirement = retirement
 
 
 class ReadinessWakeError(FrameError):
@@ -389,6 +412,8 @@ class SelectorReadiness:
         current, _ = SelectorReadiness._slots(self)
         _require(current is None)  # never replace another owner of this direction
         self._attempted = True  # registration intent before the possibly partial native add
+        cancelled = False
+        held = None
         try:
             s = self._scope_snapshot
             install = _install_reader if s.interest == "read" else _install_writer
@@ -398,6 +423,8 @@ class SelectorReadiness:
             SelectorReadiness._owned(self, handle)
             self._handle = self._handle_snapshot = handle
             self._handle_args = self._handle_args_snapshot = handle._args
+            held = (s, self._future_origin, self._wake_binding_origin,
+                    handle, self._handle_args_snapshot, end_ns)
             async with asyncio.timeout_at(end_ns / 1_000_000_000):
                 if wake is None:
                     value = await asyncio.shield(self._future_snapshot)
@@ -414,6 +441,7 @@ class SelectorReadiness:
             SelectorReadiness._native(self)
             _require(value is None and self._unknown is False)
         except asyncio.CancelledError:
+            cancelled = True
             raise  # never consume an external Task cancellation as a metadata wake
         except (TimeoutError, ReadinessWakeError):
             # A shared wake that completed with the deadline still forbids IO.
@@ -428,6 +456,25 @@ class SelectorReadiness:
             SelectorReadiness._retire(self)
             if not self._retired or self._unknown:
                 raise FrameError("BI1_READINESS_RETIREMENT_UNKNOWN") from None
+            if cancelled:
+                try:
+                    _require(type(held) is tuple and len(held) == 6)
+                    scope, future, binding, handle, args, end = held
+                    SelectorReadiness._guard(self)
+                    SelectorReadiness._wake_guard(self)
+                    _require(self._origin_scope is scope and self._future_origin is future
+                             and self._wake_binding_origin is binding
+                             and self._handle_snapshot is handle
+                             and self._handle_args_snapshot is args
+                             and self._attempted is True and self._retired is True
+                             and self._unknown is False and binding.end is end)
+                except BaseException:
+                    self._unknown = True
+                    raise FrameError("BI1_READINESS_CANCELLATION_UNKNOWN") from None
+                if _TASK.cancelling(scope.task) > 0:
+                    raise _ReadinessCancelledError(_CancelledWaitRetirement(
+                        _CANCEL_RETIREMENT_MINT, self, scope, future, binding,
+                        handle, args, end)) from None
 
 
 class SelectorWriteReadiness(SelectorReadiness):

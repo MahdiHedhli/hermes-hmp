@@ -634,6 +634,19 @@ class SocketChannel:
             _require(type(writer) is CredentialReadyWriter)
             CredentialReadyWriter._released(writer, self)
 
+        control = getattr(self, "_cancel_receiver", None)
+        _require(control is getattr(self, "_cancel_receiver_snapshot", None))
+        if control is not None:
+            from .presentation_broker_cancel import BrokerCancellationOwner
+            from .presentation_credential_control import CredentialControlCursor
+            _require(type(control) is BrokerCancellationOwner and self._cancel_receiver is control)
+            cursor = control._signed_cursor_snapshot
+            if cursor is not None:
+                _require(type(cursor) is CredentialControlCursor
+                         and control._signed_cursor is cursor)
+                if cursor._cancel_release is not None:
+                    CredentialControlCursor._released_cancelled(cursor, self)
+
     def _credential_work_ready(self):
         self._credential_external_idle()
         # No unsigned body fallback after a credential exchange. A future typed

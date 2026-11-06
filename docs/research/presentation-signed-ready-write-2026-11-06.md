@@ -86,3 +86,12 @@ receipt; new-source CI is pending. Prior write-readiness source f210093 passed
 CI742 plugin and Python 3.12/3.13/3.14 Unicode jobs. No live host/device/settings,
 permissions, providers, role-key installation or installed app changed. Full
 bot-character delivery remains unavailable.
+
+
+## Subsequent source checkpoint
+
+The later [known cancelled-read slice](presentation-cancelled-control-read-2026-11-06.md)
+settles only actual original-task cancellation during a positively retired owned
+wait. The preceding observations remain evidence of b066cac; unknown native IO and
+generic failures still retain debt. Exact b066cac passed CI744 plugin and Python
+3.12/3.13/3.14 Unicode jobs; this does not qualify later source or full delivery.

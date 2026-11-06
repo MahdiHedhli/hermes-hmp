@@ -1,25 +1,25 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now includes a
-reviewed fixed signed READY sender. Actual socket progress, one retained write/
-grammar intent and the original native completion-Future allocation stay joined
-to original resource/input/key facts. The original controller joins that exact
-completion before a GO-read receipt; worker GO and production startup stay closed.
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now includes
+reviewed local retirement for actual original-task cancellation during its exact
+known retired control-read wait. Pre-await scope/Future/wake/handle and original
+cursor/buffer/count facts remain joined; historical close requires that original
+native task done AND cancelled. Failed reads never become authenticated completion.
+Unknown native/readiness/pending/drift/fake/stale state still retains debt.
 
-Root final affected regression: **1,375 passed, one skipped**, 56.86 seconds;
-configured repository-wide lint passed. The 17 new send cases cover actual wire
-bytes, real kernel backpressure, partial/uncertain sends, no retries, late key and
-Future/offset substitution, early GO waiting, and normal GO/CANCEL consumption.
-Independent source/test review was read-only. Interrupted unfinished control reads
-still retain separate unknown debt and prevent aggregate channel closure; a
-completed writer does not resolve that gap. See [evidence and limits](docs/research/presentation-signed-ready-write-2026-11-06.md).
-New-source CI is pending. Prior write-readiness source `f210093` passed
-[CI742](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42280521444).
-Earlier cancellation-consumer and fixture failures remain recorded, not erased.
+Root final affected regression: **1,395 passed, one skipped**, 57.38 seconds;
+configured repository-wide lint passed. New targeted read-stop cases: **17 passed**,
+plus three readiness cancellation cases. Known partial auth/header/body, second
+frame and retired-key cancellation close actual socket/clock descriptors; unknown
+cases refuse. A reconstructed fact from an earlier real retired wait cannot settle
+this await. Independent review was read-only. See [evidence and limits](docs/research/presentation-cancelled-control-read-2026-11-06.md).
+New-source CI is pending. Prior signed READY sender `b066cac` passed
+[CI744](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42283359183).
+Prior fixture/regression failures remain recorded with their actual repairs/limits.
 
-Production resource admission/worker GO relay, interrupted-read settlement, later
-signed IO, startup, native publication, STATUS and physical/release qualification
-remain open. Character delivery is unavailable. No live host/device/settings changed.
+Production resource admission/worker GO relay, actual signed BEGIN/later phase IO,
+startup, native publication, STATUS and physical/release qualification remain open.
+Character delivery is unavailable. No live host/device/settings changed.
 
 ## Native image verification checkpoint — November 6, 2026
 

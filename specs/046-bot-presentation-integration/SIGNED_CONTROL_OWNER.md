@@ -191,3 +191,13 @@ production resource admission or runtime/startup activation follows.
 Writer-local historical retirement does not settle an independently interrupted
 control read. Its unknown read claim continues to prevent aggregate socket/clock
 closure. See [READY write evidence and limits](../../docs/research/presentation-signed-ready-write-2026-11-06.md).
+
+
+## November 6 — narrow known cancelled-read retirement
+
+Known cancellation of the original controller's exact positively retired wait now
+has a payload-free local retirement path. It preserves original task/cursor/count/
+buffer/registration provenance and grants no authenticated completion. Historical
+closure requires the actual original task done and cancelled. Unknown native IO,
+pending/drift/fake/stale state remains held. No generic error settlement, resource
+release or production activation follows. See [cancellation evidence](../../docs/research/presentation-cancelled-control-read-2026-11-06.md).

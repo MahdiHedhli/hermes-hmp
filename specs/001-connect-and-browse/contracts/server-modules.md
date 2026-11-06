@@ -620,3 +620,16 @@ production resource admission, worker relay and dispatch remain closed.
   original completion-Future allocation and same-reader GO join. No resource admission,
   worker GO relay or production activation. Historical local retirement is distinct
   from signing/current-material success; uncertain native IO retains debt.
+
+
+### BI1 cancelled original control-read retirement (November 6, 2026)
+
+`presentation_readiness.py` can carry a private payload-free cancellation fact
+only after actual native Task cancellation and positive retirement with its
+pre-await scope/Future/wake/handle/cutoff unchanged. The signed control cursor in
+`presentation_credential_control.py` joins that exact await to original per-frame
+allocation/buffer/count facts, wipes its original buffer and propagates cancellation
+without authenticated completion. Historical close checks original Task.done AND
+cancelled; unknown syscall/readiness/pending/drift/fake/stale state retains debt.
+Work/material guards, deadlines and generic credential transports remain unchanged.
+See [evidence and limits](../../docs/research/presentation-cancelled-control-read-2026-11-06.md).

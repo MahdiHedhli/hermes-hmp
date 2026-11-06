@@ -42,6 +42,9 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
     ready_case = bool(mutation and mutation.startswith("signed_control_native_ready_"))
     write_case = bool(ready_case and "_ready_write_" in mutation)
     write_go_case = bool(write_case and mutation.endswith(("go_join", "early_go", "shadow_wait")))
+    stop_case = bool(mutation and mutation.startswith("signed_control_native_stop_read_"))
+    stop_event = asyncio.Event()
+    stop_first_wait_event = asyncio.Event()
     ready_event = asyncio.Event()
     control_retained_event = asyncio.Event()
     cleanup_cause_event = asyncio.Event()
@@ -425,6 +428,136 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                                     type(selector).close(selector)
                         if "ready_extra_read" in held:
                             os.close(held["ready_extra_read"])
+                if stop_case:
+                    from hmp_plugin import presentation_readiness as readiness
+                    from hmp_plugin.presentation_broker_codec import BrokerFrame, BrokerHeader
+                    from hmp_plugin.presentation_credential_control import CredentialControlCursor
+
+                    after_go = mutation.endswith("after_go")
+                    if after_go:
+                        control = BrokerCancellationOwner.stage_credential_go_control(work)
+                        # Existing modeled READY only; no resources/READY writer/worker GO.
+                        record.grammar.observe(BrokerFrame(BrokerHeader(
+                            record.grammar._binding, "READY", 0, 0, 2), b""), sender="broker")
+                    else:
+                        control = BrokerCancellationOwner.retain_credential_cancel(work)
+                    held["native_control"] = control
+                    control_retained_event.set()
+                    cursor = control._signed_cursor_snapshot
+                    wait = readiness.SelectorReadiness.wait
+                    def signal_ready(waiter):
+                        if (waiter._origin_scope.task is control._allocation_snapshot.task
+                                and cursor._consumed == held.get("stop_target")
+                                and (not after_go or cursor._frame_index == 1)):
+                            held["stop_waiter"] = waiter
+                            stop_event.set()
+                    async def observed_wait(waiter, cutoff, **options):
+                        if mutation.endswith("stale_wait") and cursor._consumed == 0:
+                            stop_first_wait_event.set()
+                        signal_ready(waiter)
+                        try:
+                            result = await wait(waiter, cutoff, **options)
+                        except readiness._ReadinessCancelledError:
+                            if not mutation.endswith("stale_wait"):
+                                raise
+                            old = held["stop_earlier_waiter"]
+                            cursor._waiter = old
+                            # Deliberately reconstructed caller data from a real
+                            # earlier retired wait is NOT this await's origin.
+                            fake = readiness._CancelledWaitRetirement(
+                                readiness._CANCEL_RETIREMENT_MINT, old, old._origin_scope,
+                                old._future_origin, old._wake_binding_origin,
+                                old._handle_snapshot, old._handle_args_snapshot,
+                                old._wake_binding_origin.end)
+                            raise readiness._ReadinessCancelledError(fake) from None
+                        if mutation.endswith("stale_wait") and cursor._consumed == 0:
+                            held["stop_earlier_waiter"] = waiter
+                        return result
+                    monkeypatch.setattr(readiness.SelectorReadiness, "wait", observed_wait)
+                    async with asyncio.timeout_at(native.deadline_ns / 1e9):
+                        await stop_event.wait()
+                    original = cursor._buffer_origin
+                    held["stop_before"] = (cursor._consumed, cursor._target,
+                                           cursor._wire_before, cursor._frame_index)
+                    waiter = held["stop_waiter"]
+                    original_future = waiter._future_origin
+                    held["stop_original_future"] = original_future
+                    unknown = mutation.endswith(("unknown_retirement", "buffer_drift",
+                        "count_drift", "wake_swap", "future_swap", "fake_cancel", "read_intent",
+                        "pending_drift", "waiter_swap", "stale_wait"))
+                    if mutation.endswith("retired_key"):
+                        keys["broker"].retire()
+                    callbacks = []
+                    held["stop_callbacks"] = callbacks
+                    if mutation.endswith("buffer_drift"):
+                        class ForeignBuffer:
+                            def __getattribute__(self, name):
+                                callbacks.append(name)
+                                raise AssertionError("foreign cancelled-read buffer getter")
+                            def clear(self):
+                                callbacks.append("clear")
+                                raise AssertionError("foreign cancelled-read buffer clear")
+                        cursor._buffer = ForeignBuffer()
+                    if mutation.endswith("read_intent"):
+                        cursor._read_intent = True
+                    if mutation.endswith("pending_drift"):
+                        cursor._pending = cursor._pending_snapshot = b"SYNTHETIC_PENDING"
+                    if mutation.endswith("waiter_swap"):
+                        cursor._waiter = readiness.SelectorReadiness(channel._socket_snapshot)
+                    if mutation.endswith("count_drift"):
+                        cursor._consumed = cursor._consumed_snapshot = cursor._consumed + 1
+                    if mutation.endswith(("unknown_retirement", "wake_swap", "future_swap")):
+                        remove = readiness._remove_reader
+                        def changed_remove(*args):
+                            result = remove(*args)
+                            if mutation.endswith("unknown_retirement"):
+                                return False
+                            if mutation.endswith("wake_swap"):
+                                old = waiter._wake_binding_origin
+                                waiter._wake_binding = waiter._wake_binding_origin = (
+                                    readiness._WakeBinding(old.scope, old.future, old.end))
+                            else:
+                                replacement = asyncio.get_running_loop().create_future()
+                                held["stop_substitute_future"] = replacement
+                                waiter._future = waiter._future_snapshot = (
+                                    waiter._future_origin) = replacement
+                            return result
+                        monkeypatch.setattr(readiness, "_remove_reader", changed_remove)
+                    task = control._allocation_snapshot.task
+                    if mutation.endswith("fake_cancel"):
+                        original_future.set_exception(asyncio.CancelledError())
+                    else:
+                        task.cancel()  # actual owned synthetic task, no job/resource action
+                    outcome = await asyncio.gather(task, return_exceptions=True)
+                    assert isinstance(outcome[0], BaseException)
+                    assert task.done()
+                    assert cursor._failed and not cursor._complete
+                    assert len(original) == 0 and not callbacks
+                    assert cursor._release is None and cursor._completion is None
+                    assert cursor._cancel_release is cursor._cancel_release_snapshot
+                    assert cursor._io_unknown is unknown
+                    assert (cursor._cancel_release is None) is unknown
+                    assert channel._reading is unknown
+                    assert control._cancel_receipt is None and not control._notice_completed
+                    assert native.start_attempted is False
+                    assert record.grammar._cancel is False
+                    assert (control._go_receipt is not None) is after_go
+                    if not mutation.endswith("count_drift"):
+                        assert cursor._consumed is held["stop_before"][0]
+                    assert cursor._target is held["stop_before"][1]
+                    if not unknown:
+                        assert task.cancelled() and task.cancelling() > 0
+                        CredentialControlCursor._released_cancelled(cursor, channel)
+                    else:
+                        with pytest.raises(FrameError):
+                            CredentialControlCursor._released_cancelled(cursor, channel)
+                        if mutation.endswith("fake_cancel"):
+                            assert task.cancelling() == 0
+                    with pytest.raises(FrameError):
+                        await CredentialControlCursor.run(cursor)  # no authentication/read retry
+                    held["stop_checked"] = True
+                    held["stop_unknown"] = unknown
+                    return ticket
                 cleanup = mutation.startswith("signed_control_native_cleanup_")
                 go_chain = (mutation.startswith("signed_control_native_go_chain_")
                             or (cleanup and ("after_go" in mutation
@@ -1147,7 +1280,7 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                                              "signed_control_window") else "GO"
             if mutation.startswith("signed_control_native_"):
                 phase = "GO" if (mutation == "signed_control_native_go"
-                    or write_go_case
+                    or write_go_case or (stop_case and mutation.endswith("after_go"))
                     or (cleanup_case and ("after_go" in mutation or mutation.endswith("late_go")))
                     or (mutation.startswith("signed_control_native_go_chain_")
                     and not mutation.endswith("before_go"))) else "CANCEL"
@@ -1182,7 +1315,53 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 control_frame = control_frame[:-1] + bytes([control_frame[-1] ^ 1])
             held["signed_auth_length"] = len(control_raw)
             wire = control_raw + control_frame
-            if ready_case:
+            if stop_case:
+                async with asyncio.timeout_at(end / 1e9):
+                    await control_retained_event.wait()
+                after_go = mutation.endswith("after_go")
+                if after_go:
+                    control = held["native_control"]
+                    await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, wire)
+                    async with asyncio.timeout_at(end / 1e9):
+                        await asyncio.wait((control._go_future_snapshot,
+                                           control._allocation_snapshot.task),
+                                          return_when=asyncio.FIRST_COMPLETED)
+                    assert control._go_future_snapshot.done()
+                    start = time.monotonic_ns()
+                    body2 = CancellationWindow(start, start + 250_000_000).encode()
+                    frame2 = encode_frame(binding, "CANCEL", 2, body2, version=2)
+                    value2 = dict(value, phase="CANCEL", sequence=2,
+                                  frame_sha256=hashlib.sha256(frame2).hexdigest(),
+                                  frame_length=len(frame2))
+                    raw2 = encode_record(value2, keys["gateway"]._private_key.sign(
+                        signing_bytes(value2)))
+                    wire = raw2 + frame2
+                    target = len(wire) - 8  # second frame, partial CANCEL body
+                elif mutation.endswith(("auth_prefix", "stale_wait")):
+                    target = 4
+                elif mutation.endswith("signed_auth"):
+                    target = len(control_raw)
+                elif mutation.endswith("header_prefix"):
+                    target = len(control_raw) + 10
+                elif mutation.endswith("body_prefix"):
+                    target = len(wire) - 8
+                else:
+                    target = 0
+                held["stop_target"] = target
+                if mutation.endswith("stale_wait"):
+                    async with asyncio.timeout_at(end / 1e9):
+                        await stop_first_wait_event.wait()
+                if target:
+                    await asyncio.get_running_loop().sock_sendall(
+                        gateway._socket_snapshot, wire[:target])
+                else:
+                    # The read may already be parked; original waiter proves
+                    # the actual wait frame, never an idle fabricated owner.
+                    cursor = held["native_control"]._signed_cursor_snapshot
+                    if cursor._waiter is not None and cursor._consumed == 0:
+                        held["stop_waiter"] = cursor._waiter
+                        stop_event.set()
+            elif ready_case:
                 await asyncio.wait_for(ready_event.wait(), timeout=5)
                 if write_go_case and mutation.endswith("early_go"):
                     await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, wire)
@@ -1298,6 +1477,11 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
         if "record" in held:
             # Fixture closes its own local descriptors only, not registry debt.
             channel = held.get("original_channel", held["record"].channel_snapshot)
+            if stop_case and held.get("stop_checked") and not held["stop_unknown"]:
+                channel._credential_external_idle()
+                channel._bindings()
+                channel._local_integrity()
+                assert not channel._reading and not channel._writing
             channel.close()
             channel.close_clock()
         gateway.close()
@@ -1782,3 +1966,25 @@ async def test_fixed_ready_write_joins_actual_native_send_without_retry(
             assert not channel._clock_closed_known
         else:
             assert channel._closed_known and channel._clock_closed_known
+
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+@pytest.mark.parametrize("suffix", [
+    "no_bytes", "auth_prefix", "signed_auth", "header_prefix", "body_prefix",
+    "after_go", "retired_key", "unknown_retirement", "buffer_drift", "count_drift",
+    "wake_swap", "future_swap", "fake_cancel", "read_intent", "pending_drift", "waiter_swap",
+    "stale_wait",
+])
+async def test_original_cancelled_read_settles_only_known_owned_wait(
+    local, tmp_path, monkeypatch, suffix
+):
+    held, _ = await exchange(local, tmp_path, monkeypatch,
+                            "signed_control_native_stop_read_" + suffix)
+    assert held["stop_checked"]
+    channel = held["record"].channel_snapshot
+    if held["stop_unknown"]:
+        assert not channel._closed_known and not channel._clock_closed_known
+    else:
+        assert channel._closed_known and channel._clock_closed_known

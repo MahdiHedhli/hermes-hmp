@@ -83,6 +83,11 @@ historical, not an alternative live authorization path or resolved incident.
       controller task/cursor and frozen budget before any credential resource/READY
       startup. No legacy fallback, new parser task or boolean gate opening.
       Source fixture acceptance does not qualify signed READY/resources or production startup.
+- [x] Implement/review cancellation-only local retirement for the original signed
+      control read's exact positively retired readiness wait, with original held
+      task/cursor/count/buffer/wake/Future/handle binding and no authenticated completion.
+      Historical closure requires actual original Task.done+cancelled. Unknown native/
+      readiness/pending/drift/fake/stale state remains debt, without retry or resource credit.
 - [ ] Wire only through qualified production startup/service dispatch; preserve
       the exact original adopted connection plus current native phase authority
       before any credential resource/GO path. Ticket/capacity alone is insufficient.

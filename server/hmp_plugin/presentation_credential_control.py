@@ -12,6 +12,10 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import socket
+import threading
+from typing import NamedTuple
 
 from .presentation_broker_codec import BrokerBinding, header_size
 from .presentation_credential_codec import payload_size
@@ -25,6 +29,57 @@ from .presentation_jobs import FrameError
 
 _LIMIT = 2048 + 8 + 1024 + 16
 _CONTROL_READ_COMPLETE = object()
+_WAIT_CANCEL_MINT = object()
+_READ_CANCEL_MINT = object()
+
+
+class _ControlReadRun(NamedTuple):
+    cursor: object
+    binding: object
+    control: object
+    refs: tuple
+    channel: object
+    sock: object
+    buffer: bytearray
+    allocation: object
+    task: object
+    loop: object
+    context: tuple
+    frame_index: int
+    wire_before: int
+
+    def __repr__(self):
+        return "<ControlReadRun original-local-IO redacted>"
+
+
+class _WaitCancelled(NamedTuple):
+    mint: object
+    run: object
+    retirement: object
+    consumed: int
+    target: int
+    values: bytes
+
+    def __repr__(self):
+        return "<ControlReadWaitCancelled no-authority redacted>"
+
+
+class _OwnedWaitCancelled(asyncio.CancelledError):
+    def __init__(self, receipt):
+        super().__init__()
+        self.receipt = receipt
+
+
+class _CancelledReadRetirement(NamedTuple):
+    mint: object
+    run: _ControlReadRun
+    readiness: object
+    consumed: int
+    target: int
+
+    def __repr__(self):
+        return "<CancelledControlReadRetirement local-only redacted>"
+
 
 
 def _require(value):
@@ -76,6 +131,8 @@ class CredentialControlCursor:
         owner._advanced = False
         owner._raw = owner._frame = owner._header = None
         owner._phase = None
+        owner._read_run = owner._read_run_snapshot = None
+        owner._cancel_release = owner._cancel_release_snapshot = None
         owner._release = None
         owner._completion = owner._completion_snapshot = None
         sock, loop = refs[14]._socket_snapshot, binding._loop
@@ -328,6 +385,159 @@ class CredentialControlCursor:
         _require(type(self) is CredentialControlCursor and self._complete is False)
         return CredentialControlCursor._time_current(self)[1]
 
+    def _begin_read_run(self, original):
+        from .presentation_control_binding import PreparedControlBinding
+
+        CredentialControlCursor._local(self)
+        _require(self._read_run is None and self._read_run_snapshot is None
+                 and self._cancel_release is None and self._cancel_release_snapshot is None
+                 and original is self._buffer_origin and self._buffer is original)
+        binding = self._binding_snapshot
+        PreparedControlBinding._allocation_current(binding)
+        refs = binding._refs_snapshot
+        run = _ControlReadRun(self, binding, self._control_snapshot, refs, refs[14],
+                              self._socket, original, binding._allocation,
+                              binding._allocation.task, self._loop,
+                              (os.getpid(), os.geteuid(), threading.get_ident()),
+                              self._frame_index, self._wire_before)
+        self._read_run = self._read_run_snapshot = run
+        return run
+
+    def _run_local(self, run):
+        """Original allocation only; no live-key or work/cancellation permission."""
+        from .presentation_broker_cancel import BrokerCancellationOwner
+        from .presentation_broker_service import SocketChannel
+        from .presentation_control_binding import PreparedControlBinding
+        from .presentation_remote_cleanup import _TASK, _TaskAllocation
+
+        _require(type(self) is CredentialControlCursor and type(run) is _ControlReadRun
+                 and self._read_run is run and self._read_run_snapshot is run
+                 and run.cursor is self and type(run.binding) is PreparedControlBinding
+                 and type(run.control) is BrokerCancellationOwner
+                 and type(run.refs) is tuple and len(run.refs) == 19
+                 and type(run.channel) is SocketChannel and type(run.sock) is socket.socket
+                 and type(run.buffer) is bytearray
+                 and type(run.allocation) is _TaskAllocation and type(run.task) is _TASK
+                 and type(run.loop) is asyncio.SelectorEventLoop
+                 and type(run.context) is tuple and len(run.context) == 3
+                 and all(type(v) is int for v in run.context)
+                 and run.context == (os.getpid(), os.geteuid(), threading.get_ident())
+                 and asyncio.get_running_loop() is run.loop
+                 and _TASK.get_loop(run.task) is run.loop
+                 and run.allocation.task is run.task
+                 and _TASK.get_coro(run.task) is run.allocation.coroutine
+                 and type(run.frame_index) is int and run.frame_index in (0, 1)
+                 and type(run.wire_before) is int and 0 <= run.wire_before <= _LIMIT)
+        _require(self._binding is run.binding and self._binding_snapshot is run.binding
+                 and self._control is run.control and self._control_snapshot is run.control
+                 and run.binding._control is run.control
+                 and run.binding._control_snapshot is run.control
+                 and run.control._channel is run.channel
+                 and run.binding._refs is run.refs and run.binding._refs_snapshot is run.refs
+                 and run.binding._allocation is run.allocation
+                 and run.control._allocation is run.allocation
+                 and run.control._allocation_snapshot is run.allocation
+                 and run.control._signed_cursor is self
+                 and run.control._signed_cursor_snapshot is self
+                 and run.control._credential_binding is run.binding
+                 and run.control._credential_binding_snapshot is run.binding
+                 and run.control._channel_snapshot is run.channel and run.refs[14] is run.channel
+                 and run.channel._cancel_receiver is run.control
+                 and run.channel._cancel_receiver_snapshot is run.control
+                 and self._socket is run.sock and run.channel._socket is run.sock
+                 and run.channel._socket_snapshot is run.sock
+                 and self._loop is run.loop and run.binding._loop is run.loop
+                 and self._buffer is run.buffer and self._buffer_origin is run.buffer
+                 and self._frame_index is run.frame_index and self._wire_before is run.wire_before)
+        PreparedControlBinding._allocation_current(run.binding)
+        return run
+
+    def _cancelled_wait_retirement(self, run, original, receipt):
+        from .presentation_readiness import (
+            _CANCEL_RETIREMENT_MINT,
+            SelectorReadiness,
+            _CancelledWaitRetirement,
+        )
+        from .presentation_remote_cleanup import _TASK
+
+        _require(CredentialControlCursor._run_local(self, run) is run)
+        _require(asyncio.current_task() is run.task and _TASK.cancelling(run.task) > 0
+                 and type(receipt) is _WaitCancelled and receipt.mint is _WAIT_CANCEL_MINT
+                 and receipt.run is run and type(receipt.retirement) is _CancelledWaitRetirement
+                 and receipt.retirement.mint is _CANCEL_RETIREMENT_MINT
+                 and type(receipt.consumed) is int and type(receipt.target) is int
+                 and type(receipt.values) is bytes
+                 and original is run.buffer and self._buffer_origin is original
+                 and run.channel._reading is True
+                 and self._started is True and self._complete is False and self._failed is False
+                 and self._io_unknown is False and self._read_intent is False
+                 and self._pending is None and self._pending_snapshot is None
+                 and self._consumed is receipt.consumed
+                 and self._consumed_snapshot is receipt.consumed
+                 and self._target is receipt.target and self._target_snapshot is receipt.target
+                 and 0 <= receipt.consumed <= receipt.target <= _LIMIT
+                 and len(original) == receipt.consumed
+                 and type(self._buffer_values) is bytes
+                 and self._buffer_values == receipt.values and bytes(original) == receipt.values
+                 and self._release is None and self._completion is None
+                 and self._completion_snapshot is None)
+        fact = receipt.retirement
+        waiter = fact.owner
+        _require(type(waiter) is SelectorReadiness and self._waiter is waiter)
+        SelectorReadiness._guard(waiter)
+        SelectorReadiness._wake_guard(waiter)
+        _require(waiter._origin_scope is fact.scope and waiter._scope_snapshot is fact.scope
+                 and waiter._future_origin is fact.future
+                 and waiter._wake_binding_origin is fact.binding
+                 and waiter._handle_snapshot is fact.handle
+                 and waiter._handle_args_snapshot is fact.handle_args
+                 and fact.scope.sock is run.sock and fact.scope.task is run.task
+                 and fact.scope.loop is run.loop and fact.scope.interest == "read"
+                 and waiter._attempted is True and waiter._retired is True
+                 and waiter._unknown is False and fact.binding.scope is fact.scope
+                 and fact.binding.future is None and fact.binding.end is fact.end)
+        return _CancelledReadRetirement(_READ_CANCEL_MINT, run, fact,
+                                        receipt.consumed, receipt.target)
+
+    def _released_cancelled(self, channel):
+        """Historical cancelled-read retirement, never authentication/native release."""
+        from .presentation_readiness import (
+            _CANCEL_RETIREMENT_MINT,
+            SelectorReadiness,
+            _CancelledWaitRetirement,
+        )
+        from .presentation_remote_cleanup import _TASK
+
+        fact = self._cancel_release
+        _require(type(fact) is _CancelledReadRetirement and fact.mint is _READ_CANCEL_MINT
+                 and fact is self._cancel_release_snapshot)
+        run = fact.run
+        _require(CredentialControlCursor._run_local(self, run) is run
+                 and channel is run.channel and channel._reading is False
+                 and _TASK.done(run.task) and _TASK.cancelled(run.task)
+                 and self._started is True and self._failed is True and self._complete is False
+                 and self._io_unknown is False and self._read_intent is False
+                 and self._pending is None and self._pending_snapshot is None
+                 and self._release is None and self._completion is None
+                 and self._completion_snapshot is None
+                 and self._raw is None and self._frame is None
+                 and self._header is None and self._phase is None
+                 and self._consumed is fact.consumed and self._consumed_snapshot is fact.consumed
+                 and self._target is fact.target and self._target_snapshot is fact.target
+                 and type(self._buffer_values) is bytes and self._buffer_values == b""
+                 and len(run.buffer) == 0)
+        wait = fact.readiness
+        _require(type(wait) is _CancelledWaitRetirement
+                 and wait.mint is _CANCEL_RETIREMENT_MINT
+                 and type(wait.owner) is SelectorReadiness and self._waiter is wait.owner)
+        SelectorReadiness._guard(wait.owner, actor=False)
+        SelectorReadiness._wake_guard(wait.owner)
+        _require(wait.owner._origin_scope is wait.scope and wait.owner._future_origin is wait.future
+                 and wait.owner._wake_binding_origin is wait.binding
+                 and wait.owner._handle_snapshot is wait.handle
+                 and wait.owner._handle_args_snapshot is wait.handle_args
+                 and wait.owner._retired is True and wait.owner._unknown is False)
+
     async def _take(self, target):
         import errno
         import os
@@ -335,10 +545,17 @@ class CredentialControlCursor:
         from .presentation_broker_cancel import _SOCKET_RECV
         from .presentation_broker_service import _SOCKET_FILENO, _SOCKET_TIMEOUT
         from .presentation_cancel_budget import CancellationBudget
-        from .presentation_readiness import SelectorReadiness, _WakeBinding
+        from .presentation_readiness import (
+            _CANCEL_RETIREMENT_MINT,
+            SelectorReadiness,
+            _CancelledWaitRetirement,
+            _ReadinessCancelledError,
+            _WakeBinding,
+        )
 
         part = None
         buffer = self._buffer_origin
+        read_run = self._read_run_snapshot
         _require(type(buffer) is bytearray)
         try:
             CredentialControlCursor._guard(self)
@@ -409,6 +626,17 @@ class CredentialControlCursor:
                     cutoff = CredentialControlCursor._guard(self)
                     try:
                         await SelectorReadiness.wait(waiter, cutoff)
+                    except _ReadinessCancelledError as error:
+                        _require(type(error) is _ReadinessCancelledError
+                                 and type(error.retirement) is _CancelledWaitRetirement
+                                 and error.retirement.mint is _CANCEL_RETIREMENT_MINT
+                                 and error.retirement.owner is waiter
+                                 and error.retirement.scope is origin
+                                 and error.retirement.future is future
+                                 and error.retirement.end is cutoff)
+                        raise _OwnedWaitCancelled(_WaitCancelled(
+                            _WAIT_CANCEL_MINT, read_run, error.retirement,
+                            consumed, target, values)) from None
                     except TimeoutError as error:
                         # Continue only a known original readiness retirement
                         # (or known no-registration expiry), never unknown debt.
@@ -484,14 +712,23 @@ class CredentialControlCursor:
             part = None
 
     async def run(self):
-
+        # Reject retries before entering a failure cleanup that could overwrite
+        # the original run's positive retirement or unknown native debt.
+        _require(type(self) is CredentialControlCursor)
+        _require(self._initialized is True and self._started is False
+                 and self._complete is False and self._failed is False
+                 and self._io_unknown is False and self._cancel_release is None
+                 and self._cancel_release_snapshot is None)
         original = self._buffer_origin
         _require(type(original) is bytearray)
         prefix = raw = framed = commitment = header = parsed = expected = None
         cancelled = failed = False
+        retirement = run = None
+        channel = None
         try:
             CredentialControlCursor._guard(self)
             _require(self._started is False)
+            run = CredentialControlCursor._begin_read_run(self, original)
             self._started = True
             channel = self._binding_snapshot._refs_snapshot[14]
             _require(channel._reading is False)
@@ -557,6 +794,13 @@ class CredentialControlCursor:
             self._release = _CONTROL_READ_COMPLETE
             self._complete = True
             return None  # no data object is accepted as native authority
+        except _OwnedWaitCancelled as stopped:
+            failed = cancelled = True
+            try:
+                retirement = CredentialControlCursor._cancelled_wait_retirement(
+                    self, run, original, stopped.receipt)
+            except BaseException:
+                retirement = None
         except asyncio.CancelledError:
             failed = cancelled = True
         except BaseException:
@@ -565,13 +809,16 @@ class CredentialControlCursor:
             prefix = raw = framed = commitment = header = parsed = expected = None
             if failed:
                 self._failed = True
-                # Conservative uncertainty retains original consumed counts and
-                # read/readiness intent. No retry or borrowed-buffer cleanup.
-                self._io_unknown = True
+                # Only actual cancellation of the exact known retired wait
+                # settles local IO; all other failures retain native debt.
+                self._io_unknown = retirement is None
                 bytearray.clear(original)
                 self._buffer_values = b""
                 self._pending = self._pending_snapshot = None
                 self._raw = self._frame = self._header = self._phase = None
+                if retirement is not None:
+                    self._cancel_release = self._cancel_release_snapshot = retirement
+                    channel._reading = False
             if not failed:
                 channel._reading = False
         if cancelled:
@@ -604,6 +851,8 @@ class CredentialControlCursor:
         self._pending = self._pending_snapshot = None
         self._raw = self._frame = self._header = self._phase = None
         self._release = None
+        self._read_run = self._read_run_snapshot = None
+        self._cancel_release = self._cancel_release_snapshot = None
         self._completion = self._completion_snapshot = None
         self._started = self._complete = False
         await CredentialControlCursor.run(self)

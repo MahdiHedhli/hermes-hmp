@@ -797,3 +797,52 @@ async def test_same_task_reinitialization_during_native_add_preserves_exact_regi
     assert rejected == [True] and owner._retired and not owner._unknown
     slots = loop._selector.get_key(left.fileno()).data
     assert slots[slot] is None and slots[1 - slot] is opposite
+
+
+@pytest.mark.parametrize("kind", ["read", "write"])
+async def test_native_task_cancel_retains_exact_preawait_retirement_without_payload(pair, kind):
+    left, _ = pair
+    if kind == "write":
+        _fill_send_buffer(left)
+    cls = readiness.SelectorReadiness if kind == "read" else readiness.SelectorWriteReadiness
+    retained = []
+    async def wait_owned():
+        owner = cls(left)
+        retained.append(owner)
+        await owner.wait(end())
+    task = asyncio.create_task(wait_owned())
+    await asyncio.sleep(0)
+    owner = retained[0]
+    original = (owner._origin_scope, owner._future_origin, owner._wake_binding_origin,
+                owner._handle_snapshot, owner._handle_args_snapshot)
+    assert owner._attempted and not owner._retired
+    task.cancel()
+    with pytest.raises(readiness._ReadinessCancelledError) as caught:
+        await task
+    fact = caught.value.retirement
+    assert type(fact) is readiness._CancelledWaitRetirement
+    assert fact.mint is readiness._CANCEL_RETIREMENT_MINT and fact.owner is owner
+    assert all(a is b for a, b in zip(
+        (fact.scope, fact.future, fact.binding, fact.handle, fact.handle_args), original,
+        strict=True))
+    assert fact.end is original[2].end
+    assert task.done() and task.cancelled() and task.cancelling() > 0
+    assert owner._retired and not owner._unknown
+    assert not any(type(value) in (bytes, bytearray) for value in fact)
+
+
+async def test_future_cancel_exception_is_not_native_task_cancel_retirement(pair):
+    retained = []
+    async def wait_owned():
+        owner = readiness.SelectorReadiness(pair[0])
+        retained.append(owner)
+        await owner.wait(end())
+    task = asyncio.create_task(wait_owned())
+    await asyncio.sleep(0)
+    owner = retained[0]
+    owner._future_origin.set_exception(asyncio.CancelledError())
+    with pytest.raises(asyncio.CancelledError) as caught:
+        await task
+    assert type(caught.value) is asyncio.CancelledError
+    assert task.cancelled() and task.cancelling() == 0
+    assert owner._retired and not owner._unknown
