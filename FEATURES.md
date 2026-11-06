@@ -8,6 +8,13 @@ execution is not claimed. Every native case has known cleanup. A deliberately
 delegated socket can echo after its original peer exits, and the original
 lifetime fence correctly refuses it. Nonce possession alone grants no authority.
 
+Integrated source `1d12376` through [PR116](https://github.com/MahdiHedhli/hermes-hmp/pull/116)
+passes all four jobs in [CI42135111372](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42135111372):
+**7,230 passed, 30 skipped, 18 warnings, 190 subtests**, plus Unicode 17 jobs.
+Linux CI skips the Darwin-specific cases; the separate root native observations
+are the evidence for those cases. Counts overlap and are not additive. Initial
+configured-lint failure and its reviewed successor remain recorded.
+
 This is an experiment, not production runtime qualification or an installed
 image feature. Ambient gateway FD custody and startup provenance, the production
 issuer, qualified TERMINAL/ACK, native retirement, authenticated character routes

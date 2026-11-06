@@ -75,6 +75,14 @@ PID-reuse test, exit-timing matrix or partial-constructor fault qualification.
 Those remain separate work. Linux skips for the Darwin-specific primitive are
 not Linux qualification; its separate runtime contract remains.
 
+## Exact-source CI
+
+Integrated source `1d12376` through PR116 passes CI42135111372, all four jobs:
+7,230 passed, 30 skipped, 18 warnings and 190 subtests, plus the Unicode 17 jobs.
+Linux CI skips the Darwin-specific cases and cannot replace root's separate
+actual observations. Counts overlap and are not additive. No production, device
+or full-character admission follows.
+
 ## Remaining production work
 
 The [runtime issuer plan](RUNTIME_ISSUER.md) remains proposed with production
