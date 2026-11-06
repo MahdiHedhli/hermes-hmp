@@ -1,5 +1,13 @@
 # BI1 integration tasks
 
+- [x] Implement/review the owned-child lifetime/possession experiment and perform
+      one bounded actual Darwin run. Root passes 20 checks (nine native modes,
+      eleven guards); reviewer independently matches source/log/artifact hashes,
+      no reviewer execution. All nine cleanups known; delegated fresh echo after
+      original exit refuses. This does not qualify ambient gateway FD custody,
+      production issuer, bidirectional terminal transcript or native release.
+      See [exact experiment scope](PEER_LIFETIME_PROBE.md).
+
 - [ ] Review and implement the actual trusted startup/runtime issuer, separate
       from synthetic_no_go inventories and enrollment DATA, together with one
       actual original-task terminal transcript. See [issuer contract](RUNTIME_ISSUER.md).

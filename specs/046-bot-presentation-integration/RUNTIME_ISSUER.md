@@ -105,6 +105,15 @@ before any body. Exit, ambiguous registration, replacement or lost observation
 refuses; never register a replacement PID and call it the original lifetime.
 The observer is not an owned reap or authority to signal that PID.
 
+The [owned-peer experiment](PEER_LIFETIME_PROBE.md) exercises a conditional
+alternative: register before a newly generated connection-possession challenge.
+Root's 20 checks include nine actual Darwin cases, with independently read-back
+artifacts and known cleanup; reviewer execution is not claimed. This alternative
+requires exclusion of every other FD holder, including fork inheritance and
+delegation. Its negative delegated-socket case proves why nonce possession alone
+cannot establish the original peer. Ambient gateway custody remains unresolved;
+neither this experiment nor CLOEXEC changes production admission.
+
 For the first disposable transcript, the external supervisor must own both
 synthetic process objects from creation, retain their unreaped lifetimes through
 registration/peer join, and be their only reaper. That gives the fixture an

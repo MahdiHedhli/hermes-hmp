@@ -1,3 +1,19 @@
+## Owned-peer lifetime experiment — November 6, 2026
+
+A new disposable Darwin probe exercises observer registration followed by a fresh
+role/scope-bound connection-possession challenge. Root's exact-source CPython
+3.11.15 run passes **20 checks: nine native modes and eleven guard cases**.
+Independent source and artifact review accepted that bounded evidence; reviewer
+execution is not claimed. Every native case has known cleanup. A deliberately
+delegated socket can echo after its original peer exits, and the original
+lifetime fence correctly refuses it. Nonce possession alone grants no authority.
+
+This is an experiment, not production runtime qualification or an installed
+image feature. Ambient gateway FD custody and startup provenance, the production
+issuer, qualified TERMINAL/ACK, native retirement, authenticated character routes
+and physical parity remain open. Desktop characters and host-local images remain
+unfinished on phones. See the [probe contract](specs/046-bot-presentation-integration/PEER_LIFETIME_PROBE.md).
+
 ## Reviewed local handoff freeze — November 5, 2026
 
 HMP source `797dbbc` is integrated through
