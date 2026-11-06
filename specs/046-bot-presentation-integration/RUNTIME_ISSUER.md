@@ -167,7 +167,27 @@ authority path, or exact operation/phase/input/result/frame-digest approvals fro
 the retained native gateway owner over Mach that constrain UDS data. Approval
 must be an original native-owner transition, never a caller boolean. Boot-only
 source must have no route to ordinary UDS BEGIN/GO/control/terminal authority
-until this binding is implemented and independently reviewed, including delegated-holder negatives.
+until this binding is implemented and independently reviewed, including
+delegated-holder negatives.
+
+### Request receive and reply-right disposal boundary
+
+The next request receiver retains the entire kernel receive buffer and copied
+rights before post-call time/reentry checks. It accepts only a fixed noncomplex
+frame, exact local endpoint, no voucher or unexplained flags, checked audit
+trailer bounds, and received PORT_SEND_ONCE remote / PORT_SEND local dispositions
+for the selected COPY_SEND + MAKE_SEND_ONCE request. Received dispositions are
+not the sender's original dispositions. Timeout is distinct from other uncertain
+receive/copyout outcomes; neither permits a replacement cursor or automatic retry.
+
+Receiving a reply right does not authorize contact with its destination. Even
+discarding a send-once right can cause a kernel notification to that destination,
+as shown by [pinned XNU right cleanup](https://github.com/apple-oss-distributions/xnu/blob/f6217f891ac0bb64f3d375211650a4c1ff8ca1ea/osfmk/ipc/ipc_right.c).
+Therefore a receive-only implementation must not claim no outbound IPC once it
+accepts such rights. Until startup and right provenance are implemented, keep
+the endpoint unexported and actual requests restricted to explicitly owned
+fixture reply destinations, including disposal notification scope. No generic
+unqualified production receiver or challenge is admitted by this contract.
 
 The installed Darwin SDK exposes LOCAL_PEERTOKEN, but it is not selected here as
 a standalone original-peer-incarnation proof. Inspected Apple kernel code looks
