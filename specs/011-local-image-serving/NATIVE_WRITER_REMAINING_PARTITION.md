@@ -59,3 +59,37 @@ The pure remaining planner preserves all 418 never-attempted phases from pairs
 refused pair. The combined related suite passed 696 tests. Completed-prefix
 artifact audit, source-bound execution integration and supplemental coverage
 remain open. No full-matrix, delivery or release pass is claimed.
+
+## Source-bound executor candidate
+
+`local_media_native_writer_remaining.py` adds a separate offline execution owner.
+It requires four canonical private single-link evidence files with explicit
+SHA-256 references: prefix proof, independent review record, terminal matrix
+journal and original refused native receipt. The review record is an operator-held
+attestation to the actual independent review, not a cryptographic reviewer
+identity or any server/device permission. It binds the accepted prefix digest,
+source and exact scope counts.
+
+Admission reconciles every completed/current pair to the historical catalog,
+compares recorded fields canonically (boolean/float substitutions refuse), and
+requires the original native actor's known terminal-zero settlement record. An
+unsettled actor, pending/mismatched review, wrong source/request or changed file
+refuses before a new state or job is written. The accepted prefix remains bound
+to old source `21937dc`; it is not relabeled as execution of this candidate.
+
+The operator supplies an exclusive fresh 0700 root, expected current HMP source,
+native source and explicit reviewed archive cache. Each job rechecks 32 GiB plus
+1 GiB capacity admission, owns a new root and uses the existing source-pinned
+single/paired driver as planned. Returned completion and source must agree.
+Any exception or uncertainty keeps the exact attempted job and prevents all
+later admission. No root is adopted/reused, prior artifact deleted, failed job
+retried or original observation deadline extended. Native receipts remain
+necessary if an I/O failure prevents the latest parent journal write.
+
+The executor can complete only the unattempted scope (301 jobs / 418 phases).
+Its full-matrix flag stays false and original-refusal-preserved stays true.
+The two accepted fresh repartition observations are separate evidence. Additional
+ordinary/delegate scope, final composite acceptance, C6b and device/release gates
+remain open. Root's 716 related guard/model tests and lint passed; read-only
+preflight against the actual evidence also passed. Independent execution-source
+review is pending, and this executor has launched no native job yet.
