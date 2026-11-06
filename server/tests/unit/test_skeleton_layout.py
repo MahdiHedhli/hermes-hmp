@@ -75,6 +75,7 @@ CONTRACT_MODULES = {
     "presentation_credential_work.py",
     "presentation_credential_begin.py",
     "presentation_credential_queued.py",
+    "presentation_control_binding.py",
     "presentation_credential_transcript.py",
     # BR4a read-only kernel connection identity; no endpoint/service activation.
     "presentation_broker_peer.py",

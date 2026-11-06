@@ -227,6 +227,64 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
 
                     await asyncio.create_task(foreign_task())
             assert work.current_queued() is native
+            if mutation in (
+                "control_binding",
+                "control_binding_creator_drift",
+                "control_binding_reader_drift",
+            ):
+                from hmp_plugin.presentation_broker_cancel import BrokerCancellationOwner
+                from hmp_plugin.presentation_cancel_budget import CancellationBudget
+
+                budget_before = CancellationBudget.inspect(native.cleanup_budget)
+                grammar_before = dict(record.grammar.__dict__)
+                control = BrokerCancellationOwner.prepare_credential(work)
+                held["prepared_control"] = control
+                prepared = control._credential_binding_snapshot
+                assert (
+                    prepared._bound is True and prepared._allocation is control._allocation_snapshot
+                )
+                assert prepared._creator is asyncio.current_task()
+                assert prepared._allocation.task is not asyncio.current_task()
+                assert prepared._allocation.task.get_coro() is control._slot_snapshot.coroutine
+                with pytest.raises(FrameError, match="SIGNED_CONTROL_READER_NOT_IMPLEMENTED"):
+                    BrokerCancellationOwner._guard(control)
+                with pytest.raises(FrameError, match="SIGNED_CONTROL_READER_NOT_IMPLEMENTED"):
+                    BrokerServiceSpine._v2_work_current(spine, control)
+                with pytest.raises(FrameError):
+                    BrokerCancellationOwner.prepare_credential(work)
+                original_task = control._allocation_snapshot.task
+                if mutation != "control_binding":
+                    from hmp_plugin.presentation_clock import NativeClockOwner
+                    from hmp_plugin.presentation_control_binding import PreparedControlBinding
+
+                    callbacks = []
+                    held["binding_callbacks"] = callbacks
+
+                    class Foreign:
+                        def __getattribute__(self, name):
+                            callbacks.append(name)
+                            raise AssertionError("foreign control getter")
+
+                    if mutation == "control_binding_creator_drift":
+                        sample = NativeClockOwner.sample
+
+                        def changed(clock):
+                            now = sample(clock)
+                            prepared._control_snapshot = Foreign()
+                            return now
+
+                        monkeypatch.setattr(NativeClockOwner, "sample", changed)
+                        with pytest.raises(FrameError):
+                            PreparedControlBinding.creator_current(prepared)
+                    else:
+                        prepared._allocation = Foreign()
+                outcome = await asyncio.gather(original_task, return_exceptions=True)
+                assert len(outcome) == 1 and isinstance(outcome[0], FrameError)
+                assert control._failed is True and control._wire_received == 0
+                assert control._go_receipt is None and control._cancel_receipt is None
+                assert channel._reading is False and control._buffer_origin == b""
+                assert CancellationBudget.inspect(native.cleanup_budget) == budget_before
+                assert record.grammar.__dict__ == grammar_before
             return ticket
         except FrameError:
             with pytest.raises(FrameError):
@@ -265,7 +323,15 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
         )
         raw = encode_record(value, keys["gateway"]._private_key.sign(signing_bytes(value)))
         await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, raw + frame)
-        if mutation in (None, "earlier_accept", "queued_after_admission", "legacy_control"):
+        if mutation in (
+            None,
+            "earlier_accept",
+            "queued_after_admission",
+            "legacy_control",
+            "control_binding",
+            "control_binding_creator_drift",
+            "control_binding_reader_drift",
+        ):
             held["ticket"] = await task
         else:
             with pytest.raises(FrameError):
@@ -421,3 +487,31 @@ async def test_credential_channel_refuses_legacy_control_and_result_before_claim
     assert held["legacy_refused"] is True and calls == [held["ticket"]]
     assert held["record"].credential_adoption_complete is True
     assert held["work"]._refused is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+async def test_prepared_credential_control_binds_original_task_and_performs_no_io(
+    local, tmp_path, monkeypatch
+):
+    held, calls = await exchange(local, tmp_path, monkeypatch, "control_binding")
+    control = held["prepared_control"]
+    assert calls == [held["ticket"]] and control._failed is True
+    assert held["record"].cancel_owner is control
+    assert control._credential_binding_snapshot._refs is held["work"]._refs_snapshot
+    assert local[0]._registry_snapshot._record(held["ticket"]).resources is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+@pytest.mark.parametrize(
+    "mutation", ["control_binding_creator_drift", "control_binding_reader_drift"]
+)
+async def test_prepared_control_rejects_foreign_context_without_getters_or_io(
+    local, tmp_path, monkeypatch, mutation
+):
+    held, calls = await exchange(local, tmp_path, monkeypatch, mutation)
+    assert held["binding_callbacks"] == [] and calls == [held["ticket"]]
+    control = held["prepared_control"]
+    assert control._failed is True and control._wire_received == 0
+    assert control._go_receipt is None and control._cancel_receipt is None

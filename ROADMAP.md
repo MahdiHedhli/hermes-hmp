@@ -1,23 +1,23 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now explicitly
-refuses legacy raw GO/CANCEL and direct result IO on credential channels. Known
-mode refusal precedes native task/custody claims and preserves the valid grammar/
-budget. Existing legacy unsigned channels are unchanged. Original controller
-reinitialization cannot replace its retained task/cursor.
-Affected regression: **1,116 passed, one skipped**, 29.86 seconds; configured lint
-passed. Independent review was source-only. See [source evidence and limits](docs/research/presentation-credential-no-legacy-io-2026-11-06.md).
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) includes the
+reviewed original controller task/key-context preparation handoff. It retains
+actual native allocation/creator/loop and original queued scope before publication,
+with callback-safe reference checks. It cannot read or authorize work: its Task
+stops explicitly before bytes, and work guards refuse even before it runs.
+Affected regression: **1,120 passed, one skipped**, 29.73 seconds; configured lint
+passed. Independent review was source-only.
+See [evidence and limits](docs/research/presentation-prepared-control-binding-2026-11-06.md).
 
-The [signed control handoff contract](specs/046-bot-presentation-integration/SIGNED_CONTROL_OWNER.md)
-is reviewed; actual signed GO/CANCEL must precede credential resource/READY
-startup. Those paths are not implemented or opened. Remaining signed/direct IO,
-production startup, native publication, STATUS and physical/release qualification
-remain open. Character delivery is not yet available. No live host/device changed.
+Actual signed GO/CANCEL parsing/receipts, resource/READY startup, remaining
+signed/direct IO, production startup, native publication, STATUS and physical/
+release qualification remain open. Character delivery is not yet available;
+legacy unsigned fallback stays refused. No live host/device changed.
 
-Earlier queued owner `baf2212` passed
-[CI718](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42258615640): 8,307 tests,
+Earlier fallback refusal `98d6c3b` passed
+[CI720](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42261624061): 8,309 tests,
 190 subtests, 33 skips, 18 warnings; plugin checks and Python 3.12–3.14 Unicode
-jobs passed. That result does not qualify the newer fallback-refusal fix.
+jobs passed. That result does not qualify the newer preparation source.
 
 ## Native image verification checkpoint — November 6, 2026
 

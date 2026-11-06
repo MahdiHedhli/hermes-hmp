@@ -46,6 +46,9 @@ historical, not an alternative live authorization path or resolved incident.
       claims; preserve known-refusal grammar/budget and original controller task.
       Affected regression: 1,116 passed, one skipped. No signed control activation.
 - [x] Review the fixed original [signed control handoff contract](SIGNED_CONTROL_OWNER.md).
+- [x] Implement/review the no-IO original controller allocation/key-context
+      preparation handoff, with work guards hard-closed and partial objects retained.
+      Affected regression: 1,120 passed, one skipped. This is NOT a signed reader.
 - [ ] Implement the actual signed GO/CANCEL receiver/context on the existing original
       controller task/cursor and frozen budget before any credential resource/READY
       startup. No legacy fallback, new parser task or boolean gate opening.

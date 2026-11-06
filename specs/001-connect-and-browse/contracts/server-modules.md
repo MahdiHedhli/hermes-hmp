@@ -598,3 +598,5 @@ not weaken the closed plugin registration or optional-media import boundaries.
 - `presentation_credential_begin.py`: retained original broker-task signed BEGIN read cursor; no native input adoption or worker authority.
 
 - `presentation_credential_queued.py`: original adopted connection/key/input-receipt pre-resource queued-current check; no resource or GO permit.
+
+- `presentation_control_binding.py`: prepared original controller task/key-context handoff; hard no-IO stop until signed control exists.
