@@ -1,3 +1,18 @@
+## Native dependency union verified; cache source integrated — November 6, 2026
+
+PR128 is integrated into the feature branch at `4bab0cd`. Both exact-source CI
+runs passed all jobs: 7,415 tests, 33 skips, 18 warnings and 190 subtests, plus
+Unicode jobs. The original two historical hash-witness omissions were repaired
+using the independently reviewed exact inverse and unchanged hash constants.
+
+A fresh native PM build also resolved and installed the complete shipping HMP
+dependency declaration alongside native `ed1afb08` core dependencies, with all
+12,189 original source/auxiliary files unchanged. The resulting environment uses
+Python 3.14.9, aiohttp 3.14.5, qrcode 7.4.2, PyYAML 6.0.3 and cryptography 50.0.2.
+This is a sampled dependency-union build, not full plugin loading, activation,
+phone display or release qualification. See
+[method and remaining limits](docs/research/local-media-native-pm-union-2026-11-06.md).
+
 ## Current native image-cache compatibility fixed — November 6, 2026
 
 The candidate now recognizes both legacy `cache/images` and current

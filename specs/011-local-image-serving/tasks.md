@@ -525,3 +525,19 @@ distinguishes native cache-helper evidence from provider generation, deferred/
 Desktop runtime scope, cost/T12, Linux, complete plugin PM, phone rendering and
 activation; those gates remain open. No live permissions, settings or deployment
 changed.
+
+## Exact shipping dependency-union sample (2026-11-06)
+
+PR128 integrated at `4bab0cd` after both full exact-source CI runs passed all
+jobs (7,415 tests, 33 skips, 18 warnings, 190 subtests plus Unicode jobs).
+The two omitted historical active-batch witnesses now use the exact reviewed
+inverse, preserving byte reads and original SHA constants.
+
+One isolated native PM build resolved and installed the three shipping HMP
+manifest dependencies with the pinned native core graph. All 12,189 original
+inputs remained unchanged. This closes only the sampled dependency-union build
+gap; full plugin installation/loading and activation remain separate. The first
+environment-preflight refusal is preserved. See
+[the PM sample](../../docs/research/local-media-native-pm-union-2026-11-06.md).
+C6b/T12, Linux, production provider/Desktop scope and physical display/activation
+remain unchecked; no broader S4/S5/R2/R3 completion is inferred.

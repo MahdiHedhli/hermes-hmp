@@ -128,6 +128,12 @@ passed. These results do not qualify phone display, an actual image producer,
 large-image memory/deadlines, Linux, full plugin-PM installation or production
 activation. Do not infer availability on an installed host or phone from them.
 
+The complete shipping manifest dependency union has separately
+[built with the pinned native core graph](research/local-media-native-pm-union-2026-11-06.md)
+in a fresh private PM environment. This excludes core-project installation and
+uses a dependency-only plugin member; it is not a plugin loading or host
+activation check. The original native source and locks stayed unchanged.
+
 The candidate is default off and restricted to approval-owner devices; jobs/model
 controls alone do not grant that ownership. It also needs
 `platforms.hmp.extra.local_media.enabled`, Hermes at or above `v0.21.5` (or a
