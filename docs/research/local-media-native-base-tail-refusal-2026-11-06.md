@@ -30,9 +30,17 @@ Terminal parent journal SHA-256:
 The cause is not established. In particular, case 6 has no full prompts, so
 this cannot be described as a problem exclusive to the full-prompt shape.
 Heavy-only splitting did not establish sufficient timing margin for the entire
-plan. A source-reviewed, separately pinned collector is now auditing only the
-201 completed jobs / 296 phases. It preserves both refusals and refuses any
-changed state/settlement mapping. The full-301 collector was not run and must
-reject this terminal failed state. All 120 never-started phases, the newly
-refused two phases, supplemental native execution, final composite coverage,
-production activation and device/release qualification remain open.
+plan. A source-reviewed, separately pinned collector completed the separate
+201-job / 296-phase prefix audit. Independent readback accepted all 5,416
+artifacts and 2,526,369 copied source identities, 592 outcomes and 2,010 known
+commands without expiry or settlement in that prefix. Both refused attempts
+remain excluded. Prefix proof SHA-256:
+`f6d139a0a22e376f904994504c8e0e23075bccb66ff5140bfd06bc77070b8440`.
+This accepts only the completed prefix; it does not complete the parent run. The full-301 collector was not run and must
+reject this terminal failed state. The separate follow-up source 5e247a6 later completed all 120 never-started
+phases and two explicitly reviewed fresh single-phase Phone observations; their
+artifacts and cleanup were independently accepted. Those observations do not
+rehabilitate the paired refusal or establish its timing cause. The 144-phase
+child-lineage supplement is now running; its completion/artifact acceptance, final
+composite/native feature coverage, activation and device/release qualification
+remain open.

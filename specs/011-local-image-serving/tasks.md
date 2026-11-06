@@ -7,6 +7,8 @@
 > and the slices M0-M3 below. Descriptor/fetch source and bounded native samples
 > now exist; activation, physical acceptance and full release qualification remain open.
 
+**Current November 6 disposition:** [C6b scoped native-evidence acceptance](../../docs/research/local-media-c6b-root-acceptance-2026-11-06.md) is complete. Earlier dated stage statements that C6b remains open are historical checkpoints. HMP R2 source and runtime-package review are also complete. Full S4/S5 delivery acceptance, plugin loading, R3/current-listener activation, clients/devices and release remain open.
+
 `[ ]` means not started or not independently reviewed. Workers do not self-certify. No implementation task starts before the contract revision (P0) is reviewed. A worker meeting unspecified behavior records a gap marker instead of inventing a rule.
 
 ## M0 Documents
@@ -55,11 +57,11 @@ dependency action.
   the 114 legacy tests as the architecture allows. Exit for the listener source slice: bounded A7-A12 and A14 evidence, then **mandatory independent
   exact-candidate security review**. Root accepted exact `f737197` after independent review: 3047 unit cases passed, three existing S4 contract-table failures and 16 native-dependent skips remained. This closes the listener source slice only; the route portions of A8/A10/A11 stay with S4/S5.
 
-(The older headings "M1 Host" and "M2 Convergence" below are original document-phase names and are unrelated to slices M1-M3 above.) Later slices stay open exactly as listed under them: C6b exact-native cost and
+(The older headings "M1 Host" and "M2 Convergence" below are original document-phase names and are unrelated to slices M1-M3 above.) At the original M3 checkpoint, later slices remained C6b exact-native cost and
 concurrent-writer evidence (release-candidate evidence, not a per-version allowlist), S4 descriptor emission, S5
 route, R2 independent exact-candidate review, and R3 owner-authorized install, flag
-and physical-device acceptance. C6b, independent delivery review and device acceptance remain pending;
-the T12 sampled Darwin memory measurement is now recorded below. No evidence row
+and physical-device acceptance. The current November 6 disposition above now records scoped C6b and HMP R2 acceptance. Full delivery and device acceptance remain open;
+the T12 sampled Darwin memory measurement is recorded below. No evidence row
 enables the feature or certifies another platform.
 
 ### Acceptance matrix for M2/M3
@@ -98,7 +100,7 @@ candidate and sample; that evidence does not prove behavior on future builds.
 - [x] **S6a** *(historical; retired design, not carried onto the converted base)* Inert process qualification gate and empty manifest. Root accepted source after independent Opus original review, Sonnet hardening delta review and 392 focused tests. No listener, flag, entry or admission; S6 remains open.
 - [ ] **S6b** *(historical; retired design, superseded by M3)* Bind the S6a gate to the adapter, request context and per-load media caches (static required set, actual-object proofs, strict flag fields). Source and focused tests written under the [S6b freeze](ROOT_DECISIONS.md#s6b-listener-binding-freeze-2026-10-01); bounded source independently reviewed and accepted after repair, with 138 root cases passing. No entry, route consumer or admission; S6 stays open.
 - [x] **C6a** Request-scoped active-history batch module and independent security review, following the C6 freeze; accepted single scanner unchanged. Source acceptance only; native cost/memory and C6b remain open.
-- [ ] **C6b** Bind that reviewed batch to the same native database/home capture, then root exact-native cost, concurrent-writer and mint-memory evidence. C6 remains open.
+- [x] **C6b** Bind the reviewed batch to the same native database/home capture and accept the bounded current-native cost/allocation, modeled mint, process RSS and 912-phase writer evidence. Root accepted after independent contract review and receipt-join repair, preserving actual sources, old refusals and residual/ABA limits. This closes this evidence task only; full delivery, activation, platform/device and release qualification remain separate.
 - [ ] **S4** Descriptor emission in handlers, 128 cap (T1, T5, T6, T7). Needs S2, S3, S6 and C6 admission.
   Source written on `b07890e`, independently reviewed and accepted for the S4 source slice (2026-10-02; full task not ticked): the four read handlers select the old read or the media twin plus one `bind_media_batch` in one worker job, then mint newest-first (at most 128) on the loop through the listener's one registry; `media_unavailable` and the §13 media constants are in `contract.py`; no fetch route (S5). Native complete-binding cost and T12 are release-candidate evidence, not prerequisites for this source. Independent review accepted the exact source, with stale documentation repaired. Root reproduced 679 focused cases after seven added tests; full delivery, native cost, T12 and device evidence remain separate open gates.
 - [ ] **S5** Route, dedicated executor, permits, `ContextVar` copy for both phases, constants, streaming, phase one, phase two, synchronous final section (T3, T9-T11, T13, T15-T17). Needs S1, S3, S6.
@@ -109,7 +111,7 @@ candidate and sample; that evidence does not prove behavior on future builds.
 
 ## M2 Convergence
 
-- [ ] **R2** Independent security review of the exact candidate.
+- [x] **R2** Independent exact HMP local-media source security review at `5e247a6` / native `ed1afb08`; 21 production files and their composition accepted, with known limits retained. The runtime-only 109-file package is independently verified. This is not full S4/S5 delivery, mobile/build/device, plugin-loading or R3 activation qualification. See [source/package evidence](../../docs/research/local-media-delivery-source-review-2026-11-06.md).
 - [ ] **R3** Owner-authorized install, live flag and physical-device acceptance. No build-list or manifest entry is required. Any live Hermes change needs separate owner authorization.
 
 ## S1 reviewed source identity (2026-10-01)
@@ -708,6 +710,12 @@ limitation is reclassified as a fix or a physical/release qualification.
 
 - [x] Independently review the pure [child-lineage supplement partition](NATIVE_WRITER_SUPPLEMENT_PARTITION.md): preserve all 144 added phases in 90 prospective jobs, exact expanded-catalog coordinates, heavy-only splitting and no execution authority. Root 23 pure partition cases and independent source review pass; native supplemental execution/admission and final composite coverage remain open.
 - [x] Independently review the explicit supplemental-only execution owner: fresh roots, per-job capacity/source/cache checks, pre-effect attempt record, retained failure and no replay. Root 13 causal models plus 23 pure partition tests and lint pass. No native supplement run is claimed.
-- [ ] Admit and execute the reviewed supplemental scope after the active base-tail batch becomes authoritatively terminal; independently verify all actual source/runtime/report/command/checkpoint and cleanup artifacts before composite acceptance.
-- [ ] Independently accept the base-tail completed prefix after job 201 observation refusal: 201 completed jobs / 296 phases, not the full planned scope. Preserve the original pair-174 and new origin-pair-323 refusals; cause remains unproven. The separate source-reviewed collector is active; no retry, deadline extension or later native admission follows.
+- [x] Admit and execute the reviewed supplemental scope after the base-tail batch becomes authoritatively terminal; independently verify all actual source/runtime/report/command/checkpoint and cleanup artifacts. All 144 fresh phases completed with 3,744 artifacts and 1,810,368 copied-source identities independently accepted.
+- [x] Independently reconcile all 912 exact declared phase identities across the six actual-source evidence scopes, preserving original paired refusals, fresh-single contexts and residual/ABA limitations. [Bounded composite evidence](../../docs/research/local-media-native-writer-composite-2026-11-06.md). This does not close C6b root disposition, delivery, activation or device/release gates.
+- [x] Independently accept the base-tail completed prefix after job 201 observation refusal: 201 completed jobs / 296 phases, not the full planned scope. Preserve the original pair-174 and new origin-pair-323 refusals; cause remains unproven. Independent review accepted all 5,416 artifacts and 2,526,369 copied source identities in the completed prefix only; no retry, deadline extension or later native admission follows.
 - [x] Independently review explicit supplemental `per_phase_v2` layout: exactly the same ordered 144 observations in 144 single-phase jobs; historical `heavy_only_v1` remains default and no failure-driven switching/replay occurs. Root 45 pure/fake-driver tests and lint pass. Timing improvement and native admission remain unproven.
+- [x] Independently review the pure [second-tail partition](NATIVE_WRITER_SECOND_TAIL_PARTITION.md): exactly 120 never-started phases after job 201, preserving every ordered coordinate/workload and excluding both refusals. Root 64 related pure/fake-driver cases and configured lint pass. No source/receipt acceptance, execution owner or native admission follows from this plan.
+
+- [x] Independently accept all 120 never-started single-phase observations at exact source 5e247a6: 3,120 artifacts, 1,508,640 copied source identities, 240 outcomes and 1,200 known commands without settlement; all borrows/DB/listener/workers/hooks/writers closed. No old paired refusal or full-matrix timing result is promoted.
+- [x] Review the exact new Phone-pair-323 phase plan/controller (38 admission causals), execute its two fresh single-phase observations, and independently accept 52 artifacts / 25,144 copied source identities and known cleanup. Process-startup/cumulative-resource/timing context differs from the original paired attempt, which remains refused.
+- [ ] Complete and independently accept the full 144-phase ordinary/delegated-child supplement. The reviewed controller 43ba4592 is now running explicit per_phase_v2 from frozen 5e247a6 with all 17 evidence pins checked before each unchanged original driver call. Capacity exit 0 alone is not completion; original 12-second observation/retained settlement/no retry rules remain.

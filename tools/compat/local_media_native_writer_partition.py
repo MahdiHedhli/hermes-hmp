@@ -97,3 +97,51 @@ def supplemental_plan(expanded_pairs, *, layout="heavy_only_v1"):
             "planned_pairs": 72, "planned_phases": 144,
             "base_phases_included": False, "full_matrix_completed": False,
             "execution_admission_review_required": True}
+
+
+def unattempted_after_refusal(prior_jobs, completed_jobs, refused_job, *, layout):
+    """Pure next-scope DATA; never adopt/replay the completed or refused prefix.
+
+    The caller must independently reconcile actual source-bound terminal evidence
+    and review before admission. Counts and this plan alone supply no authority.
+    """
+    require(type(layout) is str and layout == "per_phase_v2" and
+            type(prior_jobs) is tuple and len(prior_jobs) == 301 and
+            type(completed_jobs) is int and
+            type(refused_job) is int and completed_jobs == refused_job and
+            0 <= refused_job < 301)
+    additions = ("ordinary_child", "delegate_child")
+    base = tuple(row for row in contract.paired_plan()
+                 if not any(request.split(":")[0] in additions for request in row[2]))
+    expected_prior = remaining_plan(base, 174, 174)["jobs"]
+    for job in prior_jobs:
+        require(type(job) is dict and set(job) ==
+                {"origin_pair", "origin_phases", "case", "selector", "request"})
+        require(all(type(job[key]) is int for key in ("origin_pair", "case", "selector")) and
+                type(job["origin_phases"]) is tuple and
+                all(type(phase) is int for phase in job["origin_phases"]) and
+                (type(job["request"]) is str or
+                 (type(job["request"]) is tuple and
+                  all(type(request) is str for request in job["request"]))))
+    require(json.dumps(prior_jobs, sort_keys=True, separators=(",", ":")) ==
+            json.dumps(expected_prior, sort_keys=True, separators=(",", ":")))
+    jobs = []
+    for previous_index in range(refused_job + 1, len(prior_jobs)):
+        previous = prior_jobs[previous_index]
+        requests = ((previous["request"],) if type(previous["request"]) is str
+                    else previous["request"])
+        for phase, request in zip(previous["origin_phases"], requests, strict=True):
+            jobs.append({"previous_job": previous_index,
+                         "origin_pair": previous["origin_pair"], "origin_phases": (phase,),
+                         "case": previous["case"], "selector": previous["selector"],
+                         "request": request})
+    expected = [(job["origin_pair"], phase) for job in prior_jobs[refused_job + 1:]
+                for phase in job["origin_phases"]]
+    actual = [(job["origin_pair"], job["origin_phases"][0]) for job in jobs]
+    require(actual == expected and len(actual) == len(set(actual)))
+    return {"base_source": BASE_SOURCE, "base_plan_sha256": BASE_PLAN_SHA256,
+            "previous_plan_source": EXPANDED_CATALOG_SOURCE,
+            "layout": layout, "jobs": tuple(jobs), "planned_phases": len(expected),
+            "excluded_completed_jobs": completed_jobs, "excluded_refused_job": refused_job,
+            "original_refused_pair": 174, "refused_job_replayed": False,
+            "full_matrix_completed": False, "source_receipt_reconciliation_required": True}

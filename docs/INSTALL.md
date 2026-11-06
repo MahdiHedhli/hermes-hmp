@@ -18,10 +18,12 @@ preflight and change API ingress and secret scoping.
 
 Install the runtime plugin directory from its public repository. Hermes scans
 the selected directory, so this avoids scanning research documents and test
-fixtures as executable plugin content. The current runtime scan has two
-medium findings for subprocess calls; both use fixed argument lists, no shell,
-and bounded timeouts. Review any scanner warning before accepting it. Never
-disable the scanner or use `--allow-removed`.
+fixtures as executable plugin content. For exact candidate `5e247a6` on November 6, 2026, native `plugin-guard-v12`
+reports **safe, with 12 medium heuristic matches**: three fixed subprocess sites
+and nine binary-format/Unicode-validation literals. Independent source review
+found no new security issue in those matches; this is not a zero-finding or
+dynamic-runtime claim. Review the actual scanner output before accepting it.
+Never disable the scanner or use `--allow-removed`.
 
 ```sh
 hermes plugins install 'MahdiHedhli/hermes-hmp#server/hmp_plugin' --enable
@@ -116,6 +118,8 @@ To change that decision later, use `hermes hmp devices list` on the host to find
 The plugin belongs to the Hermes instance where it is installed. Do not copy its instance keys or device store between hosts. See [Host hardening](../server/HOST_HARDENING.md) before exposing any Hermes host service.
 
 ## Host-local generated images (candidate; not activated)
+
+Current checkpoints: [bounded C6b native evidence](research/local-media-c6b-root-acceptance-2026-11-06.md) and [exact HMP source/runtime-package review](research/local-media-delivery-source-review-2026-11-06.md) are accepted. These do not establish installation, loaded-listener availability, mobile display or release qualification. Preserve existing flag values and device rights during any separately authorized deployment.
 
 Descriptor minting and authenticated fetch code exist in the feature candidate.
 It supports both legacy `cache/images` and current `cache/generated/images`
