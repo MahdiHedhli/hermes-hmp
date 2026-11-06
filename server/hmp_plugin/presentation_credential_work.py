@@ -449,3 +449,16 @@ class NativePhaseWorkOwner:
         except BaseException:
             self._exchange_failed = True
             raise
+
+
+    async def exchange_go(self):
+        """Fixed signed GO on actual native admission; original work task only."""
+        from .presentation_credential_go import NativeGoCommitment
+        from .presentation_credential_go_write import NativeGoWriter
+
+        commitment = NativeGoCommitment.retain(self)
+        NativeGoCommitment.prepare(commitment)
+        writer = NativeGoWriter.retain(commitment)
+        await NativeGoWriter.write_go(writer)
+        NativeGoWriter.current_written(writer)
+        return writer  # original full-write proof only; no native GO_SENT mutation

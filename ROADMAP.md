@@ -1,3 +1,23 @@
+## Internal signed GO dispatch checkpoint — November 6, 2026
+
+The original credential work path now composes signed GO transport through the
+existing native admission and single GO_SENT transition, with exact full-write
+proof and separate fixed post-GO_SENT material checks. The original task parks
+on its fenced shared cause instead of entering an unsupported unsigned result
+reader. No result token, broker receipt or execution acknowledgement follows.
+
+Six direct dispatch cases and **872 selected affected tests** passed, 44.25 seconds;
+configured lint passed. Independent read-only review accepted cause/scheduler
+fences and callback-free role-material resealing after final native checks. Late
+failures retain full-wire/native-phase facts while withholding public success.
+This selected run is narrower than the prior writer's 1,466-test regression.
+Prior writer CI760 is still running; new-source CI is not qualified.
+
+Startup, signed cleanup/results/terminal custody, worker relay/native publication,
+STATUS and physical/release qualification remain open. Character delivery remains
+unavailable. No live host/device/settings or installed build changed.
+See [evidence and limits](docs/research/presentation-signed-go-dispatch-2026-11-06.md).
+
 ## Signed GO write checkpoint — November 6, 2026
 
 The original-task GO writer now sends the retained fixed signed GO record and

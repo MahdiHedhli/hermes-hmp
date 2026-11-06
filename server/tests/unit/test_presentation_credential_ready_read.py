@@ -40,6 +40,8 @@ from .test_presentation_supervisor import context as context
     "dispatch_go_write_zero", "dispatch_go_write_registration", "dispatch_go_write_initial",
     "dispatch_go_write_wrong_actor", "dispatch_go_write_intent_drift",
     "dispatch_go_write_release_cleanup", "dispatch_go_write_release_allocation",
+    "dispatch_go_live", "dispatch_go_live_key", "dispatch_go_live_cancel",
+    "dispatch_go_live_error", "dispatch_go_live_future", "dispatch_go_live_final_key",
 ])
 async def test_original_work_ready_read_requires_its_complete_signed_begin(
     context, begin_gateway, tmp_path, monkeypatch, mutation
@@ -361,13 +363,101 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 assert remote._go_admission is None and authority._record(operation).child is None
                 with pytest.raises(FrameError):
                     channel._credential_work_ready()
-                if mutation.startswith("dispatch_go_"):
+                if mutation.startswith("dispatch_go_live"):
+                    from hmp_plugin.presentation_jobs import JobOwner
+
+                    native_transition = JobOwner.remote_transition
+                    held["live_go_sent_calls"] = 0
+                    if mutation == "dispatch_go_live_future":
+                        publish = RemoteCleanupOwner._publish_write_quiescence
+                        held["foreign_cause_calls"] = []
+
+                        def foreign_cause_callback(*args, **kwargs):
+                            held["foreign_cause_calls"].append(True)
+                            raise AssertionError("foreign cause Future method dispatched")
+
+                        def changed_publish(owned):
+                            result = publish(owned)
+                            if owned is cleanup and result is True:
+                                cleanup._cause_snapshot.add_done_callback = foreign_cause_callback
+                            return result
+
+                        monkeypatch.setattr(RemoteCleanupOwner, "_publish_write_quiescence",
+                                            changed_publish)
+                    if mutation == "dispatch_go_live_final_key":
+                        from hmp_plugin.presentation_remote import RemoteOperationOwner
+
+                        check = RemoteOperationOwner._check
+                        held["native_sent_checks"] = 0
+
+                        def retire_after_final_check(owned, phase):
+                            result = check(owned, phase)
+                            if owned is remote and phase is RemotePhase.GO_SENT:
+                                held["native_sent_checks"] += 1
+                                if held["native_sent_checks"] == 5:
+                                    keys["gateway"].retire()
+                            return result
+
+                        monkeypatch.setattr(RemoteOperationOwner, "_check",
+                                            retire_after_final_check)
+
+                    def observed_go_sent(job_owner, handle, owned_remote, phase):
+                        result = native_transition(job_owner, handle, owned_remote, phase)
+                        if owned_remote is remote and phase is RemotePhase.GO_SENT:
+                            held["live_go_sent_calls"] += 1
+                            held["observed_native_go_sent"] = job_owner.inspect_remote(handle)
+                            if mutation == "dispatch_go_live_key":
+                                keys["gateway"].retire()
+                            elif mutation == "dispatch_go_live_cancel":
+                                RemoteCleanupOwner.request(cleanup)
+                            elif mutation == "dispatch_go_live_error":
+                                raise FrameError("SYNTHETIC_POST_GO_SENT_NATIVE_ERROR")
+                        return result
+
+                    monkeypatch.setattr(JobOwner, "remote_transition", observed_go_sent)
+                    try:
+                        if mutation == "dispatch_go_live":
+                            assert await remote.go() is True
+                            assert cleanup._go_notice_fact is channel._go_write_fact_snapshot
+                            assert cleanup._go_notice_snapshot.result() is True
+                            assert not cleanup._allocations_snapshot[1].task.done()
+                            assert authority._record(operation).owner.inspect_remote(
+                                authority._record(operation).handle) is RemotePhase.GO_SENT
+                        else:
+                            with pytest.raises((FrameError, AuthorityRefusalError,
+                                                asyncio.CancelledError)):
+                                await remote.go()
+                            if mutation != "dispatch_go_live_future":
+                                assert cleanup._go_notice_fact is None
+                    finally:
+                        monkeypatch.setattr(JobOwner, "remote_transition", native_transition)
+                    writer = producer._go_commitment_snapshot._writer_snapshot
+                    held["go_writer"] = writer
+                    assert writer._complete and writer._offset == len(writer._scope_snapshot.wire)
+                    assert peer.recv(65536) == writer._scope_snapshot.wire
+                    assert held["live_go_sent_calls"] == 1
+                    assert held["observed_native_go_sent"] is RemotePhase.GO_SENT
+                    assert remote._go_admission_used is True
+                    assert remote._result_owner is None
+                    assert cleanup._result_token is None
+                    if mutation == "dispatch_go_live":
+                        assert not cleanup._result_notice.done()
+                    else:
+                        assert cleanup._result_notice.done()
+                        assert cleanup._result_notice.result() is False
+                    assert not cleanup._cause_snapshot.cancelled()
+                    if mutation == "dispatch_go_live_future":
+                        assert held["foreign_cause_calls"] == []
+                        assert cleanup._cause_snapshot.done()
+                    if mutation == "dispatch_go_live_final_key":
+                        assert held["native_sent_checks"] == 5
+                    assert authority._record(operation).child is None
+                elif mutation.startswith("dispatch_go_"):
                     from hmp_plugin import presentation_credential_go as go_module
-                    from hmp_plugin.presentation_broker_service import SocketChannel
                     from hmp_plugin.presentation_credential_go import NativeGoCommitment
 
-                    async def signed_go_only(owned_channel, owned_remote):
-                        assert owned_channel is channel and owned_remote is remote
+                    async def signed_go_only(owned_producer):
+                        assert owned_producer is producer
                         if mutation == "dispatch_go_wrong_actor":
                             async def wrong_go():
                                 with pytest.raises(FrameError):
@@ -543,7 +633,7 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                                 commitment.prepare()
                         raise FrameError("SYNTHETIC_GO_SIGNING_ONLY_NO_WIRE")
 
-                    monkeypatch.setattr(SocketChannel, "send_go", signed_go_only)
+                    monkeypatch.setattr(NativePhaseWorkOwner, "exchange_go", signed_go_only)
                     with pytest.raises((FrameError, AuthorityRefusalError, OSError)):
                         await remote.go()
                     commitment = held["go_commitment"]

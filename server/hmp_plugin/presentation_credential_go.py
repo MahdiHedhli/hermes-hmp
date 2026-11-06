@@ -132,6 +132,28 @@ class NativeGoCommitment:
         _require(NativeGoCommitment._metadata(self) is s)
         _require(NativePhaseWorkOwner._material_local(s.producer)[0] is b.remote)
         RemoteOperationOwner._check(b.remote, RemotePhase.GO_INTENT)
+        _require(NativePhaseWorkOwner._material_local(s.producer)[0] is b.remote)
+        _require(type(now) is int and 0 <= now < b.intent.end_ns
+                 and NativeGoCommitment._metadata(self) is s)
+        return s
+
+    def _sent_guard(self):
+        """Fixed post-native-GO_SENT current material; no signing/write permission."""
+        s = NativeGoCommitment._metadata(self)
+        b = s.ready_scope.read_scope.write_scope
+        _require(asyncio.current_task() is b.allocation.task
+                 and _TASK.cancelling(b.allocation.task) == 0 and self._failed is False)
+        _require(NativePhaseWorkOwner._material_local(s.producer)[0] is b.remote)
+        RemoteOperationOwner._check(b.remote, RemotePhase.GO_SENT)
+        _require(b.remote._go_admission_used is True and b.channel._reading is False
+                 and b.channel._writing is False)
+        SocketChannel._check(b.channel)
+        _require(SocketChannel._qualified_clock(b.channel) is b.refs[8])
+        now = NativeClockOwner.sample(b.refs[8])
+        _require(NativeGoCommitment._metadata(self) is s)
+        _require(NativePhaseWorkOwner._material_local(s.producer)[0] is b.remote)
+        RemoteOperationOwner._check(b.remote, RemotePhase.GO_SENT)
+        _require(NativePhaseWorkOwner._material_local(s.producer)[0] is b.remote)
         _require(type(now) is int and 0 <= now < b.intent.end_ns
                  and NativeGoCommitment._metadata(self) is s)
         return s

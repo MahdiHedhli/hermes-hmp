@@ -688,3 +688,10 @@ owner recognizes only a typed reciprocal GO IO-slot description. Historical loca
 release requires actual original Task.done and held cleanup/allocation proofs,
 without following foreign mutable metadata. No production sender dispatch,
 GO_SENT, worker relay, broker custody or native publication follows.
+
+The current internal `RemoteOperationOwner` credential GO branch uses the fixed
+signer/writer and original native GO_SENT call, validating exact local write proof
+before and fixed current material afterward. `RemoteCleanupOwner` publishes only
+local GO readiness then parks the original work Task on the exact fenced native
+cause Future; unsigned result fallback is not attempted. No result token, worker
+execution, startup factory or production activation is provided by this slice.

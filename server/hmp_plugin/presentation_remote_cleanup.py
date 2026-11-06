@@ -655,6 +655,8 @@ class RemoteCleanupOwner:
             return False  # partial initialization never opens work
         barriers = self._barriers_snapshot
         ready = barriers.ready if type(barriers) is _BarrierAllocation else None
+        cause = barriers.cause if type(barriers) is _BarrierAllocation else None
+        loop = self._loop_snapshot
         go = self._go_barriers_snapshot
         notice = go.notice if type(go) is _GoBarriers else None
         result_barrier = self._result_barrier_snapshot
@@ -708,6 +710,25 @@ class RemoteCleanupOwner:
             _FUTURE.set_result(notice, True)
             if not RemoteCleanupOwner._publish_write_quiescence(self):
                 raise AuthorityRefusalError
+            if self._remote_snapshot._credential_handshake_snapshot is not None:
+                # Signed result/terminal custody is not integrated yet. Keep the
+                # original work task parked; never try the unsigned result reader.
+                from .presentation_broker_cancel import _native_future_methods
+                from .presentation_readiness import _scheduler_safe
+
+                RemoteCleanupOwner._guard(self)
+                if (self._barriers_snapshot is not barriers or barriers.cause is not cause
+                        or self._cause_snapshot is not cause or self._cause is not cause
+                        or type(cause) is not _FUTURE or self._loop_snapshot is not loop
+                        or self._loop is not loop or _FUTURE.get_loop(cause) is not loop):
+                    raise AuthorityRefusalError
+                _native_future_methods(cause)
+                _scheduler_safe(loop)
+                await asyncio.wait((cause,))
+                RemoteCleanupOwner._guard(self)
+                if self._intent is not True:
+                    raise AuthorityRefusalError
+                return False
             from .presentation_result_transport import RemoteResultOwner
 
             receiver = RemoteResultOwner.retain(self._remote_snapshot)

@@ -171,13 +171,13 @@ class NativeGoWriter:
                      and b.channel._go_write_fact_snapshot is None)
         return s
 
-    def _guard(self):
+    def _intent_current(self):
         s = NativeGoWriter._metadata(self)
         signed = s.signed_scope
         b = signed.ready_scope.read_scope.write_scope
         _require(asyncio.current_task() is b.allocation.task
                  and _TASK.cancelling(b.allocation.task) == 0
-                 and self._failed is False and self._unknown is False and self._complete is False)
+                 and self._failed is False and self._unknown is False)
         _require(NativeGoCommitment._material_guard(s.commitment) is signed)
         r, fact = signed.ready_scope.read_scope, signed.ready_scope.read_fact
         ready = check_commitment(fact.raw, sender_public=r.pins[0], receiver_public=r.pins[1],
@@ -196,6 +196,36 @@ class NativeGoWriter:
                  and os.get_inheritable(fd) is False
                  and NativeGoWriter._metadata(self) is s)
         return s
+
+    def _guard(self):
+        s = NativeGoWriter._intent_current(self)
+        _require(self._complete is False)
+        return s
+
+    def current_written(self):
+        s = NativeGoWriter._metadata(self)
+        _require(self._complete is True and self._failed is False and self._active is False)
+        NativeGoWriter._settled(self)
+        _require(NativeGoWriter._intent_current(self) is s)
+        return self._fact_snapshot  # original native write proof, never execution
+
+    def current_sent(self):
+        s = NativeGoWriter._metadata(self)
+        _require(self._complete is True and self._failed is False and self._active is False)
+        NativeGoWriter._settled(self)
+        signed = s.signed_scope
+        b = signed.ready_scope.read_scope.write_scope
+        _require(NativeGoCommitment._sent_guard(s.commitment) is signed)
+        r, fact = signed.ready_scope.read_scope, signed.ready_scope.read_fact
+        ready = check_commitment(fact.raw, sender_public=r.pins[0], receiver_public=r.pins[1],
+                                 expected=dict(r.expected))
+        check_complete_frame(ready, fact.frame, binding=b.intent.binding)
+        checked = check_commitment(s.raw, sender_public=signed.pins[0],
+                                   receiver_public=signed.pins[1], expected=dict(signed.expected))
+        check_complete_frame(checked, signed.frame, binding=b.intent.binding)
+        _require(NativeGoCommitment._sent_guard(s.commitment) is signed
+                 and NativeGoWriter._metadata(self) is s)
+        return self._fact_snapshot  # GO_SENT is local transmission, no broker receipt
 
     def _settled(self):
         NativeGoWriter._metadata(self)

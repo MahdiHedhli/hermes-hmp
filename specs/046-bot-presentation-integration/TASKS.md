@@ -298,3 +298,10 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Finalize bounded signed GO transport on original native intent/work Task:
       twelve causal cases, lint and independent repair review pass; final affected
       regression 1,466 passed/one skipped. Production sender/GO_SENT/relay remain open.
+
+- [x] Integrate bounded internal signed GO dispatch through original native
+      admission/single GO_SENT and full-write proof. Six direct cases, selected872
+      and lint pass; independent boundary repair review accepted. Shared cause
+      wait is fenced; no unsigned RESULT fallback/result token or execution credit.
+- [ ] Integrate authenticated cleanup/result/terminal custody and actual broker
+      worker relay before qualifying complete character delivery/startup/release.

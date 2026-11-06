@@ -538,11 +538,31 @@ class RemoteOperationOwner:
             JobOwner.remote_transition(self._seal_snapshot[0], self._seal_snapshot[1],
                                        self, RemotePhase.GO_INTENT)
             RemoteOperationOwner._check(self, RemotePhase.GO_INTENT)
-            await SocketChannel.send_go(self._channel_snapshot, self)
+            signed_writer = None
+            if self._credential_handshake_snapshot is not None:
+                from .presentation_credential_go_write import NativeGoWriter
+                from .presentation_credential_work import NativePhaseWorkOwner
+
+                producer = cleanup._credential_work_snapshot
+                if (type(producer) is not NativePhaseWorkOwner
+                        or cleanup._credential_work is not producer):
+                    raise AuthorityRefusalError
+                signed_writer = await NativePhaseWorkOwner.exchange_go(producer)
+                scope = NativeGoWriter._metadata(signed_writer)
+                if (scope.signed_scope.producer is not producer
+                        or scope.signed_scope.ready_scope.read_scope.write_scope.remote is not self
+                        or NativeGoWriter.current_written(signed_writer)
+                            is not self._channel_snapshot._go_write_fact_snapshot):
+                    raise AuthorityRefusalError
+            else:
+                await SocketChannel.send_go(self._channel_snapshot, self)
             RemoteOperationOwner._check(self, RemotePhase.GO_INTENT)
             JobOwner.remote_transition(self._seal_snapshot[0], self._seal_snapshot[1],
                                        self, RemotePhase.GO_SENT)
             RemoteOperationOwner._check(self, RemotePhase.GO_SENT)
+            if (signed_writer is not None and NativeGoWriter.current_sent(signed_writer)
+                    is not self._channel_snapshot._go_write_fact_snapshot):
+                raise AuthorityRefusalError
             return True  # local write only; no execution/result/release proof
         except BaseException:
             RemoteOperationOwner._poison(self)
