@@ -171,3 +171,16 @@ writer phase has run at this checkpoint. The initial pilot is12 separately owned
 single-phase processes, including public native controls/history/eligibility/
 tip movement/guard and synthetic Phone-store, residual/ABA cases; it is not the
 624-phase matrix or fork/reset qualification. Every failure remains a refusal.
+
+## Bounded pilot result
+
+All12 pilot phases at `8167016` completed and passed independent source/artifact
+readback:24 first/second outcomes,336 artifact hashes/private modes, native/HMP
+SHA/literal Git and helper/runtime/report bindings,39/39 native borrows per
+process, actual writer/hooks/DB/listener/worker closure and132 known commands.
+Nine successful public native mutation calls, five synthetic Phone-store calls
+and one native guard refusal were verified. Residual stale acceptance and
+Phone-store ABA acceptance remain limitations. No expiry/retry/guard bypass.
+[Exact scope/outcomes](../../docs/research/local-media-native-writer-pilot-2026-11-06.md).
+Full624/storage/fork-reset coverage and C6b remain open;559 model/guard tests
+and configured lint passed separately. No reviewer execution or release pass.
