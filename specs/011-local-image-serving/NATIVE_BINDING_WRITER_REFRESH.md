@@ -330,4 +330,3 @@ Independent refusal/prefix artifact review and a reviewed heavy-shape partition
 are next. No deadline extension, evidence deletion, deployment or release pass.
 The isolated ordinary/delegate follow-up remains source-reviewed with native
 execution pending; older statements that this matrix is running are superseded.
-
