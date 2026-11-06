@@ -1,22 +1,21 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now contains the
-independently reviewed fixed BEGIN signer on the original native work allocation.
-It uses the same reserved intent and exact original input, rechecks native/key/
-task/socket/time state before signing and after crypto, and refuses duplicate
-attempts. The final affected regression passed **940 tests, one skipped**, in
-27.56 seconds; repository-wide configured lint passed. Review was source-only.
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) contains the
+reviewed fixed original-work BEGIN signer and now two-stage BEGIN/input consistency
+checks. The broker can verify the signed held context/header first, then separately
+validate the exact bounded input packet, hashes, scope and deadline. Returned
+objects are data; they grant no native input adoption or worker authority.
+Final affected regression: **956 passed, one skipped**, 27.17 seconds; configured
+repository-wide lint passed. Independent review read source/tests only.
+See [the new prerequisite and limits](docs/research/presentation-credential-begin-input-2026-11-06.md).
 
-The actual transport gate remains CLOSED: no application bytes, GO, child or
-completed-write fact follows. Complete phase/direct-writer/cleanup integration,
-paired production startup, native publication, STATUS and physical/release
-qualification remain open. Desktop character delivery is not yet available.
-No live host setting, permission, key installation or device changed.
-See [source/test evidence and limits](docs/research/presentation-credential-work-signer-2026-11-06.md).
-
-Fresh [CI 702](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42248707404)
-passed for earlier reservation source `6c31d43`, including plugin checks and
-Python 3.12–3.14 Unicode jobs. It does not qualify this newer signer.
+The transport gate remains CLOSED. Actual broker cursor/native adoption, remaining
+signed phases/direct writers/cleanup, production startup/capacity/rotation,
+native publication, STATUS and physical/release qualification remain open.
+Desktop character delivery is not yet available. No live host/device changed.
+Signer source `80fb5b1` CI708 is still in progress; earlier reservation source
+`6c31d43` passed [CI702](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42248707404).
+Neither is CI qualification of this newer input-check change.
 
 ## Native image verification checkpoint — November 6, 2026
 

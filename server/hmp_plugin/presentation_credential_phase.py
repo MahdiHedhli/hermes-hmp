@@ -149,3 +149,90 @@ def check_complete_frame(
     if hashlib.sha256(frame).hexdigest() != commitment.frame_sha256:
         _refuse()
     return header
+
+
+_BEGIN_CONTEXT = _EXPECTED - {"input_sha256", "scope_sha256"}
+
+
+@dataclass(frozen=True)
+class ConsistentBeginInput:
+    """Verified data relationship, not native input adoption or authorization."""
+
+    commitment: ConsistentCommitment
+    packet: bytes
+
+
+def stage_begin_commitment(
+    raw: bytes, *, sender_public: bytes, receiver_public: bytes, expected_context: dict
+) -> ConsistentCommitment:
+    """Check fixed BEGIN context/signature before reading its bounded body.
+
+    The two signed input hashes remain unadopted claims. The original broker
+    receiver must retain the actual checked record/cursor and complete the
+    independent input check before any registry/resource/worker effects.
+    """
+    if type(expected_context) is not dict:
+        _refuse()
+    if any(type(key) is not str for key in expected_context):
+        _refuse()
+    if expected_context.keys() != _BEGIN_CONTEXT:
+        _refuse()
+    for name, item in expected_context.items():
+        if type(item) is not (int if name in ("sequence", "work_end_ns") else str):
+            _refuse()
+    if (
+        expected_context["phase"] != "BEGIN"
+        or expected_context["role"] != "gateway"
+        or expected_context["direction"] != "g2b"
+        or expected_context["sequence"] != 0
+    ):
+        _refuse()
+    parsed = decode_record(raw)
+    value = json.loads(parsed.canonical_json)
+    if value["family"] != "phase" or value["phase"] != "BEGIN":
+        _refuse()
+    expected = dict(
+        expected_context, input_sha256=value["input_sha256"], scope_sha256=value["scope_sha256"]
+    )
+    return check_commitment(
+        raw, sender_public=sender_public, receiver_public=receiver_public, expected=expected
+    )
+
+
+def check_begin_frame(
+    raw: bytes,
+    frame: bytes,
+    *,
+    sender_public: bytes,
+    receiver_public: bytes,
+    expected_context: dict,
+    binding: BrokerBinding,
+) -> ConsistentBeginInput:
+    """Bounded complete BEGIN/input3 consistency; no native or registry effects.
+
+    Reverify the original record rather than trusting a caller-constructed staged
+    data object. This whole-buffer BEGIN helper does not replace the original
+    receiver's staged header admission, read cursor or actual transfer evidence.
+    """
+    from .presentation_credential_scope import derive_input_scope
+    from .presentation_input_v3 import decode_input_v3
+
+    commitment = stage_begin_commitment(
+        raw,
+        sender_public=sender_public,
+        receiver_public=receiver_public,
+        expected_context=expected_context,
+    )
+    check_complete_frame(commitment, frame, binding=binding)
+    end = 8 + header_size(frame[:8])
+    packet = frame[end:]
+    row = decode_input_v3(packet)
+    scope = derive_input_scope(packet, binding)
+    value = json.loads(commitment.canonical_json)
+    if (
+        row["deadline_ns"] != expected_context["work_end_ns"]
+        or scope.input_sha256 != value["input_sha256"]
+        or scope.scope_sha256 != value["scope_sha256"]
+    ):
+        _refuse()
+    return ConsistentBeginInput(commitment, packet)

@@ -221,3 +221,11 @@ Root's expanded affected regression passed 658 tests, one skipped; configured
 lint passed. See [evidence and limits](../../docs/research/presentation-credential-stream-2026-11-06.md).
 The receiver still must supply actual signature-checked retained context and its
 original cursor; no digest data is a phase/native/transfer or publication permit.
+
+## BEGIN data prerequisite checkpoint
+
+The two-stage data-only BEGIN/input checks are implemented and independently
+reviewed; affected regression passed 956 tests, one skipped. Signed hash claims
+remain unadopted until whole-frame/input3/scope/deadline consistency succeeds.
+Actual original broker cursor/native admission and complete transport remain
+unfinished. See [evidence and limits](../../docs/research/presentation-credential-begin-input-2026-11-06.md).

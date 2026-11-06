@@ -29,6 +29,11 @@ historical, not an alternative live authorization path or resolved incident.
       gap, preserving original work allocation and the SAME reserved intent.
       Final affected regression: 940 passed, one skipped; no transport/GO activation.
       See [actual task/producer contract](PHASE_WORK_OWNER.md).
+- [x] Implement/review fixed BEGIN unadopted signed-claim staging and complete
+      input3/frame/hash/scope/deadline data checks. Affected regression: 956 passed,
+      one skipped. No broker cursor/native-adoption authority follows.
+- [ ] Retain the actual broker signed-record/read cursor and current role context,
+      complete input/native validation before registry or resource effects.
 - [ ] Integrate operator-selected paired runtime/source/credential startup,
       capacity and rotation with the retained handshake on its original channel,
       task/cursor and known local write completion facts.

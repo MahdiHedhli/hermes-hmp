@@ -1,6 +1,7 @@
 """Synthetic signed commitments cannot excuse changed frames or context."""
 
 import hashlib
+import json
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
@@ -141,3 +142,169 @@ def test_signature_and_receiver_pin_are_checked():
         )
     with pytest.raises(FrameError):
         check_commitment(raw, sender_public=sp, receiver_public=b"z" * 32, expected=expected)
+
+
+def begin_fixture(updates=None):
+    from hmp_plugin.presentation_credential_scope import derive_input_scope
+    from hmp_plugin.presentation_input_v3 import encode_input_v3
+
+    from .test_presentation_credential_scope import input_value
+
+    value = dict(input_value(), **(updates or {}))
+    if value["profile"] != "default":
+        value["home"] = value["root"] + "/profiles/" + value["profile"]
+        value["directory_policy"] = value["directory_policy"] + [[501, 20, 448]] * 2
+        parts = value["home"][1:].split("/")
+        value["parent_work_counts"] = dict(
+            value["parent_work_counts"],
+            opens=len(parts) + 1,
+            metadata=4 * (len(parts) + 1),
+            path_bytes=3 * (1 + sum(len(part.encode("utf-8")) for part in parts)),
+        )
+    packet = encode_input_v3(value)
+    data = fixture("BEGIN", packet, sequence=0)
+    binding, frame, expected, sp, rp, sign = data
+    scope = derive_input_scope(packet, binding)
+    updates = {
+        "input_sha256": scope.input_sha256,
+        "scope_sha256": scope.scope_sha256,
+        "work_end_ns": value["deadline_ns"],
+    }
+    context = {
+        key: item
+        for key, item in dict(expected, **updates).items()
+        if key not in ("input_sha256", "scope_sha256")
+    }
+    return (
+        binding,
+        frame,
+        context,
+        sp,
+        rp,
+        lambda changed=None: sign(dict(updates, **(changed or {}))),
+    )
+
+
+def test_begin_stages_hash_claims_then_independently_checks_original_input():
+    from hmp_plugin.presentation_credential_phase import check_begin_frame, stage_begin_commitment
+
+    binding, frame, context, sp, rp, sign = begin_fixture()
+    raw = sign()
+    staged = stage_begin_commitment(
+        raw, sender_public=sp, receiver_public=rp, expected_context=context
+    )
+    end = 8 + int.from_bytes(frame[4:8], "big")
+    header = check_committed_header(staged, frame[:end], binding=binding)
+    assert header.kind == "BEGIN" and header.sequence == 0
+    result = check_begin_frame(
+        raw, frame, sender_public=sp, receiver_public=rp, expected_context=context, binding=binding
+    )
+    assert result.commitment == staged and result.packet == frame[end:]
+    assert not hasattr(result, "authorized") and not hasattr(result, "adopted")
+
+
+@pytest.mark.parametrize("field", ["input_sha256", "scope_sha256"])
+def test_valid_signed_begin_hash_is_only_unadopted_claim(field):
+    from hmp_plugin.presentation_credential_phase import check_begin_frame, stage_begin_commitment
+
+    binding, frame, context, sp, rp, sign = begin_fixture()
+    raw = sign({field: "f" * 64})
+    # A valid role signature alone cannot establish the actual input relationship.
+    stage_begin_commitment(raw, sender_public=sp, receiver_public=rp, expected_context=context)
+    with pytest.raises(FrameError):
+        check_begin_frame(
+            raw,
+            frame,
+            sender_public=sp,
+            receiver_public=rp,
+            expected_context=context,
+            binding=binding,
+        )
+
+
+def test_signed_begin_deadline_must_equal_exact_decoded_input_deadline():
+    from hmp_plugin.presentation_credential_phase import check_begin_frame
+
+    binding, frame, context, sp, rp, sign = begin_fixture()
+    context["work_end_ns"] += 1
+    with pytest.raises(FrameError):
+        check_begin_frame(
+            sign({"work_end_ns": context["work_end_ns"]}),
+            frame,
+            sender_public=sp,
+            receiver_public=rp,
+            expected_context=context,
+            binding=binding,
+        )
+
+
+@pytest.mark.parametrize("change", ["phase", "sequence", "role", "extra", "missing", "bool"])
+def test_begin_staging_rejects_non_original_or_open_context(change):
+    from hmp_plugin.presentation_credential_phase import stage_begin_commitment
+
+    _, _, context, sp, rp, sign = begin_fixture()
+    raw = sign()
+    if change == "phase":
+        context["phase"] = "GO"
+    elif change == "sequence":
+        context["sequence"] = 1
+    elif change == "role":
+        context["role"] = "broker"
+    elif change == "extra":
+        context["input_sha256"] = "f" * 64
+    elif change == "missing":
+        del context["operation_id"]
+    else:
+        context["work_end_ns"] = True
+    with pytest.raises(FrameError):
+        stage_begin_commitment(raw, sender_public=sp, receiver_public=rp, expected_context=context)
+
+
+@pytest.mark.parametrize(
+    "updates",
+    [
+        {"profile": "second"},
+        {"challenge": "c" * 64},
+        {"epoch": 2},
+        {"operation": "AVATAR", "expected_avatar_sha": "d" * 64},
+        {"canonical_fallback": "Renamed"},
+    ],
+)
+def test_valid_signed_changed_input_cannot_reuse_original_scope(updates):
+    from hmp_plugin.presentation_credential_codec import decode_record
+    from hmp_plugin.presentation_credential_phase import check_begin_frame, stage_begin_commitment
+
+    original = begin_fixture()
+    original_scope = json.loads(decode_record(original[5]()).canonical_json)["scope_sha256"]
+    binding, frame, context, sp, rp, sign = begin_fixture(updates)
+    raw = sign({"scope_sha256": original_scope})
+    stage_begin_commitment(raw, sender_public=sp, receiver_public=rp, expected_context=context)
+    with pytest.raises(FrameError):
+        check_begin_frame(
+            raw,
+            frame,
+            sender_public=sp,
+            receiver_public=rp,
+            expected_context=context,
+            binding=binding,
+        )
+
+
+def test_correctly_signed_whole_frame_does_not_excuse_invalid_input3():
+    from hmp_plugin.presentation_credential_phase import check_begin_frame, stage_begin_commitment
+
+    binding, frame, expected, sp, rp, sign = fixture("BEGIN", b"data", sequence=0)
+    context = {
+        key: value for key, value in expected.items() if key not in ("input_sha256", "scope_sha256")
+    }
+    raw = sign()
+    stage_begin_commitment(raw, sender_public=sp, receiver_public=rp, expected_context=context)
+    with pytest.raises(FrameError):
+        check_begin_frame(
+            raw,
+            frame,
+            sender_public=sp,
+            receiver_public=rp,
+            expected_context=context,
+            binding=binding,
+        )
