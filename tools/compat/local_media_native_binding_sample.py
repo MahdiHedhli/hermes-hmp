@@ -146,7 +146,75 @@ def validate_preparation_report(report):
                     and cell[key] == list(SELECTORS))
 
 
-def run_preparation(fx, open_cell, *, user, profile, chat):
+
+def validate_cost_case(case):
+    require(case is None or (type(case) is int and 0 <= case < len(KINDS) * len(SHAPES)))
+
+
+def measure_binding(bind, check):
+    """One warmup, three untraced timings, then one separate Python trace.
+
+    Only the complete binding call is timed/traced. Candidate construction and
+    result validation are outside that interval. This excludes native C memory,
+    RSS, mint cost and concurrent writers; no latency admission threshold follows.
+    An existing trace is refused, never reset or stopped by this helper.
+    """
+    import gc
+    import time
+    import tracemalloc
+
+    require(callable(bind) and callable(check) and not tracemalloc.is_tracing())
+    check(bind())
+    durations = []
+    for _ in range(3):
+        start = time.perf_counter_ns()
+        result = bind()
+        duration = time.perf_counter_ns() - start
+        check(result)
+        require(type(duration) is int and duration >= 0)
+        durations.append(duration)
+        del result
+    gc.collect()
+    require(not tracemalloc.is_tracing())
+    tracemalloc.start()
+    try:
+        baseline, _ = tracemalloc.get_traced_memory()
+        result = bind()
+        current, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    check(result)
+    del result
+    require(peak >= current >= baseline)
+    return {"durations_ns": durations, "peak_traced_bytes": peak - baseline,
+            "current_traced_bytes": current - baseline}
+
+
+def validate_cost_report(report, case):
+    validate_cost_case(case)
+    require(case is not None and type(report) is dict and set(report) == {
+        "case", "kind", "lineage_count", "prompt_chars", "selectors", "warmups_per_selector",
+        "traces_per_selector", "rss_measured", "mint_measured", "writer_cases_run"})
+    kind, (lineage, prompt) = KINDS[case // len(SHAPES)], SHAPES[case % len(SHAPES)]
+    require(type(report["case"]) is int and report["case"] == case and
+            report["kind"] == kind and type(report["lineage_count"]) is int and
+            report["lineage_count"] == lineage and type(report["prompt_chars"]) is int and
+            report["prompt_chars"] == prompt and
+            type(report["warmups_per_selector"]) is int and report["warmups_per_selector"] == 1 and
+            type(report["traces_per_selector"]) is int and report["traces_per_selector"] == 1 and
+            report["rss_measured"] is False and report["mint_measured"] is False and
+            type(report["writer_cases_run"]) is int and report["writer_cases_run"] == 0 and
+            type(report["selectors"]) is list and len(report["selectors"]) == len(SELECTORS))
+    for row, count in zip(report["selectors"], SELECTORS, strict=True):
+        require(type(row) is dict and set(row) == {"count", "durations_ns",
+            "peak_traced_bytes", "current_traced_bytes"} and type(row["count"]) is int and
+            row["count"] == count and type(row["durations_ns"]) is list and
+            len(row["durations_ns"]) == 3 and
+            all(type(value) is int and value >= 0 for value in row["durations_ns"]) and
+            type(row["peak_traced_bytes"]) is int and type(row["current_traced_bytes"]) is int and
+            row["peak_traced_bytes"] >= row["current_traced_bytes"] >= 0)
+
+def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None, cost_results=None):
     """Verify all eight native shapes through complete binding, without measuring cost.
 
     Each lineage/prompt shape owns a fresh native DB with BOTH proof sources:
@@ -157,6 +225,10 @@ def run_preparation(fx, open_cell, *, user, profile, chat):
     """
     from hmp_plugin.contract import ConversationRef
 
+    validate_cost_case(cost_case)
+    require((cost_case is None and cost_results is None) or
+            (cost_case is not None and type(cost_results) is list and not cost_results))
+    cost_rows = []
     sidecar, binding = bound_modules(fx.rig.ctx.media_modules)
     cells = {}
     for index, (lineage, prompt) in enumerate(SHAPES):
@@ -191,11 +263,18 @@ def run_preparation(fx, open_cell, *, user, profile, chat):
                             lineage_tip=info.lineage_tip,
                             candidates=tuple(item for item in rows.candidates
                                              if item.tool_row_id in wanted))
+                        def check(result, kind=kind, selected=selected):
+                            require(type(result) is binding.MediaBatchBinding and
+                                    result.reason == "ok" and result.kind is not None and
+                                    result.kind.value == kind and result.accepted == selected)
+
                         result = fx.native.bridge.bind_media_batch(candidate)
-                        require(type(result) is binding.MediaBatchBinding and
-                                result.reason == "ok" and result.kind is not None and
-                                result.kind.value == kind and result.accepted == selected)
+                        check(result)
                         accepted.append(len(result.accepted))
+                        if cost_case == KINDS.index(kind) * len(SHAPES) + index:
+                            cost_rows.append({"count": count, **measure_binding(
+                                lambda candidate=candidate:
+                                    fx.native.bridge.bind_media_batch(candidate), check)})
                     cells[(kind, lineage, prompt)] = {key: shape[key] for key in (
                         "kind", "lineage_count", "prompt_chars", "verified_prompt_count",
                         "history_rows", "legacy_rows", "generated_rows")} | {
@@ -210,4 +289,12 @@ def run_preparation(fx, open_cell, *, user, profile, chat):
     report = {"cells": ordered, "timing_measured": False,
               "allocation_measured": False, "writer_cases_run": 0, "databases_closed": len(SHAPES)}
     validate_preparation_report(report)
+    if cost_case is not None:
+        kind, (lineage, prompt) = KINDS[cost_case // len(SHAPES)], SHAPES[cost_case % len(SHAPES)]
+        cost = {"case": cost_case, "kind": kind, "lineage_count": lineage,
+                "prompt_chars": prompt, "selectors": cost_rows, "warmups_per_selector": 1,
+                "traces_per_selector": 1, "rss_measured": False, "mint_measured": False,
+                "writer_cases_run": 0}
+        validate_cost_report(cost, cost_case)
+        cost_results.append(cost)
     return report

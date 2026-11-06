@@ -409,3 +409,128 @@ def test_shared_database_keeps_both_independent_prompted_lineages(lineage):
         assert len(db.get_messages(shape["tip"], limit=1000)) == 258
     assert db.sessions[shapes[0]["tip"]]["title"] == "Bot Chat"
     assert "title" not in db.sessions[shapes[1]["tip"]]
+
+
+def cost_report(case=0):
+    module = load()
+    lineage, prompt = module.SHAPES[case % 4]
+    return {"case": case, "kind": module.KINDS[case // 4], "lineage_count": lineage,
+        "prompt_chars": prompt, "warmups_per_selector": 1, "traces_per_selector": 1,
+        "rss_measured": False, "mint_measured": False, "writer_cases_run": 0,
+        "selectors": [{"count": count, "durations_ns": [10, 11, 12],
+            "peak_traced_bytes": 100, "current_traced_bytes": 40} for count in (1, 16, 128)]}
+
+
+@pytest.mark.parametrize("case", range(8))
+def test_cost_report_requires_exact_selected_workload(case):
+    module = load()
+    module.validate_cost_report(cost_report(case), case)
+    with pytest.raises(RuntimeError):
+        module.validate_cost_report(cost_report(case), (case + 1) % 8)
+
+
+@pytest.mark.parametrize("mutation", ["missing_repeat", "boolean_time", "negative_time",
+    "wrong_selector", "missing_selector", "current_above_peak", "rss", "mint", "writer", "extra"])
+def test_cost_schema_rejects_incomplete_or_overclaimed_measurement(mutation):
+    report = cost_report()
+    row = report["selectors"][0]
+    if mutation == "missing_repeat":
+        row["durations_ns"].pop()
+    elif mutation == "boolean_time":
+        row["durations_ns"][0] = True
+    elif mutation == "negative_time":
+        row["durations_ns"][0] = -1
+    elif mutation == "wrong_selector":
+        row["count"] = 2
+    elif mutation == "missing_selector":
+        report["selectors"].pop()
+    elif mutation == "current_above_peak":
+        row["current_traced_bytes"] = 101
+    elif mutation == "rss":
+        report["rss_measured"] = True
+    elif mutation == "mint":
+        report["mint_measured"] = True
+    elif mutation == "writer":
+        report["writer_cases_run"] = 1
+    else:
+        report["raw_session"] = "forbidden"
+    with pytest.raises(RuntimeError):
+        load().validate_cost_report(report, 0)
+
+
+@pytest.mark.parametrize("bad", [True, -1, 8, 1.0, "0", [], {}])
+def test_invalid_cost_case_refused_before_native_or_filesystem_access(tmp_path, bad):
+    from .test_local_media_native_serving_driver import driver
+
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40,
+                           sample_binding_seed=True, binding_cost_case=bad)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_cost_mode_cannot_be_silently_accepted_as_preparation_or_normal_mode(tmp_path):
+    from .test_local_media_native_serving_driver import driver, good
+
+    report = good()
+    report["native_binding_preparation"] = preparation_report()
+    report["native_binding_cost"] = cost_report()
+    args = (report, report["native_source_hashes"], report["hmp_source_hashes"],
+            report["runtime_executable_sha256"])
+    driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0)
+    with pytest.raises(RuntimeError):
+        driver.validate_report(*args, sample_binding_seed=True)
+    with pytest.raises(RuntimeError):
+        driver.validate_report(*args, binding_cost_case=0)
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40, binding_cost_case=0)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_measurement_has_one_warmup_three_untraced_calls_and_separate_trace():
+    import tracemalloc
+
+    calls, checked = [], []
+
+    def bind():
+        calls.append(tracemalloc.is_tracing())
+        return bytearray(4096)
+
+    def check(result):
+        assert len(result) == 4096
+        checked.append(tracemalloc.is_tracing())
+
+    result = load().measure_binding(bind, check)
+    assert calls == [False, False, False, False, True]
+    assert checked == [False] * 5
+    assert len(result["durations_ns"]) == 3
+    assert result["peak_traced_bytes"] >= result["current_traced_bytes"] >= 4096
+    assert not tracemalloc.is_tracing()
+
+
+def test_existing_trace_is_preserved_and_binding_never_called():
+    import tracemalloc
+
+    tracemalloc.start()
+    try:
+        with pytest.raises(RuntimeError):
+            load().measure_binding(lambda: pytest.fail("must not bind"), lambda _: None)
+        assert tracemalloc.is_tracing()
+    finally:
+        tracemalloc.stop()
+
+
+def test_binding_exception_stops_only_its_owned_trace():
+    import tracemalloc
+
+    count = [0]
+
+    def bind():
+        count[0] += 1
+        if count[0] == 5:
+            assert tracemalloc.is_tracing()
+            raise ValueError("synthetic failure")
+        return object()
+
+    with pytest.raises(ValueError, match="synthetic failure"):
+        load().measure_binding(bind, lambda _: None)
+    assert count == [5] and not tracemalloc.is_tracing()

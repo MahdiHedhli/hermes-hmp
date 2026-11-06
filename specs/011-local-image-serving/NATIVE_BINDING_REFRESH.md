@@ -108,3 +108,36 @@ each of four disposable databases between the two proof sources. Large-prompt
 databases therefore verify four and 196 distinct full prompts respectively,
 matching the documented original workload. Source/model verification and fresh
 native artifact review of this expanded matrix must be recorded separately.
+
+## Current cost stage
+
+Expanded preparation at `891f922` completed and passed independent artifact
+readback: eight cases, 24 selectors, four closed dual-context databases, 65/65
+borrows, original database closed, listener/workers settled, sweep zero. All
+28 top-level artifact hashes/modes and 12,185 native plus 374 HMP source/Git
+bindings matched. There were 100 disclosed synthetic absent-proc probes,
+71 own-FD listings, two bounded OS metadata reads and zero unexpected denials.
+This is preparation evidence only; the six-case result stays separately scoped.
+
+Optional `binding_cost_case=0..7` requires explicit seed mode. Each fresh isolated
+process still executes and verifies the complete preparation matrix, but measures
+only the selected kind/shape. Case order is Bot Chat then Phone, each in table
+order. Each selector (1/16/128) receives one dedicated warmup after preparation
+and validation activity, then three untraced monotonic-ns
+complete-binding calls and one separate Python allocation trace. Candidate
+construction and outcome validation are outside the interval; every actual
+binding outcome must still pass the same kind/ID assertions. The trace retains
+the result while reading peak/current bytes above baseline, then stops before
+validation; no prior trace is reset or stopped. Exceptions settle the owned trace.
+
+Eight independently bound fresh-process reports are needed for 72 timing values
+and 24 allocation samples. These counts describe this stage, not the older study's
+44 trace cells/20 RSS rows or 500 writer phases. Mint allocation, fresh-process
+RSS and writer/control/residual/ABA stages remain separate required work. No
+latency ceiling, native C-allocation guarantee, current default/provider change,
+or qualification claim follows. Normal/preparation/memory reports retain their
+prior contracts; a cost result cannot be accepted without its exact selected case.
+These are warm costs, not cold-call measurements. Independent source review
+accepted the mode without reviewer execution. The existing 12-second actor-observation deadline and all source, private-TMPDIR,
+audit and lifecycle restrictions remain unchanged. Expired actors are retained
+to actual terminal settlement and refused, never retried automatically.
