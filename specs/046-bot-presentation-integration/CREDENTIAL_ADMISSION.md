@@ -215,3 +215,37 @@ This amendment does not change the independently reviewed image-delivery
 candidate `5e247a6`, its pending ColPanicM2 owner decision, current device grants,
 live host configuration or any runtime. Existing per-feature minimum-version/
 API/security gates and older-host fallback remain unchanged.
+
+## Startup key-file source checkpoint — November 6, 2026
+
+`presentation_credential_files.py` implements bounded startup-only acquisition of
+fixed `own.seed`, `own.pub` and `peer.pub` in an operator-selected role directory.
+The directory is private 0700; leaves are regular owner-controlled 0600,
+single-link, exactly 32 bytes. An original no-follow ancestor walk and final
+path/descriptor joins accompany own-key derivation and both configured public
+pin checks. Shared ancestors use stable inode/type/owner/mode identity; unrelated
+directory entries do not select a key. Root-owned sticky ancestors are allowed
+under the same trusted-administrator premise as the endpoint owner.
+
+All original descriptors are retained before allocation and closed before the
+owner becomes ready. Unknown close stays retained and is never retried.
+Reinitialization cannot reset state or revive retirement; retirement before final
+publication prevents ready/key publication. Failure drops reachable seed/key
+aliases before the outward context-free exception. This is not zeroization or
+same-UID/fork isolation. Cleanup refuses foreign PID/UID before descriptor effects.
+
+Independent source/test review accepted this component under serialized trusted
+startup. Root's expanded focused suite passed 213 tests without warnings in a
+fresh owned test root; the strengthened actual-descriptor process-context case
+then passed the targeted 30-test loader suite. Review did not execute tests.
+An earlier default pytest run produced stale temporary-directory cleanup warnings;
+subsequent tests used an explicit fresh root. Two fresh-root failures exposed an
+exact-bool sticky-directory policy defect, now corrected and retained as failure
+history rather than called successful runs.
+
+The component generates no key, exposes no signing method and is not connected
+to a request, listener or installer. Actual operator-selected runtime inventory,
+credential retirement/drift detection, typed paired role factory, handshake,
+original native phase/cursor ownership and no-key-inheritance audit remain open.
+No installed credentials or live host settings were read or changed in these
+synthetic tests.
