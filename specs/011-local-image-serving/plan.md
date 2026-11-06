@@ -38,7 +38,7 @@ Each test must fail when its named guard is removed. Unit tests use a fake bridg
 | T4 | Compression, rewind, retire; restored identical row 200; changed content 404 | skip rescan |
 | T5 | Phone conversation replaced 404; non-canonical Bot Chat no descriptor | skip kind recheck |
 | T6 | Assistant `MEDIA:` or Markdown: no descriptor, no read | parse assistant text |
-| T7 | `image` outside lexical `<home>/cache/images/`: no descriptor; forced into registry gives 404 | relax derivation |
+| T7 | `image` outside the two closed lexical roots `<home>/cache/images/` and `<home>/cache/generated/images/`: no descriptor; forced into registry gives 404; no cross-root fallback | relax derivation |
 | T8 | File replaced after first 200 gives 404; concurrent first fetches serve at most one digest | skip CAS |
 | T9 | Causal changes between phase-one return and phase-two check give 404; initial grant refusals keep ERR-3; loop flips refuse; busy phase two gives 429; shared 20 s deadline; residual not tested as refused | skip phase two; merge phases; native call on loop; queue permit |
 | T10 | Third device or fifth instance gives 429; permits held through cancellation | release on cancel |

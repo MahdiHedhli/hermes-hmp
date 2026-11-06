@@ -1,3 +1,19 @@
+## Native-backed concurrent image memory sample passed — November 6, 2026
+
+One independently reviewed Darwin sample at HMP `8f16c1f` / native `ed1afb08`
+held four actual 8 MiB image buffers and four workers, refused a fifth eligible
+request without new work, then streamed four exact responses. Cancelling four
+handlers in the second case retained all permits until the original workers
+completed; no response/body reached those cancelled clients.
+
+Active/cancelled traced peaks were 40.72/40.67 MiB; RSS increments 39.69/11.95 MiB,
+below unchanged 96/128 MiB provisional ceilings. Native borrows/releases balanced
+46/46 and database/listener/workers closed. This is combined-process memory with
+bounded streaming clients included, separate per-case traces and cumulative RSS.
+It completes the sampled Darwin T12 measurement, not provider generation, Linux
+or device/release qualification. No live configuration, grant, provider or deployment changed.
+[Exact method and evidence](docs/research/local-media-native-memory-2026-11-06.md).
+
 ## Native dependency union verified; cache source integrated — November 6, 2026
 
 PR128 is integrated into the feature branch at `4bab0cd`. Both exact-source CI

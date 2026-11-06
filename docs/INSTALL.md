@@ -134,6 +134,12 @@ in a fresh private PM environment. This excludes core-project installation and
 uses a dependency-only plugin member; it is not a plugin loading or host
 activation check. The original native source and locks stayed unchanged.
 
+A [native-backed four-fetch memory sample](research/local-media-native-memory-2026-11-06.md)
+also passed the unchanged provisional ceilings on its pinned Darwin runtime,
+including cancelled handlers with late workers. Bounded streaming clients are
+included in the measured process. This records the sampled Darwin T12 measurement,
+not Linux, phone, release or activation qualification.
+
 The candidate is default off and restricted to approval-owner devices; jobs/model
 controls alone do not grant that ownership. It also needs
 `platforms.hmp.extra.local_media.enabled`, Hermes at or above `v0.21.5` (or a

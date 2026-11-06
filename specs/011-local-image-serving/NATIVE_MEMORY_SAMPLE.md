@@ -58,8 +58,9 @@ source/runtime binding and database/listener/worker cleanup are unchanged.
 
 Root's 114 guard/structure/fixture-driver checks pass before native execution.
 Independent read-only source review accepted one fresh isolated sample, without
-reviewer execution. Native memory execution and artifact readback are pending
-until a separately recorded terminal outcome. The existing `t12_qualified` and
+reviewer execution. One native run at `8f16c1f` completed with independently
+accepted artifact readback; [the result](../../docs/research/local-media-native-memory-2026-11-06.md)
+records the exact metrics and scope. The existing `t12_qualified` and
 `production_qualified` report fields remain false: an observation does not grant
 platform, installation, provider, phone, release or live runtime authority.
 

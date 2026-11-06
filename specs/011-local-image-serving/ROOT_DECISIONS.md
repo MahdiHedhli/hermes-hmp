@@ -5,7 +5,7 @@ Public record of the architecture decisions this feature was frozen on. Where an
 > **Superseding section (2026-10-02).** The exact-build gate described below (process-qualified
 > manifest, fingerprints, process anchor, preload qualification) is superseded by
 > [Minimum-version conversion](#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02),
-> the last section of this file. The earlier S6, S6a and S6b text is preserved as **historical
+> below. The earlier S6, S6a and S6b text is preserved as **historical
 > evidence about the retired design**. It is not current policy, and nothing there describes
 > runtime behavior of the converted base.
 
@@ -795,3 +795,27 @@ provider or downloads an image. The fresh bounded native cache-helper sample com
 native `ed1afb08`, with three materializations, restored context and independently
 accepted artifact bindings. Full provider generation, cost/T12, Linux, device,
 activation and full plugin-PM union remain separate open gates.
+
+## Sampled native memory observation (2026-11-06)
+
+HMP `8f16c1f` / native `ed1afb08` completed the independently source/artifact-
+reviewed [four-fetch memory sample](../../docs/research/local-media-native-memory-2026-11-06.md).
+It held four actual native-backed 8 MiB buffers in active and cancelled-late-worker
+cases, refused an eligible fifth request without new phase-one work, and retained
+all worker/buffer/device permits until actual completion. Four active responses
+had exact bytes/digests; four cancelled clients received no response/body.
+
+The unchanged 96 MiB traced / 128 MiB incremental RSS ceilings passed. Streaming
+clients are included in the measured process; trace sessions are separate per
+case with no reset within a case, and RSS high-water is cumulative. Native
+borrows/releases balanced 46/46 and actual database/listener/worker closure was
+observed. The 28 artifact bindings, 12,185 native / 372 HMP source hashes/literal
+Git identities, runtime and terminal commands were independently read back.
+The reviewer performed no execution.
+
+This completes the T12 sampled Darwin measurement row; it grants no native
+allocation bound, other-platform, production, device or release qualification.
+C6b cost/concurrent-writer evidence, Linux, actual provider/Desktop scope, full
+plugin loading and physical activation remain open. The separate shipping
+dependency-union build is accepted only for its recorded native sample. No
+runtime gate, ceiling, deadline, permission or default-off setting changes.

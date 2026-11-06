@@ -4,7 +4,8 @@
 > process anchor and preload qualification (S6/S6a/S6b). Their records below are **historical evidence about the
 > retired design**, not current policy and not runtime behavior. See
 > [Minimum-version conversion](ROOT_DECISIONS.md#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02)
-> and the slices M0-M3 below. The feature is **unimplemented**.
+> and the slices M0-M3 below. Descriptor/fetch source and bounded native samples
+> now exist; activation, physical acceptance and full release qualification remain open.
 
 `[ ]` means not started or not independently reviewed. Workers do not self-certify. No implementation task starts before the contract revision (P0) is reviewed. A worker meeting unspecified behavior records a gap marker instead of inventing a rule.
 
@@ -56,9 +57,10 @@ dependency action.
 
 (The older headings "M1 Host" and "M2 Convergence" below are original document-phase names and are unrelated to slices M1-M3 above.) Later slices stay open exactly as listed under them: C6b exact-native cost and
 concurrent-writer evidence (release-candidate evidence, not a per-version allowlist), S4 descriptor emission, S5
-route, T12 memory on sampled builds, R2 independent exact-candidate review, and R3 owner-authorized install, flag
-and physical-device acceptance. C6b and T12 sample evidence, independent review and device acceptance are pending;
-the feature is not enabled by any of them.
+route, R2 independent exact-candidate review, and R3 owner-authorized install, flag
+and physical-device acceptance. C6b, independent delivery review and device acceptance remain pending;
+the T12 sampled Darwin memory measurement is now recorded below. No evidence row
+enables the feature or certifies another platform.
 
 ### Acceptance matrix for M2/M3
 
@@ -102,7 +104,7 @@ candidate and sample; that evidence does not prove behavior on future builds.
 - [ ] **S5** Route, dedicated executor, permits, `ContextVar` copy for both phases, constants, streaming, phase one, phase two, synchronous final section (T3, T9-T11, T13, T15-T17). Needs S1, S3, S6.
   Source slice independently reviewed and accepted after bounded amendments (2026-10-02; full task not ticked): the always-registered route, per-app executor/permits, both native bridge phases and synchronous final section. Clean locked CI: 3613 passed, 16 native-dependent skips, one existing warning. Synthetic four-fetch memory passed the unchanged provisional limits; native T12, native serving, phone binary loading, device and release evidence remain open. See [the S5 acceptance scope](ROOT_DECISIONS.md#s5-bounded-source-acceptance-2026-10-02).
 - [ ] **T** Causal suite T1-T18 on a fake bridge and an exact-build disposable-home fixture.
-- [ ] **T12** Memory measurement run recorded against the provisional ceilings.
+- [x] **T12** Memory measurement run recorded against the unchanged provisional ceilings: HMP `8f16c1f` / native `ed1afb08`, Python 3.14.9/aiohttp 3.14.5, Darwin; four active and four cancelled-late-worker 8 MiB fetches. Independent source/artifact review accepted the [scoped sample](../../docs/research/local-media-native-memory-2026-11-06.md). Combined-process clients count toward the bounds; no native-allocation, Linux, device, activation or release qualification follows. The fixture's `t12_qualified: false` remains a refusal to self-certify broader qualification.
 - [x] **PG** Linux errno mapping for the file leaf only. Root reviewed and independently reran the accepted 89 tests plus 91 supplemental real-kernel checks on non-root Linux CPython 3.14.7/tmpfs. See the bounded evidence below; native HMP serving remains unqualified.
 
 ## M2 Convergence
@@ -539,5 +541,25 @@ inputs remained unchanged. This closes only the sampled dependency-union build
 gap; full plugin installation/loading and activation remain separate. The first
 environment-preflight refusal is preserved. See
 [the PM sample](../../docs/research/local-media-native-pm-union-2026-11-06.md).
-C6b/T12, Linux, production provider/Desktop scope and physical display/activation
-remain unchecked; no broader S4/S5/R2/R3 completion is inferred.
+At that dependency-union checkpoint, C6b/T12, Linux, production provider/Desktop
+scope and physical display/activation remained unchecked. The later T12 sampled
+Darwin observation below supersedes only that measurement status; no broader
+S4/S5/R2/R3 completion is inferred.
+
+## Native four-fetch memory observation (2026-11-06)
+
+One source `8f16c1f` sample now records four simultaneous 8 MiB native-backed
+fetches and four cancelled handlers whose actual late workers retained all
+permits. Both cases refused the eligible fifth request without new phase-one
+work. Active/cancelled traced peaks 42,702,643 / 42,648,222 bytes and RSS increments
+41,615,360 / 12,533,760 bytes pass the unchanged 96 / 128 MiB ceilings. The
+combined process includes bounded streaming clients; each case has its own trace
+session, while RSS high-water is cumulative. Native borrows/releases 46/46,
+database close, zero scoped sweep, listener close and actual worker joins passed.
+
+Independent read-only review accepted 28 artifact bindings, source/literal Git
+identities, runtime and terminal report/receipt. Root's separate 114 guard cases
+passed; reviewer execution is not claimed. This completes the T12 sampled Darwin
+measurement row, not platform, provider, device or release qualification. No
+broader source/release checkbox is closed. See
+[the exact record](../../docs/research/local-media-native-memory-2026-11-06.md).

@@ -1,6 +1,6 @@
 # Host-local generated images
 
-Status: **draft specification. Feature unimplemented: no route, not qualified, not released.** Amended 2026-10-02 for the owner's minimum-version policy (see [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02)); the exact-build manifest described by earlier revisions is retired. The normative wire text is [HMP v1 §7e](../../docs/architecture/contracts/HMP_V1.md) (clauses `LM-1`..`LM-20`); this spec is the feature-level view and must not contradict it. Decisions and their authority are in [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md). There is no build list. Availability follows the minimum version and the required Hermes APIs (HMP v1 GU-2d). This feature makes no qualification, shipping or platform claim.
+Status: **implementation candidate; descriptor/fetch source and bounded native samples exist, not activated, device-qualified or released.** Amended 2026-10-02 for the owner's minimum-version policy (see [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md#minimum-version-conversion-supersedes-s6-manifestfingerprintanchor-s6a-admission-semantics-s6b-preload-qualification-2026-10-02)); the exact-build manifest described by earlier revisions is retired. The normative wire text is [HMP v1 §7e](../../docs/architecture/contracts/HMP_V1.md) (clauses `LM-1`..`LM-20`); this spec is the feature-level view and must not contradict it. Decisions and their authority are in [`ROOT_DECISIONS.md`](ROOT_DECISIONS.md). There is no build list. Availability follows the minimum version and the required Hermes APIs (HMP v1 GU-2d). This feature makes no shipping or broad platform claim.
 
 ## User outcome
 
@@ -57,7 +57,7 @@ These are research evidence, not qualified serving. Implementation promotes them
 
 ## Gaps and non-goals
 
-- E1 (producer spelling): the producer's `image` string must begin lexically with the routed home string plus `/cache/images/`. The bounded exact-build fixture passed for its stated producer and layout. That is **sampled evidence, not an admission prerequisite per build**; a mismatch on any build refuses that candidate (`lexical_mismatch`).
+- E1 (producer spelling): the producer's `image` string must begin lexically with the routed home string plus `/cache/images/` or `/cache/generated/images/`, followed by a flat bounded basename. C1a permits exactly those two independent layouts, with no search/fallback. Bounded fixtures passed for their stated producer/cache-helper and layouts. That is **sampled evidence, not an admission prerequisite per build**; a mismatch on any build refuses that candidate (`lexical_mismatch`).
 - `PLATFORM_GAP`: the bounded Linux file-leaf run passed on its stated platform; native serving and broader platform coverage are unqualified, and no Linux support claim is made.
 - No atomic snapshot guarantee. A grant or tip change after the last native check and before `prepare` is a stated residual and is not promised to refuse. No native check runs on the event loop.
 - Memory ceilings (96 MiB traced peak, 128 MiB incremental RSS) are provisional verification ceilings, not a native-allocation bound.
@@ -66,6 +66,6 @@ These are research evidence, not qualified serving. Implementation promotes them
 - Under the minimum-version policy no build list, fingerprint, Git SHA, qualification manifest or process latch gates this feature. A disabled direct-send switch does not close it. Unknown, newer and development versions are attempted; only a version below the floor, a missing required API, a failed in-memory binding check or a per-candidate security check closes it.
 - `HERMES_API_GAP` G-M1 (no bounded, side-effect-free, snapshot-consistent session read; native reads may materialize unbounded content, flush token counts and prune) and G-M2 (no typed tool-artifact record, so producers other than `image_generate` cannot gain authority) are retained and unsolved.
 - Assistant `MEDIA:` text stays ordinary, unmodified text on every build (root choice D-M9). The image appears on the tool row. No presentation question is pending.
-- C6b exact-native binding cost, T12 memory, independent exact-candidate review and physical-device acceptance are pending release-candidate evidence, not feature enablement.
+- C6b exact-native binding cost/concurrent-writer evidence, independent exact-candidate review and physical-device acceptance remain open release-candidate evidence, not feature enablement. The sampled Darwin T12 four-fetch/cancellation memory measurement is [recorded](../../docs/research/local-media-native-memory-2026-11-06.md) against the unchanged ceilings; it is not other-platform or release qualification.
 - The existing phone transport timeout is 15 s; a slow fetch may show unavailable before the host deadlines. No transport change is authorized here.
 - Phone app work lives in a separate private repository and is out of this tree.
