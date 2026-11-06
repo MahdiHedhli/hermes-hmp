@@ -575,3 +575,15 @@ differ. Reuse the established shapes and writer/control/residual assertions, but
 refresh the current native helper/DB lifecycle, timing and allocation evidence.
 The old 500 writer phases are historical evidence, not a new current run.
 C6b remains open; no extra HTTP/provider/Linux/device prerequisite is added to it.
+
+## Current complete-binding cost stage (2026-11-06)
+
+At `85c83f8`, all 24 selected workload pairs completed: 72 warm timing values,
+24 Python allocation traces, both proof contexts and exact full prompts. Each
+process balanced 40/40 borrows and closed its workload/original databases and
+listener/workers. [Exact method and results](../../docs/research/local-media-native-binding-cost-2026-11-06.md).
+Independent aggregate artifact review accepted all 24 reports, 672 artifact
+and source/Git/runtime bindings; 235 focused guards/lint passed.
+The earlier observation-expired actor settled but remains refused. Current
+mint-memory, RSS and writer/control/refusal/residual/ABA stages remain open.
+C6b and delivery/release rows remain unchecked. No live activation occurred.

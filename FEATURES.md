@@ -1,3 +1,16 @@
+## Current complete-binding cost checkpoint — November 6, 2026
+
+The [current native sample](docs/research/local-media-native-binding-cost-2026-11-06.md)
+completed all 24 Bot Chat/Phone workload-selector pairs at `85c83f8`, yielding
+72 warm timing values and 24 Python allocation samples. Both proof contexts and
+full verified prompts are retained per database; 40/40 borrows, database and
+listener/worker closure held in each process. Independent aggregate artifact
+review accepted all 672 artifact and source/runtime/report bindings. Exact-source
+CI is tracked separately. The earlier observation
+expiry remains a refused run, not a pass. Current mint-memory, RSS and writer/
+control/residual/ABA evidence remain required, so C6b stays open. No phone image
+display, production activation or release qualification is claimed.
+
 ## Native-backed concurrent image memory sample passed — November 6, 2026
 
 The sample is integrated through PR130 at `8d096b5`; exact-source CI42166758410

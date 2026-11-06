@@ -158,7 +158,7 @@ proof contexts, all four shapes and all three selectors. The successful full
 preparation evidence remains separate. Current cost source/artifact observations
 do not close mint/RSS/writer or C6b gates.
 
-### Revised per-selector execution layout (source review pending)
+### Revised per-selector execution layout (independently accepted)
 
 The current source requires both `binding_cost_case=0..7` and an explicit
 `binding_cost_selector` of 1, 16 or 128. Each cost process seeds only the selected
@@ -176,3 +176,10 @@ not proof context, prompt volume, history size, selectors, semantics or lifecycl
 assertions. The 12-second deadline is unchanged. The earlier case-2 observation
 refusal remains permanent and is not automatically retried. Revised-source
 execution requires independent review and separate artifact/source bindings.
+
+All 24 revised-source processes at `85c83f8` completed with source/runtime/report
+bindings, known command outcomes, 40/40 borrows per process and actual closure.
+Independent read-only review accepted all 672 top-level artifacts and every
+source/literal Git inventory. The 72 timings and 24 Python traces are scoped
+to warm complete binding. See [current results](../../docs/research/local-media-native-binding-cost-2026-11-06.md).
+Mint-memory, RSS, writer/control/residual/ABA and current C6b completion remain open.
