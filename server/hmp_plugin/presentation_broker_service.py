@@ -429,6 +429,7 @@ class SocketChannel:
         self._pre_result_cursor_origin = None
         self._clock_owner = self._clock_owner_snapshot = None
         self._clock_closed_known = False
+        self._credential_handshake = self._credential_handshake_snapshot = None
         try:
             _require(type(sock) is socket.socket and type(enrollment) is StartupEnrollment
                      and type(role) is str and role in ("gateway", "broker")
@@ -609,9 +610,18 @@ class SocketChannel:
                  and self._clock_closed_known is False)
         return clock
 
+    def _credential_external_idle(self):
+        owner = getattr(self, "_credential_handshake", None)
+        _require(owner is getattr(self, "_credential_handshake_snapshot", None))
+        if owner is not None:
+            from .presentation_credential_handshake import CredentialHandshakeOwner
+            _require(type(owner) is CredentialHandshakeOwner)
+            CredentialHandshakeOwner._released(owner, self)
+
     def close_clock(self) -> bool:
         """Distinct local clock-FD fact; socket close alone never establishes it."""
         try:
+            self._credential_external_idle()
             self._bindings()
             _require(self._closed_known is True)
             if self._clock_owner_snapshot is None:
@@ -641,6 +651,7 @@ class SocketChannel:
         return bytes(data)
 
     def claim_remote(self, owner) -> None:
+        self._credential_external_idle()
         from .presentation_remote import RemoteOperationOwner
 
         self._bindings()
@@ -651,6 +662,7 @@ class SocketChannel:
         self._check()  # failed authentication leaves the same allocation retained
 
     def _authorize_io(self, owner, direction, binding, end_ns, frame=None):
+        self._credential_external_idle()
         if self._remote_owner is None:
             _require(owner is None)
             return
@@ -787,6 +799,7 @@ class SocketChannel:
                  and type(intent.wire) is bytes and type(intent.token) is object)
 
     async def send_go(self, remote):
+        self._credential_external_idle()
         from .presentation_jobs import RemotePhase
         from .presentation_remote import RemoteOperationOwner
         from .presentation_remote_cleanup import _LOOP, RemoteCleanupOwner
@@ -826,6 +839,7 @@ class SocketChannel:
         """One cleanup-only CANCEL; ordinary retired work IO stays refused."""
         from .presentation_remote_cleanup import _LOOP, RemoteCleanupOwner
 
+        self._credential_external_idle()
         _require(type(owner) is RemoteCleanupOwner)
         data = RemoteCleanupOwner._prepare_cancel(owner, self)
         self._writing = True
@@ -850,6 +864,7 @@ class SocketChannel:
 
     def close(self) -> bool:
         try:
+            self._credential_external_idle()
             self._bindings()
             if self._closing:
                 self._integrity_lost = self._refused = True

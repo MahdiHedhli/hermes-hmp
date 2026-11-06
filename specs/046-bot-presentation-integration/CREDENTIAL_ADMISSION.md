@@ -249,3 +249,12 @@ credential retirement/drift detection, typed paired role factory, handshake,
 original native phase/cursor ownership and no-key-inheritance audit remain open.
 No installed credentials or live host settings were read or changed in these
 synthetic tests.
+
+## Retained handshake source checkpoint
+
+The original-task credential handshake actor and channel IO/close exclusion
+passed independent source review and a root regression run of 452 tests, one
+skipped. See [the evidence and limits](../../docs/research/presentation-credential-handshake-2026-11-06.md).
+Only a historical known-complete local IO fact releases the socket claim;
+unknown retains original debt. No runtime factory, phase/native authority or
+production feature is enabled by this source component.

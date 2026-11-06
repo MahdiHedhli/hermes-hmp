@@ -8,6 +8,7 @@ No signing API or credential generation is exposed here.
 from __future__ import annotations
 
 import os
+import secrets
 import stat
 from dataclasses import dataclass, field
 
@@ -74,6 +75,7 @@ class StartupRoleKeyFiles:
         self._refused = False
         self._ready = False
         self._private_key = None
+        self._boot = None
         self._process = (os.getpid(), os.geteuid())
         values = []
         seed = data = key = own_public = peer_public = derived = None
@@ -131,7 +133,10 @@ class StartupRoleKeyFiles:
             for name, held in key_rows:
                 _require(_identity(os.stat(name, dir_fd=parent, follow_symlinks=False)) == held.identity)
             _require(self.close_local() is True and self._process == (os.getpid(), os.geteuid()))
+            boot = secrets.token_bytes(32)
+            _require(type(boot) is bytes and len(boot) == 32)
             _require(self._refused is False and self._ready is False)
+            self._boot = boot.hex()
             self._private_key = key
             self._ready = True
             # No zeroization claim: Python/crypto allocator copies can remain.

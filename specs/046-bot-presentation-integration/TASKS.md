@@ -12,6 +12,10 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement/review data-only signed phase/body checks (`46c697c`) and
       startup-only role key-file acquisition/retirement (`33beebe`), with no
       signer or runtime permission. Root's expanded focused suite passed 213.
+- [x] Implement/review the retained original-task handshake and external channel
+      IO/close claim, with synthetic socket tests and 452-pass/one-skip focused
+      regression. Native qualification is mocked in the actor tests; no production
+      factory or phase/native permission follows.
 - [ ] Implement typed paired startup/key custody and bounded handshake on the
       original channel/task/cursor, with known local write completion facts.
 - [ ] Integrate signed phase commitments with original native phase owners;
