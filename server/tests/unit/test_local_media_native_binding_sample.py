@@ -568,3 +568,153 @@ def test_incomplete_or_undeclared_cost_mode_refuses_before_filesystem(case, sele
 def test_cost_report_cannot_certify_another_selector():
     with pytest.raises(RuntimeError):
         load().validate_cost_report(cost_report(), 0, 16)
+
+
+def mint_report(case=0, count=1):
+    module = load()
+    lineage, prompt = module.SHAPES[case % 4]
+    return {"case": case, "kind": module.KINDS[case // 4], "lineage_count": lineage,
+        "prompt_chars": prompt, "modeled_loop": True, "binding_measured": False,
+        "rss_measured": False, "writer_cases_run": 0,
+        "selectors": [{"count": count, "peak_traced_bytes": 200, "current_traced_bytes": 100,
+            "refs_verified": count, "shared_fields_verified": True, "before_explicit_gc": True}]}
+
+
+@pytest.mark.parametrize("case", range(8))
+@pytest.mark.parametrize("count", (1, 16, 128))
+def test_mint_schema_pins_every_kind_shape_selector(case, count):
+    module = load()
+    module.validate_mint_report(mint_report(case, count), case, count)
+    with pytest.raises(RuntimeError):
+        module.validate_mint_report(mint_report(case, count), (case + 1) % 8, count)
+
+
+@pytest.mark.parametrize("change", ["missing_refs", "after_gc", "not_shared", "negative_peak",
+                                  "binding_claim", "rss_claim", "writer_claim", "raw_ref"])
+def test_mint_schema_refuses_incomplete_or_overclaimed_evidence(change):
+    report = mint_report()
+    row = report["selectors"][0]
+    if change == "missing_refs":
+        row["refs_verified"] = 0
+    elif change == "after_gc":
+        row["before_explicit_gc"] = False
+    elif change == "not_shared":
+        row["shared_fields_verified"] = False
+    elif change == "negative_peak":
+        row["peak_traced_bytes"] = -1
+    elif change == "binding_claim":
+        report["binding_measured"] = True
+    elif change == "rss_claim":
+        report["rss_measured"] = True
+    elif change == "writer_claim":
+        report["writer_cases_run"] = 1
+    else:
+        row["ref"] = "synthetic-opaque-value-must-not-be-reported"
+    with pytest.raises(RuntimeError):
+        load().validate_mint_report(report, 0, 1)
+
+
+def modeled_mint_inputs(count):
+    candidate = types.SimpleNamespace(provenance_consistent=True,
+        user_id="synthetic-mint-user", profile="alpha",
+        candidates=tuple(types.SimpleNamespace(tool_row_id=i, raw_digest=bytes([i]) * 32)
+                         for i in range(1, count + 1)))
+    bound = types.SimpleNamespace(sidecar=candidate, ok=True,
+        accepted=tuple(range(count, 0, -1)), kind=types.SimpleNamespace(value="phone"),
+        session_id="synthetic-mint-session", tip="synthetic-mint-tip")
+    return candidate, bound
+
+
+@pytest.mark.parametrize("count", (1, 16, 128))
+def test_mint_trace_uses_fresh_actual_registry_and_shared_fields_before_gc(monkeypatch, count):
+    import gc
+    import tracemalloc
+
+    from hmp_plugin import local_media_registry as registry
+
+    original, owned, observations = registry.LocalMediaRegistry, [], []
+    collect = gc.collect
+
+    def fresh():
+        assert tracemalloc.is_tracing()
+        result = original()
+        owned.append(result)
+        return result
+
+    def collect_before():
+        observations.append(tracemalloc.is_tracing())
+        return collect()
+
+    monkeypatch.setattr(registry, "LocalMediaRegistry", fresh)
+    monkeypatch.setattr(gc, "collect", collect_before)
+    candidate, bound = modeled_mint_inputs(count)
+    for _ in range(2):
+        report = load().measure_mint(registry, candidate, bound,
+            user=candidate.user_id, profile=candidate.profile)
+        assert report["count"] == report["refs_verified"] == count
+        assert report["before_explicit_gc"] is report["shared_fields_verified"] is True
+        assert report["peak_traced_bytes"] >= report["current_traced_bytes"] > 0
+    assert observations == [False, False] and len(owned) == 2 and owned[0] is not owned[1]
+    assert len(owned[0]._entries) == len(owned[1]._entries) == count
+    assert not tracemalloc.is_tracing()
+
+
+def test_mint_exception_settles_owned_trace(monkeypatch):
+    import tracemalloc
+
+    from hmp_plugin import local_media_registry as registry
+
+    def fail():
+        assert tracemalloc.is_tracing()
+        raise ValueError("synthetic registry construction failure")
+
+    monkeypatch.setattr(registry, "LocalMediaRegistry", fail)
+    candidate, bound = modeled_mint_inputs(1)
+    with pytest.raises(ValueError, match="synthetic registry construction failure"):
+        load().measure_mint(registry, candidate, bound,
+            user=candidate.user_id, profile=candidate.profile)
+    assert not tracemalloc.is_tracing()
+
+
+def test_mint_preserves_existing_trace_without_creating_registry(monkeypatch):
+    import tracemalloc
+
+    from hmp_plugin import local_media_registry as registry
+
+    monkeypatch.setattr(registry, "LocalMediaRegistry", lambda: pytest.fail("must not construct"))
+    candidate, bound = modeled_mint_inputs(1)
+    tracemalloc.start()
+    try:
+        with pytest.raises(RuntimeError):
+            load().measure_mint(registry, candidate, bound,
+                user=candidate.user_id, profile=candidate.profile)
+        assert tracemalloc.is_tracing()
+    finally:
+        tracemalloc.stop()
+
+
+@pytest.mark.parametrize("mint", [True, 1, None, "true"])
+def test_mint_requires_explicit_boolean_and_pinned_case_before_filesystem(tmp_path, mint):
+    from .test_local_media_native_serving_driver import driver
+
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40,
+                           sample_binding_seed=True, binding_mint=mint)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_driver_cannot_confuse_modeled_mint_with_complete_binding_cost():
+    from .test_local_media_native_serving_driver import driver, good
+
+    report = good()
+    prep = preparation_report()
+    prep["cells"], prep["databases_closed"] = [prep["cells"][0], prep["cells"][4]], 1
+    report["native_binding_preparation"] = prep
+    report["native_binding_mint"] = mint_report()
+    args = (report, report["native_source_hashes"], report["hmp_source_hashes"],
+            report["runtime_executable_sha256"])
+    driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                           binding_cost_selector=1, binding_mint=True)
+    with pytest.raises(RuntimeError):
+        driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                               binding_cost_selector=1)

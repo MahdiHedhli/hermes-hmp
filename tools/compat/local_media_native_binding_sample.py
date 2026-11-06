@@ -222,8 +222,93 @@ def validate_cost_report(report, case, selector):
             type(row["peak_traced_bytes"]) is int and type(row["current_traced_bytes"]) is int and
             row["peak_traced_bytes"] >= row["current_traced_bytes"] >= 0)
 
+
+def validate_mint_mode(case, selector, mint):
+    validate_cost_mode(case, selector)
+    require(type(mint) is bool and (not mint or case is not None))
+
+
+def measure_mint(registry_module, candidate, bound, *, user, profile):
+    """Trace a fresh modeled mint loop, retaining results before explicit cleanup.
+
+    Native complete binding has already verified the candidate. Production
+    registry/Binding/descriptor types are used, with shared field objects as in
+    the synchronous emission loop. This does not execute S4 authorization or
+    its event-loop route, and does not measure native C memory or RSS.
+    Automatic garbage collection policy is unchanged.
+    """
+    import gc
+    import tracemalloc
+    from types import ModuleType
+
+    from hmp_plugin.contract import WireMediaDescriptor
+
+    require(type(registry_module) is ModuleType and not tracemalloc.is_tracing() and
+            bound.sidecar is candidate and bound.ok and candidate.provenance_consistent and
+            candidate.user_id == user and candidate.profile == profile and
+            len(bound.accepted) in SELECTORS)
+    device, instance = "synthetic-c6b-mint-device", "synthetic-c6b-mint-instance"
+    session, tip = bound.session_id, bound.tip
+    kind = registry_module.SessionKind(bound.kind.value)
+    digests = {item.tool_row_id: item.raw_digest for item in candidate.candidates}
+    require(set(bound.accepted) == set(digests))
+    gc.collect()
+    require(not tracemalloc.is_tracing())
+    tracemalloc.start()
+    try:
+        baseline, _ = tracemalloc.get_traced_memory()
+        registry = registry_module.LocalMediaRegistry()
+        descriptors = tuple(WireMediaDescriptor(kind="image", ref=registry.mint(
+            registry_module.Binding(device_id=device, user_id=user, instance_id=instance,
+                profile=profile, kind=kind, session_id=session, tip=tip,
+                tool_row_id=row_id, raw_digest=digests[row_id]))) for row_id in bound.accepted)
+        current, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    # Validation follows the trace. It cannot inflate the reported mint peak.
+    require(peak >= current >= baseline and len(descriptors) == len(bound.accepted) and
+            len({item.ref for item in descriptors}) == len(descriptors))
+    caller = registry_module.Caller(device_id=device, user_id=user, instance_id=instance,
+                                    profile=profile)
+    for row_id, descriptor in zip(bound.accepted, descriptors, strict=True):
+        entry = registry.lookup(descriptor.ref, caller)
+        require(entry is not None)
+        value = entry.binding
+        require(value.device_id is device and value.user_id is user and
+                value.instance_id is instance and value.profile is profile and
+                value.kind is kind and value.session_id is session and value.tip is tip and
+                value.tool_row_id == row_id and value.raw_digest is digests[row_id])
+    require(len(registry._entries) == len(descriptors))
+    return {"count": len(descriptors), "peak_traced_bytes": peak - baseline,
+            "current_traced_bytes": current - baseline, "refs_verified": len(descriptors),
+            "shared_fields_verified": True, "before_explicit_gc": True}
+
+
+def validate_mint_report(report, case, selector):
+    validate_mint_mode(case, selector, True)
+    require(type(report) is dict and set(report) == {"case", "kind", "lineage_count",
+        "prompt_chars", "selectors", "modeled_loop", "binding_measured", "rss_measured",
+        "writer_cases_run"})
+    kind, (lineage, prompt) = KINDS[case // len(SHAPES)], SHAPES[case % len(SHAPES)]
+    require(type(report["case"]) is int and report["case"] == case and
+            type(report["kind"]) is str and report["kind"] == kind and
+            type(report["lineage_count"]) is int and report["lineage_count"] == lineage and
+            type(report["prompt_chars"]) is int and report["prompt_chars"] == prompt and
+            report["modeled_loop"] is True and report["binding_measured"] is False and
+            report["rss_measured"] is False and type(report["writer_cases_run"]) is int and
+            report["writer_cases_run"] == 0 and type(report["selectors"]) is list and
+            len(report["selectors"]) == 1)
+    row = report["selectors"][0]
+    require(type(row) is dict and set(row) == {"count", "peak_traced_bytes",
+        "current_traced_bytes", "refs_verified", "shared_fields_verified", "before_explicit_gc"} and
+        type(row["count"]) is int and type(row["refs_verified"]) is int and
+        row["count"] == row["refs_verified"] == selector and
+        row["shared_fields_verified"] is True and row["before_explicit_gc"] is True and
+        type(row["peak_traced_bytes"]) is int and type(row["current_traced_bytes"]) is int and
+        row["peak_traced_bytes"] >= row["current_traced_bytes"] >= 0)
+
 def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
-                    cost_selector=None, cost_results=None):
+                    cost_selector=None, cost_results=None, mint=False):
     """Verify the full matrix, or both contexts of one explicitly selected cost shape.
 
     Each lineage/prompt shape owns a fresh native DB with BOTH proof sources:
@@ -234,7 +319,7 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
     """
     from hmp_plugin.contract import ConversationRef
 
-    validate_cost_mode(cost_case, cost_selector)
+    validate_mint_mode(cost_case, cost_selector, mint)
     require((cost_case is None and cost_results is None) or
             (cost_case is not None and type(cost_results) is list and not cost_results))
     cost_rows = []
@@ -284,9 +369,13 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
                         accepted.append(len(result.accepted))
                         if (cost_case == KINDS.index(kind) * len(SHAPES) + index and
                                 cost_selector == count):
-                            cost_rows.append({"count": count, **measure_binding(
-                                lambda candidate=candidate:
-                                    fx.native.bridge.bind_media_batch(candidate), check)})
+                            if mint:
+                                cost_rows.append(measure_mint(fx.rig.ctx.media_registry_module,
+                                    candidate, result, user=user, profile=profile))
+                            else:
+                                cost_rows.append({"count": count, **measure_binding(
+                                    lambda candidate=candidate:
+                                        fx.native.bridge.bind_media_batch(candidate), check)})
                     cells[(kind, lineage, prompt)] = {key: shape[key] for key in (
                         "kind", "lineage_count", "prompt_chars", "verified_prompt_count",
                         "history_rows", "legacy_rows", "generated_rows")} | {
@@ -309,6 +398,12 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
                 "prompt_chars": prompt, "selectors": cost_rows, "warmups_per_selector": 1,
                 "traces_per_selector": 1, "rss_measured": False, "mint_measured": False,
                 "writer_cases_run": 0}
-        validate_cost_report(cost, cost_case, cost_selector)
+        if mint:
+            cost = {"case": cost_case, "kind": kind, "lineage_count": lineage,
+                    "prompt_chars": prompt, "selectors": cost_rows, "modeled_loop": True,
+                    "binding_measured": False, "rss_measured": False, "writer_cases_run": 0}
+            validate_mint_report(cost, cost_case, cost_selector)
+        else:
+            validate_cost_report(cost, cost_case, cost_selector)
         cost_results.append(cost)
     return report
