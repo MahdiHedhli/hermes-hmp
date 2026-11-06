@@ -1,24 +1,21 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
 [Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) includes reviewed
-cleanup-time signed control. The SAME original reader crosses known work expiry
-only after settled readiness and qualified clock checks, retaining partial cursor
-state and the earliest native cleanup end. Only authenticated CANCEL may continue;
-late GO, unknown retirement and clock errors refuse without a renewed timer.
+fixed READY signing from actual independently started resources and a completed
+native input-write observation. Original service/input/child/pipe/current role
+facts are checked before and after crypto. This signs data only: no socket write,
+READY grammar, resource admission or worker GO is granted.
 
-Affected regression: **1,181 passed, one skipped**, 39.68 seconds; final focused
-module **84 passed**, 12.61 seconds; configured lint passed. Independent review
-was source/test read-only. See [evidence and limits](docs/research/presentation-signed-control-cleanup-time-2026-11-06.md).
+Final affected regression: **1,262 passed, one skipped**, 47.68 seconds; configured
+lint passed. READY cases 12 passed; full controller module 96 passed. Independent
+review was source/test read-only. See [evidence and limits](docs/research/presentation-signed-ready-producer-2026-11-06.md).
 
-Signed READY tied to actual admitted resources/input, resource/worker GO relay,
-later signed result/terminal/ACK IO, production startup, native publication,
-STATUS and physical/release qualification remain open. READY in these fixtures
-is a synthetic prior grammar fact. Character delivery remains unavailable.
-No live host/device/mobile build/permission/provider/key installation changed.
-
-Earlier control-chain source `41ceb9a` passed all plugin and Python3.12–3.14
-Unicode jobs in [CI734](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42272783316).
-That does not qualify this newer cleanup-time source.
+Prior source 9dcda68 CI736 failed two timed fixture assertions (8,372 passed). This
+source includes independently reviewed causal-order repairs, without changing the
+250ms protocol interval or accepting expired results. New-source CI is pending.
+Actual signed READY sending, production resource admission/GO relay, later signed
+IO, startup, native publication, STATUS and physical/release qualification remain
+open. Character delivery is unavailable. No live host/device/settings changed.
 
 ## Native image verification checkpoint — November 6, 2026
 

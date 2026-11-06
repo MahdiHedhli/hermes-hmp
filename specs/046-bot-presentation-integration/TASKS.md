@@ -66,8 +66,13 @@ historical, not an alternative live authorization path or resolved incident.
       pre-GO CANCELseq1 remains supported. Modeled READY is not resource qualification.
 - [x] Implement/review authenticated cleanup-time control under the original earliest
       budget, including partial auth/header/body expiry and original cause retention.
-- [ ] Implement fixed signed READY producer/write from actual admitted resources
-      and original staged input; keep production resource startup closed until qualified.
+- [x] Implement/review fixed signing-only READY producer from actual independently
+      started/staged fixture resources and native completed-input write observation.
+      1,262 affected passed, one skipped; no socket/grammar/resource admission grant.
+- [x] Repair CI736 fixture cause/GO ordering without changing protocol deadlines;
+      prior exact-source failures remain recorded; replacement CI is pending.
+- [ ] Implement actual signed READY write from the retained original resource/input
+      facts with one write/grammar intent; keep production startup closed until qualified.
 - [x] Implement/review source signed GO/CANCEL receiver/context on the existing original
       controller task/cursor and frozen budget before any credential resource/READY
       startup. No legacy fallback, new parser task or boolean gate opening.

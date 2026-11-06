@@ -168,3 +168,13 @@ Only authenticated CANCEL may continue, original offsets/targets/buffers remain
 unchanged, and remote inheritance cannot extend the first cause. Source receiver
 acceptance remains separate from signed READY/resources/worker relay and runtime
 startup. See [evidence and limits](../../docs/research/presentation-signed-control-cleanup-time-2026-11-06.md).
+
+## Fixed READY signing checkpoint
+
+`CredentialReadyProducer` now derives fixed broker READY from the actual original
+resource/input-write observation and reverified handshake/native input scope.
+It preserves the original service actor, pipe/child/fd, role and work deadline
+through callbacks before/after signing. It performs no socket write, grammar
+READY, resource start or GO relay. Fixtures independently start disposable
+resources; production admission remains unqualified. Prior CI736 failures and
+reviewed fixture-order fixes remain explicit. See [evidence](../../docs/research/presentation-signed-ready-producer-2026-11-06.md).

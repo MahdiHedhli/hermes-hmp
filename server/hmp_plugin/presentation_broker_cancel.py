@@ -231,6 +231,7 @@ class BrokerCancellationOwner:
         self._signed_cursor = self._signed_cursor_snapshot = None
         self._signed_cancel = self._signed_cancel_snapshot = None
         self._signed_go = self._signed_go_snapshot = None
+        self._credential_ready = self._credential_ready_snapshot = None
         self._buffer = self._buffer_snapshot = self._buffer_origin = bytearray()
         self._wire_received = self._frame_start = 0
         self._pending = self._waiter = None

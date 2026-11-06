@@ -485,7 +485,7 @@ Native/helper/socket/current device and release qualifications remain separate.
 
 - `presentation_process.py`: fixed launch attempt custody, exact terminal waitpid and one signal-zero group observation. No destructive signal, runtime qualification or native route binding.
 
-- `presentation_control_pipe.py`: owned nonblocking schema2 input/one GO/control closure; binding only, no native authorization or process termination.
+- `presentation_control_pipe.py`: owned nonblocking schema3 input/one GO/control closure; native completed-input write observation is local only, no native authorization or process termination.
 
 - `presentation_input_v3.py`: closed input3 parent-policy/work transfer; no legacy decoder fallback or native authority. Actual entry migration/result2 remain pending.
 
@@ -601,3 +601,5 @@ not weaken the closed plugin registration or optional-media import boundaries.
 
 - `presentation_control_binding.py`: prepared original controller task/key-context handoff; preparation alone remains a hard no-IO stop.
 - `presentation_credential_control.py`: original controller-task first signed GO/CANCEL frame staging; explicit signed pre-GO CANCEL adoption joins existing native grammar/budget/receipt and owned local park/stop. Typed GO read/native receipt may precede same-task signed CANCELseq2 under original work/earliest cleanup budget; the dedicated original-service CANCEL consumer is distinct from generic work. Signed READY/resources/worker relay and production dispatch remain closed.
+
+- `presentation_credential_ready.py`: fixed original-service READY signing from actual resource/input-write facts; no socket write, grammar READY, resource admission or GO relay.

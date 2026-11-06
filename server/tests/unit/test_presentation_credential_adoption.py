@@ -39,6 +39,10 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
         observation=spine._observation,
     )
     held = {}
+    ready_case = bool(mutation and mutation.startswith("signed_control_native_ready_"))
+    ready_event = asyncio.Event()
+    control_retained_event = asyncio.Event()
+    cleanup_cause_event = asyncio.Event()
     from hmp_plugin.presentation_credential_queued import CredentialQueuedOwner
 
     original_init = CredentialQueuedOwner.__init__
@@ -239,6 +243,155 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 budget = native.cleanup_budget_snapshot
                 before = CancellationBudget.inspect(budget)
                 grammar_before = dict(record.grammar.__dict__)
+                if ready_case:
+                    import json
+                    from io import FileIO
+
+                    from hmp_plugin import presentation_credential_ready as ready_module
+                    from hmp_plugin.presentation_broker_cancel import BrokerCancellationOwner
+                    from hmp_plugin.presentation_broker_registry import BrokerRegistry
+                    from hmp_plugin.presentation_credential_codec import decode_record
+                    from hmp_plugin.presentation_credential_phase import _EXPECTED, check_commitment
+                    from hmp_plugin.presentation_credential_ready import CredentialReadyProducer
+
+                    control = BrokerCancellationOwner.stage_credential_go_control(work)
+                    held["native_control"] = control
+                    resources = process = child = None
+                    try:
+                        if not mutation.endswith("no_resources"):
+                            BrokerRegistry.start_resources(spine._registry_snapshot, ticket)
+                            resources = native.resources_snapshot
+                            process = resources._process_snapshot
+                            child = process._child_snapshot
+                            if not mutation.endswith("no_input"):
+                                BrokerRegistry.stage_resource_input(spine._registry_snapshot,
+                                                                    ticket, work._refs_snapshot[8])
+                        if mutation.endswith("no_fact"):
+                            resources._control_snapshot._input_write_observation_origin = None
+                        if mutation.endswith("wrong_fact"):
+                            pipe = resources._control_snapshot
+                            fact = pipe._input_write_observation_origin._replace(
+                                packet_sha256="f" * 64)
+                            pipe._input_write_observation = fact
+                            pipe._input_write_observation_origin = fact
+                        acquisition_failed = mutation.endswith(("no_resources", "no_input",
+                                                               "no_fact", "wrong_fact"))
+                        if acquisition_failed:
+                            with pytest.raises(FrameError):
+                                CredentialReadyProducer.retain(control)
+                            held["ready_acquisition_refused"] = True
+                            return ticket
+                        if mutation.endswith("wrong_task"):
+                            async def wrong_ready_actor():
+                                with pytest.raises(FrameError):
+                                    CredentialReadyProducer.retain(control)
+                            await asyncio.create_task(wrong_ready_actor())
+                            assert control._credential_ready is None
+                        producer = CredentialReadyProducer.retain(control)
+                        held["ready_producer"] = producer
+                        with pytest.raises(FrameError):
+                            CredentialReadyProducer.retain(control)
+                        original_claim = json.loads(
+                            receiver._result_snapshot.commitment.canonical_json)
+                        callbacks = []
+                        if mutation.endswith("forged_begin_claim"):
+                            from dataclasses import replace
+                            forged = dict(original_claim, input_sha256="f" * 64)
+                            object.__setattr__(receiver._result_snapshot, "commitment", replace(
+                                receiver._result_snapshot.commitment,
+                                canonical_json=json.dumps(forged).encode()))
+                        if mutation.endswith(("late_fd_close", "late_fd_replace", "foreign_phase")):
+                            from hmp_plugin.presentation_clock import NativeClockOwner
+                            sample = NativeClockOwner.sample
+                            altered = []
+
+                            class ForeignPhase:
+                                def __eq__(self, other):
+                                    callbacks.append("eq")
+                                    raise AssertionError("foreign phase comparison")
+
+                            def late_sample(clock):
+                                now = sample(clock)
+                                if not altered and asyncio.current_task() is record.task:
+                                    altered.append(True)
+                                    pipe = resources._control_snapshot
+                                    if mutation.endswith("late_fd_close"):
+                                        FileIO.close(pipe._stream_snapshot)
+                                    elif mutation.endswith("late_fd_replace"):
+                                        extra_read, extra_write = os.pipe()
+                                        held["ready_extra_read"] = extra_read
+                                        os.dup2(extra_write, pipe._identity_snapshot[0])
+                                        os.close(extra_write)
+                                    else:
+                                        resources._phase = ForeignPhase()
+                                return now
+
+                            monkeypatch.setattr(NativeClockOwner, "sample", late_sample)
+                        if mutation.endswith("retired"):
+                            keys["broker"].retire()
+                        elif mutation.endswith("post_crypto"):
+                            encode = ready_module.encode_record
+
+                            def retired_encode(*args, **options):
+                                raw = encode(*args, **options)
+                                keys["broker"].retire()
+                                return raw
+
+                            monkeypatch.setattr(ready_module, "encode_record", retired_encode)
+                        if mutation.endswith(("retired", "post_crypto", "late_fd_close",
+                                              "late_fd_replace", "foreign_phase")):
+                            with pytest.raises(FrameError):
+                                producer.prepare_ready()
+                            assert producer._attempted is True and producer._record is None
+                            assert callbacks == []
+                            if mutation.endswith(("late_fd_close", "late_fd_replace")):
+                                assert resources._control_snapshot._resource_uncertain is True
+                            with pytest.raises(FrameError):
+                                producer.prepare_ready()
+                        else:
+                            raw = producer.prepare_ready()
+                            held["ready_record"] = raw
+                            expected = {k: original_claim[k] for k in _EXPECTED}
+                            expected.update(phase="READY", role="broker", direction="b2g",
+                                            sequence=0)
+                            checked = check_commitment(raw,
+                                sender_public=keys["broker"]._selection.own_public,
+                                receiver_public=keys["broker"]._selection.peer_public,
+                                expected=expected)
+                            assert checked.frame_length == len(encode_frame(
+                                native.binding, "READY", 0, b"", version=2))
+                            assert json.loads(decode_record(raw).canonical_json)["role"] == "broker"
+                            with pytest.raises(FrameError):
+                                producer.prepare_ready()
+                            assert producer._record is raw
+                        assert record.grammar._ready is False and record.grammar._broker_next == 0
+                        assert control._go_receipt is None and resources._go_attempted is False
+                        assert resources._control_snapshot._go._attempted is False
+                        return ticket
+                    finally:
+                        ready_event.set()
+                        BrokerCancellationOwner.abort(control)
+                        await asyncio.gather(control._allocation_snapshot.task,
+                                             return_exceptions=True)
+                        if child is not None:
+                            # Exact disposable fixture ownership only: closing
+                            # its native stdin ends the reader waiting for GO.
+                            for stream in (child.stdin, child.stdout, child.stderr):
+                                if (type(stream) is FileIO
+                                        and not FileIO.closed.__get__(stream, FileIO)):
+                                    FileIO.close(stream)
+                            until = time.monotonic() + 3
+                            while process._wait is None:
+                                if process.poll_wait():
+                                    break
+                                assert time.monotonic() < until
+                                await asyncio.sleep(0.005)
+                            if resources._pipes_snapshot is not None:
+                                selector = resources._pipes_snapshot._selector
+                                if selector is not None:
+                                    type(selector).close(selector)
+                        if "ready_extra_read" in held:
+                            os.close(held["ready_extra_read"])
                 cleanup = mutation.startswith("signed_control_native_cleanup_")
                 go_chain = (mutation.startswith("signed_control_native_go_chain_")
                             or (cleanup and ("after_go" in mutation
@@ -254,6 +407,7 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 else:
                     control = BrokerCancellationOwner.retain_credential_cancel(work)
                 held["native_control"] = control
+                control_retained_event.set()
                 inherit = CancellationBudget.inherit
 
                 def inherited(budget, window, now):
@@ -340,6 +494,7 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                     if mutation.endswith("earlier_cause"):
                         BrokerCancellationOwner._local_cause(control)
                         held["cleanup_initial_end"] = CancellationBudget.inspect(budget)[2]
+                        cleanup_cause_event.set()
                     if mutation.endswith(("sample_error", "guard_timeout")):
                         sample = NativeClockOwner.sample
 
@@ -950,6 +1105,11 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                     await asyncio.get_running_loop().sock_sendall(
                         gateway._socket_snapshot, wire_bytes[split:])
 
+            if cleanup_case and mutation.endswith("earlier_cause"):
+                # Establish the actual local cause before encoding a later
+                # remote window; scheduler speed cannot reverse this causal.
+                async with asyncio.timeout_at(end / 1e9):
+                    await cleanup_cause_event.wait()
             phase = "CANCEL" if mutation in ("signed_control_cancel", "signed_control_hash",
                                              "signed_control_window") else "GO"
             if mutation.startswith("signed_control_native_"):
@@ -964,7 +1124,7 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                     start += 1_000_000_000
                 body = CancellationWindow(start, start + 250_000_000).encode()
                 if cleanup_case:
-                    start = (time.monotonic_ns() + 50_000_000
+                    start = (held["cleanup_initial_end"] - 250_000_000 + 50_000_000
                              if mutation.endswith("earlier_cause") else end)
                     body = CancellationWindow(start, start + 250_000_000).encode()
             if mutation == "signed_control_window":
@@ -988,7 +1148,10 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 control_frame = control_frame[:-1] + bytes([control_frame[-1] ^ 1])
             held["signed_auth_length"] = len(control_raw)
             wire = control_raw + control_frame
-            if cleanup_case and "after_go" not in mutation:
+            if ready_case:
+                await asyncio.wait_for(ready_event.wait(), timeout=5)
+                await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, wire)
+            elif cleanup_case and "after_go" not in mutation:
                 await send_cleanup_wire(wire, len(control_raw))
             elif cleanup_case:
                 await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, wire)
@@ -1008,6 +1171,17 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, wire)
             if (mutation.startswith("signed_control_native_go_chain_")
                     and not mutation.endswith("before_go")):
+                if not mutation.endswith(("missing_ready", "index_drift")):
+                    # Internal fixture coordination observes an actual GO-read
+                    # notification, NOT a production execution acknowledgement.
+                    # Cancellation starts here, after BEGIN/GO fixture setup.
+                    async with asyncio.timeout_at(end / 1e9):
+                        await control_retained_event.wait()
+                        native_control = held["native_control"]
+                        go_future = native_control._go_future_snapshot
+                        await asyncio.wait((go_future, native_control._allocation_snapshot.task),
+                                           return_when=asyncio.FIRST_COMPLETED)
+                        assert go_future.done()
                 start = time.monotonic_ns()
                 body2 = CancellationWindow(start, start + 250_000_000).encode()
                 frame2 = encode_frame(binding, "CANCEL", 2, body2, version=2)
@@ -1313,3 +1487,17 @@ async def test_original_cleanup_time_cursor_without_budget_renewal(local, tmp_pa
     held, _ = await exchange(local, tmp_path, monkeypatch,
                              "signed_control_native_cleanup_" + suffix)
     assert held["cleanup_checked"] is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+@pytest.mark.parametrize("suffix", [
+    "signed", "wrong_task", "no_resources", "no_input", "no_fact", "wrong_fact",
+    "retired", "post_crypto", "late_fd_close", "late_fd_replace", "foreign_phase",
+    "forged_begin_claim",
+])
+async def test_fixed_ready_signature_requires_actual_resource_input_write(local, tmp_path,
+                                                                         monkeypatch, suffix):
+    held, _ = await exchange(local, tmp_path, monkeypatch,
+                             "signed_control_native_ready_" + suffix)
+    assert "ready_record" in held or "ready_producer" in held or held["ready_acquisition_refused"]

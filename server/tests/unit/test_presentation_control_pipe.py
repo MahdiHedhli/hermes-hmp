@@ -426,3 +426,61 @@ def test_native_fileio_nonowning_close_cannot_mint_os_close_fact():
         stream.close()
         os.close(write)
         os.close(read)
+
+
+def test_native_input_write_observation_binds_completed_original_bytes(pipe):
+    import hashlib
+
+    from hmp_plugin.presentation_control_pipe import _INPUT_WRITE_MINT, ControlInputWriteObservation
+
+    owner, read, stream, handle, child = pipe
+    data = packet()
+    owner.write_input(data)
+    fact = owner._input_write_observation_origin
+    assert type(fact) is ControlInputWriteObservation and fact.mint is _INPUT_WRITE_MINT
+    assert fact is owner._input_write_observation and fact.owner is owner
+    assert fact.stream is stream and fact.handle is handle and fact.child is child
+    assert fact.packet_sha256 == hashlib.sha256(data).hexdigest()
+    assert fact.packet_length == len(data)
+    assert os.read(read, 8192) == data
+
+
+def test_post_write_reentry_cannot_publish_observation_after_legacy_flag_restore(pipe):
+    owner, read, _, _, _ = pipe
+    data = packet()
+    calls = []
+
+    def current():
+        calls.append(True)
+        if len(calls) == 2:  # complete native write, before observation publication
+            with pytest.raises(FrameError):
+                owner.write_input(data)
+            owner.uncertain = False  # cannot clear the independent sticky refusal
+        return True
+
+    owner._current = current
+    with pytest.raises(FrameError):
+        owner.write_input(data)
+    assert owner._work_refused is True and owner._input_ready is False
+    assert owner._input_write_observation_origin is None
+    assert os.read(read, 8192) == data
+
+
+def test_uncertain_partial_native_write_never_mints_input_observation(pipe, monkeypatch):
+    owner, read, _, _, _ = pipe
+    data = packet()
+    write = os.write
+    calls = []
+
+    def partial(fd, body):
+        calls.append(True)
+        write(fd, body[:10])
+        raise OSError("synthetic write-result uncertainty")
+
+    monkeypatch.setattr(os, "write", partial)
+    with pytest.raises(FrameError):
+        owner.write_input(data)
+    assert owner._input_write_observation_origin is None and owner._input_ready is False
+    with pytest.raises(FrameError):
+        owner.write_input(data)
+    assert len(calls) == 1 and os.read(read, 8192) == data[:10]
