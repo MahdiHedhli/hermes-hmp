@@ -1,5 +1,21 @@
 # Roadmap
 
+## Native-bound modeled mint-memory sample reviewed — November 6, 2026
+
+[Current evidence](docs/research/local-media-native-mint-memory-2026-11-06.md)
+at `6453386` covers 24 fresh isolated samples and 1,160 verified refs using
+production registry/Binding/descriptor types over actual native binding results.
+Independent source/artifact review accepted all 672 top-level artifacts, source/
+literal Git/runtime/report identities, known commands and cleanup. Each process
+balanced 35/35 native borrows. Traced peaks were 3,844/14,224/81,616 bytes for
+1/16/128 refs, retained before explicit cleanup with shared field objects.
+This is a modeled mint loop, not input preparation, native binding, S4 route/
+authorization/event-loop cost, RSS/native-C or full-capacity registry memory.
+Root's 277 focused checks/lint passed. Current RSS and writer/control/refusal/
+residual/ABA work remain required; C6b and delivery/release stay open. PR131's
+binding-cost work is integrated at `4925e06` with all final CI jobs successful.
+No live settings, grants, providers, gateway, app install or release changed.
+
 ## Current complete-binding cost checkpoint — November 6, 2026
 
 The [current native sample](docs/research/local-media-native-binding-cost-2026-11-06.md)

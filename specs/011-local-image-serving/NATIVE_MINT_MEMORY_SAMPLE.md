@@ -46,11 +46,18 @@ cases. It cannot validate as a complete-binding cost report. Complete matrix:
 24 distinct current-source kind/shape/selector reports; no arbitrary memory
 ceiling, native-C bound, gate/allowlist or release certification follows.
 
-## Status
+## Execution checkpoint
 
-Root's 277 focused checks and configured lint passed. Independent read-only
-source review accepted this modeled-loop scope and dispatch/lifecycle contracts
-without reviewer execution. No current native mint sample has run yet.
-Exact-source execution, artifact readback and honest result documentation remain required.
-The earlier observation-expired cost run remains refused, not repaired by this
-new stage; no automatic retry or deadline extension is authorized.
+All 24 current-source pairs at `6453386` completed: 1,160 refs verified and maximum
+traced peak 81,616 bytes for 128 refs. Each process balanced 35/35 borrows and
+closed its workload/original DBs and listener/workers with no observation expiry.
+Root checked artifact hashes/private modes and source/runtime/report bindings;
+independent read-only aggregate review accepted all 672 artifacts, source/literal
+Git inventories, runtime/report bindings and known outcomes. No reviewer execution. The saved-data collector first
+incorrectly required the older cost-mode 40/40 count; it was corrected using
+actual receipts without native reexecution. No old count is transferred.
+
+[Exact method/results](../../docs/research/local-media-native-mint-memory-2026-11-06.md)
+exclude binding/input-index/route/auth/event-loop/RSS/native-C/full-capacity
+registry claims. Root's 277 guards/lint passed and independent source review
+accepted the modeled-loop contract. Current RSS/writer and C6b remain open.

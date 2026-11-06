@@ -587,3 +587,14 @@ and source/Git/runtime bindings; 235 focused guards/lint passed.
 The earlier observation-expired actor settled but remains refused. Current
 mint-memory, RSS and writer/control/refusal/residual/ABA stages remain open.
 C6b and delivery/release rows remain unchecked. No live activation occurred.
+
+## Current modeled mint-memory stage (2026-11-06)
+
+At `6453386`, all 24 native-bound modeled mint samples completed and passed
+independent artifact/source review: 1,160 refs, 672 artifact bindings, 35/35
+borrows per run, closed DBs/listener/workers and no observation expiry.
+[Method/results](../../docs/research/local-media-native-mint-memory-2026-11-06.md)
+cover fresh production registry/Binding/descriptor allocation with shared inputs,
+not input-index construction, binding, S4 authorization/event-loop, RSS/native-C
+or full-capacity registry memory. Root's 277 focused guards/lint passed.
+Current RSS/writer/control/refusal/residual/ABA work and C6b remain open.
