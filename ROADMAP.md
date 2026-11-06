@@ -31,15 +31,11 @@ remain open, so C6b and delivery/release are not complete.
 
 ### Constructed-child and paired-runner checkpoint
 
-Four constructed branch/reset child-isolation phases at `befa0f7` passed
-independent source/artifact review: eight exact parent-binding outcomes,
-112 artifacts and 39/39 native borrows per process with verified cleanup.
-These do not exercise actual gateway fork/reset admission. The declared matrix
-now contains 768 unique phases. A 384-pair runner is implemented for source
-review, with separate fresh DB/home scopes and durable closed checkpoints;
-paired native execution and full coverage are still pending. Root's 601 related
-checks passed before the checkpoint type-hardening delta; 304 targeted checks
-passed after it. No delivery, device or release qualification is claimed.
+Four constructed branch/reset child-isolation phases at `befa0f7` passed independent source/artifact review: eight exact parent-binding outcomes, 112 artifacts and 39/39 native borrows per process with verified cleanup. These do not exercise actual gateway fork/reset admission.
+
+The paired runner at `f6c693f` passed independent source review after a type-exact checkpoint repair. Two largest-history paired processes completed four phases with fresh DB/home scopes, four durable checkpoints, 60 reviewed artifacts, 53/53 borrows per process and verified cleanup. Child isolation retained exact parent selections; Phone append/deactivation refused the concurrent read and the fresh read accepted the expected 128/127 rows. No deadline extension, retry, guard bypass or reviewer execution.
+
+The declared full matrix contains 768 unique phases in 384 pairs. Full-matrix execution, operational fork/reset applicability, C6b, activation, physical display and release qualification remain open. The related suite passed 601 checks before the finite checkpoint type repair; 304 targeted checks passed afterward, with lint clean.
 
 ## Native-bound modeled mint-memory sample reviewed — November 6, 2026
 

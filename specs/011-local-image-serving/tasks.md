@@ -662,3 +662,10 @@ limitation is reclassified as a fix or a physical/release qualification.
   source/runtime/outcome/closure bindings; bounded constructed-child scope only.
 - [ ] Paired runner source implemented with two exclusive DB scopes and closed
   checkpoints; independent source review and unchanged-budget native pilot pending.
+
+- [x] Independent paired source review accepted after canonical checkpoint type
+  repair, before native execution. Two largest-shape native processes/four phases
+  at `f6c693f` passed independent 60-artifact/checkpoint/source/runtime readback.
+- [ ] Execute and independently review all 768 declared phases with capacity
+  preflight/reserve and unchanged actor/deadline/security rules. Current bounded
+  pilots are not the full matrix; operational gateway reset admission stays distinct.

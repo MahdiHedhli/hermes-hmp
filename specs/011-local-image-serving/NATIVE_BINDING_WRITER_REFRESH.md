@@ -273,3 +273,24 @@ The four constructed-child artifacts at `befa0f7` passed independent readback:
 112 hashes/bytes/private modes, all copied native/HMP SHA and literal Git IDs,
 helper/runtime bindings, eight exact parent outcomes, 39/39 borrows each, and
 writer/hooks/DB/listener closure. This closes that bounded evidence review only.
+
+### Paired heavy-shape native result
+
+Two root-operated processes at `f6c693f` completed four phases with the original
+12-second refusal policy unchanged. Both seeded the largest 98-session/full-prompt
+shape with 128 selectors in two separate DB scopes. Bot branch/reset children
+preserved exact parent selections; Phone append refused then freshly accepted
+128 rows, while deactivation refused then freshly accepted 127. Independent
+readback accepted all 60 artifacts, copied source/literal Git/runtime/helper
+bindings and four canonical type-exact checkpoints. Each process balanced 53/53
+borrows and closed both workload DBs plus the original DB/listener/workers.
+No settlement after expiry or retry occurred. This qualifies the bounded paired
+pilot, not the full 768 phases or operational gateway fork/reset admission.
+
+Observed retained roots occupy approximately 411 MiB each; 384 copies at that
+observed size would consume about 154 GiB before any additional growth. Free
+space is approximately 194 GiB at this checkpoint. These observations are not a
+hard storage bound: full execution must check available capacity before each
+fresh process, preserve prior evidence, and stop rather than exhaust the volume
+or delete protected evidence. Source-copy optimization or staged evidence
+retention must be reviewed separately if capacity cannot preserve a reserve.
