@@ -690,3 +690,9 @@ limitation is reclassified as a fix or a physical/release qualification.
 - [ ] Review explicit 72-pair supplemental scope, whose completed result cannot
   assert full-matrix completion. Execute after prior full run settles; retain
   separate source bindings, artifacts and independent readback.
+
+- [x] Optional archive-clone driver source independently accepted for one sample;
+  679 root model/guard checks and lint passed. Fresh largest Bot ordinary-child
+  cached single phase completed at `0397803`; no expiry/fallback, 39/39 borrows.
+- [ ] Independently verify cached sample artifacts/source/runtime/clone lineage,
+  then review broader heavy single-phase partition and all remaining scope.

@@ -95,3 +95,19 @@ cached/default paths, malformed options, clone refusal, wrong commit/blob,
 helper mismatch and post-workload archive drift. These models execute no clone,
 Git or native workload. Independent integration source review is pending. No
 retained real archive or Hermes workload has used this optional path yet.
+
+## Cached single-phase lineage sample — November 6, 2026
+
+A fresh native sample at `0397803` used the reviewed optional archive-clone path
+and independently checked Git/archive/source identities before executing one
+largest-shape Bot ordinary-child phase (98 sessions, full prompts, 128 selectors).
+It completed under the unchanged process limit: `tip_changed` first, then fresh
+`not_eligible`, two public native mutation calls, 39/39 borrows and closed
+DB/listener/workers. All ten commands had known outcomes; no expiry/settlement,
+ordinary-copy fallback or metadata removal occurred. Independent artifact review
+is pending. This is one phase, not a full matrix or a measured storage bound.
+
+The original matrix at `21937dc` remains stopped after 174 completed pairs and
+one refused pair; 209 pairs never started. Reusing its verified source archive
+neither reruns nor rehabilitates the refused workload. Broader single-phase
+partition/remaining execution and independent evidence review remain open.
