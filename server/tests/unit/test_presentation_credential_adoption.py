@@ -227,6 +227,155 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
 
                     await asyncio.create_task(foreign_task())
             assert work.current_queued() is native
+            if mutation and mutation.startswith("signed_control_"):
+                from hmp_plugin.presentation_broker_cancel import BrokerCancellationOwner
+                from hmp_plugin.presentation_cancel_budget import CancellationBudget
+
+                budget_before = CancellationBudget.inspect(native.cleanup_budget_snapshot)
+                grammar_before = dict(record.grammar.__dict__)
+                if mutation in ("signed_control_init_refs", "signed_control_final_refs"):
+                    from hmp_plugin.presentation_credential_control import CredentialControlCursor
+                    completed = CredentialBeginReceiver._completed_current
+                    retain = CredentialControlCursor.retain
+                    callbacks = []
+                    calls = []
+                    active = []
+
+                    class ForeignRefs:
+                        def __getitem__(self, index):
+                            callbacks.append(index)
+                            raise AssertionError("foreign refs indexing")
+
+                        def __iter__(self):
+                            callbacks.append("iterate")
+                            raise AssertionError("foreign refs iteration")
+
+                    def changed_completed(receiver):
+                        result = completed(receiver)
+                        if active:
+                            calls.append(True)
+                            wanted = 1 if mutation == "signed_control_init_refs" else 2
+                            if len(calls) == wanted:
+                                record.cancel_owner._credential_binding_snapshot._refs_snapshot = (
+                                    ForeignRefs())
+                        return result
+
+                    def retained(cls, control):
+                        active.append(True)
+                        return retain(control)
+
+                    monkeypatch.setattr(CredentialBeginReceiver, "_completed_current",
+                                        changed_completed)
+                    monkeypatch.setattr(CredentialControlCursor, "retain", classmethod(retained))
+                    with pytest.raises(FrameError, match="CONTROL_ACQUISITION_REFUSED"):
+                        BrokerCancellationOwner.stage_credential_control(work)
+                    control = record.cancel_owner
+                    assert control._failed is True and callbacks == []
+                    await asyncio.gather(control._allocation_snapshot.task, return_exceptions=True)
+                    assert control._go_receipt is None and control._cancel_receipt is None
+                    assert (CancellationBudget.inspect(native.cleanup_budget_snapshot)
+                            == budget_before)
+                    assert record.grammar.__dict__ == grammar_before
+                    held["signed_cursor"] = control._signed_cursor_snapshot
+                    return ticket
+                control = BrokerCancellationOwner.stage_credential_control(work)
+                held["staged_control"] = control
+                cursor = control._signed_cursor_snapshot
+                with pytest.raises(FrameError):
+                    BrokerCancellationOwner.stage_credential_control(work)
+                if mutation == "signed_control_key":
+                    keys["broker"].retire()
+                elif mutation == "signed_control_deadline":
+                    from hmp_plugin.presentation_clock import NativeClockOwner
+                    monkeypatch.setattr(NativeClockOwner, "sample", lambda _: end)
+                elif mutation in ("signed_control_retire_after_read", "signed_control_counter"):
+                    from hmp_plugin import presentation_broker_cancel as cancel_module
+                    recv = cancel_module._SOCKET_RECV
+
+                    def retired_recv(sock, wanted):
+                        part = recv(sock, wanted)
+                        if mutation == "signed_control_counter":
+                            cursor._consumed = cursor._consumed_snapshot = 1
+                        else:
+                            keys["broker"].retire()
+                        return part
+
+                    monkeypatch.setattr(cancel_module, "_SOCKET_RECV", retired_recv)
+                elif mutation == "signed_control_buffer":
+                    from hmp_plugin.presentation_clock import NativeClockOwner
+                    sample = NativeClockOwner.sample
+                    held["signed_original_buffer"] = cursor._buffer_origin
+                    replacement = bytearray(b"preserve")
+
+                    def buffer_changed(clock):
+                        now = sample(clock)
+                        if cursor._last_read is not None and cursor._read_intent:
+                            cursor._buffer = cursor._buffer_origin = replacement
+                            cursor._buffer_values = bytes(replacement)
+                            cursor._consumed = cursor._consumed_snapshot = len(replacement) + 8
+                            cursor._target = cursor._target_snapshot = len(replacement) + 8
+                        return now
+
+                    monkeypatch.setattr(NativeClockOwner, "sample", buffer_changed)
+                elif mutation in ("signed_control_blocking", "signed_control_timeout"):
+                    from hmp_plugin import presentation_broker_cancel as cancel_module
+                    check = SocketChannel._check
+                    checked, received = [], []
+
+                    def changed_socket(checked_channel):
+                        check(checked_channel)
+                        if asyncio.current_task() is control._allocation_snapshot.task:
+                            checked.append(True)
+                            if len(checked) == 2:
+                                if mutation == "signed_control_blocking":
+                                    os.set_blocking(checked_channel._fd, True)
+                                else:
+                                    checked_channel._socket_snapshot.settimeout(0.01)
+
+                    def forbidden_recv(sock, wanted):
+                        received.append(True)
+                        raise AssertionError("blocking recv must be refused before syscall")
+
+                    monkeypatch.setattr(SocketChannel, "_check", changed_socket)
+                    monkeypatch.setattr(cancel_module, "_SOCKET_RECV", forbidden_recv)
+                    held["signed_forbidden_recv"] = received
+                elif mutation == "signed_control_wrong_task":
+                    from hmp_plugin.presentation_credential_control import CredentialControlCursor
+                    with pytest.raises(FrameError):
+                        CredentialControlCursor._guard(cursor)
+                outcome = await asyncio.gather(control._allocation_snapshot.task,
+                                               return_exceptions=True)
+                assert len(outcome) == 1 and isinstance(outcome[0], FrameError)
+                if mutation in ("signed_control_blocking", "signed_control_timeout"):
+                    assert held["signed_forbidden_recv"] == [] and cursor._consumed == 0
+                    channel._socket_snapshot.setblocking(False)
+                assert control._go_receipt is None and control._cancel_receipt is None
+                assert CancellationBudget.inspect(native.cleanup_budget_snapshot) == budget_before
+                assert record.grammar.__dict__ == grammar_before
+                success = mutation in ("signed_control_go", "signed_control_cancel",
+                                       "signed_control_fragmented", "signed_control_wrong_task")
+                assert cursor._complete is success and cursor._failed is not success
+                if success:
+                    assert str(outcome[0]) == "BI1_SIGNED_CONTROL_RECEIPT_INTEGRATION_REQUIRED"
+                    assert cursor._consumed == len(cursor._raw) + len(cursor._frame)
+                    assert channel._reading is False
+                else:
+                    assert cursor._raw is None
+                    if mutation == "signed_control_buffer":
+                        assert cursor._buffer_origin == b"preserve"
+                        assert held["signed_original_buffer"] == b""
+                    else:
+                        assert cursor._buffer_origin == b""
+                    if mutation == "signed_control_counter":
+                        assert cursor._last_read == (0, 8)
+                    if mutation in ("signed_control_signature", "signed_control_scope",
+                                    "signed_control_sequence", "signed_control_boot"):
+                        assert cursor._consumed == held["signed_auth_length"]
+                    if mutation in ("signed_control_key", "signed_control_deadline"):
+                        assert cursor._consumed == 0
+                    if mutation == "signed_control_retire_after_read":
+                        assert cursor._consumed == 8
+                held["signed_cursor"] = cursor
             if mutation in (
                 "control_binding",
                 "control_binding_creator_drift",
@@ -366,7 +515,39 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
         )
         raw = encode_record(value, keys["gateway"]._private_key.sign(signing_bytes(value)))
         await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, raw + frame)
-        if mutation in (
+        if mutation and mutation.startswith("signed_control_"):
+            from hmp_plugin.presentation_cancel_budget import CancellationWindow
+
+            phase = "CANCEL" if mutation in ("signed_control_cancel", "signed_control_hash",
+                                             "signed_control_window") else "GO"
+            body = CancellationWindow(end - 250_000_000, end).encode() if phase == "CANCEL" else b""
+            if mutation == "signed_control_window":
+                body = b"\0" * 16
+            control_frame = encode_frame(binding, phase, 1, body, version=2)
+            control_value = dict(value, phase=phase, sequence=1,
+                                 frame_sha256=hashlib.sha256(control_frame).hexdigest(),
+                                 frame_length=len(control_frame))
+            if mutation == "signed_control_scope":
+                control_value["scope_sha256"] = "f" * 64
+            if mutation == "signed_control_sequence":
+                control_value["sequence"] = 2
+            if mutation == "signed_control_boot":
+                control_value["broker_boot"] = "f" * len(control_value["broker_boot"])
+            control_raw = encode_record(control_value, keys["gateway"]._private_key.sign(
+                signing_bytes(control_value)))
+            if mutation == "signed_control_signature":
+                control_raw = control_raw[:-1] + bytes([control_raw[-1] ^ 1])
+            if mutation == "signed_control_hash":
+                control_frame = control_frame[:-1] + bytes([control_frame[-1] ^ 1])
+            held["signed_auth_length"] = len(control_raw)
+            wire = control_raw + control_frame
+            if mutation == "signed_control_fragmented":
+                for part in (wire[:4], wire[4:8], wire[8:-1], wire[-1:]):
+                    await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, part)
+                    await asyncio.sleep(0)
+            else:
+                await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, wire)
+        if (mutation and mutation.startswith("signed_control_")) or mutation in (
             None,
             "earlier_accept",
             "queued_after_admission",
@@ -582,3 +763,20 @@ async def test_controller_reader_material_rejects_revocation_and_callback_drift(
     control = held["prepared_control"]
     assert control._failed is True and control._wire_received == 0
     assert control._go_receipt is None and control._cancel_receipt is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+@pytest.mark.parametrize("mutation", [
+    "signed_control_go", "signed_control_cancel", "signed_control_scope",
+    "signed_control_sequence", "signed_control_signature", "signed_control_hash",
+    "signed_control_key", "signed_control_deadline", "signed_control_retire_after_read",
+    "signed_control_fragmented", "signed_control_wrong_task", "signed_control_boot",
+    "signed_control_window", "signed_control_counter", "signed_control_buffer",
+    "signed_control_init_refs", "signed_control_final_refs",
+    "signed_control_blocking", "signed_control_timeout",
+])
+async def test_original_signed_control_cursor_without_native_receipts(local, tmp_path, monkeypatch,
+                                                                     mutation):
+    held, _ = await exchange(local, tmp_path, monkeypatch, mutation)
+    assert "signed_cursor" in held

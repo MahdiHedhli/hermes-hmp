@@ -599,4 +599,5 @@ not weaken the closed plugin registration or optional-media import boundaries.
 
 - `presentation_credential_queued.py`: original adopted connection/key/input-receipt pre-resource queued-current check; no resource or GO permit.
 
-- `presentation_control_binding.py`: prepared original controller task/key-context handoff; hard no-IO stop until signed control exists.
+- `presentation_control_binding.py`: prepared original controller task/key-context handoff; preparation alone remains a hard no-IO stop.
+- `presentation_credential_control.py`: original controller-task first signed GO/CANCEL frame staging; bounded authenticated bytes only, no native receipts, grammar/window mutation, resource startup or GO authority. Production dispatch remains closed.

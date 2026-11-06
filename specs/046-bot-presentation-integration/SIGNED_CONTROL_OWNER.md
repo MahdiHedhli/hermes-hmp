@@ -116,3 +116,13 @@ material-only; signed phase/deadline/read-cursor checks remain unimplemented, an
 the Task still hard-stops before IO/receipts. Root affected regression: 1,123
 passed, one skipped; independent read-only review accepted this limited slice.
 See [evidence and limits](../../docs/research/presentation-control-reader-material-2026-11-06.md).
+
+## First-frame cursor checkpoint
+
+`stage_credential_control(queued_owner)` now reads and authenticates one bounded
+first-control GO/CANCEL sequence1 on the original controller Task/socket cursor.
+It checks exact signed context and complete HBR1 frame, validates CANCEL encoding
+without adopting it, and explicitly stops before native receipts/grammar/budget
+mutation. `prepare_credential` alone remains no-IO; the working `retain_credential`
+entry, after-GO CANCEL and cleanup/resource/READY lifecycle are still unimplemented.
+See [first-frame evidence and limits](../../docs/research/presentation-signed-control-first-frame-2026-11-06.md).

@@ -147,6 +147,21 @@ class BrokerCancellationOwner:
         BrokerCancellationOwner._initialize(owner, channel, registry, ticket, grammar)
         return owner  # prepared context/task, not a signed control reader or permit
 
+    @classmethod
+    def stage_credential_control(cls, queued):
+        """Actual first signed frame read only; native receipt/work gates stay closed."""
+        from .presentation_credential_control import CredentialControlCursor
+
+        if cls is not BrokerCancellationOwner:
+            _refuse()
+        owner = BrokerCancellationOwner.prepare_credential(queued)
+        try:
+            CredentialControlCursor.retain(owner)
+        except BaseException:
+            owner._failed = True
+            raise FrameError("BI1_CREDENTIAL_CONTROL_ACQUISITION_REFUSED") from None
+        return owner
+
     def __init__(self, channel, registry, ticket, grammar):
         if type(self) is not BrokerCancellationOwner or "_initialized" in vars(self):
             _refuse()  # never replace an original task/cursor or partial failure
@@ -183,6 +198,7 @@ class BrokerCancellationOwner:
         self._task_initialized = self._task_initialized_snapshot = None
         self._scope = self._scope_snapshot = None
         self._failure_origin = self._failure_origin_snapshot = (None, None)
+        self._signed_cursor = self._signed_cursor_snapshot = None
         self._buffer = self._buffer_snapshot = self._buffer_origin = bytearray()
         self._wire_received = self._frame_start = 0
         self._pending = self._waiter = None
@@ -677,7 +693,20 @@ class BrokerCancellationOwner:
             from .presentation_control_binding import PreparedControlBinding
 
             try:
-                PreparedControlBinding.reader_closed(self._credential_binding_snapshot)
+                cursor = self._signed_cursor_snapshot
+                if cursor is None:
+                    if self._signed_cursor is not None:
+                        _refuse()
+                    PreparedControlBinding.reader_closed(self._credential_binding_snapshot)
+                else:
+                    from .presentation_credential_control import CredentialControlCursor
+
+                    if (type(cursor) is not CredentialControlCursor
+                            or self._signed_cursor is not cursor):
+                        _refuse()
+                    await CredentialControlCursor.run(cursor)
+                    # Completed authenticated bytes do not mint native receipts.
+                    raise FrameError("BI1_SIGNED_CONTROL_RECEIPT_INTEGRATION_REQUIRED")
             finally:
                 self._failed = True
             return None
