@@ -718,3 +718,171 @@ def test_driver_cannot_confuse_modeled_mint_with_complete_binding_cost():
     with pytest.raises(RuntimeError):
         driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
                                binding_cost_selector=1)
+
+
+def rss_report(case=0, count=1):
+    module = load()
+    lineage, prompt = module.SHAPES[case % 4]
+    return {"case": case, "kind": module.KINDS[case // 4], "lineage_count": lineage,
+        "prompt_chars": prompt, "platform": "darwin", "rss_unit": "bytes",
+        "includes_prior_peak": True, "isolated_native_allocation_bound": False,
+        "tracing_enabled": False, "mint_measured": False, "writer_cases_run": 0,
+        "selectors": [{"count": count, **module.rss_values(100, 200, 90, 220)}]}
+
+
+def test_rss_accounting_retains_prior_peak_and_negative_current_delta():
+    values = load().rss_values(100, 200, 90, 220)
+    assert values["current_delta"] == -10
+    assert values["peak_growth"] == 20
+    assert values["peak_above_current_baseline"] == 120
+    assert load().rss_values(100, 200, 100, 200)["peak_growth"] == 0
+    assert load().rss_values(100, 200, 100, 200)["peak_above_current_baseline"] == 100
+
+
+@pytest.mark.parametrize("values", [(True, 200, 90, 220), (0, 200, 90, 220),
+    (100, 99, 90, 220), (100, 200, 250, 220), (100, 200, 90, 199), (100.0, 200, 90, 220)])
+def test_rss_witness_refuses_invalid_units_types_or_nonmonotonic_peak(values):
+    with pytest.raises(RuntimeError):
+        load().rss_values(*values)
+
+
+@pytest.mark.parametrize("case", range(8))
+@pytest.mark.parametrize("count", (1, 16, 128))
+def test_rss_report_pins_every_kind_shape_selector(case, count):
+    module = load()
+    module.validate_rss_report(rss_report(case, count), case, count)
+    with pytest.raises(RuntimeError):
+        module.validate_rss_report(rss_report(case, count), (case + 1) % 8, count)
+
+
+@pytest.mark.parametrize("change", ["false_peak_growth", "false_current_delta", "hide_prior_peak",
+    "claim_native_bound", "wrong_platform", "wrong_unit", "tracing", "mint", "writer", "raw_data"])
+def test_rss_report_refuses_unjustified_accounting_or_scope_claims(change):
+    report = rss_report()
+    if change == "false_peak_growth":
+        report["selectors"][0]["peak_growth"] = 120
+    elif change == "false_current_delta":
+        report["selectors"][0]["current_delta"] = 0
+    elif change == "hide_prior_peak":
+        report["includes_prior_peak"] = False
+    elif change == "claim_native_bound":
+        report["isolated_native_allocation_bound"] = True
+    elif change == "wrong_platform":
+        report["platform"] = "linux"
+    elif change == "wrong_unit":
+        report["rss_unit"] = "KiB"
+    elif change == "tracing":
+        report["tracing_enabled"] = True
+    elif change == "mint":
+        report["mint_measured"] = True
+    elif change == "writer":
+        report["writer_cases_run"] = 1
+    else:
+        report["session_id"] = "private"
+    with pytest.raises(RuntimeError):
+        load().validate_rss_report(report, 0, 1)
+
+
+@pytest.mark.parametrize(("rss", "mint", "case", "selector"), [
+    (True, True, 0, 1), (1, False, 0, 1), (None, False, 0, 1),
+    (True, False, None, None), (True, False, 0, None), (True, False, 0, True)])
+def test_rss_mode_refuses_ambiguity_before_filesystem(tmp_path, rss, mint, case, selector):
+    from .test_local_media_native_serving_driver import driver
+
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40, sample_binding_seed=True,
+            binding_cost_case=case, binding_cost_selector=selector,
+            binding_mint=mint, binding_rss=rss)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_rss_platform_refuses_before_filesystem_or_native_import(monkeypatch, tmp_path):
+    from .test_local_media_native_serving_driver import driver
+
+    monkeypatch.setattr(sys, "platform", "linux")
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, "a" * 40, sample_binding_seed=True,
+                           binding_cost_case=0, binding_cost_selector=1, binding_rss=True)
+    assert not tuple(tmp_path.iterdir())
+
+
+def test_driver_cannot_confuse_cumulative_rss_with_cost_or_mint():
+    from .test_local_media_native_serving_driver import driver, good
+
+    report = good()
+    prep = preparation_report()
+    prep["cells"], prep["databases_closed"] = [prep["cells"][0], prep["cells"][4]], 1
+    report["native_binding_preparation"] = prep
+    report["native_binding_rss"] = rss_report()
+    args = (report, report["native_source_hashes"], report["hmp_source_hashes"],
+            report["runtime_executable_sha256"])
+    driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                           binding_cost_selector=1, binding_rss=True)
+    for options in ({}, {"binding_mint": True}):
+        with pytest.raises(RuntimeError):
+            driver.validate_report(*args, sample_binding_seed=True, binding_cost_case=0,
+                                   binding_cost_selector=1, **options)
+
+
+def test_rss_observes_only_self_and_holds_result_through_both_after_snapshots(monkeypatch):
+    import gc
+    import os
+    import resource
+    import weakref
+
+    events, held = [], []
+    memory, peaks = iter((100, 90)), iter((200, 220))
+
+    def current():
+        value = next(memory)
+        if value == 90:
+            assert held[0]() is not None
+        events.append("rss")
+        return types.SimpleNamespace(rss=value)
+
+    def process(pid):
+        assert pid == os.getpid()
+        events.append("self")
+        return types.SimpleNamespace(memory_info=current)
+
+    def usage(who):
+        assert who == resource.RUSAGE_SELF
+        value = next(peaks)
+        if value == 220:
+            assert held[0]() is not None
+        events.append("peak")
+        return types.SimpleNamespace(ru_maxrss=value)
+
+    class Result:
+        pass
+
+    def bind():
+        events.append("bind")
+        result = Result()
+        held.append(weakref.ref(result))
+        return result
+
+    def check(result):
+        assert held[0]() is result
+        events.append("validate")
+
+    fake = types.ModuleType("psutil")
+    fake.Process = process
+    monkeypatch.setitem(sys.modules, "psutil", fake)
+    monkeypatch.setattr(sys, "platform", "darwin")
+    monkeypatch.setattr(resource, "getrusage", usage)
+    monkeypatch.setattr(gc, "collect", lambda: events.append("gc"))
+    assert load().measure_binding_rss(bind, check) == load().rss_values(100, 200, 90, 220)
+    assert events == ["self", "gc", "rss", "peak", "bind", "rss", "peak", "validate"]
+
+
+def test_rss_never_runs_a_binding_under_existing_trace():
+    import tracemalloc
+
+    tracemalloc.start()
+    try:
+        with pytest.raises(RuntimeError):
+            load().measure_binding_rss(lambda: pytest.fail("must not bind"), lambda _: None)
+        assert tracemalloc.is_tracing()
+    finally:
+        tracemalloc.stop()

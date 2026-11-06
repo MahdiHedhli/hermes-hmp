@@ -307,8 +307,81 @@ def validate_mint_report(report, case, selector):
         type(row["peak_traced_bytes"]) is int and type(row["current_traced_bytes"]) is int and
         row["peak_traced_bytes"] >= row["current_traced_bytes"] >= 0)
 
+
+def validate_sample_mode(case, selector, mint, rss):
+    validate_mint_mode(case, selector, mint)
+    require(type(rss) is bool and not (mint and rss) and (not rss or case is not None))
+
+
+def rss_values(before_current, before_max, after_current, after_max):
+    """Darwin byte witnesses; cumulative peaks include earlier preparation."""
+    require(all(type(value) is int and value > 0 for value in (
+        before_current, before_max, after_current, after_max)) and
+        before_max >= before_current and after_max >= max(before_max, after_current))
+    return {"before_current": before_current, "before_max": before_max,
+            "after_current": after_current, "after_max": after_max,
+            "current_delta": after_current - before_current,
+            "peak_growth": after_max - before_max,
+            "peak_above_current_baseline": max(0, after_max - before_current)}
+
+
+def measure_binding_rss(bind, check):
+    """Observe self-process RSS around one warm binding, without tracing.
+
+    Darwin ru_maxrss is cumulative and includes prior fixture/native activity.
+    Its upper difference is not an isolated binding/native-C allocation bound.
+    Validation is outside the interval; result remains held at observation.
+    """
+    import sys
+    import tracemalloc
+
+    require(sys.platform == "darwin" and not tracemalloc.is_tracing() and
+            callable(bind) and callable(check))
+    import gc
+    import os
+    import resource
+
+    import psutil
+
+    process = psutil.Process(os.getpid())
+    gc.collect()
+    before_current = process.memory_info().rss
+    before_max = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    result = bind()
+    after_current = process.memory_info().rss
+    after_max = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+    check(result)
+    values = rss_values(before_current, before_max, after_current, after_max)
+    del result
+    return values
+
+
+def validate_rss_report(report, case, selector):
+    validate_sample_mode(case, selector, False, True)
+    require(type(report) is dict and set(report) == {"case", "kind", "lineage_count",
+        "prompt_chars", "selectors", "platform", "rss_unit", "includes_prior_peak",
+        "isolated_native_allocation_bound", "tracing_enabled", "mint_measured", "writer_cases_run"})
+    kind, (lineage, prompt) = KINDS[case // len(SHAPES)], SHAPES[case % len(SHAPES)]
+    require(type(report["case"]) is int and report["case"] == case and
+            type(report["kind"]) is str and report["kind"] == kind and
+            type(report["lineage_count"]) is int and report["lineage_count"] == lineage and
+            type(report["prompt_chars"]) is int and report["prompt_chars"] == prompt and
+            report["platform"] == "darwin" and report["rss_unit"] == "bytes" and
+            report["includes_prior_peak"] is True and
+            report["isolated_native_allocation_bound"] is False and
+            report["tracing_enabled"] is report["mint_measured"] is False and
+            type(report["writer_cases_run"]) is int and report["writer_cases_run"] == 0 and
+            type(report["selectors"]) is list and len(report["selectors"]) == 1)
+    row = report["selectors"][0]
+    require(type(row) is dict and set(row) == {"count", "before_current", "before_max",
+        "after_current", "after_max", "current_delta", "peak_growth", "peak_above_current_baseline"}
+        and type(row["count"]) is int and row["count"] == selector)
+    expected = rss_values(*(row[key] for key in (
+        "before_current", "before_max", "after_current", "after_max")))
+    require(all(type(row[key]) is int and row[key] == value for key, value in expected.items()))
+
 def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
-                    cost_selector=None, cost_results=None, mint=False):
+                    cost_selector=None, cost_results=None, mint=False, rss=False):
     """Verify the full matrix, or both contexts of one explicitly selected cost shape.
 
     Each lineage/prompt shape owns a fresh native DB with BOTH proof sources:
@@ -319,7 +392,7 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
     """
     from hmp_plugin.contract import ConversationRef
 
-    validate_mint_mode(cost_case, cost_selector, mint)
+    validate_sample_mode(cost_case, cost_selector, mint, rss)
     require((cost_case is None and cost_results is None) or
             (cost_case is not None and type(cost_results) is list and not cost_results))
     cost_rows = []
@@ -372,6 +445,10 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
                             if mint:
                                 cost_rows.append(measure_mint(fx.rig.ctx.media_registry_module,
                                     candidate, result, user=user, profile=profile))
+                            elif rss:
+                                cost_rows.append({"count": count, **measure_binding_rss(
+                                    lambda candidate=candidate:
+                                        fx.native.bridge.bind_media_batch(candidate), check)})
                             else:
                                 cost_rows.append({"count": count, **measure_binding(
                                     lambda candidate=candidate:
@@ -403,6 +480,13 @@ def run_preparation(fx, open_cell, *, user, profile, chat, cost_case=None,
                     "prompt_chars": prompt, "selectors": cost_rows, "modeled_loop": True,
                     "binding_measured": False, "rss_measured": False, "writer_cases_run": 0}
             validate_mint_report(cost, cost_case, cost_selector)
+        elif rss:
+            cost = {"case": cost_case, "kind": kind, "lineage_count": lineage,
+                    "prompt_chars": prompt, "selectors": cost_rows, "platform": "darwin",
+                    "rss_unit": "bytes", "includes_prior_peak": True,
+                    "isolated_native_allocation_bound": False, "tracing_enabled": False,
+                    "mint_measured": False, "writer_cases_run": 0}
+            validate_rss_report(cost, cost_case, cost_selector)
         else:
             validate_cost_report(cost, cost_case, cost_selector)
         cost_results.append(cost)

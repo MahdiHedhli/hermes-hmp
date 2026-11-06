@@ -250,7 +250,8 @@ def _binding_cell(root, fx, registry, borrowed, lock, selection, owners, index, 
 
 
 def run_fixture(root, *, sample_memory=False, sample_binding_seed=False,
-                binding_cost_case=None, binding_cost_selector=None, binding_mint=False):
+                binding_cost_case=None, binding_cost_selector=None, binding_mint=False,
+                binding_rss=False):
     """One native scratch DB, real routes/registry, synthetic transport authority.
 
     Python audit restrictions are test guards, NOT an OS sandbox or complete
@@ -259,6 +260,8 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False,
     _require(type(sample_memory) is bool and type(sample_binding_seed) is bool and
              not (sample_memory and sample_binding_seed))
     _require(type(binding_mint) is bool and (not binding_mint or binding_cost_case is not None))
+    _require(type(binding_rss) is bool and not (binding_mint and binding_rss) and
+             (not binding_rss or (binding_cost_case is not None and sys.platform == "darwin")))
     _require((binding_cost_case is None and binding_cost_selector is None) or
              (sample_binding_seed and type(binding_cost_case) is int and
               0 <= binding_cost_case < 8 and type(binding_cost_selector) is int and
@@ -553,10 +556,11 @@ def run_fixture(root, *, sample_memory=False, sample_binding_seed=False,
                         report["native_binding_preparation"] = helper.run_preparation(
                             fx, open_binding_cell, user=USER, profile=PROFILE, chat=CHAT,
                             cost_case=binding_cost_case, cost_selector=binding_cost_selector,
-                            cost_results=costs, mint=binding_mint)
+                            cost_results=costs, mint=binding_mint, rss=binding_rss)
                         if binding_cost_case is not None:
                             _require(len(costs) == 1)
-                            key = "native_binding_mint" if binding_mint else "native_binding_cost"
+                            key = ("native_binding_mint" if binding_mint else
+                                   "native_binding_rss" if binding_rss else "native_binding_cost")
                             report[key] = costs[0]
                         _require(len(binding_owners) == (4 if binding_cost_case is None else 1) and
                                  all(owner["closed"] for owner in binding_owners))
