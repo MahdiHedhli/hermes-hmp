@@ -1,3 +1,20 @@
+## Native sender identity experiment — November 6, 2026
+
+Following independent source review, one isolated root Darwin run passes **57
+checks: one actual native case and 56 portable checks**. An explicit fresh-child
+spawn assignment delivers two fixed messages to the owned receiver. Kernel sender
+identity matches the exact exited child; false body identity and an extended fake
+trailer cannot substitute for it. Cleanup is recorded known and timely.
+Independent artifact review accepted the source/artifact bindings, terminal
+commands and bounded observations; no reviewer execution is claimed.
+
+The first registered-port experiment failed, and the recipient of its two fixed
+nonsecret messages remains historically unverified. Its source and evidence are
+preserved separately; the replacement pass does not resolve that uncertainty.
+This experiment does not qualify a production issuer, character-serving route or
+phone image feature. Desktop characters and host-local images remain unfinished.
+See the [native experiment contract](specs/046-bot-presentation-integration/NATIVE_SENDER_AUDIT.md).
+
 ## Owned-peer lifetime experiment — November 6, 2026
 
 A new disposable Darwin probe exercises observer registration followed by a fresh

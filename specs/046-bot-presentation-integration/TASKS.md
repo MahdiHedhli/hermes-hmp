@@ -1,5 +1,11 @@
 # BI1 integration tasks
 
+- [ ] Complete independent artifact review and CI for the fresh-child native
+      sender experiment. Root's single actual Darwin run plus portable checks
+      passes 57 cases; production authority remains unqualified. Historical
+      first-route recipient uncertainty remains open. See
+      [native sender evidence](NATIVE_SENDER_AUDIT.md).
+
 - [x] Implement/review the owned-child lifetime/possession experiment and perform
       one bounded actual Darwin run. Root passes 20 checks (nine native modes,
       eleven guards); reviewer independently matches source/log/artifact hashes,
