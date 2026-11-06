@@ -1818,3 +1818,10 @@ files totaled 133,762,797 bytes, below the unchanged 128-MiB source budget.
 Independent review accepted a separate 160-MiB tar ceiling; source/file/entry
 bounds remain unchanged. All original Git actors were observed terminal. This
 setup refusal is preserved separately and is not native-serving evidence.
+
+Subsequent focused run reproduced an analogous wrong-task case refusal: six
+passed, one failed. The original controller had failed with FrameError before
+notice completion, with unknown-IO false. This is stronger localization, not a
+resolved cause or timeout diagnosis. A later 14-case repeated run passed. Test
+notes retain only exception class and bounded source-function/line locations,
+not arbitrary exception messages or payloads.

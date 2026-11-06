@@ -63,3 +63,10 @@ all 130 adoption cases passed after adding test-only exception notes. The notes
 preserve the original service exception and report the actual original controller
 Task outcome and retained notice/failure/debt flags if it recurs. They neither
 repair state nor extend deadlines. Failure remains unresolved, not reclassified.
+
+Subsequent focused run reproduced an analogous wrong-task case refusal: six
+passed, one failed. The original controller had failed with FrameError before
+notice completion, with unknown-IO false. This is stronger localization, not a
+resolved cause or timeout diagnosis. A later 14-case repeated run passed. Test
+notes retain only exception class and bounded source-function/line locations,
+not arbitrary exception messages or payloads.

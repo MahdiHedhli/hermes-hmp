@@ -906,7 +906,7 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                         # controller outcome rather than guessing timeout from a
                         # later failed/unknown flag; this never retries or repairs.
                         controller = control._allocation_snapshot.task
-                        outcome = "pending"
+                        outcome, error = "pending", None
                         if controller.done():
                             if controller.cancelled():
                                 outcome = "cancelled"
@@ -915,6 +915,12 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                                 outcome = ("returned" if error is None
                                            else type(error).__name__)
                         refusal.add_note("original controller outcome: " + outcome)
+                        if controller.done() and not controller.cancelled() and error is not None:
+                            trace, sites = error.__traceback__, []
+                            while trace is not None:
+                                sites.append((trace.tb_frame.f_code.co_name, trace.tb_lineno))
+                                trace = trace.tb_next
+                            refusal.add_note("controller refusal sites: " + repr(sites[-2:]))
                         refusal.add_note(
                             f"notice_completed={control._notice_completed!r}; "
                             f"failed={control._failed!r}; io_unknown={control._io_unknown!r}")
