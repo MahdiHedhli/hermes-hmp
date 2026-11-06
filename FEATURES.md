@@ -6,8 +6,8 @@ largest-shape Bot ordinary-child phase (98 sessions, full prompts, 128 selectors
 It completed under the unchanged process limit: `tip_changed` first, then fresh
 `not_eligible`, two public native mutation calls, 39/39 borrows and closed
 DB/listener/workers. All ten commands had known outcomes; no expiry/settlement,
-ordinary-copy fallback or metadata removal occurred. Independent artifact review
-is pending. This is one phase, not a full matrix or a measured storage bound.
+ordinary-copy fallback or metadata removal occurred. Independent readback accepted all 26 artifacts and source/runtime/clone
+bindings. This is one phase, not a full matrix or a measured storage bound.
 
 The original matrix at `21937dc` remains stopped after 174 completed pairs and
 one refused pair; 209 pairs never started. Reusing its verified source archive

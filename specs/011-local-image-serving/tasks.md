@@ -694,5 +694,6 @@ limitation is reclassified as a fix or a physical/release qualification.
 - [x] Optional archive-clone driver source independently accepted for one sample;
   679 root model/guard checks and lint passed. Fresh largest Bot ordinary-child
   cached single phase completed at `0397803`; no expiry/fallback, 39/39 borrows.
-- [ ] Independently verify cached sample artifacts/source/runtime/clone lineage,
-  then review broader heavy single-phase partition and all remaining scope.
+- [x] Independent cached sample readback accepted all 26 artifacts and source/
+  runtime/clone bindings; one largest Bot ordinary-child phase only.
+- [ ] Review broader heavy single-phase partition and all remaining scope.
