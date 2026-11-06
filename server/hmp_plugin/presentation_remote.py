@@ -261,7 +261,8 @@ class RemoteOperationOwner:
                 or self._credential_binding is not self._credential_binding_snapshot):
             raise AuthorityRefusalError
         if credential is None:
-            if self._credential_binding is not None or getattr(c, "_credential_handshake", None) is not None:
+            if (self._credential_binding is not None
+                    or getattr(c, "_credential_handshake", None) is not None):
                 raise AuthorityRefusalError
         else:
             from .presentation_credential_handshake import CredentialHandshakeOwner
@@ -270,9 +271,11 @@ class RemoteOperationOwner:
                     or c._credential_handshake_snapshot is not credential):
                 raise AuthorityRefusalError
             if self._initialized is False and self._credential_binding is None:
-                pass  # construction-only join; _check cannot admit work before initialization
+                # Construction-only join: _check refuses uninitialized work.
+                pass
             else:
-                CredentialHandshakeOwner._native_input_local(credential, self, self._credential_binding)
+                CredentialHandshakeOwner._native_input_local(
+                    credential, self, self._credential_binding)
         work = r.policy_work
         # Index5 is a resolved JobOwner context: never resolve it until these
         # callback-free local references have passed. _references checks it later.

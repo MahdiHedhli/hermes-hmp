@@ -5,6 +5,7 @@ No request path calls it. Root/local administrator and installed runtime remain
 trusted; private modes do not isolate hostile same-UID code or fork snapshots.
 No signing API or credential generation is exposed here.
 """
+
 from __future__ import annotations
 
 import os
@@ -51,6 +52,7 @@ class _HeldFile:
 @dataclass(frozen=True, repr=False)
 class RoleKeySelection:
     """Operator-selected data; does not attest an admitted runtime inventory."""
+
     directory: str
     role: str
     generation: str
@@ -66,6 +68,7 @@ class StartupRoleKeyFiles:
     The paired startup factory must retain this exact object and separately
     establish runtime/source generation, key retirement and phase ownership.
     """
+
     def __init__(self, selection: RoleKeySelection):
         if type(self) is not StartupRoleKeyFiles or "_initialized" in vars(self):
             raise CredentialAcquisitionError(self) from None
@@ -82,16 +85,26 @@ class StartupRoleKeyFiles:
         failed = False
         try:
             _require(type(selection) is RoleKeySelection and os.name == "posix")
-            _require(type(selection.directory) is str and selection.directory.startswith("/")
-                     and 1 < len(selection.directory.encode("utf-8")) <= 4096
-                     and all(32 <= ord(c) != 127 for c in selection.directory))
+            _require(
+                type(selection.directory) is str
+                and selection.directory.startswith("/")
+                and 1 < len(selection.directory.encode("utf-8")) <= 4096
+                and all(32 <= ord(c) != 127 for c in selection.directory)
+            )
             parts = selection.directory[1:].split("/")
             _require(len(parts) <= 64 and all(p not in ("", ".", "..") for p in parts))
             _require(type(selection.role) is str and selection.role in ("gateway", "broker"))
-            _require(type(selection.generation) is str and len(selection.generation) == 64
-                     and all(c in "0123456789abcdef" for c in selection.generation))
-            _require(all(type(key) is bytes and len(key) == 32
-                         for key in (selection.own_public, selection.peer_public)))
+            _require(
+                type(selection.generation) is str
+                and len(selection.generation) == 64
+                and all(c in "0123456789abcdef" for c in selection.generation)
+            )
+            _require(
+                all(
+                    type(key) is bytes and len(key) == 32
+                    for key in (selection.own_public, selection.peer_public)
+                )
+            )
             _require(selection.own_public != selection.peer_public)
             uid = os.geteuid()
             _require(type(uid) is int and uid > 0)
@@ -106,17 +119,26 @@ class StartupRoleKeyFiles:
                 if index == len(parts):
                     _require(row.st_uid == uid and mode == 0o700)
                 else:
-                    _require(row.st_uid in (0, uid) and not mode & (stat.S_ISUID | stat.S_ISGID)
-                             and (not mode & 0o022 or (row.st_uid == 0 and bool(mode & stat.S_ISVTX))))
+                    _require(
+                        row.st_uid in (0, uid)
+                        and not mode & (stat.S_ISUID | stat.S_ISGID)
+                        and (not mode & 0o022 or (row.st_uid == 0 and bool(mode & stat.S_ISVTX)))
+                    )
                 directories.append((name, parent, held))
                 parent = held.fd
             key_rows = []
             for name in ("own.seed", "own.pub", "peer.pub"):
-                held = self._open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, parent)
+                held = self._open(
+                    name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK, parent
+                )
                 row = os.fstat(held.fd)
-                _require(stat.S_ISREG(row.st_mode) and row.st_uid == uid
-                         and stat.S_IMODE(row.st_mode) == 0o600
-                         and row.st_nlink == 1 and row.st_size == 32)
+                _require(
+                    stat.S_ISREG(row.st_mode)
+                    and row.st_uid == uid
+                    and stat.S_IMODE(row.st_mode) == 0o600
+                    and row.st_nlink == 1
+                    and row.st_size == 32
+                )
                 data = os.read(held.fd, 33)
                 _require(type(data) is bytes and len(data) == 32 and os.read(held.fd, 1) == b"")
                 _require(_identity(os.fstat(held.fd)) == held.identity)
@@ -125,13 +147,20 @@ class StartupRoleKeyFiles:
             seed, own_public, peer_public = values
             key = Ed25519PrivateKey.from_private_bytes(seed)
             derived = key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
-            _require(derived == own_public == selection.own_public
-                     and peer_public == selection.peer_public)
+            _require(
+                derived == own_public == selection.own_public
+                and peer_public == selection.peer_public
+            )
             # Check path-to-original-descriptor joins after all bounded reads.
             for name, original_parent, held in directories:
-                _require(_identity(os.stat(name, dir_fd=original_parent, follow_symlinks=False)) == held.identity)
+                _require(
+                    _identity(os.stat(name, dir_fd=original_parent, follow_symlinks=False))
+                    == held.identity
+                )
             for name, held in key_rows:
-                _require(_identity(os.stat(name, dir_fd=parent, follow_symlinks=False)) == held.identity)
+                _require(
+                    _identity(os.stat(name, dir_fd=parent, follow_symlinks=False)) == held.identity
+                )
             _require(self.close_local() is True and self._process == (os.getpid(), os.geteuid()))
             boot = secrets.token_bytes(32)
             _require(type(boot) is bytes and len(boot) == 32)

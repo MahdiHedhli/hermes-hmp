@@ -1,7 +1,14 @@
-# Runtime qualification issuer — proposed Darwin implementation contract
+# Historical Darwin runtime issuer proposal
 
-This is the next implementation contract for full desktop character delivery,
-not qualification evidence. No issuer is implemented or admitted by this file.
+The current independently reviewed direction is the
+[local role-credential contract](CREDENTIAL_ADMISSION.md) and
+[closed wire/owner contract](CREDENTIAL_WIRE.md). Bounded credential, handshake
+and original native-input source components are accepted; production paired
+runtime admission and complete signed phase/native publication remain unfinished.
+The Mach-origin issuer proposal below is retained as dated research, not the next
+implementation contract or an alternative production admission path. Its
+limitations and unresolved historical incident are not resolved by this change.
+No issuer or live listener is admitted by this document.
 Keep TERMINAL dispatch/acceptance, ACK, started journal release, native completion
 and HTTP image publication closed until the composed implementation is reviewed
 and its exact runtime is observed. Preserve classic, blobatar and custom static

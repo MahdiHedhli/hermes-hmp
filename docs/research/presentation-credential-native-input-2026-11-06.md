@@ -52,3 +52,15 @@ authentication capacity and retirement, signed phase streaming, actual GO and al
 name/classic/blobatar/custom-static variants, RESULT/TERMINAL/ACK/journal/native
 publication joins, STATUS, installation and physical/release qualification. No
 live host credentials, settings, permissions, jobs, models or providers changed.
+
+## Configured lint follow-up
+
+The configured repository-wide Ruff check passed after cleanup without rule
+exclusions. Independent read-only comparison found all eight production modules
+equal to source `c4f6f38` under only import/alias order, constant string-split to
+literal-list and keyword-only builtin-dict to literal-dict normalizations.
+Imported-name multisets remained identical. Test cleanup includes an Event
+observing retained prefix bytes before cancellation, with the original unknown
+debt/no-release assertions preserved. The final affected regression on this
+cleanup passed 640 tests, one skipped, in 25.88 seconds. These are root execution
+results; independent review inspected source/ASTs/tests without project execution.

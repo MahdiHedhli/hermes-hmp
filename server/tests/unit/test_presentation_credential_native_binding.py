@@ -2,57 +2,78 @@
 
 No live Hermes home, production factory, worker GO, provider or user contents.
 """
+
 import asyncio
 import os
 from dataclasses import replace
 
 import pytest
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from cryptography.hazmat.primitives.serialization import Encoding, PrivateFormat, PublicFormat, NoEncryption
+from cryptography.hazmat.primitives.serialization import (
+    Encoding,
+    NoEncryption,
+    PrivateFormat,
+    PublicFormat,
+)
 
+from hmp_plugin.presentation_authority import AuthorityRefusalError
 from hmp_plugin.presentation_broker_service import SocketChannel
 from hmp_plugin.presentation_credential_files import RoleKeySelection, StartupRoleKeyFiles
 from hmp_plugin.presentation_credential_handshake import CredentialHandshakeOwner
 from hmp_plugin.presentation_credential_scope import derive_input_scope
 from hmp_plugin.presentation_jobs import FrameError, RemotePhase, State
-from hmp_plugin.presentation_authority import AuthorityRefusalError
 
-from .test_presentation_supervisor import context as context
 from .test_presentation_broker_service import local as local
-from .test_presentation_selected_protocol import v2gateway as v2gateway
 from .test_presentation_remote import prepare
+from .test_presentation_selected_protocol import v2gateway as v2gateway
+from .test_presentation_supervisor import context as context
 
 
 def key_pair(tmp_path, generation):
     private = {role: Ed25519PrivateKey.generate() for role in ("gateway", "broker")}
-    public = {role: key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw) for role, key in private.items()}
+    public = {
+        role: key.public_key().public_bytes(Encoding.Raw, PublicFormat.Raw)
+        for role, key in private.items()
+    }
     owners = {}
     for role in private:
         peer = "broker" if role == "gateway" else "gateway"
         directory = tmp_path / role
         directory.mkdir(mode=0o700)
-        values = {"own.seed": private[role].private_bytes(Encoding.Raw, PrivateFormat.Raw, NoEncryption()),
-                  "own.pub": public[role], "peer.pub": public[peer]}
+        values = {
+            "own.seed": private[role].private_bytes(
+                Encoding.Raw, PrivateFormat.Raw, NoEncryption()
+            ),
+            "own.pub": public[role],
+            "peer.pub": public[peer],
+        }
         for name, data in values.items():
             fd = os.open(directory / name, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             with os.fdopen(fd, "wb") as output:
                 output.write(data)
-        owners[role] = StartupRoleKeyFiles(RoleKeySelection(str(directory), role, generation,
-                                                          public[role], public[peer]))
+        owners[role] = StartupRoleKeyFiles(
+            RoleKeySelection(str(directory), role, generation, public[role], public[peer])
+        )
     return owners
 
 
 async def handshake(prepared, tmp_path):
     authority, operation, _, channel, peer, _, _, binding = prepared
     keys = key_pair(tmp_path, channel._enrollment.installation_generation)
-    broker = SocketChannel(peer, replace(channel._enrollment, gateway_pid=os.getpid() + 1,
-        service_pid=os.getpid()), role="broker", endpoint=channel._endpoint,
-        observation=channel._observation)
+    broker = SocketChannel(
+        peer,
+        replace(channel._enrollment, gateway_pid=os.getpid() + 1, service_pid=os.getpid()),
+        role="broker",
+        endpoint=channel._endpoint,
+        observation=channel._observation,
+    )
     end = int(authority._record(operation).deadline * 1_000_000_000)
+
     async def receiver():
         owner = CredentialHandshakeOwner.retain(broker, keys["broker"], binding, end)
         await owner.run()
         return owner
+
     task = asyncio.create_task(receiver())
     try:
         owner = CredentialHandshakeOwner.retain(channel, keys["gateway"], binding, end)
@@ -66,7 +87,9 @@ async def handshake(prepared, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_handshake_binds_exact_native_packet_and_original_shared_slot(context, v2gateway, tmp_path):
+async def test_handshake_binds_exact_native_packet_and_original_shared_slot(
+    context, v2gateway, tmp_path
+):
     prepared = await prepare(context, v2gateway)
     authority, operation, _, channel, peer, _, packet, _ = prepared
     owner, keys, broker = await handshake(prepared, tmp_path)
@@ -105,7 +128,9 @@ async def test_handshake_binds_exact_native_packet_and_original_shared_slot(cont
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mutation", ["packet_copy", "channel"])
-async def test_completed_handshake_cannot_repair_wrong_native_binding(context, v2gateway, tmp_path, mutation):
+async def test_completed_handshake_cannot_repair_wrong_native_binding(
+    context, v2gateway, tmp_path, mutation
+):
     prepared = await prepare(context, v2gateway)
     authority, operation, _, channel, _, _, packet, _ = prepared
     owner, keys, broker = await handshake(prepared, tmp_path)
@@ -129,7 +154,9 @@ async def test_completed_handshake_cannot_repair_wrong_native_binding(context, v
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("retirement", ["key", "listener"])
-async def test_handshake_completion_cannot_override_current_retirement(context, v2gateway, tmp_path, retirement):
+async def test_handshake_completion_cannot_override_current_retirement(
+    context, v2gateway, tmp_path, retirement
+):
     prepared = await prepare(context, v2gateway)
     authority, operation, _, channel, _, _, packet, _ = prepared
     owner, keys, broker = await handshake(prepared, tmp_path)
@@ -157,7 +184,9 @@ async def test_handshake_completion_cannot_override_current_retirement(context, 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mutation", ["joined", "invalid", "fence", "epoch"])
-async def test_final_native_current_mutation_cannot_mint_join(context, v2gateway, tmp_path, monkeypatch, mutation):
+async def test_final_native_current_mutation_cannot_mint_join(
+    context, v2gateway, tmp_path, monkeypatch, mutation
+):
     prepared = await prepare(context, v2gateway)
     authority, operation, _, channel, _, work, packet, _ = prepared
     owner, keys, broker = await handshake(prepared, tmp_path)
@@ -166,10 +195,12 @@ async def test_final_native_current_mutation_cannot_mint_join(context, v2gateway
         current = authority._current
         calls = 0
         callbacks = []
+
         class Foreign:
             def __bool__(self):
                 callbacks.append("truthiness")
                 raise AssertionError("foreign joined flag must not be truth-tested")
+
         def changed(record):
             nonlocal calls
             result = current(record)
@@ -186,6 +217,7 @@ async def test_final_native_current_mutation_cannot_mint_join(context, v2gateway
                         record.owner._epoch += 1
                         object.__setattr__(record.lease, "epoch", record.owner._epoch)
             return result
+
         monkeypatch.setattr(authority, "_current", changed)
         with pytest.raises((AuthorityRefusalError, FrameError)):
             authority.bind_remote(operation, channel, binding, packet)

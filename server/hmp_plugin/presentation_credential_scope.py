@@ -3,6 +3,7 @@
 This digest is correlation data. Native INITIAL and original job ownership remain
 required independently; decoding input does not authorize any filesystem read.
 """
+
 from __future__ import annotations
 
 import hashlib
@@ -28,11 +29,20 @@ def derive_input_scope(packet: bytes, binding: BrokerBinding) -> InputScopeDiges
     if value["iid"] != binding.iid:
         raise FrameError("BI1_CREDENTIAL_INPUT_SCOPE_REFUSED")
     input_sha = hashlib.sha256(packet).hexdigest()
-    scope = dict(v=1, iid=binding.iid, listener=binding.listener,
-                 operation_id=binding.operation, profile=value["profile"],
-                 kind=value["operation"], expected_avatar_sha=value["expected_avatar_sha"],
-                 challenge=value["challenge"], epoch=value["epoch"],
-                 deadline_ns=value["deadline_ns"], input_sha256=input_sha)
-    raw = json.dumps(scope, sort_keys=True, separators=(",", ":"),
-                     ensure_ascii=True, allow_nan=False).encode("ascii")
+    scope = {
+        "v": 1,
+        "iid": binding.iid,
+        "listener": binding.listener,
+        "operation_id": binding.operation,
+        "profile": value["profile"],
+        "kind": value["operation"],
+        "expected_avatar_sha": value["expected_avatar_sha"],
+        "challenge": value["challenge"],
+        "epoch": value["epoch"],
+        "deadline_ns": value["deadline_ns"],
+        "input_sha256": input_sha,
+    }
+    raw = json.dumps(
+        scope, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False
+    ).encode("ascii")
     return InputScopeDigest(input_sha, hashlib.sha256(raw).hexdigest())

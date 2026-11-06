@@ -1,8 +1,9 @@
-# Proposed credential wire v1 and original-owner transitions
+# Credential wire v1 and original-owner transitions
 
-Status: concrete companion to [CREDENTIAL_ADMISSION.md](CREDENTIAL_ADMISSION.md),
-for independent review before implementation. No credential, signer, runtime
-permission or production listener is created by this document.
+Status: independently reviewed companion to [CREDENTIAL_ADMISSION.md](CREDENTIAL_ADMISSION.md).
+Bounded source components are accepted as recorded below; complete production
+integration remains open. No credential, signer, runtime permission or production
+listener is created by this document.
 
 ## Canonical authenticated record
 

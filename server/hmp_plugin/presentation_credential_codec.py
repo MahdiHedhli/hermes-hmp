@@ -3,6 +3,7 @@
 Signature bytes are opaque here. Role owners must verify pinned keys and retained
 native context before any effect. Parsing never creates a runtime permission.
 """
+
 from __future__ import annotations
 
 import json
@@ -11,21 +12,53 @@ import struct
 from dataclasses import dataclass
 
 from . import wire
-from .presentation_jobs import FrameError
 from .presentation_broker_codec import FRAME_LIMIT
+from .presentation_jobs import FrameError
 
 MAGIC = b"HBA1"
 JSON_LIMIT = 1976
 RECORD_LIMIT = 2048
-_COMMON = frozenset("v family alg phase role direction iid listener key_id peer_key_id generation operation_id work_end_ns".split())
+_COMMON = frozenset(
+    [
+        "v",
+        "family",
+        "alg",
+        "phase",
+        "role",
+        "direction",
+        "iid",
+        "listener",
+        "key_id",
+        "peer_key_id",
+        "generation",
+        "operation_id",
+        "work_end_ns",
+    ]
+)
 _HANDSHAKE = {
-    "HELLO": frozenset("gateway_boot gateway_nonce".split()),
-    "CHALLENGE": frozenset("gateway_boot gateway_nonce broker_boot broker_nonce hello_sha256".split()),
-    "FINISH": frozenset("gateway_boot broker_boot channel hello_sha256 challenge_sha256".split()),
-    "ACCEPT": frozenset("gateway_boot broker_boot channel finish_sha256".split()),
+    "HELLO": frozenset(["gateway_boot", "gateway_nonce"]),
+    "CHALLENGE": frozenset(
+        ["gateway_boot", "gateway_nonce", "broker_boot", "broker_nonce", "hello_sha256"]
+    ),
+    "FINISH": frozenset(
+        ["gateway_boot", "broker_boot", "channel", "hello_sha256", "challenge_sha256"]
+    ),
+    "ACCEPT": frozenset(["gateway_boot", "broker_boot", "channel", "finish_sha256"]),
 }
-_PHASES = frozenset("BEGIN READY GO RESULT CANCEL TERMINAL ACK".split())
-_PHASE = frozenset("gateway_boot broker_boot channel transcript_sha256 sequence input_sha256 scope_sha256 frame_sha256 frame_length".split())
+_PHASES = frozenset(["BEGIN", "READY", "GO", "RESULT", "CANCEL", "TERMINAL", "ACK"])
+_PHASE = frozenset(
+    [
+        "gateway_boot",
+        "broker_boot",
+        "channel",
+        "transcript_sha256",
+        "sequence",
+        "input_sha256",
+        "scope_sha256",
+        "frame_sha256",
+        "frame_length",
+    ]
+)
 _HEX = re.compile(r"[0-9a-f]{64}\Z", re.ASCII)
 _LISTENER = re.compile(r"[0-9a-f]{32}\Z", re.ASCII)
 _DOMAINS = {
@@ -43,8 +76,10 @@ def _validate(value):
         _refuse()
     if any(type(key) is not str for key in value):
         _refuse()
-    if any(type(item) is not (int if key in ("v", "sequence", "frame_length", "work_end_ns") else str)
-           for key, item in value.items()):
+    if any(
+        type(item) is not (int if key in ("v", "sequence", "frame_length", "work_end_ns") else str)
+        for key, item in value.items()
+    ):
         _refuse()
     family, phase = value.get("family"), value.get("phase")
     if type(family) is not str or type(phase) is not str:
@@ -80,7 +115,9 @@ def _validate(value):
         if key not in ("v", "sequence", "frame_length", "work_end_ns") and type(item) is not str:
             _refuse()
         if key in ("v", "sequence", "frame_length", "work_end_ns"):
-            upper = 3 if key == "sequence" else (FRAME_LIMIT if key == "frame_length" else 2**63 - 1)
+            upper = (
+                3 if key == "sequence" else (FRAME_LIMIT if key == "frame_length" else 2**63 - 1)
+            )
             lower = 8 if key == "frame_length" else (1 if key == "work_end_ns" else 0)
             if type(item) is not int or not lower <= item <= upper:
                 _refuse()
@@ -91,7 +128,9 @@ def _validate(value):
 
 def _canonical(value):
     _validate(value)
-    raw = json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False).encode("ascii")
+    raw = json.dumps(
+        value, sort_keys=True, separators=(",", ":"), ensure_ascii=True, allow_nan=False
+    ).encode("ascii")
     if not 1 <= len(raw) <= JSON_LIMIT:
         _refuse()
     return raw
@@ -123,6 +162,7 @@ def payload_size(prefix: bytes) -> int:
 @dataclass(frozen=True)
 class UnverifiedRecord:
     """Immutable wire data only; deliberately not a verified-owner receipt."""
+
     canonical_json: bytes
     signature: bytes
     signing_data: bytes

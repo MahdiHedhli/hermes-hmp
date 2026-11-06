@@ -1,7 +1,8 @@
-# Proposed paired startup and phase admission: local role credentials
+# Paired startup and phase admission: local role credentials
 
-Status: concrete contract amendment for independent review, not implementation,
-credential creation, production authority or deployment permission. The full
+Status: independently reviewed contract with bounded source components accepted.
+Production paired runtime admission and full signed phase delivery remain open.
+This document grants no credential creation, production authority or deployment permission. The full
 desktop display-name, classic/blobatar and custom-static-image feature remains
 required. This does not replace delivery with a snapshot or a no-GO fixture.
 
