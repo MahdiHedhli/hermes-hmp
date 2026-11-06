@@ -61,7 +61,15 @@ Prequeued data refuses before nonce generation; early exit in this run refuses
 at initial peer observation, not at a later timing boundary.
 
 The private source-bound receipt is
-`/private/tmp/hermes-lifetime-probe-311-20261106.json`. This one-way owned-child
+`/private/tmp/hermes-lifetime-probe-311-20261106.json`. Configured CI42134814902
+then caught one 101-column line that the default local lint settings missed;
+no CI tests ran. The one-line wrap preserves the AST ignoring source locations.
+Required repository-configured Ruff passes, and a separately reviewed fresh
+exact-successor run passes all 20 checks in 0.44s, again with all nine cleanups
+known. Its source-bound receipt is
+`/private/tmp/hermes-lifetime-repaired-311-20261106.json`. The original run and
+failed CI remain historical evidence; the two passing counts are not additive.
+This one-way owned-child
 experiment is not a bidirectional service/gateway terminal transcript, forced
 PID-reuse test, exit-timing matrix or partial-constructor fault qualification.
 Those remain separate work. Linux skips for the Darwin-specific primitive are

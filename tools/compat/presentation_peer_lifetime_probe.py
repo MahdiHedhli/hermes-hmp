@@ -117,7 +117,8 @@ def _empty(connection):
     try:
         _RECV(connection, 1, socket.MSG_PEEK)
     except BlockingIOError as error:
-        _require(type(error) is BlockingIOError and error.errno in (errno.EAGAIN, errno.EWOULDBLOCK))
+        _require(type(error) is BlockingIOError
+                 and error.errno in (errno.EAGAIN, errno.EWOULDBLOCK))
         return
     _require(False)  # both queued bytes and EOF refuse, never drain/reset
 
