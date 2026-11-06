@@ -60,7 +60,7 @@ def _call_clone(source_fd, directory_fd, name):
 
     library = ctypes.CDLL("/usr/lib/libSystem.B.dylib", use_errno=True)
     function = library.fclonefileat
-    function.argtypes = (ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_int)
+    function.argtypes = (ctypes.c_int, ctypes.c_int, ctypes.c_char_p, ctypes.c_uint32)
     function.restype = ctypes.c_int
     # Current SDK: CLONE_NOOWNERCOPY=2, CLONE_NOFOLLOW_ANY=8. A single basename
     # relative to the retained directory FD has no intermediate target path.
