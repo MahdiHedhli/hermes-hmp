@@ -1,35 +1,20 @@
-## Bot-character credential source checkpoint — November 6, 2026
+## Bot-character delivery source checkpoint — November 6, 2026
 
-Independently reviewed source commit `7c37b4f` adds bounded credential record
-parsing, bilateral signed-transcript consistency and scope hashing from the
-original validated input3. The focused suite passed 167 tests; review inspected
-source/tests without independently rerunning them. These are data-only building
-blocks, not runtime enrollment, native authority or finished character delivery.
-Later reviewed source `46c697c` adds signed phase/body consistency; `33beebe`
-adds bounded startup-only role key-file custody, with all descriptors closed
-before readiness and irreversible retirement. The expanded focused suite passed
-213 tests; the strengthened process-context descriptor case passed the targeted
-30-test loader suite afterward. These checks grant no signing/native authority.
-Typed paired startup, runtime/rotation qualification, original cursor/phase
-integration, full GO/result/TERMINAL/ACK/native publication and device/release
-qualification remain open.
-See the [credential contract and checkpoint](specs/046-bot-presentation-integration/CREDENTIAL_WIRE.md).
-The local role-credential direction supersedes the unfinished Mach production
-admission proposal; historical Mach evidence and its unresolved incident remain.
-The retained credential handshake and channel IO/close exclusion are now
-independently source-reviewed at `922c04d`; the final focused regression passed
-452 tests with one skip. Actor tests use synthetic keys/sockets with native
-qualification mocked. Paired runtime admission, phase/native authority and full
-character delivery remain unfinished. See [handshake source evidence and limits](docs/research/presentation-credential-handshake-2026-11-06.md).
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) contains the
+reviewed credential records, handshake/key custody, original native-input join
+and bounded frame-digest components. Latest component source `aae7a40` passed
+**658 affected tests, one skipped**, and configured repository lint. Independent
+review inspected source/tests without execution. Synthetic authorization and
+modeled peer/clock qualification remain explicit; sockets, policy threads and
+job slots are actual disposable test resources.
 
-The original native-input correlation handoff is independently reviewed at
-`693c51f`, with **640 affected tests passed, one skipped**. The exact policy packet,
-original job slot and earlier conserved deadline are retained; final native-state
-mutations refuse before minting a join. This adds no native phase permission or
-unsigned fallback. [Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138)
-tracks the remaining complete delivery work; see [handoff evidence](docs/research/presentation-credential-native-input-2026-11-06.md).
-
-No live installation, configuration or permission change accompanied this work.
+Desktop name/classic/blobatar/custom-static delivery remains unfinished. Paired
+runtime/source admission, rotation/capacity, signed phase streaming and direct
+broker IO, actual GO and native publication, STATUS, installation and physical/
+release qualification are open. The digest helper is data-only and unsigned
+phase fallback stays refused. See [streaming evidence](docs/research/presentation-credential-stream-2026-11-06.md)
+and [original-input evidence](docs/research/presentation-credential-native-input-2026-11-06.md).
+No live host setting, permission or device changed.
 
 ## Native image verification checkpoint — November 6, 2026
 
