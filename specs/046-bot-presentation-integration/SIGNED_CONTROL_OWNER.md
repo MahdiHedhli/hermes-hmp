@@ -1,6 +1,6 @@
 # Signed GO/CANCEL handoff before credential resource startup
 
-Status: partial source integration; signed GO/full control lifecycle is NOT implemented. Legacy raw
+Status: partial source integration; full signed control/resource lifecycle is NOT implemented. Legacy raw
 control and result paths must refuse a credential-attached channel. Resource/READY
 startup remains closed until the concrete signed control receiver is retained.
 This changes no minimum-version policy and disables no legacy unsigned channel.
@@ -146,3 +146,14 @@ revalidation, actual native park verification and original cleanup time. Generic
 work guards and ordinary `cancel_receipt` remain closed. Wrong caller/spine cannot
 consume the original attempt; late authority failure cannot retry after restoration.
 See [evidence and limits](../../docs/research/presentation-signed-cancel-service-consumer-2026-11-06.md).
+
+## GO/read and next-CANCEL checkpoint
+
+`stage_credential_go_control` retains a typed original GO proof, requires existing
+READY grammar before native read/grammar receipt, and continues the SAME actual
+Task/cursor for CANCELseq2. Native cancellation/service validation also retains
+the original GO proof. Total control lifetime bytes remain bounded by6,192.
+Reads remain under original work time; cleanup-time control, signed READY write,
+resource/worker relay and production admission are unimplemented. Unit READY is
+an explicit modeled grammar fact, not resource or signed transport evidence.
+See [evidence and limits](../../docs/research/presentation-signed-go-control-chain-2026-11-06.md).

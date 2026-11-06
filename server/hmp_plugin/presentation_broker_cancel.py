@@ -177,6 +177,21 @@ class BrokerCancellationOwner:
             raise FrameError("BI1_CREDENTIAL_CANCEL_ACQUISITION_REFUSED") from None
         return owner
 
+    @classmethod
+    def stage_credential_go_control(cls, queued):
+        """GO/read receipts and next CANCEL under work time; no resource relay."""
+        from .presentation_credential_control import CredentialGoPhase
+
+        if cls is not BrokerCancellationOwner:
+            _refuse()
+        owner = BrokerCancellationOwner.retain_credential_cancel(queued)
+        try:
+            CredentialGoPhase.retain(owner)
+        except BaseException:
+            owner._failed = True
+            raise FrameError("BI1_CREDENTIAL_GO_ACQUISITION_REFUSED") from None
+        return owner
+
     def __init__(self, channel, registry, ticket, grammar):
         if type(self) is not BrokerCancellationOwner or "_initialized" in vars(self):
             _refuse()  # never replace an original task/cursor or partial failure
@@ -215,6 +230,7 @@ class BrokerCancellationOwner:
         self._failure_origin = self._failure_origin_snapshot = (None, None)
         self._signed_cursor = self._signed_cursor_snapshot = None
         self._signed_cancel = self._signed_cancel_snapshot = None
+        self._signed_go = self._signed_go_snapshot = None
         self._buffer = self._buffer_snapshot = self._buffer_origin = bytearray()
         self._wire_received = self._frame_start = 0
         self._pending = self._waiter = None
@@ -721,6 +737,16 @@ class BrokerCancellationOwner:
                             or self._signed_cursor is not cursor):
                         _refuse()
                     await CredentialControlCursor.run(cursor)
+                    phase = self._signed_go_snapshot
+                    if phase is not None:
+                        from .presentation_credential_control import CredentialGoPhase
+
+                        if type(phase) is not CredentialGoPhase or self._signed_go is not phase:
+                            _refuse()
+                        if cursor._phase == "GO":
+                            return await CredentialGoPhase.run(phase)
+                    elif self._signed_go is not None:
+                        _refuse()
                     adoption = self._signed_cancel_snapshot
                     if adoption is not None:
                         from .presentation_credential_control import CredentialCancelAdoption

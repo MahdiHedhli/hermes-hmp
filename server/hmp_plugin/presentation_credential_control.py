@@ -1,10 +1,11 @@
-"""First signed control frame on the original native controller allocation.
+"""Signed control read facts on the original native controller allocation.
 
 Source-only staging, not a working GO/CANCEL lifecycle. First-frame reading
 alone grants no native effects. The explicit pre-GO CANCEL adoption joins that
 original read to native grammar/budget/receipt and owned local park/stop only.
 A dedicated original-service CANCEL validator is separate from reader IO;
-signed GO/resources and production dispatch stay closed.
+Signed GO read receipts are separate from worker relay; resource admission and
+production dispatch stay closed.
 """
 
 from __future__ import annotations
@@ -69,6 +70,10 @@ class CredentialControlCursor:
         owner._pending = owner._pending_snapshot = None
         owner._waiter = None
         owner._last_read = None
+        owner._frame_index = 0
+        owner._wire_before = 0
+        owner._prior_completion = None
+        owner._advanced = False
         owner._raw = owner._frame = owner._header = None
         owner._phase = None
         owner._release = None
@@ -216,6 +221,31 @@ class CredentialControlCursor:
             and self._consumed is self._consumed_snapshot
             and 0 <= len(self._buffer) <= self._consumed <= self._target <= _LIMIT
         )
+        _require(
+            type(self._frame_index) is int
+            and self._frame_index in (0, 1)
+            and type(self._wire_before) is int
+            and self._wire_before + self._consumed <= 2 * _LIMIT
+            and type(self._advanced) is bool
+        )
+        if self._frame_index == 0:
+            _require(
+                self._wire_before == 0
+                and self._prior_completion is None
+                and self._advanced is False
+            )
+        else:
+            prior = self._prior_completion
+            _require(
+                type(prior) is tuple
+                and len(prior) == 8
+                and type(prior[0]) is bytes
+                and type(prior[1]) is bytes
+                and type(prior[6]) is str
+                and prior[6] == "GO"
+                and self._advanced is True
+                and self._wire_before == len(prior[0]) + len(prior[1])
+            )
         if self._pending is None:
             _require(self._pending_snapshot is None and len(self._buffer) == self._consumed)
         else:
@@ -390,7 +420,10 @@ class CredentialControlCursor:
             # Read only the phase discriminator from the closed codec. It is not
             # a revocation hint; no native effect occurs before authentication.
             _require(parsed["family"] == "phase" and parsed["phase"] in ("GO", "CANCEL"))
-            expected = dict(self._expected_snapshot, phase=parsed["phase"], sequence=1)
+            sequence = self._frame_index + 1
+            if sequence == 2:
+                _require(parsed["phase"] == "CANCEL")
+            expected = dict(self._expected_snapshot, phase=parsed["phase"], sequence=sequence)
             commitment = check_commitment(
                 raw, sender_public=self._pins[0], receiver_public=self._pins[1], expected=expected
             )
@@ -458,6 +491,35 @@ class CredentialControlCursor:
         if failed:
             raise FrameError("BI1_CREDENTIAL_CONTROL_READ_REFUSED") from None
 
+    async def read_after_go(self):
+        """Same actual controller cursor, second CANCEL only; no cleanup-time reads yet."""
+        from .presentation_broker_cancel import BrokerCancellationOwner
+
+        CredentialControlCursor._local(self)
+        _require(self._frame_index == 0 and self._advanced is False)
+        control = self._control_snapshot
+        _require(type(control) is BrokerCancellationOwner)
+        phase = control._signed_go_snapshot
+        _require(type(phase) is CredentialGoPhase and control._signed_go is phase)
+        CredentialGoPhase._local(phase)
+        completed = self._completion_snapshot
+        CredentialControlCursor._completed_local(self, completed)
+        _require(phase._completion is completed and phase._notified is True)
+        self._advanced = True  # irreversible before allocating the second frame buffer
+        self._prior_completion = completed
+        self._wire_before = self._consumed_snapshot
+        self._frame_index = 1
+        self._buffer = self._buffer_origin = bytearray()
+        self._buffer_values = b""
+        self._target = self._target_snapshot = 0
+        self._consumed = self._consumed_snapshot = 0
+        self._pending = self._pending_snapshot = None
+        self._raw = self._frame = self._header = self._phase = None
+        self._release = None
+        self._completion = self._completion_snapshot = None
+        self._started = self._complete = False
+        await CredentialControlCursor.run(self)
+
     def _completed_local(self, completion, *, creator=False):
         """Callback-free seal against held original completed cursor facts."""
         from .presentation_broker_codec import BrokerHeader
@@ -520,7 +582,7 @@ class CredentialControlCursor:
             raw,
             sender_public=self._pins[0],
             receiver_public=self._pins[1],
-            expected=dict(self._expected_snapshot, phase=phase, sequence=1),
+            expected=dict(self._expected_snapshot, phase=phase, sequence=self._frame_index + 1),
         )
         checked = check_complete_frame(commitment, frame, binding=self._broker_binding)
         _require(checked.kind == phase and checked.body_length == (0 if phase == "GO" else 16))
@@ -691,7 +753,8 @@ class CredentialCancelAdoption:
         _row(notice.frame.header)
         _require(
             notice.frame.header.kind == "CANCEL"
-            and notice.frame.header.sequence == 1
+            and notice.frame.header.sequence
+            == (2 if control._go_receipt_snapshot is not None else 1)
             and notice.frame.header.version == 2
             and notice.frame.header.body_length == 16
             and len(notice.frame.body) == 16
@@ -734,6 +797,17 @@ class CredentialCancelAdoption:
                 for v in (self._consume_attempted, self._consume_complete, self._consume_failed)
             )
         )
+        phase = self._control_snapshot._signed_go_snapshot
+        if phase is not None:
+            _require(
+                type(phase) is CredentialGoPhase and self._control_snapshot._signed_go is phase
+            )
+            CredentialGoPhase._local(phase)
+        else:
+            _require(
+                self._control_snapshot._signed_go is None
+                and self._control_snapshot._go_receipt_snapshot is None
+            )
         CredentialCancelAdoption._notice_local(self)
         CredentialControlCursor._local(self._cursor_snapshot, creator=creator)
         if self._cursor_snapshot._complete is True:
@@ -756,7 +830,6 @@ class CredentialCancelAdoption:
             and self._control_snapshot is control
             and self._refs_snapshot is refs
             and control._failed is False
-            and control._go_receipt_snapshot is None
         )
         return refs
 
@@ -790,8 +863,8 @@ class CredentialCancelAdoption:
             _require(
                 cursor._completion_snapshot is completed
                 and cursor._phase == "CANCEL"
-                and refs[18]._client_next == 1
-                and refs[18]._go is False
+                and refs[18]._client_next == cursor._frame_index + 1
+                and refs[18]._go is (cursor._frame_index == 1)
                 and refs[18]._cancel is False
                 and control._retired is False
             )
@@ -806,7 +879,7 @@ class CredentialCancelAdoption:
             )
             _require(
                 native_header.kind == "CANCEL"
-                and native_header.sequence == 1
+                and native_header.sequence == cursor._frame_index + 1
                 and native_header.body_length == 16
             )
             body = frame_bytes[end:]
@@ -914,7 +987,6 @@ class CredentialCancelAdoption:
             and self._binding_snapshot is binding
             and control._failed is False
             and control._io_unknown is False
-            and control._go_receipt_snapshot is None
         )
         return refs
 
@@ -1004,7 +1076,11 @@ class CredentialCancelAdoption:
                 and _TASK._fut_waiter.__get__(task, _TASK) is control._park_future_snapshot
                 and completion[6] == "CANCEL"
                 and encode_frame(
-                    control._scope_snapshot[1], "CANCEL", 1, notice.frame.body, version=2
+                    control._scope_snapshot[1],
+                    "CANCEL",
+                    cursor._frame_index + 1,
+                    notice.frame.body,
+                    version=2,
                 )
                 == completion[1]
             )
@@ -1029,3 +1105,225 @@ class CredentialCancelAdoption:
             self._consume_failed = True
             BrokerCancellationOwner.refuse_notice(control)
             raise
+
+
+class CredentialGoPhase:
+    """Authenticated GO receipt plus same-task next CANCEL, never worker GO relay."""
+
+    @classmethod
+    def retain(cls, control):
+        from .presentation_broker_cancel import BrokerCancellationOwner
+        from .presentation_control_binding import PreparedControlBinding
+        from .presentation_remote_cleanup import _FUTURE
+
+        _require(cls is CredentialGoPhase and type(control) is BrokerCancellationOwner)
+        binding = control._credential_binding_snapshot
+        _require(type(binding) is PreparedControlBinding)
+        PreparedControlBinding.creator_current(binding)
+        adoption, cursor = control._signed_cancel_snapshot, control._signed_cursor_snapshot
+        _require(
+            type(adoption) is CredentialCancelAdoption
+            and type(cursor) is CredentialControlCursor
+            and control._signed_go is None
+            and control._signed_go_snapshot is None
+            and type(control._go_allocation_snapshot) is tuple
+            and len(control._go_allocation_snapshot) == 1
+            and type(control._go_allocation_snapshot[0]) is _FUTURE
+        )
+        owner = cls.__new__(cls)
+        control._signed_go = control._signed_go_snapshot = owner
+        owner._refs = owner._refs_snapshot = (
+            control,
+            adoption,
+            cursor,
+            binding,
+            control._go_allocation_snapshot,
+            control._go_future_snapshot,
+            control._go_initialized_snapshot,
+        )
+        owner._attempted = owner._notified = False
+        owner._receipt = owner._completion = None
+        CredentialGoPhase._local(owner)
+        return owner
+
+    def __repr__(self):
+        return "<CredentialGoPhase no-worker-relay context-redacted>"
+
+    def _local(self):
+        from .presentation_broker_cancel import (
+            _GO_RECEIPT_MINT,
+            BrokerCancellationOwner,
+            _GoReceipt,
+            _native_future_methods,
+        )
+        from .presentation_broker_codec import BrokerFrame, BrokerHeader, _row, encode_frame
+        from .presentation_control_binding import PreparedControlBinding
+        from .presentation_remote_cleanup import _FUTURE
+
+        _require(
+            type(self) is CredentialGoPhase
+            and type(self._refs) is tuple
+            and len(self._refs) == 7
+            and self._refs is self._refs_snapshot
+        )
+        control, adoption, cursor, binding, allocation, future, initialized = self._refs
+        _require(
+            type(control) is BrokerCancellationOwner
+            and type(adoption) is CredentialCancelAdoption
+            and type(cursor) is CredentialControlCursor
+            and type(binding) is PreparedControlBinding
+            and type(allocation) is tuple
+            and len(allocation) == 1
+            and type(future) is _FUTURE
+            and allocation[0] is future
+            and type(initialized) is object
+        )
+        _require(
+            control._signed_go is self
+            and control._signed_go_snapshot is self
+            and control._signed_cancel_snapshot is adoption
+            and control._signed_cursor_snapshot is cursor
+            and control._credential_binding_snapshot is binding
+            and control._go_allocation is allocation
+            and control._go_allocation_snapshot is allocation
+            and control._go_future is future
+            and control._go_future_snapshot is future
+            and control._go_initialized is initialized
+            and control._go_initialized_snapshot is initialized
+            and type(self._attempted) is bool
+            and type(self._notified) is bool
+        )
+        _require(
+            type(cursor._frame_index) is int
+            and cursor._frame_index in (0, 1)
+            and type(cursor._wire_before) is int
+            and 0 <= cursor._wire_before <= _LIMIT
+            and type(cursor._advanced) is bool
+        )
+        _native_future_methods(future)
+        receipt = self._receipt
+        if receipt is None:
+            _require(
+                control._go_receipt is None
+                and control._go_receipt_snapshot is None
+                and self._notified is False
+                and not _FUTURE.done(future)
+            )
+            return
+        _require(
+            type(receipt) is _GoReceipt
+            and receipt.mint is _GO_RECEIPT_MINT
+            and control._go_receipt is receipt
+            and control._go_receipt_snapshot is receipt
+            and type(receipt.scope) is tuple
+            and len(receipt.scope) == 10
+            and receipt.scope is binding._scope_snapshot
+            and receipt.allocation is binding._allocation
+            and receipt.future is future
+            and type(receipt.frame) is BrokerFrame
+            and type(receipt.frame.header) is BrokerHeader
+            and type(receipt.frame.body) is bytes
+            and receipt.frame.body == b""
+        )
+        _row(receipt.frame.header)
+        _require(
+            receipt.frame.header.kind == "GO"
+            and receipt.frame.header.sequence == 1
+            and receipt.frame.header.version == 2
+            and receipt.frame.header.body_length == 0
+        )
+        completed = self._completion
+        _require(
+            type(completed) is tuple
+            and len(completed) == 8
+            and type(completed[0]) is bytes
+            and type(completed[1]) is bytes
+            and type(completed[3]) is bytearray
+            and type(completed[4]) is int
+            and type(completed[5]) is int
+            and type(completed[6]) is str
+            and type(completed[7]) is int
+            and completed[4] == completed[5] == len(completed[0]) + len(completed[1])
+            and bytes(completed[3]) == completed[0] + completed[1]
+            and (
+                cursor._completion_snapshot is completed
+                if cursor._frame_index == 0
+                else cursor._prior_completion is completed
+            )
+            and type(completed[6]) is str
+            and completed[6] == "GO"
+            and encode_frame(receipt.scope[1], "GO", 1, b"", version=2) == completed[1]
+            and self._attempted is True
+        )
+        if self._notified:
+            _require(_FUTURE.done(future) and _FUTURE.result(future) is receipt)
+        else:
+            _require(not _FUTURE.done(future))
+
+    async def run(self):
+        from .presentation_broker_cancel import (
+            _GO_RECEIPT_MINT,
+            BrokerCancellationOwner,
+            _GoReceipt,
+        )
+        from .presentation_broker_codec import BrokerFrame, decode_header
+        from .presentation_broker_lifecycle import OperationGrammar
+        from .presentation_cancel_budget import CancellationBudget
+        from .presentation_clock import NativeClockOwner
+        from .presentation_remote_cleanup import _FUTURE
+
+        CredentialGoPhase._local(self)
+        control, adoption, cursor, _binding, _, future, _ = self._refs_snapshot
+        attempted = False
+        try:
+            refs = CredentialCancelAdoption._current(adoption)
+            completion = CredentialControlCursor.completed_current(cursor)
+            CredentialCancelAdoption._completed_current(adoption, cursor, completion, refs)
+            _require(
+                cursor._frame_index == 0
+                and completion[6] == "GO"
+                and self._attempted is False
+                and self._receipt is None
+                and refs[18]._ready is True
+                and refs[18]._go is False
+                and refs[18]._cancel is False
+                and refs[18]._invalidated is False
+                and refs[18]._client_next == 1
+            )
+            frame_bytes = completion[1]
+            end = 8 + header_size(frame_bytes[:8])
+            header = decode_header(
+                frame_bytes[:end], expected=cursor._broker_binding, expected_version=2
+            )
+            _require(header.kind == "GO" and header.sequence == 1 and header.body_length == 0)
+            now = NativeClockOwner.sample(refs[13])
+            CredentialCancelAdoption._completed_current(adoption, cursor, completion, refs)
+            _require(
+                type(now) is int
+                and 0 <= now < completion[7]
+                and CancellationBudget.inspect(refs[17])[2:] == (None, False)
+                and control._retired is False
+            )
+            self._attempted = attempted = True
+            frame = BrokerFrame(header, b"")
+            OperationGrammar.observe(refs[18], frame, sender="client")
+            receipt = _GoReceipt(
+                _GO_RECEIPT_MINT,
+                frame,
+                control._scope_snapshot,
+                control._allocation_snapshot,
+                future,
+            )
+            self._receipt, self._completion = receipt, completion
+            control._go_receipt = control._go_receipt_snapshot = receipt
+            CredentialCancelAdoption._completed_current(adoption, cursor, completion, refs)
+            _FUTURE.set_result(future, receipt)
+            self._notified = True
+            CredentialCancelAdoption._completed_current(adoption, cursor, completion, refs)
+            # Native grammar/receipt are read facts only. Generic go_receipt and
+            # resource relay stay closed; no GO execution is authorized here.
+            await CredentialControlCursor.read_after_go(cursor)
+            return await CredentialCancelAdoption.run(adoption)
+        finally:
+            if attempted and control._stop_known is not True:
+                BrokerCancellationOwner._local_cause(control)

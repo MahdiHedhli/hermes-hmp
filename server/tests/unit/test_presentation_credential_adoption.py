@@ -238,7 +238,17 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                 budget = native.cleanup_budget_snapshot
                 before = CancellationBudget.inspect(budget)
                 grammar_before = dict(record.grammar.__dict__)
-                control = BrokerCancellationOwner.retain_credential_cancel(work)
+                go_chain = mutation.startswith("signed_control_native_go_chain_")
+                if go_chain:
+                    control = BrokerCancellationOwner.stage_credential_go_control(work)
+                    if mutation != "signed_control_native_go_chain_missing_ready":
+                        from hmp_plugin.presentation_broker_codec import BrokerFrame, BrokerHeader
+                        # Explicit synthetic prior READY grammar fact only. No
+                        # signed READY write/resource qualification is claimed.
+                        record.grammar.observe(BrokerFrame(BrokerHeader(
+                            record.grammar._binding, "READY", 0, 0, 2), b""), sender="broker")
+                else:
+                    control = BrokerCancellationOwner.retain_credential_cancel(work)
                 held["native_control"] = control
                 inherit = CancellationBudget.inherit
 
@@ -303,6 +313,80 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
 
                     monkeypatch.setattr(BrokerServiceSpine, "_current", retired_notice)
                 waiter = control._cancel_future_snapshot
+                if go_chain:
+                    if mutation.endswith(("index_drift", "expired", "retired")):
+                        from hmp_plugin.presentation_clock import NativeClockOwner
+                        sample = NativeClockOwner.sample
+                        callbacks = []
+
+                        class ForeignFrameIndex:
+                            def __eq__(self, other):
+                                callbacks.append("eq")
+                                raise AssertionError("foreign frame index comparison")
+                            def __add__(self, other):
+                                callbacks.append("add")
+                                raise AssertionError("foreign frame index arithmetic")
+                            def __index__(self):
+                                callbacks.append("index")
+                                raise AssertionError("foreign frame indexing")
+
+                        def changed_go(clock):
+                            now = sample(clock)
+                            phase = control._signed_go_snapshot
+                            cursor = control._signed_cursor_snapshot
+                            if mutation.endswith("index_drift") and cursor._complete:
+                                cursor._frame_index = ForeignFrameIndex()
+                            elif phase._notified:
+                                if mutation.endswith("expired"):
+                                    return end
+                                if mutation.endswith("retired"):
+                                    keys["broker"].retire()
+                            return now
+
+                        monkeypatch.setattr(NativeClockOwner, "sample", changed_go)
+                        if mutation.endswith("expired"):
+                            monkeypatch.setattr(NativeClockOwner, "cleanup_sample", lambda _: end)
+                        held["go_transition_callbacks"] = callbacks
+                    expected = mutation in ("signed_control_native_go_chain_cancel",
+                                            "signed_control_native_go_chain_before_go")
+                    if expected:
+                        consumed = await BrokerServiceSpine._v2_control(spine, control)
+                        assert consumed.header.kind == "CANCEL"
+                        assert (consumed.header.sequence
+                                == (1 if mutation.endswith("before_go") else 2))
+                        if mutation.endswith("cancel"):
+                            go = control._go_future_snapshot.result()
+                            assert go is control._go_receipt_snapshot
+                            assert go.frame.header.kind == "GO"
+                            assert control._signed_cursor_snapshot._wire_before > 0
+                        with pytest.raises(FrameError, match="SIGNED_CONTROL_READER_NOT_IMPLEMENTED"
+                                           ):
+                            BrokerServiceSpine._v2_work_current(spine, control)
+                        assert native.resources is None and native.start_attempted is False
+                        BrokerCancellationOwner.abort(control)
+                        outcome = await asyncio.gather(control._allocation_snapshot.task,
+                                                       return_exceptions=True)
+                        assert outcome == [consumed] and control._stop_known is True
+                    else:
+                        outcome = await asyncio.gather(control._allocation_snapshot.task,
+                                                       return_exceptions=True)
+                        assert isinstance(outcome[0], FrameError) and not waiter.done()
+                        if mutation.endswith(("missing_ready", "index_drift")):
+                            assert control._go_receipt is None
+                            assert CancellationBudget.inspect(budget) == before
+                        else:
+                            assert control._go_future_snapshot.done()
+                            assert control._retired is True
+                            assert CancellationBudget.inspect(budget)[2] is not None
+                        assert native.start_attempted is False and native.resources is None
+                        if "go_transition_callbacks" in held:
+                            assert held["go_transition_callbacks"] == []
+                            assert control._signed_cursor_snapshot._wire_before == (
+                                0 if mutation.endswith("index_drift")
+                                else held["signed_auth_length"]
+                                + len(encode_frame(control._go_receipt.frame.header.binding,
+                                                   "GO", 1, b"", version=2)))
+                    return ticket
                 if mutation.startswith("signed_control_native_service_"):
                     from hmp_plugin.presentation_credential_control import CredentialCancelAdoption
                     adoption = control._signed_cancel_snapshot
@@ -764,7 +848,9 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
             phase = "CANCEL" if mutation in ("signed_control_cancel", "signed_control_hash",
                                              "signed_control_window") else "GO"
             if mutation.startswith("signed_control_native_"):
-                phase = "GO" if mutation == "signed_control_native_go" else "CANCEL"
+                phase = "GO" if (mutation == "signed_control_native_go"
+                    or (mutation.startswith("signed_control_native_go_chain_")
+                    and not mutation.endswith("before_go"))) else "CANCEL"
             body = CancellationWindow(end - 250_000_000, end).encode() if phase == "CANCEL" else b""
             if mutation.startswith("signed_control_native_") and phase == "CANCEL":
                 start = time.monotonic_ns()
@@ -797,6 +883,22 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
                     await asyncio.sleep(0)
             else:
                 await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, wire)
+            if (mutation.startswith("signed_control_native_go_chain_")
+                    and not mutation.endswith("before_go")):
+                start = time.monotonic_ns()
+                body2 = CancellationWindow(start, start + 250_000_000).encode()
+                frame2 = encode_frame(binding, "CANCEL", 2, body2, version=2)
+                value2 = dict(value, phase="CANCEL", sequence=2,
+                              frame_sha256=hashlib.sha256(frame2).hexdigest(),
+                              frame_length=len(frame2))
+                if mutation.endswith("wrong_sequence"):
+                    value2["sequence"] = 1
+                raw2 = encode_record(value2, keys["gateway"]._private_key.sign(
+                    signing_bytes(value2)))
+                if mutation.endswith("bad_signature"):
+                    raw2 = raw2[:-1] + bytes([raw2[-1] ^ 1])
+                await asyncio.get_running_loop().sock_sendall(
+                    gateway._socket_snapshot, raw2 + frame2)
         if (mutation and mutation.startswith("signed_control_")) or mutation in (
             None,
             "earlier_accept",
@@ -1058,5 +1160,19 @@ async def test_signed_cancel_native_receipt_and_owned_local_stop(local, tmp_path
 ])
 async def test_original_service_consumes_only_current_signed_cancel(local, tmp_path, monkeypatch,
                                                                   mutation):
+    held, _ = await exchange(local, tmp_path, monkeypatch, mutation)
+    assert "native_control" in held
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+@pytest.mark.parametrize("mutation", [
+    "signed_control_native_go_chain_cancel", "signed_control_native_go_chain_before_go",
+    "signed_control_native_go_chain_missing_ready", "signed_control_native_go_chain_bad_signature",
+    "signed_control_native_go_chain_wrong_sequence", "signed_control_native_go_chain_index_drift",
+    "signed_control_native_go_chain_expired", "signed_control_native_go_chain_retired",
+])
+async def test_signed_go_receipt_then_same_cursor_cancel_without_worker_relay(local, tmp_path,
+                                                                            monkeypatch, mutation):
     held, _ = await exchange(local, tmp_path, monkeypatch, mutation)
     assert "native_control" in held
