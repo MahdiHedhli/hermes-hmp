@@ -1,5 +1,6 @@
 """Fixture import and refusal checks; these never import/run native Hermes."""
 import importlib.util
+import os
 import sys
 from pathlib import Path
 
@@ -242,3 +243,20 @@ def test_audit_denial_latches_before_optional_diagnostic_failure(monkeypatch):
         module._refuse_with_diagnostic(denied, "read_outside_fixture_sources")
     assert denied == [{"code": "read_outside_fixture_sources", "source_frames": [],
                        "diagnostic_capture_failed": True}]
+
+
+def test_only_exact_readonly_darwin_container_probes_are_synthesized_absent():
+    module = load()
+    for path in ("/proc/1/cgroup", "/proc/self/mountinfo"):
+        assert module._absent_darwin_proc_probe(path, False) is (sys.platform == "darwin")
+        assert module._absent_darwin_proc_probe(path, True) is False
+    for path in ("/proc/1/environ", "/proc/1/cgroup/../environ", "/proc/self/mountinfoX",
+                 b"/proc/1/cgroup", "/etc/passwd"):
+        assert module._absent_darwin_proc_probe(path, False) is False
+
+
+@pytest.mark.parametrize("flags", [os.O_TRUNC, os.O_APPEND, os.O_RDWR, os.O_CREAT])
+def test_read_mode_cannot_disguise_mutating_open_flags(flags):
+    module = load()
+    assert module._open_writes("r", os.O_RDONLY | flags) is True
+    assert module._open_writes("rb", os.O_RDONLY) is False

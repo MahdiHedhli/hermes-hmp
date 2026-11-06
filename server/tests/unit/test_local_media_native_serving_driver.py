@@ -39,6 +39,7 @@ def good(native=None, hmp=None, executable="e" * 64):
     report.update(dict.fromkeys(driver._FALSE, False))
     report.update(schema=1, native_acquires=2, native_releases=2,
         descriptor_records_retained=1, audit_denials=0, scoped_native_sweep=0,
+        expected_absent_proc_probes=2,
         native_source_hashes=native or {"hermes_state.py": "a" * 64},
         hmp_source_hashes=hmp or {"server/hmp_plugin/__init__.py": "b" * 64},
         runtime_executable_sha256=executable)

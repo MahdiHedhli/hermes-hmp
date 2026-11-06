@@ -131,6 +131,19 @@ def _cleanup_setup(owners, native_registry, db, fx, patch, root, report):
 
 
 
+
+
+def _open_writes(mode, flags):
+    return (isinstance(mode, str) and any(x in mode for x in "wax+")) or (
+        isinstance(flags, int) and bool(flags &
+            (os.O_WRONLY | os.O_RDWR | os.O_CREAT | os.O_TRUNC | os.O_APPEND)))
+
+def _absent_darwin_proc_probe(raw, writing):
+    # Native directory hardening unconditionally probes Linux container files.
+    # Return the ordinary Darwin absence without opening any outside file.
+    return (sys.platform == "darwin" and not writing and type(raw) is str and
+            raw in ("/proc/1/cgroup", "/proc/self/mountinfo"))
+
 def _refuse_with_diagnostic(denied, code):
     if len(denied) < 16:
         record = {"code": code, "source_frames": []}
@@ -183,6 +196,7 @@ def run_fixture(root):
     hmp_pins = _inventory_sources(_ROOT)
     (root / "home/config.yaml").write_text("sessions:\n  cjk_fts: false\n")
     denied = []
+    absent_proc_probes = [0]
     allowed_endpoint = [None]
     reads = (root, _ROOT, Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve())
 
@@ -193,8 +207,10 @@ def run_fixture(root):
         if event == "open" and isinstance(args[0], (str, bytes, os.PathLike)):
             path = Path(os.fsdecode(args[0])).resolve()
             mode, flags = args[1], args[2]
-            write = (isinstance(mode, str) and any(x in mode for x in "wax+")) or (
-                isinstance(flags, int) and bool(flags & (os.O_WRONLY | os.O_RDWR | os.O_CREAT)))
+            write = _open_writes(mode, flags)
+            if _absent_darwin_proc_probe(args[0], write):
+                absent_proc_probes[0] += 1
+                raise FileNotFoundError("fixture_darwin_linux_proc_absent")
             if write and not _inside(path, root):
                 refuse("write_outside_scratch")
             if not _inside(path, root) and (path.name == ".env" or not any(
@@ -414,7 +430,9 @@ def run_fixture(root):
             "denial_codes": denied, "default_state_created": (root / "home/state.db").exists()}))
     _require(_inventory_sources(source) == pins and _inventory_sources(_ROOT) == hmp_pins)
     _check_import_origins(dict(sys.modules), source, _ROOT)
-    report.update(audit_denials=0, source_unchanged=True, selected_source_origins_checked=True,
+    report.update(audit_denials=0, synthetic_absent_linux_proc_probes=True,
+                  expected_absent_proc_probes=absent_proc_probes[0],
+                  source_unchanged=True, selected_source_origins_checked=True,
                   native_source_hashes=pins,
                   hmp_source_hashes=hmp_pins, runtime_executable_sha256=_digest(
                       Path(sys.executable).resolve()))

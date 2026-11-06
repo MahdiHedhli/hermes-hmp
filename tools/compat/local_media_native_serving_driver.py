@@ -36,7 +36,7 @@ _TRUE = frozenset(("native_database", "native_registry", "synthetic_routing_auth
     "between_phase_authorization_change_refused", "message_change_before_fetch_refused",
     "revoked_device_refused", "listener_closed",
     "workers_joined", "borrowed_native_balanced", "native_database_close_observed",
-    "source_unchanged", "selected_source_origins_checked"))
+    "source_unchanged", "selected_source_origins_checked", "synthetic_absent_linux_proc_probes"))
 _FALSE = frozenset(("actual_image_producer", "production_qualified", "t12_qualified"))
 _ENTRY = '''import hashlib,importlib.util,json,os,sys
 from pathlib import Path
@@ -177,15 +177,17 @@ def _no_custom_tar(root, repository, label, receipt):
 def validate_report(report, native, hmp, executable_sha):
     expected = _TRUE | _FALSE | {"schema", "native_acquires", "native_releases",
         "descriptor_records_retained", "audit_denials", "scoped_native_sweep",
+        "expected_absent_proc_probes",
         "native_source_hashes", "hmp_source_hashes", "runtime_executable_sha256"}
     commands._require(type(report) is dict and set(report) == expected and
         type(report.get("schema")) is int and
         report["schema"] == 1 and all(report.get(k) is True for k in _TRUE) and
         all(report.get(k) is False for k in _FALSE))
     for key in ("native_acquires", "native_releases", "descriptor_records_retained",
-                "audit_denials", "scoped_native_sweep"):
+                "audit_denials", "scoped_native_sweep", "expected_absent_proc_probes"):
         commands._require(type(report.get(key)) is int)
-    commands._require(report["native_acquires"] > 0 and
+    commands._require(report["expected_absent_proc_probes"] > 0 and
+        report["native_acquires"] > 0 and
         report["native_acquires"] == report["native_releases"] and
         0 <= report["descriptor_records_retained"] <= 8 and
         report["audit_denials"] == report["scoped_native_sweep"] == 0 and
