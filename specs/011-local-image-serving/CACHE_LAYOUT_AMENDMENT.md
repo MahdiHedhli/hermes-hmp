@@ -1,7 +1,8 @@
 # Native generated-image cache layout amendment
 
-Status: independently source-reviewed runtime and witness amendment. Native
-cache-helper qualification remains pending; no live activation is claimed.
+Status: independently source-reviewed runtime/witness amendment and bounded
+native cache-helper sample accepted. No live activation is claimed. See
+[the current evidence](../../docs/research/local-media-native-cache-layouts-2026-11-06.md).
 
 ## Source-backed trigger
 

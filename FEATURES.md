@@ -1,3 +1,19 @@
+## Current native image-cache compatibility fixed — November 6, 2026
+
+The candidate now recognizes both legacy `cache/images` and current
+`cache/generated/images`. This fixes current native results being discarded
+before descriptor minting. Layouts remain separately bound by the original raw
+tool digest; each ancestor is descriptor-pinned and revalidated, with no arbitrary
+path or fallback to another cache.
+
+One independently source/artifact-reviewed sample used the pinned native cache
+materializer three times and served the resulting images through HMP, alongside
+the legacy control. Profile context was restored, isolation/revocation controls
+passed and native borrows/releases balanced 25/25. A separate 800-case regression
+passed. This is candidate backend evidence, not remote provider generation, phone
+display or deployment. See
+[exact evidence and open gates](docs/research/local-media-native-cache-layouts-2026-11-06.md).
+
 ## Bounded native image-serving sample completed — November 6, 2026
 
 One fresh Darwin sample completed on HMP `3d7d08c` / native `ed1afb08`, using

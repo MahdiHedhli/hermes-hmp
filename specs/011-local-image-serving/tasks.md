@@ -502,3 +502,26 @@ attempts are preserved; only one is a validated completion. Earlier incorrect
 late-file/row expectations were corrected to the established S5 contract, not
 made into a new production guarantee. Native cost/T12, Linux, actual producer,
 full plugin PM union, physical rendering and activation gates remain unchecked.
+
+
+## C1a current native cache compatibility (2026-11-06)
+
+Current native `ed1afb08` writes generated images to `cache/generated/images`;
+the legacy-only HMP selector discarded them. The independently reviewed C1a
+amendment now supports exactly that root plus `cache/images`, with flat names,
+raw-digest namespace binding, descriptor-pinned ancestor revalidation and no
+fallback. Existing ownership, flags, minimum/API policy and limits are unchanged.
+Historical source hash constants remain intact behind an exact reviewed inverse.
+
+The source `d6c79d6` native sample used the actual cache writer and response helper
+three times under scratch profile ContextVar scope, restored each token, then
+completed real native storage/HMP serving controls across both layouts. Source,
+28 artifacts, runtime, closed report and cleanup bindings were independently
+accepted read-only. Sixteen focused layout/witness checks and a separate 800-case
+regression passed.
+
+[The sample record](../../docs/research/local-media-native-cache-layouts-2026-11-06.md)
+distinguishes native cache-helper evidence from provider generation, deferred/
+Desktop runtime scope, cost/T12, Linux, complete plugin PM, phone rendering and
+activation; those gates remain open. No live permissions, settings or deployment
+changed.

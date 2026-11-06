@@ -791,4 +791,7 @@ unknown/tampered changes are not stripped and the old hash constants are unchang
 The cache-helper harness is separately source-reviewed for fixed synthetic PNG
 bytes, explicit scratch-profile ContextVar scope/reset, native success-response
 storage, both layouts and wrong-namespace shadow controls. It never calls a
-provider or downloads an image. A fresh native execution remains a separate gate.
+provider or downloads an image. The fresh bounded native cache-helper sample completed on HMP `d6c79d6` /
+native `ed1afb08`, with three materializations, restored context and independently
+accepted artifact bindings. Full provider generation, cost/T12, Linux, device,
+activation and full plugin-PM union remain separate open gates.

@@ -118,6 +118,10 @@ The plugin belongs to the Hermes instance where it is installed. Do not copy its
 ## Host-local generated images (candidate; not activated)
 
 Descriptor minting and authenticated fetch code exist in the feature candidate.
+It supports both legacy `cache/images` and current `cache/generated/images`
+through separate closed layouts, with no namespace fallback. A
+[current native cache-helper sample](research/local-media-native-cache-layouts-2026-11-06.md)
+completed alongside the legacy control.
 One [bounded native-storage/route sample](research/local-media-native-serving-sample-2026-11-06.md)
 completed with synthetic authority, and a separate descriptor/fetch regression
 passed. These results do not qualify phone display, an actual image producer,
