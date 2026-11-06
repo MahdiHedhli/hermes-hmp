@@ -255,3 +255,51 @@ async def test_final_native_current_mutation_cannot_mint_join(
         assert broker.close() and broker.close_clock()
         for key in keys.values():
             key.retire()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mutation", ["fence", "policy", "packet"])
+async def test_begin_reservation_rechecks_after_native_admission(
+    context, v2gateway, tmp_path, monkeypatch, mutation
+):
+    from hmp_plugin.presentation_remote import RemoteOperationOwner
+
+    prepared = await prepare(context, v2gateway)
+    authority, operation, _, channel, peer, _, packet, _ = prepared
+    owner, keys, broker = await handshake(prepared, tmp_path)
+    try:
+        binding = owner._operation_binding()
+        remote = authority.bind_remote(operation, channel, binding, packet)
+        original = RemoteOperationOwner._authorize_channel
+        admissions = []
+
+        def changed(owned, owned_channel, direction, scope, end, frame):
+            original(owned, owned_channel, direction, scope, end, frame)
+            admissions.append(direction)
+            if mutation == "fence":
+                owned._record_snapshot.fence.retire()
+            elif mutation == "policy":
+                owned._record_snapshot.policy_work._invalid = True
+            else:
+                owned._record_snapshot.policy_work._packet = bytes(bytearray(packet))
+
+        monkeypatch.setattr(RemoteOperationOwner, "_authorize_channel", changed)
+        with pytest.raises((FrameError, AuthorityRefusalError)):
+            await remote.begin_ready()
+        assert admissions == ["send"]
+        assert remote._send_claimed is True and remote._send_completed is False
+        assert channel._begin_write_intent is None
+        assert channel._begin_write_intent_snapshot is None
+        assert channel._begin_write_fact is None and channel._writing is False
+        record = authority._record(operation)
+        assert record.remote_operation is remote and record.child is None
+        assert record.owner.inspect(record.handle)[0] is State.UNKNOWN
+        try:
+            received = peer.recv(1)
+        except BlockingIOError:
+            received = b""
+        assert received == b""
+    finally:
+        assert broker.close() and broker.close_clock()
+        for key in keys.values():
+            key.retire()

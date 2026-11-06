@@ -82,3 +82,26 @@ Log hygiene had no captured logs to scan. That baseline full CI does not
 qualify this later source edit or any production/device/runtime behavior.
 The earlier `cc8a70f` CI failure remains historical: its two test portability/
 explicit-census failures were corrected without weakening exact-set checks.
+
+## Reservation callback-boundary regression
+
+Three additional causal cases inject listener retirement, policy invalidation or
+an equal-but-distinct policy packet immediately after the original native send
+admission. Each verifies that admission ran exactly once, the original send claim
+remains consumed, neither BEGIN intent nor write-completion fact is created, no
+application byte is sent, no child starts, and the original ledger retains
+UNKNOWN debt. The focused module passes 12 tests (1.34 seconds); configured Ruff
+passes. This supplements the earlier 928-test affected regression, not a fresh
+full-suite or physical qualification.
+
+An exploratory channel-identity mutation reached refusal but caused conservative
+channel-close uncertainty during fixture teardown; it was removed from this
+focused patch and is not included in the passing count. No runtime guard or
+cleanup refusal was relaxed to accommodate the test. A future dedicated partial
+channel-owner fixture is needed to assert that uncertain-close lifecycle without
+expecting ordinary fixture closure.
+
+Independent read-only review accepted the three additional cases. Fresh GitHub
+CI 702 passed for exact prior source `6c31d436e67fda2c818da57f34dc0172ebb331ef`,
+including plugin tests/lint/surface/privacy steps and Python 3.12–3.14 Unicode
+jobs. This observation does not qualify the later test-only delta or devices.

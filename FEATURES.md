@@ -1,3 +1,13 @@
+## Reservation security follow-up — November 6, 2026
+
+Three independently reviewed post-admission regression cases now cover listener
+retirement, policy invalidation and replacement of the original packet. The
+focused module passed 12 tests; Ruff passed. No signer or transport gate was
+opened. Fresh CI for exact source `6c31d436e67fda2c818da57f34dc0172ebb331ef`
+completed successfully: [CI 702](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42248707404).
+That CI predates these three added tests. Bot-character delivery and device
+qualification remain incomplete.
+
 ## Bot-character delivery source checkpoint — November 6, 2026
 
 [Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) contains reviewed
