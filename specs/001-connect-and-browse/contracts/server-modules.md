@@ -596,3 +596,5 @@ not weaken the closed plugin registration or optional-media import boundaries.
 - `presentation_credential_work.py`: original native work-task fixed BEGIN signing producer; no transport, GO or publication permission.
 
 - `presentation_credential_begin.py`: retained original broker-task signed BEGIN read cursor; no native input adoption or worker authority.
+
+- `presentation_credential_queued.py`: original adopted connection/key/input-receipt pre-resource queued-current check; no resource or GO permit.

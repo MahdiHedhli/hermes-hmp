@@ -38,6 +38,25 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
         observation=spine._observation,
     )
     held = {}
+    from hmp_plugin.presentation_credential_queued import CredentialQueuedOwner
+
+    original_init = CredentialQueuedOwner.__init__
+
+    def queued_init(work, service, record):
+        if mutation == "queued_factory_channel":
+            callbacks = []
+            held["callbacks"] = callbacks
+            held["original_channel"] = record.channel_snapshot
+
+            class ForeignChannel:
+                def __getattribute__(self, name):
+                    callbacks.append(name)
+                    raise AssertionError("foreign constructor channel getter")
+
+            record.channel_snapshot = ForeignChannel()
+        original_init(work, service, record)
+
+    monkeypatch.setattr(CredentialQueuedOwner, "__init__", queued_init)
     original_reserve = BrokerRegistry.reserve
     reserve_calls = []
 
@@ -73,7 +92,7 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
             channel,
             keys["broker"],
             enrollment.scope,
-            end - 100_000_000 if mutation == "earlier_accept" else end,
+            end - 100_000_000 if mutation in ("earlier_accept", "queued_after_admission") else end,
         )
         await owner.run()
         receiver = CredentialBeginReceiver.retain(owner)
@@ -88,6 +107,88 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
             with pytest.raises(FrameError):
                 BrokerServiceSpine._adopt_credential_begin(spine, record)
             assert record.ticket is ticket and record.credential_adoption_failed is False
+            work = record.credential_work_snapshot
+            assert work is record.credential_work
+            held["work"] = work
+            native = spine._registry_snapshot._record(ticket)
+            if mutation and mutation.startswith("queued_"):
+                from hmp_plugin.presentation_cancel_budget import CancellationBudget
+                from hmp_plugin.presentation_clock import NativeClockOwner
+
+                if mutation == "queued_after_admission":
+                    monkeypatch.setattr(NativeClockOwner, "sample", lambda _: receiver._end + 1)
+                elif mutation == "queued_key":
+                    keys["broker"].retire()
+                elif mutation == "queued_budget":
+                    CancellationBudget.refuse(native.cleanup_budget)
+                elif mutation == "queued_receipt":
+                    native.input_receipt = object()
+                elif mutation == "queued_grammar":
+                    record.grammar._ready = True
+                elif mutation == "queued_flags":
+                    record.credential_adoption_failed = True
+                elif mutation == "queued_deadline":
+                    monkeypatch.setattr(NativeClockOwner, "sample", lambda _: native.deadline_ns)
+                elif mutation in (
+                    "queued_final_key",
+                    "queued_foreign_refs",
+                    "queued_foreign_budget",
+                    "queued_forged_receipt",
+                    "queued_socket_receipt",
+                ):
+                    sample = NativeClockOwner.sample
+                    socket_check = SocketChannel._check
+                    callbacks = []
+                    held["callbacks"] = callbacks
+
+                    class Foreign:
+                        def __getattribute__(self, name):
+                            callbacks.append(name)
+                            raise AssertionError("foreign getter")
+
+                        def __eq__(self, other):
+                            callbacks.append("comparison")
+                            raise AssertionError("foreign comparison")
+
+                        def __iter__(self):
+                            callbacks.append("iterate")
+                            raise AssertionError("foreign reference iteration")
+
+                        def __getitem__(self, index):
+                            callbacks.append(index)
+                            raise AssertionError("foreign reference indexing")
+
+                    def changed(clock):
+                        now = sample(clock)
+                        if mutation == "queued_final_key":
+                            keys["broker"].retire()
+                        elif mutation == "queued_foreign_budget":
+                            native.cleanup_budget = Foreign()
+                        elif mutation in ("queued_forged_receipt", "queued_socket_receipt"):
+                            forged = native.input_receipt_snapshot._replace(input_sha=Foreign())
+                            native.input_receipt = native.input_receipt_snapshot = forged
+                        else:
+                            work._refs = Foreign()
+                        return now
+
+                    if mutation == "queued_socket_receipt":
+
+                        def socket_changed(channel):
+                            result = socket_check(channel)
+                            forged = native.input_receipt_snapshot._replace(input_sha=Foreign())
+                            native.input_receipt = native.input_receipt_snapshot = forged
+                            return result
+
+                        monkeypatch.setattr(SocketChannel, "_check", socket_changed)
+                    else:
+                        monkeypatch.setattr(NativeClockOwner, "sample", changed)
+                elif mutation == "queued_wrong_task":
+
+                    async def foreign_task():
+                        return work.current_queued()
+
+                    await asyncio.create_task(foreign_task())
+            assert work.current_queued() is native
             return ticket
         except FrameError:
             with pytest.raises(FrameError):
@@ -126,7 +227,7 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
         )
         raw = encode_record(value, keys["gateway"]._private_key.sign(signing_bytes(value)))
         await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, raw + frame)
-        if mutation in (None, "earlier_accept"):
+        if mutation in (None, "earlier_accept", "queued_after_admission"):
             held["ticket"] = await task
         else:
             with pytest.raises(FrameError):
@@ -137,7 +238,7 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
         await asyncio.gather(task, return_exceptions=True)
         if "record" in held:
             # Fixture closes its own local descriptors only, not registry debt.
-            channel = held["record"].channel_snapshot
+            channel = held.get("original_channel", held["record"].channel_snapshot)
             channel.close()
             channel.close_clock()
         gateway.close()
@@ -210,3 +311,64 @@ async def test_adoption_finishes_under_earlier_local_cap_without_renewing_work_e
     assert receiver._end == receiver._end_snapshot < receiver._expected["work_end_ns"]
     assert native.deadline_ns == receiver._expected["work_end_ns"]
     assert native.start_attempted is False and native.resources is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+async def test_queued_work_uses_original_work_end_after_local_admission_cap(
+    local, tmp_path, monkeypatch
+):
+    held, _ = await exchange(local, tmp_path, monkeypatch, "queued_after_admission")
+    work = held["work"]
+    assert work._initialized is True and work._refused is False
+    assert work._end == held["receiver"]._expected["work_end_ns"]
+    assert held["record"].credential_adoption_complete is True
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        "queued_key",
+        "queued_budget",
+        "queued_receipt",
+        "queued_flags",
+        "queued_final_key",
+        "queued_foreign_refs",
+        "queued_deadline",
+        "queued_wrong_task",
+        "queued_foreign_budget",
+        "queued_forged_receipt",
+        "queued_socket_receipt",
+        "queued_grammar",
+    ],
+)
+async def test_queued_current_refuses_late_drift_without_resource_or_go(
+    local, tmp_path, monkeypatch, mutation
+):
+    held, calls = await exchange(local, tmp_path, monkeypatch, mutation)
+    record, work = held["record"], held["work"]
+    assert record.credential_adoption_complete is True
+    assert calls == [record.ticket] and work._refused is True
+    native = local[0]._registry_snapshot._record(record.ticket)
+    assert native.resources is None and native.start_attempted is False
+    assert held.get("callbacks", []) == []
+    with pytest.raises(FrameError):
+        work.current_queued()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+async def test_queued_constructor_rejects_foreign_channel_before_getters(
+    local, tmp_path, monkeypatch
+):
+    held, calls = await exchange(local, tmp_path, monkeypatch, "queued_factory_channel")
+    record = held["record"]
+    assert held["callbacks"] == [] and calls == [record.ticket]
+    assert (
+        record.credential_adoption_complete is False and record.credential_adoption_failed is True
+    )
+    assert record.credential_work_snapshot._initialized is False
+    native = local[0]._registry_snapshot._record(record.ticket)
+    assert native.resources is None and native.start_attempted is False

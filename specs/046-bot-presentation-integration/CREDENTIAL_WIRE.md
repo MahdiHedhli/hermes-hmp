@@ -271,3 +271,12 @@ Neither a caller boolean nor a new/copy connection may satisfy this gate. No
 credential resource/GO path is opened by the source-only adoption seam; existing
 unsigned phase IO remains refused. Do not generically poison/retry/free a ticket
 merely to make its status match the separate failed connection attempt.
+
+## Queued pre-resource owner checkpoint
+
+The original adopted connection now retains a reviewed queued-current owner
+before adoption-complete. Its current checks bind original receipt/budget/grammar
+identity, role material, native clock and exact signed work end. It is QUEUED-only
+and cannot authorize later resource/GO phases; future entries must retain it and
+their own phase facts. Root affected regression: 1,114 passed, one skipped.
+See [evidence and limits](../../docs/research/presentation-credential-queued-current-2026-11-06.md).

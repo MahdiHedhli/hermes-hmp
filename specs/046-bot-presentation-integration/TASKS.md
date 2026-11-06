@@ -38,6 +38,10 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Implement/review original service connection/registry one-attempt queue and
       input-receipt adoption, current receiver revalidation and sticky late failure.
       Expanded affected regression: 1,099 passed, one skipped; no resources/GO.
+- [x] Implement/review the original adopted connection's queued-current owner,
+      original input/budget/grammar references, key/task/socket/work-end checks
+      and callback-boundary refusal tests; 1,114 affected passed, one skipped.
+      No resource or GO permission is minted; partial owner is retained on failure.
 - [ ] Wire only through qualified production startup/service dispatch; preserve
       the exact original adopted connection plus current native phase authority
       before any credential resource/GO path. Ticket/capacity alone is insufficient.

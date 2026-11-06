@@ -1,24 +1,23 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now contains the
-reviewed original-service one-attempt credential input adoption seam. It preserves
-the exact connection/task/registry/receiver join, replay/capacity gates, original
-deadlines and one-time input binding. Late failures retain their ticket/receipt
-with a sticky connection refusal. No worker or GO is started.
-Final expanded affected regression: **1,099 passed, one skipped**, 27.90 seconds,
-including existing registry/replay tests; configured lint passed. Independent
-review was source-only. See [evidence and limits](docs/research/presentation-credential-service-adoption-2026-11-06.md).
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) includes the
+reviewed original adopted connection's pre-resource queued-current owner. It
+checks original registry/input/grammar/budget ownership, current role material,
+original task and signed work deadline; late revocation/refusal stays sticky.
+It is retained before adoption-complete and grants no resource or GO permission.
+Final affected regression: **1,114 passed, one skipped**, 29.72 seconds;
+configured lint passed. Independent review was source-only.
+See [evidence and limits](docs/research/presentation-credential-queued-current-2026-11-06.md).
 
-The preceding receiver source `87bc9a9` passed
-[CI712](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42254661824): 8,286 tests,
-190 subtests, 33 skips and 18 warnings, plus plugin checks and Unicode jobs on
-Python 3.12–3.14. That does not qualify the newer adoption source.
+Earlier adoption source `778d100` passed
+[CI716](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42256612745): 8,292 tests,
+190 subtests, 33 skips, 18 warnings; plugin checks and Python 3.12–3.14 Unicode
+jobs passed. That result does not qualify the newer queued-current owner.
 
-No production dispatcher uses this seam yet. Runtime/source/key admission,
-remaining signed phases/direct writers/cleanup, resource/GO/result/terminal/native
-publication, STATUS and physical/release qualification remain open. A queued
-registry ticket is not phase permission. Desktop character delivery is not yet
-available; unsigned transport remains closed. No live host/device changed.
+Production runtime/source/key startup, remaining signed work/cleanup/direct IO,
+resource/GO/result/terminal/native publication, STATUS and physical/release
+qualification remain open. Desktop character delivery is not yet available;
+unsigned transport remains closed. No live host/device changed.
 
 ## Native image verification checkpoint — November 6, 2026
 

@@ -1252,6 +1252,7 @@ class _Connection:
         self.credential_adoption_complete = False
         self.credential_adoption_failed = False
         self.credential_grammar_snapshot = None
+        self.credential_work = self.credential_work_snapshot = None
 
 
 class ServiceAcquisitionError(FrameError):
@@ -1645,6 +1646,12 @@ class BrokerServiceSpine:
             BrokerServiceSpine._current(self)
             _require(CredentialBeginReceiver._completed_current(receiver) is result)
             retained()
+            from .presentation_credential_queued import CredentialQueuedOwner
+
+            _require(record.credential_work is None and record.credential_work_snapshot is None)
+            work = CredentialQueuedOwner.__new__(CredentialQueuedOwner)
+            record.credential_work = record.credential_work_snapshot = work
+            CredentialQueuedOwner.__init__(work, self, record)
             record.credential_adoption_complete = True
             return ticket  # queued input only, no worker/resources/GO authority
         except asyncio.CancelledError:
