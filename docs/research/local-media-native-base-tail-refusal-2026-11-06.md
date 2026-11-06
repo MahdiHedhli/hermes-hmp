@@ -37,6 +37,10 @@ commands without expiry or settlement in that prefix. Both refused attempts
 remain excluded. Prefix proof SHA-256:
 `f6d139a0a22e376f904994504c8e0e23075bccb66ff5140bfd06bc77070b8440`.
 This accepts only the completed prefix; it does not complete the parent run. The full-301 collector was not run and must
-reject this terminal failed state. All 120 never-started phases, the newly
-refused two phases, supplemental native execution, final composite coverage,
-production activation and device/release qualification remain open.
+reject this terminal failed state. The separate follow-up source 5e247a6 later completed all 120 never-started
+phases and two explicitly reviewed fresh single-phase Phone observations; their
+artifacts and cleanup were independently accepted. Those observations do not
+rehabilitate the paired refusal or establish its timing cause. The 144-phase
+child-lineage supplement is now running; its completion/artifact acceptance, final
+composite/native feature coverage, activation and device/release qualification
+remain open.

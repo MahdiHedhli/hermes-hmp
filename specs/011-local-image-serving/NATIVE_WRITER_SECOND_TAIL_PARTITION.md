@@ -37,3 +37,15 @@ Independent read-only source review accepted exact catalog/type/order checks,
 phase preservation and the absence of retry or execution authority. No execution owner or native run is added
 by this slice. Full-matrix, composite coverage, image activation and physical/
 release qualification remain open.
+
+## Observed follow-up, independently accepted
+
+The separately reviewed private controller 0ae34f9c executed the full planned
+120 never-started single-phase scope from exact CI-tested source 5e247a6. Its
+parent and collector reached terminal 0, and independent readback accepted all
+3,120 artifacts, 1,508,640 copied source identities, 240 outcomes and 1,200
+known command receipts without expiry/settlement. Every phase had balanced
+39/39 borrows and closed DB/listener/workers/hooks/writer state; audit/sweep
+were zero. This accepts only those observations. Both historical paired attempts
+remain refused. Final composite/native feature and physical/release qualification
+remain open.
