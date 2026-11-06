@@ -42,6 +42,13 @@ historical, not an alternative live authorization path or resolved incident.
       original input/budget/grammar references, key/task/socket/work-end checks
       and callback-boundary refusal tests; 1,114 affected passed, one skipped.
       No resource or GO permission is minted; partial owner is retained on failure.
+- [x] Refuse legacy direct GO/CANCEL/result IO on credential channels before native
+      claims; preserve known-refusal grammar/budget and original controller task.
+      Affected regression: 1,116 passed, one skipped. No signed control activation.
+- [x] Review the fixed original [signed control handoff contract](SIGNED_CONTROL_OWNER.md).
+- [ ] Implement the actual signed GO/CANCEL receiver/context on the existing original
+      controller task/cursor and frozen budget before any credential resource/READY
+      startup. No legacy fallback, new parser task or boolean gate opening.
 - [ ] Wire only through qualified production startup/service dispatch; preserve
       the exact original adopted connection plus current native phase authority
       before any credential resource/GO path. Ticket/capacity alone is insufficient.

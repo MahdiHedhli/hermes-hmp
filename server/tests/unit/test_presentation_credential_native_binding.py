@@ -97,6 +97,13 @@ async def test_handshake_binds_exact_native_packet_and_original_shared_slot(
     try:
         binding = owner._operation_binding()
         remote = authority.bind_remote(operation, channel, binding, packet)
+        from hmp_plugin.presentation_result_transport import RemoteResultOwner
+
+        with pytest.raises(FrameError, match="PHASE_INTEGRATION_REQUIRED"):
+            RemoteResultOwner.retain(remote)
+        assert remote._result_owner is None and remote._result_owner_snapshot is None
+        assert remote._job_origin_snapshot._remote_candidate_custody_origin is None
+        assert remote._job_origin_snapshot._remote_candidate_custody_snapshot is None
         fact = remote._credential_binding
         assert fact is owner._native_input is owner._native_input_snapshot
         assert fact.remote is remote and fact.packet is packet and fact.binding is binding

@@ -1,23 +1,23 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) includes the
-reviewed original adopted connection's pre-resource queued-current owner. It
-checks original registry/input/grammar/budget ownership, current role material,
-original task and signed work deadline; late revocation/refusal stays sticky.
-It is retained before adoption-complete and grants no resource or GO permission.
-Final affected regression: **1,114 passed, one skipped**, 29.72 seconds;
-configured lint passed. Independent review was source-only.
-See [evidence and limits](docs/research/presentation-credential-queued-current-2026-11-06.md).
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now explicitly
+refuses legacy raw GO/CANCEL and direct result IO on credential channels. Known
+mode refusal precedes native task/custody claims and preserves the valid grammar/
+budget. Existing legacy unsigned channels are unchanged. Original controller
+reinitialization cannot replace its retained task/cursor.
+Affected regression: **1,116 passed, one skipped**, 29.86 seconds; configured lint
+passed. Independent review was source-only. See [source evidence and limits](docs/research/presentation-credential-no-legacy-io-2026-11-06.md).
 
-Earlier adoption source `778d100` passed
-[CI716](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42256612745): 8,292 tests,
+The [signed control handoff contract](specs/046-bot-presentation-integration/SIGNED_CONTROL_OWNER.md)
+is reviewed; actual signed GO/CANCEL must precede credential resource/READY
+startup. Those paths are not implemented or opened. Remaining signed/direct IO,
+production startup, native publication, STATUS and physical/release qualification
+remain open. Character delivery is not yet available. No live host/device changed.
+
+Earlier queued owner `baf2212` passed
+[CI718](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42258615640): 8,307 tests,
 190 subtests, 33 skips, 18 warnings; plugin checks and Python 3.12–3.14 Unicode
-jobs passed. That result does not qualify the newer queued-current owner.
-
-Production runtime/source/key startup, remaining signed work/cleanup/direct IO,
-resource/GO/result/terminal/native publication, STATUS and physical/release
-qualification remain open. Desktop character delivery is not yet available;
-unsigned transport remains closed. No live host/device changed.
+jobs passed. That result does not qualify the newer fallback-refusal fix.
 
 ## Native image verification checkpoint — November 6, 2026
 

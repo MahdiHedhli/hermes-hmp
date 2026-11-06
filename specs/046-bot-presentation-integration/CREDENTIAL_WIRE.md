@@ -280,3 +280,12 @@ identity, role material, native clock and exact signed work end. It is QUEUED-on
 and cannot authorize later resource/GO phases; future entries must retain it and
 their own phase facts. Root affected regression: 1,114 passed, one skipped.
 See [evidence and limits](../../docs/research/presentation-credential-queued-current-2026-11-06.md).
+
+## Direct IO fallback boundary
+
+Legacy raw GO/CANCEL and result IO explicitly refuse credential-attached channels
+before claims or bytes; normal legacy channels remain unchanged. Signed control
+is not implemented. Resource startup must wait for the actual original signed
+control context/cursor, not merely an existing legacy controller object. The
+reviewed [control contract](SIGNED_CONTROL_OWNER.md) fixes its task, phase and
+earliest-budget requirements; no dispatcher/generic work gate is opened here.

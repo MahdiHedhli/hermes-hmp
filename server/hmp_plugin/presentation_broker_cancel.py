@@ -111,12 +111,17 @@ class BrokerCancellationOwner:
                 or channel._cancel_receiver is not None
                 or channel._cancel_receiver_snapshot is not None):
             _refuse()
+        # This reader only understands unsigned v2 controls. Credential channels
+        # require their separate original signed-record cursor, never fallback.
+        SocketChannel._credential_work_ready(channel)
         owner = BrokerCancellationOwner.__new__(BrokerCancellationOwner)
         channel._cancel_receiver = channel._cancel_receiver_snapshot = owner
         BrokerCancellationOwner.__init__(owner, channel, registry, ticket, grammar)
         return owner
 
     def __init__(self, channel, registry, ticket, grammar):
+        if type(self) is not BrokerCancellationOwner or "_initialized" in vars(self):
+            _refuse()  # never replace an original task/cursor or partial failure
         self._channel = self._channel_snapshot = self._io_channel_origin = channel
         self._registry = self._registry_snapshot = registry
         self._ticket = self._ticket_snapshot = ticket
@@ -143,8 +148,7 @@ class BrokerCancellationOwner:
         self._allocation = self._allocation_snapshot = None
         self._task_initialized = self._task_initialized_snapshot = None
         self._scope = self._scope_snapshot = None
-        self._failure_origin = self._failure_origin_snapshot = (
-            grammar if type(grammar) is OperationGrammar else None, None)
+        self._failure_origin = self._failure_origin_snapshot = (None, None)
         self._buffer = self._buffer_snapshot = self._buffer_origin = bytearray()
         self._wire_received = self._frame_start = 0
         self._pending = self._waiter = None
@@ -155,6 +159,11 @@ class BrokerCancellationOwner:
         self._loop = self._loop_snapshot = asyncio.get_running_loop()
         self._context = self._context_snapshot = (os.getpid(), os.geteuid(), threading.get_ident())
         try:
+            if type(channel) is not SocketChannel:
+                _refuse()
+            SocketChannel._credential_work_ready(channel)
+            self._failure_origin = self._failure_origin_snapshot = (
+                grammar if type(grammar) is OperationGrammar else None, None)
             if type(registry) is not BrokerRegistry or type(ticket) is not BrokerTicket:
                 _refuse()
             # Capture original failure custody under the existing registry lock,
@@ -243,6 +252,10 @@ class BrokerCancellationOwner:
         if (type(c) is not SocketChannel or c is not self._io_channel_origin
                 or type(scope) is not tuple or len(scope) != 10):
             _refuse()
+        if reader:
+            # Covers a later credential attachment too. Local owned cleanup
+            # (reader=False) remains separate from refusing remote control IO.
+            SocketChannel._credential_work_ready(c)
         _binding(scope[1])  # exact closed field types before any dataclass equality
         SocketChannel._bindings(c)  # exact enrollment types before any field/property reads
         if (self._initialized is not True

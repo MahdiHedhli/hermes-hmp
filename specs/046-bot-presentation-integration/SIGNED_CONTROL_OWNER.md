@@ -1,0 +1,99 @@
+# Signed GO/CANCEL handoff before credential resource startup
+
+Status: implementation contract; signed control is NOT implemented. Legacy raw
+control and result paths must refuse a credential-attached channel. Resource/READY
+startup remains closed until the concrete signed control receiver is retained.
+This changes no minimum-version policy and disables no legacy unsigned channel.
+
+## Fixed original entry and task ownership
+
+The planned source entry is `BrokerCancellationOwner.retain_credential(queued_owner)`.
+It takes only the exact original `CredentialQueuedOwner`, never a caller channel,
+registry, packet, key, phase, digest or enable flag. On its original service task,
+join the original connection/shared registry/ticket/receipt/budget/grammar/channel
+and completed BEGIN reader; require successful adoption and the current queued
+native phase. Retain the control owner before initialization effects. Preserve
+any partial owner/task and the consumed original attempt on failure.
+
+Keep `retain` and direct legacy `__init__` closed to credential channels. A signed
+entry must use an exact separate retained credential context, not bypass their
+refusal by temporarily clearing handshake fields or setting a boolean. Its
+context retains the original startup role material, installed generation, native
+clock, signed input/scope/transcript and work end from the original owners.
+
+Use the existing single `_TaskSlot`/`_TaskAllocation` and fixed reader coroutine.
+Bind credential context to that actual initialized Task/coroutine/slot before
+`_initialized` is published. Default native loop/no eager/custom factory remains
+required. Partial initialization leaves `_failed` and no read eligibility. Do not
+relax the handshake task guard. Distinguish the original service caller's current
+checks, the actual controller reader allocation and local owned cleanup; no
+other task/name/copied allocation may borrow either role.
+
+## One cursor and exact signed phase
+
+The same original controller cursor reads a bounded HBA1 record before each HBR1
+control. Do not add a second reader/parser Task. Before body reads, verify pinned
+gateway/broker key identities, current role generation and all original context:
+iid/listener/channel/boots/transcript/operation, input/scope hashes, exact original
+signed work end, phase/direction and the existing grammar sequence. No independent
+renewable auth counter: GO uses client sequence 1; CANCEL uses the actual remaining
+client sequence before or after GO, at most one GO and one CANCEL.
+
+Check the bounded HBR1-v2 header against that retained commitment before its body,
+then hash/compare the entire actual header/body on the original cursor. GO has no
+body; CANCEL has the existing exact 16-byte CancellationWindow. Stage signed
+metadata only; constructing a consistency object cannot mint a GO/CANCEL receipt.
+Mint the existing native receipt/future only after original complete-read,
+authentication/scope/clock/budget/grammar checks all succeed. Typed signature/read
+context must remain joined to those actual receipt objects at later service use.
+No unsigned, v1, copied-frame or caller-data fallback is allowed.
+
+The original controller bound becomes at most two signed records (2*2048 bytes)
+plus its existing two HBR1 control frames (2*(8+1024+16)): 6,192 wire bytes. This
+must remain within the existing whole-channel 2,050,288 and cleanup-subset 13,384
+limits. Counters are lifetime counts, not memory/latency guarantees. Keep original
+consumed offsets, pending read intent and uncertain readiness registration debt.
+On terminal refusal clear transient payload aliases/context and wipe only the
+captured original private buffer; never follow a substituted buffer for cleanup.
+
+## Cancellation is not a new budget
+
+An unauthenticated HBA1 prefix or unverified signed claim cannot be treated as a
+remote CANCEL cause or adopt a remote window. Work expiry/local Task cancellation
+may still independently freeze qualified local cleanup on the original budget.
+Only authenticated original-scope control and a completely validated native
+window may use the existing remote receive/adoption operation. Preserve the
+first cause and earliest end, including work expiry or an earlier local cause;
+never add a handshake timeout, restart a cleanup interval or retry ambiguous IO.
+An authenticated CANCEL intent may conservatively stop work before complete body
+validation, but cannot adopt a body-supplied window or mint a completed receipt.
+
+Current key/config/source generation retirement stops remote authentication and
+phase effects, including cleanup messages. It must not prevent solely local
+cleanup of already owned resources under the original frozen budget. Keep those
+checks separate; `reader=False` cleanup is not permission for network writes.
+
+## Resource/READY and later work stay gated
+
+Before any credential `start_resources`, retain this actual signed controller,
+its original Task and current context. A legacy controller object or future is
+insufficient. Preserve queue capacity checks and original one-attempt resource
+intent. READY must be a fixed broker signature produced from the actual original
+resource/input-staged facts, not from queue admission alone. Actual native GO
+requires both the authenticated complete GO receipt and existing fresh phase/
+resource/native checks. RESULT/TERMINAL/ACK/direct writers and native publication
+must independently join their own original facts. No generic sign API or premature
+opening of `_credential_work_ready` follows from this contract.
+
+## Required causal acceptance
+
+Cover successful GO, CANCEL-before-GO and CANCEL-after-GO on the actual original
+allocation/cursor; original service/registry/input/budget/grammar joins; wrong task,
+instance/profile/operation/transcript/sequence and revoked generation; signature,
+header/body/hash/window failures; unauthenticated CANCEL-prefix no adoption;
+partial auth/header/body and ambiguous readiness/cancellation; first-cause/earliest
+budget conservation, work-end expiry and key retirement during work/cleanup;
+foreign getter/index/comparison/buffer tripwires; no task/owner claim or budget/
+grammar mutation on known legacy-mode refusal; no duplicate receipt, retry or
+resource/GO effect after refusal. Keep synthetic/native/device/release evidence
+and local descriptor cleanup distinct from actual registry/native debt release.

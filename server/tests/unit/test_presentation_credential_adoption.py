@@ -107,6 +107,44 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
             with pytest.raises(FrameError):
                 BrokerServiceSpine._adopt_credential_begin(spine, record)
             assert record.ticket is ticket and record.credential_adoption_failed is False
+            if mutation == "legacy_control":
+                from hmp_plugin.presentation_broker_cancel import BrokerCancellationOwner
+                from hmp_plugin.presentation_cancel_budget import CancellationBudget
+                from hmp_plugin.presentation_result_transport import BrokerResultWriter, _native_io
+
+                native = spine._registry_snapshot._record(ticket)
+                original_budget = CancellationBudget.inspect(native.cleanup_budget)
+                with pytest.raises(FrameError, match="PHASE_INTEGRATION_REQUIRED"):
+                    BrokerCancellationOwner.retain(
+                        channel, spine._registry_snapshot, ticket, record.grammar
+                    )
+                assert (
+                    channel._cancel_receiver is None and channel._cancel_receiver_snapshot is None
+                )
+                assert CancellationBudget.inspect(native.cleanup_budget) == original_budget
+                # Direct initialization is also rejected before capturing another
+                # operation's failure custody or scheduling native Tasks/Futures.
+                direct = BrokerCancellationOwner.__new__(BrokerCancellationOwner)
+                grammar_before = dict(record.grammar.__dict__)
+                with pytest.raises(FrameError):
+                    BrokerCancellationOwner.__init__(
+                        direct, channel, spine._registry_snapshot, ticket, record.grammar
+                    )
+                assert record.grammar.__dict__ == grammar_before
+                assert CancellationBudget.inspect(native.cleanup_budget) == original_budget
+                assert direct._failure_origin_snapshot == (None, None)
+                assert direct._allocation_snapshot is None and direct._slot_snapshot.task is None
+                assert direct._go_future_snapshot is None and direct._cancel_future_snapshot is None
+                assert (
+                    channel._cancel_receiver is None and channel._cancel_receiver_snapshot is None
+                )
+                with pytest.raises(FrameError, match="PHASE_INTEGRATION_REQUIRED"):
+                    BrokerResultWriter.retain(spine, record, receiver._result_snapshot.packet)
+                assert record.result_writer is None and record.result_writer_snapshot is None
+                assert channel._result_writer is None and channel._result_writer_snapshot is None
+                with pytest.raises(FrameError, match="PHASE_INTEGRATION_REQUIRED"):
+                    _native_io(channel)
+                held["legacy_refused"] = True
             work = record.credential_work_snapshot
             assert work is record.credential_work
             held["work"] = work
@@ -227,7 +265,7 @@ async def exchange(local, tmp_path, monkeypatch, mutation=None):
         )
         raw = encode_record(value, keys["gateway"]._private_key.sign(signing_bytes(value)))
         await asyncio.get_running_loop().sock_sendall(gateway._socket_snapshot, raw + frame)
-        if mutation in (None, "earlier_accept", "queued_after_admission"):
+        if mutation in (None, "earlier_accept", "queued_after_admission", "legacy_control"):
             held["ticket"] = await task
         else:
             with pytest.raises(FrameError):
@@ -372,3 +410,14 @@ async def test_queued_constructor_rejects_foreign_channel_before_getters(
     assert record.credential_work_snapshot._initialized is False
     native = local[0]._registry_snapshot._record(record.ticket)
     assert native.resources is None and native.start_attempted is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("local", [2], indirect=True)
+async def test_credential_channel_refuses_legacy_control_and_result_before_claims(
+    local, tmp_path, monkeypatch
+):
+    held, calls = await exchange(local, tmp_path, monkeypatch, "legacy_control")
+    assert held["legacy_refused"] is True and calls == [held["ticket"]]
+    assert held["record"].credential_adoption_complete is True
+    assert held["work"]._refused is False
