@@ -113,7 +113,9 @@ def test_supplement_runs_only_additions_without_claiming_full_matrix(tmp_path, m
 
 
 @pytest.mark.parametrize("scope", [None, True, "resume", "all", ""])
-def test_unknown_execution_scope_refuses_before_state_or_pair_creation(tmp_path, monkeypatch, scope):
+def test_unknown_execution_scope_refuses_before_state_or_pair_creation(
+    tmp_path, monkeypatch, scope
+):
     module, root, calls = fixture(tmp_path, monkeypatch)
     with pytest.raises(RuntimeError):
         module.run_matrix(root, tmp_path / "native", "a" * 40, "b" * 40, scope=scope)
