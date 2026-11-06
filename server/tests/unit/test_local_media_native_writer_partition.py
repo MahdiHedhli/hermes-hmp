@@ -121,3 +121,29 @@ def test_supplement_cannot_adopt_a_changed_or_ambiguous_catalog(mutation):
         plan = list(plan)
     with pytest.raises(RuntimeError):
         module.supplemental_plan(plan)
+
+
+def test_explicit_per_phase_layout_preserves_every_historical_supplement_coordinate():
+    module = load()
+    catalog = module.contract.paired_plan()
+    paired = module.supplemental_plan(catalog)
+    single = module.supplemental_plan(catalog, layout='per_phase_v2')
+    def expand(plan):
+        return [(job['origin_pair'], phase, job['case'], job['selector'],
+                 catalog[job['origin_pair']][2][phase])
+                for job in plan['jobs'] for phase in job['origin_phases']]
+    assert expand(paired) == expand(single)
+    assert len(single['jobs']) == single['planned_phases'] == 144
+    assert single['layout'] == 'per_phase_v2' and paired['layout'] == 'heavy_only_v1'
+    assert all(len(job['origin_phases']) == 1 and type(job['request']) is str
+               and job['request'] == catalog[job['origin_pair']][2][job['origin_phases'][0]]
+               for job in single['jobs'])
+    assert single['full_matrix_completed'] is False
+    assert single['execution_admission_review_required'] is True
+
+
+@pytest.mark.parametrize('layout', [True, None, 'auto', 'retry', 'per_phase', []])
+def test_unknown_or_automatic_supplement_layout_is_not_execution_admission(layout):
+    module = load()
+    with pytest.raises(RuntimeError):
+        module.supplemental_plan(module.contract.paired_plan(), layout=layout)

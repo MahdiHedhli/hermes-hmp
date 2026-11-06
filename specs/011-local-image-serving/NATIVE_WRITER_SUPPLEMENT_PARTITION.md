@@ -60,3 +60,28 @@ started from this executor. Actual execution admission waits for the current
 base-tail batch to become authoritatively terminal and its ownership/debt to be
 reconciled. Independent source-bound artifact acceptance and composite coverage
 remain separate requirements.
+
+## Explicit per-phase layout amendment
+
+After the separate base-tail paired Phone case 6 exceeded its original
+observation limit, no cause or timing improvement is inferred. That failed case
+was not full-prompt; heavy-only splitting did not establish margin for all
+workloads. Both historical refused attempts remain excluded and unchanged.
+
+The pure supplemental planner and runner now accept an explicit `layout`:
+`heavy_only_v1` retains the reviewed historical 90-job layout and remains the
+default; `per_phase_v2` maps the exact same ordered 144 phases to 144 separate
+single-phase jobs. Case, selector, expanded-catalog origin and phase coordinates,
+full phase workload, both proof contexts and expected outcomes are unchanged.
+The original child observation limit and actual retained-settlement contract
+are unchanged. This is fixture partitioning, not a smaller coverage requirement.
+
+The selected layout is recorded in the plan/journal. Unknown, ambiguous and
+`auto` values refuse before journaling. No layout is selected or changed because
+of a failed receipt; no automatic fallback, retry or attempted-root adoption is
+added. The supplemental scope itself includes neither historical base refusal.
+Its caller still needs separately reviewed actual native admission and artifact
+acceptance. This amendment has not executed a native job or established timing
+margin. Root's 45 pure/fake-driver cases and lint pass. Independent read-only
+source review accepted ordered coordinate equivalence and the absence of
+implicit switching, retry, authority or deadline changes.

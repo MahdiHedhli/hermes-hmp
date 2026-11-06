@@ -120,3 +120,23 @@ def test_invalid_admission_has_no_native_call(tmp_path, monkeypatch, bad):
     with pytest.raises(RuntimeError):
         run(module, root, cache)
     assert not calls
+
+
+def test_explicit_single_phase_execution_keeps_scope_without_switch(tmp_path, monkeypatch):
+    module, root, calls, _ = setup(tmp_path, monkeypatch)
+    state = module.run_supplement(root, Path('/unused-native'), NATIVE, SOURCE,
+                                  native_archive_cache=('explicit', 'cache'),
+                                  layout='per_phase_v2')
+    assert state['layout'] == 'per_phase_v2'
+    assert len(calls) == len(state['completed']) == state['phases_planned'] == 144
+    assert all(type(kwargs['binding_writer']) is str for _, kwargs in calls)
+    assert state['full_matrix_completed'] is False and state['production_qualified'] is False
+    assert state['scope_execution_completed'] is True
+
+
+def test_invalid_layout_refuses_before_creating_a_journal_or_job(tmp_path, monkeypatch):
+    module, root, calls, _ = setup(tmp_path, monkeypatch)
+    with pytest.raises(RuntimeError):
+        module.run_supplement(root, Path('/unused-native'), NATIVE, SOURCE,
+                              native_archive_cache=('explicit', 'cache'), layout='auto')
+    assert not calls and not any(root.iterdir())

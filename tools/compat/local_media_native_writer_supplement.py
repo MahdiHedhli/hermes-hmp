@@ -22,7 +22,7 @@ ALLOWANCE = 1024 ** 3
 
 
 def run_supplement(root, native_repository, native_commit, expected_hmp_commit, *,
-                   native_archive_cache):
+                   native_archive_cache, layout="heavy_only_v1"):
     """Run the reviewed new scope once; retain every attempted root on failure.
 
     This is not a continuation API. Any interrupted or attempted run needs its
@@ -32,12 +32,12 @@ def run_supplement(root, native_repository, native_commit, expected_hmp_commit, 
     require(driver._sha(native_commit) and driver._sha(expected_hmp_commit))
     driver.validate_archive_cache(native_archive_cache)
     require(native_archive_cache is not None)
-    plan = partition.supplemental_plan(partition.contract.paired_plan())
+    plan = partition.supplemental_plan(partition.contract.paired_plan(), layout=layout)
     require(type(root) is type(Path()) and root.is_absolute() and root.resolve() == root)
     info = root.lstat()
     require(stat.S_ISDIR(info.st_mode) and info.st_uid == os.geteuid() and
             stat.S_IMODE(info.st_mode) == 0o700 and not any(root.iterdir()))
-    state = {"schema": 1, "scope": plan["scope"], "stage": "prepared",
+    state = {"schema": 1, "scope": plan["scope"], "layout": plan["layout"], "stage": "prepared",
              "source": expected_hmp_commit, "native": native_commit,
              "catalog_source": plan["catalog_source"],
              "catalog_sha256": plan["catalog_sha256"],
