@@ -707,3 +707,5 @@ limitation is reclassified as a fix or a physical/release qualification.
   integration/admission; supplemental144 and final composite coverage still open.
 
 - [x] Independently review the pure [child-lineage supplement partition](NATIVE_WRITER_SUPPLEMENT_PARTITION.md): preserve all 144 added phases in 90 prospective jobs, exact expanded-catalog coordinates, heavy-only splitting and no execution authority. Root 23 pure partition cases and independent source review pass; native supplemental execution/admission and final composite coverage remain open.
+- [x] Independently review the explicit supplemental-only execution owner: fresh roots, per-job capacity/source/cache checks, pre-effect attempt record, retained failure and no replay. Root 13 causal models plus 23 pure partition tests and lint pass. No native supplement run is claimed.
+- [ ] Admit and execute the reviewed supplemental scope after the active base-tail batch becomes authoritatively terminal; independently verify all actual source/runtime/report/command/checkpoint and cleanup artifacts before composite acceptance.

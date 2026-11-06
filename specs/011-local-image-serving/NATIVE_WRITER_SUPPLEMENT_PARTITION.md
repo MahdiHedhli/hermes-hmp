@@ -32,3 +32,31 @@ Root's 23 pure partition tests pass, including an independently enumerated
 source review accepted the exact catalog, coverage, type/order guards and absence
 of execution authority. No supplemental native execution, composite coverage,
 production image delivery or physical/release qualification is claimed here.
+
+## Explicit supplemental execution owner
+
+`local_media_native_writer_supplement.run_supplement` now provides a separate,
+inert-on-import fixture runner for this exact new scope. Independent read-only
+source review accepted its preparation contract. Root's 13 fake-driver causal
+checks plus 23 pure partition cases pass; lint passes. The causal checks cover
+attempt journaling before execution, exact plan forwarding, completion scope,
+capacity loss between jobs, child failure/cancellation, wrong source/native/report
+receipts, nonempty/symlink/nonprivate roots and refusal to reuse an attempted root.
+These models do not execute native operations or establish timing margin.
+
+Admission requires explicit source/native pins and a reviewed archive cache.
+Each job receives a fresh private root; a 32 GiB reserve plus 1 GiB allowance is
+checked before every job. This checks available capacity rather than reserving
+physical space. The existing driver binds actual HEAD/source/runtime/archive
+identities and retains the actual child across observation expiry. The runner
+records an attempt before driver effects, stops all later admission on exception
+or ambiguous receipt, and never retries/adopts/deletes an attempted root. If a
+journal write itself fails, retained child receipts remain necessary evidence;
+absence of a final parent journal is not permission to resume or replay.
+
+Successful completion reports only supplemental execution pending artifact
+review. Full-matrix and production flags remain false. No native run has been
+started from this executor. Actual execution admission waits for the current
+base-tail batch to become authoritatively terminal and its ownership/debt to be
+reconciled. Independent source-bound artifact acceptance and composite coverage
+remain separate requirements.

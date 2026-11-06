@@ -16,6 +16,11 @@ Supplemental native execution, composite coverage acceptance, production image
 activation and physical/release qualification remain open. Earlier checkpoint
 sections below retain their dated scope and are not fresh completion claims.
 
+The explicit supplemental-only runner is also source-reviewed: 13 fake-driver
+failure/admission causals plus 23 pure partition tests and lint pass. It requires
+fresh roots, source/cache pins and per-job capacity checks, and never resumes a
+failed attempt. Native supplemental execution has not started.
+
 ## Heavy-case fresh partition samples reviewed — November 6, 2026
 
 Two separately reviewed fresh single-phase experiments at `5c96927` completed
