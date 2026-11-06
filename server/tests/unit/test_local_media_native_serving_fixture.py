@@ -218,3 +218,12 @@ def test_builtin_mime_setup_ignores_host_files_and_registry(tmp_path, monkeypatc
     module._builtin_mime_types()
     assert mimetypes.guess_type("image.png") == ("image/png", None)
     assert mimetypes.guess_type("image.hmp_private") == (None, None)
+
+
+def test_sqlite_guard_admits_only_exact_fileless_memory_form(tmp_path):
+    module = load()
+    assert module._checked_sqlite_path(":memory:", tmp_path) is None
+    for value in ("", "memory:", "file::memory:", "file::memory:?cache=shared", b":memory:"):
+        with pytest.raises((RuntimeError, TypeError)):
+            module._checked_sqlite_path(value, tmp_path)
+    assert list(tmp_path.iterdir()) == []

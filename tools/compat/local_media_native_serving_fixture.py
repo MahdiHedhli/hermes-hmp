@@ -67,6 +67,8 @@ def _inventory_sources(base):
 def _checked_sqlite_path(raw, root):
     text = os.fspath(raw)
     _require(type(text) is str and "\x00" not in text)
+    if text == ":memory:":
+        return None  # Native schema comparison uses a connection-private, fileless database.
     if text.startswith("file:"):
         parts = urlsplit(text)
         _require(parts.scheme == "file" and parts.netloc == "" and
