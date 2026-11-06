@@ -338,3 +338,8 @@ historical, not an alternative live authorization path or resolved incident.
       retirement and distinct BEGIN-derived signer contract in
       [SIGNED_PRE_READY_CLEANUP.md](SIGNED_PRE_READY_CLEANUP.md). No fabricated
       READY transition, replacement reader, unsigned fallback or ACK inference.
+
+- [x] Implement/review cancellation-only local retirement of the original signed
+      READY wait: exact minted selector proof, original Task done+cancelled for
+      historical release, payload-free count fact and wiped bytes. Seven causals
+      and 104 READY-reader module tests pass; no pre-READY CANCEL/ACK enabled.

@@ -29,7 +29,12 @@ from .presentation_credential_scope import derive_input_scope
 from .presentation_credential_transcript import check_transcript
 from .presentation_credential_work import NativePhaseWorkOwner
 from .presentation_jobs import FrameError, RemotePhase
-from .presentation_readiness import SelectorReadiness
+from .presentation_readiness import (
+    _CANCEL_RETIREMENT_MINT,
+    SelectorReadiness,
+    _CancelledWaitRetirement,
+    _ReadinessCancelledError,
+)
 from .presentation_remote import RemoteOperationOwner
 from .presentation_remote_cleanup import _TASK
 
@@ -38,6 +43,37 @@ _FILENO = socket.socket.fileno
 _TIMEOUT = socket.socket.gettimeout
 _LIMIT = RECORD_LIMIT + 8 + HEADER_LIMIT
 _READY_READ_MINT = object()
+_READY_CANCEL_MINT = object()
+
+
+class _ReadyWaitRetirement(NamedTuple):
+    mint: object
+    scope: object
+    readiness: object
+    consumed: int
+    target: int
+    values: bytes
+
+    def __repr__(self):
+        return "<ReadyWaitRetirement local-only redacted>"
+
+
+class _ReadyReadRetirement(NamedTuple):
+    mint: object
+    scope: object
+    readiness: object
+    consumed: int
+    target: int
+
+    def __repr__(self):
+        return "<ReadyReadRetirement payload-free local-only>"
+
+
+class _OwnedReadyWaitCancelled(asyncio.CancelledError):
+    def __init__(self, receipt):
+        super().__init__()
+        self.receipt = receipt
+
 
 
 def _require(value):
@@ -105,6 +141,7 @@ class NativeReadyReceiver:
         owner._last_read = None
         owner._transition = owner._transition_snapshot = None
         owner._completion = owner._completion_origin = None
+        owner._cancel_release = owner._cancel_release_origin = None
         writer._ready_receiver = writer._ready_receiver_snapshot = owner
         base.channel._credential_ready_receiver = owner
         base.channel._credential_ready_receiver_snapshot = owner
@@ -189,7 +226,18 @@ class NativeReadyReceiver:
                  and self._waiter is self._waiter_origin
                  and b.channel._reading is self._active
                  and self._completion is self._completion_origin)
-        if self._pending is None:
+        _require(self._cancel_release is self._cancel_release_origin)
+        if self._cancel_release_origin is not None:
+            stopped = self._cancel_release_origin
+            _require(type(stopped) is _ReadyReadRetirement
+                     and stopped.mint is _READY_CANCEL_MINT and stopped.scope is s
+                     and self._failed is True and self._active is False
+                     and self._complete is False and self._io_unknown is False
+                     and self._pending is None and self._pending_origin is None
+                     and self._read_intent is False
+                     and self._consumed is stopped.consumed and self._target is stopped.target
+                     and len(self._buffer) == 0 and self._buffer_values == b"")
+        elif self._pending is None:
             _require(len(self._buffer) == self._consumed)
         else:
             _require(type(self._pending) is bytes
@@ -276,7 +324,19 @@ class NativeReadyReceiver:
                     waiter = SelectorReadiness.__new__(SelectorReadiness)
                     self._waiter = self._waiter_origin = waiter
                     SelectorReadiness.__init__(waiter, b.sock)
-                    await SelectorReadiness.wait(waiter, b.intent.end_ns)
+                    origin, future = waiter._origin_scope, waiter._future_origin
+                    cutoff = b.intent.end_ns
+                    try:
+                        await SelectorReadiness.wait(waiter, cutoff)
+                    except _ReadinessCancelledError as error:
+                        _require(type(error) is _ReadinessCancelledError)
+                        fact = error.retirement
+                        _require(type(fact) is _CancelledWaitRetirement
+                                 and fact.mint is _CANCEL_RETIREMENT_MINT
+                                 and fact.owner is waiter and fact.scope is origin
+                                 and fact.future is future and fact.end is cutoff)
+                        raise _OwnedReadyWaitCancelled(_ReadyWaitRetirement(
+                            _READY_CANCEL_MINT, s, fact, consumed, target, values)) from None
                     _require(self._waiter_origin is waiter and waiter._retired is True
                              and waiter._unknown is False)
                     _require(NativeReadyReceiver._guard(self) is s)
@@ -306,6 +366,63 @@ class NativeReadyReceiver:
         finally:
             part = values = None
 
+    def _cancelled_wait_current(self, receipt, *, released=False):
+        """Original local read retirement; no live role/work/native authority."""
+        s = NativeReadyReceiver._metadata(self)
+        b = s.write_scope
+        _require(type(released) is bool)
+        _require(type(receipt) is (_ReadyReadRetirement if released else _ReadyWaitRetirement)
+                 and receipt.mint is _READY_CANCEL_MINT and receipt.scope is s
+                 and type(receipt.consumed) is int and type(receipt.target) is int
+                 and self._started is True and self._complete is False
+                 and self._io_unknown is False and self._read_intent is False
+                 and self._pending is None and self._pending_origin is None
+                 and self._consumed is receipt.consumed and self._target is receipt.target)
+        if released:
+            _require(self._cancel_release is receipt and self._cancel_release_origin is receipt
+                     and _TASK.done(b.allocation.task) and _TASK.cancelled(b.allocation.task)
+                     and self._failed is True and self._active is False)
+        else:
+            _require(type(receipt.values) is bytes and self._buffer_values == receipt.values
+                     and bytes(s.buffer) == receipt.values and len(s.buffer) == receipt.consumed)
+            _require(asyncio.current_task() is b.allocation.task
+                     and _TASK.cancelling(b.allocation.task) > 0
+                     and self._failed is False and self._active is True
+                     and self._cancel_release is None and self._cancel_release_origin is None)
+        fact = receipt.readiness
+        _require(type(fact) is _CancelledWaitRetirement
+                 and fact.mint is _CANCEL_RETIREMENT_MINT
+                 and type(fact.owner) is SelectorReadiness
+                 and self._waiter is fact.owner and self._waiter_origin is fact.owner)
+        waiter = fact.owner
+        SelectorReadiness._guard(waiter, actor=not released)
+        SelectorReadiness._wake_guard(waiter)
+        _require(waiter._origin_scope is fact.scope and waiter._scope_snapshot is fact.scope
+                 and waiter._future_origin is fact.future
+                 and waiter._wake_binding_origin is fact.binding
+                 and waiter._handle_snapshot is fact.handle
+                 and waiter._handle_args_snapshot is fact.handle_args
+                 and fact.scope.sock is b.sock and fact.scope.task is b.allocation.task
+                 and fact.scope.loop is b.loop and fact.scope.interest == "read"
+                 and waiter._attempted is True and waiter._retired is True
+                 and waiter._unknown is False and fact.binding.scope is fact.scope
+                 and fact.binding.future is None and fact.binding.end is fact.end
+                 and fact.end is b.intent.end_ns)
+        # Guard callbacks cannot replace the original cursor or actor.
+        _require(NativeReadyReceiver._metadata(self) is s
+                 and self._consumed is receipt.consumed and self._target is receipt.target
+                 and self._read_intent is False
+                 and self._pending is None and self._io_unknown is False)
+        if not released:
+            _require(type(receipt.values) is bytes and self._buffer_values == receipt.values
+                     and bytes(s.buffer) == receipt.values and len(s.buffer) == receipt.consumed)
+            _require(asyncio.current_task() is b.allocation.task
+                     and _TASK.cancelling(b.allocation.task) > 0
+                     and self._failed is False and self._active is True)
+            return _ReadyReadRetirement(_READY_CANCEL_MINT, s, fact,
+                                        receipt.consumed, receipt.target)
+        return receipt
+
     async def run(self):
         s = NativeReadyReceiver._metadata(self)
         _require(asyncio.current_task() is s.write_scope.allocation.task
@@ -316,6 +433,7 @@ class NativeReadyReceiver:
         original = self._buffer_origin
         prefix = raw = framed = header = checked = None
         failed = cancelled = False
+        retirement = None
         try:
             _require(NativeReadyReceiver._guard(self) is s)
             prefix = await NativeReadyReceiver._take(self, 8)
@@ -339,6 +457,13 @@ class NativeReadyReceiver:
                 _READY_READ_MINT, self, s, raw, framed[auth_end:], header, original,
                 self._consumed_origin, self._target_origin)
             self._complete = True
+        except _OwnedReadyWaitCancelled as stopped:
+            failed = cancelled = True
+            try:
+                _require(type(stopped) is _OwnedReadyWaitCancelled)
+                retirement = NativeReadyReceiver._cancelled_wait_current(self, stopped.receipt)
+            except BaseException:
+                retirement = None
         except asyncio.CancelledError:
             failed = cancelled = True
         except BaseException:
@@ -346,10 +471,19 @@ class NativeReadyReceiver:
         finally:
             prefix = raw = framed = header = checked = None
             if failed:
-                self._failed = self._io_unknown = True
-                bytearray.clear(original)
-                self._buffer_values = b""
-                self._pending = self._pending_origin = None
+                self._failed = True
+                self._io_unknown = retirement is None
+                if retirement is None:
+                    bytearray.clear(original)
+                    self._buffer_values = b""
+                    self._pending = self._pending_origin = None
+                else:
+                    bytearray.clear(original)
+                    self._buffer_values = b""
+                    self._pending = self._pending_origin = None
+                    self._cancel_release = self._cancel_release_origin = retirement
+                    self._active = False
+                    s.write_scope.channel._reading = False
             if self._complete and not self._io_unknown and not self._read_intent:
                 self._active = False
                 s.write_scope.channel._reading = False
@@ -378,6 +512,11 @@ class NativeReadyReceiver:
 
     def _released(self, channel):
         s = NativeReadyReceiver._metadata(self)
+        if self._cancel_release_origin is not None:
+            _require(channel is s.write_scope.channel)
+            NativeReadyReceiver._cancelled_wait_current(
+                self, self._cancel_release_origin, released=True)
+            return
         _require(channel is s.write_scope.channel and _TASK.done(s.write_scope.allocation.task)
                  and self._active is False and self._io_unknown is False
                  and self._read_intent is False and self._pending is None)

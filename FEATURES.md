@@ -1,3 +1,16 @@
+## Original READY cancellation retirement — November 6, 2026
+
+Bot-character transport can now retire a cancelled original signed READY wait
+using its exact owned selector receipt, while retaining failure and withholding
+remote cleanup/ACK. Partial bytes are wiped; the historical fact keeps only
+ownership and counts and requires the original Task done and cancelled.
+Seven causal cases and independent read-only review pass. Full affected
+regression: **1,525 passed, one skipped**, 84.46 seconds; lint passed.
+This is source-only progress. BEGIN-derived pre-READY CANCEL, production startup,
+result/terminal custody, complete character delivery and physical qualification
+remain open. The earlier intermittent broker failure is retained as unresolved;
+this passing run does not establish its cause or repair it.
+
 ## Signed pre-READY integration checkpoint — November 6, 2026
 
 The next bot-character transport task now has an exact source-backed contract:

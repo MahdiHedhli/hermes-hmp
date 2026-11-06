@@ -1,6 +1,8 @@
 # Signed pre-READY cleanup integration
 
-Status: implementation plan, not an enabled route or qualification receipt.
+Status: first local READY-wait retirement prerequisite implemented and reviewed;
+pre-READY signing/transport remains a plan, not an enabled route.
+See [source evidence](../../docs/research/presentation-ready-cancel-retirement-2026-11-06.md).
 Pinned inspected source: bdb3adff9fcfee52fa384f59ac1b438d5b754eb4.
 Preserve complete desktop character delivery; this prerequisite is not a substitute.
 
@@ -10,8 +12,9 @@ Preserve complete desktop character delivery; this prerequisite is not a substit
 `NativeCancelWriter` derives its original BEGIN scope through that transition.
 Neither can safely be called with a fabricated READY object before READY arrives.
 `NativePhaseWorkOwner._cleanup_material` also requires the original work Task
-joined. `NativeReadyReceiver.run` currently treats every failed/cancelled read as
-unknown IO, even if the underlying owned selector interest retired conclusively.
+joined. `NativeReadyReceiver.run` now distinguishes an exact retained cancelled-wait
+retirement from failures with unknown IO. The broader signed CANCEL path still
+requires the remaining separate integration below.
 Its `_released` requires known inactive/no-IO state. Merely joining the Task or
 seeing a cancellation exception cannot prove that state.
 

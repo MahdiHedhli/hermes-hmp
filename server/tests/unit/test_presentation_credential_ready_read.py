@@ -28,7 +28,9 @@ from .test_presentation_supervisor import context as context
     "ready", "fragmented", "signature", "scope", "sequence", "hash", "wrong_phase",
     "oversize_auth", "eof", "unknown_recv", "target_drift", "count_drift", "buffer_drift",
     "current_key", "admission_refusal", "wrong_actor", "missing_write", "deadline",
-    "cancel_wait", "pin_drift", "native_ready", "native_wrong_actor", "native_observe_false",
+    "cancel_wait", "cancel_wait_partial", "cancel_wait_key", "cancel_wait_generic",
+    "cancel_wait_foreign_end", "cancel_wait_progress", "cancel_wait_subclass", "pin_drift",
+    "native_ready", "native_wrong_actor", "native_observe_false",
     "native_observe_key", "native_transition_error", "native_transition_key", "native_data_drift",
     "composed_ready", "composed_signature", "composed_wrong_actor",
     "dispatch_ready", "dispatch_signature", "dispatch_cancel",
@@ -83,7 +85,9 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 assert part
                 received.extend(part)
             assert bytes(received) == b.wire
-            if mutation == "cancel_wait":
+            if mutation.startswith("cancel_wait"):
+                if mutation == "cancel_wait_partial":
+                    await asyncio.get_running_loop().sock_sendall(peer, b"HBAX")
                 await read_wait.wait()
                 b.allocation.task.cancel()  # synthetic owned task only
                 held["ready_wire"] = b""
@@ -208,13 +212,37 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                         await receiver.run()
                 await asyncio.create_task(wrong_reader())
                 assert not receiver._started and not receiver._failed and not channel._reading
-            if mutation == "cancel_wait":
+            if mutation.startswith("cancel_wait"):
                 from hmp_plugin import presentation_readiness as readiness
                 wait = readiness.SelectorReadiness.wait
+                held["cancel_getters"] = []
+
+                class ForeignCancelled(readiness._ReadinessCancelledError):
+                    def __getattribute__(self, name):
+                        if name == "retirement":
+                            held["cancel_getters"].append(name)
+                            raise AssertionError("foreign cancellation getter")
+                        return super().__getattribute__(name)
+
                 async def observe_wait(waiter, end_ns, **options):
-                    if waiter._origin_scope.task is writer._scope_snapshot.allocation.task:
+                    if (waiter._origin_scope.task is writer._scope_snapshot.allocation.task
+                            and (mutation != "cancel_wait_partial" or receiver._consumed == 4)):
                         read_wait.set()
-                    return await wait(waiter, end_ns, **options)
+                    try:
+                        return await wait(waiter, end_ns, **options)
+                    except readiness._ReadinessCancelledError as error:
+                        if mutation == "cancel_wait_generic":
+                            raise asyncio.CancelledError from None
+                        if mutation == "cancel_wait_foreign_end":
+                            raise readiness._ReadinessCancelledError(
+                                error.retirement._replace(end=end_ns + 1)) from None
+                        if mutation == "cancel_wait_subclass":
+                            raise ForeignCancelled(error.retirement) from None
+                        if mutation == "cancel_wait_progress":
+                            receiver._consumed += 1
+                        if mutation == "cancel_wait_key":
+                            keys["gateway"].retire()
+                        raise
                 monkeypatch.setattr(readiness.SelectorReadiness, "wait", observe_wait)
             if mutation in ("deadline", "pin_drift"):
                 from hmp_plugin.presentation_clock import NativeClockOwner
@@ -1308,7 +1336,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
         native_case = mutation.startswith("native_")
         succeeds = mutation in ("ready", "fragmented", "wrong_actor", "missing_write")
         read_complete = succeeds or mutation == "current_key" or native_case
-        io_unknown = not read_complete and mutation != "admission_refusal"
+        known_cancel = mutation in ("cancel_wait", "cancel_wait_partial", "cancel_wait_key")
+        io_unknown = not read_complete and mutation != "admission_refusal" and not known_cancel
         assert receiver._complete is read_complete
         assert receiver._failed is (not read_complete or mutation in (
             "current_key", "native_observe_key"))
@@ -1348,11 +1377,32 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 NativeReadyReceiver._released(receiver, channel)
         elif not io_unknown:
             NativeReadyReceiver._released(receiver, channel)
+            if known_cancel:
+                assert receiver._cancel_release_origin is not None
+                assert receiver._scope_origin.write_scope.allocation.task.cancelled()
+                assert receiver._completion is None and receiver._failed
+                stopped = receiver._cancel_release_origin
+                assert not hasattr(stopped, "values")
+                assert stopped.consumed == (4 if mutation == "cancel_wait_partial" else 0)
+                assert not receiver._buffer_origin and receiver._buffer_values == b""
+                error = held["read_error"]
+                assert type(error) is asyncio.CancelledError and error.__context__ is None
+                trace = error.__traceback__
+                while trace:
+                    if trace.tb_frame.f_code.co_filename.endswith(
+                            "presentation_credential_ready_read.py"):
+                        for name in ("part", "values", "prefix", "raw", "framed", "header",
+                                     "checked"):
+                            assert trace.tb_frame.f_locals.get(name) is None
+                    trace = trace.tb_next
+                with pytest.raises(FrameError):
+                    NativeReadyReceiver._released(receiver, broker)
         else:
             assert receiver._completion is None
             assert not receiver._scope_origin.buffer and receiver._pending is None
             error = held["read_error"]
-            error_type = asyncio.CancelledError if mutation == "cancel_wait" else FrameError
+            error_type = (asyncio.CancelledError if mutation in (
+                "cancel_wait_generic", "cancel_wait_progress") else FrameError)
             assert type(error) is error_type
             assert error.__context__ is None
             trace = error.__traceback__
@@ -1369,6 +1419,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 assert receiver._last_read == (0, 8, 8)  # actual count survives callback drift
             with pytest.raises(FrameError):
                 NativeReadyReceiver._released(receiver, channel)
+        if mutation.startswith("cancel_wait"):
+            assert held["cancel_getters"] == []
         if mutation == "pin_drift":
             assert held["pin_callbacks"] == [] and receiver._consumed == 0
         with pytest.raises(FrameError):
