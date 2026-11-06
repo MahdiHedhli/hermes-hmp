@@ -13,16 +13,19 @@ Root's 328 focused checks/lint passed. Mint PR132 is integrated at `0e4f5bc`
 with successful final CI. Current writer/control/refusal/residual/ABA evidence,
 C6b, physical display/activation and release qualification remain open.
 
-### Writer refresh foundation checkpoint
+### Writer refresh pilot checkpoint
 
-[PR134](https://github.com/MahdiHedhli/hermes-hmp/pull/134) adds independently
-reviewed inert actor/read-hook foundations at `89703b8`. Twenty-one causal
-ownership models and 349 combined focused checks passed. Review caught and
-root repaired ambiguous release acknowledgment before any native writer use;
-only exact True clears a retained handle. Native DB-close barriers, scenario
-oracles and the full applicable writer/residual/ABA execution remain pending.
-This is not a native concurrency or delivery/release pass.
-[Contract](specs/011-local-image-serving/NATIVE_BINDING_WRITER_REFRESH.md).
+[PR134](https://github.com/MahdiHedhli/hermes-hmp/pull/134) now includes
+independently reviewed DB-close barriers and scenario oracles at `8167016`.
+The bounded 12-phase native pilot passed: 24 exact first/second outcomes,
+336 artifact/source/runtime bindings, 39/39 borrows per process and verified
+writer/hooks/DB/listener/worker closure. It exercised nine successful public
+native mutation calls, five synthetic Phone-store calls and one native guard
+refusal. Residual stale acceptance and Phone-store ABA acceptance remain
+limitations. Root's 559 focused checks/lint passed; no reviewer execution.
+The full 624-phase matrix, storage layout and native fork/reset applicability
+remain open, so C6b and delivery/release are not complete.
+[Exact pilot scope](docs/research/local-media-native-writer-pilot-2026-11-06.md).
 
 ## Native-bound modeled mint-memory sample reviewed — November 6, 2026
 

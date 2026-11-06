@@ -626,3 +626,19 @@ unchecked. No native-C, Linux, physical display, activation or release pass foll
 
 [Writer contract](NATIVE_BINDING_WRITER_REFRESH.md). CW1 is foundation acceptance
 only, not C6b completion or native writer execution.
+
+## Writer integrated source and bounded pilot (2026-11-06)
+
+CW2's native DB-close/global cleanup barriers and the currently declared subset
+of CW3 oracles are implemented and independently accepted for a bounded pilot.
+At `8167016`, all 12 pilot phases and 24 first/second outcomes passed independent
+artifact/source/runtime readback. Each process balanced 39/39 borrows and closed
+its writer/hooks/DB/listener/workers; all 132 command outcomes were known.
+Root's 559 focused guards/lint passed.
+
+[Exact scope](../../docs/research/local-media-native-writer-pilot-2026-11-06.md)
+preserves the native guard refusal, surviving-selector semantics, residual stale
+acceptance and Phone-store ABA acceptance. Full 624-phase execution requires a
+reviewed storage/layout plan; native fork/reset applicability and other coverage
+remain open. CW3/CW4/CW5 and current C6b remain unchecked. No native safety
+limitation is reclassified as a fix or a physical/release qualification.

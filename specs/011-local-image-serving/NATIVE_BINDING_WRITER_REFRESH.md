@@ -105,8 +105,8 @@ any execution; no native pass is inferred.
 
 ## Integrated runner candidate (not yet accepted/executed)
 
-An explicit `binding_writer="scenario:seam"` requires seed mode, exact case0..7
-and selector1/16/128, and excludes cost/mint/RSS combinations. Validated fixed
+An explicit `binding_writer="scenario:seam"` requires seed mode, exact case 0..7
+and selector 1/16/128, and excludes cost/mint/RSS combinations. Validated fixed
 strings alone enter the copied entry; the controller binds the writer-helper
 hash as well as complete source/runtime/report inventories. Prior default,
 preparation, cost, mint and RSS report contracts stay separate.
@@ -134,7 +134,7 @@ read methods are instrumented; original methods perform every actual read.
 Native mutation APIs verify returned results AND fresh post-write facts; Phone
 store changes remain separately counted/labeled. Explicit fixture acquisition
 ports enforce selected path/object. A separate release port returns exact True
-ONLY after the existing adapter validates actual registry releaseTrue and updates
+ONLY after the existing adapter validates actual registry release True and updates
 tracked borrow debt. It never promotes an arbitrary callback's false/None return.
 Every first/second result checks sidecar identity, exact selected IDs, kind and
 closed reason; metadata summaries reveal no row IDs/content/path/ref.
@@ -151,22 +151,22 @@ Currently declared requests span624 phase pairs: six general scenarios at three
 brackets plus residual/ABA last-read cases for both kinds, and ambiguity/kind-swap/
 title-guard/archive cases only for Bot Chat, across four full shapes and three
 selectors. This does NOT yet complete native fork/reset/other applicability
-coverage or the historical500 phases. CW3 remains open until that audit and its
+coverage or the historical 500 phases. CW3 remains open until that audit and its
 scenario oracles are complete. No unsupported reverse kind switch is manufactured
 by clearing a protected canonical title.
 
 Root's focused model/guard checks and lint are recorded with the source receipt.
 Independent integrated source review is required before a bounded fresh native
 pilot. Pilot results cannot substitute for the full matrix. A single source copy
-currently occupies about311MiB, so a full624-copy run must not be started without
+currently occupies about 311 MiB, so a full 624-copy run must not be started without
 a reviewed storage/execution layout that preserves all phase coverage and the
-unchanged12-second per-actor budget. No protected prior evidence is deleted to
+unchanged 12-second per-actor budget. No protected prior evidence is deleted to
 make space, no deadline is extended and no ambiguous native write is retried.
 
 Integrated source review accepted a BOUNDED pilot, with no reviewer execution.
 The explicit ContextVar copy is captured before thread creation and independently
 accepted; a causal profileA->readerB change proves the worker still sees A.
-Root's559 combined focused guards/models and configured lint passed. No native
+Root's 559 combined focused guards/models and configured lint passed. No native
 writer phase has run at this checkpoint. The initial pilot is12 separately owned
 single-phase processes, including public native controls/history/eligibility/
 tip movement/guard and synthetic Phone-store, residual/ABA cases; it is not the
@@ -174,7 +174,7 @@ tip movement/guard and synthetic Phone-store, residual/ABA cases; it is not the
 
 ## Bounded pilot result
 
-All12 pilot phases at `8167016` completed and passed independent source/artifact
+All 12 pilot phases at `8167016` completed and passed independent source/artifact
 readback:24 first/second outcomes,336 artifact hashes/private modes, native/HMP
 SHA/literal Git and helper/runtime/report bindings,39/39 native borrows per
 process, actual writer/hooks/DB/listener/worker closure and132 known commands.
@@ -182,5 +182,5 @@ Nine successful public native mutation calls, five synthetic Phone-store calls
 and one native guard refusal were verified. Residual stale acceptance and
 Phone-store ABA acceptance remain limitations. No expiry/retry/guard bypass.
 [Exact scope/outcomes](../../docs/research/local-media-native-writer-pilot-2026-11-06.md).
-Full624/storage/fork-reset coverage and C6b remain open;559 model/guard tests
+Full 624/storage/fork-reset coverage and C6b remain open;559 model/guard tests
 and configured lint passed separately. No reviewer execution or release pass.
