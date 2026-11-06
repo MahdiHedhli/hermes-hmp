@@ -677,3 +677,14 @@ actual consumed native GO_INTENT admission. It uses the original work Task,
 current role material, native authority and original deadline. Closed primitive
 metadata and pre/post crypto checks prevent foreign callbacks/publication after
 retirement. It grants no socket-write, GO_SENT, resource or execution permission.
+
+### Fixed original-work signed GO writer (November 6, 2026)
+
+`presentation_credential_go_write.py` writes only the retained fixed GO commitment
+on the original native work Task, using one original GO write intent. Actual
+bounded byte progress, exact EAGAIN readiness retirement and final current checks
+precede the native write fact; uncertainty preserves debt. The completed BEGIN
+owner recognizes only a typed reciprocal GO IO-slot description. Historical local
+release requires actual original Task.done and held cleanup/allocation proofs,
+without following foreign mutable metadata. No production sender dispatch,
+GO_SENT, worker relay, broker custody or native publication follows.

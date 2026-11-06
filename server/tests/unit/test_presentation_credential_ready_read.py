@@ -35,6 +35,11 @@ from .test_presentation_supervisor import context as context
     "dispatch_go_sign", "dispatch_go_key", "dispatch_go_wrong_actor",
     "dispatch_go_revoked", "dispatch_go_admission", "dispatch_go_deadline",
     "dispatch_go_expected_row", "dispatch_go_foreign_end",
+    "dispatch_go_write", "dispatch_go_write_partial", "dispatch_go_write_eagain",
+    "dispatch_go_write_unknown", "dispatch_go_write_key",
+    "dispatch_go_write_zero", "dispatch_go_write_registration", "dispatch_go_write_initial",
+    "dispatch_go_write_wrong_actor", "dispatch_go_write_intent_drift",
+    "dispatch_go_write_release_cleanup", "dispatch_go_write_release_allocation",
 ])
 async def test_original_work_ready_read_requires_its_complete_signed_begin(
     context, begin_gateway, tmp_path, monkeypatch, mutation
@@ -428,22 +433,122 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                                                 changed_go_clock)
                         try:
                             held["go_raw"] = commitment.prepare()
+                            if mutation.startswith("dispatch_go_write"):
+                                import errno
+
+                                from hmp_plugin import presentation_credential_go_write as go_write
+                                from hmp_plugin.presentation_credential_go_write import (
+                                    NativeGoWriter,
+                                )
+
+                                if mutation == "dispatch_go_write_wrong_actor":
+                                    async def wrong_go_writer_factory():
+                                        with pytest.raises(FrameError):
+                                            NativeGoWriter.retain(commitment)
+                                    await asyncio.create_task(wrong_go_writer_factory())
+                                    assert commitment._writer is None
+                                writer = NativeGoWriter.retain(commitment)
+                                held["go_writer"] = writer
+                                if mutation == "dispatch_go_write_wrong_actor":
+                                    async def wrong_go_write():
+                                        with pytest.raises(FrameError):
+                                            await writer.write_go()
+                                    await asyncio.create_task(wrong_go_write())
+                                    assert writer._attempted is False and writer._failed is False
+                                send = go_write._SEND
+                                held["go_send_calls"] = 0
+
+                                def changed_go_send(sock, data):
+                                    held["go_send_calls"] += 1
+                                    if mutation == "dispatch_go_write_zero":
+                                        return 0
+                                    if (mutation in ("dispatch_go_write_eagain",
+                                                     "dispatch_go_write_registration")
+                                            and held["go_send_calls"] == 1):
+                                        raise BlockingIOError(
+                                            errno.EAGAIN, "synthetic GO wouldblock")
+                                    limit = (37 if mutation == "dispatch_go_write_partial" else
+                                             7 if mutation == "dispatch_go_write_unknown"
+                                             else len(data))
+                                    count = send(sock, data[:limit])
+                                    if mutation == "dispatch_go_write_unknown":
+                                        raise OSError("synthetic uncertain GO send")
+                                    if mutation == "dispatch_go_write_key":
+                                        keys["gateway"].retire()
+                                    if mutation == "dispatch_go_write_intent_drift":
+                                        class ForeignGoIntent:
+                                            def __getattribute__(self, name):
+                                                held["intent_foreign_callbacks"] = True
+                                                raise AssertionError("foreign GO intent getter")
+                                        foreign = ForeignGoIntent()
+                                        channel._go_write_intent = foreign
+                                        channel._go_write_intent_snapshot = foreign
+                                    return count
+
+                                monkeypatch.setattr(go_write, "_SEND", changed_go_send)
+                                if mutation == "dispatch_go_write_registration":
+                                    from hmp_plugin import presentation_readiness as readiness
+
+                                    install = readiness._install_writer
+
+                                    def unknown_go_install(*args):
+                                        install(*args)
+                                        raise OSError("synthetic uncertain GO registration")
+
+                                    monkeypatch.setattr(readiness, "_install_writer",
+                                                        unknown_go_install)
+                                if mutation == "dispatch_go_write_initial":
+                                    material = NativeGoCommitment._material_guard
+
+                                    def reject_initial_signer(owned):
+                                        result = material(owned)
+                                        if owned is commitment and writer._attempted:
+                                            held["initial_go_guard_calls"] = (
+                                                held.get("initial_go_guard_calls", 0) + 1)
+                                            raise FrameError("SYNTHETIC_INITIAL_GO_WRITE_REFUSAL")
+                                        return result
+
+                                    monkeypatch.setattr(NativeGoCommitment, "_material_guard",
+                                                        reject_initial_signer)
+                                try:
+                                    await writer.write_go()
+                                finally:
+                                    with pytest.raises(FrameError):
+                                        await writer.write_go()
+                                    try:
+                                        held["go_actual_wire"] = peer.recv(65536)
+                                    except BlockingIOError:
+                                        held["go_actual_wire"] = b""
+                                    if mutation == "dispatch_go_write_initial":
+                                        monkeypatch.setattr(NativeGoCommitment, "_material_guard",
+                                                            material)
+                                        assert held["initial_go_guard_calls"] == 1
+                                        assert held["go_send_calls"] == 0
                         finally:
                             go_record = authority._record(operation)
                             held["go_native_phase"] = go_record.owner.inspect_remote(
                                 go_record.handle)
                             assert remote._go_admission_used is True
-                            assert channel._go_write_intent is None
-                            assert channel._go_write_fact is None
+                            if "go_writer" in held:
+                                writer = held["go_writer"]
+                                if mutation == "dispatch_go_write_intent_drift":
+                                    assert not held.get("intent_foreign_callbacks")
+                                else:
+                                    assert channel._go_write_intent is writer._scope_snapshot.intent
+                                assert (channel._go_write_fact is not None) is writer._complete
+                            else:
+                                assert channel._go_write_intent is None
+                                assert channel._go_write_fact is None
                             with pytest.raises(FrameError):
                                 commitment.prepare()
                         raise FrameError("SYNTHETIC_GO_SIGNING_ONLY_NO_WIRE")
 
                     monkeypatch.setattr(SocketChannel, "send_go", signed_go_only)
-                    with pytest.raises((FrameError, AuthorityRefusalError)):
+                    with pytest.raises((FrameError, AuthorityRefusalError, OSError)):
                         await remote.go()
                     commitment = held["go_commitment"]
-                    go_success = mutation in ("dispatch_go_sign", "dispatch_go_wrong_actor")
+                    go_success = (mutation in ("dispatch_go_sign", "dispatch_go_wrong_actor")
+                                  or mutation.startswith("dispatch_go_write"))
                     pre_attempt_refusal = mutation == "dispatch_go_admission"
                     assert commitment._attempted is not pre_attempt_refusal
                     assert commitment._complete is go_success
@@ -452,6 +557,31 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                         RemotePhase.UNKNOWN if mutation == "dispatch_go_deadline"
                         else RemotePhase.GO_INTENT)
                     assert held.get("go_foreign_callbacks", []) == []
+                    if "go_writer" in held:
+                        writer = held["go_writer"]
+                        write_success = mutation in (
+                            "dispatch_go_write", "dispatch_go_write_partial",
+                            "dispatch_go_write_eagain", "dispatch_go_write_wrong_actor",
+                            "dispatch_go_write_release_cleanup",
+                            "dispatch_go_write_release_allocation")
+                        assert writer._complete is write_success
+                        assert writer._failed is not write_success
+                        assert writer._unknown is (mutation in (
+                            "dispatch_go_write_unknown", "dispatch_go_write_registration",
+                            "dispatch_go_write_intent_drift"))
+                        expected_wire = writer._scope_snapshot.wire
+                        assert held["go_actual_wire"] == expected_wire[:len(held["go_actual_wire"])]
+                        if write_success:
+                            assert writer._offset == len(expected_wire)
+                            assert channel._go_write_fact is writer._fact_snapshot
+                        elif mutation == "dispatch_go_write_unknown":
+                            assert writer._offset == 0 and len(held["go_actual_wire"]) == 7
+                        elif mutation in (
+                            "dispatch_go_write_zero", "dispatch_go_write_registration",
+                            "dispatch_go_write_initial"):
+                            assert writer._offset == 0 and held["go_actual_wire"] == b""
+                        else:
+                            assert writer._offset == len(expected_wire)
                     if go_success:
                         from hmp_plugin.presentation_credential_phase import (
                             check_commitment,
@@ -473,7 +603,33 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                     result = await asyncio.shield(cleanup._allocations_snapshot[0].task)
                 assert type(result) is bool
                 assert cleanup._allocations_snapshot[1].task.done()
+                held["joined_work_outcome"] = await asyncio.gather(
+                    cleanup._allocations_snapshot[1].task, return_exceptions=True)
                 assert result is True or cleanup._unknown is True
+                if mutation in ("dispatch_go_write_release_cleanup",
+                                "dispatch_go_write_release_allocation"):
+                    held["release_foreign_callbacks"] = []
+
+                    class ForeignGoCleanup:
+                        def __getattribute__(self, name):
+                            held["release_foreign_callbacks"].append(name)
+                            raise AssertionError("foreign GO cleanup getter")
+
+                        def __getitem__(self, key):
+                            held["release_foreign_callbacks"].append(key)
+                            raise AssertionError("foreign GO allocation indexing")
+
+                    foreign = ForeignGoCleanup()
+                    if mutation == "dispatch_go_write_release_cleanup":
+                        remote._cleanup_owner = remote._cleanup_owner_snapshot = foreign
+                    else:
+                        cleanup._allocations = cleanup._allocations_snapshot = foreign
+                    from hmp_plugin.presentation_credential_go_write import NativeGoWriter
+
+                    with pytest.raises(FrameError):
+                        NativeGoWriter._released(held["go_writer"], channel)
+                    assert held["release_foreign_callbacks"] == []
+                    assert channel.close() is False and not channel._closed_known
             else:
                 with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
                     await remote.begin_ready()
@@ -485,7 +641,8 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 await peer_task
             if mutation.startswith("dispatch_go_"):
                 assert remote._go_admission_used is True
-                assert channel._go_write_intent is None and channel._go_write_fact is None
+                if "go_writer" not in held:
+                    assert channel._go_write_intent is None and channel._go_write_fact is None
             else:
                 assert remote._go_admission is None
             assert authority._record(operation).child is None

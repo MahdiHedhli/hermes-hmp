@@ -553,11 +553,19 @@ async def begin_gateway(local, monkeypatch):
         writer = channel._credential_begin_writer_snapshot
         reader = channel._credential_ready_receiver_snapshot
         transition = None if reader is None else reader._transition_snapshot
+        go_writer = channel._credential_go_writer_snapshot
+        release_drift = False
+        if go_writer is not None:
+            go_base = go_writer._scope_snapshot.signed_scope.ready_scope.read_scope.write_scope
+            release_drift = (go_base.remote._cleanup_owner_snapshot is not go_base.refs[0]
+                             or type(go_base.refs[0]._allocations_snapshot) is not tuple)
         closed = channel.close()
         if not closed:
             assert ((writer is not None and writer._unknown)
                     or (reader is not None and reader._io_unknown)
-                    or (transition is not None and transition._failed))
+                    or (transition is not None and transition._failed)
+                    or (go_writer is not None and (go_writer._unknown or go_writer._failed))
+                    or release_drift)
             assert not channel._closed_known
             # Fixture-owned disposal only, never a channel/native release fact.
             # No test flag or protocol evidence is restored to make close pass.

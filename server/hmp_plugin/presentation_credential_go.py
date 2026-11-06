@@ -64,6 +64,7 @@ class NativeGoCommitment:
             tuple(sorted(expected.items())), (b.refs[5].own_public, b.refs[5].peer_public))
         owner._attempted = owner._complete = owner._failed = False
         owner._raw = owner._raw_snapshot = None
+        owner._writer = owner._writer_snapshot = None
         producer._go_commitment = producer._go_commitment_snapshot = owner
         try:
             NativeGoCommitment._guard(owner)
@@ -117,16 +118,14 @@ class NativeGoCommitment:
             _require(self._raw is None)
         return s
 
-    def _guard(self):
+    def _material_guard(self):
         s = NativeGoCommitment._metadata(self)
         b = s.ready_scope.read_scope.write_scope
         _require(asyncio.current_task() is b.allocation.task
                  and _TASK.cancelling(b.allocation.task) == 0 and self._failed is False)
         _require(NativePhaseWorkOwner._material_local(s.producer)[0] is b.remote)
         RemoteOperationOwner._check(b.remote, RemotePhase.GO_INTENT)
-        _require(b.remote._go_admission_used is True
-                 and b.channel._go_write_intent is None and b.channel._go_write_fact is None
-                 and b.channel._writing is False and b.channel._reading is False)
+        _require(b.remote._go_admission_used is True and b.channel._reading is False)
         SocketChannel._check(b.channel)
         _require(SocketChannel._qualified_clock(b.channel) is b.refs[8])
         now = NativeClockOwner.sample(b.refs[8])
@@ -135,6 +134,13 @@ class NativeGoCommitment:
         RemoteOperationOwner._check(b.remote, RemotePhase.GO_INTENT)
         _require(type(now) is int and 0 <= now < b.intent.end_ns
                  and NativeGoCommitment._metadata(self) is s)
+        return s
+
+    def _guard(self):
+        s = NativeGoCommitment._material_guard(self)
+        channel = s.ready_scope.read_scope.write_scope.channel
+        _require(channel._go_write_intent is None and channel._go_write_fact is None
+                 and channel._writing is False)
         return s
 
     def _ready_current(self):

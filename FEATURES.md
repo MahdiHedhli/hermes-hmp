@@ -1,3 +1,26 @@
+## Signed GO write checkpoint — November 6, 2026
+
+The original-task GO writer now sends the retained fixed signed GO record and
+frame on one original native GO write intent. Actual byte progress, current
+role/native/clock checks and owned write-readiness settlement precede the native
+write fact. Partial/uncertain IO keeps original admission/intent/debt and cannot
+retry. The completed BEGIN owner recognizes only an exact reciprocal GO IO-slot
+handoff. Historical local closure follows held original proofs, not mutable
+foreign cleanup metadata.
+
+Independent read-only source review accepted the final historical-release repair
+and completion check. **1,466 affected tests passed, one skipped**, 67.04 seconds;
+configured lint passed. Twelve writer cases include complete/partial/EAGAIN,
+unknown send/registration, zero send, key retirement, initial refusal, wrong actor,
+intent drift and foreign postjoin cleanup/allocation tripwires. Prior signer
+`beb4599` passed [CI758](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42296434170).
+Current writer CI is not yet qualified.
+
+Production sender dispatch, GO_SENT, broker custody/worker relay, startup, later
+output/terminal/publication/STATUS and physical/release qualification remain open.
+Character delivery remains unavailable. No live host/device/settings/build changed.
+See [evidence and limits](docs/research/presentation-signed-go-write-2026-11-06.md).
+
 ## Fixed GO commitment checkpoint — November 6, 2026
 
 The new original-work signer derives only gateway/g2b GO sequence1 for the

@@ -214,8 +214,14 @@ class NativeBeginWriter:
                  and self._completion is self._completion_snapshot
                  and all(type(v) is bool for v in (
                      self._attempted, self._active, self._inflight, self._failed,
-                     self._unknown, self._complete, self._completion_attempted))
-                 and s.channel._writing is self._active)
+                     self._unknown, self._complete, self._completion_attempted)))
+        writing = self._active
+        go_writer = getattr(s.channel, "_credential_go_writer_snapshot", None)
+        if self._complete and self._active is False and go_writer is not None:
+            from .presentation_credential_go_write import NativeGoWriter
+            _require(type(go_writer) is NativeGoWriter)
+            writing = NativeGoWriter._begin_writing(go_writer, self)
+        _require(s.channel._writing is writing)
         fact = self._completion_snapshot
         if self._complete:
             _require(type(fact) is _SignedBeginWriteComplete
