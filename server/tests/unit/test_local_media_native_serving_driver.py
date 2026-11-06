@@ -102,11 +102,32 @@ def test_unqualified_or_coerced_report_refuses(field, value):
             {"server/hmp_plugin/__init__.py": "b" * 64}, "e" * 64)
 
 
-def test_complete_controller_model_never_executes_commands(tmp_path, monkeypatch):
+@pytest.mark.parametrize("cache_mode", ["none", "clone", "wrong_commit", "wrong_blob",
+                                      "clone_error", "helper_drift", "archive_drift"])
+def test_complete_controller_model_never_executes_commands(tmp_path, monkeypatch, cache_mode):
     root = tmp_path / "owned"
     root.mkdir(mode=0o700)
     roles = []
     fixture_bytes = driver._FIXTURE.read_bytes()
+    cache = None
+    if cache_mode != "none":
+        monkeypatch.setattr(driver.sys, "platform", "darwin")
+        source = tmp_path / "cache.tar"
+        native_files = {"hermes_state.py": b"# model", "hermes_state_registry.py": b"# model"}
+        if cache_mode == "wrong_blob":
+            native_files["hermes_state.py"] = b"# foreign"
+        archive(source, native_files, "c" * 40 if cache_mode == "wrong_commit" else COMMIT)
+        cache = (source, hashlib.sha256(source.read_bytes()).hexdigest())
+
+        def clone_model(path, destination, digest):
+            assert (path, digest) == cache
+            if cache_mode == "clone_error":
+                raise OSError("synthetic clone refusal")
+            destination.write_bytes(path.read_bytes())
+            destination.chmod(0o600)
+            return {"method": "fclonefileat", "sha256": digest, "fallback_used": False}
+
+        monkeypatch.setattr(driver.clone_contract, "clone_archive", clone_model)
 
     def model(argv, directory, role, receipt, **kwargs):
         roles.append(role)
@@ -135,6 +156,10 @@ def test_complete_controller_model_never_executes_commands(tmp_path, monkeypatch
                     "server/tests/unit/test_s4_descriptors.py": b"# model",
                     "server/tests/unit/hmp_kit.py": b"# model"}
                 commit = "b" * 40
+                if cache is not None:
+                    files["tools/compat/local_media_native_archive_clone.py"] = (
+                        b"# drift" if cache_mode == "helper_drift" else
+                        Path(driver._CLONE_SPEC.origin).read_bytes())
             if role.endswith("_tree"):
                 return b"".join(b"100644 blob " + hashlib.sha1(
                     b"blob " + str(len(data)).encode() + b"\0" + data,
@@ -148,15 +173,33 @@ def test_complete_controller_model_never_executes_commands(tmp_path, monkeypatch
                       driver.commands._digest(Path(sys.executable).resolve()))
         data = json.dumps(report).encode()
         (directory / "native-serving-report.json").write_bytes(data)
+        if cache_mode == "archive_drift":
+            with (directory / "native.tar").open("ab") as stream:
+                stream.write(b"drift")
         return json.dumps({"schema": 1, "completed": True,
                            "report_sha256": hashlib.sha256(data).hexdigest()}).encode()
 
     monkeypatch.setattr(driver.commands, "_owned", model)
-    result = driver.run_fixture(root, tmp_path / "never-executed-native-repo", COMMIT)
+    if cache_mode not in ("none", "clone"):
+        with pytest.raises((RuntimeError, OSError)):
+            driver.run_fixture(root, tmp_path / "never-executed-native-repo", COMMIT,
+                               native_archive_cache=cache)
+        assert "native_archive" not in roles
+        if cache_mode != "archive_drift":
+            assert "native_serving" not in roles
+        assert not json.loads((root / "receipt.json").read_text()).get("completed")
+        return
+    result = driver.run_fixture(root, tmp_path / "never-executed-native-repo", COMMIT,
+                               native_archive_cache=cache)
     assert result["completed"] is True and result["production_qualified"] is False
-    assert roles == ["git_version", "hmp_head", "native_kind", "native_tar_config",
-                     "native_tree", "native_archive", "hmp_kind", "hmp_tar_config",
-                     "hmp_tree", "hmp_archive", "native_serving"]
+    expected_roles = ["git_version", "hmp_head", "native_kind", "native_tar_config",
+                      "native_tree", "native_archive", "hmp_kind", "hmp_tar_config",
+                      "hmp_tree", "hmp_archive", "native_serving"]
+    if cache is not None:
+        expected_roles.remove("native_archive")
+        assert result["native_archive_clone_attempted"] is True
+        assert result["native_archive_clone"]["fallback_used"] is False
+    assert roles == expected_roles
     assert all(row["model_only"] is True for row in result["commands"])
 
 
@@ -302,3 +345,13 @@ def test_expected_source_mismatch_refuses_before_archive_or_native_operation(tmp
         driver.run_fixture(root, tmp_path / "native", COMMIT, expected_hmp_commit="b" * 40)
     assert calls == ["git_version", "hmp_head"]
     assert not (root / "native.tar").exists() and not (root / "entry.py").exists()
+
+
+@pytest.mark.parametrize("cache", [False, (), ("wrong", "a" * 64),
+    (Path("relative"), "a" * 64), (Path("/private/tmp/cache"), "a" * 40),
+    (Path("/private/tmp/cache"), True), [Path("/private/tmp/cache"), "a" * 64]])
+def test_invalid_cache_option_refuses_before_owned_filesystem_effects(tmp_path, monkeypatch, cache):
+    monkeypatch.setattr(driver.sys, "platform", "darwin")
+    with pytest.raises(RuntimeError):
+        driver.run_fixture(tmp_path, tmp_path, COMMIT, native_archive_cache=cache)
+    assert not tuple(tmp_path.iterdir())

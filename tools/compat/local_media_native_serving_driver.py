@@ -38,6 +38,11 @@ _WRITER_SPEC = importlib.util.spec_from_file_location(
     Path(__file__).with_name("local_media_native_writer_sample.py"))
 writer_contract = importlib.util.module_from_spec(_WRITER_SPEC)
 _WRITER_SPEC.loader.exec_module(writer_contract)
+_CLONE_SPEC = importlib.util.spec_from_file_location(
+    "_media_native_archive_clone_contract",
+    Path(__file__).with_name("local_media_native_archive_clone.py"))
+clone_contract = importlib.util.module_from_spec(_CLONE_SPEC)
+_CLONE_SPEC.loader.exec_module(clone_contract)
 _MAX_ARCHIVE = 160 * 1024 * 1024  # Tar framing is separate from source bytes.
 _MAX_SOURCE = 128 * 1024 * 1024
 _MAX_REPORT = 64 * 1024 * 1024
@@ -296,10 +301,20 @@ def validate_pair_checkpoints(root, report, requests):
                           checkpoint.get("database_closed") is True)
 
 
+def validate_archive_cache(cache):
+    if cache is None:
+        return
+    commands._require(sys.platform == "darwin" and type(cache) is tuple and len(cache) == 2 and
+                      type(cache[0]) is type(Path()) and cache[0].is_absolute() and
+                      cache[0].resolve() == cache[0] and type(cache[1]) is str and
+                      re.fullmatch("[0-9a-f]{64}", cache[1]) is not None)
+
+
 def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
                 sample_binding_seed=False, binding_cost_case=None, binding_cost_selector=None,
                     binding_mint=False, binding_rss=False, binding_writer=None,
-                    expected_hmp_commit=None):
+                    expected_hmp_commit=None, native_archive_cache=None):
+    validate_archive_cache(native_archive_cache)
     commands._require(expected_hmp_commit is None or _sha(expected_hmp_commit))
     commands._require(type(sample_memory) is bool and type(sample_binding_seed) is bool and
                       not (sample_memory and sample_binding_seed))
@@ -320,6 +335,10 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
         receipt = {"schema": 1, "commands": [], "native_commit": native_commit,
                    "production_qualified": False,
                    "fixture_source_sha256": commands._digest(_FIXTURE)}
+        if native_archive_cache is not None:
+            receipt["native_archive_cache_sha256"] = native_archive_cache[1]
+            receipt["archive_clone_fixture_source_sha256"] = commands._digest(
+                Path(_CLONE_SPEC.origin))
         if sample_memory:
             receipt["memory_fixture_source_sha256"] = commands._digest(Path(_MEMORY_SPEC.origin))
         if sample_binding_seed:
@@ -355,8 +374,17 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
                 tree=True), commit)
             archive = root / (label + ".tar")
             commands._require(not archive.exists())
-            _git(root, repository, ["archive", "--format=tar", "--output=" + str(archive), commit,
-                "--", "*.py", "*.json", "*.toml", "*.yaml", "*.yml"], label + "_archive", receipt)
+            if label == "native" and native_archive_cache is not None:
+                receipt["native_archive_clone_attempted"] = True
+                commands._save(root / "receipt.json", receipt)
+                receipt["native_archive_clone"] = clone_contract.clone_archive(
+                    native_archive_cache[0], archive, native_archive_cache[1])
+                commands._save(root / "receipt.json", receipt)
+            else:
+                _git(root, repository, ["archive", "--format=tar",
+                    "--output=" + str(archive), commit, "--", "*.py", "*.json", "*.toml",
+                    "*.yaml", "*.yml"], label + "_archive",
+                    receipt)
             copies[label] = extract_sources(archive, root / label, commit, manifest)
             verify_literal_sources(root / label, copies[label], manifest)
         commands._require({"hermes_state.py", "hermes_state_registry.py"} <= set(copies["native"]))
@@ -364,6 +392,10 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
             "server/tests/unit/test_s5_media_fetch.py", "server/tests/unit/test_s4_descriptors.py",
             "server/tests/unit/hmp_kit.py", "tools/compat/local_media_native_serving_fixture.py"}
             <= set(copies["hmp"]))
+        if native_archive_cache is not None:
+            commands._require(commands._digest(
+                root / "hmp/tools/compat/local_media_native_archive_clone.py") ==
+                receipt["archive_clone_fixture_source_sha256"])
         if sample_memory:
             copied_memory = root / "hmp/tools/compat/local_media_native_memory_sample.py"
             commands._require(commands._digest(copied_memory) ==
@@ -421,6 +453,10 @@ def run_fixture(root, native_repository, native_commit, *, sample_memory=False,
                                   for name, value in inventory.items()))
         commands._require(commands._digest(executable.resolve()) == executable_sha and
             commands._digest(_FIXTURE) == receipt["fixture_source_sha256"])
+        if native_archive_cache is not None:
+            commands._require(commands._digest(root / "native.tar") == native_archive_cache[1] and
+                              commands._digest(Path(_CLONE_SPEC.origin)) ==
+                              receipt["archive_clone_fixture_source_sha256"])
         receipt.update(completed=True, report_sha256=marker["report_sha256"],
                        runtime_executable_sha256=executable_sha, observation=report)
         commands._save(root / "receipt.json", receipt)

@@ -2,8 +2,9 @@
 
 This fixture-only storage optimization does not change native execution,
 authority, phase coverage or the original 12-second process refusal policy.
-It is not wired into the serving driver. One fresh tiny synthetic clone has
-completed; evidence review and driver integration remain separate gates.
+One fresh tiny synthetic clone completed and passed independent artifact review.
+The optional driver integration below is implemented but awaits separate source
+review before use.
 
 The local macOS `cp(1)` manual explicitly allows `cp -c` to fall back to an
 ordinary copy. Therefore it cannot establish the intended no-fallback storage
@@ -67,5 +68,30 @@ matched; destination had its own inode, with owned 0600 single-link properties,
 and the allowed provenance name was present. Its opaque value was not read.
 No ordinary-copy fallback, metadata removal, existing-target overwrite, actual
 archive extraction or native Hermes workload occurred. The first strict-guard
-refusal remains preserved. Independent artifact review is pending. This is not
+refusal remains preserved. Independent artifact review accepted the exact tiny source/artifact bindings. This is not
 measured physical-space savings, driver qualification or a release claim.
+
+## Optional driver integration candidate
+
+`run_fixture(native_archive_cache=(canonical_path, exact_sha256))` is explicit
+and Darwin-only; malformed cache options refuse before owned filesystem effects.
+The default path still creates a fresh native Git archive. Cached mode clones
+only `native.tar`; HMP archives remain fresh. Git commit type, custom tar-command
+refusal, literal Git tree/mode inventory, bounded archive parsing/extraction and
+copied-source hashing remain mandatory. A cache hash/path alone never authorizes
+native execution. Wrong archive header commits and wrong content/blob identities
+refuse before the native entry.
+
+The receipt records the expected cache digest and clone-helper source hash,
+then attempted state before the clone syscall. A clone refusal stops without
+falling back to Git archive. The copied HMP clone helper must match the loaded
+source hash before native execution. On successful workload completion, the
+archive digest and helper hash are checked again before completion publication.
+No archive or source evidence is deleted; source/worker lifetime and original
+12-second refusal remain unchanged.
+
+Root's 679 combined fixture/model guards and configured lint passed, including
+cached/default paths, malformed options, clone refusal, wrong commit/blob,
+helper mismatch and post-workload archive drift. These models execute no clone,
+Git or native workload. Independent integration source review is pending. No
+retained real archive or Hermes workload has used this optional path yet.
