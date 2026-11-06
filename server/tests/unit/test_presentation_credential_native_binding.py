@@ -548,7 +548,9 @@ async def begin_gateway(local, monkeypatch):
         yield channel, peer, spine
     finally:
         writer = channel._credential_begin_writer_snapshot
-        if writer is not None and writer._unknown:
+        reader = channel._credential_ready_receiver_snapshot
+        if ((writer is not None and writer._unknown)
+                or (reader is not None and reader._io_unknown)):
             assert not channel.close() and not channel._closed_known
             # Fixture-owned disposal only, never a channel/native release fact.
             # No test flag or protocol evidence is restored to make close pass.

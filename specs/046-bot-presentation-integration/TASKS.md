@@ -92,6 +92,10 @@ historical, not an alternative live authorization path or resolved incident.
       reserved native intent; concrete full-wire progress and one completion check
       precede native write fact. Partial/unknown no retry, original maximum input3
       envelope and native actor scope retained. No production caller/READY read.
+- [x] Implement/review original-work signed READY read from completed signed BEGIN
+      evidence, one existing native receive claim, original deadline/cursor and
+      broker signature/context/hash. Read success is separate from fresh native
+      PRE_GO/READY transition, resources and GO; production caller remains closed.
 - [ ] Wire only through qualified production startup/service dispatch; preserve
       the exact original adopted connection plus current native phase authority
       before any credential resource/GO path. Ticket/capacity alone is insufficient.

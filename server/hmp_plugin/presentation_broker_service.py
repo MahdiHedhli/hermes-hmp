@@ -433,6 +433,7 @@ class SocketChannel:
         self._credential_begin_receiver = self._credential_begin_receiver_snapshot = None
         self._credential_ready_writer = self._credential_ready_writer_snapshot = None
         self._credential_begin_writer = self._credential_begin_writer_snapshot = None
+        self._credential_ready_receiver = self._credential_ready_receiver_snapshot = None
         try:
             _require(type(sock) is socket.socket and type(enrollment) is StartupEnrollment
                      and type(role) is str and role in ("gateway", "broker")
@@ -641,6 +642,13 @@ class SocketChannel:
             from .presentation_credential_begin_write import NativeBeginWriter
             _require(type(begin_writer) is NativeBeginWriter)
             NativeBeginWriter._released(begin_writer, self)
+
+        ready_receiver = getattr(self, "_credential_ready_receiver", None)
+        _require(ready_receiver is getattr(self, "_credential_ready_receiver_snapshot", None))
+        if ready_receiver is not None:
+            from .presentation_credential_ready_read import NativeReadyReceiver
+            _require(type(ready_receiver) is NativeReadyReceiver)
+            NativeReadyReceiver._released(ready_receiver, self)
 
         control = getattr(self, "_cancel_receiver", None)
         _require(control is getattr(self, "_cancel_receiver_snapshot", None))

@@ -84,3 +84,10 @@ permissions/providers or mobile build changed. Production resource admission,
 signed READY reception and later signed phases, worker GO relay, runtime/startup,
 native publication, STATUS and physical/release qualification remain incomplete.
 The earlier native-destination incident remains separate and unresolved.
+
+
+## Subsequent CI observation
+
+Exact BEGIN-writer source 5b8f40a passed CI748 plugin and Python 3.12/3.13/3.14
+Unicode jobs. This does not qualify later READY-reader source or production/device
+behavior; see the separate [READY read checkpoint](presentation-signed-ready-read-2026-11-06.md).

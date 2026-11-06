@@ -83,3 +83,13 @@ does not open old unsigned READY/GO/CANCEL/result transports. Historical local
 retirement additionally requires the original work task joined; no write-quiescence,
 resource, remote/native release or production startup follows. See
 [write evidence and limits](../../docs/research/presentation-signed-begin-write-2026-11-06.md).
+
+
+## November 6 — original-work signed READY cursor
+
+`NativeReadyReceiver` joins only the original completed signed BEGIN writer and
+consumes one existing native receive claim on that same live work allocation.
+It validates bounded broker READY context/signature/empty-frame hash under the
+original clock/deadline. Current read data is NOT native READY admission: a fresh
+PRE_GO/native phase transition remains separate. Production caller/generic channel
+gates remain unchanged. See [read evidence and limits](../../docs/research/presentation-signed-ready-read-2026-11-06.md).

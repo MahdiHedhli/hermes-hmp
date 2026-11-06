@@ -1,26 +1,26 @@
 ## Bot-character delivery source checkpoint — November 6, 2026
 
-[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now includes a
-reviewed fixed signed BEGIN writer on the original native work task and SAME
-reserved send intent. Full signed-record/frame progress and one native completion
-authorization precede its native write fact. Boundary failures are sticky; unknown
-IO cannot retry or clear debt. Input3's four-byte envelope is included in bounds.
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now includes
+reviewed signed READY reception on the original native work allocation, derived
+only from completed signed/native BEGIN evidence. One existing native receive
+claim, original deadline/cursor and broker signature/context/empty-frame hash are
+joined. Failed/partial/unknown reads cannot mint native READY or retry; late native
+claim failures retain their original linear state. Generic credential gates stay closed.
 
-Root final affected regression: **1,408 passed, one skipped**, 60.31 seconds;
-configured repository-wide lint passed. Native-binding module: **32 passed**,
-including 12 new transport cases. Actual wire bytes, maximum valid 8,196-byte
-input, real backpressure, partial/unknown writes, initial-boundary restoration,
-one completion refusal and wrong actors are covered. Clearing handshake markers
-cannot revive unsigned fallback. Independent review was read-only. See
-[evidence and limits](docs/research/presentation-signed-begin-write-2026-11-06.md).
-New-source CI is pending. Prior cancelled-read source `36de774` passed
-[CI746](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42286196003).
+Root final affected regression: **1,429 passed, one skipped**, 64.17 seconds;
+configured repository-wide lint passed. New READY-reader cases: **20 passed**,
+covering valid/fragmented input, malformed/foreign/stale context, EOF/unknown recv,
+postcallback count/target/buffer drift, late keys/pins/claim refusal, wrong actors,
+forged completion flag, deadline and cancellation. Failure context/immutable aliases
+are cleared; only the original buffer is wiped. Independent review was read-only.
+See [evidence and limits](docs/research/presentation-signed-ready-read-2026-11-06.md).
+New-source CI is pending. Prior signed BEGIN writer `5b8f40a` passed
+[CI748](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42288772458).
 
-This helper has no production caller; the existing production-path signing tests
-still send zero application bytes. Signed READY reception/later phase IO,
-production resource admission/worker GO relay, startup, native publication, STATUS
-and physical/release qualification remain open. Character delivery is unavailable.
-No live host/device/settings or mobile build changed.
+Read success is not a fresh PRE_GO/native READY transition. Production wiring,
+later signed phases, resource admission/worker GO relay, startup, native publication,
+STATUS and physical/release qualification remain open. Character delivery is
+unavailable. No live host/device/settings or mobile build changed.
 
 ## Native image verification checkpoint — November 6, 2026
 

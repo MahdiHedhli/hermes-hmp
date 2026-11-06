@@ -646,3 +646,17 @@ Maximum input3 includes its four-byte envelope. No production caller, signed REA
 reader or generic credential gate opening is added. Historical local settlement
 requires joined original work Task and known IO; it grants no remote/resource
 credit. See [evidence and limits](../../docs/research/presentation-signed-begin-write-2026-11-06.md).
+
+
+### BI1 original-work signed READY receiver (November 6, 2026)
+
+`presentation_credential_ready_read.py` derives one receive admission only from
+completed `NativeBeginWriter` signed/native evidence on the original live work
+allocation. It joins original send completion and consumes the existing native
+receive claim once before bounded direct reads/owned readiness. Broker READY seq0
+signature, original context/input scope and empty-frame hash are checked, with
+original packet/binding/clock/key/task joins before and after callbacks. A private
+read completion/current check grants no native READY transition, resource or GO
+permission. Unknown/partial/cancelled reads retain debt; context-free failure wipes
+only the original buffer. Production callers and generic credential gates stay
+unchanged. See [evidence and limits](../../docs/research/presentation-signed-ready-read-2026-11-06.md).
