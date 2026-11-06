@@ -633,3 +633,16 @@ without authenticated completion. Historical close checks original Task.done AND
 cancelled; unknown syscall/readiness/pending/drift/fake/stale state retains debt.
 Work/material guards, deadlines and generic credential transports remain unchanged.
 See [evidence and limits](../../docs/research/presentation-cancelled-control-read-2026-11-06.md).
+
+
+### BI1 original-work signed BEGIN writer (November 6, 2026)
+
+`presentation_credential_begin_write.py` derives only the original fixed signed
+BEGIN plus input3 frame from `NativePhaseWorkOwner` and its already reserved
+`_BeginWriteIntent`. Original task/allocation/source/key/native authority, concrete
+send progress and owned writability remain joined. One native completion check
+precedes `_BeginWriteFact` on that SAME intent; no second reserve/authorize-send.
+Maximum input3 includes its four-byte envelope. No production caller, signed READY
+reader or generic credential gate opening is added. Historical local settlement
+requires joined original work Task and known IO; it grants no remote/resource
+credit. See [evidence and limits](../../docs/research/presentation-signed-begin-write-2026-11-06.md).

@@ -88,6 +88,10 @@ historical, not an alternative live authorization path or resolved incident.
       task/cursor/count/buffer/wake/Future/handle binding and no authenticated completion.
       Historical closure requires actual original Task.done+cancelled. Unknown native/
       readiness/pending/drift/fake/stale state remains debt, without retry or resource credit.
+- [x] Implement/review the fixed original-work signed BEGIN socket writer on the SAME
+      reserved native intent; concrete full-wire progress and one completion check
+      precede native write fact. Partial/unknown no retry, original maximum input3
+      envelope and native actor scope retained. No production caller/READY read.
 - [ ] Wire only through qualified production startup/service dispatch; preserve
       the exact original adopted connection plus current native phase authority
       before any credential resource/GO path. Ticket/capacity alone is insufficient.

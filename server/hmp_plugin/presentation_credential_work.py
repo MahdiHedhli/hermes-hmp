@@ -35,6 +35,7 @@ class NativePhaseWorkOwner:
 
         _require(type(self) is NativePhaseWorkOwner and "_ready" not in vars(self))
         self._ready = self._attempted = self._failed = False
+        self._writer = self._writer_snapshot = None
         self._record = self._record_snapshot = None
         self._intent = self._intent_snapshot = None
         self._cleanup = cleanup
@@ -308,6 +309,13 @@ class NativePhaseWorkOwner:
             type(now) is int and type(remote._end_snapshot) is int and now < remote._end_snapshot
         )
         intent = channel._begin_write_intent_snapshot
+        writer = self._writer
+        _require(writer is self._writer_snapshot)
+        writing = False
+        if writer is not None:
+            from .presentation_credential_begin_write import NativeBeginWriter
+            _require(type(writer) is NativeBeginWriter)
+            writing = NativeBeginWriter._producer_active(writer, self)
         _require(
             type(intent) is _BeginWriteIntent
             and channel._begin_write_intent is intent
@@ -331,7 +339,7 @@ class NativePhaseWorkOwner:
             and intent.version == 2
             and channel._begin_write_fact is None
             and channel._begin_write_fact_snapshot is None
-            and channel._writing is False
+            and channel._writing is writing
             and channel._reading is False
             and remote._send_claimed is True
             and remote._send_completed is False

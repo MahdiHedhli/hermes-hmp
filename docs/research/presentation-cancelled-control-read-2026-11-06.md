@@ -80,3 +80,10 @@ provider/permission change or mobile build. Full character delivery still needs
 production resource admission, actual signed BEGIN/later phase transport, worker
 GO relay, startup, native publication, STATUS and physical/release qualification.
 The earlier native-destination incident remains unresolved and separate.
+
+
+## Subsequent CI observation
+
+Exact cancelled-read source 36de774 passed CI746 plugin and Python 3.12/3.13/3.14
+Unicode jobs. This qualifies only that source/check scope; later BEGIN transport
+and production/device qualification remain separate.

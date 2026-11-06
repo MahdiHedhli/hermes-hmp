@@ -1,8 +1,8 @@
 # Original work-task phase producer contract
 
 Status: independently reviewed bounded contract/source seam. The no-IO BEGIN
-reservation and fixed original-work BEGIN signer are implemented; complete signed
-transport is not. See the [source/test evidence](../../docs/research/presentation-credential-work-signer-2026-11-06.md). No live runtime, credential, service or capability is admitted here.
+reservation, fixed original-work BEGIN signer and source-only signed BEGIN writer
+are implemented. Complete phase transport and production wiring remain open. See the [source/test evidence](../../docs/research/presentation-credential-work-signer-2026-11-06.md). No live runtime, credential, service or capability is admitted here.
 
 ## Actual task ownership
 
@@ -66,3 +66,20 @@ synthetic native authorization and modeled peer/clock facts. They preserve zero
 application bytes and no write-completion/GO/child fact. No reviewer tests ran.
 Production startup, remaining phase signing, complete streaming/native publication,
 installation and physical/release qualification remain unfinished.
+
+
+## November 6 — actual source-only signed BEGIN write
+
+`NativeBeginWriter` derives only the original producer, signed record, exact input3
+packet and the previously reserved native intent. Callback-free actor/metadata
+admission precedes retained owner/attempt latches and native guards. The full
+signed record plus HBR1 frame, offsets and one completion authorization remain
+bound to the same intent. No second reservation/authorize-send is allowed. Input3
+permits INPUT_LIMIT+4, with total bounded by 2048+8+1024+INPUT_LIMIT+4.
+
+An original native `_BeginWriteFact` follows only full native bytes, existing
+completion authorization and final current authority/material checks. Native fact
+does not open old unsigned READY/GO/CANCEL/result transports. Historical local
+retirement additionally requires the original work task joined; no write-quiescence,
+resource, remote/native release or production startup follows. See
+[write evidence and limits](../../docs/research/presentation-signed-begin-write-2026-11-06.md).

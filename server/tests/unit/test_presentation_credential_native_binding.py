@@ -9,6 +9,7 @@ import os
 from dataclasses import replace
 
 import pytest
+import pytest_asyncio
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives.serialization import (
     Encoding,
@@ -524,6 +525,232 @@ async def test_constructor_rechecks_allocation_after_handshake_clock_boundary(
             *(allocation.task for allocation in retained[0]), return_exceptions=True
         )
     finally:
+        assert broker.close() and broker.close_clock()
+        for key in keys.values():
+            key.retire()
+
+
+@pytest_asyncio.fixture
+async def begin_gateway(local, monkeypatch):
+    from hmp_plugin.presentation_clock import NativeClockOwner
+
+    from .test_presentation_selected_protocol import darwin_model
+
+    spine, enrollment, client, _, _, _ = local
+    darwin_model(monkeypatch)
+    sock = client()
+    peer, _ = await asyncio.get_running_loop().sock_accept(spine._listener)
+    peer.setblocking(False)
+    channel = SocketChannel(sock, replace(enrollment, gateway_pid=os.getpid(),
+        service_pid=os.getpid() + 1, protocol_version=2), role="gateway",
+        endpoint=spine._endpoint, observation=spine._observation)
+    try:
+        yield channel, peer, spine
+    finally:
+        writer = channel._credential_begin_writer_snapshot
+        if writer is not None and writer._unknown:
+            assert not channel.close() and not channel._closed_known
+            # Fixture-owned disposal only, never a channel/native release fact.
+            # No test flag or protocol evidence is restored to make close pass.
+            sock.close()
+            assert NativeClockOwner.close_local(channel._clock_owner_snapshot)
+        else:
+            assert channel.close() and channel.close_clock()
+        sock.close()
+        peer.close()
+        assert await spine.stop_local_sockets()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mutation", [
+    "signed", "partial", "wouldblock", "zero", "unknown", "max_packet", "initial_guard",
+    "completion_error", "post_send_key", "offset_drift", "wrong_actor", "registration_unknown",
+])
+async def test_original_work_signed_begin_transport_preserves_reserved_intent(
+    context, begin_gateway, tmp_path, monkeypatch, mutation
+):
+    import errno
+
+    from hmp_plugin import presentation_credential_begin_write as module
+    from hmp_plugin.presentation_credential_begin_write import NativeBeginWriter
+    from hmp_plugin.presentation_remote import RemoteOperationOwner
+
+    if mutation == "max_packet":
+        from hmp_plugin import presentation_input_v3 as input3
+        from hmp_plugin.presentation_jobs import INPUT_LIMIT
+        original_encode = input3.encode_input_v3
+        def maximum_input(value):
+            encoded = original_encode(value)
+            body = encoded[4:].ljust(INPUT_LIMIT, b" ")
+            packet = len(body).to_bytes(4, "big") + body
+            assert input3.decode_input_v3(packet) == value and len(packet) == INPUT_LIMIT + 4
+            return packet
+        monkeypatch.setattr(input3, "encode_input_v3", maximum_input)
+    prepared = await prepare(context, begin_gateway)
+    authority, operation, _, channel, peer, _, packet, _ = prepared
+    if mutation == "max_packet":
+        import socket
+        channel._socket_snapshot.setsockopt(socket.SOL_SOCKET, socket.SO_SNDBUF, 1024)
+    if mutation == "wrong_actor":
+        from hmp_plugin.presentation_credential_work import NativePhaseWorkOwner
+        initialize = NativePhaseWorkOwner.__init__
+        def initialized(producer, cleanup):
+            initialize(producer, cleanup)
+            with pytest.raises(FrameError):
+                NativeBeginWriter.retain(producer)
+            assert producer._writer is None and channel._credential_begin_writer is None
+        monkeypatch.setattr(NativePhaseWorkOwner, "__init__", initialized)
+    owner, keys, broker = await handshake(prepared, tmp_path)
+    held = {"actual": bytearray(), "calls": 0}
+    wire_ready = asyncio.Event()
+    async def receive_known_wire():
+        await wire_ready.wait()
+        expected = (0 if mutation in ("zero", "initial_guard", "registration_unknown") else
+                    7 if mutation == "unknown" else len(held["writer"]._scope_snapshot.wire))
+        actual = bytearray()
+        async with asyncio.timeout_at(held["writer"]._scope_snapshot.intent.end_ns / 1e9):
+            while len(actual) < expected:
+                part = await asyncio.get_running_loop().sock_recv(peer, expected - len(actual))
+                assert part
+                actual.extend(part)
+        return bytes(actual)
+    receiver_task = asyncio.create_task(receive_known_wire())
+    try:
+        remote = authority.bind_remote(operation, channel, owner._operation_binding(), packet)
+        native_send = module._SEND
+        original_send = SocketChannel.send
+        original_authorize = RemoteOperationOwner._authorize_send_completion
+        completion_calls = []
+        def authorized(owned, *args):
+            completion_calls.append(owned)
+            result = original_authorize(owned, *args)
+            if mutation == "completion_error":
+                raise FrameError("SYNTHETIC_COMPLETION_REFUSAL")
+            return result
+        monkeypatch.setattr(RemoteOperationOwner, "_authorize_send_completion", authorized)
+        if mutation == "registration_unknown":
+            from hmp_plugin import presentation_readiness as readiness
+            install = readiness._install_writer
+            def unknown_install(*args):
+                install(*args)
+                raise OSError("synthetic unknown BEGIN write registration")
+            monkeypatch.setattr(readiness, "_install_writer", unknown_install)
+        def send(sock, data):
+            held["calls"] += 1
+            if mutation in ("wouldblock", "registration_unknown") and held["calls"] == 1:
+                raise BlockingIOError(errno.EAGAIN, "synthetic known would-block")
+            if mutation == "zero":
+                return 0
+            limit = 7 if mutation == "unknown" else 37 if mutation == "partial" else len(data)
+            n = native_send(sock, data[:limit])
+            held["actual"].extend(data[:n])
+            if mutation == "unknown":
+                raise OSError("synthetic uncertain native BEGIN send")
+            if mutation == "post_send_key":
+                keys["gateway"].retire()
+            if mutation == "offset_drift":
+                writer = held["writer"]
+                writer._offset = writer._offset_snapshot = writer._offset + 1
+            return n
+        monkeypatch.setattr(module, "_SEND", send)
+        async def qualified_test_send(owned_channel, frame, end, *, owner=None):
+            if owned_channel is not channel:
+                return await original_send(owned_channel, frame, end, owner=owner)
+            assert owner is remote
+            producer = remote._cleanup_owner_snapshot._credential_work_snapshot
+            assert asyncio.current_task() is producer._refs_snapshot[6].task
+            assert asyncio.current_task() is not producer._cleanup._caller_snapshot
+            writer = NativeBeginWriter.retain(producer)
+            if mutation == "wrong_actor":
+                async def foreign_write():
+                    with pytest.raises(FrameError):
+                        await writer.write_begin()
+                await asyncio.create_task(foreign_write())
+                assert writer._attempted is False and writer._failed is False
+                assert channel._writing is False
+            held["writer"] = writer
+            held["intent"] = channel._begin_write_intent_snapshot
+            wire_ready.set()
+            if mutation == "initial_guard":
+                from hmp_plugin.presentation_credential_work import NativePhaseWorkOwner
+                guard = NativePhaseWorkOwner._guard
+                def fail_initial(owned):
+                    result = guard(owned)
+                    if owned is producer and writer._attempted:
+                        held["guard_calls"] = held.get("guard_calls", 0) + 1
+                        raise FrameError("SYNTHETIC_INITIAL_WRITE_GUARD")
+                    return result
+                monkeypatch.setattr(NativePhaseWorkOwner, "_guard", fail_initial)
+            with pytest.raises(FrameError):
+                NativeBeginWriter.retain(producer)
+            try:
+                await writer.write_begin()
+            finally:
+                if mutation == "initial_guard":
+                    monkeypatch.setattr(NativePhaseWorkOwner, "_guard", guard)
+                    with pytest.raises(FrameError):
+                        await writer.write_begin()
+                    assert held["guard_calls"] == 1 and held["calls"] == 0
+                held["count"] = writer._offset
+                held["fact"] = channel._begin_write_fact_snapshot
+            # End the isolated qualification before unimplemented signed READY.
+            # Actual production SocketChannel.send remains unchanged/closed.
+            raise FrameError("SYNTHETIC_BEGIN_TRANSPORT_ONLY")
+        monkeypatch.setattr(SocketChannel, "send", qualified_test_send)
+        with pytest.raises((FrameError, AuthorityRefusalError)):
+            await remote.begin_ready()
+        writer = held["writer"]
+        scope = writer._scope_snapshot
+        succeeded = mutation in ("signed", "partial", "wouldblock", "max_packet", "wrong_actor")
+        assert writer._complete is succeeded and writer._failed is not succeeded
+        assert writer._attempted
+        assert scope.intent is held["intent"] is channel._begin_write_intent_snapshot
+        assert scope.intent is writer._scope_snapshot.intent
+        assert scope.raw is scope.producer._record_snapshot
+        zero_known_progress = mutation in ("zero", "unknown", "initial_guard",
+                                           "registration_unknown")
+        assert held["count"] == (0 if zero_known_progress else len(scope.wire))
+        assert bytes(held["actual"]) == scope.wire[:len(held["actual"])]
+        assert await receiver_task == bytes(held["actual"])
+        assert completion_calls == ([remote] if succeeded or mutation == "completion_error" else [])
+        if mutation == "max_packet":
+            assert len(scope.intent.packet) == module._PACKET_LIMIT == 8196
+            assert module._LIMIT == 11276
+            assert writer._waiter_origin is not None and writer._waiter_origin._retired
+        assert (held["fact"] is not None) is succeeded
+        if succeeded:
+            assert held["fact"].intent is held["intent"]
+            assert writer._completion_snapshot.native is held["fact"]
+        assert writer._unknown is (mutation in ("unknown", "offset_drift", "registration_unknown"))
+        assert channel._writing is (mutation in ("unknown", "offset_drift", "registration_unknown"))
+        assert remote._go_admission is None and authority._record(operation).child is None
+        assert remote._send_completed is False  # source test intercepted before READY integration
+        calls = held["calls"]
+        with pytest.raises((FrameError, AuthorityRefusalError)):
+            await writer.write_begin()
+        assert held["calls"] == calls and channel._begin_write_intent_snapshot is held["intent"]
+        if not writer._unknown:
+            NativeBeginWriter._released(writer, channel)
+        else:
+            with pytest.raises(FrameError):
+                NativeBeginWriter._released(writer, channel)
+        if succeeded:
+            # Removing both mutable markers cannot erase the retained signed
+            # channel provenance and revive the generic unsigned fallback.
+            handshake_owner = channel._credential_handshake_snapshot
+            channel._credential_handshake = channel._credential_handshake_snapshot = None
+            try:
+                with pytest.raises(FrameError):
+                    channel._credential_work_ready()
+            finally:
+                channel._credential_handshake = channel._credential_handshake_snapshot = (
+                    handshake_owner)
+        # The native completion fact cannot bypass any old unsigned phase path.
+        with pytest.raises(FrameError):
+            await channel.send_cancel(remote._cleanup_owner_snapshot)
+    finally:
+        receiver_task.cancel()
+        await asyncio.gather(receiver_task, return_exceptions=True)
         assert broker.close() and broker.close_clock()
         for key in keys.values():
             key.retire()
