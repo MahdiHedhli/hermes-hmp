@@ -199,3 +199,15 @@ suite including the existing HBR1 and input3 codecs passed 167 tests. Typed star
 custody, original cursor integration, actual GO/output/TERMINAL/ACK/native joins,
 STATUS and authenticated HTTP publication remain incomplete. No live change or
 physical-device qualification follows from this checkpoint.
+
+### Phase commitment source checkpoint
+
+`presentation_credential_phase.py` adds independently reviewed data-only signed
+phase/context checks, bounded exact HBR1 v2 header matching before body
+allocation, and a whole-frame fixture digest check. The focused suite including
+input3 and HBR1 passed 183 tests (root execution; independent review read-only).
+The original receiver must retain its exact checked commitment, supply locally
+held pins/context and stream/hash its own cursor. Reconstructing a data object
+is not signature proof. BEGIN scope must be independently derived before any
+registry/resource effect. Actual native and lifecycle authority remain separate;
+no signer, GO admission, completed transfer or runtime capability is added.
