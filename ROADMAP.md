@@ -1,3 +1,20 @@
+## Fixed GO commitment checkpoint — November 6, 2026
+
+The new original-work signer derives only gateway/g2b GO sequence1 for the
+original empty frame after actual native GO_INTENT and consumed admission. It
+joins completed BEGIN/READY/transition, current role material and original end;
+no socket write, GO_SENT, resource or execution permission follows. Production
+GO transport remains closed.
+
+Independent read-only review accepted the fixed GO state seam and metadata
+repairs: closed primitive rows/exact integer ends before comparison, then exact
+expected values derived from retained READY. Selected regression before the final
+value join: **853 passed**, 39.49 seconds. After it: **eight focused cases passed**,
+2.16 seconds; configured lint passed. Admission/expiry assertions preserve actual
+pre-attempt refusal/native UNKNOWN; no rollback is inferred. Prior cancellation
+uncertainty remains recorded. No host/device/settings or installed build changed.
+See [evidence and limits](docs/research/presentation-signed-go-commitment-2026-11-06.md).
+
 ## Internal signed READY dispatch checkpoint — November 6, 2026
 
 The credential branch now uses the signed exchange through the existing original

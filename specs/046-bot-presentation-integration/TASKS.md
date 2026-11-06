@@ -289,3 +289,8 @@ historical, not an alternative live authorization path or resolved incident.
       work/caller barrier; three direct cases and independent source review pass.
       Full regression 1,444 passed/one skipped; final explicit-join focused172
       passed/lint passed. Final readback review accepted; startup/GO/release remain open.
+
+- [x] Qualify bounded fixed GO signing-only producer from actual native GO_INTENT and
+      original BEGIN/READY/transition/admission; eight focused cases and bounded
+      source review pass. Selected853 passed before final value join; focused8
+      and lint pass afterward. Final review accepted; transport remains closed.

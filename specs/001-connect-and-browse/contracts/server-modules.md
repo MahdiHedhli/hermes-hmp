@@ -668,3 +668,12 @@ post-state material guard requires actual STARTING/READY ledger state, no GO or
 child, current keys and signed READY, original clock/deadline and a known native
 return. Unknown outcomes remain terminal; no rollback, retry, production caller,
 resource admission or worker GO authority is supplied.
+
+### Fixed native GO commitment (November 6, 2026)
+
+`presentation_credential_go.py` derives only a fixed signed gateway GO sequence1
+empty-frame commitment from the original completed BEGIN/READY transition and
+actual consumed native GO_INTENT admission. It uses the original work Task,
+current role material, native authority and original deadline. Closed primitive
+metadata and pre/post crypto checks prevent foreign callbacks/publication after
+retirement. It grants no socket-write, GO_SENT, resource or execution permission.

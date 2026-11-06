@@ -37,6 +37,7 @@ class NativePhaseWorkOwner:
         self._ready = self._attempted = self._failed = False
         self._writer = self._writer_snapshot = None
         self._ready_transition = self._ready_transition_snapshot = None
+        self._go_commitment = self._go_commitment_snapshot = None
         self._exchange_attempted = self._exchange_complete = self._exchange_failed = False
         self._record = self._record_snapshot = None
         self._intent = self._intent_snapshot = None

@@ -32,6 +32,9 @@ from .test_presentation_supervisor import context as context
     "native_observe_key", "native_transition_error", "native_transition_key", "native_data_drift",
     "composed_ready", "composed_signature", "composed_wrong_actor",
     "dispatch_ready", "dispatch_signature", "dispatch_cancel",
+    "dispatch_go_sign", "dispatch_go_key", "dispatch_go_wrong_actor",
+    "dispatch_go_revoked", "dispatch_go_admission", "dispatch_go_deadline",
+    "dispatch_go_expected_row", "dispatch_go_foreign_end",
 ])
 async def test_original_work_ready_read_requires_its_complete_signed_begin(
     context, begin_gateway, tmp_path, monkeypatch, mutation
@@ -340,7 +343,7 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 return writer
 
             monkeypatch.setattr(NativeBeginWriter, "retain", classmethod(dispatch_writer))
-            if mutation == "dispatch_ready":
+            if mutation == "dispatch_ready" or mutation.startswith("dispatch_go_"):
                 assert await remote.begin_ready() is True
                 cleanup = remote._cleanup_owner_snapshot
                 producer = cleanup._credential_work_snapshot
@@ -353,6 +356,116 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 assert remote._go_admission is None and authority._record(operation).child is None
                 with pytest.raises(FrameError):
                     channel._credential_work_ready()
+                if mutation.startswith("dispatch_go_"):
+                    from hmp_plugin import presentation_credential_go as go_module
+                    from hmp_plugin.presentation_broker_service import SocketChannel
+                    from hmp_plugin.presentation_credential_go import NativeGoCommitment
+
+                    async def signed_go_only(owned_channel, owned_remote):
+                        assert owned_channel is channel and owned_remote is remote
+                        if mutation == "dispatch_go_wrong_actor":
+                            async def wrong_go():
+                                with pytest.raises(FrameError):
+                                    NativeGoCommitment.retain(producer)
+                            await asyncio.create_task(wrong_go())
+                            assert producer._go_commitment is None
+                        commitment = NativeGoCommitment.retain(producer)
+                        held["go_commitment"] = commitment
+                        with pytest.raises(FrameError):
+                            NativeGoCommitment.retain(producer)
+                        if mutation == "dispatch_go_key":
+                            encode = go_module.encode_record
+
+                            def revoke_after_sign(*args):
+                                raw = encode(*args)
+                                keys["gateway"].retire()
+                                return raw
+
+                            monkeypatch.setattr(go_module, "encode_record", revoke_after_sign)
+                        if mutation == "dispatch_go_revoked":
+                            keys["gateway"].retire()
+                        if mutation == "dispatch_go_admission":
+                            admission = remote._go_admission_snapshot
+                            foreign_admission = admission._replace(
+                                packet=bytes(bytearray(admission.packet)))
+                            remote._go_admission = remote._go_admission_snapshot = foreign_admission
+                        if mutation in ("dispatch_go_deadline", "dispatch_go_expected_row",
+                                        "dispatch_go_foreign_end"):
+                            sample = go_module.NativeClockOwner.sample
+                            held["go_foreign_callbacks"] = []
+
+                            class ForeignGoData:
+                                def __iter__(self):
+                                    held["go_foreign_callbacks"].append("iter")
+                                    raise AssertionError("foreign GO data iteration")
+
+                                def __eq__(self, other):
+                                    held["go_foreign_callbacks"].append("eq")
+                                    raise AssertionError("foreign GO end comparison")
+
+                            def changed_go_clock(clock):
+                                now = sample(clock)
+                                if (commitment._attempted and asyncio.current_task()
+                                        is producer._refs_snapshot[6].task):
+                                    if mutation == "dispatch_go_deadline":
+                                        return remote._end_snapshot
+                                    if not held.get("go_data_changed"):
+                                        held["go_data_changed"] = True
+                                        scope = commitment._scope_snapshot
+                                        if mutation == "dispatch_go_expected_row":
+                                            scope = scope._replace(
+                                                expected=(ForeignGoData(), *scope.expected[1:]))
+                                        else:
+                                            foreign = scope.admission._replace(
+                                                end_ns=ForeignGoData())
+                                            remote._go_admission = foreign
+                                            remote._go_admission_snapshot = foreign
+                                            scope = scope._replace(admission=foreign)
+                                        commitment._scope = commitment._scope_snapshot = scope
+                                return now
+
+                            monkeypatch.setattr(go_module.NativeClockOwner, "sample",
+                                                changed_go_clock)
+                        try:
+                            held["go_raw"] = commitment.prepare()
+                        finally:
+                            go_record = authority._record(operation)
+                            held["go_native_phase"] = go_record.owner.inspect_remote(
+                                go_record.handle)
+                            assert remote._go_admission_used is True
+                            assert channel._go_write_intent is None
+                            assert channel._go_write_fact is None
+                            with pytest.raises(FrameError):
+                                commitment.prepare()
+                        raise FrameError("SYNTHETIC_GO_SIGNING_ONLY_NO_WIRE")
+
+                    monkeypatch.setattr(SocketChannel, "send_go", signed_go_only)
+                    with pytest.raises((FrameError, AuthorityRefusalError)):
+                        await remote.go()
+                    commitment = held["go_commitment"]
+                    go_success = mutation in ("dispatch_go_sign", "dispatch_go_wrong_actor")
+                    pre_attempt_refusal = mutation == "dispatch_go_admission"
+                    assert commitment._attempted is not pre_attempt_refusal
+                    assert commitment._complete is go_success
+                    assert commitment._failed is (not go_success and not pre_attempt_refusal)
+                    assert held["go_native_phase"] is (
+                        RemotePhase.UNKNOWN if mutation == "dispatch_go_deadline"
+                        else RemotePhase.GO_INTENT)
+                    assert held.get("go_foreign_callbacks", []) == []
+                    if go_success:
+                        from hmp_plugin.presentation_credential_phase import (
+                            check_commitment,
+                            check_complete_frame,
+                        )
+
+                        scope = commitment._scope_snapshot
+                        checked = check_commitment(held["go_raw"], sender_public=scope.pins[0],
+                            receiver_public=scope.pins[1], expected=dict(scope.expected))
+                        header = check_complete_frame(checked, scope.frame,
+                                                      binding=remote._binding_snapshot)
+                        assert header.kind == "GO" and header.sequence == 1
+                    else:
+                        assert commitment._raw is None and "go_raw" not in held
                 RemoteCleanupOwner.request(cleanup)
                 # Actual owned cleanup may retain UNKNOWN: signed cleanup relay
                 # is not integrated by this READY-only dispatch slice.
@@ -370,7 +483,12 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                 assert remote._cleanup_owner_snapshot._credential_work_snapshot._exchange_failed
             async with asyncio.timeout(2):
                 await peer_task
-            assert remote._go_admission is None and authority._record(operation).child is None
+            if mutation.startswith("dispatch_go_"):
+                assert remote._go_admission_used is True
+                assert channel._go_write_intent is None and channel._go_write_fact is None
+            else:
+                assert remote._go_admission is None
+            assert authority._record(operation).child is None
             assert authority._record(operation).owner.inspect_remote(
                 authority._record(operation).handle) is RemotePhase.UNKNOWN
             return
