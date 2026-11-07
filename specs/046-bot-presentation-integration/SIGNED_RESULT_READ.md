@@ -483,3 +483,39 @@ failure branch was not exercised, and the broad failure remains unresolved.
 This checkpoint is source-only and NOT a green whole-transport qualification.
 
 Prior intermittent broker causes and native sender-destination risk remain open.
+
+## One-shot original-parser consumption — November 7, 2026
+
+`NativeCleanupRead.consume_pending()` now feeds one actual pending allocation
+on its original work actor into the SAME authentication parser or original body
+digest. A distinct attempt allocation is retained before the first currentness
+boundary; failure consumes the attempt even if no feed occurred. An independent
+parser/count origin cell precedes feed/hash effects. Body expected progress uses
+a pinned native hash copy without replacing the actual original stream/hash.
+The actual after-state is retained before native callbacks and joined to fixed
+role/actor/original budget/socket checks. Only then are pending aliases withdrawn.
+The fixed cleanup observer recognizes that same progress. Old stopped/IDLE/pending
+APIs do not revive. Work exit still records UNKNOWN because full drain is unfinished.
+
+Actual private fixtures cover received8-byte auth-prefix consumption and the
+SAME original digest13->16 for a3-byte body tail, with no image accumulator or
+candidate restoration. Wrong actor/duplicate, initial boundary failure with
+method restoration, partial feed, role retirement, coherent parser buffer copy,
+foreign count, post-clock progress receipt copy/socket mode, and actual post-hash
+lost acknowledgement refuse without replay; observed counts remain retained.
+Independent read-only review found and required the pre-boundary attempt latch;
+that repair and causal were accepted. No reader task/interest, new budget,
+signing, frame/terminal/ACK/native release or production gate is granted.
+
+Repeated native reads, record-boundary dispatch/auth completion, full drain,
+concurrent CANCEL, terminal/ACK and phone character-image delivery remain open.
+Exact affected transport regression:1,940 passed,1 skipped in168.05s. Full lint,
+plugin surface and whitespace checks pass. Eight focused header consumption cases
+and two body cases overlap this run. An isolated private basetemp avoids unrelated
+pytest garbage cleanup; no existing temporary evidence was manually deleted.
+The initial header fixture misclassified the new successful consumed state; that
+expectation was corrected. Review required the early attempt-latch repair and its
+first-boundary failure/restoration causal. No authority guard was relaxed.
+Earlier broad broker failures and the sender-destination incident remain unresolved;
+this green run does not establish their causes or certify full transport release.
+No build, install, live host/device, grant/provider or deployment change occurred.

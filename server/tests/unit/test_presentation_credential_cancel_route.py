@@ -93,6 +93,8 @@ from .test_presentation_supervisor import context as context
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_advanced",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_consumed",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_hashlost",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_countbad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_custodybad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_copybad",
@@ -599,7 +601,9 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                                     held["partial_body_sent"] = count
                                                     if stage.endswith((
                                                             "_notice_native",
-                                                            "_notice_native_advanced")):
+                                                            "_notice_native_advanced",
+                                                            "_notice_native_consumed",
+                                                            "_notice_native_hashlost")):
                                                         tail = bytes(data[13:16])
 
                                                         task = asyncio.create_task(
@@ -1137,7 +1141,8 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 except FrameError:
                     notice = owned._cleanup_owner_snapshot._read_gate_snapshot._signed_notice_origin
                     assert notice is not None and notice._initialized
-                    if stage.endswith(("_notice_native", "_notice_native_advanced")):
+                    if stage.endswith(("_notice_native", "_notice_native_advanced",
+                                       "_notice_native_consumed", "_notice_native_hashlost")):
                         native_body_ready.set()
                         async with asyncio.timeout_at(end / 1e9):
                             await native_body_queued.wait()
@@ -1163,7 +1168,8 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     assert idle_fact.scope[1] is cursor._parser_origin
                     assert idle_fact.scope[2] == cursor._parser.needed
                     assert body._candidate_snapshot is None and not body._scope_origin.accumulator
-                    if stage.endswith(("_notice_native", "_notice_native_advanced")):
+                    if stage.endswith(("_notice_native", "_notice_native_advanced",
+                                       "_notice_native_consumed", "_notice_native_hashlost")):
                         from hmp_plugin.presentation_credential_cleanup_read import (
                             NativeCleanupRead,
                         )
@@ -1174,7 +1180,8 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                         def body_native_observer(owner):
                             value = observer(owner)
                             assert owner is native and value.count == 3
-                            assert body._stream_origin._received == 13
+                            assert body._stream_origin._received == (
+                                16 if stage.endswith("_notice_native_consumed") else 13)
                             held["body_notice_consumed"] = True
                             native_body_observed.set()
                             return value
@@ -1188,8 +1195,44 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                         assert body._stream_origin._received == 13
                         assert body._committed == 13 and body._candidate_snapshot is None
                         assert not body._scope_origin.accumulator
-                        async with asyncio.timeout_at(end / 1e9):
-                            await native_body_observed.wait()
+                        if stage.endswith("_notice_native_consumed"):
+                            progress = native.consume_pending()
+                            assert progress.count == 3 and native._consume_complete
+                            assert progress.before.stream is body._initialization_origin[1]
+                            assert progress.after.stream is progress.before.stream
+                            assert progress.before.received == 13 and progress.after.received == 16
+                            assert body._committed == 13 and not body._scope_origin.accumulator
+                            assert native._pending_origin is None
+                            with pytest.raises(FrameError):
+                                native.consume_pending()
+                            with pytest.raises(FrameError):
+                                native.current_pending()
+                            assert not native._failed and not native._unknown
+                            held["body_parser_consumed"] = True
+                        if stage.endswith("_notice_native_hashlost"):
+                            from hmp_plugin.presentation_credential_stream import (
+                                SignedResultDiscard,
+                            )
+                            feed = SignedResultDiscard.feed
+
+                            def lost_hash_return(parser, chunk):
+                                feed(parser, chunk)
+                                raise FrameError("SYNTHETIC_POST_HASH_ACK_LOST")
+
+                            monkeypatch.setattr(SignedResultDiscard, "feed", lost_hash_return)
+                            with pytest.raises(FrameError):
+                                native.consume_pending()
+                            assert body._stream_origin._received == 16
+                            assert native._native_count_allocation_origin[1] == 3
+                            assert native._consume_attempted and not native._consume_returned
+                            assert native._progress_origin is None
+                            assert native._pending_origin is None and native._unknown
+                            with pytest.raises(FrameError):
+                                native.consume_pending()
+                            held["body_hash_ack_lost"] = True
+                        else:
+                            async with asyncio.timeout_at(end / 1e9):
+                                await native_body_observed.wait()
                         if stage.endswith("_notice_native_advanced"):
                             from hmp_plugin.presentation_credential_cleanup_notice import (
                                 SignedReadNotice,
@@ -1613,8 +1656,12 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                         if (not held.get("body_notice_published")
                                 and isinstance(outcome, BaseException)):
                             raise outcome  # preserve actual original actor/fixture error
-                        assert held["body_notice_consumed"]
-                        if stage.endswith(("_notice_native", "_notice_native_advanced")):
+                        if stage.endswith("_notice_native_hashlost"):
+                            assert held["body_hash_ack_lost"] and not native_body_observed.is_set()
+                        else:
+                            assert held["body_notice_consumed"]
+                        if stage.endswith(("_notice_native", "_notice_native_advanced",
+                                       "_notice_native_consumed", "_notice_native_hashlost")):
                             native = held["native_body_owner"]
                             assert native._received == 3 and native._count_known
                             assert native._pending_origin is None
@@ -1635,8 +1682,14 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                 b"untouched synthetic replacement")
                     async with asyncio.timeout(3):
                         await asyncio.shield(cleanup._allocations_snapshot[0].task)
-                    if stage.endswith("_notice_native_advanced"):
-                        assert held["body_progress_boundary_refused"]
+                    if stage.endswith(("_notice_native_advanced", "_notice_native_consumed",
+                                       "_notice_native_hashlost")):
+                        if stage.endswith("_notice_native_consumed"):
+                            assert held["body_parser_consumed"]
+                        elif stage.endswith("_notice_native_hashlost"):
+                            assert held["body_hash_ack_lost"]
+                        else:
+                            assert held["body_progress_boundary_refused"]
                         assert body._wake_receipt_origin is not None
                         with pytest.raises(FrameError):
                             NativeResultBodyOwner._released(body, body._scope_origin.envelope)

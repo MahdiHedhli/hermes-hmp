@@ -67,6 +67,14 @@ from .test_presentation_supervisor import context as context
     "wake_reserve_notice_native_counterbad", "wake_reserve_notice_native_pendingpairbad",
     "wake_reserve_notice_native_scopebad", "wake_reserve_notice_native_workflagbad",
     "wake_reserve_notice_native_parseradvancebad",
+    "wake_reserve_notice_native_consume",
+    "wake_reserve_notice_native_consume_initial",
+    "wake_reserve_notice_native_consume_retired",
+    "wake_reserve_notice_native_consume_partial",
+    "wake_reserve_notice_native_consume_parsercopy",
+    "wake_reserve_notice_native_consume_countdrift",
+    "wake_reserve_notice_native_consume_progresscopy",
+    "wake_reserve_notice_native_consume_fdmode",
 ])
 async def test_original_result_envelope(context, begin_gateway, tmp_path, monkeypatch, mutation):
     from hmp_plugin import presentation_credential_result_read as module
@@ -895,6 +903,108 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                     assert native.current_pending() is receipt
                                     assert native._pending_origin == held["native_expected"]
                                     assert not cursor._parser._buffer_origin
+                                if "_native_consume_" in mutation:
+                                    from hmp_plugin.presentation_credential_stream import (
+                                        SignedCleanupAuthPrefix,
+                                    )
+                                    feed = SignedCleanupAuthPrefix.feed
+                                    held["consume_feed_calls"] = 0
+
+                                    if mutation.endswith("_initial"):
+                                        original_fence = NativeCleanupRead._final_socket_fence
+
+                                        def first_consume_boundary(owner, scope):
+                                            if owner._consume_attempted:
+                                                held["consume_initial_boundary"] = True
+                                                monkeypatch.setattr(NativeCleanupRead,
+                                                    "_final_socket_fence", original_fence)
+                                                raise FrameError(
+                                                    "SYNTHETIC_INITIAL_CONSUME_FAILURE")
+                                            return original_fence(owner, scope)
+
+                                        monkeypatch.setattr(NativeCleanupRead,
+                                            "_final_socket_fence", first_consume_boundary)
+
+                                    def observed_consume_feed(parser, chunk):
+                                        held["consume_feed_calls"] += 1
+                                        assert parser is cursor._parser_origin
+                                        assert chunk is native._pending_allocation_origin[1]
+                                        if mutation.endswith("_partial"):
+                                            feed(parser, chunk[:4])
+                                            raise FrameError("SYNTHETIC_PARTIAL_FEED_FAILURE")
+                                        feed(parser, chunk)
+                                        if mutation.endswith("_retired"):
+                                            keys["gateway"].retire()
+                                        elif mutation.endswith("_parsercopy"):
+                                            replacement = bytearray(parser._buffer_origin)
+                                            parser._buffer = parser._buffer_origin = replacement
+                                            held["consume_parser_replacement"] = replacement
+                                        elif mutation.endswith("_countdrift"):
+                                            class ForeignConsumeCount:
+                                                def __eq__(self, other):
+                                                    held["foreign_consume_count_eq"] = True
+                                                    raise AssertionError("foreign consume count")
+                                            native._received = native._received_origin = (
+                                                ForeignConsumeCount())
+
+                                    monkeypatch.setattr(SignedCleanupAuthPrefix, "feed",
+                                                        observed_consume_feed)
+                                    if mutation.endswith(("_progresscopy", "_fdmode")):
+                                        remaining = RemoteCleanupOwner._remaining
+
+                                        def post_consume_clock(cleanup):
+                                            value = remaining(cleanup)
+                                            if (native._consume_returned
+                                                    and not held.get("consume_post_changed")):
+                                                held["consume_post_changed"] = True
+                                                if mutation.endswith("_fdmode"):
+                                                    reader._base_origin.sock.settimeout(0.2)
+                                                else:
+                                                    held["consume_original_progress"] = (
+                                                        native._progress_origin)
+                                                    copied = native._progress_origin._replace()
+                                                    native._progress = copied
+                                                    native._progress_origin = copied
+                                            return value
+
+                                        monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                                            post_consume_clock)
+                                    with pytest.raises(FrameError):
+                                        native.consume_pending()
+                                    assert native._consume_attempted
+                                    assert not native._consume_complete
+                                    assert native._native_count_allocation_origin[1] == 8
+                                    assert native._pending_origin is None
+                                    with pytest.raises(FrameError):
+                                        native.consume_pending()
+                                    assert held["consume_feed_calls"] == (
+                                        0 if mutation.endswith("_initial") else 1)
+                                    assert native._consume_attempt_allocation_origin is not None
+                                    if mutation.endswith("_initial"):
+                                        assert held["consume_initial_boundary"]
+                                        assert native._consume_allocation_origin is None
+                                    assert "foreign_consume_count_eq" not in held
+                                    held["parser_consumption_failed"] = True
+                                if mutation.endswith("_consume"):
+                                    async def wrong_consumer():
+                                        with pytest.raises(FrameError):
+                                            native.consume_pending()
+                                    await asyncio.create_task(wrong_consumer())
+                                    assert not native._consume_attempted
+                                    consumed = native.consume_pending()
+                                    assert consumed.count == 8
+                                    assert consumed.before.parser is cursor._parser_origin
+                                    assert consumed.after.parser is cursor._parser_origin
+                                    assert consumed.after.value == held["native_expected"]
+                                    assert native._consume_complete and native._consume_returned
+                                    assert native._pending_origin is None
+                                    assert native._native_count_allocation_origin[1] == 8
+                                    with pytest.raises(FrameError):
+                                        native.consume_pending()
+                                    with pytest.raises(FrameError):
+                                        native.current_pending()
+                                    assert not native._failed and not native._unknown
+                                    held["parser_consumption_checked"] = True
                                 if mutation.endswith("_parseradvancebad"):
                                     from hmp_plugin.presentation_credential_stream import (
                                         SignedCleanupAuthPrefix,
@@ -946,14 +1056,25 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                 else:
                                     assert held["native_calls"] == 1
                                 if mutation in ("wake_reserve_notice_native",
-                                                "wake_reserve_notice_native_workflagbad"):
+                                                "wake_reserve_notice_native_workflagbad",
+                                                "wake_reserve_notice_native_consume"):
                                     assert not native._failed and not notice._unknown
                                     async with asyncio.timeout_at(
                                             reader._base_origin.intent.end_ns / 1e9):
                                         await native_observed.wait()
                                     if mutation.endswith("_workflagbad"):
                                         owned._cleanup_owner_snapshot._initialized = False
-                            if mutation.endswith("_parseradvancebad"):
+                            if "_native_consume_" in mutation:
+                                assert held["parser_consumption_failed"]
+                                count = (0 if mutation.endswith("_initial") else
+                                         4 if mutation.endswith("_partial") else 8)
+                                assert bytes(cursor._parser._buffer_origin) == (
+                                    held["native_expected"][:count])
+                            elif mutation.endswith("_consume"):
+                                assert held["parser_consumption_checked"]
+                                assert (bytes(cursor._parser._buffer_origin)
+                                        == held["native_expected"])
+                            elif mutation.endswith("_parseradvancebad"):
                                 assert held["actual_parser_advance_refused"]
                                 assert (bytes(cursor._parser._buffer_origin)
                                         == held["native_expected"])
@@ -1074,7 +1195,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                         if "_notice_native" in mutation:
                             assert not cursor._failed
                             if mutation not in ("wake_reserve_notice_native",
-                                                "wake_reserve_notice_native_workflagbad"):
+                                                "wake_reserve_notice_native_workflagbad",
+                                                "wake_reserve_notice_native_consume"):
                                 assert native._failed and notice._unknown
                         elif "_notice_cursor" in mutation:
                             assert cursor._failed and notice._unknown
@@ -1280,6 +1402,14 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             "wake_reserve_notice_native_scopebad",
                             "wake_reserve_notice_native_workflagbad",
                             "wake_reserve_notice_native_parseradvancebad",
+                            "wake_reserve_notice_native_consume",
+                            "wake_reserve_notice_native_consume_initial",
+                            "wake_reserve_notice_native_consume_retired",
+                            "wake_reserve_notice_native_consume_partial",
+                            "wake_reserve_notice_native_consume_parsercopy",
+                            "wake_reserve_notice_native_consume_countdrift",
+                            "wake_reserve_notice_native_consume_progresscopy",
+                            "wake_reserve_notice_native_consume_fdmode",
                             "wake_reserve_wait_dispatchbad"):
                 assert reader._wake_release_origin is not None and not reader._io_unknown
                 assert not reader._active and reader._failed and not reader._buffer_origin
@@ -1394,7 +1524,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             if "_notice_native" in mutation:
                 native = held["native_owner"]
                 if mutation in ("wake_reserve_notice_native",
-                                "wake_reserve_notice_native_workflagbad"):
+                                "wake_reserve_notice_native_workflagbad",
+                                "wake_reserve_notice_native_consume"):
                     assert native_observed.is_set()
                 if mutation.endswith((
                         "_lostack", "_blocked", "_timeoutbad", "_blockingbad", "_fdbad")):
@@ -1415,7 +1546,7 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                         assert reader._base_origin.channel._reading is True
                     elif mutation.endswith("_probewritingbad"):
                         assert reader._base_origin.channel._writing is True
-                elif mutation.endswith("_counterbad"):
+                elif mutation.endswith(("_counterbad", "_consume_countdrift")):
                     assert native._native_count_allocation_origin[1] == 8
                     assert "foreign_native_count_eq" not in held
                 else:

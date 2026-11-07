@@ -14,8 +14,12 @@
 - [x] Causally verify raw same-parser feed cannot reuse frozen stopped-reader
       proof: actual received8-byte prefix, unknown refusal, retained native count
       and dropped pending aliases. Independent read-only review accepted; no handoff.
-- [ ] Consume actual native pending bytes into the original bound parser/digest
-      under a distinct active-progress handoff; never replay bytes or relax old stops.
+- [x] Consume one actual native pending allocation on its original work actor into
+      the SAME bound authentication parser or original body digest. Independent
+      pre-boundary attempt/progress cells, irreversible consumption, fixed cleanup
+      observer, postcallback currentness and no replay; reviewed one-shot slice.
+- [ ] Continue exact-needed reads on the retained original reader with monotonic
+      syscall/commit accounting; never reset one-shot attempt flags or old stops.
 
 - [x] Retain one-shot original-reader IDLE admission before native currentness;
       independently anchor owner/scope/fact, exact bounded count/original minimum
