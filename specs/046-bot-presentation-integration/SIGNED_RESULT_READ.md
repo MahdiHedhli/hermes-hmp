@@ -390,3 +390,34 @@ admission, exact next-byte accounting, concurrent CANCEL, terminal/ACK/native
 release and production character-image delivery remain unfinished; signed
 request stays False. No deployment/build/install/settings/device changed. Earlier
 broker causes and native sender-destination risk remain unresolved.
+
+## One-shot original reader IDLE admission — November 7, 2026
+
+`SignedCleanupReader` now retains one actual partial owner on the bound original
+cursor BEFORE native currentness checks. Its scope, cursor and admission fact
+have independent allocation cells. Current IDLE admission repeats fixed original
+actor/cursor/native/role checks, the exact next bounded count and the original
+minimum budget ceiling; no parser/digest advances and no deadline renews.
+Wrong/duplicate actors cannot borrow or recreate the owner. Coherent owner/scope/
+fact substitution, early/post-fact key revocation and foreign reservation/end
+metadata refuse without foreign getters/ordering or a retry.
+
+Independent review required retaining the partial owner before native checks and
+exact nested reservation/end type fences; these are fixed and causally covered.
+The corruption test additionally prompted failure paths to poison the HELD
+original notice/cleanup reservation, never rediscover authority through drifted
+cursor fields. Independent final read-only review accepted. Thirty focused
+envelope cases passed in8.80s; original13-byte body case passed in2.00s. Final
+exact-source expanded credential/cleanup/terminal/layout regression: 1,145
+passed in142.06s. Full server/tools lint and whitespace checks pass. One
+fixture assertion initially conflated idle-admission refusal with historical
+original stop retirement: that independent local stop correctly remains valid.
+The assertion was corrected; no production guard or unknown state was relaxed.
+
+This is IDLE admission only. It exposes no receive/registration/signing operation
+and enables no cooperative gate. Native progress handoff, exact per-byte accounting,
+concurrent CANCEL, terminal/ACK/native release and production character-image
+delivery remain open. Existing stopped-body validators must not be weakened to
+accept an advanced digest; future native continuation needs a distinct qualified
+handoff. No build/install/deployment/device/settings changed. Prior broker causes
+and native sender-destination risk remain unresolved.

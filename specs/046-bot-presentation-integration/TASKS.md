@@ -2,6 +2,12 @@
 
 ## Current envelope stop preparation
 
+- [x] Retain one-shot original-reader IDLE admission before native currentness;
+      independently anchor owner/scope/fact, exact bounded count/original minimum
+      end, malformed metadata refusal, partial attribution and held-original failure.
+- [ ] Qualify active digest/framing handoff and native receive progress separately
+      from IDLE admission; keep original stopped-validator and signing gates intact.
+
 - [x] Retain original stopped authentication parser/outer-header framing or SAME
       partial-body digest, with independent parser/state allocations before effects
       and postcallback currentness. Exact-type replacement and partial-init refusal.

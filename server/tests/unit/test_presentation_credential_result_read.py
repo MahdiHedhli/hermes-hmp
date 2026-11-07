@@ -47,6 +47,13 @@ from .test_presentation_supervisor import context as context
     "wake_reserve_notice_reader_copybad", "wake_reserve_notice_reader_rolebad",
     "wake_reserve_notice_cursorinitbad", "wake_reserve_notice_cursorstatebad",
     "wake_reserve_notice_cursorpairbad",
+    "wake_reserve_notice_cursoradmissionscopebad",
+    "wake_reserve_notice_cursoradmissionfactbad",
+    "wake_reserve_notice_cursoradmissionownerbad",
+    "wake_reserve_notice_cursoradmissioninitbad",
+    "wake_reserve_notice_cursoradmissionearlybad",
+    "wake_reserve_notice_cursoradmissionreservationbad",
+    "wake_reserve_notice_cursoradmissionendbad",
 ])
 async def test_original_result_envelope(context, begin_gateway, tmp_path, monkeypatch, mutation):
     from hmp_plugin import presentation_credential_result_read as module
@@ -493,6 +500,7 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
         if ("_reserve_notice" in mutation and "_init_" not in mutation
                 and not mutation.endswith("_swapinit")):
             from hmp_plugin.presentation_credential_cleanup_notice import (
+                SignedCleanupReader,
                 SignedReadNotice,
                 SignedStoppedCursor,
             )
@@ -627,9 +635,58 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                         else:
                             cursor = SignedStoppedCursor.retain(notice)
                             assert cursor.current() is cursor
+                            if mutation.endswith((
+                                    "_cursoradmissioninitbad", "_cursoradmissionearlybad")):
+                                admission_remaining = RemoteCleanupOwner._remaining
+
+                                def partial_admission_clock(cleanup):
+                                    value = admission_remaining(cleanup)
+                                    partial = cursor._reader_origin
+                                    early = mutation.endswith("_cursoradmissionearlybad")
+                                    boundary = (partial is not None
+                                                and (partial._scope_origin is None if early
+                                                     else partial._fact_origin is not None))
+                                    if (boundary
+                                            and not partial._admitted
+                                            and asyncio.current_task() is (
+                                                reader._base_origin.allocation.task)
+                                            and not held.get("partial_admission_revoked")):
+                                        held["partial_admission_revoked"] = True
+                                        held["partial_admission_fact"] = partial._fact_origin
+                                        keys["gateway"].retire()
+                                    return value
+
+                                monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                                    partial_admission_clock)
+                                with pytest.raises(FrameError):
+                                    SignedCleanupReader.retain(cursor)
+                                idle_reader = cursor._reader_origin
+                                assert held["partial_admission_revoked"]
+                                assert idle_reader._failed and not idle_reader._admitted
+                                if mutation.endswith("_cursoradmissionearlybad"):
+                                    assert idle_reader._scope_origin is None
+                                    assert idle_reader._fact_allocation_origin is None
+                                else:
+                                    assert idle_reader._fact_allocation_origin[1] is (
+                                        held["partial_admission_fact"])
+                            else:
+                                idle_reader = SignedCleanupReader.retain(cursor)
+                                idle_fact = idle_reader.current_idle()
+                                assert idle_reader.current_idle() is idle_fact
+                                assert idle_fact.scope[2] == cursor._parser.needed
+                                assert idle_fact.scope[4] <= notice._reservation.end
+                            with pytest.raises(FrameError):
+                                SignedCleanupReader.retain(cursor)
+                            if not mutation.endswith((
+                                    "_cursoradmissioninitbad", "_cursoradmissionearlybad")):
+                                assert not idle_reader._failed
                             assert (cursor._parser._buffer_origin
                                     == notice._reservation.capture.envelope.values)
-                            if mutation.endswith(("_cursorstatebad", "_cursorpairbad")):
+                            if mutation.endswith((
+                                    "_cursorstatebad", "_cursorpairbad",
+                                    "_cursoradmissionscopebad", "_cursoradmissionfactbad",
+                                    "_cursoradmissionownerbad",
+                                    "_cursoradmissionreservationbad", "_cursoradmissionendbad")):
                                 original_remaining = RemoteCleanupOwner._remaining
 
                                 def cursor_clock_drift(cleanup):
@@ -638,7 +695,53 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                     if (asyncio.current_task() is work_task
                                             and not held.get("cursor_state_changed")):
                                         held["cursor_state_changed"] = True
-                                        if mutation.endswith("_cursorpairbad"):
+                                        if mutation.endswith((
+                                                "_cursoradmissionreservationbad",
+                                                "_cursoradmissionendbad")):
+                                            class ForeignReservation:
+                                                def __getattr__(self, name):
+                                                    held["foreign_idle_reservation_getter"] = True
+                                                    raise AssertionError("foreign reservation")
+                                            class ForeignEnd:
+                                                def __ge__(self, other):
+                                                    held["foreign_idle_end_order"] = True
+                                                    raise AssertionError("foreign end ordering")
+                                            old = idle_reader._scope_origin
+                                            reservation = ForeignReservation()
+                                            if mutation.endswith("_cursoradmissionendbad"):
+                                                reservation = old[0].reservation._replace(
+                                                    end=ForeignEnd())
+                                            bad_stop = old[0]._replace(reservation=reservation)
+                                            cursor._fact = cursor._fact_origin = bad_stop
+                                            scope = (bad_stop, *old[1:])
+                                            idle_reader._scope = idle_reader._scope_origin = scope
+                                            idle_reader._scope_allocation_origin = (
+                                                idle_reader, scope)
+                                            with pytest.raises(FrameError):
+                                                SignedCleanupReader._metadata(idle_reader)
+                                            held["idle_reservation_type_refused"] = True
+                                        elif mutation.endswith("_cursoradmissionscopebad"):
+                                            scope = tuple(v for v in idle_reader._scope_origin)
+                                            held["admission_original_scope"] = (
+                                                idle_reader._scope_origin)
+                                            idle_reader._scope = idle_reader._scope_origin = scope
+                                            fact = idle_reader._fact_origin._replace(scope=scope)
+                                            idle_reader._fact = idle_reader._fact_origin = fact
+                                        elif mutation.endswith("_cursoradmissionfactbad"):
+                                            held["admission_original_fact"] = (
+                                                idle_reader._fact_origin)
+                                            fact = idle_reader._fact_origin._replace()
+                                            idle_reader._fact = idle_reader._fact_origin = fact
+                                        elif mutation.endswith("_cursoradmissionownerbad"):
+                                            held["admission_original_cursor"] = cursor
+                                            replacement = SignedStoppedCursor.__new__(
+                                                SignedStoppedCursor)
+                                            replacement.__dict__.update(cursor.__dict__)
+                                            replacement._reader_allocation_origin = (
+                                                replacement, idle_reader)
+                                            idle_reader._cursor = replacement
+                                            idle_reader._cursor_origin = replacement
+                                        elif mutation.endswith("_cursorpairbad"):
                                             from hmp_plugin.presentation_credential_stream import (
                                                 SignedCleanupAuthPrefix,
                                             )
@@ -666,8 +769,24 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                 monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
                                                     cursor_clock_drift)
                                 with pytest.raises(FrameError):
-                                    cursor.current()
+                                    idle_reader.current_idle()
                                 assert held["cursor_state_changed"] and cursor._failed
+                                assert idle_reader._failed
+                                assert "foreign_idle_reservation_getter" not in held
+                                assert "foreign_idle_end_order" not in held
+                                if mutation.endswith((
+                                        "_cursoradmissionreservationbad",
+                                        "_cursoradmissionendbad")):
+                                    assert held["idle_reservation_type_refused"]
+                                if mutation.endswith("_cursoradmissionscopebad"):
+                                    assert idle_reader._scope_allocation_origin[1] is (
+                                        held["admission_original_scope"])
+                                elif mutation.endswith("_cursoradmissionfactbad"):
+                                    assert idle_reader._fact_allocation_origin[1] is (
+                                        held["admission_original_fact"])
+                                elif mutation.endswith("_cursoradmissionownerbad"):
+                                    assert idle_reader._cursor_allocation_origin[1] is cursor
+                                    assert idle_reader._cursor_origin is not cursor
                                 if mutation.endswith("_cursorpairbad"):
                                     original_parser = held["cursor_original_parser"]
                                     assert cursor._parser_allocation_origin[1] is original_parser
@@ -727,6 +846,9 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                 and not held.get("cleanup_notice_checked")):
                             checking = True
                             try:
+                                with pytest.raises(FrameError):
+                                    idle_reader.current_idle()
+                                assert not idle_reader._failed
                                 with pytest.raises(FrameError):
                                     notice.current_stop_for_reader()
                                 assert not notice._failed and not notice._unknown
@@ -848,6 +970,13 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             "wake_reserve_notice_cursorinitbad",
                             "wake_reserve_notice_cursorstatebad",
                             "wake_reserve_notice_cursorpairbad",
+                            "wake_reserve_notice_cursoradmissionscopebad",
+                            "wake_reserve_notice_cursoradmissionfactbad",
+                            "wake_reserve_notice_cursoradmissionownerbad",
+                            "wake_reserve_notice_cursoradmissioninitbad",
+                            "wake_reserve_notice_cursoradmissionearlybad",
+                            "wake_reserve_notice_cursoradmissionreservationbad",
+                            "wake_reserve_notice_cursoradmissionendbad",
                             "wake_reserve_wait_dispatchbad"):
                 assert reader._wake_release_origin is not None and not reader._io_unknown
                 assert not reader._active and reader._failed and not reader._buffer_origin

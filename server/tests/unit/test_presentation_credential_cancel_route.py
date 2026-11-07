@@ -1110,12 +1110,18 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     assert notice.current_stop_for_reader().stop is body._wake_receipt_origin
                     assert body._candidate_snapshot is None and not body._scope_origin.accumulator
                     from hmp_plugin.presentation_credential_cleanup_notice import (
+                        SignedCleanupReader,
                         SignedStoppedCursor,
                     )
                     cursor = SignedStoppedCursor.retain(notice)
                     assert cursor.current() is cursor
                     assert cursor._parser._stream_origin is body._initialization_origin[1]
                     assert cursor._parser._stream_origin._received == 13
+                    idle_reader = SignedCleanupReader.retain(cursor)
+                    idle_fact = idle_reader.current_idle()
+                    assert idle_reader.current_idle() is idle_fact
+                    assert idle_fact.scope[1] is cursor._parser_origin
+                    assert idle_fact.scope[2] == cursor._parser.needed
                     assert body._candidate_snapshot is None and not body._scope_origin.accumulator
                     with pytest.raises(FrameError):
                         notice.current_stop_for_cleanup()  # sender cannot borrow cleanup actor
@@ -1173,8 +1179,9 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
 
                     monkeypatch.setattr(RemoteCleanupOwner, "_remaining", body_binding_clock_drift)
                     with pytest.raises(FrameError):
-                        cursor.current()
+                        idle_reader.current_idle()
                     assert held["body_cursor_binding_changed"] and cursor._failed
+                    assert idle_reader._failed
                     assert notice._unknown and owned._cleanup_owner_snapshot._unknown
                     with pytest.raises(FrameError):
                         notice.publish()

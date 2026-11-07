@@ -25,12 +25,14 @@ from .presentation_credential_result_read import (
     _ResultWaitHold,
     _ResultWakeRetirement,
 )
+from .presentation_credential_stream import CHUNK_LIMIT
 from .presentation_credential_work import NativePhaseWorkOwner
 from .presentation_jobs import FrameError
 from .presentation_readiness import SelectorReadiness, _scheduler_safe, _WakeWaitRetirement
 from .presentation_remote_cleanup import _FUTURE, _TASK, RemoteCleanupOwner, _initialize_future
 
 _MINT = object()
+_READER_MINT = object()
 
 
 def _require(value):
@@ -388,6 +390,7 @@ class SignedStoppedCursor:
         owner = cls.__new__(cls)
         owner._notice = owner._notice_origin = notice
         owner._fact = owner._fact_origin = fact
+        owner._reader = owner._reader_origin = owner._reader_allocation_origin = None
         owner._parser = owner._parser_origin = None
         owner._parser_allocation_origin = None
         owner._parser_state_allocation_origin = None
@@ -470,6 +473,15 @@ class SignedStoppedCursor:
                  and state_allocation[0] is self and state_allocation[1] is parser
                  and state_allocation[2] is held)
         SignedReadNotice.inspect(self._notice, c.gate)
+        reader = self._reader_origin
+        if reader is None:
+            _require(self._reader is None and self._reader_allocation_origin is None)
+        else:
+            _require(type(reader) is SignedCleanupReader and self._reader is reader
+                     and type(self._reader_allocation_origin) is tuple
+                     and len(self._reader_allocation_origin) == 2
+                     and self._reader_allocation_origin[0] is self
+                     and self._reader_allocation_origin[1] is reader)
         if c.body is None:
             _require(type(parser) is SignedCleanupAuthPrefix and len(held) == 4
                      and type(held[0]) is bytearray and type(held[1]) is bytes
@@ -514,7 +526,7 @@ class SignedStoppedCursor:
         _require(type(self) is SignedStoppedCursor
                  and type(self._notice_origin) is SignedReadNotice)
         notice = self._notice_origin
-        SignedReadNotice._actor(notice)  # foreign actor must not poison original binding
+        reservation = SignedReadNotice._actor(notice)  # fixed original actor
         failed = False
         try:
             fact = SignedStoppedCursor._metadata(self)
@@ -523,6 +535,167 @@ class SignedStoppedCursor:
             return self
         except BaseException:
             failed = self._failed = notice._failed = notice._unknown = True
-            self._fact_origin.reservation.capture.cleanup._unknown = True
+            reservation.capture.cleanup._unknown = True
         if failed:
             raise FrameError("BI1_SIGNED_STOPPED_CURSOR_CURRENTNESS_UNKNOWN") from None
+
+
+class _IdleReaderAdmission(NamedTuple):
+    mint: object
+    owner: object
+    scope: tuple
+
+    def __repr__(self):
+        return "<IdleReaderAdmission original-bound-reader no-native-IO-or-release>"
+
+
+class SignedCleanupReader:
+    """One-shot idle admission of the original bound reader, before native IO.
+
+    This preserves an explicit owner for later native receive qualification.
+    Neither this fact nor its count/end is a recv, registration or signer permit.
+    No parser advances here; future IO must transfer/track original digest
+    progress explicitly rather than weakening the stopped-owner validators.
+    """
+
+    @classmethod
+    def retain(cls, cursor):
+        from .presentation_credential_stream import SignedCleanupAuthPrefix, SignedResultDiscard
+
+        _require(cls is SignedCleanupReader and type(cursor) is SignedStoppedCursor)
+        _require(type(cursor._notice_origin) is SignedReadNotice
+                 and cursor._notice is cursor._notice_origin
+                 and cursor._initialized is True and cursor._failed is False
+                 and cursor._notice_origin._cursor is cursor
+                 and cursor._notice_origin._cursor_origin is cursor)
+        original_notice = cursor._notice_origin
+        original_reservation = SignedReadNotice._actor(original_notice)
+        _require(cursor._reader is None and cursor._reader_origin is None
+                 and cursor._reader_allocation_origin is None)
+        owner = cls.__new__(cls)
+        owner._cursor = owner._cursor_origin = cursor
+        owner._cursor_allocation_origin = (owner, cursor)
+        owner._scope = owner._scope_origin = owner._scope_allocation_origin = None
+        owner._fact = owner._fact_origin = owner._fact_allocation_origin = None
+        owner._attempted = True
+        owner._admitted = owner._failed = False
+        # Keep partial acquisition before parser/native/clock checks; no retry.
+        cursor._reader = cursor._reader_origin = owner
+        cursor._reader_allocation_origin = (cursor, owner)
+        failed = False
+        try:
+            SignedStoppedCursor.current(cursor)
+            stop = cursor._fact_origin
+            r, parser = stop.reservation, cursor._parser_origin
+            if r.capture.body is None:
+                count = SignedCleanupAuthPrefix.needed.fget(parser)
+            else:
+                count = SignedResultDiscard.needed.fget(parser)
+            _, _, end, budget_failed = CancellationBudget.inspect(r.budget)
+            _require(type(count) is int and 0 <= count <= CHUNK_LIMIT
+                     and type(end) is int and 0 < end <= r.end and budget_failed is False)
+            owner._scope = owner._scope_origin = (stop, parser, count, r.budget, end)
+            owner._scope_allocation_origin = (owner, owner._scope_origin)
+            SignedCleanupReader._initial_current(owner)
+            fact = _IdleReaderAdmission(_READER_MINT, owner, owner._scope_origin)
+            owner._fact = owner._fact_origin = fact
+            owner._fact_allocation_origin = (owner, fact)
+            SignedCleanupReader._initial_current(owner)
+            owner._admitted = True
+            return owner
+        except BaseException:
+            failed = owner._failed = cursor._failed = True
+            original_notice._failed = original_notice._unknown = True
+            original_reservation.capture.cleanup._unknown = True
+        if failed:
+            raise FrameError("BI1_SIGNED_IDLE_READER_ADMISSION_UNKNOWN") from None
+
+    def __repr__(self):
+        return "<SignedCleanupReader original-idle-admission no-native-IO>"
+
+    def _metadata(self):
+        _require(type(self) is SignedCleanupReader and self._failed is False
+                 and self._attempted is True and type(self._admitted) is bool
+                 and type(self._cursor) is SignedStoppedCursor
+                 and self._cursor is self._cursor_origin
+                 and type(self._cursor_allocation_origin) is tuple
+                 and len(self._cursor_allocation_origin) == 2
+                 and self._cursor_allocation_origin[0] is self
+                 and self._cursor_allocation_origin[1] is self._cursor
+                 and self._cursor._reader is self and self._cursor._reader_origin is self
+                 and type(self._cursor._reader_allocation_origin) is tuple
+                 and len(self._cursor._reader_allocation_origin) == 2
+                 and self._cursor._reader_allocation_origin[0] is self._cursor
+                 and self._cursor._reader_allocation_origin[1] is self
+                 and type(self._scope) is tuple and self._scope is self._scope_origin
+                 and len(self._scope) == 5
+                 and type(self._scope_allocation_origin) is tuple
+                 and len(self._scope_allocation_origin) == 2
+                 and self._scope_allocation_origin[0] is self
+                 and self._scope_allocation_origin[1] is self._scope)
+        stop, parser, count, budget, end = self._scope_origin
+        _require(type(stop) is _SignedReadReady and stop is self._cursor._fact_origin
+                 and type(stop.reservation) is SignedReadReservation
+                 and type(stop.reservation.end) is int
+                 and type(count) is int and 0 <= count <= CHUNK_LIMIT
+                 and type(end) is int and 0 < end <= stop.reservation.end
+                 and type(self._cursor._parser_allocation_origin) is tuple
+                 and len(self._cursor._parser_allocation_origin) == 3
+                 and self._cursor._parser_allocation_origin[0] is self._cursor
+                 and parser is self._cursor._parser_allocation_origin[1]
+                 and budget is stop.reservation.budget)
+        fact, cell = self._fact_origin, self._fact_allocation_origin
+        _require(self._fact is fact)
+        if fact is None:
+            _require(cell is None and self._admitted is False)
+        else:
+            _require(type(fact) is _IdleReaderAdmission and fact.mint is _READER_MINT
+                     and fact.owner is self and fact.scope is self._scope_origin
+                     and type(cell) is tuple and len(cell) == 2
+                     and cell[0] is self and cell[1] is fact)
+        return self._scope_origin
+
+    def _cursor_current(self):
+        scope = SignedCleanupReader._metadata(self)
+        cursor = self._cursor_origin
+        _require(SignedStoppedCursor.current(cursor) is cursor)
+        _require(SignedCleanupReader._metadata(self) is scope)
+        stop, parser, count, budget, end = scope
+        # Pure primitive joins AFTER original selector/FD/clock callbacks. Do not
+        # invoke a caller-selected needed property or adopt changed parser state.
+        if stop.reservation.capture.body is None:
+            _require(type(parser._target_origin) is int
+                     and type(parser._buffer_origin) is bytearray
+                     and parser._target_origin - len(parser._buffer_origin) == count)
+        else:
+            stream = parser._stream_origin
+            _require(type(stream._body_length) is int and type(stream._received) is int
+                     and min(CHUNK_LIMIT, stream._body_length - stream._received) == count)
+        _, _, current_end, failed = CancellationBudget.inspect(budget)
+        _require(type(current_end) is int and 0 < current_end <= end and failed is False
+                 and SignedCleanupReader._metadata(self) is scope)
+        return scope
+
+    def _initial_current(self):
+        _require(type(self) is SignedCleanupReader and self._admitted is False
+                 and type(self._cursor_origin) is SignedStoppedCursor)
+        SignedReadNotice._actor(self._cursor_origin._notice_origin)
+        return SignedCleanupReader._cursor_current(self)
+
+    def current_idle(self):
+        _require(type(self) is SignedCleanupReader
+                 and type(self._cursor_origin) is SignedStoppedCursor)
+        cursor = self._cursor_origin
+        notice = cursor._notice_origin
+        reservation = SignedReadNotice._actor(notice)  # wrong actor cannot poison admission
+        _require(self._admitted is True)
+        failed = False
+        try:
+            SignedCleanupReader._cursor_current(self)
+            return self._fact_origin
+        except BaseException:
+            failed = self._failed = cursor._failed = True
+            notice._failed = notice._unknown = True
+            reservation.capture.cleanup._unknown = True
+        if failed:
+            raise FrameError("BI1_SIGNED_IDLE_READER_CURRENTNESS_UNKNOWN") from None
