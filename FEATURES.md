@@ -1,3 +1,25 @@
+## Signed RESULT discard data continuation — November 6, 2026
+
+The bounded signed RESULT parser now continues partial authentication/header
+framing and discards body bytes through the full-frame digest without retaining
+an image. A supplied partial-body digest is reused by identity, not copied or
+replayed. Exact next counts, signatures/header/hash, no scan/overread/restart,
+sticky refusal, type-first metadata and input-alias sanitization are tested.
+
+Independent read-only review accepted repaired source and causals. Final focused
+discard/stream run:49 passed in0.25s. Expanded affected regression: **1,810 passed,
+one skipped in152.20s**; lint/whitespace pass. Runs overlap and are not summed.
+Initial fixture failure and review findings remain in the research record.
+
+This is DATA only, not original runtime ownership, read permission, cleanup,
+terminal/ACK or publication. The next typed reservation/read-ready bridge must
+bind the actual original capture/hash allocation and frozen authority/budget.
+Grammar-bound direct ABORTED-before-RESULT remains required; this fixed RESULT
+helper does not select that branch or permit fallback after a parse failure.
+Signed runtime cleanup stays disabled. Full composition and physical character
+image delivery remain unfinished. No deployment/device/build/config/grant/provider
+changed. Historical broker failures and native sender-destination risk remain open.
+
 ## Signed envelope native-cause wake — November 6, 2026
 
 Envelope waits now listen to their actual original cleanup cause held before

@@ -12,9 +12,15 @@ import os
 import threading
 from dataclasses import dataclass
 
-from .presentation_broker_codec import BrokerBinding, _binding
-from .presentation_credential_phase import ConsistentCommitment, check_committed_header
-from .presentation_jobs import FrameError
+from .presentation_broker_codec import HEADER_LIMIT, BrokerBinding, _binding, header_size
+from .presentation_credential_codec import RECORD_LIMIT, payload_size
+from .presentation_credential_phase import (
+    _EXPECTED,
+    ConsistentCommitment,
+    check_commitment,
+    check_committed_header,
+)
+from .presentation_jobs import OUTPUT_LIMIT, FrameError
 
 CHUNK_LIMIT = 65_536
 _HASH_TYPE = type(hashlib.sha256())
@@ -169,3 +175,181 @@ class CommittedFrameDigest:
         except BaseException:
             self._failed = True
             raise
+
+
+class SignedResultDiscard:
+    """Bounded framing/digest DATA continuation, never a socket or cleanup permit.
+
+    `prefix` is the already-consumed bounded HBA1/outer header, never image bytes.
+    Optional `stream` is the SAME original partial-body digest, not a copied hash.
+    The caller must separately prove original cursor/actor/budget/IO authority.
+    """
+
+    def __init__(self, prefix: bytes, *, sender_public: bytes, receiver_public: bytes,
+                 expected: dict, binding: BrokerBinding, stream=None):
+        _require(type(self) is SignedResultDiscard and "_initialized" not in vars(self))
+        self._initialized = self._failed = self._finished = False
+        self._context = (os.getpid(), threading.get_ident())
+        self._buffer = self._buffer_origin = bytearray()
+        self._stage = self._stage_origin = "auth_prefix"
+        self._target = self._target_origin = 8
+        self._auth_end = self._auth_end_origin = None
+        self._stream = self._stream_origin = None
+        self._resume = stream
+        self._binding = self._binding_origin = binding
+        failed = False
+        try:
+            _require(type(prefix) is bytes and len(prefix) <= RECORD_LIMIT + 8 + HEADER_LIMIT
+                     and type(expected) is dict and all(type(k) is str for k in expected)
+                     and expected.keys() == _EXPECTED
+                     and all(type(v) is (int if k in ("sequence", "work_end_ns") else str)
+                             for k, v in expected.items())
+                     and expected["phase"] == "RESULT" and expected["role"] == "broker"
+                     and expected["direction"] == "b2g" and expected["sequence"] == 1
+                     and type(sender_public) is bytes and len(sender_public) == 32
+                     and type(receiver_public) is bytes and len(receiver_public) == 32
+                     and (stream is None or type(stream) is CommittedFrameDigest))
+            _binding(binding)
+            self._expected = self._expected_origin = tuple(sorted(expected.items()))
+            self._pins = self._pins_origin = (sender_public, receiver_public)
+            self._initialized = True
+            offset = 0
+            while offset < len(prefix):
+                _require(self._stage != "body")  # never replay or retain consumed image bytes
+                count = min(self.needed, len(prefix) - offset)
+                self.feed(prefix[offset:offset + count])
+                offset += count
+            _require(stream is None or self._stage == "body")
+        except BaseException:
+            failed = self._failed = True
+            self._buffer_origin.clear()
+        finally:
+            prefix = stream = None
+        if failed:
+            raise FrameError("BI1_SIGNED_DISCARD_DATA_REFUSED") from None
+
+    def __repr__(self):
+        return "<SignedResultDiscard framing-and-digest-data no-IO-permission>"
+
+    def _guard(self):
+        _require(type(self) is SignedResultDiscard and self._initialized is True
+                 and self._failed is False and self._finished is False
+                 and type(self._context) is tuple and len(self._context) == 2
+                 and all(type(v) is int for v in self._context)
+                 and self._context == (os.getpid(), threading.get_ident())
+                 and type(self._buffer) is bytearray and self._buffer is self._buffer_origin
+                 and self._stage is self._stage_origin and type(self._stage) is str
+                 and self._stage in ("auth_prefix", "auth", "header_prefix", "header", "body")
+                 and type(self._target) is int and self._target is self._target_origin
+                 and 8 <= self._target <= RECORD_LIMIT + 8 + HEADER_LIMIT
+                 and len(self._buffer) <= self._target
+                 and self._auth_end is self._auth_end_origin
+                 and self._binding is self._binding_origin and type(self._binding) is BrokerBinding
+                 and type(self._expected) is tuple and self._expected is self._expected_origin
+                 and len(self._expected) == len(_EXPECTED)
+                 and all(type(row) is tuple and len(row) == 2 and type(row[0]) is str
+                         and type(row[1]) is (int if row[0] in ("sequence", "work_end_ns") else str)
+                         for row in self._expected)
+                 and {row[0] for row in self._expected} == _EXPECTED
+                 and type(self._pins) is tuple and self._pins is self._pins_origin
+                 and len(self._pins) == 2
+                 and all(type(v) is bytes and len(v) == 32 for v in self._pins)
+                 and self._stream is self._stream_origin)
+        _binding(self._binding)
+        if self._stage == "auth_prefix":
+            _require(self._auth_end is None and self._target == 8)
+        else:
+            _require(type(self._auth_end) is int and 73 <= self._auth_end <= RECORD_LIMIT)
+            if self._stage == "auth":
+                _require(self._target == self._auth_end)
+            elif self._stage == "header_prefix":
+                _require(self._target == self._auth_end + 8
+                         and len(self._buffer) >= self._auth_end)
+            else:
+                _require(self._auth_end + 9 <= self._target
+                         <= self._auth_end + 8 + HEADER_LIMIT
+                         and len(self._buffer) >= self._auth_end + 8)
+        if self._stage == "body":
+            _require(type(self._stream) is CommittedFrameDigest
+                     and len(self._buffer) == self._target)
+            CommittedFrameDigest._guard(self._stream)
+        else:
+            _require(self._stream is None)
+
+    @property
+    def needed(self) -> int:
+        try:
+            SignedResultDiscard._guard(self)
+            if self._stage == "body":
+                return min(CHUNK_LIMIT, CommittedFrameDigest.remaining.fget(self._stream))
+            return self._target - len(self._buffer)
+        except BaseException:
+            self._failed = True
+            self._buffer_origin.clear()
+        raise FrameError("BI1_SIGNED_DISCARD_DATA_REFUSED") from None
+
+    def feed(self, chunk: bytes) -> None:
+        failed = False
+        raw = header = None
+        try:
+            count = SignedResultDiscard.needed.fget(self)
+            _require(type(chunk) is bytes and 0 < len(chunk) <= count)
+            if self._stage == "body":
+                CommittedFrameDigest.feed(self._stream, chunk)
+                SignedResultDiscard._guard(self)
+                return
+            self._buffer_origin.extend(chunk)
+            if len(self._buffer) != self._target:
+                return
+            if self._stage == "auth_prefix":
+                self._auth_end = self._auth_end_origin = 8 + payload_size(bytes(self._buffer))
+                self._target = self._target_origin = self._auth_end
+                self._stage = self._stage_origin = "auth"
+            elif self._stage == "auth":
+                check_commitment(bytes(self._buffer), sender_public=self._pins[0],
+                                 receiver_public=self._pins[1], expected=dict(self._expected))
+                self._target = self._target_origin = self._auth_end + 8
+                self._stage = self._stage_origin = "header_prefix"
+            elif self._stage == "header_prefix":
+                self._target = self._target_origin = self._target + header_size(
+                    bytes(self._buffer[self._auth_end:]))
+                self._stage = self._stage_origin = "header"
+            else:
+                raw = bytes(self._buffer[:self._auth_end])
+                header = bytes(self._buffer[self._auth_end:])
+                checked = check_commitment(raw, sender_public=self._pins[0],
+                    receiver_public=self._pins[1], expected=dict(self._expected))
+                decoded = check_committed_header(checked, header, binding=self._binding)
+                _require(decoded.kind == "RESULT" and decoded.sequence == 1
+                         and decoded.version == 2 and 4 <= decoded.body_length <= OUTPUT_LIMIT)
+                if self._resume is None:
+                    stream = CommittedFrameDigest(checked, header, binding=self._binding)
+                else:
+                    stream = self._resume
+                    CommittedFrameDigest._guard(stream)
+                    _require(stream._binding is self._binding
+                             and stream._commitment == checked
+                             and stream._header_length == len(header)
+                             and stream._body_length == decoded.body_length)
+                self._stream = self._stream_origin = stream
+                self._stage = self._stage_origin = "body"
+            SignedResultDiscard._guard(self)
+        except BaseException:
+            failed = self._failed = True
+            self._buffer_origin.clear()
+        finally:
+            chunk = raw = header = None
+        if failed:
+            raise FrameError("BI1_SIGNED_DISCARD_DATA_REFUSED") from None
+
+    def finish(self) -> ConsistentFrameDigest:
+        try:
+            _require(SignedResultDiscard.needed.fget(self) == 0 and self._stage == "body")
+            fact = CommittedFrameDigest.finish(self._stream)
+            self._finished = True
+            self._buffer_origin.clear()
+            return fact  # full-frame DATA only, not terminal/native settlement
+        except BaseException:
+            self._failed = True
+            self._buffer_origin.clear()
+        raise FrameError("BI1_SIGNED_DISCARD_DATA_REFUSED") from None

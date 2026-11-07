@@ -270,3 +270,13 @@ metadata drift retain unknown debt; historical refusal is sticky unknown. Extern
 Task cancellation stays separate. Signed cooperative transfer remains disabled;
 CANCEL still requires its existing whole-work join and current role/budget checks.
 No terminal/ACK/publication/native release follows from local stop.
+
+### Signed discard data continuation — November 6, 2026
+
+`SignedResultDiscard` continues exact partial signed RESULT framing and bounded
+body hashing without retaining image bytes. A supplied partial digest is reused
+by identity, never copied/replayed; runtime owner/allocation proof remains separate.
+It validates pinned commitment/header/full hash, refuses overread/scanning/restart
+and clears input aliases on stable refusal. This grants no socket/actor/budget,
+read transfer, terminal/ACK/native release or publication authority. Integrate only
+through distinct signed reservation and original-work read-ready admission.

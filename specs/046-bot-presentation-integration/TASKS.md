@@ -8,6 +8,12 @@
 - [x] Wire the actual native cleanup-cause wake into envelope waits with distinct
       typed current/historical stop receipts and frozen signed capture correlation.
       Independent read-only review accepted the bounded local-stop implementation.
+- [x] Implement/review bounded signed RESULT discard DATA continuation from partial
+      authentication/header or SAME supplied partial-body digest; no body retention,
+      scanning or runtime read authority. Exact runtime allocation binding remains next.
+- [ ] Qualify distinct signed request reservation and original-work read-ready
+      notice, with current frozen budget/quiescence/role checks; no legacy fact or
+      fabricated work-join substitution. See [integration contract](SIGNED_CLEANUP_HANDOFF.md).
 - [ ] Qualify signed cooperative cursor transfer/drain and terminal/ACK against
       the same original capture/budget; no whole-work-join relaxation is enabled.
 
