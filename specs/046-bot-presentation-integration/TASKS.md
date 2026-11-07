@@ -18,6 +18,11 @@
       and fact allocation cells, native partial initialization/dispatch uncertainty,
       correlated stop/current role/earliest-budget seals and no publication retry.
       No consumer/signing authority or cooperative route is enabled.
+- [x] Verify actual broker parked-CANCEL expiry under the original250ms timeout:
+      receipt retained, late consumption refused, frozen end unchanged, no credit/
+      closure. Controlled causal does not resolve earlier broad broker failures.
+- [ ] Diagnose original broad-suite broker cancellation failures from actual
+      bounded state/underlying-task evidence; passing reruns are not resolution.
 - [ ] Qualify distinct signed request reservation and original-work read-ready
       notice, with current frozen budget/quiescence/role checks; no legacy fact or
       fabricated work-join substitution. See [integration contract](SIGNED_CLEANUP_HANDOFF.md).

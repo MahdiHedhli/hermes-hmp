@@ -1,3 +1,25 @@
+## Controlled broker parked-receipt expiry — November 6, 2026
+
+Added a deterministic actual-peer case: receive/authenticate the real CANCEL,
+then let the ORIGINAL controller's existing250ms timeout expire before service
+consumption. The original task exits with its existing wrapped adoption refusal;
+park Future cancellation, timeout expiry, failed/unknown state and unchanged
+frozen budget are observed. No replacement deadline/sample or receipt is made.
+
+The actual authenticated CancelReceipt remains retained, while late consumption
+fails and no job credit/release follows. Fixture-only FD/clock disposal after
+protocol refusal grants no native or remote closure. Production guards are
+unchanged. Independent read-only review accepted the causal and teardown limits.
+Final nearby matrix: **18 passed in7.27s**; lint/whitespace pass. This is focused
+coverage, not a new full regression or release qualification.
+
+This establishes the expected expiry refusal pattern. It does NOT prove that
+expiry caused either earlier broad-suite failure; both original causes remain
+unresolved and their new state diagnostic has not reproduced a failure yet.
+Signed consumer/signing/drain/terminal/ACK, production composition and physical
+character-image delivery remain open. No runtime/build/device/config/grant/provider
+changed. Native sender-destination risk remains unresolved.
+
 ## Signed original-work stop notification — November 6, 2026
 
 A distinct one-shot signed stop notice now retains the actual native Future and

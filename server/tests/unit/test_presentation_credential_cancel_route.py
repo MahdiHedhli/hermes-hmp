@@ -35,7 +35,8 @@ from .test_presentation_supervisor import context as context
 @pytest.mark.asyncio
 @pytest.mark.parametrize("local", [2], indirect=True)
 @pytest.mark.parametrize("stage", ["before_ready", "ready", "after_go", "go_current",
-                                  "go_current_wrong_actor", "go_current_deadline", "go_relay",
+                                  "go_current_wrong_actor", "go_current_deadline",
+                                  "go_current_park_expiry", "go_relay",
                                   "go_relay_wrong_actor",
                                   "go_relay_result", "go_relay_zero", "go_relay_partial",
                                   "go_relay_unknown", "go_relay_post_drift", "go_relay_tail_key",
@@ -179,7 +180,7 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         "go_relay_result_sign_write_body_adopt_key",
         "go_relay_result_sign_write_body_adopt_notice_revoked")
     operation_failure = (relay_failure or result_failure or writer_failure or body_fault
-                         or adopted_key_retirement)
+                         or adopted_key_retirement or stage == "go_current_park_expiry")
 
     async def broker():
         record = await BrokerServiceSpine._accept_owned(spine, end)
@@ -685,6 +686,38 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     held["go_current_checked"] = True
                 finally:
                     go_checked.set()
+            if stage == "go_current_park_expiry":
+                # Actual CANCEL and actual original timeout. Never extend/sample a
+                # replacement budget or manufacture a completed receipt/task.
+                original_task = control._allocation_snapshot.task
+                async with asyncio.timeout_at(end / 1e9):
+                    await asyncio.wait((original_task, control._cancel_future_snapshot),
+                                       return_when=asyncio.FIRST_COMPLETED)
+                    assert control._notice_completed and control._parked
+                    assert control._cancel_future_snapshot.done()
+                    assert control._stop_intent_snapshot is None
+                    assert type(control._timeout_snapshot) is asyncio.Timeout
+                    frozen_end = CancellationBudget.inspect(control._scope_snapshot[3])[2]
+                    assert type(frozen_end) is int
+                    await asyncio.gather(original_task, return_exceptions=True)
+                assert original_task.done() and not original_task.cancelled()
+                failure = original_task.exception()
+                assert type(failure) is FrameError
+                assert failure.args == ("BI1_CREDENTIAL_CANCEL_ADOPTION_REFUSED",)
+                assert asyncio.Timeout.expired(control._timeout_snapshot)
+                assert control._park_future_snapshot.done()
+                assert control._park_future_snapshot.cancelled()
+                assert control._failed and control._io_unknown
+                assert CancellationBudget.inspect(control._scope_snapshot[3])[2] == frozen_end
+                with pytest.raises(FrameError):
+                    await BrokerServiceSpine._v2_control(spine, control)
+                adoption = control._signed_cancel_snapshot
+                assert adoption._consume_attempted and not adoption._consume_complete
+                assert adoption._consume_failed
+                assert adoption._native_receipt_origin is control._cancel_receipt_snapshot
+                assert adoption._native_receipt_origin is not None
+                held["actual_park_expiry_refused"] = True
+                return None
             try:
                 frame = await BrokerServiceSpine._v2_control(spine, control)
             except FrameError as consumer_failure:
@@ -1571,6 +1604,12 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 frame = None
             else:
                 frame = await broker_task
+        if stage == "go_current_park_expiry":
+            assert frame is None and held["actual_park_expiry_refused"]
+            assert held["control"]._stop_intent_snapshot is None
+            assert not cleanup._result_token and remote._result_owner is None
+            assert not remote._job_origin_snapshot.credit_released
+            return  # known local facts cannot convert expired broker custody into release
         if operation_failure:
             assert frame is None
             if relay_failure:

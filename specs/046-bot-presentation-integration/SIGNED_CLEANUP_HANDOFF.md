@@ -119,3 +119,12 @@ unknown debt/no retry. It has no consumer or signer: signed gate.request remains
 False and normal external Task cancellation remains. Original-cleanup current
 notice validation, concurrent-CANCEL authority and same-reader drain/terminal/ACK
 still require separate qualification. Future DATA is no I/O or release permission.
+
+### Actual parked-receipt expiry check — November 6, 2026
+
+The controlled real-peer case now observes original controller timeout expiry
+after actual CANCEL adoption: authenticated receipt remains retained, late service
+consumption refuses, frozen end does not renew and no job credit/release follows.
+This is expected negative qualification, not proof of the earlier intermittent
+failures' causes or a new cleanup/terminal/native permission. Production guards
+are unchanged; current consumption and original deadline remain independent gates.
