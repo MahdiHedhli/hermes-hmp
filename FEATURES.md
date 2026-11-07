@@ -1,3 +1,19 @@
+## Bot-image dependency integration requirement — November 7, 2026
+
+Source inspection and independent requirements review confirm that entry-file
+observation consumes the activation's one artifact-read owner. Dependency and
+interpreter checks must join a combined original plan before its completion;
+a later owner or fresh counter cannot safely extend it. The contract is recorded
+in specs/046-bot-presentation-integration/DEPENDENCY_FILE_COMPOSITION.md.
+It covers cross-document overlap and full-expectation shared-row deduplication,
+package trees, loose artifacts/resources/extensions, original prior counts and
+callback/cleanup refusal. Wire/plan freeze and implementation remain open.
+
+The task list now correctly marks selection accounting complete (576 startup
+checks on its exact source). Runtime/native/key composition and bot-character
+image delivery remain unfinished HMP work; no upstream blocker is established
+for this composition. This requirements review adds no code/runtime/device pass.
+
 ## Current HMP wheel verification — November 7, 2026
 
 Built source `e3148f266cfc13abb3bf4665d2ab8d510bf3cc0a` into a wheel using build1.3.0,

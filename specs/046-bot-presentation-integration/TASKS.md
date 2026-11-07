@@ -733,7 +733,8 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Consume actual retained schema2 recipe plugin bytes/expectations through verify_recipe; no caller replacement payload/digest or schema1 downgrade.
 - [x] Carry actual document count allocation into package IO; seal post-read/document-hash/final-package count identity and retain final actual cell;14 composed cases/534 combined checks pass.
 - [x] Preserve historical recipe/configuration/data custody after namespace/path drift; occupied package refuses before fresh capture.
-- [ ] Join earlier selection and later artifact accounting into full startup limits; do not manufacture prior IO counts.
+- [x] Carry actual original selection count into recipe/plugin/entry accounting;576 startup checks pass.
+- [ ] Complete later dependency/interpreter accounting in one combined original-owner plan; see [composition](DEPENDENCY_FILE_COMPOSITION.md).
 - [ ] Complete GR2 entry/dependency/interpreter/link/loader closure, then GR3 native listener/store/bridge/identity/key factory. Full character-image runtime remains unfinished.
 
 ### GR2 original entry observation checkpoint — November 7, 2026
@@ -749,4 +750,4 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Own metadata trees before/after actual file hashes and wrapper ancestry/identity joins; preserve unknown scan/close debt and no replay.
 - [x] Retain/complete file lifecycle with one-shot-before-native-effects, actual metadata/count publication, compatible legacy facts and typed prior package budget;18 entry/21 artifact cases,569 combined checks pass.
 - [ ] Complete actual installed wrapper execution/control-flow and independent operator qualification; snapshots alone do not attest executed bytes.
-- [ ] Complete remaining selection/dependency/interpreter/link/loader accounting and native/key factory, broker/ACK/release and physical image qualification.
+- [ ] Complete remaining dependency/interpreter/link/loader accounting and native/key factory, broker/ACK/release and physical image qualification.
