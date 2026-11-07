@@ -159,7 +159,7 @@ class _AuthScope(NamedTuple):
     owner: object
     scope: _ReadScope
     before: _ParserSeal
-    progress: _ConsumedReceipt
+    progress: object
     step: object
     ledger: object
     receipt: object
@@ -217,7 +217,8 @@ def owned_native_read(notice):
 def require_unadvanced_notice(notice):
     owner = owned_native_read(notice)
     if owner is not None:
-        _require(type(owner._attempted) is bool and owner._attempted is False)
+        _require(type(owner._attempted) is bool and owner._attempted is False
+                 and owner._auth_allocation_origin is None)
 
 
 def retire_pending_on_work_exit(gate, cleanup):
@@ -464,7 +465,8 @@ class NativeCleanupRead:
     def run_once(self):
         s = NativeCleanupRead._origin(self)
         r = SignedReadNotice._actor(s.notice)
-        _require(self._initialized is True and self._attempted is False)
+        _require(self._initialized is True and self._attempted is False
+                 and self._auth_allocation_origin is None)
         self._attempted = True
         chunk = None
         failed = False
@@ -530,7 +532,7 @@ class NativeCleanupRead:
 
     def current_for_cleanup(self):
         _require(type(self) is NativeCleanupRead and type(self._consume_attempted) is bool)
-        if self._consume_attempted:
+        if self._consume_attempted or self._auth_allocation_origin is not None:
             return NativeCleanupRead.current_progress_for_cleanup(self)
         s = NativeCleanupRead._origin(self)
         r = SignedReadNotice._cleanup_actor(s.notice)
@@ -661,6 +663,8 @@ class NativeCleanupRead:
         return s
 
     def _progress_work_current(self):
+        if self._consume_complete is False and self._auth_origin is not None:
+            return NativeCleanupRead._captured_auth_current(self, cleanup=False)
         s = NativeCleanupRead._consumption_metadata(self)
         r = SignedReadNotice._actor(s.notice)
         SelectorReadiness._native(r.wait.owner)
@@ -752,6 +756,8 @@ class NativeCleanupRead:
         return NativeCleanupRead._base_progress_for_cleanup(self)
 
     def _base_progress_for_cleanup(self):
+        if self._consume_complete is False and self._auth_origin is not None:
+            return NativeCleanupRead._captured_auth_current(self, cleanup=True)
         s = NativeCleanupRead._origin(self)
         r = SignedReadNotice._cleanup_actor(s.notice)
         _require(self._consume_complete is True)
@@ -1048,8 +1054,10 @@ class NativeCleanupRead:
                  and held_scope.step is self._next_read_origin
                  and held_scope.ledger is self._ledger_origin
                  and type(self._received) is int and self._received is self._received_origin
-                 and NativeCleanupRead._continuation_seal(
-                     self, scope, held_scope.progress.after) is current_seal)
+                 and (held_scope.progress is None or (
+                     type(held_scope.progress) is _ConsumedReceipt
+                     and NativeCleanupRead._continuation_seal(
+                         self, scope, held_scope.progress.after) is current_seal)))
         SignedReadNotice._role_seal(scope.notice)
         _require(type(parser) is SignedCleanupAuthPrefix
                  and parser is scope.idle_scope[1]
@@ -1089,7 +1097,10 @@ class NativeCleanupRead:
                  and fact.count == held_scope.count
                  and fact.total_received == held_scope.total_received)
         step, ledger = auth.scope.step, auth.scope.ledger
-        if step is None:
+        if held_scope.progress is None:
+            _require(step is None and ledger is None and held_scope.receipt is None
+                     and fact.count == fact.total_received == 0)
+        elif step is None:
             _require(auth.scope.receipt is self._progress_origin
                      and fact.count == self._received and fact.total_received == self._received)
         else:
@@ -1099,34 +1110,137 @@ class NativeCleanupRead:
                      and fact.count == step.received and fact.total_received == ledger.received)
         return fact
 
+    def _captured_auth_metadata(self, scope):
+        """No post-cause receive/consume exists on this distinct captured path."""
+        _require(self._initialized is True and self._failed is False and self._unknown is False
+                 and all(type(v) is bool and v is False for v in (
+                     self._attempted, self._returned, self._complete, self._count_known,
+                     self._inflight, self._reading_owned, self._consume_attempted,
+                     self._consume_returned, self._consume_complete))
+                 and type(self._received) is int and self._received == 0
+                 and self._received is self._received_origin
+                 and all(v is None for v in (
+                     self._native_count_allocation_origin, self._pending, self._pending_origin,
+                     self._pending_allocation_origin, self._fact, self._fact_origin,
+                     self._fact_allocation_origin, self._consume_allocation_origin,
+                     self._consume_attempt_allocation_origin, self._progress,
+                     self._progress_origin, self._progress_allocation_origin,
+                     self._next_read, self._next_read_origin, self._next_read_allocation_origin,
+                     self._ledger, self._ledger_origin, self._ledger_allocation_origin))
+                 and scope.idle_scope[2] == 0)
+        auth = self._auth_origin
+        _require(type(auth) is _AuthAttempt and self._auth is auth
+                 and type(self._auth_allocation_origin) is tuple
+                 and len(self._auth_allocation_origin) == 2
+                 and self._auth_allocation_origin[0] is self
+                 and self._auth_allocation_origin[1] is auth
+                 and type(auth.scope) is _AuthScope and auth.scope is auth.scope_origin
+                 and type(auth.scope_allocation) is tuple and len(auth.scope_allocation) == 2
+                 and auth.scope_allocation[0] is auth and auth.scope_allocation[1] is auth.scope
+                 and auth.scope.owner is self and auth.scope.scope is scope
+                 and type(auth.scope.before) is _ParserSeal)
+        before = auth.scope.before
+        _require(type(before.value) is bytes and type(before.buffer) is bytearray
+                 and type(before.target) is int and type(before.header_done) is bool
+                 and before.header_done is True)
+        cursor, capture = scope.cursor, scope.idle_scope[0].reservation.capture
+        state = cursor._parser_state_origin
+        _require(capture.body is None and cursor._initialized is True and cursor._failed is False
+                 and cursor._notice is scope.notice and cursor._notice_origin is scope.notice
+                 and cursor._fact is scope.idle_scope[0]
+                 and cursor._fact_origin is scope.idle_scope[0]
+                 and type(state) is tuple and len(state) == 4
+                 and cursor._parser_state is state
+                 and type(cursor._parser_state_allocation_origin) is tuple
+                 and len(cursor._parser_state_allocation_origin) == 3
+                 and cursor._parser_state_allocation_origin[0] is cursor
+                 and cursor._parser_state_allocation_origin[1] is before.parser
+                 and cursor._parser_state_allocation_origin[2] is state
+                 and type(state[0]) is bytearray and type(state[1]) is bytes
+                 and type(state[2]) is int and state[3] is True
+                 and before.parser is scope.idle_scope[1]
+                 and cursor._parser is before.parser and cursor._parser_origin is before.parser
+                 and before.buffer is state[0] and before.value == state[1]
+                 and before.target is state[2] and before.header_done is True
+                 and len(before.value) == before.target
+                 and auth.scope.progress is None and auth.scope.step is None
+                 and auth.scope.ledger is None and auth.scope.receipt is None
+                 and type(auth.scope.count) is int and type(auth.scope.total_received) is int
+                 and auth.scope.count == auth.scope.total_received == 0)
+        stop, end = SignedReadNotice._stop_binding_metadata(scope.notice)
+        _require(stop is scope.idle_scope[0].stop and end <= scope.idle_scope[4])
+        from .presentation_remote_cleanup import _FUTURE
+        _require(_FUTURE.done(scope.notice._future_origin)
+                 and not _FUTURE.cancelled(scope.notice._future_origin)
+                 and _FUTURE.result(scope.notice._future_origin) is scope.idle_scope[0])
+        result = NativeCleanupRead._auth_metadata(self, scope, before)
+        if result is None:
+            NativeCleanupRead._same_parser(
+                NativeCleanupRead._parser_seal(before.parser), before)
+        return result
+
+    def _captured_auth_current(self, *, cleanup):
+        _require(type(cleanup) is bool)
+        s = NativeCleanupRead._origin(self)
+        r = (SignedReadNotice._cleanup_actor(s.notice) if cleanup
+             else SignedReadNotice._actor(s.notice))
+        NativeCleanupRead._captured_auth_metadata(self, s)
+        SelectorReadiness._native(r.wait.owner, actor=not cleanup)
+        _require(SelectorReadiness._slots(r.wait.owner)[0] is None)
+        SignedReadNotice._role_seal(s.notice)
+        from .presentation_remote_cleanup import RemoteCleanupOwner
+        _require(RemoteCleanupOwner._remaining(r.capture.cleanup) > 0)
+        NativeCleanupRead._final_socket_fence(self, s)
+        SignedReadNotice._role_seal(s.notice)
+        _require((SignedReadNotice._cleanup_actor(s.notice) if cleanup
+                  else SignedReadNotice._actor(s.notice)) is r)
+        fact = NativeCleanupRead._captured_auth_metadata(self, s)
+        return fact
+
     def finish_authentication(self):
         s = NativeCleanupRead._origin(self)
         r = SignedReadNotice._actor(s.notice)
-        _require(self._consume_complete is True and self._failed is False
-                 and self._unknown is False and self._auth_origin is None
+        _require(self._failed is False and self._unknown is False and self._auth_origin is None
                  and self._auth is None and self._auth_allocation_origin is None)
-        progress, cell = self._progress_origin, self._progress_allocation_origin
-        _require(type(progress) is _ConsumedReceipt and self._progress is progress
-                 and progress.owner is self and progress.scope is s and progress.mint is _MINT
-                 and type(progress.after) is _ParserSeal
-                 and type(cell) is tuple and len(cell) == 2
-                 and cell[0] is self and cell[1] is progress)
-        before = NativeCleanupRead._continuation_seal(self, s, progress.after)
+        captured = self._consume_complete is False
+        if captured:
+            # Frozen original-parser validation before admitting any irreversible
+            # verification. This route never creates native or consume receipts.
+            _require(s.idle_scope[2] == 0 and s.idle_scope[0].reservation.capture.body is None)
+            _require(NativeCleanupRead._metadata(self) is s)
+            before = NativeCleanupRead._parser_seal(s.idle_scope[1])
+            progress = step = receipt = None
+            count = total = 0
+        else:
+            progress, cell = self._progress_origin, self._progress_allocation_origin
+            _require(type(progress) is _ConsumedReceipt and self._progress is progress
+                     and progress.owner is self and progress.scope is s and progress.mint is _MINT
+                     and type(progress.after) is _ParserSeal
+                     and type(cell) is tuple and len(cell) == 2
+                     and cell[0] is self and cell[1] is progress)
+            before = NativeCleanupRead._continuation_seal(self, s, progress.after)
+            parser = before.parser
+            # Pure completed-record admission precedes the irreversible attempt.
+            _require(type(parser) is SignedCleanupAuthPrefix and parser is s.idle_scope[1]
+                     and type(before.buffer) is bytearray and type(before.value) is bytes
+                     and type(before.target) is int and before.header_done is True
+                     and 73 <= len(before.value) == before.target <= RECORD_LIMIT
+                     and parser._buffer is before.buffer and parser._buffer_origin is before.buffer
+                     and bytes(before.buffer) == before.value)
+            step = self._next_read_origin
+            receipt = progress if step is None else step.fact
+            _require(type(receipt) is (_ConsumedReceipt if step is None else _NextReceipt)
+                     and type(receipt.count) is int)
+            count = receipt.count
+            total = count if step is None else receipt.total_received
+            _require(type(total) is int and 0 < count <= total <= _WIRE_LIMIT)
         parser = before.parser
-        # Pure completed-record admission precedes the irreversible attempt.
         _require(type(parser) is SignedCleanupAuthPrefix and parser is s.idle_scope[1]
                  and type(before.buffer) is bytearray and type(before.value) is bytes
                  and type(before.target) is int and before.header_done is True
                  and 73 <= len(before.value) == before.target <= RECORD_LIMIT
                  and parser._buffer is before.buffer and parser._buffer_origin is before.buffer
                  and bytes(before.buffer) == before.value)
-        step = self._next_read_origin
-        receipt = progress if step is None else step.fact
-        _require(type(receipt) is (_ConsumedReceipt if step is None else _NextReceipt)
-                 and type(receipt.count) is int)
-        count = receipt.count
-        total = count if step is None else receipt.total_received
-        _require(type(total) is int and 0 < count <= total <= _WIRE_LIMIT)
         auth = _AuthAttempt.__new__(_AuthAttempt)
         auth_scope = _AuthScope(self, s, before, progress,
             step, self._ledger_origin, receipt, count, total)
@@ -1162,7 +1276,10 @@ class NativeCleanupRead:
             auth.fact_cell = (auth, auth.fact)
             NativeCleanupRead._progress_work_current(self)
             auth.complete = True
-            NativeCleanupRead._consumption_metadata(self)
+            if captured:
+                NativeCleanupRead._captured_auth_metadata(self, s)
+            else:
+                NativeCleanupRead._consumption_metadata(self)
             return auth.fact
         except BaseException:
             failed = auth.failed = self._failed = self._unknown = True
@@ -1213,7 +1330,8 @@ class NativeCleanupRead:
                  and type(r.capture.work) is _TaskAllocation
                  and type(r.capture.work.task) is _TASK
                  and asyncio.current_task() is r.capture.work.task)
-        if self._pending_allocation_origin is not None or self._consume_attempted is True:
+        if (self._pending_allocation_origin is not None or self._consume_attempted is True
+                or self._auth_allocation_origin is not None):
             # No complete protocol drain yet: dropping pending bytes preserves
             # actual received counts and UNKNOWN, never a completed-frame fact.
             self._failed = self._unknown = True

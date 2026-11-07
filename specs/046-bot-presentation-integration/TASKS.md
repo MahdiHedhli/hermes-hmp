@@ -33,8 +33,10 @@
 - [x] Bind newly completed authentication to one original-reader RESULT/1 or
       TERMINAL/1 frame stage; fixed parser dispatch, actual allocation continuity,
       cumulative counts and eight synthetic positive/refusal causals. DATA only.
-- [ ] Admit captured-complete authentication plus retained outer header without
-      new auth-byte receive/consume credit, parser reset or fabricated progress.
+- [x] Admit captured-complete authentication plus retained outer header without
+      new auth-byte receive/consume credit, parser reset or fabricated progress;
+      exact original allocations, zero seed, cleanup observer/work-exit binding,
+      actual four-byte retained header RESULT path and five refusal causals.
 - [ ] Complete an originally partial body using its SAME original digest; the
       new-frame parser does not qualify that path.
 - [ ] Qualify subsequent explicit grammar transitions and terminal acceptance;

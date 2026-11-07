@@ -70,6 +70,12 @@ from .test_presentation_supervisor import context as context
     "wake_reserve_notice_native_consume",
     "wake_reserve_notice_native_consume_next",
     "wake_reserve_notice_native_consume_next_auth",
+    "wake_reserve_notice_native_consume_next_auth_frame_captured_initial",
+    "wake_reserve_notice_native_consume_next_auth_frame_captured_lost",
+    "wake_reserve_notice_native_consume_next_auth_frame_captured_retired",
+    "wake_reserve_notice_native_consume_next_auth_frame_captured_countbad",
+    "wake_reserve_notice_native_consume_next_auth_frame_captured_foreign",
+    "wake_reserve_notice_native_consume_next_auth_frame_captured",
     "wake_reserve_notice_native_consume_next_auth_frame",
     "wake_reserve_notice_native_consume_next_auth_frame_terminal",
     "wake_reserve_notice_native_consume_next_auth_frame_bodyhash",
@@ -106,13 +112,15 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
 
     next_case = "_native_consume_next" in mutation
     auth_case = "_consume_next_auth" in mutation
+    captured_case = "_frame_captured" in mutation
+    captured_failure = captured_case and not mutation.endswith("_captured")
     frame_case = "_consume_next_auth_frame" in mutation
     frame_pure_failure = frame_case and mutation.endswith("_authforeign")
     frame_failure = frame_case and mutation.endswith((
         "_bodyhash", "_feedshadow", "_finishshadow", "_postledger", "_headcopy", "_authforeign"))
-    auth_failure = auth_case and mutation.endswith((
+    auth_failure = captured_failure or (auth_case and mutation.endswith((
         "_signature", "_lost", "_retired", "_copy", "_initial", "_ledger", "_counter",
-        "_values", "_scope"))
+        "_values", "_scope")))
     next_failure = next_case and mutation.endswith(("_blocked", "_lostack", "_alloc", "_foreign"))
     prepared = await prepare(context, begin_gateway)
     authority, operation, _, channel, peer, _, packet, _ = prepared
@@ -227,7 +235,7 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                         held["native_frame_length"])
                     assert done.total_received == (
                         fact.total_received
-                        + held["native_frame_length"])
+                        + held["native_frame_length"] - (4 if captured_case else 0))
                     assert done.data.terminal == (
                         b"abcd" if scope.phase == "TERMINAL"
                         else None)
@@ -364,6 +372,19 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             if mutation.startswith("wake"):
                 if mutation == "wake_partial":
                     await loop.sock_sendall(peer, b"HBA1")
+                if captured_case:
+                    frame = encode_frame(b.intent.binding, "RESULT", 1, b"abcd", version=2)
+                    value.update(phase="RESULT", sequence=1,
+                                 frame_sha256=hashlib.sha256(frame).hexdigest(),
+                                 frame_length=len(frame))
+                    raw = encode_record(
+                        value, keys["broker"]._private_key.sign(signing_bytes(value))
+                    )
+                    held["captured_length"] = len(raw) + 4
+                    held["captured_raw"] = raw
+                    held["captured_frame"] = frame
+                    held["native_frame_length"] = len(frame)
+                    await loop.sock_sendall(peer, raw + frame[:4])
                 await waiting.wait()
                 if "_notice_native" in mutation:
                     await native_ready.wait()
@@ -375,7 +396,9 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     raw = encode_record(
                         value, keys["broker"]._private_key.sign(signing_bytes(value)))
                     held["native_expected"] = raw[:8]
-                    if mutation.endswith("_eof"):
+                    if captured_case:
+                        await loop.sock_sendall(peer, held["captured_frame"][4:])
+                    elif mutation.endswith("_eof"):
                         import socket
                         peer.shutdown(socket.SHUT_WR)
                     elif next_case:
@@ -609,7 +632,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                         and waiter._handle_snapshot is not None
                         and reader._base_origin.refs[0]._barriers_snapshot.cause in futures
                         and not held.get("actual_cause_requested")
-                        and (mutation != "wake_partial" or reader._consumed == 4)):
+                        and (mutation != "wake_partial" or reader._consumed == 4)
+                        and (not captured_case or reader._consumed == held.get("captured_length"))):
                     held["actual_cause_requested"] = True
                     RemoteCleanupOwner.request(reader._base_origin.refs[0])
                     waiting.set()
@@ -892,561 +916,741 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                 )
                                 native = NativeCleanupRead.retain(idle_reader)
                                 held["native_owner"] = native
-                                fence = NativeCleanupRead._final_socket_fence
-                                dispatch = NativeCleanupRead._dispatch_metadata
-
-                                def observed_fence(owner, scope):
-                                    try:
-                                        return fence(owner, scope)
-                                    except BaseException as error:
-                                        held["native_pre_io_failure"] = error
-                                        held["native_pre_io_failure_stage"] = "socket_fence"
-                                        raise
-
-                                def observed_dispatch(owner, scope):
-                                    try:
-                                        return dispatch(owner, scope)
-                                    except BaseException as error:
-                                        held["native_pre_io_failure"] = error
-                                        held["native_pre_io_failure_stage"] = "dispatch_metadata"
-                                        raise
-
-                                monkeypatch.setattr(NativeCleanupRead, "_final_socket_fence",
-                                                    observed_fence)
-                                monkeypatch.setattr(NativeCleanupRead, "_dispatch_metadata",
-                                                    observed_dispatch)
-                                receive = NativeCleanupRead._receive
-                                held["native_calls"] = 0
-
-                                def observed_receive(sock, count):
-                                    held["native_calls"] += 1
-                                    assert sock is reader._base_origin.sock
-                                    if (next_case
-                                            and held["native_calls"] > 1):
-                                        if frame_case and native._frame_origin is not None:
-                                            assert (count
-                                                    == native._frame_origin.step_origin.requested)
-                                        else:
-                                            assert count == native._next_read_origin.requested
-                                    else:
-                                        assert count == 8
-                                    try:
-                                        value = receive(sock, min(count, 6) if (
-                                            next_case and mutation.endswith("_short")
-                                            and held["native_calls"] > 1) else count)
-                                    except OSError as error:
-                                        held["native_receive_errno"] = error.errno
-                                        raise
-                                    held["native_returned_count"] = len(value)
-                                    if (frame_case and mutation.endswith("_feedshadow")
-                                            and held["native_calls"] == 3):
-                                        def foreign_feed(*args):
-                                            held["foreign_frame_feed"] = True
-                                            raise AssertionError("foreign feed dispatched")
-                                        native._frame_origin.scope.parser.feed = foreign_feed
-                                    if next_case and held["native_calls"] > 1:
-                                        held["next_actual_received"] = len(value)
-                                        if mutation.endswith("_alloc"):
-                                            class ForeignStepAllocation:
-                                                def __getitem__(self, key):
-                                                    held["foreign_step_getitem"] = True
-                                                    raise AssertionError("foreign step access")
-                                            native._next_read_allocation_origin = (
-                                                ForeignStepAllocation())
-                                    if (mutation.endswith("_lostack")
-                                            and (not next_case or held["native_calls"] > 1)):
-                                        raise OSError("synthetic lost receive acknowledgement")
-                                    return value
-
-                                monkeypatch.setattr(NativeCleanupRead, "_receive",
-                                                    staticmethod(observed_receive))
-                                probe_case = mutation.endswith((
-                                    "_probecounterbad", "_probereadingbad", "_probewritingbad"))
-                                if probe_case:
-                                    from hmp_plugin import (
-                                        presentation_credential_cleanup_read as nr,
-                                    )
-                                    timeout_probe = nr._TIMEOUT
-
-                                    def changed_final_probe(sock):
-                                        value = timeout_probe(sock)
-                                        if not held.get("native_probe_changed"):
-                                            held["native_probe_changed"] = True
-                                            if mutation.endswith("_probecounterbad"):
-                                                class ForeignCounter:
-                                                    def __eq__(self, other):
-                                                        held["foreign_native_counter_eq"] = True
-                                                        raise AssertionError("foreign counter")
-                                                native._received = native._received_origin = (
-                                                    ForeignCounter())
-                                            elif mutation.endswith("_probereadingbad"):
-                                                reader._base_origin.channel._reading = True
-                                            else:
-                                                reader._base_origin.channel._writing = True
-                                        return value
-
-                                    monkeypatch.setattr(nr, "_TIMEOUT", changed_final_probe)
-                                if mutation.endswith((
-                                        "_timeoutbad", "_blockingbad", "_fdbad",
-                                        "_posttimeoutbad", "_postfdbad")):
-                                    native_remaining = RemoteCleanupOwner._remaining
-
-                                    def native_fd_clock_fault(cleanup):
-                                        value = native_remaining(cleanup)
-                                        post = mutation.endswith(("_posttimeoutbad", "_postfdbad"))
-                                        if (native._attempted and (native._returned if post
-                                                                  else not native._returned)
-                                                and not held.get("native_fd_changed")):
-                                            held["native_fd_changed"] = True
-                                            sock = reader._base_origin.sock
-                                            if mutation.endswith((
-                                                    "_timeoutbad", "_posttimeoutbad")):
-                                                sock.settimeout(0.2)
-                                            elif mutation.endswith("_blockingbad"):
-                                                sock.setblocking(True)
-                                            else:
-                                                import os
-                                                import socket
-                                                left, right = socket.socketpair()
-                                                left.setblocking(False)
-                                                right.setblocking(False)
-                                                held["native_fd_fixture_sockets"] = (
-                                                    sock, left, right)
-                                                os.dup2(left.fileno(), sock.fileno(),
-                                                        inheritable=False)
-                                        return value
-
-                                    monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
-                                                        native_fd_clock_fault)
-                                if mutation.endswith((
-                                        "_keybad", "_pendingbad", "_pendingpairbad",
-                                        "_counterbad", "_scopebad")):
-                                    native_remaining = RemoteCleanupOwner._remaining
-
-                                    def native_clock_fault(cleanup):
-                                        value = native_remaining(cleanup)
-                                        if (native._count_known
-                                                and not held.get("native_clock_changed")):
-                                            held["native_clock_changed"] = True
-                                            assert native._received == 8
-                                            if mutation.endswith("_keybad"):
-                                                keys["gateway"].retire()
-                                            elif mutation.endswith("_counterbad"):
-                                                class ForeignNativeCount:
-                                                    def __eq__(self, other):
-                                                        held["foreign_native_count_eq"] = True
-                                                        raise AssertionError("foreign native count")
-                                                native._received = native._received_origin = (
-                                                    ForeignNativeCount())
-                                            elif mutation.endswith("_scopebad"):
-                                                held["native_original_scope"] = native._scope_origin
-                                                copied = native._scope_origin._replace()
-                                                native._scope = native._scope_origin = copied
-                                            else:
-                                                replacement = bytearray(b"untouched replacement")
-                                                if mutation.endswith("_pendingpairbad"):
-                                                    replacement = bytes(bytearray(
-                                                        native._pending_origin))
-                                                    assert replacement is not (
-                                                        native._pending_allocation_origin[1])
-                                                held["native_replacement"] = replacement
-                                                native._pending = replacement
-                                                native._pending_origin = replacement
-                                        return value
-
-                                    monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
-                                                        native_clock_fault)
-                                observer = NativeCleanupRead.current_for_cleanup
-
-                                def observed_native(owner):
-                                    value = observer(owner)
-                                    assert owner is native
-                                    if next_case:
-                                        assert not next_failure
-                                        wanted = (native._frame_origin.done if frame_case else
-                                                  native._auth_origin.fact if auth_case else
-                                                  native._next_read_origin.fact)
-                                        assert value is wanted
-                                        assert value.total_received == (
-                                            native._frame_origin.ledger_origin.received
-                                            if frame_case else native._ledger_origin.received)
-                                    else:
-                                        assert value.count == 8
-                                    with pytest.raises(FrameError):
-                                        native.current_pending()
-                                    with pytest.raises(FrameError):
-                                        notice.current_stop_for_cleanup()
-                                    assert not notice._unknown
-                                    native_observed.set()
-                                    return value
-
-                                monkeypatch.setattr(NativeCleanupRead, "current_for_cleanup",
-                                                    observed_native)
-                                native_failure = not next_case and mutation.endswith((
-                                    "_keybad", "_pendingbad", "_lostack", "_eof", "_blocked",
-                                    "_timeoutbad", "_blockingbad", "_fdbad",
-                                    "_probecounterbad", "_probereadingbad", "_probewritingbad",
-                                    "_posttimeoutbad", "_postfdbad", "_counterbad",
-                                    "_pendingpairbad", "_scopebad"))
-                                if native_failure:
-                                    with pytest.raises(FrameError):
-                                        native.run_once()
-                                    assert native._failed and native._unknown
-                                    assert native._pending_origin is None
-                                else:
-                                    try:
-                                        receipt = native.run_once()
-                                    except FrameError:
-                                        if "native_pre_io_failure" in held:
-                                            raise held["native_pre_io_failure"] from None
-                                        raise
-                                    held["native_original_receipt"] = receipt
-                                    assert receipt.count == 8
-                                    assert native.current_pending() is receipt
-                                    assert native._pending_origin == held["native_expected"]
-                                    assert not cursor._parser._buffer_origin
-                                if ("_native_consume_" in mutation
-                                        and not next_case):
+                                if captured_case:
+                                    receive = NativeCleanupRead._receive
+                                    held["native_calls"] = 0
+                                    def captured_receive(sock, count):
+                                        held["native_calls"] += 1
+                                        return receive(sock, count)
+                                    monkeypatch.setattr(NativeCleanupRead, "_receive",
+                                                        staticmethod(captured_receive))
+                                    assert idle_fact.scope[2] == 0
+                                    assert cursor._outer_origin == held["captured_frame"][:4]
                                     from hmp_plugin.presentation_credential_stream import (
                                         SignedCleanupAuthPrefix,
                                     )
-                                    feed = SignedCleanupAuthPrefix.feed
-                                    held["consume_feed_calls"] = 0
-
-                                    if mutation.endswith("_initial"):
-                                        original_fence = NativeCleanupRead._final_socket_fence
-
-                                        def first_consume_boundary(owner, scope):
-                                            if owner._consume_attempted:
-                                                held["consume_initial_boundary"] = True
-                                                monkeypatch.setattr(NativeCleanupRead,
-                                                    "_final_socket_fence", original_fence)
-                                                raise FrameError(
-                                                    "SYNTHETIC_INITIAL_CONSUME_FAILURE")
-                                            return original_fence(owner, scope)
-
-                                        monkeypatch.setattr(NativeCleanupRead,
-                                            "_final_socket_fence", first_consume_boundary)
-
-                                    def observed_consume_feed(parser, chunk):
-                                        held["consume_feed_calls"] += 1
-                                        assert parser is cursor._parser_origin
-                                        assert chunk is native._pending_allocation_origin[1]
-                                        if mutation.endswith("_partial"):
-                                            feed(parser, chunk[:4])
-                                            raise FrameError("SYNTHETIC_PARTIAL_FEED_FAILURE")
-                                        feed(parser, chunk)
+                                    auth_finish = SignedCleanupAuthPrefix.finish
+                                    held["captured_verify_calls"] = 0
+                                    def captured_finish(parser):
+                                        held["captured_verify_calls"] += 1
+                                        result = auth_finish(parser)
+                                        if mutation.endswith("_lost"):
+                                            raise OSError("synthetic captured auth ack lost")
                                         if mutation.endswith("_retired"):
                                             keys["gateway"].retire()
-                                        elif mutation.endswith("_parsercopy"):
-                                            replacement = bytearray(parser._buffer_origin)
-                                            parser._buffer = parser._buffer_origin = replacement
-                                            held["consume_parser_replacement"] = replacement
-                                        elif mutation.endswith("_countdrift"):
-                                            class ForeignConsumeCount:
+                                        if mutation.endswith("_countbad"):
+                                            class ForeignCapturedCount:
                                                 def __eq__(self, other):
-                                                    held["foreign_consume_count_eq"] = True
-                                                    raise AssertionError("foreign consume count")
+                                                    held["captured_foreign_eq"] = True
+                                                    raise AssertionError("foreign count")
                                             native._received = native._received_origin = (
-                                                ForeignConsumeCount())
+                                                ForeignCapturedCount())
+                                        return result
+                                    monkeypatch.setattr(SignedCleanupAuthPrefix, "finish",
+                                                        captured_finish)
+                                    if mutation.endswith("_foreign"):
+                                        captured_remaining = RemoteCleanupOwner._remaining
+                                        def captured_foreign_clock(cleanup):
+                                            value = captured_remaining(cleanup)
+                                            auth = native._auth_origin
+                                            if auth is not None and not held.get(
+                                                "captured_swapped"
+                                            ):
+                                                held["captured_swapped"] = True
+                                                class ForeignCapturedValue:
+                                                    def __eq__(self, other):
+                                                        held["captured_foreign_eq"] = True
+                                                        raise AssertionError("foreign value")
+                                                    def __len__(self):
+                                                        held["captured_foreign_len"] = True
+                                                        raise AssertionError("foreign value len")
+                                                before = auth.scope.before._replace(
+                                                    value=ForeignCapturedValue())
+                                                copied = auth.scope._replace(before=before)
+                                                auth.scope = auth.scope_origin = copied
+                                            return value
+                                        monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                                            captured_foreign_clock)
+                                    if mutation.endswith("_initial"):
+                                        captured_fence = NativeCleanupRead._final_socket_fence
+                                        def captured_initial_fence(owner, scope):
+                                            if owner._auth_allocation_origin is not None:
+                                                raise FrameError("SYNTHETIC_CAPTURED_AUTH_FENCE")
+                                            return captured_fence(owner, scope)
+                                        monkeypatch.setattr(NativeCleanupRead,
+                                            "_final_socket_fence", captured_initial_fence)
+                                    if captured_failure:
+                                        with pytest.raises(FrameError):
+                                            native.finish_authentication()
+                                        assert native._auth_allocation_origin is not None
+                                        assert native._auth_origin.scope.count == 0
+                                        assert native._auth_origin.scope.total_received == 0
+                                        assert native._failed and native._unknown
+                                        assert native._frame_origin is None
+                                        assert not cursor._parser._buffer_origin
+                                        assert held["captured_verify_calls"] == (
+                                            0 if mutation.endswith(("_initial", "_foreign")) else 1)
+                                        with pytest.raises(FrameError):
+                                            native.finish_authentication()
+                                        assert held["native_calls"] == 0
+                                        assert "captured_foreign_eq" not in held
+                                        assert "captured_foreign_len" not in held
+                                    else:
+                                        fact = native.finish_authentication()
+                                        assert fact.count == fact.total_received == 0
+                                        assert held["native_calls"] == 0
+                                        assert (
+                                            not native._attempted and not native._consume_attempted
+                                        )
+                                        assert native._native_count_allocation_origin is None
+                                        assert native._progress_allocation_origin is None
+                                        with pytest.raises(FrameError):
+                                            native.finish_authentication()
+                                        with pytest.raises(FrameError):
+                                            native.run_once()
+                                        assert not native._attempted and not native._failed
+                                        exercise_native_frame(native, fact)
+                                        assert held["native_calls"] == 3
+                                        assert native._frame_origin.done.total_received == (
+                                            len(held["captured_frame"]) - 4)
+                                        cleanup_observer = NativeCleanupRead.current_for_cleanup
+                                        def captured_observer(owner):
+                                            result = cleanup_observer(owner)
+                                            assert result is native._frame_origin.done
+                                            native_observed.set()
+                                            return result
 
-                                    monkeypatch.setattr(SignedCleanupAuthPrefix, "feed",
-                                                        observed_consume_feed)
-                                    if mutation.endswith(("_progresscopy", "_fdmode")):
-                                        remaining = RemoteCleanupOwner._remaining
+                                        monkeypatch.setattr(
+                                            NativeCleanupRead,
+                                            "current_for_cleanup",
+                                            captured_observer,
+                                        )
+                                        original_auth = native._auth_allocation_origin
+                                        async def captured_wrong_actor():
+                                            with pytest.raises(FrameError):
+                                                native.finish_authentication()
+                                        await asyncio.create_task(captured_wrong_actor())
+                                        assert native._auth_allocation_origin is original_auth
+                                        async with asyncio.timeout_at(
+                                                reader._base_origin.intent.end_ns / 1e9):
+                                            await native_observed.wait()
+                                else:
+                                    fence = NativeCleanupRead._final_socket_fence
+                                    dispatch = NativeCleanupRead._dispatch_metadata
 
-                                        def post_consume_clock(cleanup):
-                                            value = remaining(cleanup)
-                                            if (native._consume_returned
-                                                    and not held.get("consume_post_changed")):
-                                                held["consume_post_changed"] = True
-                                                if mutation.endswith("_fdmode"):
-                                                    reader._base_origin.sock.settimeout(0.2)
+                                    def observed_fence(owner, scope):
+                                        try:
+                                            return fence(owner, scope)
+                                        except BaseException as error:
+                                            held["native_pre_io_failure"] = error
+                                            held["native_pre_io_failure_stage"] = "socket_fence"
+                                            raise
+
+                                    def observed_dispatch(owner, scope):
+                                        try:
+                                            return dispatch(owner, scope)
+                                        except BaseException as error:
+                                            held["native_pre_io_failure"] = error
+                                            held["native_pre_io_failure_stage"] = (
+                                                "dispatch_metadata"
+                                            )
+                                            raise
+
+                                    monkeypatch.setattr(NativeCleanupRead, "_final_socket_fence",
+                                                        observed_fence)
+                                    monkeypatch.setattr(NativeCleanupRead, "_dispatch_metadata",
+                                                        observed_dispatch)
+                                    receive = NativeCleanupRead._receive
+                                    held["native_calls"] = 0
+
+                                    def observed_receive(sock, count):
+                                        held["native_calls"] += 1
+                                        assert sock is reader._base_origin.sock
+                                        if (next_case
+                                                and held["native_calls"] > 1):
+                                            if frame_case and native._frame_origin is not None:
+                                                assert (
+                                                    count
+                                                    == native._frame_origin.step_origin.requested
+                                                )
+                                            else:
+                                                assert count == native._next_read_origin.requested
+                                        else:
+                                            assert count == 8
+                                        try:
+                                            value = receive(sock, min(count, 6) if (
+                                                next_case and mutation.endswith("_short")
+                                                and held["native_calls"] > 1) else count)
+                                        except OSError as error:
+                                            held["native_receive_errno"] = error.errno
+                                            raise
+                                        held["native_returned_count"] = len(value)
+                                        if (frame_case and mutation.endswith("_feedshadow")
+                                                and held["native_calls"] == 3):
+                                            def foreign_feed(*args):
+                                                held["foreign_frame_feed"] = True
+                                                raise AssertionError("foreign feed dispatched")
+                                            native._frame_origin.scope.parser.feed = foreign_feed
+                                        if next_case and held["native_calls"] > 1:
+                                            held["next_actual_received"] = len(value)
+                                            if mutation.endswith("_alloc"):
+                                                class ForeignStepAllocation:
+                                                    def __getitem__(self, key):
+                                                        held["foreign_step_getitem"] = True
+                                                        raise AssertionError("foreign step access")
+                                                native._next_read_allocation_origin = (
+                                                    ForeignStepAllocation())
+                                        if (mutation.endswith("_lostack")
+                                                and (not next_case or held["native_calls"] > 1)):
+                                            raise OSError("synthetic lost receive acknowledgement")
+                                        return value
+
+                                    monkeypatch.setattr(NativeCleanupRead, "_receive",
+                                                        staticmethod(observed_receive))
+                                    probe_case = mutation.endswith((
+                                        "_probecounterbad", "_probereadingbad", "_probewritingbad"))
+                                    if probe_case:
+                                        from hmp_plugin import (
+                                            presentation_credential_cleanup_read as nr,
+                                        )
+                                        timeout_probe = nr._TIMEOUT
+
+                                        def changed_final_probe(sock):
+                                            value = timeout_probe(sock)
+                                            if not held.get("native_probe_changed"):
+                                                held["native_probe_changed"] = True
+                                                if mutation.endswith("_probecounterbad"):
+                                                    class ForeignCounter:
+                                                        def __eq__(self, other):
+                                                            held["foreign_native_counter_eq"] = True
+                                                            raise AssertionError("foreign counter")
+                                                    native._received = native._received_origin = (
+                                                        ForeignCounter())
+                                                elif mutation.endswith("_probereadingbad"):
+                                                    reader._base_origin.channel._reading = True
                                                 else:
-                                                    held["consume_original_progress"] = (
-                                                        native._progress_origin)
-                                                    copied = native._progress_origin._replace()
-                                                    native._progress = copied
-                                                    native._progress_origin = copied
+                                                    reader._base_origin.channel._writing = True
+                                            return value
+
+                                        monkeypatch.setattr(nr, "_TIMEOUT", changed_final_probe)
+                                    if mutation.endswith((
+                                            "_timeoutbad", "_blockingbad", "_fdbad",
+                                            "_posttimeoutbad", "_postfdbad")):
+                                        native_remaining = RemoteCleanupOwner._remaining
+
+                                        def native_fd_clock_fault(cleanup):
+                                            value = native_remaining(cleanup)
+                                            post = mutation.endswith(
+                                                ("_posttimeoutbad", "_postfdbad")
+                                            )
+                                            if (native._attempted and (native._returned if post
+                                                                      else not native._returned)
+                                                    and not held.get("native_fd_changed")):
+                                                held["native_fd_changed"] = True
+                                                sock = reader._base_origin.sock
+                                                if mutation.endswith((
+                                                        "_timeoutbad", "_posttimeoutbad")):
+                                                    sock.settimeout(0.2)
+                                                elif mutation.endswith("_blockingbad"):
+                                                    sock.setblocking(True)
+                                                else:
+                                                    import os
+                                                    import socket
+                                                    left, right = socket.socketpair()
+                                                    left.setblocking(False)
+                                                    right.setblocking(False)
+                                                    held["native_fd_fixture_sockets"] = (
+                                                        sock, left, right)
+                                                    os.dup2(left.fileno(), sock.fileno(),
+                                                            inheritable=False)
                                             return value
 
                                         monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
-                                                            post_consume_clock)
-                                    with pytest.raises(FrameError):
-                                        native.consume_pending()
-                                    assert native._consume_attempted
-                                    assert not native._consume_complete
-                                    assert native._native_count_allocation_origin[1] == 8
-                                    assert native._pending_origin is None
-                                    with pytest.raises(FrameError):
-                                        native.consume_pending()
-                                    assert held["consume_feed_calls"] == (
-                                        0 if mutation.endswith("_initial") else 1)
-                                    assert native._consume_attempt_allocation_origin is not None
-                                    if mutation.endswith("_initial"):
-                                        assert held["consume_initial_boundary"]
-                                        assert native._consume_allocation_origin is None
-                                    assert "foreign_consume_count_eq" not in held
-                                    held["parser_consumption_failed"] = True
-                                if mutation.endswith("_consume") or next_case:
-                                    async def wrong_consumer():
+                                                            native_fd_clock_fault)
+                                    if mutation.endswith((
+                                            "_keybad", "_pendingbad", "_pendingpairbad",
+                                            "_counterbad", "_scopebad")):
+                                        native_remaining = RemoteCleanupOwner._remaining
+
+                                        def native_clock_fault(cleanup):
+                                            value = native_remaining(cleanup)
+                                            if (native._count_known
+                                                    and not held.get("native_clock_changed")):
+                                                held["native_clock_changed"] = True
+                                                assert native._received == 8
+                                                if mutation.endswith("_keybad"):
+                                                    keys["gateway"].retire()
+                                                elif mutation.endswith("_counterbad"):
+                                                    class ForeignNativeCount:
+                                                        def __eq__(self, other):
+                                                            held["foreign_native_count_eq"] = True
+                                                            raise AssertionError(
+                                                                "foreign native count"
+                                                            )
+
+                                                    native._received = native._received_origin = (
+                                                        ForeignNativeCount())
+                                                elif mutation.endswith("_scopebad"):
+                                                    held["native_original_scope"] = (
+                                                        native._scope_origin
+                                                    )
+                                                    copied = native._scope_origin._replace()
+                                                    native._scope = native._scope_origin = copied
+                                                else:
+                                                    replacement = bytearray(
+                                                        b"untouched replacement"
+                                                    )
+                                                    if mutation.endswith("_pendingpairbad"):
+                                                        replacement = bytes(bytearray(
+                                                            native._pending_origin))
+                                                        assert replacement is not (
+                                                            native._pending_allocation_origin[1])
+                                                    held["native_replacement"] = replacement
+                                                    native._pending = replacement
+                                                    native._pending_origin = replacement
+                                            return value
+
+                                        monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                                            native_clock_fault)
+                                    observer = NativeCleanupRead.current_for_cleanup
+
+                                    def observed_native(owner):
+                                        value = observer(owner)
+                                        assert owner is native
+                                        if next_case:
+                                            assert not next_failure
+                                            wanted = (native._frame_origin.done if frame_case else
+                                                      native._auth_origin.fact if auth_case else
+                                                      native._next_read_origin.fact)
+                                            assert value is wanted
+                                            assert value.total_received == (
+                                                native._frame_origin.ledger_origin.received
+                                                if frame_case else native._ledger_origin.received)
+                                        else:
+                                            assert value.count == 8
                                         with pytest.raises(FrameError):
-                                            native.consume_pending()
-                                    consumed = native.consume_pending()
-                                    assert consumed.count == 8
-                                    assert consumed.before.parser is cursor._parser_origin
-                                    assert consumed.after.parser is cursor._parser_origin
-                                    assert consumed.after.value == held["native_expected"]
-                                    assert native._consume_complete and native._consume_returned
-                                    assert native._pending_origin is None
-                                    assert native._native_count_allocation_origin[1] == 8
-                                    with pytest.raises(FrameError):
-                                        native.consume_pending()
-                                    with pytest.raises(FrameError):
-                                        native.current_pending()
-                                    assert not native._failed and not native._unknown
-                                    held["parser_consumption_checked"] = True
-                                    if next_case:
+                                            native.current_pending()
+                                        with pytest.raises(FrameError):
+                                            notice.current_stop_for_cleanup()
+                                        assert not notice._unknown
+                                        native_observed.set()
+                                        return value
+
+                                    monkeypatch.setattr(NativeCleanupRead, "current_for_cleanup",
+                                                        observed_native)
+                                    native_failure = not next_case and mutation.endswith((
+                                        "_keybad", "_pendingbad", "_lostack", "_eof", "_blocked",
+                                        "_timeoutbad", "_blockingbad", "_fdbad",
+                                        "_probecounterbad", "_probereadingbad", "_probewritingbad",
+                                        "_posttimeoutbad", "_postfdbad", "_counterbad",
+                                        "_pendingpairbad", "_scopebad"))
+                                    if native_failure:
+                                        with pytest.raises(FrameError):
+                                            native.run_once()
+                                        assert native._failed and native._unknown
+                                        assert native._pending_origin is None
+                                    else:
+                                        try:
+                                            receipt = native.run_once()
+                                        except FrameError:
+                                            if "native_pre_io_failure" in held:
+                                                raise held["native_pre_io_failure"] from None
+                                            raise
+                                        held["native_original_receipt"] = receipt
+                                        assert receipt.count == 8
+                                        assert native.current_pending() is receipt
+                                        assert native._pending_origin == held["native_expected"]
+                                        assert not cursor._parser._buffer_origin
+                                    if ("_native_consume_" in mutation
+                                            and not next_case):
                                         from hmp_plugin.presentation_credential_stream import (
                                             SignedCleanupAuthPrefix,
                                         )
-                                        parser = cursor._parser_origin
-                                        needed = SignedCleanupAuthPrefix.needed.fget(parser)
-                                        if mutation.endswith("_foreign"):
-                                            class ForeignProgress:
-                                                def __getattr__(self, name):
-                                                    held["foreign_progress_getter"] = True
-                                                    raise AssertionError("foreign progress access")
-                                            replacement = ForeignProgress()
-                                            native._progress = native._progress_origin = replacement
+                                        feed = SignedCleanupAuthPrefix.feed
+                                        held["consume_feed_calls"] = 0
+
+                                        if mutation.endswith("_initial"):
+                                            original_fence = NativeCleanupRead._final_socket_fence
+
+                                            def first_consume_boundary(owner, scope):
+                                                if owner._consume_attempted:
+                                                    held["consume_initial_boundary"] = True
+                                                    monkeypatch.setattr(NativeCleanupRead,
+                                                        "_final_socket_fence", original_fence)
+                                                    raise FrameError(
+                                                        "SYNTHETIC_INITIAL_CONSUME_FAILURE")
+                                                return original_fence(owner, scope)
+
+                                            monkeypatch.setattr(NativeCleanupRead,
+                                                "_final_socket_fence", first_consume_boundary)
+
+                                        def observed_consume_feed(parser, chunk):
+                                            held["consume_feed_calls"] += 1
+                                            assert parser is cursor._parser_origin
+                                            assert chunk is native._pending_allocation_origin[1]
+                                            if mutation.endswith("_partial"):
+                                                feed(parser, chunk[:4])
+                                                raise FrameError("SYNTHETIC_PARTIAL_FEED_FAILURE")
+                                            feed(parser, chunk)
+                                            if mutation.endswith("_retired"):
+                                                keys["gateway"].retire()
+                                            elif mutation.endswith("_parsercopy"):
+                                                replacement = bytearray(parser._buffer_origin)
+                                                parser._buffer = parser._buffer_origin = replacement
+                                                held["consume_parser_replacement"] = replacement
+                                            elif mutation.endswith("_countdrift"):
+                                                class ForeignConsumeCount:
+                                                    def __eq__(self, other):
+                                                        held["foreign_consume_count_eq"] = True
+                                                        raise AssertionError(
+                                                            "foreign consume count"
+                                                        )
+
+                                                native._received = native._received_origin = (
+                                                    ForeignConsumeCount())
+
+                                        monkeypatch.setattr(SignedCleanupAuthPrefix, "feed",
+                                                            observed_consume_feed)
+                                        if mutation.endswith(("_progresscopy", "_fdmode")):
+                                            remaining = RemoteCleanupOwner._remaining
+
+                                            def post_consume_clock(cleanup):
+                                                value = remaining(cleanup)
+                                                if (native._consume_returned
+                                                        and not held.get("consume_post_changed")):
+                                                    held["consume_post_changed"] = True
+                                                    if mutation.endswith("_fdmode"):
+                                                        reader._base_origin.sock.settimeout(0.2)
+                                                    else:
+                                                        held["consume_original_progress"] = (
+                                                            native._progress_origin)
+                                                        copied = native._progress_origin._replace()
+                                                        native._progress = copied
+                                                        native._progress_origin = copied
+                                                return value
+
+                                            monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                                                post_consume_clock)
+                                        with pytest.raises(FrameError):
+                                            native.consume_pending()
+                                        assert native._consume_attempted
+                                        assert not native._consume_complete
+                                        assert native._native_count_allocation_origin[1] == 8
+                                        assert native._pending_origin is None
+                                        with pytest.raises(FrameError):
+                                            native.consume_pending()
+                                        assert held["consume_feed_calls"] == (
+                                            0 if mutation.endswith("_initial") else 1)
+                                        assert native._consume_attempt_allocation_origin is not None
+                                        if mutation.endswith("_initial"):
+                                            assert held["consume_initial_boundary"]
+                                            assert native._consume_allocation_origin is None
+                                        assert "foreign_consume_count_eq" not in held
+                                        held["parser_consumption_failed"] = True
+                                    if mutation.endswith("_consume") or next_case:
+                                        async def wrong_consumer():
                                             with pytest.raises(FrameError):
-                                                native.read_and_consume_next()
-                                            assert "foreign_progress_getter" not in held
-                                            assert native._next_read_origin is None
-                                            assert native._ledger_origin is None
-                                            assert held["native_calls"] == 1
-                                        elif next_failure:
-                                            with pytest.raises(FrameError):
-                                                native.read_and_consume_next()
-                                            step = native._next_read_origin
-                                            assert (step.attempted and step.failed
-                                                    and not step.complete)
-                                            assert (step.pending is None
-                                                    and step.pending_cell is None)
-                                            if mutation.endswith("_alloc"):
-                                                assert step.count_known and step.received == needed
-                                                assert "foreign_step_getitem" not in held
-                                            else:
-                                                assert not step.count_known and not step.returned
-                                            with pytest.raises(FrameError):
-                                                native.read_and_consume_next()
-                                            assert held["native_calls"] == 2
-                                        else:
-                                            next_fact = native.read_and_consume_next()
-                                            assert next_fact.ordinal == 1
-                                            assert next_fact.count == (
-                                                6 if mutation.endswith("_short") else needed)
-                                            assert (next_fact.total_received
-                                                    == next_fact.total_committed)
-                                            assert next_fact.after.parser is parser
-                                            if mutation.endswith("_short"):
-                                                import weakref
-                                                old_step = weakref.ref(native._next_read_origin)
-                                                second = native.read_and_consume_next()
-                                                assert second.ordinal == 2 and second.count == 6
-                                                assert second.total_received == 20
-                                                assert old_step() is None  # no linked history
-                                            else:
-                                                assert next_fact.total_received == 8 + needed
-                                                assert (SignedCleanupAuthPrefix.needed.fget(parser)
-                                                        == 0)
-                                                ledger = native._ledger_origin
+                                                native.consume_pending()
+                                        consumed = native.consume_pending()
+                                        assert consumed.count == 8
+                                        assert consumed.before.parser is cursor._parser_origin
+                                        assert consumed.after.parser is cursor._parser_origin
+                                        assert consumed.after.value == held["native_expected"]
+                                        assert native._consume_complete and native._consume_returned
+                                        assert native._pending_origin is None
+                                        assert native._native_count_allocation_origin[1] == 8
+                                        with pytest.raises(FrameError):
+                                            native.consume_pending()
+                                        with pytest.raises(FrameError):
+                                            native.current_pending()
+                                        assert not native._failed and not native._unknown
+                                        held["parser_consumption_checked"] = True
+                                        if next_case:
+                                            from hmp_plugin.presentation_credential_stream import (
+                                                SignedCleanupAuthPrefix,
+                                            )
+                                            parser = cursor._parser_origin
+                                            needed = SignedCleanupAuthPrefix.needed.fget(parser)
+                                            if mutation.endswith("_foreign"):
+                                                class ForeignProgress:
+                                                    def __getattr__(self, name):
+                                                        held["foreign_progress_getter"] = True
+                                                        raise AssertionError(
+                                                            "foreign progress access"
+                                                        )
+
+                                                replacement = ForeignProgress()
+                                                native._progress = native._progress_origin = (
+                                                    replacement
+                                                )
+                                                with pytest.raises(FrameError):
+                                                    native.read_and_consume_next()
+                                                assert "foreign_progress_getter" not in held
+                                                assert native._next_read_origin is None
+                                                assert native._ledger_origin is None
+                                                assert held["native_calls"] == 1
+                                            elif next_failure:
+                                                with pytest.raises(FrameError):
+                                                    native.read_and_consume_next()
                                                 step = native._next_read_origin
+                                                assert (step.attempted and step.failed
+                                                        and not step.complete)
+                                                assert (step.pending is None
+                                                        and step.pending_cell is None)
+                                                if mutation.endswith("_alloc"):
+                                                    assert (
+                                                        step.count_known and step.received == needed
+                                                    )
+                                                    assert "foreign_step_getitem" not in held
+                                                else:
+                                                    assert (
+                                                        not step.count_known and not step.returned
+                                                    )
                                                 with pytest.raises(FrameError):
                                                     native.read_and_consume_next()
-                                                assert native._ledger_origin is ledger
-                                                assert native._next_read_origin is step
-                                            assert native._next_read_origin.pending is None
-                                            assert not native._failed and not native._unknown
-                                        held["next_read_checked"] = True
-                                        if auth_case:
-                                            finish = SignedCleanupAuthPrefix.finish
-                                            held["auth_finish_calls"] = 0
-
-                                            def observed_auth_finish(parser):
-                                                held["auth_finish_calls"] += 1
-                                                result = finish(parser)
-                                                if mutation.endswith("_lost"):
-                                                    raise OSError(
-                                                        "synthetic auth acknowledgement lost")
-                                                if mutation.endswith("_retired"):
-                                                    keys["gateway"].retire()
-                                                if mutation.endswith("_ledger"):
-                                                    class ForeignAuthLedger:
-                                                        def __getattr__(self, name):
-                                                            held["auth_ledger_getter"] = True
-                                                            raise AssertionError("foreign ledger")
-                                                    native._ledger_origin = ForeignAuthLedger()
-                                                if mutation.endswith("_counter"):
-                                                    class ForeignAuthCount:
-                                                        def __eq__(self, other):
-                                                            held["auth_count_eq"] = True
-                                                            raise AssertionError("foreign counter")
-                                                    native._next_read_origin.received = (
-                                                        ForeignAuthCount())
-                                                if mutation.endswith("_values"):
-                                                    from dataclasses import replace
-                                                    result = replace(result,
-                                                        frame_length=result.frame_length + 1)
-                                                if mutation.endswith("_scope"):
-                                                    class ForeignAuthScope:
-                                                        def __getattr__(self, name):
-                                                            held["auth_scope_getter"] = True
-                                                            raise AssertionError(
-                                                                "foreign auth scope")
-                                                    native._auth_origin.scope = ForeignAuthScope()
-                                                return result
-
-                                            monkeypatch.setattr(SignedCleanupAuthPrefix, "finish",
-                                                                observed_auth_finish)
-                                            if mutation.endswith("_initial"):
-                                                fence = NativeCleanupRead._final_socket_fence
-
-                                                def first_auth_fence(owner, scope):
-                                                    if owner._auth_origin is not None:
-                                                        monkeypatch.setattr(NativeCleanupRead,
-                                                            "_final_socket_fence", fence)
-                                                        raise FrameError("SYNTHETIC_AUTH_BOUNDARY")
-                                                    return fence(owner, scope)
-
-                                                monkeypatch.setattr(NativeCleanupRead,
-                                                    "_final_socket_fence", first_auth_fence)
-                                            if mutation.endswith("_copy"):
-                                                remaining = RemoteCleanupOwner._remaining
-
-                                                def auth_copy_after_clock(cleanup):
-                                                    value = remaining(cleanup)
-                                                    attempt = native._auth_origin
-                                                    if (attempt is not None and attempt.returned
-                                                            and not held.get("auth_copied")):
-                                                        from dataclasses import replace
-                                                        held["auth_copied"] = True
-                                                        held["auth_actual_checked"] = (
-                                                            attempt.checked)
-                                                        attempt.checked = replace(attempt.checked)
-                                                    return value
-
-                                                monkeypatch.setattr(RemoteCleanupOwner,
-                                                    "_remaining", auth_copy_after_clock)
-                                            if auth_failure:
-                                                with pytest.raises(FrameError):
-                                                    native.finish_authentication()
-                                                attempt = native._auth_origin
-                                                assert attempt.failed and not attempt.complete
-                                                assert not parser._buffer_origin
-                                                assert native._failed and native._unknown
-                                                assert "auth_ledger_getter" not in held
-                                                assert "auth_count_eq" not in held
-                                                assert "auth_scope_getter" not in held
-                                                assert attempt.scope_origin.total_received == (
-                                                    held["next_record_length"])
-                                                with pytest.raises(FrameError):
-                                                    native.finish_authentication()
+                                                assert held["native_calls"] == 2
                                             else:
-                                                fact = native.finish_authentication()
-                                                assert fact.phase == (
-                                                    "TERMINAL" if mutation.endswith(
-                                                        "_frame_terminal") else "RESULT")
-                                                assert fact.scope.before.parser is parser
-                                                assert fact.checked is native._auth_origin.checked
-                                                assert (fact.total_received
-                                                        == held["next_record_length"])
-                                                assert (parser._finished
-                                                        and not parser._buffer_origin)
-                                                assert native._auth_origin.complete
-                                                with pytest.raises(FrameError):
-                                                    native.finish_authentication()
-                                                with pytest.raises(FrameError):
-                                                    native.read_and_consume_next()
+                                                next_fact = native.read_and_consume_next()
+                                                assert next_fact.ordinal == 1
+                                                assert next_fact.count == (
+                                                    6 if mutation.endswith("_short") else needed)
+                                                assert (next_fact.total_received
+                                                        == next_fact.total_committed)
+                                                assert next_fact.after.parser is parser
+                                                if mutation.endswith("_short"):
+                                                    import weakref
+                                                    old_step = weakref.ref(native._next_read_origin)
+                                                    second = native.read_and_consume_next()
+                                                    assert second.ordinal == 2 and second.count == 6
+                                                    assert second.total_received == 20
+                                                    assert old_step() is None  # no linked history
+                                                else:
+                                                    assert next_fact.total_received == 8 + needed
+                                                    assert (
+                                                        SignedCleanupAuthPrefix.needed.fget(parser)
+                                                        == 0
+                                                    )
+                                                    ledger = native._ledger_origin
+                                                    step = native._next_read_origin
+                                                    with pytest.raises(FrameError):
+                                                        native.read_and_consume_next()
+                                                    assert native._ledger_origin is ledger
+                                                    assert native._next_read_origin is step
+                                                assert native._next_read_origin.pending is None
                                                 assert not native._failed and not native._unknown
-                                            assert held["auth_finish_calls"] == (
-                                                0 if mutation.endswith("_initial") else 1)
-                                            held["auth_completion_checked"] = True
-                                            if frame_case:
-                                                exercise_native_frame(native, fact)
-                                    if not next_failure and not auth_failure and not frame_failure:
-                                        await asyncio.create_task(wrong_consumer())
-                                        assert native._consume_complete and not native._failed
-                                if mutation.endswith("_parseradvancebad"):
-                                    from hmp_plugin.presentation_credential_stream import (
-                                        SignedCleanupAuthPrefix,
-                                    )
-                                    # Actual received bytes, same original parser. A raw
-                                    # feed is DATA progress, not an ownership transfer:
-                                    # the frozen stopped cursor must never certify it.
-                                    parser = cursor._parser_origin
-                                    pending = native._pending_origin
-                                    SignedCleanupAuthPrefix.feed(parser, pending)
-                                    assert bytes(parser._buffer_origin) == pending
-                                    with pytest.raises(FrameError):
-                                        native.current_pending()
-                                    assert native._native_count_allocation_origin[1] == 8
-                                    assert native._pending_origin is None
-                                    assert native._failed and native._unknown
-                                    held["actual_parser_advance_refused"] = True
-                                    pending = None
-                                if mutation.endswith("_receiptbad"):
-                                    native_remaining = RemoteCleanupOwner._remaining
+                                            held["next_read_checked"] = True
+                                            if auth_case:
+                                                finish = SignedCleanupAuthPrefix.finish
+                                                held["auth_finish_calls"] = 0
 
-                                    def native_receipt_drift(cleanup):
-                                        value = native_remaining(cleanup)
-                                        if not held.get("native_receipt_changed"):
-                                            held["native_receipt_changed"] = True
-                                            copied = native._fact_origin._replace()
-                                            native._fact = native._fact_origin = copied
-                                        return value
+                                                def observed_auth_finish(parser):
+                                                    held["auth_finish_calls"] += 1
+                                                    result = finish(parser)
+                                                    if mutation.endswith("_lost"):
+                                                        raise OSError(
+                                                            "synthetic auth acknowledgement lost")
+                                                    if mutation.endswith("_retired"):
+                                                        keys["gateway"].retire()
+                                                    if mutation.endswith("_ledger"):
+                                                        class ForeignAuthLedger:
+                                                            def __getattr__(self, name):
+                                                                held["auth_ledger_getter"] = True
+                                                                raise AssertionError(
+                                                                    "foreign ledger"
+                                                                )
 
-                                    monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
-                                                        native_receipt_drift)
+                                                        native._ledger_origin = ForeignAuthLedger()
+                                                    if mutation.endswith("_counter"):
+                                                        class ForeignAuthCount:
+                                                            def __eq__(self, other):
+                                                                held["auth_count_eq"] = True
+                                                                raise AssertionError(
+                                                                    "foreign counter"
+                                                                )
+
+                                                        native._next_read_origin.received = (
+                                                            ForeignAuthCount())
+                                                    if mutation.endswith("_values"):
+                                                        from dataclasses import replace
+                                                        result = replace(result,
+                                                            frame_length=result.frame_length + 1)
+                                                    if mutation.endswith("_scope"):
+                                                        class ForeignAuthScope:
+                                                            def __getattr__(self, name):
+                                                                held["auth_scope_getter"] = True
+                                                                raise AssertionError(
+                                                                    "foreign auth scope")
+
+                                                        native._auth_origin.scope = (
+                                                            ForeignAuthScope()
+                                                        )
+                                                    return result
+
+                                                monkeypatch.setattr(
+                                                    SignedCleanupAuthPrefix,
+                                                    "finish",
+                                                    observed_auth_finish,
+                                                )
+                                                if mutation.endswith("_initial"):
+                                                    fence = NativeCleanupRead._final_socket_fence
+
+                                                    def first_auth_fence(owner, scope):
+                                                        if owner._auth_origin is not None:
+                                                            monkeypatch.setattr(NativeCleanupRead,
+                                                                "_final_socket_fence", fence)
+                                                            raise FrameError(
+                                                                "SYNTHETIC_AUTH_BOUNDARY"
+                                                            )
+                                                        return fence(owner, scope)
+
+                                                    monkeypatch.setattr(NativeCleanupRead,
+                                                        "_final_socket_fence", first_auth_fence)
+                                                if mutation.endswith("_copy"):
+                                                    remaining = RemoteCleanupOwner._remaining
+
+                                                    def auth_copy_after_clock(cleanup):
+                                                        value = remaining(cleanup)
+                                                        attempt = native._auth_origin
+                                                        if (attempt is not None and attempt.returned
+                                                                and not held.get("auth_copied")):
+                                                            from dataclasses import replace
+                                                            held["auth_copied"] = True
+                                                            held["auth_actual_checked"] = (
+                                                                attempt.checked)
+                                                            attempt.checked = replace(
+                                                                attempt.checked
+                                                            )
+                                                        return value
+
+                                                    monkeypatch.setattr(RemoteCleanupOwner,
+                                                        "_remaining", auth_copy_after_clock)
+                                                if auth_failure:
+                                                    with pytest.raises(FrameError):
+                                                        native.finish_authentication()
+                                                    attempt = native._auth_origin
+                                                    assert attempt.failed and not attempt.complete
+                                                    assert not parser._buffer_origin
+                                                    assert native._failed and native._unknown
+                                                    assert "auth_ledger_getter" not in held
+                                                    assert "auth_count_eq" not in held
+                                                    assert "auth_scope_getter" not in held
+                                                    assert attempt.scope_origin.total_received == (
+                                                        held["next_record_length"])
+                                                    with pytest.raises(FrameError):
+                                                        native.finish_authentication()
+                                                else:
+                                                    fact = native.finish_authentication()
+                                                    assert fact.phase == (
+                                                        "TERMINAL" if mutation.endswith(
+                                                            "_frame_terminal") else "RESULT")
+                                                    assert fact.scope.before.parser is parser
+                                                    assert (
+                                                        fact.checked is native._auth_origin.checked
+                                                    )
+                                                    assert (fact.total_received
+                                                            == held["next_record_length"])
+                                                    assert (parser._finished
+                                                            and not parser._buffer_origin)
+                                                    assert native._auth_origin.complete
+                                                    with pytest.raises(FrameError):
+                                                        native.finish_authentication()
+                                                    with pytest.raises(FrameError):
+                                                        native.read_and_consume_next()
+                                                    assert (
+                                                        not native._failed and not native._unknown
+                                                    )
+                                                assert held["auth_finish_calls"] == (
+                                                    0 if mutation.endswith("_initial") else 1)
+                                                held["auth_completion_checked"] = True
+                                                if frame_case:
+                                                    exercise_native_frame(native, fact)
+                                        if (
+                                            not next_failure
+                                            and not auth_failure
+                                            and not frame_failure
+                                        ):
+                                            await asyncio.create_task(wrong_consumer())
+                                            assert native._consume_complete and not native._failed
+                                    if mutation.endswith("_parseradvancebad"):
+                                        from hmp_plugin.presentation_credential_stream import (
+                                            SignedCleanupAuthPrefix,
+                                        )
+                                        # Actual received bytes, same original parser. A raw
+                                        # feed is DATA progress, not an ownership transfer:
+                                        # the frozen stopped cursor must never certify it.
+                                        parser = cursor._parser_origin
+                                        pending = native._pending_origin
+                                        SignedCleanupAuthPrefix.feed(parser, pending)
+                                        assert bytes(parser._buffer_origin) == pending
+                                        with pytest.raises(FrameError):
+                                            native.current_pending()
+                                        assert native._native_count_allocation_origin[1] == 8
+                                        assert native._pending_origin is None
+                                        assert native._failed and native._unknown
+                                        held["actual_parser_advance_refused"] = True
+                                        pending = None
+                                    if mutation.endswith("_receiptbad"):
+                                        native_remaining = RemoteCleanupOwner._remaining
+
+                                        def native_receipt_drift(cleanup):
+                                            value = native_remaining(cleanup)
+                                            if not held.get("native_receipt_changed"):
+                                                held["native_receipt_changed"] = True
+                                                copied = native._fact_origin._replace()
+                                                native._fact = native._fact_origin = copied
+                                            return value
+
+                                        monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                                            native_receipt_drift)
+                                        with pytest.raises(FrameError):
+                                            native.current_pending()
+                                        assert native._fact_allocation_origin[1] is receipt
                                     with pytest.raises(FrameError):
-                                        native.current_pending()
-                                    assert native._fact_allocation_origin[1] is receipt
-                                with pytest.raises(FrameError):
-                                    native.run_once()
-                                with pytest.raises(FrameError):
-                                    idle_reader.current_idle()
-                                if mutation.endswith(("_timeoutbad", "_blockingbad", "_fdbad")):
-                                    assert held["native_fd_changed"]
-                                    assert held["native_calls"] == 0
-                                    assert held["native_pre_io_failure_stage"] == "socket_fence"
-                                elif probe_case:
-                                    assert held["native_probe_changed"]
-                                    assert held["native_calls"] == 0
-                                    assert (held["native_pre_io_failure_stage"]
-                                            == "dispatch_metadata")
-                                    assert "foreign_native_counter_eq" not in held
-                                else:
-                                    assert held["native_calls"] == (
-                                        2 if frame_pure_failure else
-                                        3 if frame_case and mutation.endswith("_feedshadow") else
-                                        5 if frame_case else
-                                        3 if next_case and mutation.endswith("_short") else
-                                        1 if mutation.endswith("_foreign") else
-                                        2 if next_case else 1)
-                                if mutation in ("wake_reserve_notice_native",
-                                                "wake_reserve_notice_native_workflagbad",
-                                                "wake_reserve_notice_native_consume",
-                                                "wake_reserve_notice_native_consume_next",
-                                                "wake_reserve_notice_native_consume_next_short"
-                                                ) or (
-                                        auth_case and not auth_failure and not frame_failure):
-                                    assert not native._failed and not notice._unknown
-                                    async with asyncio.timeout_at(
-                                            reader._base_origin.intent.end_ns / 1e9):
-                                        await native_observed.wait()
-                                    if mutation.endswith("_workflagbad"):
-                                        owned._cleanup_owner_snapshot._initialized = False
-                            if next_case:
+                                        native.run_once()
+                                    with pytest.raises(FrameError):
+                                        idle_reader.current_idle()
+                                    if mutation.endswith(("_timeoutbad", "_blockingbad", "_fdbad")):
+                                        assert held["native_fd_changed"]
+                                        assert held["native_calls"] == 0
+                                        assert held["native_pre_io_failure_stage"] == "socket_fence"
+                                    elif probe_case:
+                                        assert held["native_probe_changed"]
+                                        assert held["native_calls"] == 0
+                                        assert (held["native_pre_io_failure_stage"]
+                                                == "dispatch_metadata")
+                                        assert "foreign_native_counter_eq" not in held
+                                    else:
+                                        assert held["native_calls"] == (
+                                            2
+                                            if frame_pure_failure
+                                            else 3
+                                            if frame_case and mutation.endswith("_feedshadow")
+                                            else 5
+                                            if frame_case
+                                            else 3
+                                            if next_case and mutation.endswith("_short")
+                                            else 1
+                                            if mutation.endswith("_foreign")
+                                            else 2
+                                            if next_case
+                                            else 1
+                                        )
+                                    if mutation in ("wake_reserve_notice_native",
+                                                    "wake_reserve_notice_native_workflagbad",
+                                                    "wake_reserve_notice_native_consume",
+                                                    "wake_reserve_notice_native_consume_next",
+                                                    "wake_reserve_notice_native_consume_next_short"
+                                                    ) or (
+                                            auth_case and not auth_failure and not frame_failure):
+                                        assert not native._failed and not notice._unknown
+                                        async with asyncio.timeout_at(
+                                                reader._base_origin.intent.end_ns / 1e9):
+                                            await native_observed.wait()
+                                        if mutation.endswith("_workflagbad"):
+                                            owned._cleanup_owner_snapshot._initialized = False
+                            if captured_case:
+                                assert not cursor._parser._buffer_origin
+                            elif next_case:
                                 assert held["next_read_checked"]
                                 if auth_case:
                                     assert held["auth_completion_checked"]
@@ -1802,6 +2006,12 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             "wake_reserve_notice_native_consume",
                             "wake_reserve_notice_native_consume_next",
                             "wake_reserve_notice_native_consume_next_auth",
+                            "wake_reserve_notice_native_consume_next_auth_frame_captured_initial",
+                            "wake_reserve_notice_native_consume_next_auth_frame_captured_lost",
+                            "wake_reserve_notice_native_consume_next_auth_frame_captured_retired",
+                            "wake_reserve_notice_native_consume_next_auth_frame_captured_countbad",
+                            "wake_reserve_notice_native_consume_next_auth_frame_captured_foreign",
+                            "wake_reserve_notice_native_consume_next_auth_frame_captured",
                             "wake_reserve_notice_native_consume_next_auth_frame",
                             "wake_reserve_notice_native_consume_next_auth_frame_terminal",
                             "wake_reserve_notice_native_consume_next_auth_frame_bodyhash",
@@ -1974,6 +2184,12 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 elif mutation.endswith(("_counterbad", "_consume_countdrift")):
                     assert native._native_count_allocation_origin[1] == 8
                     assert "foreign_native_count_eq" not in held
+                elif captured_case:
+                    if not mutation.endswith("_countbad"):
+                        assert native._received == 0
+                    assert not native._count_known
+                    assert native._native_count_allocation_origin is None
+                    assert not native._attempted and not native._consume_attempted
                 else:
                     assert native._received == 8 and native._count_known
                     assert native._native_count_allocation_origin[1] == 8

@@ -208,7 +208,7 @@ def _ledger(frame):
              and frame.ledger_cell[0] is frame and frame.ledger_cell[1] is ledger
              and all(type(v) is int for v in ledger[:3])
              and 0 <= ledger.ordinal < _WIRE_LIMIT
-             and 0 < ledger.received == ledger.committed <= _WIRE_LIMIT
+             and 0 <= ledger.received == ledger.committed <= _WIRE_LIMIT
              and type(ledger.seal) is _FrameSeal)
     step = frame.step_origin
     if step is None:
@@ -472,7 +472,7 @@ def start_frame(native):
             offset += count
         seal = _snapshot(frame)
         total = receipt.total_received
-        _require(type(total) is int and total > 0)
+        _require(type(total) is int and total >= 0)
         ledger = _Ledger(0, total, total, seal)
         frame.ledger = frame.ledger_origin = ledger
         frame.ledger_cell = (frame, ledger)

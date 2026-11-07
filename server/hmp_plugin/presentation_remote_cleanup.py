@@ -1003,7 +1003,9 @@ class RemoteCleanupOwner:
                         owned_native_read,
                     )
                     pending_reader = owned_native_read(signed_notice)
-                    if pending_reader is not None and pending_reader._attempted is True:
+                    if (pending_reader is not None and (
+                            pending_reader._attempted is True
+                            or pending_reader._auth_allocation_origin is not None)):
                         NativeCleanupRead.current_for_cleanup(pending_reader)
                     else:
                         SignedReadNotice.current_stop_for_cleanup(signed_notice)

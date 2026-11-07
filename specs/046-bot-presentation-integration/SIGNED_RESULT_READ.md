@@ -1,3 +1,31 @@
+## Captured authentication and retained outer-header continuation — November 7, 2026
+
+A fully captured original authentication record can now be verified once without
+fabricating a post-cause receive or consume. Native read-attempt, returned/count,
+consume and progress cells remain absent/false, and the auth receipt explicitly
+records zero new bytes. Original parser/state allocation joins and exact primitive
+checks precede comparisons, followed by current role, original actor/budget and
+socket fences. The original cleanup observer recognizes this distinct path; frozen
+notice/read APIs cannot revive it, and work exit preserves UNKNOWN and retires
+owned pending storage.
+
+The same original reader then consumes retained outer-header bytes exactly once
+and reads only the remaining frame. A zero initial frame ledger does not recount
+captured authentication or header bytes. Six focused synthetic tests pass: actual
+captured authentication plus four header bytes and completed RESULT data, initial
+FD-fence refusal, verification followed by lost acknowledgement or role retirement,
+foreign post-verification count, and final-clock exact-scope/foreign-value
+substitution. Refusals perform no retry or foreign comparison/length operation.
+Independent read-only review accepted this bounded slice. Exact expanded regression:
+1,998 passed, 1 skipped in 177.99s; full lint, surface and whitespace checks pass.
+Execution source hashes remain unchanged.
+
+Original partial-body completion using its SAME digest, EAGAIN waiting, subsequent
+grammar transitions, terminal acceptance, CANCEL/ACK/native release, production
+routing and physical image delivery remain open. Earlier broker failures and the
+native sender-destination incident remain unresolved. No app build/install, live
+host/device/grant/provider or deployment change occurred in this source work.
+
 ## Original-reader committed frame stage — November 7, 2026
 
 The retained native reader now advances from actual newly completed authentication
