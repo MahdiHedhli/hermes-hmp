@@ -96,6 +96,7 @@ class GatewayActivationOwner:
         owner._ready = owner._uncertain = owner._retired = False
         owner._capturing = True
         owner._scope = None
+        owner._artifact_owner = owner._artifact_cell = None
         failed = False
         try:
             context = (os.getpid(), os.geteuid(), threading.get_ident())
@@ -184,6 +185,14 @@ class GatewayActivationOwner:
             failed = self._uncertain = True
         if failed:
             raise ActivationCaptureError(self) from None
+
+    def _retained_scope(self):
+        """Pure original allocation join for local cleanup, never current authority."""
+        cell = _ENTRY_CELL
+        _require(type(self) is GatewayActivationOwner and _ENTRY_OWNER is self
+                 and type(cell) is tuple and len(cell) == 2 and cell[0] is self
+                 and type(cell[1]) is _ActivationScope and self._scope is cell[1])
+        return cell[1]
 
     def retire(self):
         _require(type(self) is GatewayActivationOwner and _ENTRY_OWNER is self)

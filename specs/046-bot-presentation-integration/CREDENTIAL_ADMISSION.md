@@ -16,6 +16,11 @@ The PS1 activation observation prerequisite is implemented as source only in
 inventory/native admission. The trusted entry, factory and native composition
 remain open; see the paired-startup contract for current evidence and limits.
 
+`presentation_startup_artifacts.py` supplies bounded selected-file observations
+only. The fixed operator-configuration approval loader and full inventory/loader
+join remain unimplemented. Matching caller-provided file expectations is never an
+admission token or permission to load keys, bind authority, send ACK or publish.
+
 ## Decision and preserved boundaries
 
 Use independently installed, per-instance asymmetric role credentials to

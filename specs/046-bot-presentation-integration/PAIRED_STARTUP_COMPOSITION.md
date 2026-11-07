@@ -62,6 +62,16 @@ possess its original PM lease or compose native/key owners.25 isolated synthetic
 interpreter cases and308 layout/import checks pass; source review accepted the
 component. The full PS1 factory and actual native startup qualification remain open.
 
+`presentation_startup_artifacts.py` adds actual bounded selected-file observation
+with original activation/scope/descriptor ownership, no-follow and metadata/hash
+checks, known byte counters and one-close cleanup.18 file cases plus activation/
+layout/import coverage pass (352 total). The post-open guard-refusal cleanup gap
+was corrected and causally verified before source review acceptance. This is not
+a configuration approval loader or complete inventory validator. Caller-built
+expected tuples are DATA. Fixed operator-loader approval and full reachable-tree,
+unexpected-file, future-module/extension and OS-loader coverage remain prerequisites
+before the fixed native/key factory may consume these observations as a conjunct.
+
 ### Fixed capture interface and uncertainty
 
 Implement a fixed trusted gateway entry function, before listener creation, that

@@ -1,3 +1,31 @@
+## Owned startup artifact checks — November 7, 2026
+
+PS1 now includes a bounded owner for actual selected-file observations tied to the
+original activation allocation. Descriptor-relative no-follow traversal checks
+ancestor ownership/write policy and regular single-link leaf owner/mode/size;
+exact reads, EOF, SHA-256, stable before/after metadata and ancestor relationships
+are checked. Limits cover files, bytes and path depth; these are not wall-clock or
+filesystem-latency qualification. Known byte counts are retained before post-read
+checks, and original descriptors receive at most one close attempt. Retirement
+keeps local cleanup ownership; an unknown open/read/close is retained without retry.
+A post-open refusal now closes its known returned descriptor before propagating
+failure, while the original caller closes already-held ancestors.
+
+Independent source review accepted the final component.18 private-file interpreter
+cases,25 activation cases and309 layout/import checks passed:352 in4.50s, source
+unchanged during verification. Cases include symlink/hardlink/permission/digest/
+size refusal, changed files, scope drift, lost read/close acknowledgement and actual
+open followed by retirement with exactly one close per returned descriptor.
+
+Externally constructed expected-file tuples are DATA, not operator approval.
+The fixed approved-configuration loader is not implemented, and selected-file
+matches do not establish complete reachable trees, unexpected-file absence, future
+imports, extension-library/OS-loader policy or trusted startup control flow.
+Those joins and native/key factory composition remain required before admission.
+No route imports this owner, no host credentials/keys were read, and no installed
+runtime, image delivery, deployment or device/release qualification is claimed.
+Earlier unexplained regression failures and sender-destination incident remain open.
+
 ## Original gateway activation observation — November 7, 2026
 
 PS1 now has a retained early activation/import-origin observation owner. It reads

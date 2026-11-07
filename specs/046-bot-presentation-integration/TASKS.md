@@ -9,6 +9,13 @@ implementation tasks, not an established upstream Hermes blocker.
       DATA with no selection query, sticky partial ownership and callback/late-import
       fences;25 isolated synthetic cases plus308 layout/import checks pass.
       This does not complete PS1 admission/native composition.
+- [x] PS1 selected-file observation prerequisite: bounded original-context descriptor
+      ownership, no-follow traversal, actual bytes/hash/metadata and one-close cleanup;
+     18 file cases +25 activation +309 layout/import checks pass (352 total).
+      Expected-file tuples are not approved configuration or complete inventory.
+- [ ] PS1 configuration/inventory join: fixed owner-controlled operator loader,
+      independent expected roots/bytes, complete reachable tree and unexpected-file,
+      future-import/extension/OS-loader validation before native/key composition.
 - [ ] PS1: original gateway startup owner, actual activated PM generation/HMP
       entry binding, native observation/drain composition and gateway-only key custody.
 - [ ] PS2: independently selected isolated broker runtime/parser/worker and
