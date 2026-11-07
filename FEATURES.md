@@ -1,3 +1,22 @@
+## Gateway image-result custody prerequisite — November 6, 2026
+
+The gateway now has a reviewed fixed GO_SENT custody check for the upcoming signed
+image-result receiver. It preserves original native admission, policy, lease,
+listener, context, role keys, work Task and cause-free budget without a selectable
+phase or generic I/O allowance. Seven focused cases also reject use before actual
+GO_SENT and reject a wrong caller without poisoning original work.
+
+Final affected confirmation: **1,606 passed, one skipped**, 102.87 seconds; lint,
+whitespace and independent read-only review pass. An earlier broader run had one
+existing signed-cancellation failure (1,605 passed/one skipped, 105.14 seconds).
+Its targeted rerun passed; its cause and historical broker intermittency remain
+unresolved. These passing results do not resolve that failure.
+
+The actual signed receiver, original cleanup-cursor continuation, production
+composition, terminal/ACK/startup/native publication and physical/release checks
+remain open. Full phone bot-character delivery is incomplete. This checkpoint
+changes source only; the separate native sender-destination incident stays open.
+
 ## Counted signed image-result writer — November 6, 2026
 
 Bot-character transport now has a reviewed original-service signed RESULT writer.

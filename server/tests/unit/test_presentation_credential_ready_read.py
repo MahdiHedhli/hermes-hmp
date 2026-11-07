@@ -60,6 +60,10 @@ from .test_presentation_supervisor import context as context
     "dispatch_go_write_release_cleanup", "dispatch_go_write_release_allocation",
     "dispatch_go_live", "dispatch_go_live_key", "dispatch_go_live_cancel",
     "dispatch_go_live_error", "dispatch_go_live_future", "dispatch_go_live_final_key",
+    "dispatch_go_live_result_tail", "dispatch_go_live_result_tail_key",
+    "dispatch_go_live_result_tail_policy", "dispatch_go_live_result_tail_listener",
+    "dispatch_go_live_result_tail_scope", "dispatch_go_live_result_tail_budget",
+    "dispatch_go_live_result_tail_wrong_actor",
     "dispatch_cleanup_material", "dispatch_cleanup_material_key",
     "dispatch_cleanup_material_wrong_actor", "dispatch_cleanup_material_after_go",
     "dispatch_cleanup_material_allocations", "dispatch_cleanup_material_slots",
@@ -666,6 +670,7 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                     channel._credential_work_ready()
                 if mutation.startswith("dispatch_go_live"):
                     from hmp_plugin.presentation_jobs import JobOwner
+                    from hmp_plugin.presentation_remote import RemoteOperationOwner
 
                     native_transition = JobOwner.remote_transition
                     held["live_go_sent_calls"] = 0
@@ -704,9 +709,50 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
 
                     def observed_go_sent(job_owner, handle, owned_remote, phase):
                         result = native_transition(job_owner, handle, owned_remote, phase)
+                        if (owned_remote is remote and phase is RemotePhase.GO_INTENT
+                                and mutation.startswith("dispatch_go_live_result_tail")):
+                            with pytest.raises(AuthorityRefusalError):
+                                RemoteOperationOwner._result_intent_local(
+                                    remote, channel, remote._end_snapshot)
+                            held["result_tail_before_sent_refused"] = True
                         if owned_remote is remote and phase is RemotePhase.GO_SENT:
                             held["live_go_sent_calls"] += 1
                             held["observed_native_go_sent"] = job_owner.inspect_remote(handle)
+                            if mutation.startswith("dispatch_go_live_result_tail"):
+                                # Actual original work Task and actual native GO_SENT, no
+                                # production result reader or phase mutation in the fixture.
+                                try:
+                                    RemoteOperationOwner._result_intent_local(
+                                        remote, channel, remote._end_snapshot)
+                                except BaseException as error:
+                                    trace = error.__traceback__
+                                    where = []
+                                    while trace:
+                                        where.append((trace.tb_frame.f_code.co_name,
+                                                      trace.tb_lineno))
+                                        trace = trace.tb_next
+                                    diagnostic = (type(error).__name__, where[-2:])
+                                    raise AssertionError(diagnostic) from None
+                                held["result_tail_checked"] = True
+                                if mutation.endswith("_policy"):
+                                    authority._record(operation).policy_work._invalid = True
+                                elif mutation.endswith("_listener"):
+                                    authority._record(operation).fence.retire()
+                                elif mutation.endswith("_scope"):
+                                    remote._go_admission = object()
+                                elif mutation.endswith("_budget"):
+                                    from hmp_plugin.presentation_cancel_budget import (
+                                        CancellationBudget,
+                                    )
+                                    CancellationBudget.refuse(remote._cleanup_budget_snapshot)
+                                elif mutation.endswith("_key"):
+                                    keys["gateway"].retire()
+                                if mutation not in ("dispatch_go_live_result_tail",
+                                                    "dispatch_go_live_result_tail_wrong_actor"):
+                                    with pytest.raises((FrameError, AuthorityRefusalError)):
+                                        RemoteOperationOwner._result_intent_local(
+                                            remote, channel, remote._end_snapshot)
+                                    held["result_tail_refused"] = True
                             if mutation == "dispatch_go_live_key":
                                 keys["gateway"].retire()
                             elif mutation == "dispatch_go_live_cancel":
@@ -717,8 +763,20 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
 
                     monkeypatch.setattr(JobOwner, "remote_transition", observed_go_sent)
                     try:
-                        if mutation == "dispatch_go_live":
-                            assert await remote.go() is True
+                        if mutation in ("dispatch_go_live", "dispatch_go_live_result_tail",
+                                        "dispatch_go_live_result_tail_wrong_actor"):
+                            try:
+                                assert await remote.go() is True
+                            except BaseException:
+                                task = cleanup._allocations_snapshot[1].task
+                                if task.done() and not task.cancelled():
+                                    task.result()
+                                raise
+                            if mutation == "dispatch_go_live_result_tail_wrong_actor":
+                                with pytest.raises(AuthorityRefusalError):
+                                    RemoteOperationOwner._result_intent_local(
+                                        remote, channel, remote._end_snapshot)
+                                assert remote._failed is False
                             assert cleanup._go_notice_fact is channel._go_write_fact_snapshot
                             assert cleanup._go_notice_snapshot.result() is True
                             assert not cleanup._allocations_snapshot[1].task.done()
@@ -748,12 +806,19 @@ async def test_original_work_ready_read_requires_its_complete_signed_begin(
                                 extra += await asyncio.get_running_loop().sock_recv(
                                     peer, len(cancel_wire) - len(extra))
                         assert extra == cancel_wire and cleanup._cancel_write_completed
+                    if mutation.startswith("dispatch_go_live_result_tail"):
+                        assert held["result_tail_checked"]
+                        assert held["result_tail_before_sent_refused"]
+                        if mutation not in ("dispatch_go_live_result_tail",
+                                            "dispatch_go_live_result_tail_wrong_actor"):
+                            assert held["result_tail_refused"]
                     assert held["live_go_sent_calls"] == 1
                     assert held["observed_native_go_sent"] is RemotePhase.GO_SENT
                     assert remote._go_admission_used is True
                     assert remote._result_owner is None
                     assert cleanup._result_token is None
-                    if mutation == "dispatch_go_live":
+                    if mutation in ("dispatch_go_live", "dispatch_go_live_result_tail",
+                                        "dispatch_go_live_result_tail_wrong_actor"):
                         assert not cleanup._result_notice.done()
                     else:
                         assert cleanup._result_notice.done()

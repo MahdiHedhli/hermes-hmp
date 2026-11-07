@@ -396,3 +396,10 @@ historical, not an alternative live authorization path or resolved incident.
 - [ ] Compose signed RESULT with original gateway work cursor under
       [SIGNED_RESULT_READ.md](SIGNED_RESULT_READ.md), then retained
       terminal/ACK/startup/native publication. Local full-count fact is not receipt.
+
+- [x] Qualify fixed gateway GO_SENT result-custody tail with original credential
+      work actor/material, native policy/admission/listener/context and uncaused
+      frozen budget. Seven causals include actual earlier-phase refusal. Final
+      confirmation1,606 passed/one skipped102.87s; lint/whitespace/source review pass.
+      Earlier existing signed-cancellation failure is unresolved and preserved.
+      This is not a result reader, I/O grant or publication transition.

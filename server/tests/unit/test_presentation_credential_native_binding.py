@@ -559,7 +559,11 @@ async def begin_gateway(local, monkeypatch):
         if go_writer is not None:
             go_base = go_writer._scope_snapshot.signed_scope.ready_scope.read_scope.write_scope
             release_drift = (go_base.remote._cleanup_owner_snapshot is not go_base.refs[0]
-                             or type(go_base.refs[0]._allocations_snapshot) is not tuple)
+                             or type(go_base.refs[0]._allocations_snapshot) is not tuple
+                             or go_base.remote._go_admission
+                                 is not go_writer._scope_snapshot.signed_scope.admission
+                             or go_base.remote._go_admission_snapshot
+                                 is not go_writer._scope_snapshot.signed_scope.admission)
         closed = channel.close()
         if not closed:
             assert ((writer is not None and writer._unknown)

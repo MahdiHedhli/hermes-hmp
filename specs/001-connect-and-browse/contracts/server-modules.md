@@ -798,3 +798,11 @@ existing scope and budget. Its private full-count fact means local delivery only
 never terminal/native release/publication. Payload withdrawal covers producer and
 writer; uncertain writes/readiness retain debt. Production dispatch/gateway cursor
 remain open. See [writer evidence](../../../docs/research/presentation-signed-result-writer-2026-11-06.md).
+
+### BI1 gateway result custody tail (November 6, 2026)
+
+`presentation_remote.py` adds a distinct fixed `_result_intent_local` conjunction
+for actual GO_SENT, original native custody and credential work actor/material.
+It does not reuse GO_INTENT through a caller-selectable phase, sample time or
+allow socket I/O. Original signed result cursor/cleanup integration remains open.
+See [tail evidence](../../../docs/research/presentation-gateway-result-custody-tail-2026-11-06.md).

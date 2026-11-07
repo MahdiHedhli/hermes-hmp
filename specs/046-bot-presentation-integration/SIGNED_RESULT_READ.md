@@ -1,7 +1,8 @@
 # Original gateway signed RESULT cursor
 
-Status: next integration contract; no receiver or production dispatch is enabled
-by this document. Preserve the complete requested character image, not a snapshot
+Status: receiver integration contract; the fixed gateway GO_SENT custody-tail
+prerequisite is implemented separately. No receiver or production dispatch is
+enabled by this document. Preserve the complete requested character image, not a snapshot
 or unsigned compatibility fallback. The broker producer/writer are separate
 qualified components; local full write is not gateway receipt or native release.
 
@@ -20,6 +21,50 @@ or premature admission must not poison the original owner; admitted refusal is
 sticky and never retries from a new owner. Keep the existing selected result2
 independent native buffer/custody validation rather than trusting broker metadata.
 The existing generic credential work gates must stay closed.
+
+## Fixed current custody prerequisite
+
+`RemoteOperationOwner._result_intent_local` is pinned to actual native GO_SENT,
+original work actor/credential material, policy/lease/listener/admission/context and
+uncased original budget. It samples no time and grants no I/O. Use it after
+separate current native checks and the final descriptor callbacks; never reuse
+GO_INTENT checks by changing a phase field or passing a caller-selected phase.
+See [tail evidence](../../docs/research/presentation-gateway-result-custody-tail-2026-11-06.md).
+
+## Current source integration decisions
+
+The current original work allocation is retained by `RemoteCleanupOwner._work`.
+After actual GO_SENT/write-quiescence it intentionally parks on its original cause
+Future for credential channels. A receiver component may be qualified directly
+on that original actor before production continuation is opened; no new Task or
+caller-provided callback can stand in for it.
+
+At admission, use the actual completed `NativeGoWriter.current_sent` proof while
+the channel is idle. That method's current guard requires `_reading is False`;
+do not reuse it during an active read by temporarily clearing the read flag.
+Historical complete GO metadata plus the fixed current result-custody tail and
+native current checks must cover subsequent read boundaries. The completed
+`NativeReadyReceiver._metadata` also currently binds channel reading to its own
+inactive flag. Add only a fixed reciprocal READY-to-RESULT ownership description,
+analogous to the reviewed writer handoff, rather than weakening that invariant.
+
+`RemoteResultOwner` and its `_ResultCursor` are the selected unsigned result
+owners. Their general credential gate stays closed. The native outer-header
+cursor is capped at 1,032 bytes; signed HBA1 metadata needs its separately bounded
+authentication cursor. Do not increase the native header limit to fit auth bytes
+or silently publish a different owner in closed `RemoteResultOwner`-typed slots.
+Reuse the original native `BoundedResultBufferV2`, bytearray custody and parent
+context through an explicitly reviewed typed bridge. The complete path still
+needs original candidate ownership, cleanup withdrawal and result notification.
+
+`CleanupReadGate` currently captures selected unsigned/pre-result cursors, not a
+signed RESULT cursor. Full integration requires a fixed typed continuation for
+its actual auth/header/body/digest progress. Unknown/partial signed reads cannot
+be relabeled as its legacy cursor or handed to a replacement socket reader.
+Before that continuation is qualified, fail closed with retained debt; never infer
+remote terminal settlement from local task/FD retirement. Keep the original
+first-cause hook ahead of native clock sampling so any new private candidate cell
+is withdrawn together with native output custody.
 
 ## Signed record and original frame
 
