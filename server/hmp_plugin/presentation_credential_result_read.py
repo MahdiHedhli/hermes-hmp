@@ -149,6 +149,7 @@ class NativeResultEnvelopeReceiver:
         owner._waiter = owner._waiter_origin = None
         owner._last_read = None
         owner._completion = owner._completion_origin = None
+        owner._body_owner = owner._body_owner_snapshot = None
         owner._cancel_release = owner._cancel_release_origin = None
         owner._scope = owner._scope_origin = _ResultReadScope(
             owner, writer, base, go_scope, tuple(sorted(expected.items())),
@@ -197,7 +198,17 @@ class NativeResultEnvelopeReceiver:
                  and s.write_scope.channel._credential_result_receiver is self
                  and s.write_scope.channel._credential_result_receiver_snapshot is self
                  and type(self._active) is bool)
-        return self._active  # claim only, never current read authority
+        return NativeResultEnvelopeReceiver._reading_claim(self)
+
+    def _reading_claim(self):
+        _require(type(self) is NativeResultEnvelopeReceiver and type(self._active) is bool)
+        owner = self._body_owner_snapshot
+        _require(self._body_owner is owner)
+        if self._complete is True and self._active is False and owner is not None:
+            from .presentation_credential_result_body import NativeResultBodyOwner
+            _require(type(owner) is NativeResultBodyOwner)
+            return NativeResultBodyOwner._envelope_reading(owner, self)
+        return self._active  # fixed original read claim only
 
     def _metadata(self):
         _require(type(self) is NativeResultEnvelopeReceiver
@@ -243,7 +254,7 @@ class NativeResultEnvelopeReceiver:
                  and 0 <= len(self._buffer) <= self._consumed <= self._target <= _LIMIT
                  and self._pending is self._pending_origin
                  and self._waiter is self._waiter_origin
-                 and b.channel._reading is self._active
+                 and b.channel._reading is NativeResultEnvelopeReceiver._reading_claim(self)
                  and self._completion is self._completion_origin)
         _require(self._cancel_release is self._cancel_release_origin)
         if self._cancel_release_origin is not None:
@@ -537,6 +548,10 @@ class NativeResultEnvelopeReceiver:
 
     def _released(self, channel):
         s = NativeResultEnvelopeReceiver._metadata(self)
+        if self._body_owner_snapshot is not None:
+            from .presentation_credential_result_body import NativeResultBodyOwner
+            _require(type(self._body_owner_snapshot) is NativeResultBodyOwner)
+            NativeResultBodyOwner._released(self._body_owner_snapshot, self)
         if self._cancel_release_origin is not None:
             _require(channel is s.write_scope.channel)
             NativeResultEnvelopeReceiver._cancelled_wait_current(

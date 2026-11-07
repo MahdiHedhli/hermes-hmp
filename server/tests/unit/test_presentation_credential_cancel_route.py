@@ -56,16 +56,59 @@ from .test_presentation_supervisor import context as context
                                   "go_relay_result_sign_write_unknown",
                                   "go_relay_result_sign_write_tail_phase",
                                   "go_relay_result_sign_write_settlement_key",
-                                  "go_relay_result_sign_write_blocked_cancel"])
+                                  "go_relay_result_sign_write_blocked_cancel",
+                                  "go_relay_result_sign_write_body",
+                                  "go_relay_result_sign_write_body_wrong_actor",
+                                  "go_relay_result_sign_write_body_avatar",
+                                  "go_relay_result_sign_write_body_avatar_revision",
+                                  "go_relay_result_sign_write_body_challenge",
+                                  "go_relay_result_sign_write_body_parent",
+                                  "go_relay_result_sign_write_body_digest",
+                                  "go_relay_result_sign_write_body_feed_key",
+                                  "go_relay_result_sign_write_body_stream_pair",
+                                  "go_relay_result_sign_write_body_hash_pair",
+                                  "go_relay_result_sign_write_body_cancel",
+                                  "go_relay_result_sign_write_body_cancel_stale",
+                                  "go_relay_result_sign_write_body_cancel_pair",
+                                  "go_relay_result_sign_write_body_cancel_progress",
+                                  "go_relay_result_sign_write_body_cancel_custody",
+                                  "go_relay_result_sign_write_body_cancel_tail_waiter",
+                                  "go_relay_result_sign_write_body_cancel_tail_custody",
+                                  "go_relay_result_sign_write_body_cancel_release_waiter",
+                                  "go_relay_result_sign_write_body_cancel_release_custody"])
 async def test_original_gateway_cancel_reaches_original_authenticated_broker(
     context, local, tmp_path, monkeypatch, stage
 ):
+    from hmp_plugin.presentation_jobs import FrameError
+
     spine, enrollment, connect, _, _, _ = local
     darwin_model(monkeypatch)
     gateway = SocketChannel(connect(), replace(enrollment, gateway_pid=os.getpid(),
         service_pid=os.getpid() + 1), role="gateway", endpoint=spine._endpoint,
         observation=spine._observation)
-    prepared = await prepare(context, (gateway, None, spine))
+    expected_avatar_sha = None
+    if stage.startswith("go_relay_result_sign_write_body"):
+        from pathlib import Path
+
+        from .test_presentation_broker_resources import image
+        asset = Path(context[2].home) / "assets" / "avatar.png"
+        asset.parent.mkdir(mode=0o700, exist_ok=True)
+        asset.write_bytes(image())
+        asset.chmod(0o600)
+        if "_body_avatar" in stage:
+            import hashlib
+
+            from hmp_plugin.presentation_authority import ListenerFence, ParentAuthorityAdapter
+            old_authority, old_operation, native = context
+            old = old_authority._record(old_operation)
+            avatar_authority = ParentAuthorityAdapter(old.lease.iid, service=native)
+            avatar_operation = avatar_authority.reserve(old.lease, "AVATAR", old.headers,
+                listener=object(), fence=ListenerFence(1), store=object(), bridge=object(),
+                identity=object(), native_owner=object())
+            context = avatar_authority, avatar_operation, native
+            expected_avatar_sha = hashlib.sha256(image()).hexdigest()
+    prepared = await prepare(context, (gateway, None, spine),
+                             expected_avatar_sha=expected_avatar_sha)
     authority, operation, _, _, _, _, packet, binding = prepared
     end = int(authority._record(operation).deadline * 1_000_000_000)
     keys = key_pair(tmp_path, enrollment.installation_generation)
@@ -92,7 +135,11 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                "go_relay_result_sign_write_tail_phase",
                                "go_relay_result_sign_write_settlement_key",
                                "go_relay_result_sign_write_blocked_cancel")
-    operation_failure = relay_failure or result_failure or writer_failure
+    body_stage = stage.startswith("go_relay_result_sign_write_body")
+    body_fault = body_stage and stage not in ("go_relay_result_sign_write_body",
+                                              "go_relay_result_sign_write_body_wrong_actor",
+                                              "go_relay_result_sign_write_body_avatar")
+    operation_failure = relay_failure or result_failure or writer_failure or body_fault
 
     async def broker():
         record = await BrokerServiceSpine._accept_owned(spine, end)
@@ -273,6 +320,53 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                     CredentialResultProducer,
                                 )
 
+                                if body_stage and stage.endswith(
+                                        ("_challenge", "_parent", "_avatar_revision")):
+                                    from hmp_plugin.presentation_input_v3 import decode_input_v3
+                                    from hmp_plugin.presentation_output_v2 import (
+                                        decode_output_v2,
+                                        encode_output_v2,
+                                    )
+                                    take = BrokerRegistry.take_resource_candidate
+                                    input_row = decode_input_v3(packet)
+
+                                    def changed_native_result(registry, owned_ticket):
+                                        wire = take(registry, owned_ticket)
+                                        row, avatar = decode_output_v2(
+                                            wire, input_row["challenge"], input_row["epoch"])
+                                        if stage.endswith("_challenge"):
+                                            row["challenge"] = "0" * 64
+                                        elif stage.endswith("_parent"):
+                                            row["chain"][0][0] += 1
+                                        else:
+                                            import struct
+                                            import zlib
+                                            compressed = zlib.compress(b"\x00\x01\x02\x03\xff")
+                                            payload = b"IDAT" + compressed
+                                            chunk = (struct.pack(">I", len(compressed)) + payload
+                                                     + struct.pack(">I", zlib.crc32(payload)))
+                                            avatar = avatar[:33] + chunk + avatar[-12:]
+                                            row["avatar_length"] = len(avatar)
+                                            row["avatar_sha"] = hashlib.sha256(avatar).hexdigest()
+                                            row["source_proof"]["avatar_body_sha"] = (
+                                                row["avatar_sha"])
+                                        encoded = encode_output_v2(row, avatar)
+                                        if stage.endswith("_avatar_revision"):
+                                            from hmp_plugin.presentation_output_v2 import (
+                                                compare_parent_snapshot,
+                                            )
+                                            checked, _ = decode_output_v2(
+                                                encoded, input_row["challenge"], input_row["epoch"])
+                                            parent = (
+                                                remote._job_origin_snapshot.parent_result_context)
+                                            compare_parent_snapshot(checked, snapshot=parent[1],
+                                                                    parent_home=parent[0])
+                                            assert checked["avatar_sha"] != expected_avatar_sha
+                                            held["revision_claim_codec_valid"] = True
+                                        return encoded
+
+                                    monkeypatch.setattr(BrokerRegistry, "take_resource_candidate",
+                                                        changed_native_result)
                                 producer = CredentialResultProducer.retain(control)
                                 held["result_producer"] = producer
                                 if stage == "go_relay_result_sign_wrong_actor":
@@ -406,7 +500,7 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                     actual_send = rw._SEND
                                     sent = bytearray()
                                     phase_eq = []
-                                    if "_tail_" in stage:
+                                    if "_tail_" in stage and not body_stage:
                                         inheritable = rw.os.get_inheritable
                                         changed = []
 
@@ -443,6 +537,16 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                                             refused_settlement)
 
                                     def counted_result(sock, data):
+                                        if body_stage and type(data) is memoryview:
+                                            if "_body_cancel" in stage:
+                                                return 0  # truncated synthetic peer, no image body
+                                            if stage.endswith("_digest"):
+                                                changed = bytes(data)
+                                                changed = changed[:-1] + bytes([changed[-1] ^ 1])
+                                                count = actual_send(sock, changed)
+                                                sent.extend(changed[:count])
+                                                held["body_wire_changed"] = True
+                                                return count
                                         if stage.endswith("_blocked_cancel"):
                                             import errno
                                             held["go_current_checked"] = True
@@ -494,7 +598,12 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                     assert signed_writer._complete and not signed_writer._unknown
                                     assert fact is signed_writer._fact_snapshot
                                     assert fact.count == len(sent)
-                                    assert sent == raw + frozen.header + frozen.payload
+                                    if body_stage and stage.endswith("_digest"):
+                                        assert held["body_wire_changed"]
+                                        assert len(sent) == (
+                                            len(raw) + len(frozen.header) + len(frozen.payload))
+                                    else:
+                                        assert sent == raw + frozen.header + frozen.payload
                                     assert signed_writer._payload_snapshot is None
                                     assert not channel._writing
                                     held["signed_result_sent"] = True
@@ -572,6 +681,173 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     if selector is not None:
                         type(selector).close(selector)
 
+    if stage.startswith("go_relay_result_sign_write_body"):
+        from hmp_plugin.presentation_credential_result_body import NativeResultBodyOwner
+        from hmp_plugin.presentation_credential_result_read import NativeResultEnvelopeReceiver
+        from hmp_plugin.presentation_remote import RemoteOperationOwner
+
+        original_exchange = RemoteOperationOwner._go_exchange
+
+        async def original_signed_body(owned):
+            result = await original_exchange(owned)
+            producer = owned._cleanup_owner_snapshot._credential_work_snapshot
+            envelope = NativeResultEnvelopeReceiver.retain(
+                producer._go_commitment_snapshot._writer_snapshot)
+            await envelope.run()
+            if stage.endswith("_wrong_actor"):
+                async def wrong_body_factory():
+                    with pytest.raises(FrameError):
+                        NativeResultBodyOwner.retain(envelope)
+                await asyncio.create_task(wrong_body_factory())
+                assert envelope._body_owner is None
+            body = NativeResultBodyOwner.retain(envelope)
+            held["gateway_body"] = body
+            if stage.endswith("_wrong_actor"):
+                async def wrong_body_receive():
+                    with pytest.raises(FrameError):
+                        await body.receive()
+                await asyncio.create_task(wrong_body_receive())
+                assert not body._attempted and not body._failed
+            if stage.endswith("_feed_key"):
+                from hmp_plugin.presentation_output_v2 import BoundedResultBufferV2
+                feed = BoundedResultBufferV2.feed
+
+                def revoked_feed(buffer, part):
+                    feed(buffer, part)
+                    if buffer is body._scope_origin.buffer:
+                        keys["gateway"].retire()
+
+                monkeypatch.setattr(BoundedResultBufferV2, "feed", revoked_feed)
+            if stage.endswith(("_stream_pair", "_hash_pair")):
+                import hashlib
+
+                from hmp_plugin.presentation_credential_phase import check_commitment
+                from hmp_plugin.presentation_credential_stream import CommittedFrameDigest
+                if stage.endswith("_stream_pair"):
+                    e = envelope._scope_origin
+                    f = envelope._completion_origin
+                    checked = check_commitment(f.raw, sender_public=e.pins[0],
+                        receiver_public=e.pins[1], expected=dict(e.expected))
+                    replacement = CommittedFrameDigest(checked, f.frame,
+                                                        binding=e.write_scope.intent.binding)
+                    body._stream = body._stream_origin = replacement
+                else:
+                    replacement = hashlib.sha256()
+                    body._hash = body._hash_origin = replacement
+                held["body_replacement"] = replacement
+            if "_body_cancel" in stage:
+                from hmp_plugin import presentation_credential_result_body as body_module
+                from hmp_plugin.presentation_readiness import SelectorReadiness
+                wait = SelectorReadiness.wait
+                waiting = asyncio.Event()
+                stale = None
+                if stage.endswith(("_stale", "_pair")):
+                    import socket
+                    left, right = socket.socketpair()
+                    left.setblocking(False)
+                    right.setblocking(False)
+                    entered = asyncio.Event()
+
+                    async def earlier_wait():
+                        owned = SelectorReadiness(left)
+                        entered.set()
+                        try:
+                            await wait(owned, end)
+                        except body_module._ReadinessCancelledError as error:
+                            return error.retirement
+                        raise AssertionError("prior synthetic wait unexpectedly returned")
+
+                    old_task = asyncio.create_task(earlier_wait())
+                    await entered.wait()
+                    old_task.cancel()
+                    stale = await old_task
+                    assert stale.mint is body_module._CANCEL_RETIREMENT_MINT
+                    left.close()
+                    right.close()
+
+                if "_tail_" in stage or "_release_" in stage:
+                    retirement_current = NativeResultBodyOwner._retirement_current
+                    wake_guard = SelectorReadiness._wake_guard
+
+                    def observed_retirement(owned_body, receipt, *, released=False):
+                        held["inside_body_retirement"] = (owned_body, released)
+                        try:
+                            return retirement_current(owned_body, receipt, released=released)
+                        finally:
+                            held.pop("inside_body_retirement", None)
+
+                    def changed_final_wake(waiter):
+                        wake_guard(waiter)
+                        at = held.get("inside_body_retirement")
+                        expected_released = "_release_" in stage
+                        if (at == (body, expected_released) and waiter is body._waiter_origin
+                                and not held.get("body_retirement_tail_changed")):
+                            held["body_retirement_tail_changed"] = True
+                            if stage.endswith("_custody"):
+                                held["foreign_accumulator"] = bytearray(b"untouched")
+                                body._scope_origin.buffer._buffer = held["foreign_accumulator"]
+                            else:
+                                old = waiter._wake_binding_origin
+                                waiter._wake_binding = waiter._wake_binding_origin = old._replace(
+                                    end=old.end + 1)
+
+                    monkeypatch.setattr(NativeResultBodyOwner, "_retirement_current",
+                                        observed_retirement)
+                    monkeypatch.setattr(SelectorReadiness, "_wake_guard", changed_final_wake)
+
+                async def observed_wait(waiter, cutoff, **options):
+                    if waiter is not body._waiter_origin:
+                        return await wait(waiter, cutoff, **options)
+                    waiting.set()
+                    try:
+                        return await wait(waiter, cutoff, **options)
+                    except body_module._ReadinessCancelledError:
+                        if stage.endswith("_stale"):
+                            raise body_module._ReadinessCancelledError(stale) from None
+                        if stage.endswith("_pair"):
+                            waiter._origin_scope = waiter._scope_snapshot = stale.scope
+                            waiter._future_origin = waiter._future_snapshot = stale.future
+                            waiter._wake_binding = waiter._wake_binding_origin = stale.binding
+                            waiter._handle = waiter._handle_snapshot = stale.handle
+                            waiter._handle_args = waiter._handle_args_snapshot = stale.handle_args
+                            raise body_module._ReadinessCancelledError(stale) from None
+                        if stage.endswith("_progress"):
+                            body._received = body._received_snapshot = body._received + 1
+                        if stage == "go_relay_result_sign_write_body_cancel_custody":
+                            held["foreign_accumulator"] = bytearray(b"untouched")
+                            body._scope_origin.buffer._buffer = held["foreign_accumulator"]
+                        raise
+
+                async def original_cause():
+                    await waiting.wait()
+                    RemoteCleanupOwner.request(owned._cleanup_owner_snapshot)
+
+                monkeypatch.setattr(SelectorReadiness, "wait", observed_wait)
+                held["body_canceller"] = asyncio.create_task(original_cause())
+            assert await body.receive() is True
+            assert body._validated and body._candidate_snapshot[1] == image()
+            assert body._scope_origin.job.result is None
+            assert body._scope_origin.job.remote_result_token is None
+            assert not body._scope_origin.accumulator
+            from hmp_plugin.presentation_jobs import RemotePhase
+            assert owned._job_origin_snapshot.remote_phase is RemotePhase.GO_SENT
+            from hmp_plugin.presentation_clock import NativeClockOwner
+            sample = NativeClockOwner.cleanup_sample
+
+            def original_withdrawal(clock):
+                if (clock is owned._clock_owner_snapshot
+                        and owned._cleanup_owner_snapshot._intent):
+                    assert body._retired and body._candidate_snapshot is None
+                    assert body._fact_snapshot is None
+                    assert not body._scope_origin.accumulator
+                    held["body_retired_before_clock"] = True
+                return sample(clock)
+
+            monkeypatch.setattr(NativeClockOwner, "cleanup_sample", original_withdrawal)
+            return result
+
+        monkeypatch.setattr(RemoteOperationOwner, "_go_exchange", original_signed_body)
+
     broker_task = asyncio.create_task(broker())
     try:
         handshake = CredentialHandshakeOwner.retain(gateway, keys["gateway"], binding, end)
@@ -615,7 +891,50 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         else:
             assert held["broker_ready_writer"]._complete is True
         if after_go:
-            assert await remote.go() is True
+            if body_fault:
+                with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
+                    await remote.go()
+                if "gateway_body" not in held and broker_task.done():
+                    broker_task.result()  # preserve actual synthetic sender failure
+                body = held["gateway_body"]
+                assert body._retired and body._candidate_snapshot is None
+                assert body._fact_snapshot is None and not body._scope_origin.accumulator
+                assert remote._job_origin_snapshot.result is None
+                assert cleanup._result_token is None
+                if stage.endswith("_avatar_revision"):
+                    assert held["revision_claim_codec_valid"]
+                    assert body._finish_attempted
+                    assert body._received == body._scope_origin.envelope_fact.header.body_length
+                    assert body._scope_origin.expected == expected_avatar_sha
+                if "_body_cancel" in stage and "_release_" not in stage and stage.endswith(
+                        ("_stale", "_pair", "_progress", "_custody", "_waiter")):
+                    assert body._io_unknown and body._cancel_receipt_snapshot is None
+                if "_release_" in stage:
+                    await asyncio.gather(cleanup._allocations_snapshot[1].task,
+                                         return_exceptions=True)
+                    with pytest.raises(FrameError):
+                        NativeResultBodyOwner._released(body, body._scope_origin.envelope)
+                    assert body._io_unknown and body._cancel_receipt_snapshot is not None
+                if "_tail_" in stage or "_release_" in stage:
+                    assert held["body_retirement_tail_changed"]
+                if stage.endswith("_body_cancel"):
+                    assert not body._io_unknown and body._cancel_receipt_snapshot is not None
+                if stage.endswith("_custody"):
+                    assert held["foreign_accumulator"] == b"untouched"
+                if stage.endswith("_stream_pair"):
+                    assert held["body_replacement"]._received == 0
+                if stage.endswith("_hash_pair"):
+                    import hashlib
+                    assert held["body_replacement"].hexdigest() == hashlib.sha256().hexdigest()
+                return  # no private candidate or remote/native release after refusal
+            try:
+                assert await remote.go() is True
+            except BaseException:
+                if stage.startswith("go_relay_result_sign_write_body"):
+                    task = cleanup._allocations_snapshot[1].task
+                    if task.done() and not task.cancelled():
+                        task.result()
+                raise
             control = held["control"]
             async with asyncio.timeout_at(end / 1e9):
                 await asyncio.wait((control._go_future_snapshot, control._allocation_snapshot.task),
@@ -674,7 +993,15 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         assert not cleanup._result_token and remote._result_owner is None
         assert authority._record(operation).child is None
         assert held["control"]._allocation_snapshot.task.done()
+        if body_stage:
+            assert held["body_retired_before_clock"]
+            assert held["gateway_body"]._candidate_snapshot is None
     finally:
+        body_canceller = held.get("body_canceller")
+        if body_canceller is not None:
+            if not body_canceller.done():
+                body_canceller.cancel()
+            await asyncio.gather(body_canceller, return_exceptions=True)
         canceller = held.get("canceller")
         if canceller is not None:
             if not canceller.done():
@@ -703,7 +1030,18 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 selector = resources._pipes_snapshot._selector
                 if selector is not None:
                     type(selector).close(selector)
-        assert gateway.close() and gateway.close_clock()
+        gateway_closed = gateway.close()
+        if not gateway_closed and body_fault:
+            from hmp_plugin.presentation_clock import NativeClockOwner
+            own_body = held.get("gateway_body")
+            if own_body is None:
+                assert gateway._credential_result_receiver_snapshot._io_unknown
+            else:
+                assert own_body._io_unknown
+            gateway._socket_snapshot.close()  # fixture-owned disposal, no release fact
+            assert NativeClockOwner.close_local(gateway._clock_owner_snapshot)
+        else:
+            assert gateway_closed and gateway.close_clock()
         # Native resource/terminal qualification is deliberately unfinished.
         # Do not manufacture service/registry release from the control receipt.
         service_closed = await spine.stop_local_sockets()

@@ -1,3 +1,25 @@
+## Signed image body and private candidate — November 6, 2026
+
+The original gateway work task now validates actual signed image bodies in its
+original native buffer. The tested path runs the disposable fixed worker, signed
+broker producer/writer, gateway envelope and body hashes, then independent native
+result2/parent/revision checks to one private PNG candidate. It does not set a
+native result token, RESULT_VALIDATED or public response.
+
+Original stream/hash allocations, held cancellation identities and post-callback
+custody checks prevent paired replacement or stale retirement credit. The native
+job's exact discard-only hook withdraws candidate references before its first
+cleanup clock sample. Nineteen body cases include actual METADATA/AVATAR images,
+wrong revision and native claims, wire corruption, key retirement, hash replacement
+and cancellation drift. Final affected regression: **1,648 passed, one skipped**,
+123.36 seconds; lint/whitespace and independent read-only review pass.
+
+Native candidate adoption/result notification, same cooperative cleanup cursor,
+signed terminal/ACK, production startup/publication and physical/release checks
+remain open. Full phone character-image delivery is unfinished. No host/device/
+build/keys/grants/providers/settings changed. Historical broker intermittency and
+the separate native sender-destination incident remain unresolved.
+
 ## Original gateway signed RESULT envelope — November 6, 2026
 
 The gateway now has a reviewed original-work reader for the pinned signed RESULT

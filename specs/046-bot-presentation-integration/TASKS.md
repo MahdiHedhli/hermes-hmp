@@ -413,3 +413,13 @@ historical, not an alternative live authorization path or resolved incident.
       original native parent/revision validation, then typed candidate withdrawal,
       cleanup discard/terminal continuation and production dispatch. No second
       reader or envelope-to-image/terminal/publication shortcut.
+
+- [x] Qualify same-original-task signed body streaming and private candidate:
+      independent original native buffer/custody, actual signed frame/body hash,
+      native result2/parent/revision checks, independent stream/hash allocation,
+      typed first-cause discard and exact local wait retirement. Nineteen actual
+      private-peer cases; final1,648 passed/one skipped123.36s, lint/whitespace and
+      independent source review pass. No native adoption or public delivery.
+- [ ] Add reviewed typed native candidate adoption/result notification and same
+      cooperative signed cleanup cursor/terminal continuation. Preserve private
+      ownership, earliest cause and no competing reader or cancelled-task revival.

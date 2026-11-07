@@ -146,3 +146,15 @@ Only joined accepted remote closure may feed a distinct native completion path.
 Fresh PRE_EMIT, parent/native DRAIN and credential retirement remain mandatory.
 V2 STATUS needs a separate boot-bound journal-only lookup/ACK contract and must
 never renew expired work, replay a result or grant image access.
+
+## Signed image/private candidate checkpoint — November 6, 2026
+
+The original-task envelope/body components now verify actual signed image bytes
+and independent native result2/parent/revision data in the original native buffer,
+with a private candidate and discard-only first-cause hook. Native adoption/result
+notification and production dispatch remain closed. See
+[body evidence](../../docs/research/presentation-signed-result-body-2026-11-06.md).
+The cancelled-read retirement fact is local and payload-free, not a cooperative
+terminal cursor, native resource release or ACK. Integrate the same original work
+cursor's discard/terminal continuation before normal OK/ABORTED terminal claims;
+never revive a cancelled Task or attach a replacement reader to complete cleanup.

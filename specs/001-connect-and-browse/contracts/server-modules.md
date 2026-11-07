@@ -815,3 +815,14 @@ pinned scope and the committed header and preserves native counts/cancellation
 selector retirement. The fixed historical READY read-claim handoff is not a generic
 work grant. Its fact is envelope data only, no body digest/result2/native candidate,
 terminal or publication. See [envelope evidence](../../../docs/research/presentation-signed-result-envelope-2026-11-06.md).
+
+### BI1 signed body/private candidate (November 6, 2026)
+
+`presentation_credential_result_body.py` extends the original signed envelope read
+claim to actual body streaming, signed full-frame digest and independent original
+native result2/parent/revision validation. It retains one private candidate and an
+independent stream/hash allocation. The job's typed discard-only hook withdraws
+that owner before first cleanup sampling. Exact held cancellation retirement and
+post-callback release checks preserve unknown debt. Native adoption, terminal,
+publication and production dispatch remain open. See
+[body evidence](../../../docs/research/presentation-signed-result-body-2026-11-06.md).

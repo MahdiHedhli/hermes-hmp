@@ -1,9 +1,10 @@
 # Original gateway signed RESULT cursor
 
-Status: the fixed GO_SENT custody tail and original-work signed envelope cursor
-are source components. The cursor stops after authenticated bounded outer header;
-image-body/result2/candidate/cleanup continuation and production dispatch remain
-open. Preserve the complete requested character image, not a snapshot
+Status: the fixed GO_SENT custody tail, signed envelope cursor and same-original-
+work body/private-candidate owner are source components. Signed body digest and
+independent native result2/parent/revision validation are implemented separately
+from native adoption, cooperative cleanup continuation and production dispatch,
+which remain open. Preserve the complete requested character image, not a snapshot
 or unsigned compatibility fallback. The broker producer/writer are separate
 qualified components; local full write is not gateway receipt or native release.
 
@@ -148,3 +149,19 @@ inferring terminal/publication authority. Preserve one clearable candidate cell
 and separately retained original native wipe custody. Partial body/hash progress
 must be available to the same cleanup cursor under its earliest frozen budget;
 all remote/native release and terminal/ACK/publication gates remain separate.
+
+## Body component checkpoint
+
+`NativeResultBodyOwner` now implements same-original-task body streaming in the
+original native buffer, signed full-frame/body hashes, independent native result2/
+parent/revision validation and one private candidate. Original stream/hash
+allocation is independently retained; exact first-cause discard precedes cleanup
+sampling. Held wait/progress/custody checks repeat after native callbacks, and
+historical cancellation release requires original Task done+cancelled. See
+[body evidence](../../docs/research/presentation-signed-result-body-2026-11-06.md).
+
+Native result adoption/token/RESULT_VALIDATED and result notification are still
+closed. The new job hook is discard-only; no existing selected-owner candidate
+fact or terminal receipt is fabricated. Body validation does not authorize image
+emission or prove native DRAIN/PRE_EMIT/resource/terminal release. Cooperative
+signed cleanup-cursor and production continuation remain separate work.
