@@ -242,7 +242,7 @@ class NativeResultEnvelopeReceiver:
         if self._complete is True and self._active is False and owner is not None:
             from .presentation_credential_result_body import NativeResultBodyOwner
             _require(type(owner) is NativeResultBodyOwner)
-            return NativeResultBodyOwner._envelope_reading(owner, self)
+            return NativeResultBodyOwner._channel_reading(owner, self)
         return self._active  # fixed original read claim only
 
     def _metadata(self):

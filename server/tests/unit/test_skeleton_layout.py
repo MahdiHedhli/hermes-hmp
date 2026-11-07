@@ -82,6 +82,7 @@ CONTRACT_MODULES = {
     "presentation_credential_result_completed.py",
     "presentation_credential_terminal.py",
     "presentation_credential_terminal_write.py",
+    "presentation_credential_terminal_read.py",
     "presentation_credential_result_read.py",
     "presentation_credential_result_body.py",
     "presentation_credential_cleanup_capture.py",

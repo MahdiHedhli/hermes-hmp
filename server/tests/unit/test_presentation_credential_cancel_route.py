@@ -114,6 +114,14 @@ _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
                                   "go_relay_result_sign_write_blocked_cancel",
                                   "go_relay_result_sign_write_body",
                                   "go_relay_result_sign_write_body_adopt",
+                                  "go_relay_result_sign_write_body_terminal_normal",
+                                  "go_relay_result_sign_write_body_terminal_avatar",
+                                  "go_relay_result_sign_write_body_terminal_wait",
+                                  "go_relay_result_sign_write_body_terminal_authcredit",
+                                  "go_relay_result_sign_write_body_terminal_framecredit",
+                                  "go_relay_result_sign_write_body_terminal_finalkey",
+                                  "go_relay_result_sign_write_body_terminal_frameswap",
+                                  "go_relay_result_sign_write_body_terminal_finishswap",
                                   "go_relay_result_sign_write_body_adopt_capture_phase",
                                   "go_relay_result_sign_write_body_adopt_notice",
                                   "go_relay_result_sign_write_body_adopt_notice_actors",
@@ -202,6 +210,11 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
     gateway = SocketChannel(connect(), replace(enrollment, gateway_pid=os.getpid(),
         service_pid=os.getpid() + 1), role="gateway", endpoint=spine._endpoint,
         observation=spine._observation)
+    body_terminal = stage.startswith("go_relay_result_sign_write_body_terminal_")
+    body_terminal_fault = body_terminal and stage.endswith(
+        ("_authcredit", "_framecredit", "_finalkey", "_frameswap", "_finishswap")
+    )
+    terminal_can_send = asyncio.Event()
     expected_avatar_sha = None
     if (stage.startswith("go_relay_result_sign_write_body")
             or stage in ("go_relay_result_sign_write_avatar",
@@ -213,8 +226,12 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         asset.parent.mkdir(mode=0o700, exist_ok=True)
         asset.write_bytes(image())
         asset.chmod(0o600)
-        if "_body_avatar" in stage or stage in ("go_relay_result_sign_write_avatar",
-                                                "go_relay_result_sign_write_deliver_avatar"):
+        if (
+            (body_terminal and stage.endswith("_avatar"))
+            or "_body_avatar" in stage
+            or stage
+            in ("go_relay_result_sign_write_avatar", "go_relay_result_sign_write_deliver_avatar")
+        ):
             import hashlib
 
             from hmp_plugin.presentation_authority import ListenerFence, ParentAuthorityAdapter
@@ -343,16 +360,23 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         )
     )
     body_stage = stage.startswith("go_relay_result_sign_write_body")
-    body_fault = (body_stage and "_body_adopt" not in stage and stage not in (
-                                              "go_relay_result_sign_write_body",
-                                              "go_relay_result_sign_write_body_adopt",
-                                              "go_relay_result_sign_write_body_wrong_actor",
-                                              "go_relay_result_sign_write_body_avatar"))
+    body_fault = body_terminal_fault or (
+        body_stage
+        and not body_terminal
+        and "_body_adopt" not in stage
+        and stage
+        not in (
+            "go_relay_result_sign_write_body",
+            "go_relay_result_sign_write_body_adopt",
+            "go_relay_result_sign_write_body_wrong_actor",
+            "go_relay_result_sign_write_body_avatar",
+        )
+    )
     adopted_key_retirement = stage in (
         "go_relay_result_sign_write_body_adopt_key",
         "go_relay_result_sign_write_body_adopt_notice_revoked")
     terminal_fault = stage.startswith("go_relay_result_sign_write_terminal_")
-    terminal_delivery = stage.startswith("go_relay_result_sign_write_deliver_")
+    terminal_delivery = body_terminal or stage.startswith("go_relay_result_sign_write_deliver_")
     operation_failure = (
         terminal_fault or terminal_delivery
         or relay_failure
@@ -1116,6 +1140,8 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                                     return count
 
                                                 monkeypatch.setattr(tw, "_SEND", terminal_send)
+                                                if body_terminal and stage.endswith("_wait"):
+                                                    await terminal_can_send.wait()
                                                 if stage.endswith(
                                                     (
                                                         "_zero",
@@ -2191,6 +2217,133 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     body.current_candidate()
             await asyncio.create_task(foreign_candidate_reader())
             assert body.current_candidate() is body._fact_snapshot
+            if body_terminal:
+                from hmp_plugin.presentation_credential_terminal_read import NativeTerminalReceiver
+
+                async def wrong_terminal_actor():
+                    with pytest.raises(FrameError):
+                        NativeTerminalReceiver.retain(body)
+
+                await asyncio.create_task(wrong_terminal_actor())
+                assert body._terminal_reader_origin is None
+                reader = NativeTerminalReceiver.retain(body)
+                held["normal_terminal_reader"] = reader
+                from hmp_plugin import presentation_credential_terminal_read as nr
+                foreign_terminal_calls = []
+                original_auth = reader._auth
+                original_frame = None
+
+                class ForeignNormalCredit:
+                    def __getitem__(self, key):
+                        foreign_terminal_calls.append(key)
+                        raise AssertionError("foreign normal credit")
+
+                if stage.endswith("_wait"):
+                    from hmp_plugin.presentation_readiness import SelectorReadiness
+                    actual_wait = SelectorReadiness.wait
+
+                    async def observed_terminal_wait(interest, cutoff, **options):
+                        if interest is reader._waiter:
+                            assert cutoff == reader._scope_origin.write.intent.end_ns
+                            held["normal_terminal_waited"] = True
+                            terminal_can_send.set()
+                        return await actual_wait(interest, cutoff, **options)
+
+                    monkeypatch.setattr(SelectorReadiness, "wait", observed_terminal_wait)
+                if stage.endswith("_authcredit"):
+                    actual_feed = nr.SignedCleanupAuthPrefix.feed
+
+                    def corrupt_auth_credit(parser, chunk):
+                        actual_feed(parser, chunk)
+                        if parser is original_auth:
+                            reader._credit = reader._credit_origin = ForeignNormalCredit()
+
+                    monkeypatch.setattr(nr.SignedCleanupAuthPrefix, "feed", corrupt_auth_credit)
+                if stage.endswith(("_framecredit", "_frameswap")):
+                    actual_feed = nr.CommittedFrameDiscard.feed
+
+                    def corrupt_frame_credit(parser, chunk):
+                        nonlocal original_frame
+                        actual_feed(parser, chunk)
+                        if parser is reader._frame:
+                            original_frame = parser
+                            if stage.endswith("_framecredit"):
+                                reader._credit = reader._credit_origin = ForeignNormalCredit()
+                            else:
+                                replacement = nr.CommittedFrameDiscard(reader._checked,
+                                    binding=reader._scope_origin.write.intent.binding,
+                                    phase="TERMINAL", sequence=2)
+                                replacement._buffer_origin.extend(b"synthetic replacement")
+                                held["normal_foreign_frame"] = replacement
+                                reader._frame = replacement
+                                reader._frame_cell = (reader, replacement)
+
+                    monkeypatch.setattr(nr.CommittedFrameDiscard, "feed", corrupt_frame_credit)
+                if stage.endswith("_finishswap"):
+                    actual_finish = nr.CommittedFrameDiscard.finish
+
+                    def replace_after_finish(parser):
+                        nonlocal original_frame
+                        result = actual_finish(parser)
+                        if parser is reader._frame:
+                            original_frame = parser
+                            replacement = nr.CommittedFrameDiscard(reader._checked,
+                                binding=reader._scope_origin.write.intent.binding,
+                                phase="TERMINAL", sequence=2)
+                            replacement._buffer_origin.extend(b"synthetic replacement")
+                            held["normal_foreign_frame"] = replacement
+                            reader._frame = replacement
+                            reader._frame_cell = (reader, replacement)
+                        return result
+
+                    monkeypatch.setattr(nr.CommittedFrameDiscard, "finish", replace_after_finish)
+                if stage.endswith("_finalkey"):
+                    actual_hash = nr._SHA256
+
+                    def retire_after_normal_hash(value):
+                        result = actual_hash(value)
+                        if reader._frame_done is not None:
+                            keys["gateway"].retire()
+                        return result
+
+                    monkeypatch.setattr(nr, "_SHA256", retire_after_normal_hash)
+                if body_terminal_fault:
+                    try:
+                        await reader.receive()
+                    except FrameError:
+                        assert reader._failed and not reader._complete and reader._fact is None
+                        assert foreign_terminal_calls == []
+                        assert not original_auth._buffer_origin
+                        if original_frame is not None:
+                            assert not original_frame._buffer_origin
+                            assert not original_frame._terminal_origin
+                        if stage.endswith(("_frameswap", "_finishswap")):
+                            assert (
+                                held["normal_foreign_frame"]._buffer_origin
+                                == b"synthetic replacement"
+                            )
+                        assert body._candidate_snapshot is None
+                        assert body._scope_origin.job.result is None
+                        held["normal_terminal_refused"] = True
+                        raise
+                    raise AssertionError("normal terminal fault escaped")
+                terminal_fact = await reader.receive()
+                held["normal_terminal_fact"] = terminal_fact
+                if stage.endswith("_wait"):
+                    assert held["normal_terminal_waited"]
+                    assert reader._waiter._retired and not reader._waiter._unknown
+                assert (
+                    terminal_fact.handoff.claim.result_sha256
+                    == body._fact_snapshot.body_wire_sha256
+                )
+                assert terminal_fact.handoff.claim.operation_kind == (
+                    "AVATAR" if stage.endswith("_avatar") else "METADATA")
+                assert body.current_candidate() is body._fact_snapshot
+                assert not body._adopted and body._scope_origin.job.result is None
+                with pytest.raises(FrameError):
+                    await reader.receive()
+                with pytest.raises(FrameError):
+                    NativeTerminalReceiver.retain(body)
             assert body._scope_origin.job.result is None
             assert body._scope_origin.job.remote_result_token is None
             assert not body._scope_origin.accumulator
@@ -2746,6 +2899,10 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
             else:
                 frame = await broker_task
         if terminal_delivery:
+            if body_terminal:
+                assert held["normal_terminal_reader"]._complete
+                assert held["normal_terminal_fact"].received == (
+                    held["terminal_delivery"]._offset)
             delivery = held["terminal_delivery"]
             assert delivery._attempted
             assert not cleanup._result_token and remote._result_owner is None

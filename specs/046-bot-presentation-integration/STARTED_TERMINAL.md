@@ -1,3 +1,20 @@
+## Normal completion receiver checkpoint — November 7, 2026
+
+The original gateway work task now owns a one-shot signed TERMINAL receiver on
+its original socket and deadline, before RESULT adoption. Normal readiness waits
+use their own retained interest; no cleanup notice or renewed budget is invented.
+METADATA and AVATAR fixtures correlate the actual RESULT-body digest while the
+image stays withdrawn and the job result remains unpublished. Parser allocations,
+byte credits and final role/custody checks remain tied to original ownership;
+uncertain reads retain parent I/O debt and wipe the original candidate.
+
+Eight focused cases pass, including delayed arrival, credit substitution,
+parser substitution before and after finish, and late key retirement. This is
+correlated DATA only: native acceptance, signed ACK delivery/acceptance, resource
+release, trusted runtime integration and physical character display remain open.
+The earlier intermittent reader refusal has no proved cause. A diagnostic run
+was timing/interrupt-perturbed and is not qualification evidence. No live deployment.
+
 ## Counted original-service TERMINAL delivery — November 7, 2026
 
 The normal signed completion envelope now has a retained original-service writer

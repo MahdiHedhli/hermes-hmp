@@ -2,6 +2,11 @@
 
 ## Current envelope stop preparation
 
+- [x] Add pre-adoption original-task normal terminal DATA reception, owned readiness,
+      original parser/credit provenance, candidate withdrawal and I/O-debt preservation.
+- [ ] Complete native terminal acceptance, signed ACK and native resource release;
+      qualify trusted runtime and physical character display separately.
+
 - [x] Add separate bounded RESULT/result2-body digest DATA from the actual fresh
       frame or captured original native hash copy, preserving frozen native and
       original full-frame digests; sanitized feed refusals and source-drift checks.

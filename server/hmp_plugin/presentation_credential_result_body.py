@@ -205,6 +205,7 @@ class NativeResultBodyOwner:
         owner._waiter = owner._waiter_origin = None
         owner._stream = owner._stream_origin = None
         owner._hash = owner._hash_origin = None
+        owner._terminal_reader = owner._terminal_reader_origin = owner._terminal_reader_cell = None
         owner._candidate = owner._candidate_snapshot = None
         owner._fact = owner._fact_snapshot = None
         owner._cancel_receipt = owner._cancel_receipt_snapshot = None
@@ -257,6 +258,16 @@ class NativeResultBodyOwner:
                  and s.envelope_scope.write_scope.channel._credential_result_receiver_snapshot
                      is envelope and type(self._active) is bool)
         return self._active  # fixed original read claim, never authority
+
+    def _channel_reading(self, envelope):
+        own = NativeResultBodyOwner._envelope_reading(self, envelope)
+        terminal = self._terminal_reader_origin
+        if terminal is None:
+            _require(self._terminal_reader is None and self._terminal_reader_cell is None)
+            return own
+        _require(own is False)
+        from .presentation_credential_terminal_read import NativeTerminalReceiver
+        return NativeTerminalReceiver.reading_for_body(terminal, self)
 
     def _metadata(self):
         """Retained data joins only; no actor, authority or publication grant."""
@@ -1115,6 +1126,15 @@ class NativeResultBodyOwner:
         s = self._scope_origin
         b = s.envelope_scope.write_scope
         _require(_TASK.done(b.allocation.task))
+        if self._terminal_reader_origin is not None:
+            from .presentation_credential_terminal_read import NativeTerminalReceiver
+            terminal_failed = False
+            try:
+                NativeTerminalReceiver.require_released(self._terminal_reader_origin, self)
+            except BaseException:
+                self._io_unknown = terminal_failed = True
+            if terminal_failed:
+                raise FrameError("BI1_SIGNED_BODY_TERMINAL_RELEASE_UNKNOWN") from None
         w = self._waiter_origin
         _require(w is None or type(w) is SelectorReadiness)
         held = None if w is None else (w._origin_scope, w._future_origin,
