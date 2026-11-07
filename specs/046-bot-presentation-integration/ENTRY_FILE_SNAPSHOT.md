@@ -79,3 +79,26 @@ execution provenance, dependency/interpreter/link/loader and earlier selection
 accounting, native listener/store/bridge/identity and gateway-only key factory,
 independent broker startup and terminal/ACK/release/publication. No physical avatar
 or release qualification follows from this source snapshot.
+
+## Entry preparation and one-shot completion — November 7, 2026
+
+Implemented EntryFileSnapshotOwner.retain and complete; legacy verify calls those
+same fixed methods. Retention keeps the original entry/recipe/plugin inputs but
+allocates no artifact IO owner and performs no entry-tree/file read. This provides
+the preparation boundary required for the combined dependency plan. It does not
+yet parse or integrate the remaining dependency/interpreter tables.
+
+An inactive immutable attempt tuple is anchored in the original retained inputs.
+Completion latches exactly that tuple on owner and activation before fresh native
+callbacks. Copied attempt mirrors refuse at currentness checks before artifact
+acquisition/scans; initial context failure is sticky. Successful or failed
+completion cannot replay or reopen the IO allowance. Prior entry-only file/count/
+closure/publication behavior is preserved.22 entry cases and affected startup
+regressions:580 passed in24.19s, source hashes unchanged. Ruff, plugin surface and
+diff checks passed; independent source review accepted the bounded repair.
+
+No keys, runtime/native authority, image route or device install changed. Combined
+wire/plan integration, full dependency/interpreter/link/loader qualification,
+native/key factory, broker acceptance and physical image delivery remain open.
+The previously recorded e3148f2 wheel predates this source change and does not
+qualify its packaged bytes. The broader feature goal remains active.

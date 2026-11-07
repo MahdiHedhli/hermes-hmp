@@ -751,3 +751,13 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Retain/complete file lifecycle with one-shot-before-native-effects, actual metadata/count publication, compatible legacy facts and typed prior package budget;18 entry/21 artifact cases,569 combined checks pass.
 - [ ] Complete actual installed wrapper execution/control-flow and independent operator qualification; snapshots alone do not attest executed bytes.
 - [ ] Complete remaining dependency/interpreter/link/loader accounting and native/key factory, broker/ACK/release and physical image qualification.
+
+### Combined entry preparation checkpoint — November 7, 2026
+
+- [x] Separate original entry retention from one-shot file completion, with no
+      artifact IO allocated during preparation; exact inactive attempt anchor,
+      zero-IO copied-attempt refusal and failed/successful no-replay causals.
+      Independent source review accepted;580 affected startup checks passed.
+- [ ] Freeze/integrate the complete combined dependency/interpreter plan before
+      completion; entry preparation alone neither implements this plan nor grants
+      runtime/native/key authority or physical image qualification.

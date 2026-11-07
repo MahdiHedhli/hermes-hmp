@@ -68,6 +68,7 @@ class _Inputs(NamedTuple):
     entries: tuple
     files: tuple
     wrapper: ExpectedArtifact
+    completion_attempt: tuple
     io_slot: list
     scans: list
 
@@ -116,6 +117,12 @@ def _decode(raw, entry_binding, recipe_binding):
 class EntryFileSnapshotOwner:
     @classmethod
     def verify(cls, entry, recipe, plugin):
+        _require(cls is EntryFileSnapshotOwner)
+        return EntryFileSnapshotOwner.complete(EntryFileSnapshotOwner.retain(entry, recipe, plugin))
+
+    @classmethod
+    def retain(cls, entry, recipe, plugin):
+        """Retain original entry inputs before allocating/completing any file IO."""
         _require(cls is EntryFileSnapshotOwner and type(entry) is GatewayEntryOwner
                  and type(recipe) is GatewayRecipeOwner and type(plugin) is GatewayPackageOwner)
         try:
@@ -126,7 +133,8 @@ class EntryFileSnapshotOwner:
             _require(original_entry[2][3] is activation is original_plugin[0].activation
                      and activation._entry_files_owner is None
                      and activation._entry_files_cell is None
-                     and activation._entry_files_fact_cell is None)
+                     and activation._entry_files_fact_cell is None
+                     and activation._entry_files_attempt_cell is None)
             eb = GatewayEntryOwner.current_binding(entry)
             rb = GatewayRecipeOwner._loaded_binding(recipe)
             pb = GatewayPackageOwner._retained_binding(plugin)
@@ -139,23 +147,53 @@ class EntryFileSnapshotOwner:
                      and _same_recipe_binding(pb[0].expected.recipe_binding, rb))
             activation = rb[0].activation
             _require(activation._entry_files_owner is None and activation._entry_files_cell is None
-                     and activation._entry_files_fact_cell is None)
+                     and activation._entry_files_fact_cell is None
+                     and activation._entry_files_attempt_cell is None)
         except BaseException:
             raise EntryFilesError from None
         owner = cls.__new__(cls)
         activation._entry_files_owner = owner
-        owner._ready = owner._failed = owner._unknown = False
-        owner._inputs = owner._root_cell = owner._fact_cell = None
+        owner._ready = owner._failed = owner._unknown = owner._completing = False
+        owner._inputs = owner._root_cell = owner._fact_cell = owner._attempt_cell = None
         owner._seen = 0
-        fact = None
         try:
             raw = rb[4][3][2][1]
             root, entries, files, wrapper = _decode(raw, eb, rb)
             owner._inputs = inputs = _Inputs(entry, eb, recipe, rb, plugin, pb, raw,
-                                             root, entries, files, wrapper, [None], [])
+                                             root, entries, files, wrapper,
+                                             (owner, eb, rb, pb), [None], [])
             owner._root_cell = cell = (owner, inputs)
             activation._entry_files_cell = cell
             EntryFileSnapshotOwner._current(owner)
+            return owner
+        except BaseException:
+            owner._failed = True
+            raise EntryFilesError(owner) from None
+
+    @classmethod
+    def complete(cls, owner):
+        """One completion on the original retained plan; never extend a finished IO owner."""
+        _require(cls is EntryFileSnapshotOwner and type(owner) is EntryFileSnapshotOwner
+                 and owner._ready is False and owner._failed is False
+                 and owner._unknown is False and owner._completing is False
+                 and type(owner._inputs) is _Inputs)
+        inputs, cell = owner._inputs, owner._root_cell
+        EntryFileSnapshotOwner._pure_current(owner, inputs, cell)
+        _require(type(inputs.io_slot) is list and len(inputs.io_slot) == 1
+                 and inputs.io_slot[0] is None and owner._fact_cell is None
+                 and owner._attempt_cell is None
+                 and inputs.recipe_binding[0].activation._entry_files_attempt_cell is None)
+        owner._completing = True  # intent before fresh native/context/file effects
+        attempt = inputs.completion_attempt
+        owner._attempt_cell = attempt
+        inputs.recipe_binding[0].activation._entry_files_attempt_cell = attempt
+        fact = None
+        activation = inputs.recipe_binding[0].activation
+        try:
+            EntryFileSnapshotOwner._current(owner)
+            files, wrapper = inputs.files, inputs.wrapper
+            root, entries = inputs.root, inputs.entries
+            plugin = inputs.plugin
             expected = files if any(row is wrapper for row in files) else (*files, wrapper)
             io = StartupArtifactOwner.retain_from_package(plugin, expected)
             inputs.io_slot[0] = io
@@ -189,7 +227,9 @@ class EntryFileSnapshotOwner:
                              for row in io._origin.records)
                      and all(type(row) is _Scan and row.closed is True and row.unknown is False
                              and row.close_attempted is True for row in inputs.scans)
-                     and owner._fact_cell is None and activation._entry_files_fact_cell is None)
+                     and owner._fact_cell is None and activation._entry_files_fact_cell is None
+                     and owner._completing is True and owner._attempt_cell is attempt
+                     and activation._entry_files_attempt_cell is attempt)
             fact = (owner, inputs, io, file_fact, after, origins)
             owner._fact_cell = activation._entry_files_fact_cell = fact
             owner._ready = True
@@ -233,6 +273,18 @@ class EntryFileSnapshotOwner:
                  and self._inputs is inputs and self._root_cell is cell
                  and activation._entry_files_owner is self and activation._entry_files_cell is cell
                  and self._failed is False and self._unknown is False)
+
+        original_attempt = inputs.completion_attempt
+        _require(type(original_attempt) is tuple and len(original_attempt) == 4
+                 and original_attempt[0] is self and original_attempt[1] is inputs.entry_binding
+                 and original_attempt[2] is inputs.recipe_binding
+                 and original_attempt[3] is inputs.plugin_binding)
+        attempt = self._attempt_cell
+        if self._completing is False:
+            _require(attempt is None and activation._entry_files_attempt_cell is None)
+        else:
+            _require(self._completing is True and attempt is original_attempt
+                     and activation._entry_files_attempt_cell is original_attempt)
 
     def _io_current(self, io):
         inputs = EntryFileSnapshotOwner._current(self)

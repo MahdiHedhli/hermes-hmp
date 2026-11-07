@@ -135,20 +135,59 @@ if mutation in ("scan_close_unknown", "scan_next_unknown"):
             scan_calls.append(True)
             if mutation == "scan_close_unknown": raise OSError("synthetic lost close result")
     a.os.scandir = lambda fd: Scan(actual_scandir(fd))
+retained = None
 try:
-    result = EntryFileSnapshotOwner.verify(entry,recipe,plugin)
+    if mutation.startswith("retained_") or mutation.startswith("completion_"):
+        retained = EntryFileSnapshotOwner.retain(entry,recipe,plugin)
+        assert retained._ready is False and retained._inputs.io_slot == [None]
+        assert entry._activation._artifact_owner is None
+        assert entry._activation._entry_files_attempt_cell is None
+        if mutation == "retained_changed":
+            (entry_root/"unused.py").write_bytes(b"CHANGED_AFTER_RETENTION")
+        if mutation == "completion_context_failure":
+            actual_pid = a.os.getpid
+            def fail_completion_context():
+                if retained._completing: raise OSError("synthetic context failure")
+                return actual_pid()
+            a.os.getpid = fail_completion_context
+        if mutation == "completion_attempt_swap":
+            actual_pid = a.os.getpid
+            def swap_completion_attempt():
+                value = actual_pid()
+                if retained._completing:
+                    copied = tuple(list(retained._inputs.completion_attempt))
+                    retained._attempt_cell = entry._activation._entry_files_attempt_cell = copied
+                return value
+            a.os.getpid = swap_completion_attempt
+        result = EntryFileSnapshotOwner.complete(retained)
+    else:
+        result = EntryFileSnapshotOwner.verify(entry,recipe,plugin)
 except EntryFilesError as error:
-    assert mutation not in ("normal","internal_wrapper"), mutation
+    assert mutation not in ("normal","internal_wrapper","retained_normal"), mutation
     result=error.failed_owner
     if result is not None: assert result._failed and not result._ready and result._fact_cell is None
 else:
-    assert mutation in ("normal","internal_wrapper"), mutation
+    assert mutation in ("normal","internal_wrapper","retained_normal"), mutation
     assert result._ready and result._fact_cell is entry._activation._entry_files_fact_cell
     io=result._fact_cell[2]
     assert io._origin.parent.count_cell is plugin._fact[7]
     assert io._bytes_read == plugin._bytes_read + sum(row.size for row in io._origin.expected)
     assert all(row.closed for row in io._origin.records)
     assert all(row.closed for row in result._inputs.scans)
+if retained is not None:
+    actual_pid = locals().get("actual_pid")
+    if actual_pid is not None: a.os.getpid = actual_pid
+    io = retained._inputs.io_slot[0]
+    if mutation in ("completion_context_failure", "completion_attempt_swap"):
+        assert io is None and entry._activation._artifact_owner is None
+        assert retained._inputs.scans == []
+    before_retry = None if io is None else (io._bytes_read, len(io._origin.records))
+    try: EntryFileSnapshotOwner.complete(retained)
+    except EntryFilesError: pass
+    else: raise AssertionError("completion replay accepted")
+    if io is not None: assert before_retry == (io._bytes_read, len(io._origin.records))
+    if mutation == "retained_normal": assert retained._ready and not retained._failed
+    else: assert retained._failed and retained._completing
 assert not foreign_calls
 if mutation in ("normal", "internal_wrapper"):
     sys.path[1] = "/synthetic/later-generation/site-packages"
@@ -166,6 +205,7 @@ print(json.dumps({"mutation":mutation,"runtime_admitted":False}))
     "extra", "changed", "missing", "symlink", "wrapper_changed", "retired",
     "after_hash_replace", "wrapper_after_hash", "foreign_module_name",
     "scan_close_unknown", "scan_next_unknown", "foreign_final_scan",
+    "retained_normal", "retained_changed", "completion_context_failure", "completion_attempt_swap",
 ])
 def test_actual_entry_and_wrapper_files(tmp_path, mutation):
     if os.name != "posix" or sys.platform not in ("darwin", "linux"):
