@@ -268,8 +268,8 @@ class GatewayEntryOwner:
         except BaseException:
             raise GatewayEntryError(self) from None
 
-    def _invocation_state(self, s, cell):
-        """Pure final invocation join after the last native-context callback."""
+    def _invocation_values(self, s, cell):
+        """Original invocation DATA, without an early-listener eligibility claim."""
         _require(type(self) is GatewayEntryOwner and _OWNER is self
                  and type(cell) is tuple and len(cell) == 2 and cell[0] is self
                  and type(s) is _Invocation and cell[1] is s and self._scope is s
@@ -279,11 +279,16 @@ class GatewayEntryOwner:
                  and vars(s.main).get("__spec__") is s.spec
                  and sys.argv is s.argv and _arguments(sys.argv) == s.arguments
                  and sys.orig_argv is s.original
-                 and _arguments(sys.orig_argv) == s.original_arguments
-                 and not any(name in sys.modules for name in (
-                     "gateway.run", "hmp_plugin.server", "hmp_plugin.adapter")))
+                 and _arguments(sys.orig_argv) == s.original_arguments)
         _require(_interpreter_current(s.interpreter) is s.interpreter)
         return s
+
+    def _invocation_state(self, s, cell):
+        """Early startup only; continuation does not relax this fence."""
+        value = GatewayEntryOwner._invocation_values(self, s, cell)
+        _require(not any(name in sys.modules for name in (
+            "gateway.run", "hmp_plugin.server", "hmp_plugin.adapter")))
+        return value
 
     def _invocation(self):
         cell = _CELL

@@ -132,3 +132,11 @@ uninstalled; it does not resolve launch/crash or host-image delivery qualificati
 Android development build 2026110702 remains uninstalled because Gemini's existing
 app uses another signing identity. The previously recorded HMP wheel predates
 this source and does not qualify its package bytes. The full goal stays active.
+
+## Retained strict-runtime ancestry
+
+Completed strict runtime facts now retain the original loose-file observations
+as a seventh field for the original startup continuation. Legacy entry-only
+facts remain six fields. This retains observations already acquired through the
+original IO owner; it adds neither reads nor native admission. See
+[continuation](STARTUP_CONTINUATION.md).
