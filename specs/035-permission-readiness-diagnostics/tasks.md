@@ -73,6 +73,7 @@ runtime, phone, host activation, or release qualification.
 - [ ] **AR1-035-T014** Independently source-review and causally test existing
   jobs/model operation authorization after awaits. The diagnostic source task
   does not close this current gap.
+- [x] **AR1-035-T014a** Read-response currentness for GET jobs/current-model/model-options: original request/dependency scope before asynchronous authorization, held dispatch, reauthentication/current controls/bot/flag/API checks after awaits and before response. Independent source review and105 focused tests pass; see [bounded contract](READ_RESPONSE_CURRENTNESS.md). T014 remains open for mutating operations/native atomicity and installed acceptance.
 - [ ] **AR1-T009 / AR1-035-T015** Separately qualify exact installed host and
   physical device behavior, supported Hermes versions, and release artifacts.
   No source result marks this complete.
