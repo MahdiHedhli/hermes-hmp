@@ -26,6 +26,9 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
 - [x] **PS1-CONTINUATION-DATA** Retain original completed startup lineage before
       native imports, with sticky refusal and callback identity fences. See
       [contract](STARTUP_CONTINUATION.md). This does not complete PS1-LOADER.
+- [x] **PS1-BYTECODE-HEADER-DATA** Observe selected headers during original hashing
+      and classify against original interpreter magic without execution or extra IO.
+      See [scope and remaining gates](BYTECODE_HEADERS.md); not runtime admission.
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
 - [ ] **PS1-LISTENER** Bind original admitted startup to actual listener/native owner,

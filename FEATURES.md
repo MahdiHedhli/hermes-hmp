@@ -1,3 +1,12 @@
+# November 7: original bytecode header source
+
+Startup snapshots now retain selected .pyc headers from existing hash reads and
+classify them against the original interpreter magic, without executing bytecode
+or reading files again. Independent bounded review accepted this DATA-only step.
+Full cache/import/native/key qualification and physical character delivery remain
+unfinished. No device or live host changes were made.
+See [contract](specs/046-bot-presentation-integration/BYTECODE_HEADERS.md).
+
 # November 7: dependency loader observations
 
 The character startup snapshot now checks standard file-loader type, name, path

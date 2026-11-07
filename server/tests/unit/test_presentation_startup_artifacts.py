@@ -18,7 +18,9 @@ from pathlib import Path
 mutation = sys.argv[3]
 fixture = Path(sys.argv[5])
 payload = b"SYNTHETIC_CODE_ONLY\n"
-leaf = fixture / "code.py"
+if mutation == "bytecode_short":payload=b"short"
+if mutation == "bytecode_empty":payload=b""
+leaf = fixture / ("code.pyc" if mutation.startswith("bytecode_") else "code.py")
 leaf.write_bytes(payload)
 leaf.chmod(0o600)
 package = ModuleType("synthetic_startup")
@@ -62,6 +64,9 @@ close_calls = []
 actual_close = a.os.close
 actual_read = a.os.read
 actual_open = a.os.open
+if mutation == "bytecode_split":
+    def split_read(fd,count):return actual_read(fd,min(count,3))
+    a.os.read=split_read
 opened = []
 if mutation == "open_retired":
     def retire_after_open(name, flags, *, dir_fd=None):
@@ -129,7 +134,8 @@ if mutation == "foreign_descriptor":
                 records[0].closed = Foreign()
         return value
     a.os.getpid = corrupt_final_descriptor
-success = mutation in ("normal", "empty", "multiple", "retained")
+success = mutation in ("normal", "empty", "multiple", "retained",
+    "bytecode_normal", "bytecode_split", "bytecode_short", "bytecode_empty")
 if success:
     if mutation == "retained":
         observed = a.StartupArtifactOwner.retain(owner, expected)
@@ -151,6 +157,10 @@ if success:
     assert all(type(row) is a._HashedArtifact and row.owner is observed
                and row.scope is observed._origin and row.expected is target
                for row,target in zip(observed._hashes, expected))
+    assert all(type(row.bytecode_header) is bytes
+               and row.bytecode_header ==
+                   (payload[:16] if mutation.startswith("bytecode_") else b"")
+               for row in observed._hashes)
     assert observed._bytes_read == sum(row.size for row in expected)
     assert all(row.closed and row.close_attempted for row in observed._origin.records)
 else:
@@ -182,6 +192,7 @@ print(json.dumps({"mutation": mutation, "passed": True, "runtime_admitted": Fals
 
 
 @pytest.mark.parametrize("mutation", [
+    "bytecode_normal", "bytecode_split", "bytecode_short", "bytecode_empty",
     "normal", "empty", "multiple", "retained", "complete_context_failure", "digest", "size",
     "duplicate", "path", "symlink", "foreign_descriptor",
     "hardlink", "mode", "parent_mode", "ancestor_symlink", "close_unknown", "read_unknown",

@@ -6,6 +6,7 @@ later factory still supplies independent installation/operator/runtime checks.
 """
 from __future__ import annotations
 
+import importlib.util
 import os
 import sys
 import threading
@@ -55,6 +56,8 @@ class _InterpreterOrigin(NamedTuple):
     version: object
     flags: object
     data: InterpreterStartupData
+    bytecode_module: ModuleType
+    bytecode_magic: bytes
 
     def __repr__(self):
         return "<OriginalInterpreterOrigin redacted>"
@@ -80,14 +83,20 @@ def _interpreter():
     _require(0 < len(f) <= 64 and all(type(value) in (int, bool) for value in f)
              and type(sys.platform) is str and 0 < len(sys.platform) <= 64)
     data = InterpreterStartupData(paths, v, f, (name, tag, hexversion), sys.platform)
-    return _InterpreterOrigin(implementation, version, flags, data)
+    bytecode = sys.modules.get("importlib.util")
+    _require(type(bytecode) is ModuleType and bytecode is importlib.util)
+    magic = vars(bytecode).get("MAGIC_NUMBER")
+    _require(type(magic) is bytes and len(magic) == 4)
+    return _InterpreterOrigin(implementation, version, flags, data, bytecode, magic)
 
 
 def _interpreter_current(origin):
     _require(type(origin) is _InterpreterOrigin and type(origin.data) is InterpreterStartupData)
     current = _interpreter()
     _require(current.implementation is origin.implementation and current.version is origin.version
-             and current.flags is origin.flags and current.data == origin.data)
+             and current.flags is origin.flags and current.data == origin.data
+             and current.bytecode_module is origin.bytecode_module
+             and current.bytecode_magic is origin.bytecode_magic)
     return origin
 
 

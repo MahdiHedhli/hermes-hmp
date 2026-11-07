@@ -77,6 +77,7 @@ class _HashedArtifact(NamedTuple):
     expected: ExpectedArtifact
     identity: tuple
     sha256: str
+    bytecode_header: bytes
 
     def __repr__(self):
         return "<HashedArtifact original-descriptor DATA redacted>"
@@ -927,6 +928,9 @@ class StartupArtifactOwner:
             held.append((row, fd))
             _require(_identity(StartupArtifactOwner._fstat(self, fd, s)) == original)
             digest = hashlib.sha256()
+            header = b""
+            capture_header = (not anchor and not _configuration(self)
+                              and expected.path.endswith(".pyc"))
             remaining = before.st_size if anchor else expected.size
             while remaining:
                 _require(_owner_guard(self) is s)
@@ -941,6 +945,8 @@ class StartupArtifactOwner:
                 _require(_owner_guard(self) is s)
                 _append_configuration(self, data)
                 digest.update(data)
+                if capture_header and len(header) < 16:
+                    header += data[:16 - len(header)]
                 data = None
                 _require(_owner_guard(self) is s)
             _require(progress is None or self._count_cell is progress)
@@ -967,11 +973,11 @@ class StartupArtifactOwner:
                 result = _OperatorFileReceipt(self, s, expected, original, actual_hash, count_cell,
                                               tuple(row for row, _ in held), tuple(read_effects))
             elif not _configuration(self):
-                result = _HashedArtifact(self, s, expected, original, actual_hash)
+                result = _HashedArtifact(self, s, expected, original, actual_hash, header)
         except BaseException:
             failed = True
         finally:
-            data = digest = None
+            data = digest = header = None
             for row, fd in reversed(held):
                 try:
                     StartupArtifactOwner._close(self, row, fd, s, root_cell)
