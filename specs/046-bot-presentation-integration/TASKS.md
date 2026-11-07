@@ -41,8 +41,13 @@
       original progress/stream/hash joins, retained finish/result and frozen counts,
       finished-state observer and ten synthetic positive/refusal cases. Consistency
       only; the new-frame parser is not substituted for this original digest.
-- [ ] Qualify subsequent explicit grammar transitions and terminal acceptance;
-      no auth restart/fallback or captured-prefix byte credit.
+- [x] Advance actual completed RESULT/1 into a distinct TERMINAL/2 authentication
+      record on the same task/socket, with cumulative counts, current predecessor
+      seals and bounded step retirement; both full-frame/partial-body predecessors.
+      Thirteen new private-socket cases; authentication DATA only.
+- [ ] Read the next authenticated TERMINAL/2 frame/body and qualify terminal claim
+      acceptance; retain direct/earlier terminal lifecycle positions separately.
+      No auth restart/fallback or captured-prefix byte credit.
 
 - [x] Retain one-shot original-reader IDLE admission before native currentness;
       independently anchor owner/scope/fact, exact bounded count/original minimum

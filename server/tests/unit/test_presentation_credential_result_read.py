@@ -76,6 +76,18 @@ from .test_presentation_supervisor import context as context
     "wake_reserve_notice_native_consume_next_auth_frame_captured_countbad",
     "wake_reserve_notice_native_consume_next_auth_frame_captured_foreign",
     "wake_reserve_notice_native_consume_next_auth_frame_captured",
+    "wake_reserve_notice_native_consume_next_auth_frame_nextinit",
+    "wake_reserve_notice_native_consume_next_auth_frame_nextpure",
+    "wake_reserve_notice_native_consume_next_auth_frame_nextstep",
+    "wake_reserve_notice_native_consume_next_auth_frame_nextflag",
+    "wake_reserve_notice_native_consume_next_auth_frame_nexthistory",
+    "wake_reserve_notice_native_consume_next_auth_frame_nextctx",
+    "wake_reserve_notice_native_consume_next_auth_frame_nextdriftscope",
+    "wake_reserve_notice_native_consume_next_auth_frame_nextdriftcount",
+    "wake_reserve_notice_native_consume_next_auth_frame_nextfeedpins",
+    "wake_reserve_notice_native_consume_next_auth_frame_nextfeedrows",
+    "wake_reserve_notice_native_consume_next_auth_frame_next",
+    "wake_reserve_notice_native_consume_next_auth_frame_nextbad",
     "wake_reserve_notice_native_consume_next_auth_frame",
     "wake_reserve_notice_native_consume_next_auth_frame_terminal",
     "wake_reserve_notice_native_consume_next_auth_frame_bodyhash",
@@ -110,6 +122,10 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
     from hmp_plugin import presentation_credential_result_read as module
     from hmp_plugin.presentation_readiness import SelectorReadiness
 
+    terminal_case = "_auth_frame_next" in mutation
+    terminal_history = terminal_case and mutation.endswith("nexthistory")
+    terminal_failure = terminal_case and not (
+        mutation.endswith("frame_next") or terminal_history)
     next_case = "_native_consume_next" in mutation
     auth_case = "_consume_next_auth" in mutation
     captured_case = "_frame_captured" in mutation
@@ -127,6 +143,186 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
     handshake_owner, keys, _ = await handshake(prepared, tmp_path)
     remote = authority.bind_remote(operation, channel, handshake_owner._operation_binding(), packet)
     held = {}
+
+    def exercise_terminal(native, predecessor):
+        from hmp_plugin.presentation_credential_cleanup_read import NativeCleanupRead
+        from hmp_plugin.presentation_credential_stream import SignedCleanupAuthPrefix
+        if mutation.endswith("nextinit"):
+            initialize = SignedCleanupAuthPrefix.__init__
+            def lost_terminal_init(parser, *args, **kwargs):
+                initialize(parser, *args, **kwargs)
+                raise OSError("synthetic next auth init ack lost")
+            monkeypatch.setattr(SignedCleanupAuthPrefix, "__init__", lost_terminal_init)
+            with pytest.raises(FrameError):
+                native.begin_terminal()
+            terminal = native._terminal_allocation[1]
+            assert terminal.failed and not terminal.initialized
+            assert not terminal.scope.parser._buffer_allocation_origin[1]
+            with pytest.raises(FrameError):
+                native.begin_terminal()
+            return
+        if mutation.endswith(("nextdriftscope", "nextdriftcount")):
+            final_fence = NativeCleanupRead._final_socket_fence
+            def drift_after_predecessor(owner, scope):
+                value = final_fence(owner, scope)
+                terminal = native._terminal_origin
+                if (terminal is not None and terminal.initialized is True
+                        and not held.get("terminal_predecessor_drift")):
+                    held["terminal_predecessor_drift"] = True
+                    class ForeignTerminalStage:
+                        def __getattr__(self, name):
+                            held["foreign_terminal_stage_getter"] = True
+                            raise AssertionError("foreign terminal stage")
+                        def __eq__(self, other):
+                            held["foreign_terminal_stage_eq"] = True
+                            raise AssertionError("foreign terminal stage equality")
+                        def __bool__(self):
+                            held["foreign_terminal_stage_bool"] = True
+                            raise AssertionError("foreign terminal stage boolean")
+                    if mutation.endswith("nextdriftscope"):
+                        terminal.scope = ForeignTerminalStage()
+                    else:
+                        terminal.ordinal = ForeignTerminalStage()
+                return value
+            monkeypatch.setattr(NativeCleanupRead, "_final_socket_fence", drift_after_predecessor)
+            with pytest.raises(FrameError):
+                native.begin_terminal()
+            terminal = native._terminal_allocation[1]
+            assert terminal.failed and not terminal.complete
+            assert not terminal.parser_cell[1]._buffer_allocation_origin[1]
+            assert held["terminal_predecessor_drift"]
+            assert "foreign_terminal_stage_getter" not in held
+            assert "foreign_terminal_stage_eq" not in held
+            assert "foreign_terminal_stage_bool" not in held
+            with pytest.raises(FrameError):
+                native.begin_terminal()
+            return
+        terminal_scope = native.begin_terminal()
+        terminal = native._terminal_origin
+        assert terminal_scope.predecessor is predecessor
+        assert terminal.received == 0 and terminal.scope.seed == predecessor.total_received
+        assert native._frame_origin.done is predecessor
+        if mutation.endswith(("nextpure", "nextflag")):
+            fence = NativeCleanupRead._final_socket_fence
+            def final_terminal_fence(owner, scope):
+                value = fence(owner, scope)
+                step = terminal.step_origin
+                if step is not None and not held.get("terminal_final_changed"):
+                    held["terminal_final_changed"] = True
+                    class ForeignTerminalMetadata:
+                        def __eq__(self, other):
+                            held["foreign_terminal_eq"] = True
+                            raise AssertionError("foreign terminal equality")
+                        def __bool__(self):
+                            held["foreign_terminal_bool"] = True
+                            raise AssertionError("foreign terminal boolean")
+                    if mutation.endswith("nextpure"):
+                        terminal.scope.parser._expected = ForeignTerminalMetadata()
+                        terminal.scope.parser._expected_origin = terminal.scope.parser._expected
+                    else:
+                        step.complete = ForeignTerminalMetadata()
+                return value
+            monkeypatch.setattr(NativeCleanupRead, "_final_socket_fence", final_terminal_fence)
+        if mutation.endswith(("nextfeedpins", "nextfeedrows")):
+            feed_terminal = SignedCleanupAuthPrefix.feed
+            def substituted_scope_after_feed(parser, chunk):
+                feed_terminal(parser, chunk)
+                class ForeignTerminalScopeValue:
+                    def __eq__(self, other):
+                        held["foreign_terminal_scope_eq"] = True
+                        raise AssertionError("foreign next scope equality")
+                    def __iter__(self):
+                        held["foreign_terminal_scope_iter"] = True
+                        raise AssertionError("foreign next scope iteration")
+                foreign = ForeignTerminalScopeValue()
+                copied = terminal.scope._replace(**{
+                    "pins" if mutation.endswith("nextfeedpins") else "expected": foreign})
+                terminal.scope = terminal.scope_origin = copied
+                terminal.scope_cell = (terminal, copied)
+            monkeypatch.setattr(SignedCleanupAuthPrefix, "feed", substituted_scope_after_feed)
+            with pytest.raises(FrameError):
+                native.read_terminal_auth()
+            step = terminal.active_read_cell[1]
+            assert step.known and step.count_cell[1] == 8 and step.fed
+            assert step.pending is None and not terminal.parser_cell[1]._buffer_origin
+            assert terminal.failed and not terminal.complete
+            assert "foreign_terminal_scope_eq" not in held
+            assert "foreign_terminal_scope_iter" not in held
+            with pytest.raises(FrameError):
+                native.read_terminal_auth()
+            return
+        if mutation.endswith("nextstep") or terminal_history:
+            receive = NativeCleanupRead._receive
+            def next_terminal_receive(sock, count):
+                value = receive(sock, count)
+                if mutation.endswith("nextstep"):
+                    from hmp_plugin.presentation_credential_cleanup_terminal import _Step
+                    original = terminal.active_read_cell[1]
+                    held["terminal_original_step"] = original
+                    replacement = _Step.__new__(_Step)
+                    terminal.step = terminal.step_origin = replacement
+                    terminal.step_cell = (terminal, replacement)
+                return value
+            monkeypatch.setattr(NativeCleanupRead, "_receive",
+                                staticmethod(next_terminal_receive))
+        if mutation.endswith(("nextpure", "nextflag", "nextstep")):
+            with pytest.raises(FrameError):
+                native.read_terminal_auth()
+            assert terminal.failed and not terminal.complete
+            step = terminal.active_read_cell[1]
+            if mutation.endswith("nextstep"):
+                assert step is held["terminal_original_step"]
+                assert step.known and step.count_cell[1] == 8
+                assert step.pending is None
+                assert (
+                    native._scope_origin.sock
+                    is native._scope_origin.notice._reservation.capture.channel._socket
+                )
+                assert native._scope_origin.notice._reservation.capture.channel._reading is True
+            else:
+                assert not step.known and step.count_cell is None
+            assert "foreign_terminal_eq" not in held
+            assert "foreign_terminal_bool" not in held
+            with pytest.raises(FrameError):
+                native.read_terminal_auth()
+            return
+        if terminal_history:
+            import gc
+            import weakref
+            enabled = gc.isenabled()
+            gc.disable()
+            try:
+                old = None
+                for ordinal in (1, 2, 3):
+                    fact = native.read_terminal_auth()
+                    assert fact.ordinal == ordinal and fact.count == 1
+                    if old is not None:
+                        assert old() is None
+                    old = weakref.ref(terminal.step_origin)
+                assert terminal.received == terminal.ordinal == 3
+                assert not terminal.finish_attempted
+            finally:
+                if enabled:
+                    gc.enable()
+            return
+        for ordinal in (1, 2):
+            assert native.read_terminal_auth().ordinal == ordinal
+        if terminal_failure:
+            with pytest.raises(FrameError):
+                native.finish_terminal_auth()
+            assert terminal.failed and not terminal.complete
+            with pytest.raises(FrameError):
+                native.finish_terminal_auth()
+        else:
+            next_auth = native.finish_terminal_auth()
+            assert next_auth.scope is terminal_scope
+            assert next_auth.count == len(held["terminal_auth_wire"])
+            assert next_auth.total_received == predecessor.total_received + next_auth.count
+            assert json.loads(next_auth.checked.canonical_json)["sequence"] == 2
+            for action in (native.begin_terminal, native.read_terminal_auth,
+                           native.finish_terminal_auth):
+                with pytest.raises(FrameError):
+                    action()
 
     def exercise_native_frame(native, fact):
         # Called synchronously on the actual original work task, not a new actor.
@@ -245,6 +441,12 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                         with pytest.raises(FrameError):
                             action()
                     assert stage.complete and not native._failed
+                    if scope.phase == "TERMINAL":
+                        with pytest.raises(FrameError):
+                            native.begin_terminal()
+                        assert native._terminal_allocation is None and not native._failed
+                    if terminal_case:
+                        exercise_terminal(native, stage.done)
         held["native_frame_checked"] = True
 
     begin = asyncio.Event()
@@ -408,8 +610,22 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                         held["native_frame_length"] = len(frame)
                         if frame_failure:
                             frame = frame[:-1] + bytes([frame[-1] ^ 1])
+                        extra = b""
+                        if terminal_case:
+                            terminal_frame = encode_frame(b.intent.binding, "TERMINAL", 2,
+                                                          b"abcd", version=2)
+                            terminal_value = dict(value, phase="TERMINAL", sequence=2,
+                                frame_sha256=hashlib.sha256(terminal_frame).hexdigest(),
+                                frame_length=len(terminal_frame))
+                            if mutation.endswith("nextctx"):
+                                terminal_value["transcript_sha256"] = "0" * 64
+                            extra = encode_record(terminal_value,
+                                keys["broker"]._private_key.sign(signing_bytes(terminal_value)))
+                            if mutation.endswith("nextbad"):
+                                extra = extra[:-1] + bytes([extra[-1] ^ 1])
+                            held["terminal_auth_wire"] = extra
                         await loop.sock_sendall(peer, raw[:8] if mutation.endswith("_blocked")
-                                               else raw + frame)
+                                               else raw + frame + extra)
                     elif not mutation.endswith("_blocked"):
                         await loop.sock_sendall(peer, raw[:8] + b"not-consumed")
                     native_queued.set()
@@ -1068,7 +1284,15 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                         assert sock is reader._base_origin.sock
                                         if (next_case
                                                 and held["native_calls"] > 1):
-                                            if frame_case and native._frame_origin is not None:
+                                            if (
+                                                terminal_case
+                                                and native._terminal_origin is not None
+                                            ):
+                                                assert (
+                                                    count
+                                                    == native._terminal_origin.step_origin.requested
+                                                )
+                                            elif frame_case and native._frame_origin is not None:
                                                 assert (
                                                     count
                                                     == native._frame_origin.step_origin.requested
@@ -1078,9 +1302,21 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                         else:
                                             assert count == 8
                                         try:
-                                            value = receive(sock, min(count, 6) if (
-                                                next_case and mutation.endswith("_short")
-                                                and held["native_calls"] > 1) else count)
+                                            value = receive(
+                                                sock,
+                                                min(count, 1)
+                                                if (
+                                                    terminal_history
+                                                    and native._terminal_origin is not None
+                                                )
+                                                else min(count, 6)
+                                                if (
+                                                    next_case
+                                                    and mutation.endswith("_short")
+                                                    and held["native_calls"] > 1
+                                                )
+                                                else count,
+                                            )
                                         except OSError as error:
                                             held["native_receive_errno"] = error.errno
                                             raise
@@ -1219,11 +1455,20 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                         assert owner is native
                                         if next_case:
                                             assert not next_failure
-                                            wanted = (native._frame_origin.done if frame_case else
-                                                      native._auth_origin.fact if auth_case else
-                                                      native._next_read_origin.fact)
+                                            wanted = (
+                                                native._terminal_origin.step_origin.fact
+                                                if terminal_history
+                                                else native._terminal_origin.fact
+                                                if terminal_case
+                                                else native._frame_origin.done
+                                                if frame_case
+                                                else native._auth_origin.fact
+                                                if auth_case
+                                                else native._next_read_origin.fact
+                                            )
                                             assert value is wanted
                                             assert value.total_received == (
+                                                wanted.total_received if terminal_case else
                                                 native._frame_origin.ledger_origin.received
                                                 if frame_case else native._ledger_origin.received)
                                         else:
@@ -1568,6 +1813,7 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                             not next_failure
                                             and not auth_failure
                                             and not frame_failure
+                                            and not terminal_failure
                                         ):
                                             await asyncio.create_task(wrong_consumer())
                                             assert native._consume_complete and not native._failed
@@ -1621,7 +1867,27 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                         assert "foreign_native_counter_eq" not in held
                                     else:
                                         assert held["native_calls"] == (
-                                            2
+                                            8
+                                            if terminal_history
+                                            else 5
+                                            if terminal_case
+                                            and mutation.endswith(
+                                                (
+                                                    "nextinit",
+                                                    "nextpure",
+                                                    "nextflag",
+                                                    "nextdriftscope",
+                                                    "nextdriftcount",
+                                                )
+                                            )
+                                            else 6
+                                            if terminal_case
+                                            and mutation.endswith(
+                                                ("nextstep", "nextfeedpins", "nextfeedrows")
+                                            )
+                                            else 7
+                                            if terminal_case
+                                            else 2
                                             if frame_pure_failure
                                             else 3
                                             if frame_case and mutation.endswith("_feedshadow")
@@ -1635,13 +1901,18 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                             if next_case
                                             else 1
                                         )
-                                    if mutation in ("wake_reserve_notice_native",
-                                                    "wake_reserve_notice_native_workflagbad",
-                                                    "wake_reserve_notice_native_consume",
-                                                    "wake_reserve_notice_native_consume_next",
-                                                    "wake_reserve_notice_native_consume_next_short"
-                                                    ) or (
-                                            auth_case and not auth_failure and not frame_failure):
+                                    if mutation in (
+                                        "wake_reserve_notice_native",
+                                        "wake_reserve_notice_native_workflagbad",
+                                        "wake_reserve_notice_native_consume",
+                                        "wake_reserve_notice_native_consume_next",
+                                        "wake_reserve_notice_native_consume_next_short",
+                                    ) or (
+                                        auth_case
+                                        and not auth_failure
+                                        and not frame_failure
+                                        and not terminal_failure
+                                    ):
                                         assert not native._failed and not notice._unknown
                                         async with asyncio.timeout_at(
                                                 reader._base_origin.intent.end_ns / 1e9):
@@ -1791,7 +2062,12 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             if mutation.endswith("_consume_next_foreign") or frame_pure_failure:
                                 assert not native._failed
                                 assert "foreign_progress_getter" not in held
-                            elif auth_case and not auth_failure and not frame_failure:
+                            elif (
+                                auth_case
+                                and not auth_failure
+                                and not frame_failure
+                                and not terminal_failure
+                            ):
                                 assert native._auth_origin.complete and not native._failed
                             elif mutation not in ("wake_reserve_notice_native",
                                                 "wake_reserve_notice_native_workflagbad",
@@ -2012,6 +2288,18 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             "wake_reserve_notice_native_consume_next_auth_frame_captured_countbad",
                             "wake_reserve_notice_native_consume_next_auth_frame_captured_foreign",
                             "wake_reserve_notice_native_consume_next_auth_frame_captured",
+                            "wake_reserve_notice_native_consume_next_auth_frame_nextinit",
+                            "wake_reserve_notice_native_consume_next_auth_frame_nextpure",
+                            "wake_reserve_notice_native_consume_next_auth_frame_nextstep",
+                            "wake_reserve_notice_native_consume_next_auth_frame_nextflag",
+                            "wake_reserve_notice_native_consume_next_auth_frame_nexthistory",
+                            "wake_reserve_notice_native_consume_next_auth_frame_nextctx",
+                            "wake_reserve_notice_native_consume_next_auth_frame_nextdriftscope",
+                            "wake_reserve_notice_native_consume_next_auth_frame_nextdriftcount",
+                            "wake_reserve_notice_native_consume_next_auth_frame_nextfeedpins",
+                            "wake_reserve_notice_native_consume_next_auth_frame_nextfeedrows",
+                            "wake_reserve_notice_native_consume_next_auth_frame_next",
+                            "wake_reserve_notice_native_consume_next_auth_frame_nextbad",
                             "wake_reserve_notice_native_consume_next_auth_frame",
                             "wake_reserve_notice_native_consume_next_auth_frame_terminal",
                             "wake_reserve_notice_native_consume_next_auth_frame_bodyhash",
@@ -2051,7 +2339,7 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     assert reader._io_unknown
                 elif mutation.endswith(("_swapcurrent", "_reservationclock",
                                         "_cleanup_copybad", "_cleanup_futurebad",
-                                        "_reader_copybad")):
+                                        "_reader_copybad")) or mutation.endswith("nextstep"):
                     with pytest.raises(FrameError):
                         reader._released(channel)
                     assert reader._io_unknown
@@ -2155,12 +2443,15 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     assert held["notice_published"]
             if "_notice_native" in mutation:
                 native = held["native_owner"]
-                if mutation in ("wake_reserve_notice_native",
-                                "wake_reserve_notice_native_workflagbad",
-                                "wake_reserve_notice_native_consume",
-                                "wake_reserve_notice_native_consume_next",
-                                "wake_reserve_notice_native_consume_next_short") or (
-                        auth_case and not auth_failure and not frame_failure):
+                if mutation in (
+                    "wake_reserve_notice_native",
+                    "wake_reserve_notice_native_workflagbad",
+                    "wake_reserve_notice_native_consume",
+                    "wake_reserve_notice_native_consume_next",
+                    "wake_reserve_notice_native_consume_next_short",
+                ) or (
+                    auth_case and not auth_failure and not frame_failure and not terminal_failure
+                ):
                     assert native_observed.is_set()
                 if not next_case and mutation.endswith((
                         "_lostack", "_blocked", "_timeoutbad", "_blockingbad", "_fdbad")):

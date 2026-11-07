@@ -369,6 +369,7 @@ class SignedCleanupAuthPrefix:
         _require(type(self) is SignedCleanupAuthPrefix and "_initialized" not in vars(self))
         self._initialized = self._failed = self._finished = False
         self._buffer = self._buffer_origin = bytearray()
+        self._buffer_allocation_origin = (self, self._buffer_origin)
         self._context = self._context_origin = (os.getpid(), threading.get_ident())
         self._target = self._target_origin = 8
         self._header_done = self._header_done_origin = False
@@ -398,11 +399,17 @@ class SignedCleanupAuthPrefix:
                 offset += count
         except BaseException:
             failed = self._failed = True
-            self._buffer_origin.clear()
+            SignedCleanupAuthPrefix._wipe_owned(self)
         finally:
             prefix = None
         if failed:
             raise FrameError("BI1_CLEANUP_AUTH_PREFIX_REFUSED") from None
+
+    def _wipe_owned(self):
+        cell = vars(self).get("_buffer_allocation_origin")
+        if (type(cell) is tuple and len(cell) == 2 and cell[0] is self
+                and type(cell[1]) is bytearray):
+            bytearray.clear(cell[1])
 
     def __repr__(self):
         return "<SignedCleanupAuthPrefix data-only redacted>"
@@ -414,6 +421,10 @@ class SignedCleanupAuthPrefix:
                  and len(self._context) == 2 and all(type(v) is int for v in self._context)
                  and self._context == (os.getpid(), threading.get_ident())
                  and type(self._buffer) is bytearray and self._buffer is self._buffer_origin
+                 and type(self._buffer_allocation_origin) is tuple
+                 and len(self._buffer_allocation_origin) == 2
+                 and self._buffer_allocation_origin[0] is self
+                 and self._buffer_allocation_origin[1] is self._buffer_origin
                  and type(self._target) is int and self._target is self._target_origin
                  and type(self._header_done) is bool
                  and self._header_done is self._header_done_origin
@@ -438,7 +449,7 @@ class SignedCleanupAuthPrefix:
             return self._target - len(self._buffer)
         except BaseException:
             self._failed = True
-            self._buffer_origin.clear()
+            SignedCleanupAuthPrefix._wipe_owned(self)
         raise FrameError("BI1_CLEANUP_AUTH_PREFIX_REFUSED") from None
 
     def feed(self, chunk: bytes):
@@ -453,7 +464,7 @@ class SignedCleanupAuthPrefix:
             SignedCleanupAuthPrefix._guard(self)
         except BaseException:
             failed = self._failed = True
-            self._buffer_origin.clear()
+            SignedCleanupAuthPrefix._wipe_owned(self)
         finally:
             chunk = None
         if failed:
@@ -471,10 +482,10 @@ class SignedCleanupAuthPrefix:
                 expected_context=dict(self._expected))
             SignedCleanupAuthPrefix._guard(self)
             self._finished = True
-            self._buffer_origin.clear()
+            SignedCleanupAuthPrefix._wipe_owned(self)
         except BaseException:
             failed = self._failed = True
-            self._buffer_origin.clear()
+            SignedCleanupAuthPrefix._wipe_owned(self)
         finally:
             raw = None
         if failed:

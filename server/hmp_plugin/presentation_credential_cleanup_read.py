@@ -260,6 +260,7 @@ class NativeCleanupRead:
         owner._auth = owner._auth_origin = owner._auth_allocation_origin = None
         owner._frame = owner._frame_origin = owner._frame_allocation_origin = None
         owner._body_finish = owner._body_finish_origin = owner._body_finish_allocation = None
+        owner._terminal = owner._terminal_origin = owner._terminal_allocation = None
         owner._progress = owner._progress_origin = owner._progress_allocation_origin = None
         owner._received = owner._received_origin = 0
         owner._native_count_allocation_origin = None
@@ -756,6 +757,9 @@ class NativeCleanupRead:
 
     def current_progress_for_cleanup(self):
         _require(type(self) is NativeCleanupRead)
+        if self._terminal_origin is not None:
+            from .presentation_credential_cleanup_terminal import current_for_cleanup
+            return current_for_cleanup(self)
         if self._frame_origin is not None:
             from .presentation_credential_cleanup_frame import current_frame_for_cleanup
             return current_frame_for_cleanup(self)
@@ -1305,6 +1309,18 @@ class NativeCleanupRead:
         if failed:
             raise FrameError("BI1_NATIVE_CLEANUP_AUTHENTICATION_UNKNOWN") from None
 
+    def begin_terminal(self):
+        from .presentation_credential_cleanup_terminal import begin
+        return begin(self)
+
+    def read_terminal_auth(self):
+        from .presentation_credential_cleanup_terminal import read_next
+        return read_next(self)
+
+    def finish_terminal_auth(self):
+        from .presentation_credential_cleanup_terminal import finish
+        return finish(self)
+
     def finish_body(self):
         from .presentation_credential_cleanup_body import finish_body
         return finish_body(self)
@@ -1358,3 +1374,5 @@ class NativeCleanupRead:
                 step_cell[1].pending = step_cell[1].pending_cell = None
             from .presentation_credential_cleanup_frame import retire_frame_pending
             retire_frame_pending(self)
+            from .presentation_credential_cleanup_terminal import retire
+            retire(self)

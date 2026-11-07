@@ -14,3 +14,8 @@ remaining lifecycle gates are tracked in
 `presentation_credential_cleanup_body.py` separately completes the same captured
 partial-body digest. Its result is consistency DATA; it does not restore the old
 image buffer, accept a terminal or authorize native release.
+
+`presentation_credential_cleanup_terminal.py` owns the explicit successor
+TERMINAL/2 authentication record after actual RESULT/1 consistency completion.
+It retains original read ownership and byte accounting. Terminal frame/body
+handling and release remain separate unfinished work.

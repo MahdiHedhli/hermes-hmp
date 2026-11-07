@@ -1,3 +1,39 @@
+## Same-reader RESULT/1 to TERMINAL/2 authentication — November 7, 2026
+
+The original native reader now admits a distinct next authentication record only
+after its actual completed RESULT/1 frame or original partial-body completion.
+It retains those predecessor allocations and counts, derives sequence2 from the
+closed original context, and keeps the same task/socket/current role and original
+cleanup end. No predecessor parser, receipt, sequence or read flag is reset.
+Exact-needed nonblocking receives record actual byte counts before callbacks;
+independent active-step ownership survives paired slot drift, and pending bytes
+must remain the actual returned chunk. Completed predecessor step self-cells are
+retired only after a committed successor, keeping short-read history bounded.
+
+The next original pinned signature verifies TERMINAL/2 authentication DATA.
+Currentness rechecks the held stage/scope after predecessor native callbacks;
+final pre-receive seals are typed and callback-free. Parser allocation, finished
+state and canonical commitment fields are joined before an auth receipt. Prefix
+buffers now have an independent owned allocation cell and fixed owned-buffer wipe.
+No TERMINAL frame/body, domain cleanup claim, ACK or release is accepted here.
+
+Thirteen new private-socket cases cover both RESULT completion paths, damaged
+signature and wrong signed transcript context, constructor acknowledgement loss,
+final-FD foreign metadata/flag, paired post-receive step drift with retained read
+claim, GC-disabled short-read retirement, predecessor scope/counter drift and
+coherent post-feed scope replacements with foreign pins/context rows. Constructor
+and feed boundaries preserve the actual held scope before comparisons.
+Independent read-only review accepted the repaired source. Exact-source checks:
+27 focused cases passed in9.49s; expanded affected regression2,023 passed,1 skipped
+in182.17s. Full lint, plugin surface and whitespace pass; execution hashes match.
+The focused cases overlap the expanded run.
+
+Terminal frame/body continuation and acceptance, earlier/direct-terminal lifecycle
+positions, EAGAIN waiting, CANCEL/ACK/native release, production routing and physical
+character-image delivery remain open. Earlier broker failures and sender-destination
+incident remain unresolved. No app build/install, live host/device/grant/provider
+or deployment change occurred.
+
 ## Original partial-body digest completion — November 7, 2026
 
 `NativeCleanupRead.finish_body()` now finishes the SAME `SignedResultDiscard` and

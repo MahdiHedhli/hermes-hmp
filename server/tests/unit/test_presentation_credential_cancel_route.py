@@ -32,6 +32,7 @@ from .test_presentation_selected_protocol import darwin_model
 from .test_presentation_supervisor import context as context
 
 _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
+    "_notice_native_finished_next",
     "_notice_native_finished_initial",
     "_notice_native_finished_lost",
     "_notice_native_finished_digest",
@@ -117,6 +118,7 @@ _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_seal",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_resultcell",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_received",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_next",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_countbad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_custodybad",
@@ -186,7 +188,26 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         # Original private synthetic peer fault injection only. This does not
         # qualify broker currentness or a complete successful result writer.
         await native_body_ready.wait()
-        await asyncio.get_running_loop().sock_sendall(sock, tail)
+        extra = b""
+        if stage.endswith("_notice_native_finished_next"):
+            import hashlib
+            import json
+
+            from hmp_plugin.presentation_broker_codec import encode_frame
+            from hmp_plugin.presentation_credential_codec import (
+                decode_record,
+                encode_record,
+                signing_bytes,
+            )
+            raw = held["signed_result_writer"]._scope_snapshot.raw
+            value = json.loads(decode_record(raw).canonical_json)
+            terminal_frame = encode_frame(binding, "TERMINAL", 2, b"abcd", version=2)
+            value.update(phase="TERMINAL", sequence=2,
+                frame_sha256=hashlib.sha256(terminal_frame).hexdigest(),
+                frame_length=len(terminal_frame))
+            extra = encode_record(value, keys["broker"]._private_key.sign(signing_bytes(value)))
+            held["body_terminal_auth_wire"] = extra
+        await asyncio.get_running_loop().sock_sendall(sock, tail + extra)
         held["native_body_tail"] = tail
         native_body_queued.set()
     result_failure = stage in ("go_relay_result_sign_key", "go_relay_result_sign_expired",
@@ -208,7 +229,9 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                "go_relay_result_sign_write_settlement_key",
                                "go_relay_result_sign_write_blocked_cancel")
     finish_case = "_notice_native_finished" in stage
-    finish_failure = finish_case and not stage.endswith("_notice_native_finished")
+    body_next = stage.endswith("_notice_native_finished_next")
+    finish_failure = finish_case and not stage.endswith((
+        "_notice_native_finished", "_notice_native_finished_next"))
     body_stage = stage.startswith("go_relay_result_sign_write_body")
     body_fault = (body_stage and "_body_adopt" not in stage and stage not in (
                                               "go_relay_result_sign_write_body",
@@ -1228,13 +1251,19 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                         def body_native_observer(owner):
                             value = observer(owner)
                             assert owner is native
-                            assert value.count == (len(held["native_body_tail"]) - 3
+                            assert value.count == (len(held["body_terminal_auth_wire"])
+                                                   if body_next else
+                                                   len(held["native_body_tail"]) - 3
                                                    if finish_case else 3)
                             assert body._stream_origin._received == (
                                 13 + len(held["native_body_tail"]) if finish_case else
                                 19 if stage.endswith("_notice_native_continued") else
                                 16 if stage.endswith("_notice_native_consumed") else 13)
-                            if finish_case:
+                            if body_next:
+                                assert value is native._terminal_origin.fact
+                                assert value.total_received == (
+                                    len(held["native_body_tail"]) + value.count)
+                            elif finish_case:
                                 assert value is native._body_finish_origin.fact
                                 assert value.total_received == len(held["native_body_tail"])
                             elif stage.endswith("_notice_native_continued"):
@@ -1389,6 +1418,21 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                                        native.read_and_consume_next):
                                             with pytest.raises(FrameError):
                                                 action()
+                                        if body_next:
+                                            next_scope = native.begin_terminal()
+                                            assert (
+                                                next_scope.predecessor is held["body_finish_fact"]
+                                            )
+                                            for ordinal in (1, 2):
+                                                assert (
+                                                    native.read_terminal_auth().ordinal == ordinal
+                                                )
+                                            next_auth = native.finish_terminal_auth()
+                                            assert next_auth.count == len(
+                                                held["body_terminal_auth_wire"]
+                                            )
+                                            assert body._committed == 13
+                                            assert not body._scope_origin.accumulator
                         if stage.endswith("_notice_native_hashlost"):
                             from hmp_plugin.presentation_credential_stream import (
                                 SignedResultDiscard,
