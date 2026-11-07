@@ -771,3 +771,15 @@ historical, not an alternative live authorization path or resolved incident.
 - [ ] Integrate original interpreter inputs with the complete combined file plan,
       measured HMP dependency closure and explicit link/loader/operator/native/key
       requirements. No physical avatar or production image route is qualified.
+
+### D1 combined runtime-file checkpoint — November 7, 2026
+
+- [x] Freeze and implement closed dependency/interpreter schemas through one
+      original entry/recipe/plugin preparation and file IO owner, no fallback.
+- [x] Join all declared package/loose file metadata and original prior receipts,
+      exact shared-row deduplication, inherited counts and current module origins.
+      Independent source review accepted;632 startup checks and59 actual3.11 child
+      cases passed with unchanged source. Namespace/non-file origins refuse.
+- [ ] Qualify actual installation closure, required links, future imports and
+      OS-loaded libraries plus executed entry/operator/native/key factory. D1 is
+      file DATA only; broker acceptance/ACK/release and physical images remain open.

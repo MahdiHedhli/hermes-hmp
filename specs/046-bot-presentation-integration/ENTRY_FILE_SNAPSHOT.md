@@ -102,3 +102,33 @@ wire/plan integration, full dependency/interpreter/link/loader qualification,
 native/key factory, broker acceptance and physical image delivery remain open.
 The previously recorded e3148f2 wheel predates this source change and does not
 qualify its packaged bytes. The broader feature goal remains active.
+
+## Combined runtime-file snapshot implementation — November 7, 2026
+
+Implemented the fixed retain_runtime_files/verify_runtime_files path. It derives
+closed dependency/interpreter tables from the actual original recipe and captured
+interpreter data, then uses one original file-read owner and inherited actual
+counts. The legacy entry-only path stays explicitly separate, with no fallback.
+
+The combined path rescans plugin, entry, dependency and interpreter package trees,
+checks loose extension/library/resource files, reuses original prior receipts and
+hashes identical shared declarations once. It refuses conflicting/overlapping
+roots, private storage, changed/symlink artifacts and malformed loaded-module
+origins. Prior plugin replacement refuses before new file-body reads; callback,
+unknown-close and original counter/attempt protections remain enforced.
+
+Independent source review accepted this bounded implementation. 632 affected
+startup checks passed in 46.64s with unchanged source; 59 actual Python 3.11.15 child
+fixtures passed separately (not a full 3.11 plugin suite). This completes D1 file
+snapshot composition, not GR2/GR3 runtime admission or physical character delivery.
+Actual installation closure/operator approval, link/future-import/OS-loader
+qualification, native/key factory, broker acceptance/ACK/release and device image
+checks remain open. No host, permission, provider or device installation changed.
+
+Separately, current mobile source `56d517c` compiled an unsigned iOS release build
+2026110702 for arm64 iPhone/iPad. The release-artifact scan passed, tracked source
+stayed unchanged, and archive contents were hashed/read back. It is unsigned and
+uninstalled; it does not resolve launch/crash or host-image delivery qualification.
+Android development build 2026110702 remains uninstalled because Gemini's existing
+app uses another signing identity. The previously recorded HMP wheel predates
+this source and does not qualify its package bytes. The full goal stays active.

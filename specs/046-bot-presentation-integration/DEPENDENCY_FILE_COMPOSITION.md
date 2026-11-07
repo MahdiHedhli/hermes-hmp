@@ -1,7 +1,7 @@
 # Combined dependency-file composition before the one-shot read
 
-Status: independently reviewed requirements; wire/combined execution-plan freeze
-and implementation remain open. Not a runtime gate, authority token or
+Status: D1 combined file wire/execution is source implemented and independently
+reviewed. It remains snapshot DATA, not a runtime gate, authority token or
 completed GR2. Full desktop character delivery remains required.
 
 ## Verified current integration constraint
@@ -74,10 +74,10 @@ native library containment or executed-byte attestation claim follows.
 - Native/key factory, separate broker custody, terminal/ACK/release, installed
   Linux/Darwin, phone image delivery and release checks remain separate open tasks.
 
-Wire schema and executable closure enumeration must be frozen before production
-implementation; this contract does not pretend that a package-only decoder closes
-those requirements. The next author must implement the combined original-owner
-path rather than add a dependency-only helper that cannot be safely consumed.
+The D1 wire is frozen and consumed through the combined original-owner path.
+Actual installation closure enumeration, future-import/loader qualification and
+independent operator/native/key admission remain mandatory before production
+activation. A file snapshot does not close those requirements.
 
 ## Original inputs now available
 
@@ -85,5 +85,92 @@ EntryStartupData.interpreter retains original interpreter observations for the
 future combined plan; use its actual original entry binding, never a late runtime
 lookup as a substitute. The isolated dependency metadata census demonstrates why
 package-only tables omit standalone extension files. It is incomplete (qrcode
-absent), not an approved inventory or production qualification. Wire/plan freeze
-and combined execution remain open.
+absent), not an approved inventory or production qualification. D1 combined file
+execution is now implemented; complete runtime admission remains open.
+
+## D1 exact combined-file wire and execution
+
+A new fixed retain_runtime_files/verify_runtime_files entry path selects these
+closed child schemas; existing retain/verify remain explicitly entry-only, never
+an automatic fallback. The same complete method consumes either retained plan.
+Runtime-file success stays DATA, not complete GR2/native/key admission.
+
+Dependency document has exactly schema=1, kind=HMP_GATEWAY_DEPENDENCIES,
+generation, environment, packages, files, libraries and modules. Environment
+matches the original retained activation environment. Packages are a sorted list
+of {path, entries}; each path is a canonical strict child of that environment,
+and entries use the existing closed bounded package table. Files are sorted
+{path,size,sha256} loose artifacts under that same environment, including native
+extensions, Python files, required resources and archives. Libraries are sorted
+loose artifacts outside the environment with .dylib or .so[.digits...] filenames;
+these selected non-system library bytes are not loaded-library containment proof.
+Modules are sorted unique dotted ASCII Python import prefixes with no parent/
+child redundancy; hmp_plugin/hmp_startup are separately owned, not dependency
+prefixes. Loaded matching module files must be declared dependency artifacts;
+future import/extension/loader closure remains a separate mandatory factory gate.
+
+Interpreter document has exactly schema=1, kind=HMP_GATEWAY_INTERPRETER,
+generation, runtime, loader_policy, packages and files. Runtime has exactly paths,
+version, flags, implementation and platform; their canonical JSON types/values
+must match the original InterpreterStartupData (including bool versus int flag
+types). Loader policy matches the retained selection. Packages use the same table
+shape and must be within the originally observed stdlib directory; loose files
+must be within it or exactly the originally observed executable. The executable
+must be declared. Prefix/path membership and file observations do not attest the
+executed image or OS loader. Required symlink/hardlink artifacts still refuse
+until the separate reviewed link/target owner is implemented, without weakening
+regular-file checks or unrelated gateway functionality.
+
+All paths are canonical bounded absolute strings. No root/loose artifact may
+select private configuration storage, native Hermes checkout/configuration,
+credentials, profiles, logs or an ancestor tree containing those locations.
+The existing private-component restrictions apply; external library selection
+cannot become an arbitrary file/path route. No CLI/request supplies these tables.
+They come only from original pinned immutable recipe children under the
+independently approved operator configuration.
+
+At most32 package roots,1024 unique artifact rows after full-expectation
+deduplication and20000 total tree entries across the combined plan. Individual
+child/table declaration limits still apply before deduplication, plus existing tighter byte/path/depth limits. Compare all plugin,
+entry, dependency and interpreter roots for equality/ancestor overlap before IO.
+Full path/size/SHA identical duplicate file declarations map to one held original
+expected row and original declaration references. A previously hashed plugin row
+uses its actual original hash receipt, never a copied proof or subtracted count.
+Conflicting pins and a loose path inside a declared tree but absent from that
+tree's table refuse. Include actual prior configuration/recipe/package acquisition
+in the complete file/count/byte limit; no allowance reset for another child.
+
+The combined snapshot rescans all declared package trees, including the already
+observed plugin root, around the one new-file completion. Capture loose-file
+ancestry/metadata on both sides. Join prior plugin receipts plus new receipts to
+those exact before/after identities. Maintain one global scan-entry limit and
+original descriptor/scan cleanup records. Rejoin original entry/interpreter,
+activation, recipe, plugin, plan, attempted completion and IO allocations after
+callbacks. A strict plan remains distinguishable from an entry-only snapshot in
+its actual original typed inputs, not a caller-supplied qualified flag.
+
+Acceptance must cover strict positive multi-root and loose-extension/resource/
+library snapshots, actual prior receipt reuse, conflicts/overlaps/private paths,
+all schema/type/generation/runtime mismatches, missing/extra/symlink/changed and
+same-byte inode replacements, malformed loaded-module provenance, aggregate
+exhaustion, stale/revoked/wrong context and no IO after copied attempt/refusal.
+Production activation remains forbidden without remaining original factory,
+future imports/OS-loader, broker/ACK/release and physical qualification joins.
+
+## Source qualification checkpoint
+
+37 strict child fixtures cover actual temporary package trees and loose artifacts,
+original prior plugin receipt reuse, full-expectation deduplication, missing/extra/
+changed and same-byte replacement, executable/library links, cross-document
+root overlap, private storage, namespace/name/spec/search/loader drift, exact
+combined file/byte limits, copied counters, final-context drift and unknown scans.
+Fake interpreter/extension/bytecode/archive bytes are never executed and do not
+attest the real OS image or loader. Prior plugin metadata is checked before new
+file-body reads. Namespace and non-file dependency origins refuse explicitly.
+
+Full affected startup scope:632 passed in 46.64s, source hashes unchanged.59 actual
+Python 3.11.15 child fixtures (22 legacy entry +37 strict combined) passed separately;
+this is not the full 3.11 plugin suite. Independent source review accepted D1.
+No keys, image route, actual native startup, host deployment or physical image
+qualification follows. Necessary links, actual closure/operator approval,
+future imports/loaded-library policy and original native/key factory remain open.

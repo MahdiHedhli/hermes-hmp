@@ -69,6 +69,7 @@ class _Inputs(NamedTuple):
     files: tuple
     wrapper: ExpectedArtifact
     completion_attempt: tuple
+    runtime_plan: object
     io_slot: list
     scans: list
 
@@ -121,8 +122,25 @@ class EntryFileSnapshotOwner:
         return EntryFileSnapshotOwner.complete(EntryFileSnapshotOwner.retain(entry, recipe, plugin))
 
     @classmethod
+    def verify_runtime_files(cls, entry, recipe, plugin):
+        _require(cls is EntryFileSnapshotOwner)
+        return EntryFileSnapshotOwner.complete(
+            EntryFileSnapshotOwner.retain_runtime_files(entry, recipe, plugin))
+
+    @classmethod
+    def retain_runtime_files(cls, entry, recipe, plugin):
+        _require(cls is EntryFileSnapshotOwner)
+        return EntryFileSnapshotOwner._retain(entry, recipe, plugin, True)
+
+    @classmethod
     def retain(cls, entry, recipe, plugin):
-        """Retain original entry inputs before allocating/completing any file IO."""
+        """Entry-only compatibility path; never a complete runtime snapshot."""
+        _require(cls is EntryFileSnapshotOwner)
+        return EntryFileSnapshotOwner._retain(entry, recipe, plugin, False)
+
+    @classmethod
+    def _retain(cls, entry, recipe, plugin, runtime_files):
+        _require(type(runtime_files) is bool)
         _require(cls is EntryFileSnapshotOwner and type(entry) is GatewayEntryOwner
                  and type(recipe) is GatewayRecipeOwner and type(plugin) is GatewayPackageOwner)
         try:
@@ -159,9 +177,13 @@ class EntryFileSnapshotOwner:
         try:
             raw = rb[4][3][2][1]
             root, entries, files, wrapper = _decode(raw, eb, rb)
+            plan = None
+            if runtime_files:
+                from .runtime_files import build_runtime_plan
+                plan = build_runtime_plan(eb, rb, pb, root, entries, files, wrapper)
             owner._inputs = inputs = _Inputs(entry, eb, recipe, rb, plugin, pb, raw,
                                              root, entries, files, wrapper,
-                                             (owner, eb, rb, pb), [None], [])
+                                             (owner, eb, rb, pb), plan, [None], [])
             owner._root_cell = cell = (owner, inputs)
             activation._entry_files_cell = cell
             EntryFileSnapshotOwner._current(owner)
@@ -178,11 +200,15 @@ class EntryFileSnapshotOwner:
                  and owner._unknown is False and owner._completing is False
                  and type(owner._inputs) is _Inputs)
         inputs, cell = owner._inputs, owner._root_cell
-        EntryFileSnapshotOwner._pure_current(owner, inputs, cell)
-        _require(type(inputs.io_slot) is list and len(inputs.io_slot) == 1
-                 and inputs.io_slot[0] is None and owner._fact_cell is None
-                 and owner._attempt_cell is None
-                 and inputs.recipe_binding[0].activation._entry_files_attempt_cell is None)
+        try:
+            EntryFileSnapshotOwner._pure_current(owner, inputs, cell)
+            _require(type(inputs.io_slot) is list and len(inputs.io_slot) == 1
+                     and inputs.io_slot[0] is None and owner._fact_cell is None
+                     and owner._attempt_cell is None
+                     and inputs.recipe_binding[0].activation._entry_files_attempt_cell is None)
+        except BaseException:
+            owner._failed = True
+            raise EntryFilesError(owner) from None
         owner._completing = True  # intent before fresh native/context/file effects
         attempt = inputs.completion_attempt
         owner._attempt_cell = attempt
@@ -192,33 +218,58 @@ class EntryFileSnapshotOwner:
         try:
             EntryFileSnapshotOwner._current(owner)
             files, wrapper = inputs.files, inputs.wrapper
-            root, entries = inputs.root, inputs.entries
-            plugin = inputs.plugin
-            expected = files if any(row is wrapper for row in files) else (*files, wrapper)
+            plugin, plan = inputs.plugin, inputs.runtime_plan
+            if plan is None:
+                expected = files if any(row is wrapper for row in files) else (*files, wrapper)
+                packages = ((inputs.root, inputs.entries),)
+                loose, prior, dependency_origins = (wrapper,), (), None
+            else:
+                from .runtime_files import loaded_origins
+                expected = plan.pending
+                packages = tuple((row.path, row.entries) for row in plan.packages)
+                loose, prior = plan.loose, plan.prior
+                dependency_origins = loaded_origins(plan)
             io = StartupArtifactOwner.retain_from_package(plugin, expected)
             inputs.io_slot[0] = io
-            before = EntryFileSnapshotOwner._tree(owner, io)
-            _require(before.entries == entries)
-            wrapper_before = EntryFileSnapshotOwner._metadata(owner, io, wrapper.path)
+            before = tuple((root, EntryFileSnapshotOwner._tree(owner, io, root))
+                           for root, _ in packages)
+            _require(all(tree.entries == entries for (_, tree), (_, entries)
+                         in zip(before, packages, strict=True)))
+            loose_before = tuple((row.path, EntryFileSnapshotOwner._metadata(owner, io, row.path))
+                                 for row in loose)
+            if prior:
+                prior_metadata = {root + '/' + path: identity for root, tree in before
+                                  for path, identity in tree.files}
+                for path, value in loose_before:
+                    _require(path not in prior_metadata or prior_metadata[path] == value[0])
+                    prior_metadata[path] = value[0]
+                _require(all(prior_metadata[row.expected.path] == row.identity for row in prior))
             EntryFileSnapshotOwner._io_current(owner, io)
             StartupArtifactOwner.complete(io)
             file_fact = io._fact_cell
-            after = EntryFileSnapshotOwner._tree(owner, io)
+            after = tuple((root, EntryFileSnapshotOwner._tree(owner, io, root))
+                          for root, _ in packages)
             _require(before == after and type(file_fact) is tuple and len(file_fact) == 4)
-            wrapper_after = EntryFileSnapshotOwner._metadata(owner, io, wrapper.path)
-            _require(wrapper_before == wrapper_after)
-            metadata = dict(after.files)
+            loose_after = tuple((row.path, EntryFileSnapshotOwner._metadata(owner, io, row.path))
+                                for row in loose)
+            _require(loose_before == loose_after)
+            metadata = {root + '/' + path: identity for root, tree in after
+                        for path, identity in tree.files}
+            for path, value in loose_after:
+                _require(path not in metadata or metadata[path] == value[0])
+                metadata[path] = value[0]
             for receipt in file_fact[2]:
                 _require(type(receipt) is _HashedArtifact and receipt.owner is io
                          and receipt.scope is io._origin)
-                if receipt.expected is wrapper:
-                    _require(receipt.identity == wrapper_after[0])
-                if receipt.expected.path.startswith(root + "/"):
-                    relative = receipt.expected.path[len(root) + 1:]
-                    _require(metadata[relative] == receipt.identity)
+            for receipt in (*prior, *file_fact[2]):
+                _require(type(receipt) is _HashedArtifact
+                         and metadata[receipt.expected.path] == receipt.identity)
             origins = EntryFileSnapshotOwner._origins(owner)
             _require(_same_origins(origins, EntryFileSnapshotOwner._origins(owner)))
             EntryFileSnapshotOwner._io_current(owner, io)
+            if plan is not None:
+                _require(_same_origins(dependency_origins, loaded_origins(plan)))
+                EntryFileSnapshotOwner._pure_current(owner, inputs, cell)
             _require(owner._inputs is inputs and owner._root_cell is cell
                      and io._fact_cell is file_fact and activation._artifact_fact_cell is file_fact
                      and io._hashes is file_fact[2] and io._count_cell is file_fact[3]
@@ -230,7 +281,9 @@ class EntryFileSnapshotOwner:
                      and owner._fact_cell is None and activation._entry_files_fact_cell is None
                      and owner._completing is True and owner._attempt_cell is attempt
                      and activation._entry_files_attempt_cell is attempt)
-            fact = (owner, inputs, io, file_fact, after, origins)
+            snapshot = after[0][1] if plan is None else after
+            origin_snapshot = origins if plan is None else (origins, dependency_origins)
+            fact = (owner, inputs, io, file_fact, snapshot, origin_snapshot)
             owner._fact_cell = activation._entry_files_fact_cell = fact
             owner._ready = True
             return owner
@@ -274,6 +327,10 @@ class EntryFileSnapshotOwner:
                  and activation._entry_files_owner is self and activation._entry_files_cell is cell
                  and self._failed is False and self._unknown is False)
 
+        if inputs.runtime_plan is not None:
+            from .runtime_files import plan_current
+            plan_current(inputs.runtime_plan, inputs.entry_binding,
+                         inputs.recipe_binding, inputs.plugin_binding)
         original_attempt = inputs.completion_attempt
         _require(type(original_attempt) is tuple and len(original_attempt) == 4
                  and original_attempt[0] is self and original_attempt[1] is inputs.entry_binding
@@ -340,13 +397,18 @@ class EntryFileSnapshotOwner:
                     scan.unknown = self._unknown = True
                     raise
 
-    def _tree(self, io):
+    def _tree(self, io, root=None):
         inputs = EntryFileSnapshotOwner._io_current(self, io)
+        if root is None:
+            root = inputs.root
+        _require(type(root) is str and (root is inputs.root or
+                 (inputs.runtime_plan is not None
+                  and any(root is row.path for row in inputs.runtime_plan.packages))))
         s, root_cell = io._origin, io._root_cell
         held, ancestors, entries, files, directories = [], [], [], [], []
         try:
             parent = None
-            for name in ("/", *inputs.root[1:].split("/")):
+            for name in ("/", *root[1:].split("/")):
                 row, fd = StartupArtifactOwner._open(io, name, parent, True)
                 held.append((row, fd))
                 info = StartupArtifactOwner._fstat(io, fd, s)
