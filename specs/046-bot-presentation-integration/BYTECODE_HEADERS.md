@@ -36,3 +36,11 @@ Tests use synthetic headers and never execute those bytecode payloads. Actual
 artifact fixtures cover split reads, empty/short headers and unchanged aggregate
 byte counts; composed fixtures cover original continuation/magic and format
 refusals. Independent bounded source review accepted this scope.
+
+## Interpreter cache-policy qualification
+
+[PEP552](https://peps.python.org/pep-0552/) defines hash-based cache behavior and
+--check-hash-based-pycs default/always/never. Header classification does not
+qualify that effective setting. The remaining actual runtime policy must bind
+its original interpreter setting and every permitted source/cache candidate;
+it must not assume that checked-hash header flags force source validation.
