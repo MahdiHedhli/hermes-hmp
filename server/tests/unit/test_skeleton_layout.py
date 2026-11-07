@@ -68,6 +68,7 @@ CONTRACT_MODULES = {
     # Reviewed role-credential source components; no production listener/admission.
     "presentation_credential_codec.py",
     "presentation_credential_files.py",
+    "presentation_gateway_activation.py",
     "presentation_credential_handshake.py",
     "presentation_credential_phase.py",
     "presentation_credential_scope.py",

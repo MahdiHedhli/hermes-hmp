@@ -5,6 +5,10 @@
 See [paired startup composition](PAIRED_STARTUP_COMPOSITION.md). These are HMP
 implementation tasks, not an established upstream Hermes blocker.
 
+- [x] PS1 observation prerequisite: retain original early bootstrap/PM/import-origin
+      DATA with no selection query, sticky partial ownership and callback/late-import
+      fences;25 isolated synthetic cases plus308 layout/import checks pass.
+      This does not complete PS1 admission/native composition.
 - [ ] PS1: original gateway startup owner, actual activated PM generation/HMP
       entry binding, native observation/drain composition and gateway-only key custody.
 - [ ] PS2: independently selected isolated broker runtime/parser/worker and

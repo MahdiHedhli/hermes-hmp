@@ -11,6 +11,11 @@ The reviewed next installed-startup/acceptance contract is
 in TASKS.md. These are unimplemented HMP composition tasks, not an established
 upstream API blocker or permission to promote the synthetic bootstrap verifier.
 
+The PS1 activation observation prerequisite is implemented as source only in
+`presentation_gateway_activation.py`; it queries no PM selection and grants no
+inventory/native admission. The trusted entry, factory and native composition
+remain open; see the paired-startup contract for current evidence and limits.
+
 ## Decision and preserved boundaries
 
 Use independently installed, per-instance asymmetric role credentials to

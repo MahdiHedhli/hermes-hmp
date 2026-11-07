@@ -1,3 +1,28 @@
+## Original gateway activation observation — November 7, 2026
+
+PS1 now has a retained early activation/import-origin observation owner. It reads
+the actual bootstrap/PM module objects and activation path prefix without calling
+selection/activation APIs or substituting a newer committed environment. One
+partial owner is retained before observation; failed/late acquisition cannot be
+restarted. Original entry/scope, module/spec/file/function/code, path-list and
+process/uid/thread fences reject drift, including coherent scope replacement
+during a native context callback. PM file primitives are validated before equality;
+a gateway import appearing during capture prevents sealing.
+
+This is observed DATA for the fixed startup factory, not proof that bootstrap
+executed, possession of the original PM lease, admitted runtime inventory, key
+custody or native acceptance. Future imports still require independent inventory
+validation. The factory must establish trusted entry/control-flow and compose the
+native observation/drain service before PS1 is complete. No route/deployment or
+physical character display is enabled.
+
+Independent read-only review accepted the final component.25 isolated synthetic
+interpreter cases plus308 layout/import checks passed (333 total in3.43s). The
+children received only LANG/LC_ALL; no native profile, credential, host traffic,
+key acquisition or activation/selection API was used. These checks are not actual
+Hermes runtime or device qualification. Earlier unexplained regression failures
+and sender-destination incident remain open; the broader goal remains active.
+
 ## Installed-startup acceptance critical path — November 7, 2026
 
 Source review identified the remaining character-image admission prerequisite as

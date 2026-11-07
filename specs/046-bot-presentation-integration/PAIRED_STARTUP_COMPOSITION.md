@@ -52,6 +52,16 @@ Use minimum native version and required API capability checks. A recorded Hermes
 commit is diagnostic; no tested-commit equality/allowlist is admission policy.
 Installation integrity of HMP/the separate broker is a distinct boundary.
 
+### Current source prerequisite
+
+`server/hmp_plugin/presentation_gateway_activation.py` now retains early observed
+activation/import DATA, with one partial entry allocation before observation and
+no caller-supplied generation/module map. The fixed trusted entry is not wired;
+this component does not prove native bootstrap executed, verify admitted files,
+possess its original PM lease or compose native/key owners.25 isolated synthetic
+interpreter cases and308 layout/import checks pass; source review accepted the
+component. The full PS1 factory and actual native startup qualification remain open.
+
 ### Fixed capture interface and uncertainty
 
 Implement a fixed trusted gateway entry function, before listener creation, that
