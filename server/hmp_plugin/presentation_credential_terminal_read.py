@@ -37,6 +37,7 @@ from .presentation_terminal_claim import (
     _values,
     claim_binding,
     decode_handoff,
+    encode_handoff,
 )
 
 _RECV = socket.socket.recv
@@ -122,6 +123,7 @@ class NativeTerminalReceiver:
         owner._auth_allocation_origin = owner._frame_allocation_origin = None
         owner._frame = owner._frame_cell = owner._fact = owner._fact_cell = None
         owner._frame_done = owner._frame_done_cell = None
+        owner._fact_origin = owner._fact_cell_origin = None
         body._terminal_reader = body._terminal_reader_origin = owner
         body._terminal_reader_cell = (body, owner)
         failed = False
@@ -549,8 +551,11 @@ class NativeTerminalReceiver:
             fact = _Fact(self, s, data, handoff, self._received)
             _require(type(fact) is _Fact and fact.owner is self and fact.scope is s
                      and fact.frame is data and fact.handoff is handoff
+                     and type(self._received) is int and type(self._received_origin) is int
+                     and self._received is self._received_origin
                      and type(fact.received) is int and fact.received == self._received)
-            self._fact, self._fact_cell = fact, (self, fact)
+            self._fact = self._fact_origin = fact
+            self._fact_cell = self._fact_cell_origin = (self, fact)
             fact_cell = self._fact_cell
             NativeTerminalReceiver._tail(self, s)
             _require(self._fact is fact and self._fact_cell is fact_cell
@@ -565,7 +570,7 @@ class NativeTerminalReceiver:
                 NativeTerminalReceiver._settled(self)
             except BaseException:
                 self._unknown = True
-            self._fact = self._fact_cell = None
+            self._fact = self._fact_origin = self._fact_cell = self._fact_cell_origin = None
             for allocation, cls, wipe in (
                 (original_auth_cell, SignedCleanupAuthPrefix, SignedCleanupAuthPrefix._wipe_owned),
                 (original_frame_cell, CommittedFrameDiscard, CommittedFrameDiscard._fail),
@@ -604,6 +609,45 @@ class NativeTerminalReceiver:
         if failed:
             raise FrameError("BI1_NORMAL_TERMINAL_RECEPTION_UNKNOWN") from None
         return self._fact
+
+    def current_correlation(self):
+        """Original work actor's resealed DATA; never native acceptance or ACK authority."""
+        _require(type(self) is NativeTerminalReceiver and type(self._scope_origin) is _Scope)
+        s = self._scope_origin
+        NativeResultBodyOwner._actor(s.body)  # a foreign task cannot invalidate the owner
+        fact = cell = wire = None
+        failed = False
+        try:
+            fact, cell = self._fact_origin, self._fact_cell_origin
+            _require(self._complete is True and self._active is False
+                     and type(fact) is _Fact and self._fact is fact
+                     and type(cell) is tuple and len(cell) == 2
+                     and cell[0] is self and cell[1] is fact and self._fact_cell is cell
+                     and fact.owner is self and fact.scope is s
+                     and fact.frame is self._frame_done
+                     and type(self._received) is int and type(self._received_origin) is int
+                     and self._received is self._received_origin
+                     and type(fact.received) is int and fact.received == self._received
+                     and type(fact.handoff) is TerminalHandoff)
+            _require(NativeTerminalReceiver._current(self) is s
+                     and self._fact is fact and self._fact_origin is fact
+                     and self._fact_cell is cell and self._fact_cell_origin is cell)
+            wire = encode_handoff(fact.handoff.claim, fact.handoff.cleanup)
+            _require(type(wire) is bytes and wire == fact.frame.terminal)
+            NativeTerminalReceiver._settled(self)
+            _require(NativeTerminalReceiver._current(self) is s
+                     and self._fact is fact and self._fact_origin is fact
+                     and self._fact_cell is cell and self._fact_cell_origin is cell)
+            return fact
+        except BaseException:
+            self._failed = failed = True
+            self._complete = False
+            self._fact = self._fact_origin = self._fact_cell = self._fact_cell_origin = None
+            NativeResultBodyOwner.wipe(s.body)
+        finally:
+            fact = cell = wire = None
+        if failed:
+            raise FrameError("BI1_NORMAL_TERMINAL_CORRELATION_REFUSED") from None
 
     def require_released(self, body):
         _require(

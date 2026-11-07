@@ -122,6 +122,9 @@ _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
                                   "go_relay_result_sign_write_body_terminal_finalkey",
                                   "go_relay_result_sign_write_body_terminal_frameswap",
                                   "go_relay_result_sign_write_body_terminal_finishswap",
+                                  "go_relay_result_sign_write_body_terminal_factpair",
+                                  "go_relay_result_sign_write_body_terminal_factcallback",
+                                  "go_relay_result_sign_write_body_terminal_factcounter",
                                   "go_relay_result_sign_write_body_adopt_capture_phase",
                                   "go_relay_result_sign_write_body_adopt_notice",
                                   "go_relay_result_sign_write_body_adopt_notice_actors",
@@ -360,16 +363,20 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         )
     )
     body_stage = stage.startswith("go_relay_result_sign_write_body")
-    body_fault = body_terminal_fault or (
-        body_stage
-        and not body_terminal
-        and "_body_adopt" not in stage
-        and stage
-        not in (
-            "go_relay_result_sign_write_body",
-            "go_relay_result_sign_write_body_adopt",
-            "go_relay_result_sign_write_body_wrong_actor",
-            "go_relay_result_sign_write_body_avatar",
+    body_fault = (
+        (body_terminal and stage.endswith(("_factpair", "_factcallback", "_factcounter")))
+        or body_terminal_fault
+        or (
+            body_stage
+            and not body_terminal
+            and "_body_adopt" not in stage
+            and stage
+            not in (
+                "go_relay_result_sign_write_body",
+                "go_relay_result_sign_write_body_adopt",
+                "go_relay_result_sign_write_body_wrong_actor",
+                "go_relay_result_sign_write_body_avatar",
+            )
         )
     )
     adopted_key_retirement = stage in (
@@ -2328,6 +2335,44 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                         raise
                     raise AssertionError("normal terminal fault escaped")
                 terminal_fact = await reader.receive()
+                async def wrong_correlation_actor():
+                    with pytest.raises(FrameError):
+                        reader.current_correlation()
+                await asyncio.create_task(wrong_correlation_actor())
+                assert not reader._failed and reader._complete
+                assert reader.current_correlation() is terminal_fact
+                if stage.endswith(("_factpair", "_factcallback", "_factcounter")):
+                    if stage.endswith("_factpair"):
+                        reader._fact = nr._Fact(*terminal_fact)
+                        reader._fact_cell = (reader, reader._fact)
+                    elif stage.endswith("_factcounter"):
+                        class ForeignNormalCount:
+                            def __eq__(self, other):
+                                foreign_terminal_calls.append("counter equality")
+                                raise AssertionError("foreign counter equality")
+
+                        reader._received = reader._received_origin = ForeignNormalCount()
+                    else:
+                        actual_hash = nr._SHA256
+
+                        def replace_correlation_during_current(value):
+                            result = actual_hash(value)
+                            reader._fact = reader._fact_origin = nr._Fact(*terminal_fact)
+                            reader._fact_cell = reader._fact_cell_origin = (reader, reader._fact)
+                            held["normal_fact_callback_replaced"] = True
+                            return result
+
+                        monkeypatch.setattr(nr, "_SHA256", replace_correlation_during_current)
+                    with pytest.raises(FrameError):
+                        reader.current_correlation()
+                    if stage.endswith("_factcallback"):
+                        assert held["normal_fact_callback_replaced"]
+                    assert foreign_terminal_calls == []
+                    assert reader._failed and not reader._complete
+                    assert reader._fact is None and body._candidate_snapshot is None
+                    assert body._scope_origin.job.result is None
+                    held["normal_terminal_refused"] = True
+                    raise FrameError("synthetic paired correlation replacement")
                 held["normal_terminal_fact"] = terminal_fact
                 if stage.endswith("_wait"):
                     assert held["normal_terminal_waited"]

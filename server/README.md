@@ -1,3 +1,27 @@
+## Completion DATA consumer custody — November 7, 2026
+
+The normal receiver now exposes `current_correlation()` only to its original work
+actor. It rejoins the independently retained original fact/allocation, original
+frame/count and exact canonical terminal handoff bytes, then reseals current
+role/key/custody and readiness settlement. A foreign task cannot invalidate the
+owner. Paired replacement of the primary fact and cell refuses and wipes the
+private candidate; no comparison of matching values restores provenance.
+
+This supplies a validated DATA input for the future independently qualified native
+acceptance contract. It does not qualify a producer/receiver, accept native closure,
+send ACK, release journal/native credit or publish an image. Physical delivery and
+the earlier unexplained reader refusals remain unqualified/unresolved.
+
+Verification:11 focused normal terminal cases passed in9.52s, including wrong
+actor, coherent fact/origin replacement during currentness and a Foreign counter
+comparison trap (zero calls). Independent review required/fixed both preflight
+ordering and primitive fences. Earlier pre-fix expanded run:2,122 passed,1 skipped
+in226.23s. Post-ordering/pre-counter-fence expanded run:1 failed,2,122 passed,
+1 skipped in218.33s; source unchanged. The existing signed-control native notice
+retirement case observed a pending waiter instead of completed notification. It
+passed isolated, but the combined cause remains unproven; this is not a green
+final-source full-suite qualification. No production deadline/guard was relaxed.
+
 ## Normal completion receiver checkpoint — November 7, 2026
 
 The original gateway work task now owns a one-shot signed TERMINAL receiver on

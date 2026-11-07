@@ -2,6 +2,9 @@
 
 ## Current envelope stop preparation
 
+- [x] Reseal completed normal correlation DATA through original fact/allocation,
+      canonical original terminal bytes and current actor/key/custody before consumer use.
+
 - [x] Add pre-adoption original-task normal terminal DATA reception, owned readiness,
       original parser/credit provenance, candidate withdrawal and I/O-debt preservation.
 - [ ] Complete native terminal acceptance, signed ACK and native resource release;
