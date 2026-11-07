@@ -15,7 +15,11 @@ from .presentation_startup_artifacts import (
     _expected,
     _Scope,
 )
-from .presentation_startup_selection import GatewayStartupSelection, StartupSelectionOwner
+from .presentation_startup_selection import (
+    GatewayStartupSelection,
+    StartupSelectionOwner,
+    _approved_recipe,
+)
 
 _RECIPE_LIMIT = 65536
 _CHILD_LIMIT = 8 * 1024 * 1024
@@ -107,6 +111,9 @@ class GatewayRecipeOwner:
             selected = StartupSelectionOwner.retained_data(configuration)
         except BaseException:
             raise GatewayRecipeError from None
+        approval = _approved_recipe(configuration)
+        _require(approval is None or (recipe_schema == approval.recipe_schema
+                 and type(recipe_size) is int and recipe_size == approval.recipe_size))
         _require(parent is origin and type(selected) is GatewayStartupSelection
                  and type(selected.schema) is int
                  and selected.schema == 2 and type(recipe_size) is int
@@ -209,6 +216,9 @@ class GatewayRecipeOwner:
                          and row.close_attempted is True and row.unknown is False
                          for row in s.records))
         parent = StartupSelectionOwner._retained_binding(s.expected.configuration)
+        approval = _approved_recipe(s.expected.configuration)
+        _require(approval is None or (s.expected.recipe_schema == approval.recipe_schema
+                 and s.expected.expected.size == approval.recipe_size))
         _require(parent[0] is s.expected.configuration_scope
                  and parent[3] is s.expected.configuration_cell
                  and parent[3][2] is s.expected.selection)
@@ -265,7 +275,7 @@ class GatewayRecipeOwner:
                  and self._ready is False and self._fact_cell is None
                  and s.activation._recipe_fact_cell is None
                  and type(self._bytes_read) is int
-                 and 0 <= self._bytes_read <= _TOTAL_LIMIT + 65536)
+                 and 0 <= self._bytes_read <= _TOTAL_LIMIT + 65536 + 4096)
         _require(type(s.expected) is _Recipe and type(s.expected.recipe_schema) is int
                  and s.expected.recipe_schema in (1, 2))
         plan_cell = self._plan_cell
@@ -289,6 +299,9 @@ class GatewayRecipeOwner:
                  and self._ready is False and self._fact_cell is None
                  and s.activation._recipe_fact_cell is None)
         parent = StartupSelectionOwner._retained_binding(s.expected.configuration)
+        approval = _approved_recipe(s.expected.configuration)
+        _require(approval is None or (s.expected.recipe_schema == approval.recipe_schema
+                 and s.expected.expected.size == approval.recipe_size))
         _require(parent[0] is s.expected.configuration_scope
                  and parent[3] is s.expected.configuration_cell
                  and type(self._bytes_read) is int

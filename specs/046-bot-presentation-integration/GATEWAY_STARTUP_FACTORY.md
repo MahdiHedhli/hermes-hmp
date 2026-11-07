@@ -1,6 +1,7 @@
 # Fixed gateway startup-to-listener composition
 
-Status: next PS1 implementation contract; not implemented, installed or admitted.
+Status: PS1-ANCHOR source implemented/reviewed; the complete startup factory,
+runtime policy, listener/native/key admission and installed use remain unfinished.
 This preserves PAIRED_STARTUP_COMPOSITION.md and CREDENTIAL_ADMISSION.md. It is an
 HMP-owned integration task, not an established upstream blocker.
 
@@ -14,7 +15,8 @@ installation root from installed startup configuration, never profile/media data
 Do not add a public qualified flag, caller-supplied verifier callback or manifests
 to the listener binding interface.
 
-A bounded no-follow private approval-record loader is required first. It must bind
+The bounded no-follow private approval-record loader is source implemented in
+[OPERATOR_APPROVAL.md](OPERATOR_APPROVAL.md). It binds
 the exact selection size/SHA/schema independently of the inventoried entry/recipe.
 Do not put the selection hash inside a wrapper whose hash that selection transitively
 pins: this creates circular commitments. Installation-root selection is a trusted
@@ -73,9 +75,8 @@ credit release remain separate requirements before fresh PRE_EMIT publication.
   separate. Test success in one stage must not complete those rows.
 
 Independent read-only architecture review identified these concrete prerequisites
-on November 7, 2026. The next source task is the approved root contract below and approval-anchor
-loader, followed by actual loader-policy enforcement and listener
-binding. Do not collapse them into a generic callback-based factory.
+on November 7, 2026. The remaining source tasks are actual loader-policy enforcement and listener
+binding after the approved root/anchor loader below. Do not collapse them into a generic callback-based factory.
 
 ## Selected installation-root contract
 
@@ -85,12 +86,12 @@ used by HMP identity, with the fixed suffix plugin-data/hmp/presentation/gateway
 Capture original API module/function/code and canonical root before file effects;
 changed API/root refuses rather than recapturing. Traverse the suffix descriptor-
 relative with no-follow ownership/write checks. The fixed private leaf
-gateway-approval.json selects schema2, size and SHA for the fixed sibling
-gateway-startup.json; no document-supplied path is permitted. The approval record is the explicitly
+gateway-approval.json pins selection schema2, size and SHA for the fixed sibling
+gateway-startup.json, plus explicit recipe schema1 or2 and recipe size; no document-supplied path is permitted. The approval record is the explicitly
 operator-installed trust anchor, not a hash generated from served data.
 
 Join its selected IID and root to actual listener identity in the later factory.
 Loading never creates identity, directories, approval records or credentials, and
 never mutates native selection, grants or configuration. This source decision
-is not permission to read/modify installed private files. PS1-ANCHOR coding can
-proceed using isolated fixtures; runtime/loader/listener admission remains open.
+is not permission to read/modify installed private files. PS1-ANCHOR source and isolated fixtures are complete; runtime/loader/listener
+admission remains open.

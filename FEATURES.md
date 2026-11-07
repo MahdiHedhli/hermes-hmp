@@ -1,3 +1,31 @@
+## Fixed operator approval loader — November 7, 2026
+
+The startup path now derives an independent private approval anchor from the
+original native default-instance root API. It captures the native module/function/
+code/origin/loader before calling that API, joins them to the original activation
+root, and refuses callback drift or lookalike origins before file IO. It reads
+only the fixed gateway-approval.json through descriptor-relative no-follow
+traversal, private owner/mode checks, bounded actual reads, known closure and
+original allocation/counter/ledger joins. Loading never creates directories,
+identity, approval records or keys, and never reads an installed live home here.
+
+The canonical operator record pins the fixed sibling schema2 selection size/SHA
+and recipe size/schema. The selection loader accepts that original approval and
+inherits its actual byte count; subsequent recipe/package/runtime plans retain
+both original configuration file rows and counts. Current same-context root/API/
+copy failures latch permanently; wrong-thread queries refuse without retiring the
+original owner. Unknown reads/closes, foreign facts and replacements do not retry.
+
+This is source-only startup selection work. It is not runtime/import-policy,
+listener/native/key/broker admission, host activation or physical character display.
+PS1-LOADER, PS1-LISTENER, PS1-KEYS and terminal/ACK/PRE_EMIT remain required.
+
+849 combined startup/import-boundary checks passed on the current interpreter.
+Independent bounded source review accepted the final origin, parent-prefix and
+recipe-variant/size repairs. 122 actual Python 3.11.15 child fixtures also pass,
+with unchanged source; this is not the full floor suite. Installed-runtime evidence
+remains separate. See specs/046-bot-presentation-integration/OPERATOR_APPROVAL.md.
+
 ## Executable-link candidate packaging verified — November 7, 2026
 
 Built exact HMP source `bd39d95b2c057e759df4582095ca5d6d1e942de2` using the cached pinned build tools.

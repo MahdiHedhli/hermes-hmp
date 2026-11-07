@@ -20,8 +20,9 @@ See [selected executable link contract](EXECUTABLE_LINK_SNAPSHOT.md). All four b
 
 See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
 
-- [ ] **PS1-ANCHOR** Freeze trusted installer/entry root selection and implement
+- [x] **PS1-ANCHOR** Freeze trusted installer/entry root selection and implement
       independent private approval-anchor loader, avoiding circular hash approval.
+      Source/review and original-prefix composed tests complete; see OPERATOR_APPROVAL.md.
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
 - [ ] **PS1-LISTENER** Bind original admitted startup to actual listener/native owner,

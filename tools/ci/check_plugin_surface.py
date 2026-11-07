@@ -220,13 +220,17 @@ class _ModuleScanner(ast.NodeVisitor):
         if root == "hmp_startup":
             local_types = {
                 "hmp_startup.entry_files": {"EntryFileSnapshotOwner"},
+                "hmp_startup.gateway_approval": {"GatewayApprovalOwner"},
                 "hmp_startup.runtime_files": {"ExecutableLinkPlan", "RuntimeFilePlan"},
             }
             if (
-                self.name == "presentation_startup_artifacts.py"
+                self.name in (
+                    "presentation_startup_artifacts.py", "presentation_startup_selection.py")
                 and self._function_depth > 0
                 and names
                 and set(names) <= local_types.get(module, set())
+                and (self.name == "presentation_startup_artifacts.py"
+                     or module == "hmp_startup.gateway_approval")
             ):
                 return
             self._add(

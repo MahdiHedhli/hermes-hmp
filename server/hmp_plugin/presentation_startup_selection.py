@@ -96,6 +96,38 @@ def _decode(raw, directory, schema):
         document["loader_policy"], directory, schema)
 
 
+class _ApprovedSelectionSource(NamedTuple):
+    owner: object
+    binding: tuple
+
+    def __repr__(self):
+        return "<OriginalOperatorApprovalSource redacted>"
+
+
+def _approval_binding(source, current=False):
+    from hmp_startup.gateway_approval import GatewayApprovalOwner
+
+    _require(type(source) is _ApprovedSelectionSource
+             and type(source.owner) is GatewayApprovalOwner)
+    actual = (GatewayApprovalOwner.current_binding(source.owner) if current
+              else GatewayApprovalOwner._retained_binding(source.owner))
+    _require(type(source.binding) is tuple and len(source.binding) == len(actual) == 4
+             and all(a is b for a, b in zip(source.binding, actual, strict=True)))
+    return actual
+
+
+def _approved_recipe(configuration):
+    scope = StartupSelectionOwner._retained_binding(configuration)[0]
+    return None if scope.parent is None else _approval_binding(scope.parent)[3][2]
+
+
+def _configuration_rows(configuration):
+    scope = StartupSelectionOwner._retained_binding(configuration)[0]
+    if scope.parent is None:
+        return scope.expected
+    return (_approval_binding(scope.parent)[3][5], *scope.expected)
+
+
 class StartupSelectionOwner:
     @classmethod
     def load(cls, activation, expected):
@@ -110,29 +142,48 @@ class StartupSelectionOwner:
         return StartupSelectionOwner._load(activation, expected, 2)
 
     @classmethod
-    def _load(cls, activation, expected, schema):
+    def load_operator_selection(cls, approval):
+        """Use only the original fixed-root operator approval; no caller expectations."""
+        from hmp_startup.gateway_approval import GatewayApprovalOwner
+
+        _require(cls is StartupSelectionOwner and type(approval) is GatewayApprovalOwner)
+        binding = GatewayApprovalOwner.current_binding(approval)
+        source = _ApprovedSelectionSource(approval, binding)
+        return StartupSelectionOwner._load(
+            binding[0].activation, binding[3][2].selection, 2, source)
+
+    @classmethod
+    def _load(cls, activation, expected, schema, approval=None):
         _require(type(schema) is int and schema in (1, 2))
         _require(cls is StartupSelectionOwner and type(activation) is GatewayActivationOwner)
         _require(activation._selection_owner is None and activation._selection_cell is None
                  and activation._selection_fact_cell is None)
+        prefix = 0
+        if approval is not None:
+            approved = _approval_binding(approval, True)
+            _require(approved[0].activation is activation
+                     and expected is approved[3][2].selection and schema == 2)
+            prefix = approved[3][3][2]
         GatewayActivationOwner.current(activation)
+        _require(activation._selection_owner is None and activation._selection_cell is None
+                 and activation._selection_fact_cell is None)
         owner = cls.__new__(cls)
         activation._selection_owner = owner  # before parsing or descriptor effects
         owner._ready = owner._failed = owner._unknown = owner._reading = False
-        owner._bytes_read = 0
+        owner._bytes_read = prefix
         owner._selection = owner._selection_cell = None
         buffer = bytearray()
         buffer_cell = (owner, buffer)
         owner._buffer = buffer
         owner._scope = owner._origin = _Scope(
             activation, activation._scope, (expected,),
-            (os.getpid(), os.geteuid(), threading.get_ident()), [])
+            (os.getpid(), os.geteuid(), threading.get_ident()), [], approval)
         s = owner._origin
         owner._cell = (owner, s)
         owner._root_cell = (activation, owner, s, buffer_cell)
         activation._selection_cell = owner._root_cell
         root_cell = owner._root_cell
-        owner._count_cell = (owner, s, 0)
+        owner._count_cell = (owner, s, prefix)
         raw = selection = fact_cell = None
         failed = False
         try:
@@ -149,7 +200,7 @@ class StartupSelectionOwner:
             count = owner._count_cell
             _require(type(count) is tuple and len(count) == 3 and count[0] is owner
                      and count[1] is s and type(count[2]) is int
-                     and owner._bytes_read is count[2] and count[2] == expected.size)
+                     and owner._bytes_read is count[2] and count[2] == prefix + expected.size)
             digest = hashlib.sha256(raw).hexdigest()
             _require(type(digest) is str and digest == expected.sha256
                      and StartupSelectionOwner._guard(owner) is s
@@ -209,6 +260,10 @@ class StartupSelectionOwner:
                  and not any(name in sys.modules for name in _LATE_MODULES))
         context = (os.getpid(), os.geteuid(), threading.get_ident())
         _require(all(type(v) is int for v in context) and context == s.context)
+        if s.parent is not None:
+            approved = _approval_binding(s.parent, True)
+            _require(approved[0].activation is s.activation
+                     and s.expected[0] is approved[3][2].selection)
         GatewayActivationOwner.current(s.activation)
         _require(self._scope is s and self._origin is s and self._cell is cell
                  and self._root_cell is root and s.activation._selection_cell is root
@@ -216,6 +271,11 @@ class StartupSelectionOwner:
                  and s.activation._selection_owner is self and self._buffer is root[3][1]
                  and self._failed is False and self._unknown is False
                  and not any(name in sys.modules for name in _LATE_MODULES))
+        if s.parent is not None:
+            # Final callback-free parent join follows the last native activation callback.
+            approved = _approval_binding(s.parent)
+            _require(approved[0].activation is s.activation
+                     and s.expected[0] is approved[3][2].selection)
         if self._ready is True:
             _require(StartupSelectionOwner._retained_binding(self)[0] is s)
         return s
@@ -242,6 +302,12 @@ class StartupSelectionOwner:
                  and all(type(row) is _Descriptor and row.closed is True
                          and row.unknown is False and row.close_attempted is True
                          for row in s.records))
+        prefix = 0
+        if s.parent is not None:
+            approved = _approval_binding(s.parent)
+            _require(approved[0].activation is s.activation
+                     and s.expected[0] is approved[3][2].selection)
+            prefix = approved[3][3][2]
         fact = s.activation._selection_fact_cell
         _require(type(fact) is tuple and len(fact) == 4 and fact[0] is self and fact[1] is s
                  and type(fact[2]) is GatewayStartupSelection
@@ -252,7 +318,7 @@ class StartupSelectionOwner:
                  and self._bytes_read is fact[3][2]
                  and type(s.expected) is tuple and len(s.expected) == 1
                  and type(s.expected[0]) is ExpectedArtifact
-                 and fact[3][2] == s.expected[0].size)
+                 and fact[3][2] == prefix + s.expected[0].size)
         return s, cell, root, fact
 
     def retained_data(self):
