@@ -1,3 +1,16 @@
+## Parser-handoff refusal evidence — November 7, 2026
+
+The original-task/native matrix now includes an actual same-parser feed of the
+received8-byte authentication prefix. Reusing the frozen stopped-reader proof
+then refuses, drops pending aliases and retains the observed count. Independent
+read-only review accepted this causal;20 native cases pass in6.05s. The first
+fixture run failed its old blanket unchanged-parser assertion, corrected to check
+the intentional actual feed; no production guard changed. This is rejection
+coverage, not an implemented progress handoff. A targeted98-case cancellation
+matrix passed in58.61s without exercising failure diagnostics; it does not resolve
+the two broad failures below. Pytest reported81 pre-existing temporary-directory
+cleanup warnings; no disposal or native closure credit is inferred.
+
 ## One bounded original-task native read — November 7, 2026
 
 `presentation_credential_cleanup_read.py` now owns one nonblocking receive on the

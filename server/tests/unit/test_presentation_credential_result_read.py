@@ -66,6 +66,7 @@ from .test_presentation_supervisor import context as context
     "wake_reserve_notice_native_posttimeoutbad", "wake_reserve_notice_native_postfdbad",
     "wake_reserve_notice_native_counterbad", "wake_reserve_notice_native_pendingpairbad",
     "wake_reserve_notice_native_scopebad", "wake_reserve_notice_native_workflagbad",
+    "wake_reserve_notice_native_parseradvancebad",
 ])
 async def test_original_result_envelope(context, begin_gateway, tmp_path, monkeypatch, mutation):
     from hmp_plugin import presentation_credential_result_read as module
@@ -894,6 +895,24 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                     assert native.current_pending() is receipt
                                     assert native._pending_origin == held["native_expected"]
                                     assert not cursor._parser._buffer_origin
+                                if mutation.endswith("_parseradvancebad"):
+                                    from hmp_plugin.presentation_credential_stream import (
+                                        SignedCleanupAuthPrefix,
+                                    )
+                                    # Actual received bytes, same original parser. A raw
+                                    # feed is DATA progress, not an ownership transfer:
+                                    # the frozen stopped cursor must never certify it.
+                                    parser = cursor._parser_origin
+                                    pending = native._pending_origin
+                                    SignedCleanupAuthPrefix.feed(parser, pending)
+                                    assert bytes(parser._buffer_origin) == pending
+                                    with pytest.raises(FrameError):
+                                        native.current_pending()
+                                    assert native._native_count_allocation_origin[1] == 8
+                                    assert native._pending_origin is None
+                                    assert native._failed and native._unknown
+                                    held["actual_parser_advance_refused"] = True
+                                    pending = None
                                 if mutation.endswith("_receiptbad"):
                                     native_remaining = RemoteCleanupOwner._remaining
 
@@ -934,8 +953,13 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                         await native_observed.wait()
                                     if mutation.endswith("_workflagbad"):
                                         owned._cleanup_owner_snapshot._initialized = False
-                            assert (cursor._parser._buffer_origin
-                                    == notice._reservation.capture.envelope.values)
+                            if mutation.endswith("_parseradvancebad"):
+                                assert held["actual_parser_advance_refused"]
+                                assert (bytes(cursor._parser._buffer_origin)
+                                        == held["native_expected"])
+                            else:
+                                assert (cursor._parser._buffer_origin
+                                        == notice._reservation.capture.envelope.values)
                             if mutation.endswith((
                                     "_cursorstatebad", "_cursorpairbad",
                                     "_cursoradmissionscopebad", "_cursoradmissionfactbad",
@@ -1255,6 +1279,7 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             "wake_reserve_notice_native_pendingpairbad",
                             "wake_reserve_notice_native_scopebad",
                             "wake_reserve_notice_native_workflagbad",
+                            "wake_reserve_notice_native_parseradvancebad",
                             "wake_reserve_wait_dispatchbad"):
                 assert reader._wake_release_origin is not None and not reader._io_unknown
                 assert not reader._active and reader._failed and not reader._buffer_origin

@@ -6,6 +6,9 @@
       FD/mode probes, final metadata/I/O claim fences, independent native-count and
       pending-byte ownership, fixed cleanup observer and work-exit pending retirement.
       No parser/feed/hash/frame credit, readiness continuation or cooperative route.
+- [x] Causally verify raw same-parser feed cannot reuse frozen stopped-reader
+      proof: actual received8-byte prefix, unknown refusal, retained native count
+      and dropped pending aliases. Independent read-only review accepted; no handoff.
 - [ ] Consume actual native pending bytes into the original bound parser/digest
       under a distinct active-progress handoff; never replay bytes or relax old stops.
 
