@@ -1,5 +1,12 @@
 # BI1 integration tasks
 
+## Native interface reuse audit
+
+- [x] Inspect exact Desktop asset reader and canonical roster; record why neither
+      establishes HMP-safe asset delivery. See [audit](NATIVE_AVATAR_INTERFACE_AUDIT.md).
+- [ ] Finish actual runtime/native acceptance and physical avatar delivery; no
+      legacy Desktop RPC bypass or source-helper completion claim.
+
 ## Installed-startup and native acceptance critical path
 
 See [paired startup composition](PAIRED_STARTUP_COMPOSITION.md). These are HMP
