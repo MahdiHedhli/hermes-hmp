@@ -42,6 +42,11 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
       [verification scope](CACHE_OBSERVATIONS.md) remains separately tracked.
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
+      Next reviewed executable slice: original source-hash builtin/key/machinery,
+      same-read temporary buffer/counter ownership, timestamp/hash cache selection
+      and fallback enforcement consumed at fixed runtime boundaries. See
+      [exact implementation requirements](LOADER_POLICY_IMPLEMENTATION.md).
+      Archive members, ABI/library closure and full runtime admission stay open.
 - [ ] **PS1-LISTENER** Bind original admitted startup to actual listener/native owner,
       with fixed currentness methods and explicit PresentationNativeService wiring.
 - [ ] **PS1-KEYS** Acquire only the gateway role key after those joins; broker and
