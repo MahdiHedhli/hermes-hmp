@@ -311,3 +311,23 @@ checks AFTER clock callbacks and held-identity rechecks after await. Wrong sende
 completed-work queries refuse; currentness drift retains unknown debt. This is
 stop DATA only: signed request remains False, read-admission/concurrent-CANCEL
 authority is absent, and original work-join/signing gates stay unchanged.
+
+## Bounded cleanup authentication-prefix reader — November 7, 2026
+
+`SignedCleanupAuthPrefix` preserves a partial HBA1 record and exposes only the
+exact remaining authentication-byte count. It accepts no following outer header
+or body, never scans/restarts, and permanently refuses overshoot, truncation,
+invalid signature or substituted state while clearing its original framing
+buffer. Its completed value is authenticated RESULT/1 or TERMINAL/2 commitment
+DATA only. It does not select a legal lifecycle transition, validate an ABORTED
+claim, bind a native cursor or enable signed cleanup.
+
+Independent read-only review accepted the component. Focused phase/stream checks:
+80 passed in 0.34s; expanded credential/cleanup/terminal/layout regression:
+1,112 passed in 144.50s. Checks include partial prefix boundaries for both fixed phases,
+exact record separation, sticky refusal and foreign arithmetic rejection. Native
+reader admission, same-reader drain/terminal/ACK, production character images and
+physical/release qualification remain open; signed gate.request stays False.
+The current helper covers only RESULT/1 and TERMINAL/2 authentication data.
+Earlier direct-terminal sequence positions need their own retained transition
+expectations before production composition; they are not implicitly admitted.

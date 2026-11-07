@@ -17,6 +17,7 @@ from .presentation_credential_codec import RECORD_LIMIT, payload_size
 from .presentation_credential_phase import (
     _EXPECTED,
     ConsistentCommitment,
+    check_broker_cleanup_commitment,
     check_commitment,
     check_committed_header,
 )
@@ -353,3 +354,128 @@ class SignedResultDiscard:
             self._failed = True
             self._buffer_origin.clear()
         raise FrameError("BI1_SIGNED_DISCARD_DATA_REFUSED") from None
+
+
+class SignedCleanupAuthPrefix:
+    """One bounded authentication record, DATA only; no frame/body read permit.
+
+    Retains an actual partial HBA1 record without deciding runtime transitions.
+    Feed never accepts the following outer header or body. A refused record is
+    permanently failed, not eligible for another phase parser or cursor restart.
+    """
+
+    def __init__(self, prefix: bytes, *, sender_public: bytes, receiver_public: bytes,
+                 expected_context: dict):
+        _require(type(self) is SignedCleanupAuthPrefix and "_initialized" not in vars(self))
+        self._initialized = self._failed = self._finished = False
+        self._buffer = self._buffer_origin = bytearray()
+        self._context = self._context_origin = (os.getpid(), threading.get_ident())
+        self._target = self._target_origin = 8
+        self._header_done = self._header_done_origin = False
+        failed = False
+        try:
+            keys = _EXPECTED - {"phase", "sequence"}
+            _require(type(prefix) is bytes and len(prefix) <= RECORD_LIMIT
+                     and type(expected_context) is dict
+                     and all(type(k) is str for k in expected_context)
+                     and expected_context.keys() == keys
+                     and all(type(v) is (int if k == "work_end_ns" else str)
+                             for k, v in expected_context.items())
+                     and expected_context["role"] == "broker"
+                     and expected_context["direction"] == "b2g"
+                     and type(sender_public) is bytes and len(sender_public) == 32
+                     and type(receiver_public) is bytes and len(receiver_public) == 32
+                     and sender_public != receiver_public)
+            self._expected = self._expected_origin = tuple(sorted(expected_context.items()))
+            self._pins = self._pins_origin = (sender_public, receiver_public)
+            self._initialized = True
+            offset = 0
+            while offset < len(prefix):
+                count = min(SignedCleanupAuthPrefix.needed.fget(self), len(prefix) - offset)
+                _require(count > 0)
+                SignedCleanupAuthPrefix.feed(self, prefix[offset:offset + count])
+                offset += count
+        except BaseException:
+            failed = self._failed = True
+            self._buffer_origin.clear()
+        finally:
+            prefix = None
+        if failed:
+            raise FrameError("BI1_CLEANUP_AUTH_PREFIX_REFUSED") from None
+
+    def __repr__(self):
+        return "<SignedCleanupAuthPrefix data-only redacted>"
+
+    def _guard(self):
+        _require(type(self) is SignedCleanupAuthPrefix and self._initialized is True
+                 and self._failed is False and self._finished is False
+                 and type(self._context) is tuple and self._context is self._context_origin
+                 and len(self._context) == 2 and all(type(v) is int for v in self._context)
+                 and self._context == (os.getpid(), threading.get_ident())
+                 and type(self._buffer) is bytearray and self._buffer is self._buffer_origin
+                 and type(self._target) is int and self._target is self._target_origin
+                 and type(self._header_done) is bool
+                 and self._header_done is self._header_done_origin
+                 and ((self._header_done is False and self._target == 8)
+                      or (self._header_done is True and 73 <= self._target <= RECORD_LIMIT))
+                 and len(self._buffer) <= self._target
+                 and type(self._pins) is tuple and self._pins is self._pins_origin
+                 and len(self._pins) == 2
+                 and all(type(v) is bytes and len(v) == 32 for v in self._pins)
+                 and self._pins[0] != self._pins[1]
+                 and type(self._expected) is tuple and self._expected is self._expected_origin
+                 and len(self._expected) == len(_EXPECTED) - 2
+                 and all(type(row) is tuple and len(row) == 2 and type(row[0]) is str
+                         and type(row[1]) is (int if row[0] == "work_end_ns" else str)
+                         for row in self._expected)
+                 and {row[0] for row in self._expected} == _EXPECTED - {"phase", "sequence"})
+
+    @property
+    def needed(self):
+        try:
+            SignedCleanupAuthPrefix._guard(self)
+            return self._target - len(self._buffer)
+        except BaseException:
+            self._failed = True
+            self._buffer_origin.clear()
+        raise FrameError("BI1_CLEANUP_AUTH_PREFIX_REFUSED") from None
+
+    def feed(self, chunk: bytes):
+        failed = False
+        try:
+            count = SignedCleanupAuthPrefix.needed.fget(self)
+            _require(type(chunk) is bytes and 0 < len(chunk) <= count)
+            self._buffer_origin.extend(chunk)
+            if self._header_done is False and len(self._buffer) == 8:
+                self._target = self._target_origin = 8 + payload_size(bytes(self._buffer))
+                self._header_done = self._header_done_origin = True
+            SignedCleanupAuthPrefix._guard(self)
+        except BaseException:
+            failed = self._failed = True
+            self._buffer_origin.clear()
+        finally:
+            chunk = None
+        if failed:
+            raise FrameError("BI1_CLEANUP_AUTH_PREFIX_REFUSED") from None
+
+    def finish(self) -> ConsistentCommitment:
+        failed = False
+        raw = None
+        try:
+            _require(SignedCleanupAuthPrefix.needed.fget(self) == 0
+                     and self._header_done is True)
+            raw = bytes(self._buffer)
+            result = check_broker_cleanup_commitment(
+                raw, sender_public=self._pins[0], receiver_public=self._pins[1],
+                expected_context=dict(self._expected))
+            SignedCleanupAuthPrefix._guard(self)
+            self._finished = True
+            self._buffer_origin.clear()
+        except BaseException:
+            failed = self._failed = True
+            self._buffer_origin.clear()
+        finally:
+            raw = None
+        if failed:
+            raise FrameError("BI1_CLEANUP_AUTH_PREFIX_REFUSED") from None
+        return result

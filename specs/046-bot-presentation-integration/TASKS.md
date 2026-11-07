@@ -2,6 +2,10 @@
 
 ## Current envelope stop preparation
 
+- [x] Retain one bounded partial cleanup authentication record through exact-needed
+      reads; fixed signed phase consistency, no overread/restart, permanent refusal.
+      Component data only, with independent read-only review and focused causals.
+
 - [x] Authenticate fixed broker RESULT/1 or TERMINAL/2 boundary commitment DATA;
       closed context and signature, no fallback. Independent read-only review passed.
 - [ ] Bind boundary dispatch to original native cursor/transition and validate direct

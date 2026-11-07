@@ -141,3 +141,82 @@ def test_different_thread_cannot_borrow_original_digest():
     assert not thread.is_alive() and refused == [True] and stream._received == 0
     with pytest.raises(FrameError):
         stream.finish()
+
+
+def cleanup_auth_fixture(phase="RESULT", sequence=1):
+    from hmp_plugin.presentation_credential_stream import SignedCleanupAuthPrefix
+
+    _, frame, expected, sender, receiver, sign = phase_fixture(phase, b"data", sequence)
+    context = {k: v for k, v in expected.items() if k not in ("phase", "sequence")}
+    raw = sign()
+
+    def make(prefix=b""):
+        return SignedCleanupAuthPrefix(prefix, sender_public=sender, receiver_public=receiver,
+                                       expected_context=context)
+
+    return make, raw, frame
+
+
+@pytest.mark.parametrize("phase,sequence", [("RESULT", 1), ("TERMINAL", 2)])
+@pytest.mark.parametrize("cut", [0, 1, 7, 8, 9, 73, -1, -2])
+def test_cleanup_auth_preserves_same_partial_record_without_body(phase, sequence, cut):
+    make, raw, frame = cleanup_auth_fixture(phase, sequence)
+    cut = len(raw) + cut + 1 if cut < 0 else cut
+    reader = make(raw[:cut])
+    offset = cut
+    while offset < len(raw):
+        count = min(reader.needed, 11, len(raw) - offset)
+        reader.feed(raw[offset:offset + count])
+        offset += count
+    assert reader.needed == 0
+    fact = reader.finish()
+    assert fact.frame_sha256 == hashlib.sha256(frame).hexdigest()
+    assert reader._buffer_origin == bytearray()
+    assert not hasattr(fact, "authorized")
+    for action in (lambda: reader.feed(b"x"), reader.finish, lambda: reader.needed):
+        with pytest.raises(FrameError):
+            action()
+
+
+def test_cleanup_auth_rejects_overread_and_never_scans_following_record():
+    make, raw, _ = cleanup_auth_fixture()
+    for prefix in (raw + b"x", raw + raw):
+        with pytest.raises(FrameError):
+            make(prefix)
+    reader = make(raw[:-1])
+    with pytest.raises(FrameError):
+        reader.feed(raw[-1:] + b"x")
+    assert reader._buffer_origin == bytearray()
+    with pytest.raises(FrameError):
+        reader.feed(raw[-1:])
+
+
+def test_cleanup_auth_truncation_and_invalid_signature_are_permanent():
+    make, raw, _ = cleanup_auth_fixture()
+    for prefix in (raw[:-1], raw[:-1] + bytes([raw[-1] ^ 1])):
+        reader = make(prefix)
+        with pytest.raises(FrameError):
+            reader.finish()
+        assert reader._failed and not reader._buffer_origin
+        with pytest.raises(FrameError):
+            reader.finish()
+
+
+def test_cleanup_auth_foreign_target_refuses_without_index_or_arithmetic():
+    make, raw, _ = cleanup_auth_fixture()
+    reader = make(raw[:8])
+    calls = []
+
+    class Foreign:
+        def __index__(self):
+            calls.append("index")
+            return 100
+
+        def __sub__(self, other):
+            calls.append("subtract")
+            return 1
+
+    reader._target = reader._target_origin = Foreign()
+    with pytest.raises(FrameError):
+        reader.feed(b"x")
+    assert calls == [] and not reader._buffer_origin
