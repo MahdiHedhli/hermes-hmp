@@ -11,6 +11,7 @@ import os
 import stat
 import threading
 from dataclasses import dataclass
+from types import FunctionType
 from typing import NamedTuple
 
 from .presentation_gateway_activation import GatewayActivationOwner
@@ -67,6 +68,7 @@ class _Scope(NamedTuple):
     context: tuple
     records: list
     parent: object = None
+    runtime: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
@@ -80,6 +82,151 @@ class _PackageSource(NamedTuple):
 
     def __repr__(self):
         return "<OriginalPackageCountSource DATA redacted>"
+
+
+class _RuntimeSource(NamedTuple):
+    entry: object
+    entry_type: type
+    inputs: object
+    cell: tuple
+    guard: object
+    code: object
+    plan: object
+    link: object
+    reads: list
+    before: list
+    after: list
+    count: list
+    bound: int
+
+    def __repr__(self):
+        return "<OriginalRuntimeLinkSource DATA redacted>"
+
+
+@dataclass(repr=False)
+class _LinkRead:
+    hop: object
+    phase: int
+    index: int
+    before: tuple
+    attempted: bool = False
+    returned: bool = False
+    after: tuple | None = None
+    data: bytes | None = None
+    unknown: bool = False
+
+
+class _ReadlinkObservation(NamedTuple):
+    record: _LinkRead
+    before: tuple
+    after: tuple
+    data: bytes
+
+    def __repr__(self):
+        return "<OriginalReadlinkObservation DATA redacted>"
+
+
+class _LinkSnapshot(NamedTuple):
+    source: _RuntimeSource
+    phase: int
+    links: tuple
+    target: tuple
+    reads: tuple
+    count: tuple
+
+    def __repr__(self):
+        return "<OriginalExecutableLinkSnapshot DATA redacted>"
+
+
+class _LinkTargetObservation(NamedTuple):
+    owner: object
+    scope: object
+    source: _RuntimeSource
+    before: _LinkSnapshot
+    after: _LinkSnapshot
+    receipt: _HashedArtifact
+    count: tuple
+
+    def __repr__(self):
+        return "<OriginalLinkTargetObservation DATA not-admission redacted>"
+
+
+def _link_bound(runtime):
+    # Standard selected CPython's fixed MAXPATHLEN readlink buffer. This premise
+    # is not installed-runtime admission; custom builds need independent qualification.
+    _require(type(runtime.implementation) is tuple and len(runtime.implementation) == 3
+             and type(runtime.implementation[0]) is str
+             and runtime.implementation[0] == "cpython"
+             and type(runtime.version) is tuple and len(runtime.version) == 5
+             and type(runtime.version[0]) is int and runtime.version[0] == 3
+             and type(runtime.version[1]) is int and 11 <= runtime.version[1] < 15
+             and type(runtime.platform) is str and runtime.platform in ("darwin", "linux"))
+    return 1024 if runtime.platform == "darwin" else 4096
+
+
+def _runtime_source(entry):
+    from hmp_startup.entry_files import EntryFileSnapshotOwner
+    from hmp_startup.runtime_files import ExecutableLinkPlan, RuntimeFilePlan
+
+    _require(type(entry) is EntryFileSnapshotOwner)
+    inputs = EntryFileSnapshotOwner._current(entry)
+    plan = inputs.runtime_plan
+    _require(type(plan) is RuntimeFilePlan and type(plan.executable_link) is ExecutableLinkPlan
+             and entry._completing is True and entry._attempt_cell is inputs.completion_attempt
+             and type(inputs.io_slot) is list and len(inputs.io_slot) == 1
+             and inputs.io_slot[0] is None)
+    guard = EntryFileSnapshotOwner._pure_current
+    _require(type(guard) is FunctionType)
+    bound = _link_bound(plan.runtime)
+    _require(all(0 < len(hop.target) < bound for hop in plan.executable_link.hops))
+    return _RuntimeSource(entry, EntryFileSnapshotOwner, inputs, entry._root_cell,
+                          guard, guard.__code__, plan, plan.executable_link,
+                          [], [None], [None], [None], bound)
+
+
+def _runtime_seal(source, owner):
+    _require(type(source) is _RuntimeSource
+             and type(source.entry) is source.entry_type
+             and source.entry._inputs is source.inputs and source.entry._root_cell is source.cell
+             and source.inputs.runtime_plan is source.plan
+             and source.plan.executable_link is source.link
+             and type(source.guard) is FunctionType and source.guard.__code__ is source.code
+             and source.entry_type._pure_current is source.guard
+             and type(source.count) is list and len(source.count) == 1
+             and type(source.before) is list and len(source.before) == 1
+             and type(source.after) is list and len(source.after) == 1
+             and type(source.reads) is list
+             and type(source.inputs.io_slot) is list and len(source.inputs.io_slot) == 1
+             and source.inputs.io_slot[0] is owner)
+    count = source.count[0]
+    _require(type(count) is tuple and len(count) == 3 and count[0] is owner
+             and count[1] is owner._origin and type(count[2]) is int)
+    _require(owner._count_cell is count and owner._bytes_read is count[2])
+    return count
+
+
+def _runtime_current(source, owner):
+    count = _runtime_seal(source, owner)
+    source.guard(source.entry, source.inputs, source.cell)
+    _require(_runtime_seal(source, owner) is count)
+
+
+def _link_reads_current(source, snapshot):
+    _require(type(snapshot) is _LinkSnapshot and snapshot.source is source
+             and type(snapshot.phase) is int and snapshot.phase in (0, 1)
+             and type(snapshot.reads) is tuple
+             and len(snapshot.reads) == len(source.link.hops))
+    for i, (observation, hop) in enumerate(zip(snapshot.reads, source.link.hops, strict=True)):
+        _require(type(observation) is _ReadlinkObservation)
+        row = observation.record
+        index = snapshot.phase * len(source.link.hops) + i
+        _require(type(row) is _LinkRead and len(source.reads) > index
+                 and source.reads[index] is row and row.hop is hop
+                 and type(row.phase) is int and row.phase == snapshot.phase
+                 and type(row.index) is int and row.index == index
+                 and row.attempted is True and row.returned is True and row.unknown is False
+                 and row.before is observation.before and row.after is observation.after
+                 and row.data is observation.data and observation.data == hop.target)
 
 
 def _package_source(package):
@@ -205,7 +352,15 @@ class StartupArtifactOwner:
         return StartupArtifactOwner._retain(source.binding[0].activation, expected, source)
 
     @classmethod
-    def _retain(cls, activation, expected, source):
+    def retain_from_runtime_entry(cls, entry):
+        _require(cls is StartupArtifactOwner)
+        runtime = _runtime_source(entry)
+        source = _package_source(runtime.inputs.plugin)
+        return StartupArtifactOwner._retain(source.binding[0].activation,
+                                           runtime.plan.pending, source, runtime)
+
+    @classmethod
+    def _retain(cls, activation, expected, source, runtime=None):
         _require(cls is StartupArtifactOwner and type(activation) is GatewayActivationOwner
                  and activation._artifact_owner is None and activation._artifact_cell is None
                  and activation._artifact_attempt_cell is None
@@ -225,12 +380,23 @@ class StartupArtifactOwner:
                 _require(type(source) is _PackageSource)
                 owner._bytes_read = source.count_cell[2]
             s = _Scope(activation, activation._scope, expected,
-                       (os.getpid(), os.geteuid(), threading.get_ident()), [], source)
+                       (os.getpid(), os.geteuid(), threading.get_ident()), [], source, runtime)
             owner._scope = owner._origin = s
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)
             activation._artifact_cell = owner._root_cell
             owner._count_cell = owner._initial_count_cell = (owner, s, owner._bytes_read)
+            if runtime is not None:
+                _require(type(runtime) is _RuntimeSource and len(runtime.inputs.io_slot) == 1
+                         and runtime.inputs.io_slot[0] is None
+                         and runtime.plan.pending is expected)
+                runtime.guard(runtime.entry, runtime.inputs, runtime.cell)
+                _require(runtime.inputs.io_slot[0] is None)
+                runtime.inputs.io_slot[0] = owner
+                runtime.count[0] = owner._initial_count_cell
+                _require(len(source.expected) + len(expected) + len(runtime.link.hops) <= _MAX_FILES
+                         and owner._bytes_read + sum(row.size for row in expected)
+                         + 2 * runtime.link.text_bytes <= _MAX_TOTAL)
             _expected(expected)
             if source is not None:
                 _source_current(source)
@@ -262,7 +428,37 @@ class StartupArtifactOwner:
                      and all(type(row) is _Descriptor and row.closed is True
                              and row.unknown is False and row.close_attempted is True
                              for row in s.records))
-            hashes = tuple(StartupArtifactOwner._file(owner, row) for row in s.expected)
+            runtime = s.runtime
+            before = after = link_fact = None
+            if runtime is not None:
+                _require(runtime.before[0] is None and runtime.after[0] is None
+                         and runtime.reads == [])
+                before = StartupArtifactOwner._link_snapshot(owner, 0, None)
+                _require(runtime.before[0] is None)
+                runtime.before[0] = before
+            collected = []
+            progress = owner._count_cell
+            for row in s.expected:
+                _require(owner._count_cell is progress)
+                collected.append(StartupArtifactOwner._file(owner, row))
+                progress = owner._count_cell
+            hashes = tuple(collected)
+            if runtime is not None:
+                _require(runtime.before[0] is before)
+                _link_reads_current(runtime, before)
+                after = StartupArtifactOwner._link_snapshot(owner, 1, before)
+                _require(runtime.before[0] is before and runtime.after[0] is None
+                         and before.links == after.links and before.target == after.target)
+                runtime.after[0] = after
+                _link_reads_current(runtime, before)
+                _link_reads_current(runtime, after)
+                receipts = (*runtime.plan.prior, *hashes)
+                targets = tuple(row for row in receipts if row.expected is runtime.link.target)
+                _require(len(targets) == 1 and targets[0].identity == after.target[0]
+                         and targets[0].identity[3] == runtime.link.uid
+                         and stat.S_IMODE(targets[0].identity[2]) == runtime.link.mode)
+                link_fact = _LinkTargetObservation(owner, s, runtime, before, after,
+                                                   targets[0], owner._count_cell)
             count = owner._count_cell
             _require(StartupArtifactOwner._guard(owner) is s
                      and owner._root_cell is root and owner._attempt_cell is attempt
@@ -272,6 +468,8 @@ class StartupArtifactOwner:
                      and owner._count_cell is count and owner._bytes_read is count[2]
                      and count[2] == owner._initial_count_cell[2]
                      + sum(row.size for row in s.expected)
+                     + (0 if runtime is None else 2 * runtime.link.text_bytes)
+                     and count[2] <= _MAX_TOTAL
                      and all(type(row) is _HashedArtifact and row.owner is owner
                              and row.scope is s and row.expected is expected
                              for row, expected in zip(hashes, s.expected, strict=True))
@@ -280,7 +478,11 @@ class StartupArtifactOwner:
                              for row in s.records)
                      and owner._facts is None and owner._hashes is None
                      and owner._fact_cell is None and activation._artifact_fact_cell is None)
-            fact = (owner, s, hashes, count)
+            if runtime is not None:
+                _require(runtime.before[0] is before and runtime.after[0] is after
+                         and link_fact.count is count)
+            fact = ((owner, s, hashes, count) if runtime is None
+                    else (owner, s, hashes, count, link_fact))
             owner._facts = tuple(row.expected for row in hashes)
             owner._hashes = hashes
             owner._fact_cell = activation._artifact_fact_cell = fact
@@ -313,6 +515,7 @@ class StartupArtifactOwner:
                  and self._failed is False and self._unknown is False
                  and type(s.records) is list and self._reading is False)
         attempt, fact = self._attempt_cell, self._fact_cell
+        held_count = self._count_cell
         _require(s.activation._artifact_attempt_cell is attempt
                  and s.activation._artifact_fact_cell is fact)
         actual = (os.getpid(), os.geteuid(), threading.get_ident())
@@ -320,13 +523,28 @@ class StartupArtifactOwner:
         GatewayActivationOwner.current(s.activation)
         if s.parent is not None:
             _source_current(s.parent)
+        if s.runtime is not None:
+            _runtime_current(s.runtime, self)
+        if s.runtime is not None and fact is not None:
+            _require(type(fact) is tuple and len(fact) == 5
+                     and type(fact[4]) is _LinkTargetObservation)
+            link_fact = fact[4]
+            _require(link_fact.owner is self and link_fact.scope is s
+                     and link_fact.source is s.runtime
+                     and s.runtime.before[0] is link_fact.before
+                     and s.runtime.after[0] is link_fact.after
+                     and link_fact.count is fact[3] is self._count_cell)
+            _require(len(s.runtime.reads) == 2 * len(s.runtime.link.hops))
+            _link_reads_current(s.runtime, link_fact.before)
+            _link_reads_current(s.runtime, link_fact.after)
         _require(self._scope is s and self._origin is s and self._cell is cell
                  and s.activation._scope is s.activation_scope
                  and s.activation._artifact_owner is self
                  and self._root_cell is root_cell and s.activation._artifact_cell is root_cell
                  and self._failed is False
                  and self._unknown is False and self._attempt_cell is attempt
-                 and self._fact_cell is fact and s.activation._artifact_attempt_cell is attempt
+                 and self._fact_cell is fact and self._count_cell is held_count
+                 and s.activation._artifact_attempt_cell is attempt
                  and s.activation._artifact_fact_cell is fact)
         return s
 
@@ -400,12 +618,16 @@ class StartupArtifactOwner:
         try:
             data = os.read(fd, count)
             _require(type(data) is bytes)
+            runtime = s.runtime
             same = (self._scope is s and self._origin is s and self._bytes_read is before
-                    and self._count_cell is cell and self._reading is True)
+                    and self._count_cell is cell and self._reading is True
+                    and (runtime is None or runtime.count[0] is cell))
             after = before + len(data)  # actual count before any post-read check
             after_cell = (self, s, after)
             self._bytes_read = after
             self._count_cell = after_cell
+            if runtime is not None and same:
+                runtime.count[0] = after_cell
             self._reading = False
             _require(same and len(data) <= count and _owner_guard(self) is s
                      and self._bytes_read is after and self._count_cell is after_cell)
@@ -428,10 +650,184 @@ class StartupArtifactOwner:
         _require(type(value) is os.stat_result and _owner_guard(self) is s)
         return value
 
+    def _readlink(self, name, parent, hop, phase, index, before_state, start):
+        s = _owner_guard(self)
+        runtime = s.runtime
+        _require(type(runtime) is _RuntimeSource and self._ready is False
+                 and self._attempt_cell is not None and type(name) is bytes
+                 and type(parent) is int and parent >= 0
+                 and type(phase) is int and phase in (0, 1)
+                 and type(index) is int and 0 <= index < len(runtime.link.hops)
+                 and runtime.link.hops[index] is hop
+                 and name == os.fsencode(hop.path.rsplit("/", 1)[1])
+                 and self._count_cell is start and runtime.count[0] is start
+                 and ((phase == 0 and runtime.before[0] is None)
+                      or (phase == 1 and runtime.before[0] is before_state))
+                 and runtime.after[0] is None)
+        position = phase * len(runtime.link.hops) + index
+        _require(len(runtime.reads) == position and type(start) is tuple
+                 and len(start) == 3 and start[0] is self and start[1] is s
+                 and type(start[2]) is int and self._bytes_read is start[2])
+        root, owner_cell = self._root_cell, self._cell
+        record = _LinkRead(hop, phase, position, start)
+        runtime.reads.append(record)  # owned attempt before the syscall
+        record.attempted = self._reading = True
+        try:
+            data = os.readlink(name, dir_fd=parent)  # bytes input => bytes output
+            _require(type(data) is bytes)
+            after = start[2] + len(data)  # actual result before postchecks, including refusals
+            counted = (self, s, after)
+            record.returned = True
+            record.data, record.after = data, counted
+            same = (self._reading is True and self._scope is s and self._origin is s
+                    and self._root_cell is root and s.activation._artifact_cell is root
+                    and self._cell is owner_cell and self._count_cell is start
+                    and self._bytes_read is start[2] and runtime.count[0] is start)
+            if same:
+                self._bytes_read, self._count_cell = after, counted
+                runtime.count[0] = counted
+            self._reading = False
+            _require(same and len(data) < runtime.bound and data == hop.target
+                     and after <= _MAX_TOTAL and _owner_guard(self) is s
+                     and len(runtime.reads) == position + 1
+                     and runtime.reads[position] is record
+                     and runtime.count[0] is counted and self._count_cell is counted
+                     and self._bytes_read is after
+                     and ((phase == 0 and runtime.before[0] is None)
+                          or (phase == 1 and runtime.before[0] is before_state)))
+            return _ReadlinkObservation(record, start, counted, data)
+        except BaseException:
+            record.unknown = self._unknown = True
+            raise
+        finally:
+            self._reading = False
+
+    def _link_path(self, path, hop, phase, index, before_state, start, observe=True):
+        s = _owner_guard(self)
+        runtime = s.runtime
+        _require(type(runtime) is _RuntimeSource and self._count_cell is start
+                 and ((hop is None and path is runtime.link.target.path)
+                      or (hop is not None and runtime.link.hops[index] is hop
+                          and path is hop.path)))
+        root = self._root_cell
+        held, parents = [], []
+        result = observation = None
+        progress = start
+        failed = False
+        try:
+            parent = None
+            for name in ("/", *path[1:].split("/")[:-1]):
+                row, fd = StartupArtifactOwner._open(self, name, parent, True)
+                held.append((row, fd))
+                info = StartupArtifactOwner._fstat(self, fd, s)
+                mode = stat.S_IMODE(info.st_mode)
+                _require(stat.S_ISDIR(info.st_mode) and info.st_uid in (0, s.context[1])
+                         and not mode & (stat.S_ISUID | stat.S_ISGID)
+                         and (not mode & 0o022 or (info.st_uid == 0 and bool(mode & stat.S_ISVTX))))
+                parents.append((name, parent, fd, _identity(info, True)))
+                parent = fd
+            name = path.rsplit("/", 1)[1]
+            leaf = StartupArtifactOwner._stat(self, name, parent, s)
+            identity = _identity(leaf)
+            _require(self._count_cell is progress and runtime.count[0] is progress)
+            if hop is None:
+                _require(stat.S_ISREG(leaf.st_mode) and leaf.st_nlink == 1
+                         and leaf.st_size == runtime.link.target.size
+                         and leaf.st_uid == runtime.link.uid
+                         and stat.S_IMODE(leaf.st_mode) == runtime.link.mode)
+            else:
+                _require(stat.S_ISLNK(leaf.st_mode) and leaf.st_nlink == 1
+                         and leaf.st_uid in (0, s.context[1])
+                         and not leaf.st_mode & (stat.S_ISUID | stat.S_ISGID)
+                         and leaf.st_size == len(hop.target))
+                if observe:
+                    observation = StartupArtifactOwner._readlink(
+                        self, os.fsencode(name), parent, hop, phase, index, before_state, progress,
+                    )
+                    progress = observation.after
+            _require(_identity(StartupArtifactOwner._stat(self, name, parent, s)) == identity)
+            for item, ancestor, fd, signature in parents:
+                _require(_identity(StartupArtifactOwner._fstat(self, fd, s), True) == signature
+                         and _identity(StartupArtifactOwner._stat(self, item, ancestor, s), True)
+                         == signature)
+            _require(_owner_guard(self) is s and self._count_cell is progress)
+            result = identity, tuple((name, signature) for name, _, _, signature in parents)
+        except BaseException:
+            failed = True
+        finally:
+            for row, fd in reversed(held):
+                try:
+                    StartupArtifactOwner._close(self, row, fd, s, root)
+                except BaseException:
+                    row.unknown = self._unknown = True
+                    failed = True
+        if failed:
+            raise ArtifactObservationError(self) from None
+        _require(_owner_guard(self) is s and self._count_cell is progress
+                 and runtime.count[0] is progress)
+        return result, observation, progress
+
+    def _link_snapshot(self, phase, before_state):
+        s = _owner_guard(self)
+        runtime = s.runtime
+        progress = self._count_cell
+        links, reads = [], []
+        for index, hop in enumerate(runtime.link.hops):
+            metadata, observation, progress = StartupArtifactOwner._link_path(
+                self, hop.path, hop, phase, index, before_state, progress,
+            )
+            links.append((hop, metadata))
+            reads.append(observation)
+            if before_state is not None:
+                _require(runtime.before[0] is before_state)
+        target, _, progress = StartupArtifactOwner._link_path(
+            self, runtime.link.target.path, None, phase, 0, before_state, progress,
+        )
+        snapshot = _LinkSnapshot(runtime, phase, tuple(links), target, tuple(reads), progress)
+        _link_reads_current(runtime, snapshot)
+        return snapshot
+
+    def seal_link_observation(self, expected):
+        """Callback-free original link/read/count joins before entry publication."""
+        _require(type(self) is StartupArtifactOwner and self._fact_cell is expected
+                 and type(expected) is tuple and len(expected) == 5
+                 and self._origin is expected[1] and self._scope is expected[1])
+        runtime = self._origin.runtime
+        _runtime_seal(runtime, self)
+        fact = expected[4]
+        _require(len(runtime.reads) == 2 * len(runtime.link.hops))
+        _require(type(fact) is _LinkTargetObservation and fact.owner is self
+                 and fact.scope is self._origin and fact.source is runtime
+                 and runtime.before[0] is fact.before and runtime.after[0] is fact.after
+                 and fact.count is expected[3] is self._count_cell)
+        _link_reads_current(runtime, fact.before)
+        _link_reads_current(runtime, fact.after)
+        return fact
+
+    def recheck_link_metadata(self):
+        s = _owner_guard(self)
+        _require(self._ready is True and type(self._fact_cell) is tuple
+                 and len(self._fact_cell) == 5)
+        fact = self._fact_cell[4]
+        runtime = s.runtime
+        progress = self._count_cell
+        for index, (hop, previous) in enumerate(fact.after.links):
+            metadata, _, progress = StartupArtifactOwner._link_path(
+                self, hop.path, hop, 1, index, fact.before, progress, False,
+            )
+            _require(metadata == previous)
+        metadata, _, progress = StartupArtifactOwner._link_path(
+            self, runtime.link.target.path, None, 1, 0, fact.before, progress, False,
+        )
+        _require(metadata == fact.after.target and _owner_guard(self) is s
+                 and self._fact_cell[4] is fact and self._count_cell is fact.count)
+        return fact
+
     def _file(self, expected):
         s = _owner_guard(self)
         root_cell = self._root_cell
         held, directories = [], []
+        progress = self._count_cell if s.runtime is not None else None
         data = digest = None
         result = None
         failed = False
@@ -465,7 +861,10 @@ class StartupArtifactOwner:
             remaining = expected.size
             while remaining:
                 _require(_owner_guard(self) is s)
+                _require(progress is None or self._count_cell is progress)
                 data = StartupArtifactOwner._read(self, fd, min(remaining, 65536), s)
+                if progress is not None:
+                    progress = self._count_cell
                 _require(0 < len(data) <= remaining)
                 remaining -= len(data)
                 _require(_owner_guard(self) is s)
@@ -473,6 +872,7 @@ class StartupArtifactOwner:
                 digest.update(data)
                 data = None
                 _require(_owner_guard(self) is s)
+            _require(progress is None or self._count_cell is progress)
             data = StartupArtifactOwner._read(self, fd, 1, s)
             count_cell, counted = self._count_cell, self._bytes_read
             _require(data == b"" and _identity(StartupArtifactOwner._fstat(self, fd, s)) == original

@@ -133,20 +133,30 @@ class EntryFileSnapshotOwner:
         return EntryFileSnapshotOwner._retain(entry, recipe, plugin, True)
 
     @classmethod
+    def retain_runtime_link_files(cls, entry, recipe, plugin):
+        """Explicit selected-link path; completion retains link/target snapshot DATA only."""
+        _require(cls is EntryFileSnapshotOwner)
+        return EntryFileSnapshotOwner._retain(entry, recipe, plugin, True, True)
+
+    @classmethod
     def retain(cls, entry, recipe, plugin):
         """Entry-only compatibility path; never a complete runtime snapshot."""
         _require(cls is EntryFileSnapshotOwner)
         return EntryFileSnapshotOwner._retain(entry, recipe, plugin, False)
 
     @classmethod
-    def _retain(cls, entry, recipe, plugin, runtime_files):
-        _require(type(runtime_files) is bool)
+    def _retain(cls, entry, recipe, plugin, runtime_files, executable_links=False):
+        _require(type(runtime_files) is bool and type(executable_links) is bool
+                 and (runtime_files or not executable_links))
         _require(cls is EntryFileSnapshotOwner and type(entry) is GatewayEntryOwner
                  and type(recipe) is GatewayRecipeOwner and type(plugin) is GatewayPackageOwner)
         try:
             original_entry = GatewayEntryOwner._retained_binding(entry)
             original_recipe = GatewayRecipeOwner._retained_binding(recipe)
             original_plugin = GatewayPackageOwner._retained_binding(plugin)
+            if runtime_files:
+                _require(original_recipe[0].expected.recipe_schema
+                         == (2 if executable_links else 1))
             activation = original_recipe[0].activation
             _require(original_entry[2][3] is activation is original_plugin[0].activation
                      and activation._entry_files_owner is None
@@ -179,8 +189,9 @@ class EntryFileSnapshotOwner:
             root, entries, files, wrapper = _decode(raw, eb, rb)
             plan = None
             if runtime_files:
-                from .runtime_files import build_runtime_plan
-                plan = build_runtime_plan(eb, rb, pb, root, entries, files, wrapper)
+                from .runtime_files import build_runtime_link_plan, build_runtime_plan
+                builder = build_runtime_link_plan if executable_links else build_runtime_plan
+                plan = builder(eb, rb, pb, root, entries, files, wrapper)
             owner._inputs = inputs = _Inputs(entry, eb, recipe, rb, plugin, pb, raw,
                                              root, entries, files, wrapper,
                                              (owner, eb, rb, pb), plan, [None], [])
@@ -229,8 +240,15 @@ class EntryFileSnapshotOwner:
                 packages = tuple((row.path, row.entries) for row in plan.packages)
                 loose, prior = plan.loose, plan.prior
                 dependency_origins = loaded_origins(plan)
-            io = StartupArtifactOwner.retain_from_package(plugin, expected)
-            inputs.io_slot[0] = io
+            linked = plan is not None and plan.executable_link is not None
+            if linked:
+                io = StartupArtifactOwner.retain_from_runtime_entry(owner)
+                _require(inputs.io_slot[0] is io)
+            else:
+                io = StartupArtifactOwner.retain_from_package(plugin, expected)
+                _require(inputs.io_slot[0] is None)
+                inputs.io_slot[0] = io
+            io_scope, io_cell, io_root = io._origin, io._cell, io._root_cell
             before = tuple((root, EntryFileSnapshotOwner._tree(owner, io, root))
                            for root, _ in packages)
             _require(all(tree.entries == entries for (_, tree), (_, entries)
@@ -246,10 +264,11 @@ class EntryFileSnapshotOwner:
                 _require(all(prior_metadata[row.expected.path] == row.identity for row in prior))
             EntryFileSnapshotOwner._io_current(owner, io)
             StartupArtifactOwner.complete(io)
-            file_fact = io._fact_cell
+            file_fact, file_attempt = io._fact_cell, io._attempt_cell
             after = tuple((root, EntryFileSnapshotOwner._tree(owner, io, root))
                           for root, _ in packages)
-            _require(before == after and type(file_fact) is tuple and len(file_fact) == 4)
+            _require(before == after and type(file_fact) is tuple
+                     and len(file_fact) == (5 if linked else 4))
             loose_after = tuple((row.path, EntryFileSnapshotOwner._metadata(owner, io, row.path))
                                 for row in loose)
             _require(loose_before == loose_after)
@@ -264,13 +283,32 @@ class EntryFileSnapshotOwner:
             for receipt in (*prior, *file_fact[2]):
                 _require(type(receipt) is _HashedArtifact
                          and metadata[receipt.expected.path] == receipt.identity)
+            if linked:
+                link_fact = StartupArtifactOwner.recheck_link_metadata(io)
+                _require(link_fact is file_fact[4])
+                EntryFileSnapshotOwner._pure_current(owner, inputs, cell)
             origins = EntryFileSnapshotOwner._origins(owner)
             _require(_same_origins(origins, EntryFileSnapshotOwner._origins(owner)))
             EntryFileSnapshotOwner._io_current(owner, io)
             if plan is not None:
                 _require(_same_origins(dependency_origins, loaded_origins(plan)))
                 EntryFileSnapshotOwner._pure_current(owner, inputs, cell)
+            # Last origin sampling follows the last native/context callbacks.
+            current_origins = EntryFileSnapshotOwner._origins(owner)
+            _require(_same_origins(origins, current_origins))
+            if plan is not None:
+                _require(_same_origins(dependency_origins, loaded_origins(plan)))
+            if linked:
+                _require(StartupArtifactOwner.seal_link_observation(io, file_fact) is link_fact)
             _require(owner._inputs is inputs and owner._root_cell is cell
+                     and io._scope is io_scope is io._origin
+                     and io._cell is io_cell and io._root_cell is io_root
+                     and activation._artifact_cell is io_root
+                     and io._attempt_cell is file_attempt
+                     and activation._artifact_attempt_cell is file_attempt
+                     and io._ready is True and io._failed is False
+                     and io._unknown is False and io._reading is False
+                     and io._bytes_read is file_fact[3][2]
                      and io._fact_cell is file_fact and activation._artifact_fact_cell is file_fact
                      and io._hashes is file_fact[2] and io._count_cell is file_fact[3]
                      and all(type(row) is _Descriptor and row.closed is True

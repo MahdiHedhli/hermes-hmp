@@ -7,6 +7,28 @@
 - [ ] Finish actual runtime/native acceptance and physical avatar delivery; no
       legacy Desktop RPC bypass or source-helper completion claim.
 
+## Executable leaf-link integration
+
+- [x] **GR2-LINKS-L1** Explicit recipe2/interpreter2 document loader under original immutable version/root/IO/counter ownership, no detection/fallback/retry; D1 rejects recipe2 before artifact acquisition. Bounded independent source review accepted. This loads pinned DATA only.
+- [x] **GR2-LINKS-L2** Decode/retain the closed selected interpreter link plan against original entry/runtime bindings, canonical target/UID/executable-mode constraints and raw/normalized path policy. Preserve stricter pins during deduplication and reserve both text observations in the original limits. Independent source review accepted the plan boundary; actual completion is tracked separately in L3.
+- [x] **GR2-LINKS-L3** Retain descriptor-relative leaf-link observations before/after target hashing through the SAME original aggregate IO owner, charge both actual readlink observations, and verify the complete real-link/target refusal matrix. Hardlinks/ancestor links remain refused.
+- [ ] **GR2-LINKS-L4** Actual installed runtime/loader and native/key/broker/physical character delivery; no source snapshot substitutes for acceptance.
+
+See [selected executable link contract](EXECUTABLE_LINK_SNAPSHOT.md). All four belong to the existing character-delivery goal; L1 does not close GR2 or qualify a symlink.
+
+## Fixed startup factory implementation order
+
+See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
+
+- [ ] **PS1-ANCHOR** Freeze trusted installer/entry root selection and implement
+      independent private approval-anchor loader, avoiding circular hash approval.
+- [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
+      snapshot DATA cannot mint startup admission.
+- [ ] **PS1-LISTENER** Bind original admitted startup to actual listener/native owner,
+      with fixed currentness methods and explicit PresentationNativeService wiring.
+- [ ] **PS1-KEYS** Acquire only the gateway role key after those joins; broker and
+      terminal/ACK/PRE_EMIT remain separate acceptance tasks.
+
 ## Installed-startup and native acceptance critical path
 
 See [paired startup composition](PAIRED_STARTUP_COMPOSITION.md). These are HMP

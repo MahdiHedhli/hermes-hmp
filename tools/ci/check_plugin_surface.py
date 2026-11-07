@@ -11,6 +11,8 @@ Rules:
       even for `bridge.py`, which is otherwise exempt from this rule for Hermes internals.
       Every other absolute import is treated as a Hermes internal, which fails closed for unknown
       packages.
+      HMP-owned startup type joins are allowed only lazily in the artifact owner,
+      with the exact module/name pairs checked below.
       Closed exceptions, exact (module, name) pairs, only as `from … import …`:
       - `adapter.py` may import exactly `gateway.platforms.base.{BasePlatformAdapter, SendResult}`
         and `gateway.config.Platform`, the documented platform-plugin API (ruling on T013);
@@ -212,6 +214,26 @@ class _ModuleScanner(ast.NodeVisitor):
                     f"level, in {only_module}",
                 )
                 return
+            return
+        # HMP-owned sibling package, not an upstream Hermes API. Keep the
+        # circular entry/IO join lazy and closed to its exact required types.
+        if root == "hmp_startup":
+            local_types = {
+                "hmp_startup.entry_files": {"EntryFileSnapshotOwner"},
+                "hmp_startup.runtime_files": {"ExecutableLinkPlan", "RuntimeFilePlan"},
+            }
+            if (
+                self.name == "presentation_startup_artifacts.py"
+                and self._function_depth > 0
+                and names
+                and set(names) <= local_types.get(module, set())
+            ):
+                return
+            self._add(
+                "S1",
+                node,
+                "hmp_startup permits only the fixed lazy original-owner type joins",
+            )
             return
         if root in STDLIB or root in THIRD_PARTY_ALLOWED or self.name == BRIDGE_MODULE:
             return

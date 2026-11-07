@@ -163,3 +163,14 @@ metadata cannot approve roots, bound file IO or prove current/future import and
 loader containment. Combined dependency/interpreter wire and plan integration,
 link/loader policy, operator/native/key factory, broker acceptance and physical
 character delivery remain open. Existing native lifecycle regressions remain unresolved.
+
+## Executable-link candidate packaging verified — November 7, 2026
+
+Built exact HMP source `bd39d95b2c057e759df4582095ca5d6d1e942de2` using the cached pinned build tools.
+Wheel SHA256: `8e292af8c8e0b07c997424d77b750620af34a507e509994f5dca472f673b9c05`. All 162 package code/resource files
+match the committed source; complete ZIP inventory and RECORD digests/sizes were
+verified. The wheel was neither imported nor installed. Packaging does not qualify
+actual interpreter execution, loader/native/key/broker composition or phone images.
+Independent review accepted the final original-owner guard and closed lazy-import
+delta. Linux exact-source CI is pending; local 706 startup / 74 actual Python 3.11
+child fixtures and 89 surface checks are distinct evidence, not installed acceptance.

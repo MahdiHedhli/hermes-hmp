@@ -1,3 +1,68 @@
+## Executable-link candidate packaging verified — November 7, 2026
+
+Built exact HMP source `bd39d95b2c057e759df4582095ca5d6d1e942de2` using the cached pinned build tools.
+Wheel SHA256: `8e292af8c8e0b07c997424d77b750620af34a507e509994f5dca472f673b9c05`. All 162 package code/resource files
+match the committed source; complete ZIP inventory and RECORD digests/sizes were
+verified. The wheel was neither imported nor installed. Packaging does not qualify
+actual interpreter execution, loader/native/key/broker composition or phone images.
+Independent review accepted the final original-owner guard and closed lazy-import
+delta. Linux exact-source CI is pending; local 706 startup / 74 actual Python 3.11
+child fixtures and 89 surface checks are distinct evidence, not installed acceptance.
+
+## Original executable-link IO snapshot — November 7, 2026
+
+GR2-LINKS-L3 now observes selected executable links before and after target hashing
+through the same original aggregate IO owner. Actual returned UTF-8 bytes are
+accounted even on refusal; no-follow ancestry, inode/UID/mode, original allocation,
+closed-descriptor and final publication checks remain enforced. Failed owners do
+not retry or overwrite foreign replacement state. The explicit standard-CPython
+platform buffer premise and bounded failed-read overrun are documented in
+specs/046-bot-presentation-integration/EXECUTABLE_LINK_SNAPSHOT.md.
+
+All 706 affected startup tests pass, plus 74 actual Python 3.11 child fixtures
+(not the full floor suite). Synthetic runtime payloads were not executed. This
+supersedes the historical L2 completion refusal below. Actual Linux execution,
+installed runtime/build/loader/native/key/broker and physical bot-character delivery
+remain unfinished. No host, mobile executable, grants or deployment changed.
+
+## Original executable-link plan retention — November 7, 2026
+
+GR2-LINKS-L2 now derives an immutable selected link plan from the original
+recipe2/interpreter2, entry and plugin bindings. The first hop is the captured
+executable; exact target text, lexical destinations and terminal regular-file
+pins are checked. Private/intermediate cancellation is refused; bounded leading
+parent traversal is supported. The canonical target retains stricter UID and
+executable-mode constraints even when ordinary file rows share it. Hops and both
+text observations are reserved under the original cumulative file/byte limits.
+
+Independent focused source review accepted planning only.680 affected startup
+checks pass with source unchanged, plus48 actual Python3.11 child checks (not
+full3.11 qualification). Ruff, plugin surface, privacy and log scans pass.
+
+Retention is not link custody. Completion permanently refuses before acquiring
+an artifact owner; no actual readlink or target hash is credited by this slice.
+L3 original-owner link/target IO, runtime/loader/native/key/broker admission and
+physical character delivery remain unfinished. No installed/live change occurred.
+
+## Explicit executable-link recipe documents — November 7, 2026
+
+GR2-LINKS-L1 adds a distinct load_executable_links document path: recipe2 and
+interpreter2 are selected before IO and retained in original immutable inputs.
+The existing load path stays recipe1/interpreter1; other children stay schema1.
+D1 runtime snapshots refuse recipe2 before artifact acquisition, with no version
+detection, fallback, retry or relaxed regular-file check.
+
+Independent focused contract/source review accepted this bounded prerequisite.
+641 affected startup checks pass with source hashes unchanged;9 actual Python3.11
+child checks pass separately, not full3.11 qualification. Ruff, closed plugin
+surface and privacy scans pass. The frozen executable link contract defines exact
+selected hops, target UID/mode pins, descriptor-relative no-follow observation and
+both readlink byte charges through the same original IO owner.
+
+Only document loading is implemented here. Link-plan decoding and actual link/
+target observation remain unfinished, followed by runtime/loader/native/key/broker
+and physical character delivery. No installed runtime, key, host or route changed.
+
 ## Unicode attribution packaged with bot presentation — November 7, 2026
 
 Exact wheel inventory verification found the existing Unicode license omitted

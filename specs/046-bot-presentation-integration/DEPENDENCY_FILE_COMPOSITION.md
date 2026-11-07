@@ -174,3 +174,15 @@ this is not the full 3.11 plugin suite. Independent source review accepted D1.
 No keys, image route, actual native startup, host deployment or physical image
 qualification follows. Necessary links, actual closure/operator approval,
 future imports/loaded-library policy and original native/key factory remain open.
+
+## Selected executable-link plan checkpoint
+
+The explicit recipe2/interpreter2 path now retains the typed link plan described
+in [EXECUTABLE_LINK_SNAPSHOT.md](EXECUTABLE_LINK_SNAPSHOT.md). It preserves the
+original binding/canonical target row, UID/mode constraints and reservations for
+hops plus both readlink observations. L3 now performs real link observations
+and target hashing through the same original aggregate owner, with actual byte
+accounting and final identity/closure checks. This remains snapshot DATA, not
+installed runtime or native authority; see the linked contract for refusal-overread
+bounds and remaining Linux/build/physical qualification.
+D1 remains recipe1/interpreter1 regular-only with no fallback or loosened checks.

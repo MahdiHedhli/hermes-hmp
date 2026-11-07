@@ -265,3 +265,20 @@ uninstalled; it does not resolve launch/crash or host-image delivery qualificati
 Android development build 2026110702 remains uninstalled because Gemini's existing
 app uses another signing identity. The previously recorded HMP wheel predates
 this source and does not qualify its package bytes. The full goal stays active.
+
+## Explicit executable-link document variant
+
+The distinct load_executable_links path now selects complete recipe schema2 before
+IO, recording that exact integer in the original immutable inputs. Only its
+interpreter child uses schema2; all other children stay schema1. The original
+load path remains recipe1/interpreter1, and D1 runtime snapshots reject recipe2
+before acquiring an artifact owner. There is no format detection or fallback.
+
+This is the L1 document-loading prerequisite in
+[EXECUTABLE_LINK_SNAPSHOT.md](EXECUTABLE_LINK_SNAPSHOT.md). L2 now decodes and
+retains the original selected link plan, including stricter target pins and
+aggregate reservations. L3 now observes actual link/target metadata and charges
+both actual readlink observations through the original aggregate hash owner.
+Its bounded refusal-overread policy and source-only acceptance are documented in
+the linked contract. No native/key admission,
+executed image, actual PM lease or phone image delivery is qualified.
