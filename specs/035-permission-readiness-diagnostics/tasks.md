@@ -74,6 +74,7 @@ runtime, phone, host activation, or release qualification.
   jobs/model operation authorization after awaits. The diagnostic source task
   does not close this current gap.
 - [x] **AR1-035-T014a** Read-response currentness for GET jobs/current-model/model-options: original request/dependency scope before asynchronous authorization, held dispatch, reauthentication/current controls/bot/flag/API checks after awaits and before response. Independent source review and105 focused tests pass; see [bounded contract](READ_RESPONSE_CURRENTNESS.md). T014 remains open for mutating operations/native atomicity and installed acceptance.
+- [x] **AR1-035-T014b** Native create/edit jobs and model-update body/worker pre-dispatch currentness: original scope/task/callable held across awaits, guarded once-only worker entry, cancellation observation and separate native failure outcome. Independent source review and150 focused checks pass; see [write boundary](WRITE_DISPATCH_CURRENTNESS.md). Delete/pause/resume transport, post-dispatch response revocation/native atomicity and runtime qualification remain open; T014 is not complete.
 - [ ] **AR1-T009 / AR1-035-T015** Separately qualify exact installed host and
   physical device behavior, supported Hermes versions, and release artifacts.
   No source result marks this complete.
