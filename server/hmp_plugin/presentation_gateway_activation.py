@@ -17,6 +17,16 @@ _ENTRY_OWNER = None
 _ENTRY_CELL = None
 _MAX_MODULES = 20000
 _MAX_PATHS = 256
+_TYPING = sys.modules["typing"]
+_TYPING_NAMESPACE = vars(_TYPING)
+_MISSING_ALIAS = object()
+_TYPING_MEMBERS = tuple((leaf, _TYPING_NAMESPACE.get(leaf, _MISSING_ALIAS))
+                        for leaf in ("io", "re"))
+_TYPING_ENTRIES = tuple(("typing." + leaf, sys.modules.get("typing." + leaf, _MISSING_ALIAS))
+                        for leaf, _ in _TYPING_MEMBERS)
+_TYPING_ALIASES = tuple(("typing." + leaf, leaf, value) for leaf, value in _TYPING_MEMBERS
+                        if value is not _MISSING_ALIAS and value is not None
+                        and type(value) is not ModuleType)
 _LATE_MODULES = ("gateway.run", "hmp_plugin.adapter", "hmp_plugin.server")
 
 
@@ -49,11 +59,44 @@ class _ModuleOrigin(NamedTuple):
         return "<ActivationModuleOrigin redacted>"
 
 
+class _AliasOrigin(NamedTuple):
+    binding: tuple
+
+    def __repr__(self):
+        return "<OpaqueOriginalStdlibAlias redacted>"
+
+
+def _typing_current():
+    _require(type(sys.modules) is dict and type(_TYPING) is ModuleType
+             and type(_TYPING_NAMESPACE) is dict
+             and sys.modules.get("typing") is _TYPING and vars(_TYPING) is _TYPING_NAMESPACE
+             and all(_TYPING_NAMESPACE.get(leaf, _MISSING_ALIAS) is value
+                     for leaf, value in _TYPING_MEMBERS)
+             and all(sys.modules.get(name, _MISSING_ALIAS) is value
+                     for name, value in _TYPING_ENTRIES))
+
+
+def _alias_current(row):
+    _require(type(row) is _AliasOrigin
+             and any(row.binding is binding for binding in _TYPING_ALIASES))
+    _typing_current()
+    name, leaf, value = row.binding
+    _require(sys.modules.get(name) is value and _TYPING_NAMESPACE.get(leaf) is value)
+
+
 def _origins(modules):
     _require(type(modules) is dict and len(modules) <= _MAX_MODULES)
+    _typing_current()
     rows = []
     for name, module in tuple(modules.items()):
         _require(type(name) is str and 0 < len(name) <= 1024)
+        alias = next((binding for binding in _TYPING_ALIASES if binding[0] == name), None)
+        if alias is not None:
+            row = _AliasOrigin(alias)
+            _alias_current(row)
+            _require(module is alias[2])
+            rows.append(row)
+            continue
         if module is None:
             continue  # an absent import supplies no admitted origin
         _require(type(module) is ModuleType)
@@ -174,7 +217,11 @@ class GatewayActivationOwner:
                      and type(s.origins) is tuple)
             # New imports require the factory's separate inventory validation. This
             # fence only proves old observed origins have not silently changed.
+            _typing_current()
             for row in s.origins:
+                if type(row) is _AliasOrigin:
+                    _alias_current(row)
+                    continue
                 _require(type(row) is _ModuleOrigin and type(row.module) is ModuleType
                          and s.modules.get(row.name) is row.module)
                 values = vars(row.module)

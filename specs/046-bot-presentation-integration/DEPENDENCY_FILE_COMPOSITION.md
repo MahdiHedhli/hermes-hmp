@@ -78,3 +78,12 @@ Wire schema and executable closure enumeration must be frozen before production
 implementation; this contract does not pretend that a package-only decoder closes
 those requirements. The next author must implement the combined original-owner
 path rather than add a dependency-only helper that cannot be safely consumed.
+
+## Original inputs now available
+
+EntryStartupData.interpreter retains original interpreter observations for the
+future combined plan; use its actual original entry binding, never a late runtime
+lookup as a substitute. The isolated dependency metadata census demonstrates why
+package-only tables omit standalone extension files. It is incomplete (qrcode
+absent), not an approved inventory or production qualification. Wire/plan freeze
+and combined execution remain open.

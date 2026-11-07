@@ -134,3 +134,32 @@ source commit. It is not an installed gateway startup, runtime admission,
 credential/key activation, image route, physical device or release qualification.
 The package was neither imported nor installed. Bot-character delivery and
 host-local image deployment remain outstanding; the broader goal stays active.
+
+## Original interpreter continuity and Python-floor repair — November 7, 2026
+
+The original entry now captures interpreter paths, version/flags, implementation
+metadata and platform before native bootstrap. Current entry checks rejoin the
+original implementation/version/flags objects and primitive snapshots; historical
+handoff retains immutable redacted DATA. No environment selector, file read,
+Hermes version allowlist, key load or runtime authority is introduced.
+
+Actual Python 3.11 child testing exposed an existing activation defect: stdlib
+typing.io/re are opaque aliases rather than ordinary modules. Only those original
+stdlib namespace/registry identities now receive distinct alias records, with no
+alias attribute access, equality, iteration or execution. Replaced/missing bindings
+still refuse; unrelated nonmodule registry values remain rejected. This is an
+HMP compatibility repair, not an upstream blocker or global type relaxation.
+
+Independent source reviews accepted both bounded changes. 595 affected startup
+checks passed in 27.04s with unchanged source; 49 actual Python 3.11.15 child entry/
+synthetic reexec cases passed separately (not a full 3.11 plugin suite). Current
+mobile source `56d517c` additionally passed 28 character/readiness widget/pure tests;
+these are not physical devices or host image delivery.
+
+Isolated metadata census found 412 listed files across installed reachable fixture
+distributions, native extensions including a standalone cffi backend, and missing
+qrcode. That incomplete metadata environment is not admitted closure. Distribution
+metadata cannot approve roots, bound file IO or prove current/future import and
+loader containment. Combined dependency/interpreter wire and plan integration,
+link/loader policy, operator/native/key factory, broker acceptance and physical
+character delivery remain open. Existing native lifecycle regressions remain unresolved.

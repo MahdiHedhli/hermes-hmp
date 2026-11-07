@@ -761,3 +761,13 @@ historical, not an alternative live authorization path or resolved incident.
 - [ ] Freeze/integrate the complete combined dependency/interpreter plan before
       completion; entry preparation alone neither implements this plan nor grants
       runtime/native/key authority or physical image qualification.
+
+### Original interpreter continuity checkpoint — November 7, 2026
+
+- [x] Capture original interpreter observations before bootstrap and rejoin them
+      after callbacks; historical DATA is distinct from current runtime admission.
+- [x] Preserve exact original opaque stdlib typing aliases without weakening other
+      nonmodule refusals;595 startup checks and49 actual3.11 child cases passed.
+- [ ] Integrate original interpreter inputs with the complete combined file plan,
+      measured HMP dependency closure and explicit link/loader/operator/native/key
+      requirements. No physical avatar or production image route is qualified.

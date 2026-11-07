@@ -48,6 +48,37 @@ if success:
     assert original_binding[2] is entry._STARTED is owner._started_cell
     assert original_data.arguments == before[1] and original_data.original_arguments == before[3]
     assert original_data.main_file not in repr(original_data)
+    runtime = original_data.interpreter
+    assert type(runtime) is entry.InterpreterStartupData
+    assert runtime.paths[0] == sys.executable and runtime.version == tuple(sys.version_info)
+    assert runtime.flags == tuple(sys.flags) and runtime.platform == sys.platform
+    assert runtime.paths[0] not in repr(runtime)
+    foreign_runtime_calls = []
+    if mutation == "current_alias_binding":
+        class ForeignAlias:
+            def __getattr__(self, name):
+                foreign_runtime_calls.append(True)
+                raise AssertionError("foreign alias attribute")
+            def __eq__(self, other):
+                foreign_runtime_calls.append(True)
+                raise AssertionError("foreign alias equality")
+        sys.modules["typing.io"] = ForeignAlias()
+    if mutation == "current_alias_namespace":
+        vars(sys.modules["typing"])["io"] = object()
+    if mutation == "current_alias_module":
+        sys.modules["typing"] = ModuleType("typing")
+    if mutation == "current_interpreter_path": sys.executable += ".changed"
+    if mutation == "current_interpreter_tag": sys.implementation.cache_tag += "_changed"
+    if mutation == "current_interpreter_identity":
+        from types import SimpleNamespace
+        sys.implementation = SimpleNamespace(**vars(sys.implementation))
+    if mutation == "current_interpreter_flags": sys.flags = tuple(sys.flags)
+    if mutation == "current_interpreter_foreign":
+        class ForeignPath:
+            def __eq__(self, other):
+                foreign_runtime_calls.append(True)
+                raise AssertionError("foreign interpreter equality")
+        sys.executable = ForeignPath()
     old_method = vars(GatewayEntryOwner)["start"]
     old_code = old_method.__func__.__code__
     if mutation == "retained_namespace":
@@ -107,14 +138,17 @@ if success:
         else: raise AssertionError("changed original started binding accepted")
     else:
         assert owner.retained_data() is original_data
-    if mutation in ("retained_namespace", "retained_argv", "retained_foreign_started",
+    if (mutation in ("retained_namespace", "retained_argv", "retained_foreign_started",
                     "retained_bootstrap_alias", "current_module_file", "current_loader",
-                    "current_code", "current_argv_callback"):
+                    "current_code", "current_argv_callback")
+            or mutation.startswith(("current_interpreter_", "current_alias_"))):
         try: owner.current_binding()
         except GatewayEntryError: pass
         else: raise AssertionError("changed current entry accepted")
     else: assert owner.current_binding()[2] is original_binding[2]
-    assert owner._ready and not owner._failed and not owner._activation._uncertain
+    assert owner._ready and not owner._failed
+    assert owner._activation._uncertain is mutation.startswith("current_alias_")
+    assert foreign_runtime_calls == []
     if mutation == "current_code": old_method.__func__.__code__ = old_code
 try:
     GatewayEntryOwner.start()
@@ -165,6 +199,15 @@ if mutation == "final_origin_callback":
         return value
     entry._origin_current = arm_after_final_origin
     entry.os.getpid = change_file_after_origin_check
+if mutation == "typing_alias_binding": sys.modules["typing.io"] = object()
+if mutation == "typing_alias_namespace": vars(sys.modules["typing"])["io"] = object()
+if mutation == "typing_alias_module": sys.modules["typing"] = ModuleType("typing")
+if mutation == "interpreter_path": sys.executable += ".changed"
+if mutation == "interpreter_tag": sys.implementation.cache_tag += "_changed"
+if mutation == "interpreter_identity":
+    from types import SimpleNamespace
+    sys.implementation = SimpleNamespace(**vars(sys.implementation))
+if mutation == "interpreter_flags": sys.flags = tuple(sys.flags)
 if mutation == "argv_value": sys.argv[0] = __file__
 if mutation == "argv_identity": sys.argv = list(sys.argv)
 if mutation == "orig_value": sys.orig_argv.append("--changed")
@@ -205,6 +248,11 @@ if mutation.startswith("post_activation_"):
     "retained_foreign_started",
     "retained_bootstrap_alias", "current_module_file", "current_loader", "current_code",
     "final_origin_callback", "current_argv_callback",
+    "interpreter_path", "interpreter_tag", "interpreter_identity", "interpreter_flags",
+    "current_interpreter_path", "current_interpreter_tag", "current_interpreter_identity",
+    "current_interpreter_flags", "current_interpreter_foreign",
+    "typing_alias_binding", "typing_alias_namespace", "typing_alias_module",
+    "current_alias_binding", "current_alias_namespace", "current_alias_module",
 ])
 def test_original_invocation_through_bootstrap(tmp_path, mutation):
     if os.name != "posix" or os.sys.platform not in ("darwin", "linux"):

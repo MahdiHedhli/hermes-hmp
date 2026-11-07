@@ -1,3 +1,32 @@
+## Original interpreter continuity and Python-floor repair — November 7, 2026
+
+The original entry now captures interpreter paths, version/flags, implementation
+metadata and platform before native bootstrap. Current entry checks rejoin the
+original implementation/version/flags objects and primitive snapshots; historical
+handoff retains immutable redacted DATA. No environment selector, file read,
+Hermes version allowlist, key load or runtime authority is introduced.
+
+Actual Python 3.11 child testing exposed an existing activation defect: stdlib
+typing.io/re are opaque aliases rather than ordinary modules. Only those original
+stdlib namespace/registry identities now receive distinct alias records, with no
+alias attribute access, equality, iteration or execution. Replaced/missing bindings
+still refuse; unrelated nonmodule registry values remain rejected. This is an
+HMP compatibility repair, not an upstream blocker or global type relaxation.
+
+Independent source reviews accepted both bounded changes. 595 affected startup
+checks passed in 27.04s with unchanged source; 49 actual Python 3.11.15 child entry/
+synthetic reexec cases passed separately (not a full 3.11 plugin suite). Current
+mobile source `56d517c` additionally passed 28 character/readiness widget/pure tests;
+these are not physical devices or host image delivery.
+
+Isolated metadata census found 412 listed files across installed reachable fixture
+distributions, native extensions including a standalone cffi backend, and missing
+qrcode. That incomplete metadata environment is not admitted closure. Distribution
+metadata cannot approve roots, bound file IO or prove current/future import and
+loader containment. Combined dependency/interpreter wire and plan integration,
+link/loader policy, operator/native/key factory, broker acceptance and physical
+character delivery remain open. Existing native lifecycle regressions remain unresolved.
+
 ## Entry preparation and one-shot completion — November 7, 2026
 
 Implemented EntryFileSnapshotOwner.retain and complete; legacy verify calls those
@@ -2597,8 +2626,8 @@ header revokes queued work before its body arrives. Complete adoption, actual
 receiver join and original-budget resource cleanup precede separate local
 socket/clock close facts; started registry/native debt remains retained.
 
-Independent review passes 243 tests on Python3.13. Root serial Python3.11.15 and
-standalone Python3.14.4 each pass 1,656 tests plus 190 subtests, with one
+Independent review passes 243 tests on Python3.13. Root serial Python 3.11.15 and
+standalone Python 3.14.4 each pass 1,656 tests plus 190 subtests, with one
 Linux-native skip. Lint, surface, privacy and diff checks pass. Homebrew3.14.6's
 full inventory fixture is refused for a symlink escaping its runtime root (26
 setup failures, 1,630 passes); no check was weakened. Previously cited3.14.9 is
@@ -2853,7 +2882,7 @@ ambiguous shutdown, drift, cancellation and reentry refuse. CLOSED retains live
 peer/ACK checks. Transport EOF never releases registry/native debt.
 
 Both kernel nonblocking mode and captured Python timeout0.0 are enforced before
-I/O. Independent review passes83 focused cases. Serial Python3.11 and3.14.9
+I/O. Independent review passes83 focused cases. Serial Python 3.11 and3.14.9
 regressions each pass1013 tests plus66 subtests; lint, plugin-surface and privacy
 scans pass. The fixture controller uses this owner under its original status
 deadline, but no new actual-process invocation has run. The older FrameError's
@@ -2878,10 +2907,10 @@ The failure lock and private evidence remain preserved; no automatic retry ran.
 Reviewed fixture source `e0eafcf` now bounds settling and records private command
 progress; the
 original generic FrameError does not prove its exact cause. Focused service/model
-checks passed54 cases on both Python3.11 and3.14.9 before this polling repair.
+checks passed54 cases on both Python 3.11 and3.14.9 before this polling repair.
 Independent polling/control checks pass26 cases. Root floor regression passes985
 tests plus66 subtests, followed by31 service cases including fresh-channel STATUS;
-current Python3.14.9 regression passes986 tests plus66 subtests. Lint, plugin
+current Python 3.14.9 regression passes986 tests plus66 subtests. Lint, plugin
 surface and privacy scans pass. Independent artifact review matched93 plugin and
 17 parser files; all118 regular evidence files have private0600 modes.
 Exact source8a77d13 passes all jobs in CI41991480726; polling-repair CI is separate.
@@ -3105,7 +3134,7 @@ selector closure, including independently checking any adopted legacy state.
 It cannot renew cleanup, restore output, claim descendants gone or free a started
 registry/native reservation. The direct process-group cleanup contract is preserved.
 
-Independent56 focused cases pass. Complete serial Python3.11/3.14.9 runs each pass
+Independent56 focused cases pass. Complete serial Python 3.11/3.14.9 runs each pass
 707 tests plus66 subtests, with lint/import scanner. Hosted CI41958240003 also
 passes the Ubuntu plugin and Python3.12–3.14 Unicode jobs on exact sourceb000ca9.
 Later documentation does not change that executable. Actual fixed-reader EOF stays
@@ -3122,7 +3151,7 @@ late normal starts; ambiguous/late starts keep their exact owner and reservation
 Only an explicitly sealed never-started owner can take the current global ACK
 path. Started reap and pipe EOF alone remain PENDING and cannot release a slot.
 
-Independent87 registry/child cases and root composed548 on Python3.11/3.14.9 pass,
+Independent87 registry/child cases and root composed548 on Python 3.11/3.14.9 pass,
 plus lint/import scanner. Hosted CI41954648933 also passes all jobs on exact
 sourcecf33ec9. The next local-FD resource-drain contract is independently frozen;
 its partial-control retention and monotonic uncertainty prerequisites are next.
@@ -3141,7 +3170,7 @@ launch/signal outcomes refuse; uncertain handles remain retained.
 
 Actual fixed-child checks verify empty-input EOF/exact reap and termination that
 leaves another owned reader and the controller unaffected. Independent53 cases
-pass; root composed513 pass on Python3.11/3.14.9, plus lint/import scanner.
+pass; root composed513 pass on Python 3.11/3.14.9, plus lint/import scanner.
 Hosted CI41952456322 also passes the full Ubuntu plugin job and Python3.12–3.14
 Unicode jobs on exact executable sourcec715030. Later documentation commits do not
 change that executable. This is source-only: retained registry, topology-specific closure binder,
@@ -3175,7 +3204,7 @@ This is bounded grammar/admission state, not a grant or execution/custody receip
 ACK_REQUEST still requires one atomic global tombstone acknowledgement; no counter
 or resource is released by this model.
 
-Root lifecycle/codec/peer/source-inventory419 cases pass on Python3.11/3.14.9 on
+Root lifecycle/codec/peer/source-inventory419 cases pass on Python 3.11/3.14.9 on
 this Mac; independent lifecycle/codec132 pass, plus lint and the closed-import
 scanner. Hosted HMP CI41947357398 also passes the Ubuntu plugin suite and
 Python3.12–3.14 Unicode jobs on exact source b4a97e5; this is source CI, not
@@ -3196,7 +3225,7 @@ signals/waits for peer IDs or treats them as phone rights, code identity, livene
 or child custody. No broker service/route is activated.
 
 Independent39-case peer review passes; root peer/codec/skeleton368 cases pass on
-Python3.11 and3.14.9 on this Mac, plus lint and closed-import scanner. Linux
+Python 3.11 and3.14.9 on this Mac, plus lint and closed-import scanner. Linux
 credential layouts have decoder tests, not a fresh Linux kernel qualification.
 Darwin's inspected xucred ABI is explicitly versioned/unstable; unknown APIs or
 shapes refuse without fallback. Endpoint acquisition, service/code identity,
@@ -3213,7 +3242,7 @@ No service is implemented or activated yet.
 
 The first reviewed source piece is bounded private framing: canonical closed
 headers, kind-specific input3/output2 size limits and exact instance/listener/
-broker/channel/operation correlation. Codec/skeleton328 cases pass on Python3.11
+broker/channel/operation correlation. Codec/skeleton328 cases pass on Python 3.11
 and3.14.9, independently repeated; lint and the closed-import scanner pass.
 This is framing only, not peer authentication, lifecycle sequencing, body content
 validation, child closure or transport memory-bound certification. Service peer/
@@ -3234,9 +3263,9 @@ checks for every other module and unsafe loader/import variant.
 
 Independent review accepted the source repair, including a pending-native-await
 startup-binding mutation finding and its no-launch/no-emission regression.
-Python3.14.9 presentation/skeleton/surface run passes790 tests+190 subtests, with
+Python 3.14.9 presentation/skeleton/surface run passes790 tests+190 subtests, with
 20 parser-launch cases separately passing after three extra missing-flag cases;
-Python3.11 final run passes793 tests+190 subtests. Counts overlap. Ruff and the
+Python 3.11 final run passes793 tests+190 subtests. Counts overlap. Ruff and the
 mandatory closed-surface scanner pass. No installed runtime or physical character
 parity is claimed.
 

@@ -10,7 +10,7 @@ import os
 import sys
 import threading
 from importlib.machinery import ModuleSpec
-from types import CodeType, FunctionType, ModuleType
+from types import CodeType, FunctionType, ModuleType, SimpleNamespace
 from typing import NamedTuple
 
 from hmp_plugin.presentation_gateway_activation import GatewayActivationOwner
@@ -18,6 +18,8 @@ from hmp_plugin.presentation_gateway_activation import GatewayActivationOwner
 _OWNER = None
 _CELL = None
 _STARTED = None
+_VERSION_TYPE = type(sys.version_info)
+_FLAGS_TYPE = type(sys.flags)
 
 
 class GatewayEntryError(Exception):
@@ -37,6 +39,58 @@ def _arguments(value):
     return tuple(value)
 
 
+class InterpreterStartupData(NamedTuple):
+    paths: tuple
+    version: tuple
+    flags: tuple
+    implementation: tuple
+    platform: str
+
+    def __repr__(self):
+        return "<InterpreterStartupData observed-not-admitted redacted>"
+
+
+class _InterpreterOrigin(NamedTuple):
+    implementation: SimpleNamespace
+    version: object
+    flags: object
+    data: InterpreterStartupData
+
+    def __repr__(self):
+        return "<OriginalInterpreterOrigin redacted>"
+
+
+def _interpreter():
+    implementation, version, flags = sys.implementation, sys.version_info, sys.flags
+    _require(type(implementation) is SimpleNamespace and type(version) is _VERSION_TYPE
+             and type(flags) is _FLAGS_TYPE)
+    values = vars(implementation)
+    name, tag, hexversion = values.get("name"), values.get("cache_tag"), sys.hexversion
+    _require(type(name) is str and 0 < len(name) <= 128
+             and type(tag) is str and 0 < len(tag) <= 128 and type(hexversion) is int)
+    paths = (sys.executable, sys.prefix, sys.exec_prefix, sys.base_prefix,
+             sys.base_exec_prefix, getattr(sys, "_stdlib_dir", None))
+    _require(all(type(value) is str and 0 < len(value) <= 4096
+                 and value.startswith("/") and all(32 <= ord(c) != 127 for c in value)
+                 for value in paths))
+    v = tuple(version)
+    _require(len(v) == 5 and all(type(v[i]) is int for i in (0, 1, 2, 4))
+             and type(v[3]) is str and len(v[3]) <= 32)
+    f = tuple(flags)
+    _require(0 < len(f) <= 64 and all(type(value) in (int, bool) for value in f)
+             and type(sys.platform) is str and 0 < len(sys.platform) <= 64)
+    data = InterpreterStartupData(paths, v, f, (name, tag, hexversion), sys.platform)
+    return _InterpreterOrigin(implementation, version, flags, data)
+
+
+def _interpreter_current(origin):
+    _require(type(origin) is _InterpreterOrigin and type(origin.data) is InterpreterStartupData)
+    current = _interpreter()
+    _require(current.implementation is origin.implementation and current.version is origin.version
+             and current.flags is origin.flags and current.data == origin.data)
+    return origin
+
+
 class _Invocation(NamedTuple):
     context: tuple
     main: ModuleType
@@ -46,6 +100,7 @@ class _Invocation(NamedTuple):
     arguments: tuple
     original: list
     original_arguments: tuple
+    interpreter: _InterpreterOrigin
 
     def __repr__(self):
         return "<GatewayEntryInvocation redacted>"
@@ -75,6 +130,7 @@ class EntryStartupData(NamedTuple):
     entry_file: str
     native_root: str
     environment: str
+    interpreter: InterpreterStartupData
 
     def __repr__(self):
         return "<EntryStartupData historical-only redacted>"
@@ -106,7 +162,7 @@ class GatewayEntryOwner:
             _require(all(type(v) is int for v in context))
             s = _Invocation(context, main, file, vars(main).get("__spec__"),
                             sys.argv, _arguments(sys.argv),
-                            sys.orig_argv, _arguments(sys.orig_argv))
+                            sys.orig_argv, _arguments(sys.orig_argv), _interpreter())
             owner._scope = s
             cell = (owner, s)
             _CELL = cell
@@ -140,7 +196,7 @@ class GatewayEntryOwner:
                      and owner._started_cell is None and _STARTED is None)
             data = EntryStartupData(s.context, s.file, s.arguments, s.original_arguments,
                                     origin.file, activation_scope.root,
-                                    activation_scope.environment)
+                                    activation_scope.environment, s.interpreter.data)
             started = (owner, s, cell, activation, bootstrap, origin, data)
             owner._started_cell = _STARTED = started
             owner._ready = True
@@ -179,7 +235,10 @@ class GatewayEntryOwner:
                  and data.original_arguments is s.original_arguments
                  and data.entry_file is started[5].file
                  and data.native_root is activation_scope.root
-                 and data.environment is activation_scope.environment)
+                 and data.environment is activation_scope.environment
+                 and type(s.interpreter) is _InterpreterOrigin
+                 and type(s.interpreter.data) is InterpreterStartupData
+                 and data.interpreter is s.interpreter.data)
         return s, cell, started
 
     def retained_data(self):
@@ -223,6 +282,7 @@ class GatewayEntryOwner:
                  and _arguments(sys.orig_argv) == s.original_arguments
                  and not any(name in sys.modules for name in (
                      "gateway.run", "hmp_plugin.server", "hmp_plugin.adapter")))
+        _require(_interpreter_current(s.interpreter) is s.interpreter)
         return s
 
     def _invocation(self):
