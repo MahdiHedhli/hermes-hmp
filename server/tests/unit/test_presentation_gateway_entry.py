@@ -24,6 +24,10 @@ if mutation == "already_bootstrapped":
     sys.modules["hermes_bootstrap"] = ModuleType("hermes_bootstrap")
 sys.path.insert(0, root)
 before = sys.argv, tuple(sys.argv), sys.orig_argv, tuple(sys.orig_argv)
+if mutation == "retained_cache_mode_always":entry._imp.check_hash_based_pycs="always"
+if mutation == "retained_cache_mode_never":entry._imp.check_hash_based_pycs="never"
+if mutation == "retained_cache_prefix":sys.pycache_prefix="/synthetic/cache"
+if mutation == "retained_cache_root_prefix":sys.pycache_prefix="/"
 success = mutation in ("normal", "reexec") or mutation.startswith(("retained_", "current_"))
 try:
     owner = GatewayEntryOwner.start()
@@ -79,6 +83,25 @@ if success:
                 foreign_runtime_calls.append(True)
                 raise AssertionError("foreign interpreter equality")
         sys.executable = ForeignPath()
+    if mutation == "current_interpreter_cache_mode":
+        entry._imp.check_hash_based_pycs = (
+            "never" if entry._imp.check_hash_based_pycs != "never" else "always")
+    if mutation == "current_interpreter_cache_module":sys.modules["_imp"] = ModuleType("_imp")
+    if mutation == "current_interpreter_cache_prefix":sys.pycache_prefix = "/synthetic/cache"
+    if mutation == "current_interpreter_cache_write":
+        sys.dont_write_bytecode = not sys.dont_write_bytecode
+    if mutation in ("current_interpreter_cache_foreign",
+                    "current_interpreter_cache_foreign_prefix"):
+        class ForeignCache:
+            def __eq__(self, other):
+                foreign_runtime_calls.append(True)
+                raise AssertionError("foreign cache equality")
+        if mutation.endswith("prefix"):sys.pycache_prefix=ForeignCache()
+        else:entry._imp.check_hash_based_pycs=ForeignCache()
+    if mutation == "current_interpreter_cache_noncanonical":sys.pycache_prefix="/synthetic/../cache"
+    if mutation == "current_interpreter_cache_write_type":sys.dont_write_bytecode=1
+    if mutation == "current_interpreter_cache_unknown":
+        entry._imp.check_hash_based_pycs="unsupported"
     old_method = vars(GatewayEntryOwner)["start"]
     old_code = old_method.__func__.__code__
     if mutation == "retained_namespace":
@@ -112,7 +135,7 @@ if success:
     if mutation == "retained_bootstrap_alias": owner._bootstrap = ModuleType("replacement")
     if mutation == "current_module_file": entry.__file__ = entry.__file__ + ".changed"
     if mutation == "current_loader": entry.__spec__.loader = object()
-    if mutation == "current_argv_callback":
+    if mutation in ("current_argv_callback", "current_interpreter_cache_callback"):
         origin_current, getpid = entry._origin_current, entry.os.getpid
         armed_query = False
         def arm_after_origin(origin):
@@ -125,7 +148,10 @@ if success:
             value = getpid()
             if armed_query:
                 armed_query = False
-                sys.argv = ["synthetic-tail-change"]
+                if mutation == "current_argv_callback":sys.argv = ["synthetic-tail-change"]
+                else:
+                    entry._imp.check_hash_based_pycs = (
+                        "never" if entry._imp.check_hash_based_pycs != "never" else "always")
             return value
         entry._origin_current = arm_after_origin
         entry.os.getpid = change_argv_during_activation
@@ -251,6 +277,13 @@ if mutation.startswith("post_activation_"):
     "interpreter_path", "interpreter_tag", "interpreter_identity", "interpreter_flags",
     "current_interpreter_path", "current_interpreter_tag", "current_interpreter_identity",
     "current_interpreter_flags", "current_interpreter_foreign",
+    "current_interpreter_cache_mode", "current_interpreter_cache_module",
+    "current_interpreter_cache_prefix", "current_interpreter_cache_write",
+    "current_interpreter_cache_foreign", "current_interpreter_cache_foreign_prefix",
+    "current_interpreter_cache_noncanonical", "current_interpreter_cache_callback",
+    "retained_cache_mode_always", "retained_cache_mode_never", "retained_cache_prefix",
+    "retained_cache_root_prefix", "current_interpreter_cache_write_type",
+    "current_interpreter_cache_unknown",
     "typing_alias_binding", "typing_alias_namespace", "typing_alias_module",
     "current_alias_binding", "current_alias_namespace", "current_alias_module",
 ])

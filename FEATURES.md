@@ -1,3 +1,11 @@
+# November 7: effective cache policy continuity source
+
+The character startup observation now binds the original interpreter's hash-check
+mode, cache prefix and write-cache setting, refusing changes after callbacks.
+This does not select cache candidates or establish source equivalence/runtime
+admission. Bot-character delivery and host-local images remain unfinished.
+No live host/device/permission/provider/model/job settings were changed.
+
 # November 7: original bytecode header source
 
 Startup snapshots now retain selected .pyc headers from existing hash reads and

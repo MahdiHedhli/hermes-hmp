@@ -6,6 +6,7 @@ later factory still supplies independent installation/operator/runtime checks.
 """
 from __future__ import annotations
 
+import _imp
 import importlib.util
 import os
 import sys
@@ -51,6 +52,40 @@ class InterpreterStartupData(NamedTuple):
         return "<InterpreterStartupData observed-not-admitted redacted>"
 
 
+class _CachePolicyOrigin(NamedTuple):
+    module: ModuleType
+    mode: str
+    prefix: str | None
+    dont_write: bool
+
+    def __repr__(self):
+        return "<OriginalInterpreterCachePolicy DATA redacted>"
+
+
+def _cache_values(origin):
+    _require(type(origin) is _CachePolicyOrigin and type(origin.module) is ModuleType
+             and type(origin.mode) is str and origin.mode in ("default", "always", "never")
+             and type(origin.dont_write) is bool
+             and (origin.prefix is None or type(origin.prefix) is str))
+    prefix = origin.prefix
+    if prefix is not None:
+        _require(0 < len(prefix) <= 4096 and prefix.startswith("/")
+                 and all(32 <= ord(c) != 127 and not 0xD800 <= ord(c) <= 0xDFFF for c in prefix)
+                 and len(prefix.encode("utf-8")) <= 4096
+                 and (prefix == "/" or all(part not in ("", ".", "..")
+                                          for part in prefix[1:].split("/"))))
+    return origin.mode, prefix, origin.dont_write
+
+
+def _cache_policy():
+    module = sys.modules.get("_imp")
+    _require(type(module) is ModuleType and module is _imp)
+    origin = _CachePolicyOrigin(module, vars(module).get("check_hash_based_pycs"),
+                                sys.pycache_prefix, sys.dont_write_bytecode)
+    _cache_values(origin)
+    return origin
+
+
 class _InterpreterOrigin(NamedTuple):
     implementation: SimpleNamespace
     version: object
@@ -58,6 +93,7 @@ class _InterpreterOrigin(NamedTuple):
     data: InterpreterStartupData
     bytecode_module: ModuleType
     bytecode_magic: bytes
+    cache_policy: _CachePolicyOrigin
 
     def __repr__(self):
         return "<OriginalInterpreterOrigin redacted>"
@@ -87,7 +123,8 @@ def _interpreter():
     _require(type(bytecode) is ModuleType and bytecode is importlib.util)
     magic = vars(bytecode).get("MAGIC_NUMBER")
     _require(type(magic) is bytes and len(magic) == 4)
-    return _InterpreterOrigin(implementation, version, flags, data, bytecode, magic)
+    return _InterpreterOrigin(implementation, version, flags, data, bytecode, magic,
+                              _cache_policy())
 
 
 def _interpreter_current(origin):
@@ -96,7 +133,10 @@ def _interpreter_current(origin):
     _require(current.implementation is origin.implementation and current.version is origin.version
              and current.flags is origin.flags and current.data == origin.data
              and current.bytecode_module is origin.bytecode_module
-             and current.bytecode_magic is origin.bytecode_magic)
+             and current.bytecode_magic is origin.bytecode_magic
+             and type(origin.cache_policy) is _CachePolicyOrigin
+             and current.cache_policy.module is origin.cache_policy.module
+             and _cache_values(current.cache_policy) == _cache_values(origin.cache_policy))
     return origin
 
 

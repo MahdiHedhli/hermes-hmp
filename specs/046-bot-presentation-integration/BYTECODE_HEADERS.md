@@ -44,3 +44,20 @@ refusals. Independent bounded source review accepted this scope.
 qualify that effective setting. The remaining actual runtime policy must bind
 its original interpreter setting and every permitted source/cache candidate;
 it must not assume that checked-hash header flags force source validation.
+
+## Original effective cache-setting continuity
+
+The entry interpreter observation also retains the actual builtin _imp module,
+its exact default/always/never check_hash_based_pycs mode, sys.pycache_prefix and
+the exact boolean sys.dont_write_bytecode value. Prefixes are None or bounded
+canonical absolute paths; foreign objects are rejected before comparison or
+coercion. Existing original sys.flags observations retain optimization flags.
+Currentness requires the same _imp module and validated primitive values after
+callbacks; it never restores settings or silently adopts a changed policy.
+
+All three native hash-check modes may be observed. Observing never does not
+certify source checking, and no mode grants runtime permission. Cache candidate
+selection and complete approved source/cache artifact coverage remain separate
+unfinished requirements. A private observation type is not a new operator recipe
+schema or a permission/configuration write API. Tests mutate settings only in
+isolated synthetic fixture processes, never on a live gateway.
