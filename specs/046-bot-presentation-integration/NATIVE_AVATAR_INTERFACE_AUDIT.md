@@ -21,4 +21,3 @@ source helpers and this audit do not mean an image appears on an installed phone
 Host-local chat images remain a separate feature with deployment and physical
 qualification outstanding. The next implementation must complete an actual
 original runtime/native acceptance path, not report another DATA helper as BI1.
-
