@@ -1,3 +1,29 @@
+## Fixed cleanup-side current stop DATA — November 6, 2026
+
+The original cleanup task can now validate the signed stop notification while its
+original uncancelled reader task remains live. Actual Future/fact/capture/stop,
+complete retained-role, quiescence and earliest-budget joins repeat after native
+boundaries. Sender/foreign/completed-work queries cannot borrow that actor or
+revive work. Currentness refusal retains unknown debt.
+
+Root bounds a wait on the SAME actual notice Future or original work, with held
+allocation/loop and native Future/Task/scheduler checks AFTER clock callbacks.
+The adjacent original-work join now has the same post-clock dispatch protection,
+while still allowing cancelled owned work. Actual loop/partial-body rendezvous,
+paired substitutions, role revocation, completed work and foreign-dispatch refusal
+are covered. Concurrent CANCEL remains refused while work is live.
+
+Independent read-only review accepted source and causals. Final exact expanded
+regression: **1,844 passed, one skipped in162.91s**; lint/whitespace pass. Earlier
+scoped/harness failures and an earlier1,843-pass checkpoint are retained, not
+summed. This passing run does not resolve prior intermittent broker failures.
+
+Signed gate.request STILL RETURNS FALSE. This is stop DATA, not running-reader
+admission, concurrent-CANCEL signing, terminal/ACK/native release or publication.
+Same-reader continuation, production/physical character-image delivery remain
+unfinished. No deployment/device/build/config/grant/provider changed. Native
+sender-destination risk and original broker failure causes remain unresolved.
+
 ## Controlled broker parked-receipt expiry — November 6, 2026
 
 Added a deterministic actual-peer case: receive/authenticate the real CANCEL,

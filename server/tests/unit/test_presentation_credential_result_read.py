@@ -41,6 +41,9 @@ from .test_presentation_supervisor import context as context
     "wake_reserve_notice_generationclock", "wake_reserve_notice_bootclock",
     "wake_reserve_notice_processclock", "wake_reserve_notice_fileclock",
     "wake_reserve_notice_reservationclock",
+    "wake_reserve_notice_cleanup", "wake_reserve_notice_cleanup_copybad",
+    "wake_reserve_notice_cleanup_futurebad", "wake_reserve_notice_cleanup_rolebad",
+    "wake_reserve_wait_dispatchbad", "wake_reserve_wait_futurebad",
 ])
 async def test_original_result_envelope(context, begin_gateway, tmp_path, monkeypatch, mutation):
     from hmp_plugin import presentation_credential_result_read as module
@@ -357,6 +360,33 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 return reader._base_origin.intent.end_ns if reader._started else now
 
             monkeypatch.setattr(module.NativeClockOwner, "sample", expired_sample)
+        if "_reserve_wait_" in mutation:
+            remaining = RemoteCleanupOwner._remaining
+            held["root_wait_clock_calls"] = 0
+
+            def root_wait_clock(owner):
+                value = remaining(owner)
+                if (owner is owned._cleanup_owner_snapshot
+                        and asyncio.current_task() is owner._allocations_snapshot[0].task
+                        and owner._read_gate_snapshot._signed_notice_origin is not None):
+                    held["root_wait_clock_calls"] += 1
+                    if held["root_wait_clock_calls"] == 2:
+                        notice = owner._read_gate_snapshot._signed_notice_origin
+                        actual = notice._future_allocation_origin[1]
+                        held["root_wait_original_future"] = actual
+                        if mutation.endswith("_dispatchbad"):
+                            def foreign_callback(*args, **kwargs):
+                                held["root_wait_foreign_callback"] = True
+                                raise AssertionError("foreign callback invoked")
+                            actual.add_done_callback = foreign_callback
+                        else:
+                            replacement = asyncio.get_running_loop().create_future()
+                            notice._future = notice._future_origin = replacement
+                            held["root_wait_replacement_future"] = replacement
+                        held["root_wait_clock_changed"] = True
+                return value
+
+            monkeypatch.setattr(RemoteCleanupOwner, "_remaining", root_wait_clock)
         if mutation.startswith("wake"):
             native_wait = asyncio.wait
 
@@ -481,7 +511,7 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
 
                     monkeypatch.setattr(SignedReadNotice, "_deliver",
                                         staticmethod(delivered_then_failed))
-                if mutation.endswith("_futurebad"):
+                if mutation == "wake_reserve_notice_futurebad":
                     def foreign_future_method(*args):
                         held["foreign_notice_future_called"] = True
                     notice._future_origin.add_done_callback = foreign_future_method
@@ -526,7 +556,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                         return value
 
                     monkeypatch.setattr(RemoteCleanupOwner, "_remaining", last_clock_change)
-                if mutation.endswith(("_ambiguous", "_futurebad", "_swapcurrent")) or clock_fault:
+                if (mutation.endswith(("_ambiguous", "_swapcurrent")) or clock_fault
+                        or mutation == "wake_reserve_notice_futurebad"):
                     with pytest.raises(FrameError):
                         notice.publish()
                     assert notice._failed and notice._unknown and notice._attempted
@@ -535,6 +566,79 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     assert notice._published and not notice._failed
                     assert notice._future_origin.result() is notice._fact_origin
                     held["notice_published"] = True
+                if "_notice_cleanup" in mutation:
+                    with pytest.raises(FrameError):
+                        notice.current_stop_for_cleanup()  # sender is not the cleanup actor
+                    assert not notice._failed and not notice._unknown
+                    cleanup_checked = asyncio.Event()
+                    remaining = RemoteCleanupOwner._remaining
+                    checking = False
+                    current_for_cleanup = SignedReadNotice.current_stop_for_cleanup
+                    held["cleanup_notice_validated_calls"] = 0
+
+                    def counted_cleanup_query(owner):
+                        value = current_for_cleanup(owner)
+                        held["cleanup_notice_validated_calls"] += 1
+                        return value
+
+                    monkeypatch.setattr(SignedReadNotice, "current_stop_for_cleanup",
+                                        counted_cleanup_query)
+
+                    def actual_cleanup_probe(cleanup):
+                        nonlocal checking
+                        value = remaining(cleanup)
+                        if (checking and mutation.endswith("bad")
+                                and not held.get("cleanup_notice_tail_changed")):
+                            held["cleanup_notice_tail_changed"] = True
+                            if mutation.endswith("_copybad"):
+                                copied = notice._fact_origin._replace()
+                                notice._fact = notice._fact_origin = copied
+                            elif mutation.endswith("_futurebad"):
+                                held["cleanup_notice_original_future"] = notice._future_origin
+                                replacement = asyncio.get_running_loop().create_future()
+                                notice._future = notice._future_origin = replacement
+                            else:
+                                keys["gateway"].retire()
+                        if (mutation == "wake_reserve_notice_cleanup"
+                                and cleanup is owned._cleanup_owner_snapshot
+                                and asyncio.current_task() is cleanup._allocations_snapshot[0].task
+                                and cleanup._work_joined and held.get("cleanup_notice_checked")):
+                            with pytest.raises(FrameError):
+                                notice.current_stop_for_cleanup()
+                            assert not notice._failed and not notice._unknown
+                            held["cleanup_notice_completed_work_refused"] = True
+                        if (cleanup is owned._cleanup_owner_snapshot
+                                and asyncio.current_task() is cleanup._allocations_snapshot[0].task
+                                and notice._published and not checking
+                                and not held.get("cleanup_notice_checked")):
+                            checking = True
+                            try:
+                                if mutation.endswith("bad"):
+                                    with pytest.raises(FrameError):
+                                        notice.current_stop_for_cleanup()
+                                    assert notice._failed and notice._unknown
+                                    assert cleanup._unknown
+                                else:
+                                    assert notice.current_stop_for_cleanup() is notice._fact_origin
+                                    assert notice.current_stop_for_cleanup() is notice._fact_origin
+                                    assert not notice._failed and not notice._unknown
+                                    assert not cleanup._work_joined
+                                    assert not cleanup._allocations_snapshot[1].task.done()
+                                    with pytest.raises(AuthorityRefusalError):
+                                        RemoteCleanupOwner._cancel_actor(cleanup, channel)
+                                    assert not cleanup._cancel_write_attempted
+                                    assert not cleanup._read_gate_snapshot._requested
+                                    assert cleanup._read_gate_snapshot._fact_origin is None
+                                held["cleanup_notice_checked"] = True
+                                cleanup_checked.set()
+                            finally:
+                                checking = False
+                        return value
+
+                    monkeypatch.setattr(RemoteCleanupOwner, "_remaining", actual_cleanup_probe)
+                    async with asyncio.timeout_at(reader._base_origin.intent.end_ns / 1e9):
+                        # Same original work Task; no replacement reader.
+                        await cleanup_checked.wait()
                 with pytest.raises(FrameError):
                     notice.publish()  # no second attempt, even after ambiguous delivery
                 held["notice_no_retry"] = True
@@ -569,6 +673,17 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
                 await remote.go()
             reader = held["reader"]
+            if "_notice_cleanup" in mutation:
+                # The caller may refuse as soon as the actual cause completes,
+                # before the original sender/cleanup rendezvous has run.
+                async with asyncio.timeout_at(reader._base_origin.intent.end_ns / 1e9):
+                    outcome = (await asyncio.gather(reader._base_origin.allocation.task,
+                                                    return_exceptions=True))[0]
+                    cleanup_task = remote._cleanup_owner_snapshot._allocations_snapshot[0].task
+                    await asyncio.shield(cleanup_task)
+                    assert cleanup_task.done()
+                if not held.get("notice_no_retry") and isinstance(outcome, BaseException):
+                    raise outcome  # preserve actual original actor/fixture error
             assert reader._failed and not reader._complete
             assert reader._completion_origin is None
             if mutation in ("tail_key", "tail_policy", "expected_row"):
@@ -606,7 +721,11 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             "wake_reserve_notice_swapcurrent", "wake_reserve_notice_roleclock",
                             "wake_reserve_notice_generationclock", "wake_reserve_notice_bootclock",
                             "wake_reserve_notice_processclock", "wake_reserve_notice_fileclock",
-                            "wake_reserve_notice_reservationclock"):
+                            "wake_reserve_notice_reservationclock",
+                            "wake_reserve_notice_cleanup", "wake_reserve_notice_cleanup_copybad",
+                            "wake_reserve_notice_cleanup_futurebad",
+                            "wake_reserve_notice_cleanup_rolebad",
+                            "wake_reserve_wait_dispatchbad"):
                 assert reader._wake_release_origin is not None and not reader._io_unknown
                 assert not reader._active and reader._failed and not reader._buffer_origin
                 if mutation == "wake_release":
@@ -614,7 +733,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     with pytest.raises(FrameError):
                         reader._released(channel)
                     assert reader._io_unknown
-                elif mutation.endswith(("_swapcurrent", "_reservationclock")):
+                elif mutation.endswith(("_swapcurrent", "_reservationclock",
+                                        "_cleanup_copybad", "_cleanup_futurebad")):
                     with pytest.raises(FrameError):
                         reader._released(channel)
                     assert reader._io_unknown
@@ -645,6 +765,18 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 if mutation == "cancel_capture_reserve":
                     assert remote._cleanup_owner_snapshot._cancel_attempted
                     assert held["reader"]._base_origin.allocation.task.cancelled()
+        if "_reserve_wait_" in mutation:
+            cleanup = remote._cleanup_owner_snapshot
+            async with asyncio.timeout_at(reader._base_origin.intent.end_ns / 1e9):
+                await asyncio.shield(cleanup._allocations_snapshot[0].task)
+            assert held["root_wait_clock_changed"] and cleanup._unknown
+            assert "root_wait_foreign_callback" not in held
+            notice = cleanup._read_gate_snapshot._signed_notice_origin
+            assert notice._future_allocation_origin[1] is held["root_wait_original_future"]
+            assert not notice._attempted and not notice._published
+            assert not cleanup._cancel_write_attempted and not cleanup._work_joined
+            if mutation.endswith("_futurebad"):
+                assert notice._future_origin is held["root_wait_replacement_future"]
         if "_reserve_notice" in mutation:
             notice = remote._cleanup_owner_snapshot._read_gate_snapshot._signed_notice_origin
             assert notice is not None
@@ -660,7 +792,20 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             else:
                 assert held["notice_no_retry"] and notice._attempted
                 assert "foreign_notice_future_called" not in held
-                if mutation.endswith("_ambiguous"):
+                if "_notice_cleanup" in mutation:
+                    assert held["cleanup_notice_checked"]
+                    if mutation.endswith("bad"):
+                        assert held["cleanup_notice_tail_changed"]
+                        assert notice._failed and notice._unknown
+                        if mutation.endswith("_futurebad"):
+                            assert notice._future_allocation_origin[1] is (
+                                held["cleanup_notice_original_future"])
+                    else:
+                        assert held["notice_published"]
+                        # Two explicit probe queries plus the actual cleanup loop call.
+                        assert held["cleanup_notice_validated_calls"] >= 3
+                        assert held["cleanup_notice_completed_work_refused"]
+                elif mutation.endswith("_ambiguous"):
                     assert held["notice_delivered_then_failed"]
                     assert notice._future_origin.done() and notice._failed and notice._unknown
                     assert notice._future_origin.result() is notice._fact_origin

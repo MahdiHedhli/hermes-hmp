@@ -1107,6 +1107,38 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     assert notice._fact_origin.reservation.capture.body.committed == 13
                     assert body._candidate_snapshot is None
                     with pytest.raises(FrameError):
+                        notice.current_stop_for_cleanup()  # sender cannot borrow cleanup actor
+                    checked = asyncio.Event()
+                    remaining = RemoteCleanupOwner._remaining
+                    reading_notice = False
+
+                    def body_cleanup_probe(cleanup):
+                        nonlocal reading_notice
+                        value = remaining(cleanup)
+                        if (cleanup is owned._cleanup_owner_snapshot
+                                and asyncio.current_task() is cleanup._allocations_snapshot[0].task
+                                and not reading_notice and not held.get("body_notice_consumed")):
+                            reading_notice = True
+                            try:
+                                fact = notice.current_stop_for_cleanup()
+                                assert fact is notice._fact_origin
+                                assert fact.stop is body._wake_receipt_origin
+                                assert not cleanup._work_joined
+                                assert not cleanup._allocations_snapshot[1].task.done()
+                                with pytest.raises(AuthorityRefusalError):
+                                    channel = body._scope_origin.envelope_scope.write_scope.channel
+                                    RemoteCleanupOwner._cancel_actor(cleanup, channel)
+                                assert not cleanup._cancel_write_attempted
+                                held["body_notice_consumed"] = True
+                                checked.set()
+                            finally:
+                                reading_notice = False
+                        return value
+
+                    monkeypatch.setattr(RemoteCleanupOwner, "_remaining", body_cleanup_probe)
+                    async with asyncio.timeout_at(end / 1e9):
+                        await checked.wait()
+                    with pytest.raises(FrameError):
                         notice.publish()
                     held["body_notice_published"] = True
                     raise
@@ -1435,6 +1467,13 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 assert cleanup._result_token is None
                 if "_cause_wake" in stage:
                     task = cleanup._allocations_snapshot[1].task
+                    if stage.endswith("_wake_reserve_notice"):
+                        async with asyncio.timeout_at(end / 1e9):
+                            outcome = (await asyncio.gather(task, return_exceptions=True))[0]
+                        if (not held.get("body_notice_published")
+                                and isinstance(outcome, BaseException)):
+                            raise outcome  # preserve actual original actor/fixture error
+                        assert held["body_notice_consumed"]
                     assert held["original_body_cause_wake"] and task.done()
                     assert not task.cancelled() and task.cancelling() == 0
                     assert body._cancel_receipt_snapshot is None

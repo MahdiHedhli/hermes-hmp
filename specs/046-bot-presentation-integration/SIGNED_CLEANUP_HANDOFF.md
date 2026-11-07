@@ -128,3 +128,13 @@ consumption refuses, frozen end does not renew and no job credit/release follows
 This is expected negative qualification, not proof of the earlier intermittent
 failures' causes or a new cleanup/terminal/native permission. Production guards
 are unchanged; current consumption and original deadline remain independent gates.
+
+### Fixed cleanup-side current stop DATA — November 6, 2026
+
+The original cleanup actor can now validate an actually delivered signed stop
+notice against the original live uncancelled reader, allocation, role and earliest
+budget. Root bounds a wait on the actual retained notice/work pair, with dispatch
+checks AFTER clock callbacks and held-identity rechecks after await. Wrong sender/
+completed-work queries refuse; currentness drift retains unknown debt. This is
+stop DATA only: signed request remains False, read-admission/concurrent-CANCEL
+authority is absent, and original work-join/signing gates stay unchanged.

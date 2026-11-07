@@ -1,8 +1,9 @@
 """One-shot signed reader-stop notice component, not enabled cleanup IO authority.
 
 Future ownership precedes initialization. Only the original uncancelled work task
-may publish after actual correlated wake retirement. No receiver/signer consumes
-this notice yet; signed request still returns False and normally cancels work.
+may publish after actual correlated wake retirement. Original cleanup validates
+current stop DATA only; no read/signer grant exists. Signed request still returns
+False and normally cancels work.
 """
 from __future__ import annotations
 
@@ -128,7 +129,7 @@ class SignedReadNotice:
         else:
             _require(type(fact) is _SignedReadReady and fact.mint is _MINT
                      and fact.owner is self and fact.reservation is self._reservation
-                     and type(fact.end) is int and fact.end <= self._reservation.end
+                     and type(fact.end) is int and 0 < fact.end <= self._reservation.end
                      and type(self._fact_allocation_origin) is tuple
                      and len(self._fact_allocation_origin) == 2
                      and self._fact_allocation_origin[0] is self
@@ -148,8 +149,15 @@ class SignedReadNotice:
                  and _TASK.cancelling(r.capture.work.task) == 0)
         return r
 
-    def _stop(self):
-        r = SignedReadNotice._actor(self)
+    def _stop_metadata(self):
+        """Original stopped-cursor DATA; neither actor is selected by this helper."""
+        from .presentation_cleanup_reader import CleanupReadGate
+
+        _require(type(self) is SignedReadNotice)
+        SignedReadNotice.inspect(self, self._gate)
+        CleanupReadGate.guard(self._gate)
+        r = self._reservation
+        RemoteCleanupOwner._guard(r.capture.cleanup)
         c, o = r.capture, r.capture.cleanup
         _require(self._initialized is True and self._failed is False and self._unknown is False
                  and o._intent is True and o._unknown is False and o._work_joined is False
@@ -183,6 +191,68 @@ class SignedReadNotice:
         _, _, end, failed = CancellationBudget.inspect(r.budget)
         _require(type(end) is int and 0 < end <= r.end and failed is False)
         return stop, end
+
+    def _stop(self):
+        SignedReadNotice._actor(self)
+        return SignedReadNotice._stop_metadata(self)
+
+    def _cleanup_actor(self):
+        """Fixed original cleanup actor; never borrows the work actor's admission."""
+        _require(type(self) is SignedReadNotice)
+        SignedReadNotice.inspect(self, self._gate)
+        r = self._reservation
+        o = r.capture.cleanup
+        RemoteCleanupOwner._guard(o)
+        task = o._allocations_snapshot[0].task
+        _require(asyncio.current_task() is task and not _TASK.done(task)
+                 and _TASK.cancelling(task) == 0
+                 and o._allocations_snapshot[1] is r.capture.work
+                 and not _TASK.done(r.capture.work.task)
+                 and _TASK.cancelling(r.capture.work.task) == 0)
+        return r
+
+    def _ready_metadata(self):
+        """Actual delivered notice identity and stopped cursor; no IO permission."""
+        stop, end = SignedReadNotice._stop_metadata(self)
+        fact, future = self._fact_origin, self._future_origin
+        _require(self._attempted is True and self._published is True
+                 and self._failed is False and self._unknown is False
+                 and type(fact) is _SignedReadReady and fact.stop is stop
+                 and fact.reservation is self._reservation and end <= fact.end
+                 and type(future) is _FUTURE and _FUTURE.done(future)
+                 and not _FUTURE.cancelled(future) and _FUTURE.result(future) is fact)
+        return fact, stop, end
+
+    def current_stop_for_cleanup(self):
+        """Original cleanup actor's current stop DATA, not a read/CANCEL grant.
+
+        No native consumer/signer admits this as a running cleanup read. The
+        original work task must still be live and uncancelled; completed work
+        cannot be revived from a delivered historical Future.
+        """
+        r = SignedReadNotice._cleanup_actor(self)
+        _require(self._initialized is True and self._published is True)
+        failed = False
+        try:
+            fact, stop, end = SignedReadNotice._ready_metadata(self)
+            SelectorReadiness._native(r.wait.owner, actor=False)
+            handle, _ = SelectorReadiness._slots(r.wait.owner)
+            _require(handle is None)
+            SignedReadNotice._role_seal(self)
+            _require(RemoteCleanupOwner._remaining(r.capture.cleanup) > 0)
+            SignedReadNotice._role_seal(self)
+            _require(SignedReadNotice._cleanup_actor(self) is r)
+            actual, current_stop, current_end = SignedReadNotice._ready_metadata(self)
+            _require(actual is fact and current_stop is stop and current_end <= end)
+            SignedReadNotice._role_seal(self)
+            _require(SignedReadNotice._cleanup_actor(self) is r
+                     and SignedReadNotice._ready_metadata(self)[0] is fact)
+            return fact
+        except BaseException:
+            failed = self._failed = self._unknown = True
+            r.capture.cleanup._unknown = True
+        if failed:
+            raise FrameError("BI1_SIGNED_READ_CLEANUP_NOTICE_UNKNOWN") from None
 
     def _role_seal(self):
         """Complete callback-free retained role DATA seal, no work authority revival."""

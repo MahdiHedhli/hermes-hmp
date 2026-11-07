@@ -23,6 +23,10 @@
       closure. Controlled causal does not resolve earlier broad broker failures.
 - [ ] Diagnose original broad-suite broker cancellation failures from actual
       bounded state/underlying-task evidence; passing reruns are not resolution.
+- [x] Add/review fixed original-cleanup current stop-DATA validation and bounded
+      original notice/work wait with actual Future/task dispatch fences. Separate
+      sender/receiver actors; actual live/completed-work and partial-body causals.
+      No read-admission, concurrent CANCEL, legacy fact or work-join relaxation.
 - [ ] Qualify distinct signed request reservation and original-work read-ready
       notice, with current frozen budget/quiescence/role checks; no legacy fact or
       fabricated work-join substitution. See [integration contract](SIGNED_CLEANUP_HANDOFF.md).

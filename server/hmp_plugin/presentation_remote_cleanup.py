@@ -932,8 +932,65 @@ class RemoteCleanupOwner:
             if self._unknown or RemoteCleanupOwner._remaining(self) <= 0:
                 self._unknown = True
                 return False
-            work = self._allocations_snapshot[1].task
+            original_work_allocation = self._allocations_snapshot[1]
+            work = original_work_allocation.task
+            cleanup_loop = self._loop_snapshot
             gate = self._read_gate_snapshot
+            signed_notice = gate._signed_notice_origin
+            if signed_notice is not None:
+                from .presentation_credential_cleanup_notice import SignedReadNotice
+
+                if (type(signed_notice) is not SignedReadNotice
+                        or signed_notice._initialized is not True
+                        or signed_notice._failed is not False
+                        or signed_notice._unknown is not False):
+                    self._unknown = True
+                    return False
+                from .presentation_broker_cancel import _native_future_methods
+                from .presentation_readiness import _scheduler_safe
+
+                SignedReadNotice.inspect(signed_notice, gate)
+                notice_allocation = signed_notice._future_allocation_origin
+                notice_future = notice_allocation[1]
+                notice_loop = notice_allocation[2]
+                work_allocation = self._allocations_snapshot[1]
+                remaining = RemoteCleanupOwner._remaining(self)
+                # The clock can run callbacks: reseal actual held allocations and
+                # native dispatch AFTER it, before asyncio.wait registers anything.
+                RemoteCleanupOwner._guard(self)
+                SignedReadNotice.inspect(signed_notice, gate)
+                if (self._read_gate_snapshot is not gate or gate._signed_notice is not signed_notice
+                        or gate._signed_notice_origin is not signed_notice
+                        or signed_notice._future_allocation_origin is not notice_allocation
+                        or signed_notice._future is not notice_future
+                        or signed_notice._future_origin is not notice_future
+                        or self._loop_snapshot is not notice_loop
+                        or self._allocations_snapshot[1] is not work_allocation
+                        or work_allocation.task is not work or remaining <= 0):
+                    self._unknown = True
+                    return False
+                _native_future_methods(notice_future)
+                _native_future_methods(work)
+                _scheduler_safe(notice_loop)
+                # Stop DATA only: no legacy read fact, CANCEL permission or work-join
+                # substitution. Wait only within the same original cleanup allowance.
+                await asyncio.wait((notice_future, work), timeout=remaining,
+                                   return_when=asyncio.FIRST_COMPLETED)
+                RemoteCleanupOwner._guard(self)
+                if self._unknown or RemoteCleanupOwner._remaining(self) <= 0:
+                    self._unknown = True
+                    return False
+                if (self._read_gate_snapshot is not gate or gate._signed_notice is not signed_notice
+                        or gate._signed_notice_origin is not signed_notice
+                        or signed_notice._future_allocation_origin is not notice_allocation
+                        or signed_notice._future is not notice_future
+                        or signed_notice._future_origin is not notice_future
+                        or self._allocations_snapshot[1] is not work_allocation
+                        or work_allocation.task is not work):
+                    self._unknown = True
+                    return False
+                if (_FUTURE.done(notice_future) and not _TASK.done(work)):
+                    SignedReadNotice.current_stop_for_cleanup(signed_notice)
             sent = False
             if gate._requested is True:
                 if gate._fact_origin is None and not _TASK.done(work):
@@ -948,9 +1005,24 @@ class RemoteCleanupOwner:
                     await SocketChannel.send_cancel(self._refs_snapshot[3], self)
                     sent = True
             if not _TASK.done(work):
-                await asyncio.wait((work,), timeout=RemoteCleanupOwner._remaining(self))
+                from .presentation_broker_cancel import _native_future_methods
+                from .presentation_readiness import _scheduler_safe
+
+                remaining = RemoteCleanupOwner._remaining(self)
+                RemoteCleanupOwner._guard(self)
+                if (self._allocations_snapshot[1] is not original_work_allocation
+                        or original_work_allocation.task is not work
+                        or self._loop_snapshot is not cleanup_loop or remaining <= 0):
+                    self._unknown = True
+                    return False
+                # Joining cancelled OWNED work remains valid. This is a dispatch
+                # fence, not fresh work/role authority or a cancellation-count gate.
+                _native_future_methods(work)
+                _scheduler_safe(cleanup_loop)
+                await asyncio.wait((work,), timeout=remaining)
             RemoteCleanupOwner._guard(self)
-            if not _TASK.done(work):
+            if (self._allocations_snapshot[1] is not original_work_allocation
+                    or original_work_allocation.task is not work or not _TASK.done(work)):
                 self._unknown = True
                 return False
             self._work_joined = True
