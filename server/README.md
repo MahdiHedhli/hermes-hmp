@@ -10,3 +10,7 @@ captured auth record with zero post-cause auth bytes and retained outer header. 
 consistency data only and is not registered for production delivery. Scope and
 remaining lifecycle gates are tracked in
 [the signed result contract](../specs/046-bot-presentation-integration/SIGNED_RESULT_READ.md).
+
+`presentation_credential_cleanup_body.py` separately completes the same captured
+partial-body digest. Its result is consistency DATA; it does not restore the old
+image buffer, accept a terminal or authorize native release.

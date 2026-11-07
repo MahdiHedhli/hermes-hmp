@@ -31,6 +31,18 @@ from .test_presentation_remote import prepare
 from .test_presentation_selected_protocol import darwin_model
 from .test_presentation_supervisor import context as context
 
+_BODY_FINISH_SUFFIXES = ("_notice_native_finished",
+    "_notice_native_finished_initial",
+    "_notice_native_finished_lost",
+    "_notice_native_finished_digest",
+    "_notice_native_finished_ledger",
+    "_notice_native_finished_shadow",
+    "_notice_native_finished_seal",
+    "_notice_native_finished_resultcell",
+    "_notice_native_finished_received",
+    "_notice_native_finished_result",
+)
+
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("local", [2], indirect=True)
@@ -96,6 +108,16 @@ from .test_presentation_supervisor import context as context
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_consumed",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_continued",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_hashlost",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_initial",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_lost",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_digest",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_ledger",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_shadow",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_result",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_seal",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_resultcell",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_received",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_countbad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_custodybad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_copybad",
@@ -185,6 +207,8 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                "go_relay_result_sign_write_tail_phase",
                                "go_relay_result_sign_write_settlement_key",
                                "go_relay_result_sign_write_blocked_cancel")
+    finish_case = "_notice_native_finished" in stage
+    finish_failure = finish_case and not stage.endswith("_notice_native_finished")
     body_stage = stage.startswith("go_relay_result_sign_write_body")
     body_fault = (body_stage and "_body_adopt" not in stage and stage not in (
                                               "go_relay_result_sign_write_body",
@@ -600,15 +624,24 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                                     count = actual_send(sock, data[:13])
                                                     sent.extend(data[:count])
                                                     held["partial_body_sent"] = count
-                                                    if stage.endswith((
+                                                    if stage.endswith(
+                                                        (
                                                             "_notice_native",
                                                             "_notice_native_advanced",
                                                             "_notice_native_consumed",
                                                             "_notice_native_continued",
-                                                            "_notice_native_hashlost")):
-                                                        tail_end = (19 if stage.endswith(
+                                                            "_notice_native_hashlost",
+                                                            *_BODY_FINISH_SUFFIXES,
+                                                        )
+                                                    ):
+                                                        tail_end = (len(data) if finish_case else
+                                                                    19 if stage.endswith(
                                                             "_notice_native_continued") else 16)
                                                         tail = bytes(data[13:tail_end])
+                                                        if finish_case and stage.endswith(
+                                                            "_digest"
+                                                        ):
+                                                            tail = tail[:-1] + bytes([tail[-1] ^ 1])
 
                                                         task = asyncio.create_task(
                                                             queue_native_body_tail(sock, tail))
@@ -1147,7 +1180,7 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     assert notice is not None and notice._initialized
                     if stage.endswith(("_notice_native", "_notice_native_advanced",
                                        "_notice_native_consumed", "_notice_native_continued",
-                                       "_notice_native_hashlost")):
+                                       "_notice_native_hashlost", *_BODY_FINISH_SUFFIXES)):
                         native_body_ready.set()
                         async with asyncio.timeout_at(end / 1e9):
                             await native_body_queued.wait()
@@ -1175,17 +1208,18 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     assert body._candidate_snapshot is None and not body._scope_origin.accumulator
                     if stage.endswith(("_notice_native", "_notice_native_advanced",
                                        "_notice_native_consumed", "_notice_native_continued",
-                                       "_notice_native_hashlost")):
+                                       "_notice_native_hashlost", *_BODY_FINISH_SUFFIXES)):
                         from hmp_plugin.presentation_credential_cleanup_read import (
                             NativeCleanupRead,
                         )
                         native = NativeCleanupRead.retain(idle_reader)
                         held["native_body_owner"] = native
-                        if stage.endswith("_notice_native_continued"):
+                        if stage.endswith("_notice_native_continued") or finish_case:
                             receive = NativeCleanupRead._receive
 
                             def short_body_receive(sock, count):
-                                return receive(sock, min(3, count))
+                                return receive(sock, min(3, count) if (
+                                    not finish_case or not native._consume_complete) else count)
 
                             monkeypatch.setattr(NativeCleanupRead, "_receive",
                                                 staticmethod(short_body_receive))
@@ -1193,11 +1227,17 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
 
                         def body_native_observer(owner):
                             value = observer(owner)
-                            assert owner is native and value.count == 3
+                            assert owner is native
+                            assert value.count == (len(held["native_body_tail"]) - 3
+                                                   if finish_case else 3)
                             assert body._stream_origin._received == (
+                                13 + len(held["native_body_tail"]) if finish_case else
                                 19 if stage.endswith("_notice_native_continued") else
                                 16 if stage.endswith("_notice_native_consumed") else 13)
-                            if stage.endswith("_notice_native_continued"):
+                            if finish_case:
+                                assert value is native._body_finish_origin.fact
+                                assert value.total_received == len(held["native_body_tail"])
+                            elif stage.endswith("_notice_native_continued"):
                                 assert value is native._next_read_origin.fact
                                 assert value.total_received == value.total_committed == 6
                             held["body_notice_consumed"] = True
@@ -1213,7 +1253,8 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                         assert body._stream_origin._received == 13
                         assert body._committed == 13 and body._candidate_snapshot is None
                         assert not body._scope_origin.accumulator
-                        if stage.endswith(("_notice_native_consumed", "_notice_native_continued")):
+                        if stage.endswith(("_notice_native_consumed", "_notice_native_continued",
+                                           *_BODY_FINISH_SUFFIXES)):
                             progress = native.consume_pending()
                             assert progress.count == 3 and native._consume_complete
                             assert progress.before.stream is body._initialization_origin[1]
@@ -1227,14 +1268,127 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                 native.current_pending()
                             assert not native._failed and not native._unknown
                             held["body_parser_consumed"] = True
-                            if stage.endswith("_notice_native_continued"):
+                            if stage.endswith("_notice_native_continued") or finish_case:
                                 next_fact = native.read_and_consume_next()
-                                assert next_fact.count == 3 and next_fact.ordinal == 1
-                                assert next_fact.total_received == next_fact.total_committed == 6
+                                assert next_fact.count == (
+                                    len(held["native_body_tail"]) - 3 if finish_case else 3)
+                                assert next_fact.ordinal == 1
+                                assert next_fact.total_received == next_fact.total_committed == (
+                                    len(held["native_body_tail"]) if finish_case else 6)
                                 assert next_fact.after.stream is body._initialization_origin[1]
-                                assert next_fact.after.received == 19
+                                assert next_fact.after.received == (
+                                    13 + len(held["native_body_tail"]) if finish_case else 19)
                                 assert body._committed == 13 and not body._scope_origin.accumulator
                                 assert native._next_read_origin.pending is None
+                                if finish_case:
+                                    from hmp_plugin.presentation_credential_stream import (
+                                        SignedResultDiscard,
+                                    )
+                                    body_finish = SignedResultDiscard.finish
+                                    held["body_finish_calls"] = 0
+                                    def observed_body_finish(parser):
+                                        held["body_finish_calls"] += 1
+                                        value = body_finish(parser)
+                                        if stage.endswith("_lost"):
+                                            raise OSError("synthetic body finish ack lost")
+                                        if stage.endswith("_ledger"):
+                                            class ForeignBodyLedger:
+                                                def __getattr__(self, name):
+                                                    held["foreign_body_ledger"] = True
+                                                    raise AssertionError("foreign body ledger")
+                                            native._ledger_origin = ForeignBodyLedger()
+                                        if stage.endswith("_result"):
+                                            value = replace(value,
+                                                frame_length=value.frame_length + 1)
+                                        return value
+                                    monkeypatch.setattr(SignedResultDiscard, "finish",
+                                                        observed_body_finish)
+                                    if stage.endswith(("_initial", "_shadow")):
+                                        body_fence = NativeCleanupRead._final_socket_fence
+                                        def body_finish_fence(owner, scope):
+                                            value = body_fence(owner, scope)
+                                            if native._body_finish_allocation is not None:
+                                                if stage.endswith("_initial"):
+                                                    raise FrameError("SYNTHETIC_BODY_FINISH_FENCE")
+                                                def foreign_finish():
+                                                    held["foreign_body_finish"] = True
+                                                    raise AssertionError("foreign body finish")
+                                                cursor._parser_origin.finish = foreign_finish
+                                            return value
+                                        monkeypatch.setattr(NativeCleanupRead,
+                                            "_final_socket_fence", body_finish_fence)
+                                    if stage.endswith(("_resultcell", "_received")):
+                                        from hmp_plugin import (
+                                            presentation_credential_cleanup_body as bf,
+                                        )
+
+                                        final_hash = bf._HASH_HEX
+                                        def body_finish_hash(hasher):
+                                            value = final_hash(hasher)
+                                            finish = native._body_finish_origin
+                                            if (finish is not None and finish.returned
+                                                    and not held.get("body_final_hash_changed")):
+                                                held["body_final_hash_changed"] = True
+                                                class ForeignBodyReturn:
+                                                    def __getitem__(self, key):
+                                                        held["foreign_body_result_index"] = True
+                                                        raise AssertionError("foreign result cell")
+                                                    def __eq__(self, other):
+                                                        held["foreign_body_received_eq"] = True
+                                                        raise AssertionError("foreign received")
+                                                foreign = ForeignBodyReturn()
+                                                if stage.endswith("_resultcell"):
+                                                    finish.result_cell = foreign
+                                                else:
+                                                    body._stream_origin._received = foreign
+                                                    body._stream_origin._received_snapshot = foreign
+                                            return value
+                                        monkeypatch.setattr(bf, "_HASH_HEX", body_finish_hash)
+                                    if stage.endswith("_seal"):
+                                        original_progress = native._progress_allocation_origin[1]
+                                        class ForeignBodySeal:
+                                            def __getattr__(self, name):
+                                                held["foreign_body_seal_getter"] = True
+                                                raise AssertionError("foreign body seal")
+                                        copied = original_progress._replace(after=ForeignBodySeal())
+                                        native._progress = native._progress_origin = copied
+                                        with pytest.raises(FrameError):
+                                            native.finish_body()
+                                        assert native._body_finish_allocation is None
+                                        assert held["body_finish_calls"] == 0
+                                        assert not native._failed
+                                        assert "foreign_body_seal_getter" not in held
+                                        held["body_finish_refused"] = True
+                                    elif finish_failure:
+                                        with pytest.raises(FrameError):
+                                            native.finish_body()
+                                        finish = native._body_finish_origin
+                                        assert finish.failed and not finish.complete
+                                        assert finish.scope.total == len(held["native_body_tail"])
+                                        assert not cursor._parser_origin._buffer_origin
+                                        assert body._stream_origin is body._initialization_origin[1]
+                                        assert body._committed == 13
+                                        assert not body._scope_origin.accumulator
+                                        assert held["body_finish_calls"] == (
+                                            0 if stage.endswith(("_initial", "_shadow")) else 1)
+                                        assert "foreign_body_ledger" not in held
+                                        assert "foreign_body_finish" not in held
+                                        assert "foreign_body_result_index" not in held
+                                        assert "foreign_body_received_eq" not in held
+                                        with pytest.raises(FrameError):
+                                            native.finish_body()
+                                        held["body_finish_refused"] = True
+                                    else:
+                                        held["body_finish_fact"] = native.finish_body()
+                                        assert held["body_finish_fact"].digest.frame_sha256 == (
+                                            body._stream_origin._commitment.frame_sha256)
+                                        assert body._stream_origin is body._initialization_origin[1]
+                                        assert body._committed == 13
+                                        assert not body._scope_origin.accumulator
+                                        for action in (native.finish_body,
+                                                       native.read_and_consume_next):
+                                            with pytest.raises(FrameError):
+                                                action()
                         if stage.endswith("_notice_native_hashlost"):
                             from hmp_plugin.presentation_credential_stream import (
                                 SignedResultDiscard,
@@ -1256,7 +1410,7 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                             with pytest.raises(FrameError):
                                 native.consume_pending()
                             held["body_hash_ack_lost"] = True
-                        else:
+                        elif not finish_failure:
                             async with asyncio.timeout_at(end / 1e9):
                                 await native_body_observed.wait()
                         if stage.endswith("_notice_native_advanced"):
@@ -1684,11 +1838,13 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                             raise outcome  # preserve actual original actor/fixture error
                         if stage.endswith("_notice_native_hashlost"):
                             assert held["body_hash_ack_lost"] and not native_body_observed.is_set()
+                        elif finish_failure:
+                            assert held["body_finish_refused"] and not native_body_observed.is_set()
                         else:
                             assert held["body_notice_consumed"]
                         if stage.endswith(("_notice_native", "_notice_native_advanced",
                                        "_notice_native_consumed", "_notice_native_continued",
-                                       "_notice_native_hashlost")):
+                                       "_notice_native_hashlost", *_BODY_FINISH_SUFFIXES)):
                             native = held["native_body_owner"]
                             assert native._received == 3 and native._count_known
                             assert native._pending_origin is None
@@ -1709,9 +1865,17 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                 b"untouched synthetic replacement")
                     async with asyncio.timeout(3):
                         await asyncio.shield(cleanup._allocations_snapshot[0].task)
-                    if stage.endswith(("_notice_native_advanced", "_notice_native_consumed",
-                                       "_notice_native_continued", "_notice_native_hashlost")):
-                        if stage.endswith(("_notice_native_consumed", "_notice_native_continued")):
+                    if stage.endswith(
+                        (
+                            "_notice_native_advanced",
+                            "_notice_native_consumed",
+                            "_notice_native_continued",
+                            "_notice_native_hashlost",
+                            *_BODY_FINISH_SUFFIXES,
+                        )
+                    ):
+                        if stage.endswith(("_notice_native_consumed", "_notice_native_continued",
+                                           *_BODY_FINISH_SUFFIXES)):
                             assert held["body_parser_consumed"]
                         elif stage.endswith("_notice_native_hashlost"):
                             assert held["body_hash_ack_lost"]

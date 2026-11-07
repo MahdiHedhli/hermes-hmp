@@ -1,3 +1,32 @@
+## Original partial-body digest completion — November 7, 2026
+
+`NativeCleanupRead.finish_body()` now finishes the SAME `SignedResultDiscard` and
+original full-frame hash after exact-needed native continuation reaches its end.
+The native image-only hash is a separate allocation and is not mistaken for the
+full-frame digest. Original progress allocation/type checks precede nested access;
+an independently retained one-shot finish attempt precedes parser/hash/currentness
+boundaries. Actual finish results and frozen post-cause byte counts are retained
+before callbacks. Finished validation reseals original parser/stream/hash/buffer,
+result allocation, primitive counters and digest values after hashing, without
+calling unfinished-parser guards or constructing a replacement digest.
+
+Ten private-socket synthetic cases cover actual original partial-body completion,
+initial fence refusal, lost finish acknowledgement, corrupted wire data, foreign
+ledger, instance finish override, changed returned length, foreign progress seal,
+and final-hash foreign result-cell/counter substitutions. Refusals do not call
+foreign getters/index/equality or retry. The old body committed offset remains13,
+the original stream advances to its full body length, and no image accumulator or
+candidate is restored. Original cleanup observes consistency DATA only; work exit
+still preserves UNKNOWN. Independent read-only review accepted the repaired slice.
+Exact expanded regression:
+2,009 passed, 1 skipped in 184.50s; full lint, plugin surface and whitespace checks
+pass. Execution source hashes remain unchanged.
+
+EAGAIN waiting, explicit next-record grammar, terminal acceptance, CANCEL/ACK/native
+release, production routing and physical image delivery remain unfinished. Earlier
+broker failure causes and the native sender-destination incident remain unresolved.
+No app build/install, live host/device/grant/provider or deployment change occurred.
+
 ## Captured authentication and retained outer-header continuation — November 7, 2026
 
 A fully captured original authentication record can now be verified once without

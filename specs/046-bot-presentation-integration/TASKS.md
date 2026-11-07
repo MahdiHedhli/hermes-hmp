@@ -37,8 +37,10 @@
       new auth-byte receive/consume credit, parser reset or fabricated progress;
       exact original allocations, zero seed, cleanup observer/work-exit binding,
       actual four-byte retained header RESULT path and five refusal causals.
-- [ ] Complete an originally partial body using its SAME original digest; the
-      new-frame parser does not qualify that path.
+- [x] Complete an originally partial body using its SAME original digest; exact
+      original progress/stream/hash joins, retained finish/result and frozen counts,
+      finished-state observer and ten synthetic positive/refusal cases. Consistency
+      only; the new-frame parser is not substituted for this original digest.
 - [ ] Qualify subsequent explicit grammar transitions and terminal acceptance;
       no auth restart/fallback or captured-prefix byte credit.
 

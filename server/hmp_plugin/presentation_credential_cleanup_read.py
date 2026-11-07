@@ -259,6 +259,7 @@ class NativeCleanupRead:
         owner._ledger = owner._ledger_origin = owner._ledger_allocation_origin = None
         owner._auth = owner._auth_origin = owner._auth_allocation_origin = None
         owner._frame = owner._frame_origin = owner._frame_allocation_origin = None
+        owner._body_finish = owner._body_finish_origin = owner._body_finish_allocation = None
         owner._progress = owner._progress_origin = owner._progress_allocation_origin = None
         owner._received = owner._received_origin = 0
         owner._native_count_allocation_origin = None
@@ -657,7 +658,9 @@ class NativeCleanupRead:
                  and _FUTURE.result(notice._future_origin) is notice._fact_origin)
         current_seal = NativeCleanupRead._continuation_seal(self, s, fact.after)
         authenticated = NativeCleanupRead._auth_metadata(self, s, current_seal)
-        if authenticated is None:
+        from .presentation_credential_cleanup_body import metadata as body_metadata
+        completed_body = body_metadata(self, s, current_seal)
+        if authenticated is None and completed_body is None:
             NativeCleanupRead._same_parser(
                 NativeCleanupRead._parser_seal(cell[2].parser), current_seal)
         return s
@@ -676,6 +679,9 @@ class NativeCleanupRead:
         SignedReadNotice._role_seal(s.notice)
         _require(SignedReadNotice._actor(s.notice) is r
                  and NativeCleanupRead._consumption_metadata(self) is s)
+        body = self._body_finish_origin
+        if body is not None and body.returned is True:
+            return body.fact
         auth = self._auth_origin
         if auth is not None and auth.returned is True:
             return auth.fact
@@ -773,6 +779,10 @@ class NativeCleanupRead:
             SignedReadNotice._role_seal(s.notice)
             _require(SignedReadNotice._cleanup_actor(s.notice) is r
                      and NativeCleanupRead._consumption_metadata(self) is s)
+            body = self._body_finish_origin
+            if body is not None:
+                _require(body.complete is True)
+                return body.fact
             auth = self._auth_origin
             if auth is not None:
                 _require(auth.complete is True)
@@ -871,7 +881,8 @@ class NativeCleanupRead:
         s = NativeCleanupRead._origin(self)
         r = SignedReadNotice._actor(s.notice)
         _require(self._consume_complete is True and self._failed is False
-                 and self._unknown is False and self._auth_origin is None)
+                 and self._unknown is False and self._auth_origin is None
+                 and self._body_finish_allocation is None)
         progress, allocation = self._progress_origin, self._progress_allocation_origin
         _require(type(progress) is _ConsumedReceipt and self._progress is progress
                  and progress.mint is _MINT and progress.owner is self and progress.scope is s
@@ -1293,6 +1304,10 @@ class NativeCleanupRead:
                 NativeCleanupRead._drop_pending(self)
         if failed:
             raise FrameError("BI1_NATIVE_CLEANUP_AUTHENTICATION_UNKNOWN") from None
+
+    def finish_body(self):
+        from .presentation_credential_cleanup_body import finish_body
+        return finish_body(self)
 
     def start_frame(self):
         from .presentation_credential_cleanup_frame import start_frame
