@@ -88,6 +88,9 @@ from .test_presentation_supervisor import context as context
                                   "go_relay_result_sign_write_body_hash_pair",
                                   "go_relay_result_sign_write_body_cancel",
                                   "go_relay_result_sign_write_body_cancel_cause_wake",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_countbad",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_custodybad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_copybad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_scopebad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_countbad",
@@ -575,7 +578,13 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                     def counted_result(sock, data):
                                         if body_stage and type(data) is memoryview:
                                             if "_body_cancel" in stage:
-                                                return 0  # truncated synthetic peer, no image body
+                                                if ("_wake_reserve" in stage
+                                                        and not held.get("partial_body_sent")):
+                                                    count = actual_send(sock, data[:13])
+                                                    sent.extend(data[:count])
+                                                    held["partial_body_sent"] = count
+                                                    return count
+                                                return 0  # truncated synthetic peer
                                             if stage.endswith("_digest"):
                                                 changed = bytes(data)
                                                 changed = changed[:-1] + bytes([changed[-1] ^ 1])
@@ -727,6 +736,9 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         async def original_signed_body(owned):
             result = await original_exchange(owned)
             producer = owned._cleanup_owner_snapshot._credential_work_snapshot
+            if "_wake_reserve" in stage:
+                SocketChannel._go_written(owned._channel_snapshot, owned)
+                assert RemoteCleanupOwner._publish_write_quiescence(owned._cleanup_owner_snapshot)
             envelope = NativeResultEnvelopeReceiver.retain(
                 producer._go_commitment_snapshot._writer_snapshot)
             await envelope.run()
@@ -949,6 +961,28 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     held["signed_partial_cleanup_capture_checked"] = True
 
                 monkeypatch.setattr(SelectorReadiness, "wait", observed_wait)
+                if "_wake_reserve_" in stage:
+                    native = SelectorReadiness._native
+                    held["reservation_native_checks"] = 0
+
+                    def final_reservation_native(waiter, **options):
+                        result = native(waiter, **options)
+                        gate = owned._cleanup_owner_snapshot._read_gate_snapshot
+                        if (waiter is body._waiter_origin and gate._signed_reservation_attempted
+                                and gate._signed_reservation_origin is None
+                                and not gate._capture_cause.done()):
+                            held["reservation_native_checks"] += 1
+                            if held["reservation_native_checks"] == 2:
+                                if stage.endswith("_countbad"):
+                                    body._committed_snapshot += 1
+                                else:
+                                    replacement = bytearray(b"untouched synthetic replacement")
+                                    body._scope_origin.buffer._buffer = replacement
+                                    held["reservation_buffer_replacement"] = replacement
+                                held["reservation_body_tail_changed"] = True
+                        return result
+
+                    monkeypatch.setattr(SelectorReadiness, "_native", final_reservation_native)
                 if "_cause_wake" in stage:
                     wait_native = asyncio.wait
                     async def original_cause_on_registered_wait(futures, **options):
@@ -963,6 +997,23 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                             RemoteCleanupOwner.request(cleanup)  # actual original-actor first cause
                             assert not cleanup._cancel_attempted
                             assert cleanup._read_gate_snapshot._signed_capture_origin is not None
+                            if "_wake_reserve" in stage:
+                                gate = cleanup._read_gate_snapshot
+                                reservation = gate._signed_reservation_origin
+                                assert held["partial_body_sent"] == 13
+                                if stage.endswith("bad"):
+                                    assert reservation is None and gate._signed_reservation_failed
+                                    assert held["reservation_body_tail_changed"]
+                                else:
+                                    assert reservation is not None
+                                    assert not gate._signed_reservation_failed
+                                    assert reservation.capture.body.owner is body
+                                    assert reservation.capture.body.received == 13
+                                    assert reservation.capture.body.committed == 13
+                                    assert reservation.wait.owner is waiter
+                                    assert reservation.write is cleanup._write_fact_snapshot
+                                assert not gate._requested and gate._fact_origin is None
+                                held["body_reservation_checked"] = True
                         return await wait_native(futures, **options)
                     monkeypatch.setattr(asyncio, "wait", original_cause_on_registered_wait)
                 else:
@@ -1298,6 +1349,11 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     assert not cleanup._cancel_attempted
                     assert not cleanup._read_gate_snapshot._requested
                     assert cleanup._read_gate_snapshot._fact_origin is None
+                    if "_wake_reserve" in stage:
+                        assert held["body_reservation_checked"]
+                        if stage.endswith("_custodybad"):
+                            assert held["reservation_buffer_replacement"] == (
+                                b"untouched synthetic replacement")
                     async with asyncio.timeout(3):
                         await asyncio.shield(cleanup._allocations_snapshot[0].task)
                     if stage.endswith("bad"):

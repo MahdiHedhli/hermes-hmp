@@ -32,6 +32,8 @@ from .test_presentation_supervisor import context as context
     "cancel_capture_wait", "cancel_capture_partial",
     "wake_wait", "wake_partial", "wake_copy", "wake_generic", "wake_count",
     "wake_release", "wake_subclass", "wake_capture", "wake_scope", "wake_tail",
+    "wake_reserve", "wake_reserve_no_write", "cancel_capture_reserve",
+    "wake_reserve_tail_alloc", "wake_reserve_tail_refs", "wake_reserve_tail_barriers",
 ])
 async def test_original_result_envelope(context, begin_gateway, tmp_path, monkeypatch, mutation):
     from hmp_plugin import presentation_credential_result_read as module
@@ -46,6 +48,63 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
     go = asyncio.Event()
     waiting = asyncio.Event()
     retain = NativeBeginWriter.retain
+    if "reserve" in mutation:
+        from hmp_plugin.presentation_cleanup_reader import CleanupReadGate
+        request = CleanupReadGate.request
+
+        def observed_request(gate):
+            result = request(gate)
+            if gate._capture_kind == "signed":
+                assert result is False  # no suppression/read/CANCEL permission
+                assert not gate._capture_cause.done()
+                held["reservation_precompletion"] = True
+                held["reservation"] = gate._signed_reservation_origin
+            return result
+
+        monkeypatch.setattr(CleanupReadGate, "request", observed_request)
+        if "_reserve_tail_" in mutation:
+            from hmp_plugin import presentation_credential_cleanup_reservation as reservation_module
+            current = reservation_module._current
+            held["reservation_current_calls"] = 0
+
+            def foreign_after_budget(reservation, gate):
+                held["reservation_current_calls"] += 1
+                if held["reservation_current_calls"] != 2:
+                    return current(reservation, gate)
+                cleanup = reservation.capture.cleanup
+                names = {
+                    "alloc": ("_allocations", "_allocations_snapshot"),
+                    "refs": ("_refs", "_refs_snapshot"),
+                    "barriers": ("_barriers", "_barriers_snapshot"),
+                }[mutation.rsplit("_", 1)[1]]
+                saved = tuple(getattr(cleanup, name) for name in names)
+                calls = []
+
+                class ForeignStructure:
+                    def __getitem__(self, key):
+                        calls.append("index")
+                        raise AssertionError("foreign indexing")
+
+                    def __getattr__(self, key):
+                        calls.append("getter")
+                        raise AssertionError("foreign getter")
+
+                foreign = ForeignStructure()
+                for name in names:
+                    setattr(cleanup, name, foreign)
+                try:
+                    with pytest.raises((FrameError, AuthorityRefusalError)):
+                        current(reservation, gate)
+                    assert calls == []
+                    held["reservation_foreign_refused"] = True
+                finally:
+                    # Fixture structural aliases only, after refusal. Never mint/retry a
+                    # reservation or restore intent, publication, grants, role or IO flags.
+                    for name, value in zip(names, saved, strict=True):
+                        setattr(cleanup, name, value)
+                raise FrameError("synthetic refused preflight; no successful reservation")
+
+            monkeypatch.setattr(reservation_module, "_current", foreign_after_budget)
 
     def observed_begin(cls, producer):
         writer = retain(producer)
@@ -110,7 +169,10 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     assert captured.envelope.consumed == len(expected)
                     assert captured.envelope.waiter.scope.task is b.allocation.task
                     assert not captured.envelope.waiter.future_done
-                    assert captured.write is None
+                    if mutation == "cancel_capture_reserve":
+                        assert captured.write is cleanup._write_fact_snapshot
+                    else:
+                        assert captured.write is None
                     assert cleanup._cancel_attempted and not cleanup._work_joined
                     assert not gate._requested and gate._fact_origin is None
                     held["signed_envelope_cleanup_capture_checked"] = True
@@ -173,6 +235,10 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
         producer = owned._cleanup_owner_snapshot._credential_work_snapshot
         writer = producer._go_commitment_snapshot._writer_snapshot
         held["go"] = writer
+        if "reserve" in mutation and mutation != "wake_reserve_no_write":
+            from hmp_plugin.presentation_broker_service import SocketChannel
+            SocketChannel._go_written(channel, owned)
+            assert RemoteCleanupOwner._publish_write_quiescence(owned._cleanup_owner_snapshot)
         if mutation == "wrong_actor":
             async def wrong_factory():
                 with pytest.raises(FrameError):
@@ -405,7 +471,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 assert reader._consumed == 0 and held["native_received"] > 0
                 assert reader._io_unknown
             if mutation in ("cancel_wait", "cancel_partial",
-                            "cancel_capture_wait", "cancel_capture_partial"):
+                            "cancel_capture_wait", "cancel_capture_partial",
+                            "cancel_capture_reserve"):
                 assert reader._cancel_release_origin is not None
                 assert not reader._active and not reader._io_unknown
                 assert reader._consumed == (4 if mutation.endswith("partial") else 0)
@@ -419,7 +486,9 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             task = reader._base_origin.allocation.task
             assert task.done() and not task.cancelled() and task.cancelling() == 0
             assert reader._cancel_release_origin is None
-            if mutation in ("wake_wait", "wake_partial", "wake_release"):
+            if mutation in ("wake_wait", "wake_partial", "wake_release", "wake_reserve",
+                            "wake_reserve_no_write", "wake_reserve_tail_alloc",
+                            "wake_reserve_tail_refs", "wake_reserve_tail_barriers"):
                 assert reader._wake_release_origin is not None and not reader._io_unknown
                 assert not reader._active and reader._failed and not reader._buffer_origin
                 if mutation == "wake_release":
@@ -432,6 +501,28 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             else:
                 assert reader._wake_release_origin is None and reader._io_unknown
             assert "foreign_wake_getter" not in held
+        if "reserve" in mutation:
+            from hmp_plugin.presentation_credential_cleanup_reservation import (
+                inspect_signed_reservation,
+            )
+            gate = remote._cleanup_owner_snapshot._read_gate_snapshot
+            assert held["reservation_precompletion"] and gate._signed_reservation_attempted
+            assert not gate._requested and gate._fact_origin is None
+            if mutation == "wake_reserve_no_write" or "_reserve_tail_" in mutation:
+                assert held["reservation"] is None and gate._signed_reservation_failed
+                if "_reserve_tail_" in mutation:
+                    assert held["reservation_foreign_refused"]
+            else:
+                reservation = held["reservation"]
+                assert reservation is not None and not gate._signed_reservation_failed
+                assert inspect_signed_reservation(reservation, gate) is reservation
+                assert reservation.wait.owner is held["reader"]._waiter_origin
+                assert reservation.write is remote._cleanup_owner_snapshot._write_fact_snapshot
+                assert reservation.cause is remote._cleanup_owner_snapshot._barriers_snapshot.cause
+                assert gate._signed_reservation_allocation_origin == (gate, reservation)
+                if mutation == "cancel_capture_reserve":
+                    assert remote._cleanup_owner_snapshot._cancel_attempted
+                    assert held["reader"]._base_origin.allocation.task.cancelled()
         await peer_task
         if mutation.startswith("cancel_capture"):
             assert held["signed_envelope_cleanup_capture_checked"]

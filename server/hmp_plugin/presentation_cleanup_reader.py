@@ -114,6 +114,9 @@ class CleanupReadGate:
         self._capture_kind = self._capture_receiver = self._capture_cause = None
         self._signed_capture = self._signed_capture_origin = None
         self._signed_capture_allocation_origin = None
+        self._signed_reservation = self._signed_reservation_origin = None
+        self._signed_reservation_allocation_origin = None
+        self._signed_reservation_attempted = self._signed_reservation_failed = False
         self._preflight = self._preflight_origin = None
         self._fact = self._fact_origin = None
         self._notice = self._notice_origin = _FUTURE.__new__(_FUTURE)
@@ -154,7 +157,8 @@ class CleanupReadGate:
                  and all(type(v) is bool for v in (
                      self._failed, self._requested, self._activated, self._change_initialized,
                      self._change_active, self._changing, self._intent, self._io_unknown,
-                     self._done, self._eof, self._capture_attempted, self._capture_failed))
+                     self._done, self._eof, self._capture_attempted, self._capture_failed,
+                     self._signed_reservation_attempted, self._signed_reservation_failed))
                  and self._preflight is self._preflight_origin
                  and (self._capture_kind is None or (type(self._capture_kind) is str
                       and self._capture_kind in ("none", "pre", "result", "signed")))
@@ -173,6 +177,17 @@ class CleanupReadGate:
             inspect_signed_cleanup(self._signed_capture_origin, self, o)
         else:
             _require(self._signed_capture_allocation_origin is None)
+        _require(self._signed_reservation is self._signed_reservation_origin)
+        if self._signed_reservation_origin is not None:
+            from .presentation_credential_cleanup_reservation import inspect_signed_reservation
+            allocation = self._signed_reservation_allocation_origin
+            _require(self._signed_reservation_attempted is True
+                     and self._signed_reservation_failed is False
+                     and type(allocation) is tuple and len(allocation) == 2
+                     and allocation[0] is self and allocation[1] is self._signed_reservation_origin)
+            inspect_signed_reservation(self._signed_reservation_origin, self)
+        else:
+            _require(self._signed_reservation_allocation_origin is None)
         if self._preflight is not None:
             _require(self._capture_kind == "pre" and type(self._preflight) is _Request)
             CleanupReadGate._pre_seal(self, self._preflight)
@@ -400,7 +415,19 @@ class CleanupReadGate:
         if self._failed or o._unknown or self._capture_failed:
             return False
         if self._capture_kind == "signed":
-            # Progress DATA only. A typed current cooperative continuation is not qualified yet.
+            # Preflight is NOT suppression/read/CANCEL permission. Keep ordinary cancellation
+            # until the distinct original-task read-ready and continuation path is qualified.
+            if not self._signed_reservation_attempted:
+                self._signed_reservation_attempted = True
+                try:
+                    from .presentation_credential_cleanup_reservation import (
+                        prepare_signed_reservation,
+                    )
+                    reservation = prepare_signed_reservation(self)
+                    self._signed_reservation = self._signed_reservation_origin = reservation
+                    self._signed_reservation_allocation_origin = (self, reservation)
+                except BaseException:
+                    self._signed_reservation_failed = True
             return False
         if self._capture_kind == "pre":
             r = self._preflight_origin

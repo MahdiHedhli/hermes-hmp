@@ -11,6 +11,9 @@
 - [x] Implement/review bounded signed RESULT discard DATA continuation from partial
       authentication/header or SAME supplied partial-body digest; no body retention,
       scanning or runtime read authority. Exact runtime allocation binding remains next.
+- [x] Implement/review disabled signed reservation preflight from actual registered
+      envelope/partial-body wait, original write-quiescence/current role/frozen
+      budget and post-cause custody. Request still False; no suppression/read grant.
 - [ ] Qualify distinct signed request reservation and original-work read-ready
       notice, with current frozen budget/quiescence/role checks; no legacy fact or
       fabricated work-join substitution. See [integration contract](SIGNED_CLEANUP_HANDOFF.md).

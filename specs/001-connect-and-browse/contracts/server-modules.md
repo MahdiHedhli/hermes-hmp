@@ -904,3 +904,13 @@ It validates pinned commitment/header/full hash, refuses overread/scanning/resta
 and clears input aliases on stable refusal. This grants no socket/actor/budget,
 read transfer, terminal/ACK/native release or publication authority. Integrate only
 through distinct signed reservation and original-work read-ready admission.
+
+### Disabled signed reservation preflight — November 6, 2026
+
+The original registered envelope/partial-body wait can now yield a one-attempt
+preflight record tied to frozen capture/cause, actual write-quiescence, current
+retained role and original cleanup budget. Post-callback structural/counter/native
+custody seals refuse drift. It is retained DATA only: signed gate.request STILL
+RETURNS FALSE and external Task cancellation remains. No read-ready notice,
+read/CANCEL/ACK authority, release or publication follows. Separate original-work
+admission/notice and full same-task continuation remain prerequisites.

@@ -91,3 +91,20 @@ manufacture successful captures, wake/notice/CANCEL/terminal/ACK facts. Cover:
 - actual known local retirement separately from remote/native/release acceptance.
 
 Production composition and physical/device/release qualification remain separate.
+
+### Disabled signed reservation preflight — November 6, 2026
+
+The original registered envelope/partial-body wait can now yield a one-attempt
+preflight record tied to frozen capture/cause, actual write-quiescence, current
+retained role and original cleanup budget. Post-callback structural/counter/native
+custody seals refuse drift. It is retained DATA only: signed gate.request STILL
+RETURNS FALSE and external Task cancellation remains. No read-ready notice,
+read/CANCEL/ACK authority, release or publication follows. Separate original-work
+admission/notice and full same-task continuation remain prerequisites.
+
+The current disabled preflight component covers only captured GO_SENT with an
+active envelope or unvalidated partial-body registered wait. Normal post-result/
+adopted-image terminal waits require their own exact cursor/allocation proof and
+are not admitted by this component; pre-READY and already-retired waits retain
+their existing paths. Full integration must cover those legitimate lifecycle
+positions rather than silently excluding them from the feature's final scope.

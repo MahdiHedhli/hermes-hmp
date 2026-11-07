@@ -1,3 +1,28 @@
+## Disabled signed reservation preflight — November 6, 2026
+
+Signed cleanup now records a one-attempt preflight for the actual live registered
+envelope or partial-body wait, frozen capture/cause, original write-quiescence,
+current retained role and original cleanup budget. Post-callback structural,
+byte-counter/hash and native buffer/custody seals reject changed owners or output.
+An actual thirteen-byte body prefix is covered without resetting UNKNOWN state.
+
+The signed gate STILL RETURNS FALSE: this preflight is not suppression, read-ready
+or read/CANCEL/ACK permission. External Task cancellation remains unchanged even
+when the candidate exists. A separately qualified original-work admission/notice
+and same-task continuation are required before any cooperative route is enabled.
+Post-result terminal, pre-READY and retired-wait coverage remains separate.
+
+Independent read-only review accepted repaired source and causals. Final expanded
+regression: **1,820 passed, one skipped in159.38s**; lint/whitespace pass. Six
+envelope and three partial-body causal cases overlap the full run; counts are not
+summed. Reviewed body/live-metadata and missing custody/structural fences were
+repaired and recorded. Structural tripwire restoration is fixture teardown only,
+not admission/recovery proof; body corruption is left un-restored/unknown.
+
+Full signed runtime cleanup/terminal/ACK, production composition and physical
+character-image delivery remain open. No deployment/device/build/config/grant/
+provider changed. Historical broker failures and sender-destination risk remain.
+
 ## Signed RESULT discard data continuation — November 6, 2026
 
 The bounded signed RESULT parser now continues partial authentication/header
