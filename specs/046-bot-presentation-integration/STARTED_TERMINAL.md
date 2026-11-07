@@ -1,3 +1,37 @@
+## Original-service signed TERMINAL/2 envelope — November 7, 2026
+
+The normal signed RESULT/local-closure producer now owns a separate one-shot
+terminal exporter. It freezes the actual original local handoff, verifies its
+canonical claim and body digest, derives TERMINAL/2 context from the retained
+RESULT scope/pins, signs with the current original broker role key and verifies
+the complete bounded frame before returning immutable signed DATA. The signed
+frame body must equal the original handoff bytes; a self-consistent signature/hash
+on different body bytes is insufficient.
+
+Original service actor admission precedes allocation and prepare intent. Held
+scope/handoff/frozen cells preserve provenance across crypto/currentness checks.
+Wrong-task attempts leave the actual owner's slots/attempt available. Late cause,
+key retirement during signing or final verification, paired scope/handoff drift,
+foreign header values and a changed frame body prevent completion. Signing and
+handoff freeze cannot be retried or reminted. Cleared image payload stays cleared;
+no terminal bytes are sent and no grammar/ACK/resource-release credit is minted.
+
+The normal METADATA fixture now composes actual signed RESULT transfer, original
+native local closure, canonical handoff and signed terminal envelope; its peer/clock
+qualification remains mocked. AVATAR-specific signed-export qualification remains
+pending. Cleanup-time/aborted exporters, trusted runtime
+startup, counted terminal delivery, remote acceptance, original control-reader
+ACK, earlier/direct terminal positions, EAGAIN waiting and physical character
+images remain open. Existing unexplained broker refusals and sender-destination
+incident remain unresolved. No live host/device/grant/provider/deployment change.
+
+Independent read-only review accepted the source, including typed canonical
+handoff/header and exact frame-body checks. Focused native cases:8 passed,
+128 deselected in5.39s. Expanded exact-source regression:2,099 passed,1 skipped
+in200.71s. Source hashes are unchanged; lint, plugin surface and whitespace pass.
+Focused cases overlap the expanded run. Initial fixture expectation/hook-selection
+failures remain privately recorded; production guards were not weakened.
+
 ## Signed RESULT transfer to native local claim — November 7, 2026
 
 The signed writer retains an independent original scope/completion cell and the

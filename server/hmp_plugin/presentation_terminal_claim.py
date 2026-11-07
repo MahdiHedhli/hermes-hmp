@@ -321,6 +321,8 @@ class LocalStartedProducer:
         self._transfer = self._transfer_snapshot = None
         self._handoff_attempted = self._handoff_failed = False
         self._handoff = self._handoff_snapshot = None
+        self._signed_exporter = self._signed_exporter_origin = None
+        self._signed_exporter_cell = None
         self._initialized = self._failed = False
         try:
             control, channel = connection.cancel_owner, connection.channel_snapshot

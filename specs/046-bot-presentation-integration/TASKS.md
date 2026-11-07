@@ -14,9 +14,14 @@
 - [x] Join normal signed RESULT counted transfer after payload withdrawal with
       the actual original native local closure observation/input in LocalStartedProducer;
       independent payload-hash/scope/count refusal and withdrawal causals are covered.
-- [ ] Qualify trusted producer runtime/startup, signed terminal exporter and late
-      cleanup transitions, terminal acceptance, earlier/direct terminal positions,
-      EAGAIN waiting, lifecycle, ACK and native release before production routing.
+- [x] Freeze original normal signed producer handoff and prepare a one-shot
+      signed TERMINAL/2 envelope from current original broker role/context; enforce
+      exact handoff body, wrong-actor/no-retry and late cause/key/scope refusal.
+- [ ] Qualify AVATAR-specific signed export, trusted runtime/startup,
+      cleanup-time/aborted exporters, counted
+      terminal delivery, remote acceptance, earlier/direct terminal positions,
+      EAGAIN waiting, lifecycle, original control-reader ACK and native release
+      before production routing.
 
 - [x] Separate historical native wake/custody binding from the existing strict
       frozen digest wrappers; actual3-byte original-digest advancement preserves

@@ -13,12 +13,14 @@ import pytest
 
 from hmp_plugin import presentation_cancel_budget as budget_api
 from hmp_plugin import presentation_credential_cleanup_budget as cb
+from hmp_plugin import presentation_credential_terminal as ct
 from hmp_plugin.presentation_authority import AuthorityRefusalError
 from hmp_plugin.presentation_broker_cancel import (
     _CANCEL_RECEIPT_MINT,
     BrokerCancellationOwner,
     _CancelReceipt,
 )
+from hmp_plugin.presentation_broker_codec import BrokerFrame
 from hmp_plugin.presentation_broker_registry import BrokerRegistry, RegistryStatus
 from hmp_plugin.presentation_broker_service import BrokerServiceSpine, SocketChannel
 from hmp_plugin.presentation_cancel_budget import CancellationBudget
@@ -75,6 +77,13 @@ _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
                                   "go_relay_result_sign_take_alias", "go_relay_result_sign_write",
                                   "go_relay_result_sign_write_completed_fact",
                                   "go_relay_result_sign_write_completed_scope",
+                                  "go_relay_result_sign_write_terminal_latecause",
+                                  "go_relay_result_sign_write_terminal_key",
+                                  "go_relay_result_sign_write_terminal_scope",
+                                  "go_relay_result_sign_write_terminal_handoff",
+                                  "go_relay_result_sign_write_terminal_verify",
+                                  "go_relay_result_sign_write_terminal_header",
+                                  "go_relay_result_sign_write_terminal_frame",
                                   "go_relay_result_sign_write_wrong_actor",
                                   "go_relay_result_sign_write_tail_key",
                                   "go_relay_result_sign_write_tail_control",
@@ -326,8 +335,16 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
     adopted_key_retirement = stage in (
         "go_relay_result_sign_write_body_adopt_key",
         "go_relay_result_sign_write_body_adopt_notice_revoked")
-    operation_failure = (relay_failure or result_failure or writer_failure or body_fault
-                         or adopted_key_retirement or stage == "go_current_park_expiry")
+    terminal_fault = stage.startswith("go_relay_result_sign_write_terminal_")
+    operation_failure = (
+        terminal_fault
+        or relay_failure
+        or result_failure
+        or writer_failure
+        or body_fault
+        or adopted_key_retirement
+        or stage == "go_current_park_expiry"
+    )
 
     async def broker():
         record = await BrokerServiceSpine._accept_owned(spine, end)
@@ -862,7 +879,7 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                         assert sent == raw + frozen.header + frozen.payload
                                     assert signed_writer._payload_snapshot is None
                                     assert not channel._writing
-                                    if (stage == "go_relay_result_sign_write"
+                                    if (stage == "go_relay_result_sign_write" or terminal_fault
                                             or stage.startswith(
                                                 "go_relay_result_sign_write_completed_")):
                                         from hmp_plugin import (
@@ -905,6 +922,112 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                             assert terminal._transfer_snapshot is fact
                                             assert terminal._observation_snapshot is (
                                                 resources._observation_identity)
+
+                                            async def wrong_export_actor():
+                                                with pytest.raises(
+                                                    (FrameError, AuthorityRefusalError)
+                                                ):
+                                                    ct.CredentialTerminalProducer.retain(terminal)
+
+                                            await asyncio.create_task(wrong_export_actor())
+                                            assert terminal._signed_exporter is None
+                                            exporter = ct.CredentialTerminalProducer.retain(
+                                                terminal
+                                            )
+                                            held["terminal_exporter"] = exporter
+
+                                            async def wrong_prepare_actor():
+                                                with pytest.raises(
+                                                    (FrameError, AuthorityRefusalError)
+                                                ):
+                                                    exporter.prepare()
+
+                                            await asyncio.create_task(wrong_prepare_actor())
+                                            assert not exporter._attempted
+                                            actual_encode, actual_verify = (
+                                                ct.encode_record,
+                                                ct.check_complete_frame,
+                                            )
+                                            signed_calls, foreign_header_calls = [], []
+
+                                            class ForeignTerminalKind:
+                                                def __eq__(self, value):
+                                                    foreign_header_calls.append(value)
+                                                    raise AssertionError("foreign terminal kind")
+
+                                            def terminal_encode(value, signature):
+                                                signed_calls.append(None)
+                                                encoded = actual_encode(value, signature)
+                                                if stage.endswith("_terminal_latecause"):
+                                                    BrokerCancellationOwner._local_cause(control)
+                                                elif stage.endswith("_terminal_key"):
+                                                    keys["broker"].retire()
+                                                elif stage.endswith("_terminal_scope"):
+                                                    changed = exporter._scope_origin._replace(
+                                                        pins=()
+                                                    )
+                                                    exporter._scope = exporter._scope_origin = (
+                                                        changed
+                                                    )
+                                                elif stage.endswith("_terminal_handoff"):
+                                                    changed = exporter._handoff_origin._replace(
+                                                        wire=b"{}"
+                                                    )
+                                                    exporter._handoff = exporter._handoff_origin = (
+                                                        changed
+                                                    )
+                                                return encoded
+
+                                            def terminal_verify(*args, **kwargs):
+                                                header = actual_verify(*args, **kwargs)
+                                                if stage.endswith("_terminal_verify"):
+                                                    keys["broker"].retire()
+                                                elif stage.endswith("_terminal_header"):
+                                                    object.__setattr__(header, "kind",
+                                                                       ForeignTerminalKind())
+                                                return header
+
+                                            actual_frame = ct.encode_frame
+
+                                            def terminal_frame(*args, **kwargs):
+                                                value = actual_frame(*args, **kwargs)
+                                                return value[:-1] + bytes([value[-1] ^ 1])
+
+                                            if stage.endswith("_terminal_frame"):
+                                                monkeypatch.setattr(
+                                                    ct, "encode_frame", terminal_frame
+                                                )
+                                            monkeypatch.setattr(
+                                                ct, "encode_record", terminal_encode
+                                            )
+                                            monkeypatch.setattr(
+                                                ct, "check_complete_frame", terminal_verify
+                                            )
+                                            if terminal_fault:
+                                                with pytest.raises(
+                                                    (FrameError, AuthorityRefusalError)
+                                                ):
+                                                    exporter.prepare()
+                                                assert exporter._failed and exporter._attempted
+                                                assert not exporter._complete
+                                                assert exporter._frozen_origin is None
+                                            else:
+                                                envelope = exporter.prepare()
+                                                assert envelope.handoff.claim is claim
+                                                assert envelope.handoff.cleanup_end is None
+                                                assert envelope.checked.frame_length == len(
+                                                    envelope.frame)
+                                            assert producer._payload_snapshot is None
+                                            assert signed_writer._payload_snapshot is None
+                                            assert signed_calls == [None]
+                                            with pytest.raises((FrameError, AuthorityRefusalError)):
+                                                exporter.prepare()
+                                            with pytest.raises((FrameError, AuthorityRefusalError)):
+                                                ct.CredentialTerminalProducer.retain(terminal)
+                                            assert signed_calls == [None]
+                                            assert foreign_header_calls == []
+                                            assert len(sent) == fact.count
+                                            held["terminal_sign_calls"] = len(signed_calls)
                                         assert producer._payload_snapshot is None
                                     held["signed_result_sent"] = True
                                 frozen = None
@@ -2458,8 +2581,26 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 outcome = (await asyncio.gather(broker_task, return_exceptions=True))[0]
                 assert type(outcome) is asyncio.CancelledError and broker_task.cancelled()
                 frame = None
+            elif terminal_fault:
+                outcome = (await asyncio.gather(broker_task, return_exceptions=True))[0]
+                if stage.endswith(("_terminal_key", "_terminal_verify")):
+                    assert type(outcome) is FrameError
+                    assert outcome.args == ("BI1_CONTROL_CREDENTIAL_BINDING_REFUSED",)
+                    frame = None
+                else:
+                    assert type(outcome) is BrokerFrame and outcome.header.kind == "CANCEL"
+                    frame = outcome
             else:
                 frame = await broker_task
+        if terminal_fault:
+            exporter = held["terminal_exporter"]
+            assert exporter._failed and exporter._attempted and not exporter._complete
+            assert exporter._frozen_origin is None and held["terminal_sign_calls"] == 1
+            assert held["signed_result_writer"]._payload_snapshot is None
+            assert held["result_producer"]._payload_snapshot is None
+            assert not cleanup._result_token and remote._result_owner is None
+            assert not remote._job_origin_snapshot.credit_released
+            return  # exporter refusal is neither RESULT failure nor native settlement
         if stage == "go_current_park_expiry":
             assert frame is None and held["actual_park_expiry_refused"]
             assert held["control"]._stop_intent_snapshot is None

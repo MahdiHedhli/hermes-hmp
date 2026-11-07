@@ -4,6 +4,11 @@
 
 The package source is preserved from the private F1 implementation. See [HMP v1](../docs/architecture/contracts/HMP_V1.md) for its wire contract, [deployment](DEPLOYMENT.md) for profile routing, and [contributing](../CONTRIBUTING.md) for checks.
 
+The internal `presentation_credential_terminal.py` normal exporter signs and
+verifies a bounded TERMINAL/2 envelope from the original signed-result/native-local
+producer and exact canonical handoff. It has no transport method and no ACK or
+release authority. Cleanup/aborted exporters and counted delivery remain separate.
+
 The internal `presentation_credential_result_completed.py` validator binds the
 completed signed RESULT byte count and body digest after output withdrawal to
 its original actor, control and native local resource closure. The terminal
