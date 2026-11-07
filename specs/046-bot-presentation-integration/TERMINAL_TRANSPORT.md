@@ -172,3 +172,8 @@ poisoning without copying an image body; output withdrawal remains ahead of cloc
 sampling. Signed request stays disabled until the same-task wake/retirement/current
 custody/minimum-budget continuation is qualified. Terminal/ACK remain separate.
 See [capture evidence](../../docs/research/presentation-signed-cleanup-capture-2026-11-06.md).
+
+The actual registered-wake retirement receipt is now a source prerequisite. It
+records only original local interest retirement; no current cleanup/terminal/ACK
+permission follows. Correlation to the actual signed cursor/native cause and
+current minimum-budget transfer remains open. See [wake evidence](../../docs/research/presentation-wake-retirement-2026-11-06.md).

@@ -426,8 +426,11 @@ async def test_completed_wake_precedes_registration_readiness_and_expiry(pair):
     cause = asyncio.get_running_loop().create_future()
     cause.set_result(None)
     owner = readiness.SelectorReadiness(left)
-    with pytest.raises(readiness.ReadinessWakeError):
+    with pytest.raises(readiness.ReadinessWakeError) as caught:
         await owner.wait(time.monotonic_ns() - 1, wake=cause)
+    assert type(caught.value) is readiness.ReadinessWakeError
+    assert not hasattr(caught.value, "retirement")
+    assert owner._wake_retirement_origin is None
     assert not owner._attempted and not owner._unknown and not cause.cancelled()
     assert left.recv(64) == b"SYNTHETIC_ALREADY_READABLE"
 
@@ -846,3 +849,125 @@ async def test_future_cancel_exception_is_not_native_task_cancel_retirement(pair
     assert type(caught.value) is asyncio.CancelledError
     assert task.cancelled() and task.cancelling() == 0
     assert owner._retired and not owner._unknown
+
+
+@pytest.mark.parametrize("kind", ["read", "write"])
+@pytest.mark.parametrize("hint", [False, True])
+async def test_actual_wake_retirement_stays_original_actor_and_preserves_other_interest(
+        pair, kind, hint):
+    left, right = pair
+    loop = asyncio.get_running_loop()
+    cls = readiness.SelectorReadiness if kind == "read" else readiness.SelectorWriteReadiness
+    slot = 0 if kind == "read" else 1
+    if kind == "write":
+        _fill_send_buffer(left)
+        loop.add_reader(left.fileno(), lambda: None)
+    else:
+        loop.add_writer(left.fileno(), lambda: None)
+    opposite = loop._selector.get_key(left.fileno()).data[1 - slot]
+    cause = loop.create_future()
+    retained = []
+    async def wait_original():
+        owner = cls(left)
+        retained.append(owner)
+        try:
+            await owner.wait(end(), wake=cause)
+        except readiness._ReadinessWakeRetiredError as error:
+            fact = error.retirement
+            assert owner._woken_local(fact) is fact
+            with pytest.raises(FrameError):
+                owner._woken_local(fact._replace())  # reconstructed DATA is not the actual receipt
+            assert owner._woken_local(fact) is fact and not owner._unknown
+            assert asyncio.current_task().cancelling() == 0
+            return fact
+        raise AssertionError("registered wake did not retain native retirement")
+    task = asyncio.create_task(wait_original())
+    await asyncio.sleep(0)
+    owner = retained[0]
+    original = (owner._origin_scope, owner._future_origin, owner._wake_binding_origin,
+                owner._handle_snapshot, owner._handle_args_snapshot)
+    assert owner._attempted and not owner._retired
+    if kind == "read":
+        right.send(b"SYNTHETIC_WAKE_UNREAD")
+    if hint:
+        owner._readable(owner._token_snapshot)  # an original metadata hint grants no IO
+    cause.set_result(None)
+    fact = await task
+    assert type(fact) is readiness._WakeWaitRetirement
+    assert fact.mint is readiness._WAKE_RETIREMENT_MINT and fact.owner is owner
+    assert all(a is b for a, b in zip(
+        (fact.scope, fact.future, fact.binding, fact.handle, fact.handle_args),
+        original, strict=True))
+    assert fact.end is original[2].end and fact.binding.future is cause
+    assert task.done() and not task.cancelled() and task.cancelling() == 0
+    assert owner._retired and not owner._unknown
+    slots = loop._selector.get_key(left.fileno()).data
+    assert slots[slot] is None and slots[1 - slot] is opposite and not opposite.cancelled()
+    assert cause.done() and not cause.cancelled() and cause.result() is None
+    assert not any(type(value) in (bytes, bytearray) for value in fact)
+    with pytest.raises(FrameError):
+        owner._woken_local(fact)  # parent is not the original stopped wait actor
+    assert owner._wake_retirement_origin is fact and not owner._unknown
+    if kind == "read":
+        assert left.recv(64) == b"SYNTHETIC_WAKE_UNREAD"
+
+
+async def test_generic_wake_cannot_supply_native_retirement_or_foreign_callbacks(pair):
+    owner = readiness.SelectorReadiness(pair[0])
+    calls = []
+    class Foreign:
+        def __getattribute__(self, name):
+            calls.append(name)
+            raise AssertionError("foreign retirement dispatched")
+    with pytest.raises(FrameError):
+        owner._woken_local(Foreign())
+    assert calls == [] and owner._wake_retirement_origin is None
+    assert not owner._attempted and not owner._retired and not owner._unknown
+
+
+@pytest.mark.parametrize("stage", ["before_mint", "after_mint"])
+@pytest.mark.parametrize("field", ["scope", "future", "binding", "retired", "token"])
+async def test_wake_retirement_rejects_paired_drift_after_final_boundary(
+        pair, monkeypatch, stage, field):
+    loop = asyncio.get_running_loop()
+    cause = loop.create_future()
+    other = loop.create_future()
+    retained, changed = [], []
+    guard = readiness.SelectorReadiness._wake_guard
+    def changed_guard(owner):
+        result = guard(owner)
+        if (owner in retained and owner._retired and not changed
+                and (owner._wake_retirement_origin is not None) == (stage == "after_mint")):
+            changed.append(True)
+            if field == "scope":
+                copied = owner._origin_scope._replace()
+                owner._scope = owner._scope_snapshot = owner._origin_scope = copied
+            elif field == "future":
+                owner._future = owner._future_snapshot = owner._future_origin = other
+            elif field == "binding":
+                copied = owner._wake_binding_origin._replace()
+                owner._wake_binding = owner._wake_binding_origin = copied
+            elif field == "retired":
+                owner._retired = False
+            else:
+                owner._token = owner._token_snapshot = object()
+                owner._args = owner._args_snapshot = (owner._token_snapshot,)
+        return result
+    monkeypatch.setattr(readiness.SelectorReadiness, "_wake_guard", changed_guard)
+    async def wait_original():
+        owner = readiness.SelectorReadiness(pair[0])
+        retained.append(owner)
+        await owner.wait(end(), wake=cause)
+    task = asyncio.create_task(wait_original())
+    await asyncio.sleep(0)
+    assert retained[0]._attempted
+    cause.set_result(None)
+    with pytest.raises(FrameError) as caught:
+        await task
+    assert type(caught.value) is FrameError and not hasattr(caught.value, "retirement")
+    assert changed and retained[0]._unknown
+    assert retained[0]._retired is (field != "retired")
+    assert retained[0]._wake_retirement_origin is None
+    assert not task.cancelled() and task.cancelling() == 0
+    assert not other.done()  # substituted Future was not completed/cancelled
+    other.cancel()  # fixture-only disposal, no retirement or IO credit

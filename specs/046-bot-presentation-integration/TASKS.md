@@ -475,3 +475,16 @@ historical, not an alternative live authorization path or resolved incident.
       original custody/role, original write quiescence and minimum budget. Keep
       signed request disabled until those checks and causal isolation tests pass;
       then continue signed body discard/terminal authentication without a new reader.
+
+- [x] Retain actual original registered-wake retirement after native owned-interest
+      removal/opposite-direction preservation. Seal original pre-await identities,
+      exact retained receipt and original uncancelled actor after final guards;
+      generic early wakes and genuine Task cancellation stay distinct. Ninety-one
+      readiness cases pass in 0.41s; independent read-only review accepts the
+      prerequisite. Final expanded regression: 1,757 passed/one skipped in 150.03s;
+      lint/whitespace pass. No current kernel/role/budget/IO/transfer permission.
+- [ ] Wire the same signed envelope/body wait to its actual native cause and
+      correlate this actual retirement receipt with frozen original progress,
+      current registration/custody, write quiescence and original minimum budget.
+      Keep signed request disabled until full typed cooperative transition and
+      isolation/expiry/stale-ack/unknown-retirement cases pass.

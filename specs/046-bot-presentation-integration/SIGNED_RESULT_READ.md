@@ -223,3 +223,15 @@ The next transition must correlate actual native cause wake/registration retirem
 with this held original progress, not consume the snapshot as an IO grant. Same
 Task/socket/framing/hash offsets and the earliest existing cleanup ceiling must
 survive. No new reader, phase reset, timer renewal or fabricated retirement fact.
+
+## Actual registered-wake retirement prerequisite
+
+The native wait now supplies a retained typed receipt after its own registered
+interest actually retires in response to its original wake. Pre-await identities
+and original uncancelled actor are resealed after final metadata guards. An early
+no-registration wake remains generic/no receipt; Task cancellation is separate.
+The receipt proves historical local stop only and cannot authorize current FD/
+role/budget/IO or cleanup transfer. Correlate it with this original signed cursor's
+held wait progress and actual native cause, then independently qualify current
+custody/write quiescence/minimum budget. Signed request stays disabled until that
+transition is qualified. See [wake evidence](../../docs/research/presentation-wake-retirement-2026-11-06.md).

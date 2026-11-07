@@ -1,3 +1,27 @@
+## Original registered-wake retirement receipt — November 6, 2026
+
+The native readiness wait now retains a typed local stop receipt only after its
+actual registered interest is removed and the opposite I/O direction is preserved.
+The receipt binds original pre-await scope/Future/wake/handle/arguments/deadline
+identities and the original uncancelled actor. Final metadata drift cannot mint a
+receipt. Early already-completed wakes remain generic/no receipt; external Task
+cancellation stays a separate path.
+
+This proves historical local wait retirement only, not current FD/role/budget,
+cleanup read transfer, terminal or release permission. The signed cooperative
+request remains disabled and signed body/envelope cause wiring remains open.
+Ninety-one readiness cases pass in 0.41s, including fifteen new read/write,
+simultaneous-hint, opposite-interest, reconstruction/foreign-actor and final
+paired metadata/retired-flag/token drift causals. Independent read-only review
+accepts the bounded prerequisite. Final expanded affected regression: **1,757
+passed, one skipped**, 150.03s; lint/whitespace pass. Reviewer performed no tests
+or native operations.
+
+Full signed cooperative cleanup/terminal/ACK, production reader composition and
+physical image delivery remain unfinished. No deployment/device/build/config/
+grant/provider changes; historical broker failures and sender-destination risk
+remain unresolved.
+
 ## Signed cleanup progress capture — November 6, 2026
 
 First cause now captures the actual signed envelope/body framing, original hash

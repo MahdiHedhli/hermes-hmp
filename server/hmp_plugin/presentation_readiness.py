@@ -41,6 +41,7 @@ _SELECTOR_METHODS = {name: getattr(selectors.DefaultSelector, name) for name in 
     "get_key", "register", "modify", "unregister", "_fileobj_lookup")}
 _CANCEL_HANDLE = _HANDLE.cancel
 _CANCEL_RETIREMENT_MINT = object()
+_WAKE_RETIREMENT_MINT = object()
 
 
 def _require(value):
@@ -170,6 +171,28 @@ class ReadinessWakeError(FrameError):
         super().__init__("BI1_READINESS_WAKE")
 
 
+class _WakeWaitRetirement(NamedTuple):
+    mint: object
+    owner: object
+    scope: _Scope
+    future: object
+    binding: _WakeBinding
+    handle: object
+    handle_args: tuple
+    end: int
+
+    def __repr__(self):
+        return "<WakeWaitRetirement local-stop-only no-IO-or-authority>"
+
+
+class _ReadinessWakeRetiredError(ReadinessWakeError):
+    """Actual registered original wait retired after its own wake; no IO permission."""
+
+    def __init__(self, retirement):
+        super().__init__()
+        self.retirement = retirement
+
+
 class ReadinessAcquisitionError(FrameError):
     def __init__(self, owner):
         super().__init__("BI1_READINESS_ACQUISITION_UNKNOWN")
@@ -197,6 +220,7 @@ class SelectorReadiness:
         self._handle = self._handle_snapshot = None
         self._handle_args = self._handle_args_snapshot = None
         self._initialized = self._attempted = self._unknown = self._retired = False
+        self._wake_retirement = self._wake_retirement_origin = None
         try:
             loop, task = asyncio.get_running_loop(), asyncio.current_task()
             _require(type(sock) is socket.socket and type(loop) is _LOOP and type(task) is _TASK
@@ -389,6 +413,51 @@ class SelectorReadiness:
                     # Observe the constant private refusal, never an application payload.
                     _FUTURE.exception(future)
 
+    def _woken_metadata(self, fact):
+        """Original held local retirement only; never current kernel/role/IO authority."""
+        _interest(self)  # exact concrete owner type, no selectable direction
+        _require(self._initialization_started is True and self._initialized is True
+                 and self._future_initialized is True
+                 and self._callback is self._callback_snapshot
+                 and type(self._callback) is MethodType and self._callback.__self__ is self
+                 and self._callback.__func__ is SelectorReadiness._readable
+                 and type(self._token) is object and self._token is self._token_snapshot
+                 and type(self._args) is tuple and self._args is self._args_snapshot
+                 and len(self._args) == 1 and self._args[0] is self._token_snapshot
+                 and type(fact) is _WakeWaitRetirement and fact.mint is _WAKE_RETIREMENT_MINT
+                 and fact is self._wake_retirement_origin and self._wake_retirement is fact
+                 and fact.owner is self and type(fact.scope) is _Scope
+                 and fact.scope is self._origin_scope and self._scope is fact.scope
+                 and self._scope_snapshot is fact.scope
+                 and type(fact.future) is _FUTURE and fact.future is self._future_origin
+                 and self._future is fact.future and self._future_snapshot is fact.future
+                 and type(fact.binding) is _WakeBinding
+                 and fact.binding is self._wake_binding_origin
+                 and self._wake_binding is fact.binding and fact.binding.scope is fact.scope
+                 and type(fact.handle) is _HANDLE and fact.handle is self._handle_snapshot
+                 and self._handle is fact.handle
+                 and type(fact.handle_args) is tuple and len(fact.handle_args) == 1
+                 and fact.handle_args is self._handle_args_snapshot
+                 and self._handle_args is fact.handle_args
+                 and fact.handle_args[0] is self._token_snapshot
+                 and type(fact.end) is int and fact.binding.end is fact.end
+                 and type(fact.binding.future) is _FUTURE
+                 and fact.binding.future is self._wake_snapshot
+                 and self._wake is self._wake_snapshot
+                 and _FUTURE.done(fact.binding.future)
+                 and not _FUTURE.cancelled(fact.binding.future)
+                 and _FUTURE.result(fact.binding.future) is None
+                 and self._attempted is True and self._retired is True and self._unknown is False
+                 and type(fact.scope.task) is _TASK and asyncio.current_task() is fact.scope.task
+                 and _TASK.cancelling(fact.scope.task) == 0)
+        return fact
+
+    def _woken_local(self, fact):
+        """Original actor's historical local stop only; not current FD/IO/role credit."""
+        SelectorReadiness._guard(self)
+        SelectorReadiness._wake_guard(self)
+        return SelectorReadiness._woken_metadata(self, fact)
+
     async def wait(self, end_ns, *, wake=None):
         try:
             SelectorReadiness._native(self)
@@ -397,7 +466,8 @@ class SelectorReadiness:
             raise FrameError("BI1_READINESS_SCOPE_UNKNOWN") from None
         _require(type(end_ns) is int and 0 < end_ns <= MAX_NS
                  and self._attempted is False
-                 and self._unknown is False and self._retired is False)
+                 and self._unknown is False and self._retired is False
+                 and self._wake_retirement is None and self._wake_retirement_origin is None)
         _require(wake is None or (type(wake) is _FUTURE
                  and _FUTURE.get_loop(wake) is self._origin_scope.loop
                  and not _FUTURE.cancelled(wake)))
@@ -412,7 +482,7 @@ class SelectorReadiness:
         current, _ = SelectorReadiness._slots(self)
         _require(current is None)  # never replace another owner of this direction
         self._attempted = True  # registration intent before the possibly partial native add
-        cancelled = False
+        cancelled = woke = False
         held = None
         try:
             s = self._scope_snapshot
@@ -447,6 +517,7 @@ class SelectorReadiness:
             # A shared wake that completed with the deadline still forbids IO.
             if wake is not None and _FUTURE.done(wake) and not _FUTURE.cancelled(wake):
                 SelectorReadiness._wake_guard(self)
+                woke = True
                 raise ReadinessWakeError from None
             raise
         except BaseException:
@@ -475,6 +546,45 @@ class SelectorReadiness:
                     raise _ReadinessCancelledError(_CancelledWaitRetirement(
                         _CANCEL_RETIREMENT_MINT, self, scope, future, binding,
                         handle, args, end)) from None
+            elif woke:
+                failed = False
+                fact = scope = future = binding = handle = args = end = None
+                try:
+                    _require(type(held) is tuple and len(held) == 6)
+                    scope, future, binding, handle, args, end = held
+                    SelectorReadiness._guard(self)
+                    SelectorReadiness._wake_guard(self)
+                    _require(self._origin_scope is scope and self._future_origin is future
+                             and self._wake_binding_origin is binding
+                             and self._handle_snapshot is handle
+                             and self._handle_args_snapshot is args
+                             and self._attempted is True and self._retired is True
+                             and self._unknown is False and binding.end is end
+                             and type(binding.future) is _FUTURE and binding.future is wake
+                             and _FUTURE.done(wake) and not _FUTURE.cancelled(wake)
+                             and _FUTURE.result(wake) is None and _TASK.cancelling(scope.task) == 0
+                             and self._wake_retirement is None
+                             and self._wake_retirement_origin is None)
+                    fact = _WakeWaitRetirement(_WAKE_RETIREMENT_MINT, self, scope, future,
+                                              binding, handle, args, end)
+                    self._wake_retirement = self._wake_retirement_origin = fact
+                    _require(SelectorReadiness._woken_local(self, fact) is fact)
+                    # Repeat the original pre-await hold after the final metadata boundary.
+                    _require(SelectorReadiness._woken_metadata(self, fact) is fact
+                             and self._origin_scope is scope and self._future_origin is future
+                             and self._wake_binding_origin is binding
+                             and self._handle_snapshot is handle
+                             and self._handle_args_snapshot is args
+                             and binding.end is end and _TASK.cancelling(scope.task) == 0)
+                except BaseException:
+                    failed = self._unknown = True
+                    self._wake_retirement = self._wake_retirement_origin = None
+                finally:
+                    scope = future = binding = handle = args = end = None
+                if failed:
+                    fact = None
+                    raise FrameError("BI1_READINESS_WAKE_RETIREMENT_UNKNOWN") from None
+                raise _ReadinessWakeRetiredError(fact) from None
 
 
 class SelectorWriteReadiness(SelectorReadiness):

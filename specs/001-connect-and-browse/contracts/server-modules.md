@@ -854,3 +854,13 @@ ownership, wait retirement, quiescence or release. The gate's signed discriminat
 never falls back to a legacy cursor; request deliberately returns False until
 typed cooperative continuation is qualified. Original native withdrawal/cancellation
 remains in force. Live phase checks use enum identity before foreign comparison.
+
+### BI1 actual registered-wake retirement (November 6, 2026)
+
+`presentation_readiness.py` retains a typed receipt only after actual registered
+interest retirement following the original wake. Original pre-await scope/Future/
+binding/handle/arguments/end and uncancelled actor are resealed after final guards.
+Generic early wakes have no receipt; external Task cancellation remains separate.
+The record is historical local stop only, not current kernel/role/budget/IO or
+transfer authority. The signed cooperative transition remains disabled pending
+correlation/current custody/minimum-budget qualification.
