@@ -53,6 +53,8 @@ def _require(value):
 
 
 def _native_io(channel):
+    _require(type(channel) is SocketChannel)
+    SocketChannel._credential_work_ready(channel)
     SocketChannel._local_integrity(channel)
     timeout = _SOCKET_TIMEOUT(channel._socket_snapshot)
     _require(os.get_blocking(channel._fd) is False
@@ -97,6 +99,7 @@ class BrokerResultWriter:
                  and type(connection.channel_snapshot) is SocketChannel
                  and connection.result_writer is None
                  and connection.channel_snapshot._result_writer is None)
+        SocketChannel._credential_work_ready(connection.channel_snapshot)
         owner = BrokerResultWriter.__new__(BrokerResultWriter)
         connection.result_writer = connection.result_writer_snapshot = owner
         channel = connection.channel_snapshot
@@ -428,6 +431,8 @@ class RemoteResultOwner:
         _require(cls is RemoteResultOwner and type(remote) is RemoteOperationOwner)
         RemoteOperationOwner._retained_local(remote)
         channel = remote._channel_snapshot
+        _require(type(channel) is SocketChannel)
+        SocketChannel._credential_work_ready(channel)
         _require(remote._result_owner is None and remote._result_owner_snapshot is None
                  and channel._result_receiver is None)
         job = remote._job_origin_snapshot

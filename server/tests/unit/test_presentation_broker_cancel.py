@@ -613,3 +613,36 @@ async def test_lost_readiness_proof_and_budget_refusal_keeps_control_claim(recei
         await owner._allocation_snapshot.task
     assert callbacks == [] and owner._wire_received == 3
     assert owner._io_unknown and channel._reading and not owner._adopted
+
+
+@pytest.mark.asyncio
+async def test_direct_reinitialization_cannot_replace_original_control_task(receiver):
+    owner, channel, _, registry, ticket, _ = receiver
+    original = (
+        owner._allocation_snapshot,
+        owner._slot_snapshot,
+        owner._scope_snapshot,
+        owner._buffer_origin,
+        owner._go_future_snapshot,
+        owner._cancel_future_snapshot,
+    )
+    with pytest.raises(FrameError):
+        cancel.BrokerCancellationOwner.__init__(
+            owner, channel, registry, ticket, owner._grammar_snapshot
+        )
+    assert all(
+        current is retained
+        for current, retained in zip(
+            (
+                owner._allocation_snapshot,
+                owner._slot_snapshot,
+                owner._scope_snapshot,
+                owner._buffer_origin,
+                owner._go_future_snapshot,
+                owner._cancel_future_snapshot,
+            ),
+            original,
+            strict=True,
+        )
+    )
+    assert channel._cancel_receiver is owner and owner._failed is False

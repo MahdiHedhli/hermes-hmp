@@ -59,10 +59,13 @@ class RemoteOperationOwner:
         self._binding = self._binding_snapshot = binding
         self._packet = self._packet_snapshot = packet
         self._failed = False
+        self._credential_handshake = self._credential_handshake_snapshot = None
+        self._credential_binding = self._credential_binding_snapshot = None
         self._begin_attempted = False
         self._go_admission = self._go_admission_snapshot = None
         self._go_admission_used = False
         self._result_owner = self._result_owner_snapshot = None
+        self._signed_result_owner = self._signed_result_owner_snapshot = None
         self._jobs_origin = self._jobs_origin_snapshot = None
         self._job_origin = self._job_origin_snapshot = None
         self._output_custody = self._output_custody_snapshot = None
@@ -152,6 +155,14 @@ class RemoteOperationOwner:
                 raise AuthorityRefusalError
             self._lease_values = self._lease_values_snapshot = self._lease_tuple(record.lease)
             self._seal = self._seal_snapshot = self._references()
+            credential = getattr(channel, "_credential_handshake", None)
+            if credential is not None:
+                from .presentation_credential_handshake import CredentialHandshakeOwner
+                if type(credential) is not CredentialHandshakeOwner:
+                    raise AuthorityRefusalError
+                self._credential_handshake = self._credential_handshake_snapshot = credential
+                self._credential_binding = self._credential_binding_snapshot = (
+                    CredentialHandshakeOwner._bind_native_input(credential, self))
             channel.claim_remote(self)  # monotonic ownership before any exchange effect
             self._initialized = True
             self._check(RemotePhase.BOUND)
@@ -246,6 +257,26 @@ class RemoteOperationOwner:
                 or type(r.fence) is not ListenerFence or type(r.policy_work) is not NativePolicyWork
                 or a._clock is not time.monotonic or r.owner._clock is not time.monotonic):
             raise AuthorityRefusalError
+        credential = self._credential_handshake
+        if (credential is not self._credential_handshake_snapshot
+                or self._credential_binding is not self._credential_binding_snapshot):
+            raise AuthorityRefusalError
+        if credential is None:
+            if (self._credential_binding is not None
+                    or getattr(c, "_credential_handshake", None) is not None):
+                raise AuthorityRefusalError
+        else:
+            from .presentation_credential_handshake import CredentialHandshakeOwner
+            if (type(credential) is not CredentialHandshakeOwner
+                    or c._credential_handshake is not credential
+                    or c._credential_handshake_snapshot is not credential):
+                raise AuthorityRefusalError
+            if self._initialized is False and self._credential_binding is None:
+                # Construction-only join: _check refuses uninitialized work.
+                pass
+            else:
+                CredentialHandshakeOwner._native_input_local(
+                    credential, self, self._credential_binding)
         work = r.policy_work
         # Index5 is a resolved JobOwner context: never resolve it until these
         # callback-free local references have passed. _references checks it later.
@@ -321,6 +352,308 @@ class RemoteOperationOwner:
         if original != end or cleanup_end is not None or failed:
             raise AuthorityRefusalError
         RemoteOperationOwner._retained_local(self)
+        _task_allows_work()
+
+    def _go_intent_local(self, channel, end):
+        """Fixed GO_INTENT custody tail; no clock callback or phase-selector grant."""
+        from .presentation_budget import PresentationWorkLedger
+        from .presentation_remote_cleanup import RemoteCleanupOwner
+
+        RemoteOperationOwner._retained_local(self)
+        RemoteOperationOwner._clock_binding(self)
+        a, r, job = self._authority_snapshot, self._record_snapshot, self._job_origin_snapshot
+        work = r.policy_work
+        if (channel is not self._channel_snapshot or end is not self._end_snapshot
+                or channel._remote_owner is not self or channel._remote_owner_snapshot is not self
+                or self._end is not end or type(end) is not int
+                or a.owner is not r.owner or a._disabled is not False
+                or r.owner._disabled is not False or type(a._by_operation) is not dict
+                or type(r.operation) is not OpaqueOperation
+                or a._by_operation.get(r.operation) is not r or r.remote_operation is not self
+                or r.initial_complete is not True
+                or r.child is not None or r.process_owner is not None
+                or r.reader_supervisor is not None or r.native_claim is not None
+                or type(r.fence._epoch) is not int or r.fence._epoch != r.fence_epoch
+                or r.fence._retired is not False
+                or type(r.owner._epoch) is not int
+                or self._lease_values is not self._lease_values_snapshot
+                or type(self._lease_values_snapshot) is not tuple
+                or len(self._lease_values_snapshot) != 8
+                or any(type(v) is not str or len(v) > 256
+                       for v in self._lease_values_snapshot[:7])
+                or type(self._lease_values_snapshot[7]) is not int
+                or RemoteOperationOwner._lease_tuple(r.lease) != self._lease_values_snapshot
+                or r.owner._epoch != r.lease.epoch or job.lease is not r.lease
+                or job.state is not State.RUNNING
+                or job.remote_phase is not RemotePhase.GO_INTENT
+                or job.go_sent is not True or self._go_admission_used is not True
+                or job.emit_revoked is not False
+                or job.parent_result_context is not self._seal_snapshot[5]
+                or work._invalid is not False or work._construction_finished is not True
+                or work._postchecked is not True or work._transfer_attempted is not True
+                or work._packet is not self._packet_snapshot
+                or work._packet_snapshot is not self._packet_snapshot
+                or type(work._thread) is not PolicyThreadOwner
+                or type(work._policy) is not ParentPolicyReadOwner
+                or work._thread.policy is not work._policy
+                or work._thread.joined is not True or work._thread.uncertain is not False
+                or work._policy.uncertain is not False or work._policy._pending_fd is not None
+                or type(work._policy._held) is not list
+                or len(work._policy._held) > PresentationWorkLedger._LIMITS["opens"]):
+            raise AuthorityRefusalError
+        for row in work._policy._held:
+            if type(row) is not _HeldDirectory or row.closed is not True:
+                raise AuthorityRefusalError
+        cleanup = self._cleanup_owner_snapshot
+        if (type(cleanup) is not RemoteCleanupOwner or cleanup._remote_snapshot is not self
+                or cleanup._remote is not self or type(cleanup._refs_snapshot) is not tuple
+                or len(cleanup._refs_snapshot) != 12 or cleanup._refs_snapshot[2] is not r
+                or cleanup._refs_snapshot[3] is not channel):
+            raise AuthorityRefusalError
+        RemoteCleanupOwner.authorize_work(cleanup)  # retained metadata only, no clock sampling
+        original, _, cleanup_end, failed = CancellationBudget.inspect(r.cleanup_budget_snapshot)
+        if original != end or cleanup_end is not None or failed:
+            raise AuthorityRefusalError
+        RemoteOperationOwner._retained_local(self)
+        RemoteOperationOwner._go_binding(self)
+        _task_allows_work()
+
+    def _result_intent_local(self, channel, end):
+        """Fixed GO_SENT result custody tail; no read/publication or phase-selector grant."""
+        from .presentation_budget import PresentationWorkLedger
+        from .presentation_remote_cleanup import RemoteCleanupOwner
+
+        RemoteOperationOwner._retained_local(self)
+        RemoteOperationOwner._clock_binding(self)
+        a, r, job = self._authority_snapshot, self._record_snapshot, self._job_origin_snapshot
+        work = r.policy_work
+        if (channel is not self._channel_snapshot or end is not self._end_snapshot
+                or channel._remote_owner is not self or channel._remote_owner_snapshot is not self
+                or self._end is not end or type(end) is not int
+                or a.owner is not r.owner or a._disabled is not False
+                or r.owner._disabled is not False or type(a._by_operation) is not dict
+                or type(r.operation) is not OpaqueOperation
+                or a._by_operation.get(r.operation) is not r or r.remote_operation is not self
+                or r.initial_complete is not True
+                or r.child is not None or r.process_owner is not None
+                or r.reader_supervisor is not None or r.native_claim is not None
+                or type(r.fence._epoch) is not int or r.fence._epoch != r.fence_epoch
+                or r.fence._retired is not False
+                or type(r.owner._epoch) is not int
+                or self._lease_values is not self._lease_values_snapshot
+                or type(self._lease_values_snapshot) is not tuple
+                or len(self._lease_values_snapshot) != 8
+                or any(type(v) is not str or len(v) > 256
+                       for v in self._lease_values_snapshot[:7])
+                or type(self._lease_values_snapshot[7]) is not int
+                or RemoteOperationOwner._lease_tuple(r.lease) != self._lease_values_snapshot
+                or r.owner._epoch != r.lease.epoch or job.lease is not r.lease
+                or job.state is not State.RUNNING
+                or job.remote_phase is not RemotePhase.GO_SENT
+                or job.go_sent is not True or self._go_admission_used is not True
+                or job.emit_revoked is not False
+                or job.parent_result_context is not self._seal_snapshot[5]
+                or work._invalid is not False or work._construction_finished is not True
+                or work._postchecked is not True or work._transfer_attempted is not True
+                or work._packet is not self._packet_snapshot
+                or work._packet_snapshot is not self._packet_snapshot
+                or type(work._thread) is not PolicyThreadOwner
+                or type(work._policy) is not ParentPolicyReadOwner
+                or work._thread.policy is not work._policy
+                or work._thread.joined is not True or work._thread.uncertain is not False
+                or work._policy.uncertain is not False or work._policy._pending_fd is not None
+                or type(work._policy._held) is not list
+                or len(work._policy._held) > PresentationWorkLedger._LIMITS["opens"]):
+            raise AuthorityRefusalError
+        for row in work._policy._held:
+            if type(row) is not _HeldDirectory or row.closed is not True:
+                raise AuthorityRefusalError
+        cleanup = self._cleanup_owner_snapshot
+        if (type(cleanup) is not RemoteCleanupOwner or cleanup._remote_snapshot is not self
+                or cleanup._remote is not self or type(cleanup._refs_snapshot) is not tuple
+                or len(cleanup._refs_snapshot) != 12 or cleanup._refs_snapshot[2] is not r
+                or cleanup._refs_snapshot[3] is not channel):
+            raise AuthorityRefusalError
+        RemoteCleanupOwner.authorize_work(cleanup)  # retained metadata only, no clock sampling
+        original, cause, cleanup_end, failed = CancellationBudget.inspect(r.cleanup_budget_snapshot)
+        if (type(original) is not int or original != end or cause is not None
+                or cleanup_end is not None or failed):
+            raise AuthorityRefusalError
+        RemoteOperationOwner._retained_local(self)
+        RemoteOperationOwner._go_binding(self)
+        from .presentation_credential_work import NativePhaseWorkOwner
+
+        producer = cleanup._credential_work_snapshot
+        if (type(producer) is not NativePhaseWorkOwner
+                or cleanup._credential_work is not producer):
+            raise AuthorityRefusalError
+        material = NativePhaseWorkOwner._material_local(producer)
+        if material[0] is not self or material[2] is not channel:
+            raise AuthorityRefusalError
+        _task_allows_work()
+
+    def _result_validated_local(self, channel, end):
+        """Fixed adopted signed-result tail; no publication or phase-selector grant."""
+        from .presentation_budget import PresentationWorkLedger
+        from .presentation_remote_cleanup import RemoteCleanupOwner
+
+        RemoteOperationOwner._retained_local(self)
+        RemoteOperationOwner._clock_binding(self)
+        a, r, job = self._authority_snapshot, self._record_snapshot, self._job_origin_snapshot
+        work = r.policy_work
+        if (channel is not self._channel_snapshot or end is not self._end_snapshot
+                or channel._remote_owner is not self or channel._remote_owner_snapshot is not self
+                or self._end is not end or type(end) is not int
+                or a.owner is not r.owner or a._disabled is not False
+                or r.owner._disabled is not False or type(a._by_operation) is not dict
+                or type(r.operation) is not OpaqueOperation
+                or a._by_operation.get(r.operation) is not r or r.remote_operation is not self
+                or r.initial_complete is not True
+                or r.child is not None or r.process_owner is not None
+                or r.reader_supervisor is not None or r.native_claim is not None
+                or type(r.fence._epoch) is not int or r.fence._epoch != r.fence_epoch
+                or r.fence._retired is not False
+                or type(r.owner._epoch) is not int
+                or self._lease_values is not self._lease_values_snapshot
+                or type(self._lease_values_snapshot) is not tuple
+                or len(self._lease_values_snapshot) != 8
+                or any(type(v) is not str or len(v) > 256
+                       for v in self._lease_values_snapshot[:7])
+                or type(self._lease_values_snapshot[7]) is not int
+                or RemoteOperationOwner._lease_tuple(r.lease) != self._lease_values_snapshot
+                or r.owner._epoch != r.lease.epoch or job.lease is not r.lease
+                or job.state is not State.RUNNING
+                or job.remote_phase is not RemotePhase.RESULT_VALIDATED
+                or job.go_sent is not True or self._go_admission_used is not True
+                or job.emit_revoked is not False
+                or job.parent_result_context is not self._seal_snapshot[5]
+                or work._invalid is not False or work._construction_finished is not True
+                or work._postchecked is not True or work._transfer_attempted is not True
+                or work._packet is not self._packet_snapshot
+                or work._packet_snapshot is not self._packet_snapshot
+                or type(work._thread) is not PolicyThreadOwner
+                or type(work._policy) is not ParentPolicyReadOwner
+                or work._thread.policy is not work._policy
+                or work._thread.joined is not True or work._thread.uncertain is not False
+                or work._policy.uncertain is not False or work._policy._pending_fd is not None
+                or type(work._policy._held) is not list
+                or len(work._policy._held) > PresentationWorkLedger._LIMITS["opens"]):
+            raise AuthorityRefusalError
+        for row in work._policy._held:
+            if type(row) is not _HeldDirectory or row.closed is not True:
+                raise AuthorityRefusalError
+        cleanup = self._cleanup_owner_snapshot
+        if (type(cleanup) is not RemoteCleanupOwner or cleanup._remote_snapshot is not self
+                or cleanup._remote is not self or type(cleanup._refs_snapshot) is not tuple
+                or len(cleanup._refs_snapshot) != 12 or cleanup._refs_snapshot[2] is not r
+                or cleanup._refs_snapshot[3] is not channel):
+            raise AuthorityRefusalError
+        RemoteCleanupOwner.authorize_work(cleanup)  # retained metadata only, no clock sampling
+        original, cause, cleanup_end, failed = CancellationBudget.inspect(r.cleanup_budget_snapshot)
+        if (type(original) is not int or original != end or cause is not None
+                or cleanup_end is not None or failed):
+            raise AuthorityRefusalError
+        RemoteOperationOwner._retained_local(self)
+        RemoteOperationOwner._go_binding(self)
+        from .presentation_credential_work import NativePhaseWorkOwner
+
+        producer = cleanup._credential_work_snapshot
+        if (type(producer) is not NativePhaseWorkOwner
+                or cleanup._credential_work is not producer):
+            raise AuthorityRefusalError
+        material = NativePhaseWorkOwner._material_local(producer)
+        if material[0] is not self or material[2] is not channel:
+            raise AuthorityRefusalError
+        from .presentation_credential_result_body import NativeResultBodyOwner
+
+        receiver = self._signed_result_owner_snapshot
+        if (type(receiver) is not NativeResultBodyOwner
+                or self._signed_result_owner is not receiver
+                or NativeResultBodyOwner._adoption_local(receiver).envelope_scope.write_scope.remote
+                    is not self):
+            raise AuthorityRefusalError
+        _task_allows_work()
+
+    def _result_notification_local(self, channel, end):
+        """Fixed original-caller result tail; no work/publication or phase-selector grant."""
+        from .presentation_budget import PresentationWorkLedger
+        from .presentation_remote_cleanup import RemoteCleanupOwner
+
+        RemoteOperationOwner._retained_local(self)
+        RemoteOperationOwner._clock_binding(self)
+        a, r, job = self._authority_snapshot, self._record_snapshot, self._job_origin_snapshot
+        work = r.policy_work
+        if (channel is not self._channel_snapshot or end is not self._end_snapshot
+                or channel._remote_owner is not self or channel._remote_owner_snapshot is not self
+                or self._end is not end or type(end) is not int
+                or a.owner is not r.owner or a._disabled is not False
+                or r.owner._disabled is not False or type(a._by_operation) is not dict
+                or type(r.operation) is not OpaqueOperation
+                or a._by_operation.get(r.operation) is not r or r.remote_operation is not self
+                or r.initial_complete is not True
+                or r.child is not None or r.process_owner is not None
+                or r.reader_supervisor is not None or r.native_claim is not None
+                or type(r.fence._epoch) is not int or r.fence._epoch != r.fence_epoch
+                or r.fence._retired is not False
+                or type(r.owner._epoch) is not int
+                or self._lease_values is not self._lease_values_snapshot
+                or type(self._lease_values_snapshot) is not tuple
+                or len(self._lease_values_snapshot) != 8
+                or any(type(v) is not str or len(v) > 256
+                       for v in self._lease_values_snapshot[:7])
+                or type(self._lease_values_snapshot[7]) is not int
+                or RemoteOperationOwner._lease_tuple(r.lease) != self._lease_values_snapshot
+                or r.owner._epoch != r.lease.epoch or job.lease is not r.lease
+                or job.state is not State.RUNNING
+                or job.remote_phase is not RemotePhase.RESULT_VALIDATED
+                or job.go_sent is not True or self._go_admission_used is not True
+                or job.emit_revoked is not False
+                or job.parent_result_context is not self._seal_snapshot[5]
+                or work._invalid is not False or work._construction_finished is not True
+                or work._postchecked is not True or work._transfer_attempted is not True
+                or work._packet is not self._packet_snapshot
+                or work._packet_snapshot is not self._packet_snapshot
+                or type(work._thread) is not PolicyThreadOwner
+                or type(work._policy) is not ParentPolicyReadOwner
+                or work._thread.policy is not work._policy
+                or work._thread.joined is not True or work._thread.uncertain is not False
+                or work._policy.uncertain is not False or work._policy._pending_fd is not None
+                or type(work._policy._held) is not list
+                or len(work._policy._held) > PresentationWorkLedger._LIMITS["opens"]):
+            raise AuthorityRefusalError
+        for row in work._policy._held:
+            if type(row) is not _HeldDirectory or row.closed is not True:
+                raise AuthorityRefusalError
+        cleanup = self._cleanup_owner_snapshot
+        if (type(cleanup) is not RemoteCleanupOwner or cleanup._remote_snapshot is not self
+                or cleanup._remote is not self or type(cleanup._refs_snapshot) is not tuple
+                or len(cleanup._refs_snapshot) != 12 or cleanup._refs_snapshot[2] is not r
+                or cleanup._refs_snapshot[3] is not channel):
+            raise AuthorityRefusalError
+        RemoteCleanupOwner.authorize_result_caller(cleanup)  # no clock sampling
+        original, cause, cleanup_end, failed = CancellationBudget.inspect(r.cleanup_budget_snapshot)
+        if (type(original) is not int or original != end or cause is not None
+                or cleanup_end is not None or failed):
+            raise AuthorityRefusalError
+        RemoteOperationOwner._retained_local(self)
+        RemoteOperationOwner._go_binding(self)
+        from .presentation_credential_work import NativePhaseWorkOwner
+
+        producer = cleanup._credential_work_snapshot
+        if (type(producer) is not NativePhaseWorkOwner
+                or cleanup._credential_work is not producer):
+            raise AuthorityRefusalError
+        material = NativePhaseWorkOwner._result_caller_material(producer)
+        if material[0] is not self or material[2] is not channel:
+            raise AuthorityRefusalError
+        from .presentation_credential_result_body import NativeResultBodyOwner
+
+        receiver = self._signed_result_owner_snapshot
+        if (type(receiver) is not NativeResultBodyOwner
+                or self._signed_result_owner is not receiver
+                or NativeResultBodyOwner._adoption_metadata(receiver)
+                    .envelope_scope.write_scope.remote is not self):
+            raise AuthorityRefusalError
         _task_allows_work()
 
     def _work_now(self):
@@ -508,11 +841,31 @@ class RemoteOperationOwner:
             JobOwner.remote_transition(self._seal_snapshot[0], self._seal_snapshot[1],
                                        self, RemotePhase.GO_INTENT)
             RemoteOperationOwner._check(self, RemotePhase.GO_INTENT)
-            await SocketChannel.send_go(self._channel_snapshot, self)
+            signed_writer = None
+            if self._credential_handshake_snapshot is not None:
+                from .presentation_credential_go_write import NativeGoWriter
+                from .presentation_credential_work import NativePhaseWorkOwner
+
+                producer = cleanup._credential_work_snapshot
+                if (type(producer) is not NativePhaseWorkOwner
+                        or cleanup._credential_work is not producer):
+                    raise AuthorityRefusalError
+                signed_writer = await NativePhaseWorkOwner.exchange_go(producer)
+                scope = NativeGoWriter._metadata(signed_writer)
+                if (scope.signed_scope.producer is not producer
+                        or scope.signed_scope.ready_scope.read_scope.write_scope.remote is not self
+                        or NativeGoWriter.current_written(signed_writer)
+                            is not self._channel_snapshot._go_write_fact_snapshot):
+                    raise AuthorityRefusalError
+            else:
+                await SocketChannel.send_go(self._channel_snapshot, self)
             RemoteOperationOwner._check(self, RemotePhase.GO_INTENT)
             JobOwner.remote_transition(self._seal_snapshot[0], self._seal_snapshot[1],
                                        self, RemotePhase.GO_SENT)
             RemoteOperationOwner._check(self, RemotePhase.GO_SENT)
+            if (signed_writer is not None and NativeGoWriter.current_sent(signed_writer)
+                    is not self._channel_snapshot._go_write_fact_snapshot):
+                raise AuthorityRefusalError
             return True  # local write only; no execution/result/release proof
         except BaseException:
             RemoteOperationOwner._poison(self)
@@ -620,6 +973,29 @@ class RemoteOperationOwner:
             frame = BrokerFrame(BrokerHeader(self._binding, "BEGIN", 0, len(self._packet),
                                             self._protocol),
                                 self._packet)
+            if self._credential_handshake is not None:
+                SocketChannel._reserve_credential_begin(self._channel, self)
+                from .presentation_credential_work import NativePhaseWorkOwner
+
+                producer = self._cleanup_owner_snapshot._credential_work_snapshot
+                if (type(producer) is not NativePhaseWorkOwner
+                        or self._cleanup_owner_snapshot._credential_work is not producer):
+                    raise AuthorityRefusalError
+                NativePhaseWorkOwner.prepare_begin(producer)
+                receipt = await NativePhaseWorkOwner.exchange_ready(producer)
+                from .presentation_credential_ready_transition import NativeReadyTransition
+
+                transition = producer._ready_transition_snapshot
+                if (type(transition) is not NativeReadyTransition
+                        or producer._ready_transition is not transition):
+                    raise AuthorityRefusalError
+                scope = NativeReadyTransition._metadata(transition)
+                if (scope.producer is not producer
+                        or scope.read_scope.write_scope.remote is not self
+                        or NativeReadyTransition.current_phase(transition) is not receipt):
+                    raise AuthorityRefusalError
+                self._check(RemotePhase.READY)
+                return True  # signed READY only; generic GO/resource gates remain closed
             await SocketChannel.send(self._channel, frame, self._end, owner=self)
             self._send_completed = True
             self._check(RemotePhase.BEGIN_INTENT)

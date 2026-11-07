@@ -1148,6 +1148,12 @@ class JobOwner:
                 and type(custody[0]) is RemoteResultOwner
                 and custody[0]._candidate_job_origin is job):
             RemoteResultOwner.discard(custody[0])  # original owner only, no current work permission
+        if (type(custody) is tuple and len(custody) == 2 and custody[1] is job
+                and type(custody[0]) is not RemoteResultOwner):
+            from .presentation_credential_result_body import NativeResultBodyOwner
+            if (type(custody[0]) is NativeResultBodyOwner
+                    and custody[0]._candidate_job_origin is job):
+                NativeResultBodyOwner.discard(custody[0])
         job.result = None
         job.remote_result_token = None
 

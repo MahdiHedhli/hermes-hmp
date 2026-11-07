@@ -111,6 +111,9 @@ class RemoteCleanupOwner:
         from .presentation_remote import RemoteOperationOwner
 
         self._remote = self._remote_snapshot = remote
+        self._credential_work = self._credential_work_snapshot = None
+        self._credential_cancel_commitment = self._credential_cancel_commitment_snapshot = None
+        self._pre_ready_cancel_commitment = self._pre_ready_cancel_commitment_snapshot = None
         self._initialized = self._run_attempted = self._intent = False
         self._unknown = self._work_joined = self._socket_closed = self._clock_closed = False
         self._cancel_attempted = self._sampling = False
@@ -216,6 +219,12 @@ class RemoteCleanupOwner:
                 _initialize_task(slot, self._loop)
             self._initialized = True
             RemoteCleanupOwner._guard(self)
+            if remote._credential_handshake_snapshot is not None:
+                from .presentation_credential_work import NativePhaseWorkOwner
+
+                producer = NativePhaseWorkOwner.__new__(NativePhaseWorkOwner)
+                self._credential_work = self._credential_work_snapshot = producer
+                NativePhaseWorkOwner.__init__(producer, self)
         except BaseException:
             self._unknown = True
             # Never infer that failed initialization scheduled nothing. Closed
@@ -640,14 +649,144 @@ class RemoteCleanupOwner:
             raise AuthorityRefusalError
         return remaining
 
+    def _known_signing_refusal(self, channel):
+        """Pure fixed-owner no-IO proof; no live role revival or close permission."""
+        from .presentation_credential_cancel_commitment import NativeCancelCommitment
+        from .presentation_credential_pre_ready_cancel import NativePreReadyCancelCommitment
+
+        if type(self) is not RemoteCleanupOwner or type(channel) is not SocketChannel:
+            raise AuthorityRefusalError
+        post = self._credential_cancel_commitment_snapshot
+        pre = self._pre_ready_cancel_commitment_snapshot
+        if (type(post) is NativeCancelCommitment and self._credential_cancel_commitment is post
+                and pre is None and self._pre_ready_cancel_commitment is None):
+            signer = post
+            scope = NativeCancelCommitment._metadata(signer)
+        elif (type(pre) is NativePreReadyCancelCommitment
+                and self._pre_ready_cancel_commitment is pre
+                and post is None and self._credential_cancel_commitment is None):
+            signer = pre
+            scope = NativePreReadyCancelCommitment._metadata(signer)
+        else:
+            raise AuthorityRefusalError
+        if (signer._failed is not True or signer._raw is not None
+                or signer._raw_snapshot is not None or signer._writer is not None
+                or signer._writer_snapshot is not None
+                or channel._credential_cancel_writer is not None
+                or channel._credential_cancel_writer_snapshot is not None
+                or self._cancel_write_completed is not False
+                or scope.cleanup is not self or scope.cleanup_refs[3] is not channel
+                or asyncio.current_task() is not scope.allocation.task
+                or _TASK.cancelling(scope.allocation.task) != 0
+                or self._intent is not True or self._unknown is not False
+                or self._work_joined is not True):
+            raise AuthorityRefusalError
+        return signer, scope
+
+    def _close_known_signing_refusal(self, channel):
+        """Local transport only after failed no-IO signing; never remote settlement."""
+        try:
+            signer, scope = RemoteCleanupOwner._known_signing_refusal(self, channel)
+            RemoteCleanupOwner._guard(self)
+            if RemoteCleanupOwner._remaining(self) <= 0:
+                return False
+            RemoteCleanupOwner._guard(self)
+            current, current_scope = RemoteCleanupOwner._known_signing_refusal(self, channel)
+            if (current is not signer or current_scope is not scope
+                    or channel._reading is not False or channel._writing is not False):
+                return False
+            # close() independently proves all retained channel IO is settled.
+            self._socket_closed = SocketChannel.close(channel) is True
+            if not self._socket_closed or RemoteCleanupOwner._remaining(self) <= 0:
+                return False
+            RemoteCleanupOwner._guard(self)
+            current, current_scope = RemoteCleanupOwner._known_signing_refusal(self, channel)
+            if current is not signer or current_scope is not scope:
+                return False
+            self._clock_closed = SocketChannel.close_clock(channel) is True
+            return self._socket_closed and self._clock_closed
+        except BaseException:
+            return False  # original refusal/cause survives; never retry local native intent
+
+    async def _send_credential_cancel(self, channel):
+        """One fixed original cleanup route; never unsigned fallback or remote ACK."""
+        from .presentation_credential_cancel_commitment import NativeCancelCommitment
+        from .presentation_credential_cancel_write import NativeCancelWriter
+
+        if (type(self) is not RemoteCleanupOwner
+                or type(self._allocations_snapshot) is not tuple
+                or len(self._allocations_snapshot) != 2
+                or self._allocations is not self._allocations_snapshot
+                or type(self._allocations_snapshot[0]) is not _TaskAllocation
+                or type(self._allocations_snapshot[0].task) is not _TASK
+                or asyncio.current_task() is not self._allocations_snapshot[0].task
+                or _TASK.cancelling(self._allocations_snapshot[0].task) != 0):
+            raise AuthorityRefusalError
+        if (type(channel) is not SocketChannel or type(self._refs_snapshot) is not tuple
+                or len(self._refs_snapshot) != 12 or self._refs is not self._refs_snapshot
+                or channel is not self._refs_snapshot[3]):
+            raise AuthorityRefusalError
+        try:
+            from .presentation_credential_work import NativePhaseWorkOwner
+
+            producer = self._credential_work_snapshot
+            if (type(producer) is NativePhaseWorkOwner
+                    and self._credential_work is producer
+                    and producer._ready_transition_snapshot is None
+                    and producer._ready_transition is None):
+                from .presentation_credential_pre_ready_cancel import (
+                    NativePreReadyCancelCommitment,
+                )
+                from .presentation_credential_pre_ready_cancel_write import (
+                    NativePreReadyCancelWriter,
+                )
+
+                signer = NativePreReadyCancelCommitment.retain(self)
+                NativePreReadyCancelCommitment.prepare(signer)
+                writer = NativePreReadyCancelWriter.retain(signer)
+                await NativePreReadyCancelWriter.write_cancel(writer)
+                scope = NativePreReadyCancelWriter._metadata(writer)
+                if (scope.signed_scope.cleanup is not self
+                        or scope.signed_scope.cleanup_refs[3] is not channel
+                        or self._cancel_write_completed is not True
+                        or writer._complete is not True):
+                    raise AuthorityRefusalError
+                NativePreReadyCancelWriter._released(writer, channel)
+            else:
+                signer = NativeCancelCommitment.retain(self)
+                NativeCancelCommitment.prepare(signer)
+                writer = NativeCancelWriter.retain(signer)
+                await NativeCancelWriter.write_cancel(writer)
+                scope = NativeCancelWriter._metadata(writer)
+                if (scope.signed_scope.cleanup is not self
+                        or scope.signed_scope.cleanup_refs[3] is not channel
+                        or self._cancel_write_completed is not True
+                        or writer._complete is not True):
+                    raise AuthorityRefusalError
+                NativeCancelWriter._released(writer, channel)
+            RemoteCleanupOwner._guard(self)
+            if RemoteCleanupOwner._remaining(self) <= 0:
+                raise AuthorityRefusalError
+        except BaseException:
+            RemoteCleanupOwner._close_known_signing_refusal(self, channel)
+            self._unknown = True  # remote cleanup remains unconfirmed even after local close
+            if (type(channel) is SocketChannel and type(self._refs_snapshot) is tuple
+                    and len(self._refs_snapshot) == 12 and self._refs is self._refs_snapshot
+                    and channel is self._refs_snapshot[3]):
+                channel._refused = True
+            raise
+
     async def _work(self):
         from .presentation_cleanup_reader import CleanupReadGate, CleanupReadSwitch
         from .presentation_remote import RemoteOperationOwner
 
         if self._initialized is not True or self._unknown is not False:
             return False  # partial initialization never opens work
+        original_read_gate = self._read_gate_snapshot
         barriers = self._barriers_snapshot
         ready = barriers.ready if type(barriers) is _BarrierAllocation else None
+        cause = barriers.cause if type(barriers) is _BarrierAllocation else None
+        loop = self._loop_snapshot
         go = self._go_barriers_snapshot
         notice = go.notice if type(go) is _GoBarriers else None
         result_barrier = self._result_barrier_snapshot
@@ -701,6 +840,25 @@ class RemoteCleanupOwner:
             _FUTURE.set_result(notice, True)
             if not RemoteCleanupOwner._publish_write_quiescence(self):
                 raise AuthorityRefusalError
+            if self._remote_snapshot._credential_handshake_snapshot is not None:
+                # Signed result/terminal custody is not integrated yet. Keep the
+                # original work task parked; never try the unsigned result reader.
+                from .presentation_broker_cancel import _native_future_methods
+                from .presentation_readiness import _scheduler_safe
+
+                RemoteCleanupOwner._guard(self)
+                if (self._barriers_snapshot is not barriers or barriers.cause is not cause
+                        or self._cause_snapshot is not cause or self._cause is not cause
+                        or type(cause) is not _FUTURE or self._loop_snapshot is not loop
+                        or self._loop is not loop or _FUTURE.get_loop(cause) is not loop):
+                    raise AuthorityRefusalError
+                _native_future_methods(cause)
+                _scheduler_safe(loop)
+                await asyncio.wait((cause,))
+                RemoteCleanupOwner._guard(self)
+                if self._intent is not True:
+                    raise AuthorityRefusalError
+                return False
             from .presentation_result_transport import RemoteResultOwner
 
             receiver = RemoteResultOwner.retain(self._remote_snapshot)
@@ -746,6 +904,13 @@ class RemoteCleanupOwner:
                 _FUTURE.set_result(result_notice, False)
             raise
         finally:
+            # Owned memory retirement does not need current initialization/role
+            # authority. The held original gate and actual work actor select it.
+            try:
+                from .presentation_credential_cleanup_read import retire_pending_on_work_exit
+                retire_pending_on_work_exit(original_read_gate, self)
+            except BaseException:
+                self._unknown = True
             if self._initialized is True:
                 try:
                     RemoteCleanupOwner._publish_write_quiescence(self)
@@ -775,8 +940,75 @@ class RemoteCleanupOwner:
             if self._unknown or RemoteCleanupOwner._remaining(self) <= 0:
                 self._unknown = True
                 return False
-            work = self._allocations_snapshot[1].task
+            original_work_allocation = self._allocations_snapshot[1]
+            work = original_work_allocation.task
+            cleanup_loop = self._loop_snapshot
             gate = self._read_gate_snapshot
+            signed_notice = gate._signed_notice_origin
+            if signed_notice is not None:
+                from .presentation_credential_cleanup_notice import SignedReadNotice
+
+                if (type(signed_notice) is not SignedReadNotice
+                        or signed_notice._initialized is not True
+                        or signed_notice._failed is not False
+                        or signed_notice._unknown is not False):
+                    self._unknown = True
+                    return False
+                from .presentation_broker_cancel import _native_future_methods
+                from .presentation_readiness import _scheduler_safe
+
+                SignedReadNotice.inspect(signed_notice, gate)
+                notice_allocation = signed_notice._future_allocation_origin
+                notice_future = notice_allocation[1]
+                notice_loop = notice_allocation[2]
+                work_allocation = self._allocations_snapshot[1]
+                remaining = RemoteCleanupOwner._remaining(self)
+                # The clock can run callbacks: reseal actual held allocations and
+                # native dispatch AFTER it, before asyncio.wait registers anything.
+                RemoteCleanupOwner._guard(self)
+                SignedReadNotice.inspect(signed_notice, gate)
+                if (self._read_gate_snapshot is not gate or gate._signed_notice is not signed_notice
+                        or gate._signed_notice_origin is not signed_notice
+                        or signed_notice._future_allocation_origin is not notice_allocation
+                        or signed_notice._future is not notice_future
+                        or signed_notice._future_origin is not notice_future
+                        or self._loop_snapshot is not notice_loop
+                        or self._allocations_snapshot[1] is not work_allocation
+                        or work_allocation.task is not work or remaining <= 0):
+                    self._unknown = True
+                    return False
+                _native_future_methods(notice_future)
+                _native_future_methods(work)
+                _scheduler_safe(notice_loop)
+                # Stop DATA only: no legacy read fact, CANCEL permission or work-join
+                # substitution. Wait only within the same original cleanup allowance.
+                await asyncio.wait((notice_future, work), timeout=remaining,
+                                   return_when=asyncio.FIRST_COMPLETED)
+                RemoteCleanupOwner._guard(self)
+                if self._unknown or RemoteCleanupOwner._remaining(self) <= 0:
+                    self._unknown = True
+                    return False
+                if (self._read_gate_snapshot is not gate or gate._signed_notice is not signed_notice
+                        or gate._signed_notice_origin is not signed_notice
+                        or signed_notice._future_allocation_origin is not notice_allocation
+                        or signed_notice._future is not notice_future
+                        or signed_notice._future_origin is not notice_future
+                        or self._allocations_snapshot[1] is not work_allocation
+                        or work_allocation.task is not work):
+                    self._unknown = True
+                    return False
+                if (_FUTURE.done(notice_future) and not _TASK.done(work)):
+                    from .presentation_credential_cleanup_read import (
+                        NativeCleanupRead,
+                        owned_native_read,
+                    )
+                    pending_reader = owned_native_read(signed_notice)
+                    if (pending_reader is not None and (
+                            pending_reader._attempted is True
+                            or pending_reader._auth_allocation_origin is not None)):
+                        NativeCleanupRead.current_for_cleanup(pending_reader)
+                    else:
+                        SignedReadNotice.current_stop_for_cleanup(signed_notice)
             sent = False
             if gate._requested is True:
                 if gate._fact_origin is None and not _TASK.done(work):
@@ -791,9 +1023,24 @@ class RemoteCleanupOwner:
                     await SocketChannel.send_cancel(self._refs_snapshot[3], self)
                     sent = True
             if not _TASK.done(work):
-                await asyncio.wait((work,), timeout=RemoteCleanupOwner._remaining(self))
+                from .presentation_broker_cancel import _native_future_methods
+                from .presentation_readiness import _scheduler_safe
+
+                remaining = RemoteCleanupOwner._remaining(self)
+                RemoteCleanupOwner._guard(self)
+                if (self._allocations_snapshot[1] is not original_work_allocation
+                        or original_work_allocation.task is not work
+                        or self._loop_snapshot is not cleanup_loop or remaining <= 0):
+                    self._unknown = True
+                    return False
+                # Joining cancelled OWNED work remains valid. This is a dispatch
+                # fence, not fresh work/role authority or a cancellation-count gate.
+                _native_future_methods(work)
+                _scheduler_safe(cleanup_loop)
+                await asyncio.wait((work,), timeout=remaining)
             RemoteCleanupOwner._guard(self)
-            if not _TASK.done(work):
+            if (self._allocations_snapshot[1] is not original_work_allocation
+                    or original_work_allocation.task is not work or not _TASK.done(work)):
                 self._unknown = True
                 return False
             self._work_joined = True
@@ -828,6 +1075,17 @@ class RemoteCleanupOwner:
         RemoteCleanupOwner._guard(self)
         if (self._intent or self._unknown
                 or asyncio.current_task() is not self._allocations_snapshot[1].task):
+            raise AuthorityRefusalError
+        _task_allows_work()
+
+    def authorize_result_caller(self):
+        """Fixed original notification caller, never original work or cleanup actor."""
+        RemoteCleanupOwner._guard(self)
+        if (self._intent or self._unknown
+                or asyncio.current_task() is not self._caller_snapshot
+                or _TASK.cancelling(self._caller_snapshot) != 0
+                or _TASK.done(self._allocations_snapshot[1].task)
+                or _TASK.cancelling(self._allocations_snapshot[1].task) != 0):
             raise AuthorityRefusalError
         _task_allows_work()
 
@@ -893,13 +1151,26 @@ class RemoteCleanupOwner:
                 raise AuthorityRefusalError
             RemoteOperationOwner._work_now(self._remote_snapshot)
             RemoteCleanupOwner._guard(self)
-            receiver = self._remote_snapshot._result_owner_snapshot
-            if (result is not True or self._intent or self._result_barrier_snapshot is not barrier
-                    or type(receiver) is not RemoteResultOwner
-                    or self._result_token is None or receiver._validated is not True
-                    or self._result_token is not receiver._token_snapshot):
+            if result is not True or self._intent or self._result_barrier_snapshot is not barrier:
                 raise AuthorityRefusalError
-            RemoteResultOwner._guard(receiver, work=False)
+            if self._remote_snapshot._credential_handshake_snapshot is not None:
+                from .presentation_credential_result_body import NativeResultBodyOwner
+                receiver = self._remote_snapshot._signed_result_owner_snapshot
+                if (type(receiver) is not NativeResultBodyOwner
+                        or self._remote_snapshot._signed_result_owner is not receiver
+                        or self._remote_snapshot._result_owner_snapshot is not None
+                        or self._remote_snapshot._result_owner is not None
+                        or self._result_token is None
+                        or self._result_token is not receiver._token_origin):
+                    raise AuthorityRefusalError
+                NativeResultBodyOwner.current_notice(receiver)
+            else:
+                receiver = self._remote_snapshot._result_owner_snapshot
+                if (type(receiver) is not RemoteResultOwner
+                        or self._result_token is None or receiver._validated is not True
+                        or self._result_token is not receiver._token_snapshot):
+                    raise AuthorityRefusalError
+                RemoteResultOwner._guard(receiver, work=False)
             RemoteOperationOwner._retained_local(self._remote_snapshot)
             _task_allows_work()
             return True  # no header/avatar returned by this public readiness method

@@ -6,6 +6,7 @@ Only original native PRE_GO may invoke send_go. Close uncertainty is never retri
 
 from __future__ import annotations
 
+import hashlib
 import os
 import select
 import stat
@@ -14,7 +15,7 @@ import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from io import FileIO
-from typing import BinaryIO
+from typing import BinaryIO, NamedTuple
 
 from .presentation_go import GoHandoff
 from .presentation_input_v3 import decode_input_v3
@@ -42,6 +43,25 @@ class ControlAcquisitionError(FrameError):
         self._original = original
 
 
+_INPUT_WRITE_MINT = object()
+
+
+class ControlInputWriteObservation(NamedTuple):
+    """Original completed native input write, never child-read/GO/publication proof."""
+    mint: object
+    owner: object
+    stream: object
+    handle: object
+    child: object
+    identity: tuple
+    context: tuple
+    packet_sha256: str
+    packet_length: int
+
+    def __repr__(self):
+        return "<ControlInputWriteObservation payload-redacted>"
+
+
 class OwnedControlPipe:
     def __init__(
         self, stream: BinaryIO, *, handle: object, child: object, current: Callable[[], bool]
@@ -52,7 +72,9 @@ class OwnedControlPipe:
         self._current = current
         self._lock = threading.Lock()
         self._input_attempted = False
+        self._credential_go_relay = self._credential_go_relay_snapshot = None
         self._input_ready = False
+        self._input_write_observation = self._input_write_observation_origin = None
         self._close_attempted = False
         self.closed = False
         self.uncertain = False
@@ -164,7 +186,18 @@ class OwnedControlPipe:
             or now >= self._deadline
         ):
             raise FrameError("BI1_CONTROL_GO_REFUSED")
-        return os.write(fd, data)
+        relay = self._credential_go_relay_snapshot
+        if relay is not None:
+            from .presentation_credential_go_relay import CredentialGoRelay
+            if type(relay) is not CredentialGoRelay or self._credential_go_relay is not relay:
+                raise FrameError("BI1_CONTROL_CREDENTIAL_GO_REFUSED")
+            claim = CredentialGoRelay._presend(relay, self, fd, data)
+        elif self._credential_go_relay is not None:
+            raise FrameError("BI1_CONTROL_CREDENTIAL_GO_REFUSED")
+        count = os.write(fd, data)
+        if relay is not None:
+            CredentialGoRelay._record_write(relay, claim, count)
+        return count
 
     def write_input(self, packet: bytes) -> None:
         self._enter()
@@ -175,6 +208,9 @@ class OwnedControlPipe:
             if type(packet) is not bytes:
                 raise FrameError("BI1_CONTROL_INPUT_REFUSED")
             row = decode_input_v3(packet)
+            self._bindings()
+            original = (self._stream_snapshot, self._handle_snapshot,
+                        self._child_snapshot, self._identity_snapshot)
             self._deadline = row["deadline_ns"] / 1_000_000_000
             self._challenge = row["challenge"]
             offset = 0
@@ -197,6 +233,39 @@ class OwnedControlPipe:
             now = time.monotonic()
             if self.uncertain or now >= self._deadline:
                 raise FrameError("BI1_CONTROL_INPUT_REFUSED")
+            if type(self) is OwnedControlPipe and type(original[0]) is FileIO:
+                # Capture only after ALL original bytes were written. Native
+                # descriptors/owner references are checked again after callbacks.
+                if (self._stream is not original[0] or self._stream_snapshot is not original[0]
+                        or self._handle is not original[1]
+                        or self._handle_snapshot is not original[1]
+                        or self._child is not original[2] or self._child_snapshot is not original[2]
+                        or self._identity is not original[3]
+                        or self._identity_snapshot is not original[3]):
+                    raise FrameError("BI1_CONTROL_INPUT_OBSERVATION_REFUSED")
+                fd = self._fd()
+                current = self._current()
+                digest = hashlib.sha256(packet).hexdigest()
+                if (current is not True or self.uncertain is not False or self.closed is not False
+                        or self._work_refused is not False or self._resource_uncertain is not False
+                        or self._input_attempted is not True or self._input_ready is not False
+                        or self._close_attempted is not False
+                        or self._stream is not original[0]
+                        or self._stream_snapshot is not original[0]
+                        or self._handle is not original[1]
+                        or self._handle_snapshot is not original[1]
+                        or self._child is not original[2] or self._child_snapshot is not original[2]
+                        or self._identity is not original[3]
+                        or self._identity_snapshot is not original[3]
+                        or type(fd) is not int or fd != original[3][0]
+                        or self._input_write_observation is not None
+                        or self._input_write_observation_origin is not None
+                        or time.monotonic() >= self._deadline):
+                    raise FrameError("BI1_CONTROL_INPUT_OBSERVATION_REFUSED")
+                fact = ControlInputWriteObservation(
+                    _INPUT_WRITE_MINT, self, original[0], original[1], original[2], original[3],
+                    (os.getpid(), threading.get_ident()), digest, len(packet))
+                self._input_write_observation = self._input_write_observation_origin = fact
             self._input_ready = True
         except BaseException as error:
             self._mark_work_refused()

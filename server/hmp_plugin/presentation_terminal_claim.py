@@ -265,6 +265,26 @@ class _FrozenLocalHandoff(NamedTuple):
         return "<FrozenLocalHandoff data-only no-write no-release redacted>"
 
 
+def _signed_transfer(scope, fact):
+    """Closed signed-transfer branch, never reinterpret a malformed writer as legacy."""
+    from .presentation_broker_service import SocketChannel
+    from .presentation_credential_result_completed import metadata
+    from .presentation_credential_result_write import CredentialResultWriter, _ResultTransfer
+
+    _require(type(scope) is _ProducerScope and type(fact) is _ResultTransfer
+             and type(scope.channel) is SocketChannel
+             and type(scope.control_scope) is tuple and len(scope.control_scope) == 10)
+    writer = scope.channel._credential_result_writer_snapshot
+    _require(type(writer) is CredentialResultWriter and metadata(writer) is fact)
+    refs, result = fact.scope.result_scope.refs, fact.scope.result_scope
+    _require(refs[0] is scope.service and refs[1] is scope.connection
+             and refs[2] is scope.registry and refs[3] is scope.ticket
+             and refs[4] is scope.record and refs[14] is scope.channel and refs[15] is scope.task
+             and refs[17] is scope.control_scope[3]
+             and result.control is scope.control and result.resources is scope.resources
+             and fact.scope.channel is scope.channel and fact.scope.task is scope.task)
+
+
 class LocalStartedProducer:
     """One retained local observation producer; exposes data, no completion API."""
 
@@ -301,6 +321,8 @@ class LocalStartedProducer:
         self._transfer = self._transfer_snapshot = None
         self._handoff_attempted = self._handoff_failed = False
         self._handoff = self._handoff_snapshot = None
+        self._signed_exporter = self._signed_exporter_origin = None
+        self._signed_exporter_cell = None
         self._initialized = self._failed = False
         try:
             control, channel = connection.cancel_owner, connection.channel_snapshot
@@ -333,29 +355,46 @@ class LocalStartedProducer:
                 _require(s.resources._invalidated is True)
                 outcome, digest = "ABORTED", None
             else:
-                from .presentation_result_transport import (
-                    _TRANSFER_MINT,
-                    BrokerResultWriter,
-                    _CompletedResultTransfer,
-                    _WriterScope,
-                )
+                signed_writer = channel._credential_result_writer_snapshot
+                if signed_writer is not None:
+                    from .presentation_credential_result_completed import current
+                    fact = current(signed_writer)
+                    _signed_transfer(s, fact)
+                    input_current(record, fact.scope.result_scope.refs[8])
+                    self._transfer = self._transfer_snapshot = fact
+                    outcome, digest = "OK", fact.scope.payload_sha
+                else:
+                    from .presentation_result_transport import (
+                        _TRANSFER_MINT,
+                        BrokerResultWriter,
+                        _CompletedResultTransfer,
+                        _WriterScope,
+                    )
 
-                writer = connection.result_writer_snapshot
-                _require(type(writer) is BrokerResultWriter)
-                BrokerResultWriter._guard(writer)  # metadata-only original scope fence
-                fact = writer._transfer_fact_snapshot
-                _require(type(fact) is _CompletedResultTransfer and fact.mint is _TRANSFER_MINT
-                         and fact is writer._transfer_fact and fact.writer is writer
-                         and type(fact.scope) is _WriterScope
-                         and fact.scope is writer._scope_snapshot and fact.scope.record is record
-                         and fact.scope.connection is connection and fact.scope.channel is channel
-                         and fact.scope.control is control and fact.scope.task is s.task
-                         and writer._write_completed is True and writer._failed is False
-                         and s.resources._normal_complete is True
-                         and s.resources._invalidated is False)
-                input_current(record, fact.scope.packet)
-                self._transfer = self._transfer_snapshot = fact
-                outcome, digest = "OK", fact.sha256
+                    writer = connection.result_writer_snapshot
+                    _require(type(writer) is BrokerResultWriter)
+                    BrokerResultWriter._guard(writer)  # metadata-only original scope fence
+                    fact = writer._transfer_fact_snapshot
+                    _require(
+                        type(fact) is _CompletedResultTransfer
+                        and fact.mint is _TRANSFER_MINT
+                        and fact is writer._transfer_fact
+                        and fact.writer is writer
+                        and type(fact.scope) is _WriterScope
+                        and fact.scope is writer._scope_snapshot
+                        and fact.scope.record is record
+                        and fact.scope.connection is connection
+                        and fact.scope.channel is channel
+                        and fact.scope.control is control
+                        and fact.scope.task is s.task
+                        and writer._write_completed is True
+                        and writer._failed is False
+                        and s.resources._normal_complete is True
+                        and s.resources._invalidated is False
+                    )
+                    input_current(record, fact.scope.packet)
+                    self._transfer = self._transfer_snapshot = fact
+                    outcome, digest = "OK", fact.sha256
             domain = s.domain_values
             _require(type(domain) is tuple and len(domain) == 4
                      and type(domain[0]) is str and type(domain[1]) is str
@@ -464,28 +503,38 @@ class LocalStartedProducer:
                      and type(s.resources._wait.exit_code) is int
                      and observation.exit_code == s.resources._wait.exit_code)
         if self._transfer is not None:
-            from .presentation_result_transport import (
-                _TRANSFER_MINT,
-                BrokerResultWriter,
-                _CompletedResultTransfer,
-                _WriterScope,
-            )
+            if s.channel._credential_result_writer_snapshot is not None:
+                _signed_transfer(s, self._transfer)
+            else:
+                from .presentation_result_transport import (
+                    _TRANSFER_MINT,
+                    BrokerResultWriter,
+                    _CompletedResultTransfer,
+                    _WriterScope,
+                )
 
-            fact = self._transfer
-            _require(type(fact) is _CompletedResultTransfer and fact.mint is _TRANSFER_MINT
-                     and type(fact.writer) is BrokerResultWriter
-                     and type(fact.scope) is _WriterScope
-                     and s.connection.result_writer is fact.writer
-                     and s.connection.result_writer_snapshot is fact.writer
-                     and fact.writer._scope is fact.scope
-                     and fact.writer._scope_snapshot is fact.scope
-                     and fact.writer._transfer_fact is fact
-                     and fact.writer._transfer_fact_snapshot is fact
-                     and fact.scope.service is s.service and fact.scope.connection is s.connection
-                     and fact.scope.record is s.record and fact.scope.resources is s.resources
-                     and fact.scope.channel is s.channel and fact.scope.control is s.control
-                     and fact.scope.registry is s.registry and fact.scope.ticket is s.ticket
-                     and fact.scope.task is s.task)
+                fact = self._transfer
+                _require(
+                    type(fact) is _CompletedResultTransfer
+                    and fact.mint is _TRANSFER_MINT
+                    and type(fact.writer) is BrokerResultWriter
+                    and type(fact.scope) is _WriterScope
+                    and s.connection.result_writer is fact.writer
+                    and s.connection.result_writer_snapshot is fact.writer
+                    and fact.writer._scope is fact.scope
+                    and fact.writer._scope_snapshot is fact.scope
+                    and fact.writer._transfer_fact is fact
+                    and fact.writer._transfer_fact_snapshot is fact
+                    and fact.scope.service is s.service
+                    and fact.scope.connection is s.connection
+                    and fact.scope.record is s.record
+                    and fact.scope.resources is s.resources
+                    and fact.scope.channel is s.channel
+                    and fact.scope.control is s.control
+                    and fact.scope.registry is s.registry
+                    and fact.scope.ticket is s.ticket
+                    and fact.scope.task is s.task
+                )
 
     def _guard(self):
         from .presentation_broker_cancel import BrokerCancellationOwner
@@ -496,6 +545,9 @@ class LocalStartedProducer:
         BrokerServiceSpine._metadata(s.service)
         BrokerCancellationOwner._guard(s.control, cleanup=True)
         _require(SocketChannel._qualified_clock(s.channel) is s.clock)
+        if self._transfer is not None and s.channel._credential_result_writer_snapshot is not None:
+            from .presentation_credential_result_completed import current
+            _require(current(s.channel._credential_result_writer_snapshot) is self._transfer)
         # The native/control tail cannot leave changed local custody unchecked.
         LocalStartedProducer._metadata_guard(self)
 

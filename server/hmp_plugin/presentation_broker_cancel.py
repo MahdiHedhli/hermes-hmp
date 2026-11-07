@@ -111,12 +111,96 @@ class BrokerCancellationOwner:
                 or channel._cancel_receiver is not None
                 or channel._cancel_receiver_snapshot is not None):
             _refuse()
+        # This reader only understands unsigned v2 controls. Credential channels
+        # require their separate original signed-record cursor, never fallback.
+        SocketChannel._credential_work_ready(channel)
         owner = BrokerCancellationOwner.__new__(BrokerCancellationOwner)
         channel._cancel_receiver = channel._cancel_receiver_snapshot = owner
         BrokerCancellationOwner.__init__(owner, channel, registry, ticket, grammar)
         return owner
 
+    @classmethod
+    def prepare_credential(cls, queued):
+        """Bind the original allocation only; signed reading remains CLOSED."""
+        from .presentation_control_binding import PreparedControlBinding
+        from .presentation_credential_queued import CredentialQueuedOwner
+
+        if cls is not BrokerCancellationOwner or type(queued) is not CredentialQueuedOwner:
+            _refuse()
+        CredentialQueuedOwner.current_queued(queued)
+        if (type(queued._refs) is not tuple or len(queued._refs) != 19
+                or queued._refs is not queued._refs_snapshot):
+            _refuse()
+        refs = queued._refs_snapshot
+        connection, registry, ticket, channel, grammar = (
+            refs[1], refs[2], refs[3], refs[14], refs[18])
+        if (type(channel) is not SocketChannel or channel._cancel_receiver is not None
+                or channel._cancel_receiver_snapshot is not None
+                or connection.cancel_owner is not None):
+            _refuse()
+        owner = BrokerCancellationOwner.__new__(BrokerCancellationOwner)
+        binding = PreparedControlBinding.__new__(PreparedControlBinding)
+        owner._credential_binding = owner._credential_binding_snapshot = binding
+        binding._original_queued = queued
+        channel._cancel_receiver = channel._cancel_receiver_snapshot = owner
+        connection.cancel_owner = owner
+        BrokerCancellationOwner._initialize(owner, channel, registry, ticket, grammar)
+        return owner  # prepared context/task, not a signed control reader or permit
+
+    @classmethod
+    def stage_credential_control(cls, queued):
+        """Actual first signed frame read only; native receipt/work gates stay closed."""
+        from .presentation_credential_control import CredentialControlCursor
+
+        if cls is not BrokerCancellationOwner:
+            _refuse()
+        owner = BrokerCancellationOwner.prepare_credential(queued)
+        try:
+            CredentialControlCursor.retain(owner)
+        except BaseException:
+            owner._failed = True
+            raise FrameError("BI1_CREDENTIAL_CONTROL_ACQUISITION_REFUSED") from None
+        return owner
+
+    @classmethod
+    def retain_credential_cancel(cls, queued):
+        """Pre-GO signed CANCEL only; signed GO/resources remain closed."""
+        from .presentation_credential_control import CredentialCancelAdoption
+
+        if cls is not BrokerCancellationOwner:
+            _refuse()
+        owner = BrokerCancellationOwner.stage_credential_control(queued)
+        try:
+            CredentialCancelAdoption.retain(owner)
+        except BaseException:
+            owner._failed = True
+            raise FrameError("BI1_CREDENTIAL_CANCEL_ACQUISITION_REFUSED") from None
+        return owner
+
+    @classmethod
+    def stage_credential_go_control(cls, queued):
+        """GO/read receipts and next CANCEL under original budget; no resource relay."""
+        from .presentation_credential_control import CredentialGoPhase
+
+        if cls is not BrokerCancellationOwner:
+            _refuse()
+        owner = BrokerCancellationOwner.retain_credential_cancel(queued)
+        try:
+            CredentialGoPhase.retain(owner)
+        except BaseException:
+            owner._failed = True
+            raise FrameError("BI1_CREDENTIAL_GO_ACQUISITION_REFUSED") from None
+        return owner
+
     def __init__(self, channel, registry, ticket, grammar):
+        if type(self) is not BrokerCancellationOwner or "_initialized" in vars(self):
+            _refuse()  # never replace an original task/cursor or partial failure
+        self._credential_binding = self._credential_binding_snapshot = None
+        BrokerCancellationOwner._initialize(self, channel, registry, ticket, grammar)
+
+    def _initialize(self, channel, registry, ticket, grammar):
+        if type(self) is not BrokerCancellationOwner or "_initialized" in vars(self):
+            _refuse()
         self._channel = self._channel_snapshot = self._io_channel_origin = channel
         self._registry = self._registry_snapshot = registry
         self._ticket = self._ticket_snapshot = ticket
@@ -128,6 +212,8 @@ class BrokerCancellationOwner:
         self._go_allocation = self._go_allocation_snapshot = None
         self._go_initialized = self._go_initialized_snapshot = None
         self._go_relay_intent = self._go_relay_completed = False
+        self._credential_go_relay = self._credential_go_relay_snapshot = None
+        self._credential_result = self._credential_result_snapshot = None
         self._cancel_future = self._cancel_future_snapshot = None
         self._cancel_allocation = self._cancel_allocation_snapshot = None
         self._cancel_initialized = self._cancel_initialized_snapshot = None
@@ -143,8 +229,11 @@ class BrokerCancellationOwner:
         self._allocation = self._allocation_snapshot = None
         self._task_initialized = self._task_initialized_snapshot = None
         self._scope = self._scope_snapshot = None
-        self._failure_origin = self._failure_origin_snapshot = (
-            grammar if type(grammar) is OperationGrammar else None, None)
+        self._failure_origin = self._failure_origin_snapshot = (None, None)
+        self._signed_cursor = self._signed_cursor_snapshot = None
+        self._signed_cancel = self._signed_cancel_snapshot = None
+        self._signed_go = self._signed_go_snapshot = None
+        self._credential_ready = self._credential_ready_snapshot = None
         self._buffer = self._buffer_snapshot = self._buffer_origin = bytearray()
         self._wire_received = self._frame_start = 0
         self._pending = self._waiter = None
@@ -155,6 +244,22 @@ class BrokerCancellationOwner:
         self._loop = self._loop_snapshot = asyncio.get_running_loop()
         self._context = self._context_snapshot = (os.getpid(), os.geteuid(), threading.get_ident())
         try:
+            if type(channel) is not SocketChannel:
+                _refuse()
+            credential = self._credential_binding_snapshot
+            if credential is None:
+                if self._credential_binding is not None:
+                    _refuse()
+                SocketChannel._credential_work_ready(channel)
+            else:
+                from .presentation_control_binding import PreparedControlBinding
+
+                if (type(credential) is not PreparedControlBinding
+                        or self._credential_binding is not credential):
+                    _refuse()
+                PreparedControlBinding.__init__(credential, credential._original_queued, self)
+            self._failure_origin = self._failure_origin_snapshot = (
+                grammar if type(grammar) is OperationGrammar else None, None)
             if type(registry) is not BrokerRegistry or type(ticket) is not BrokerTicket:
                 _refuse()
             # Capture original failure custody under the existing registry lock,
@@ -211,8 +316,18 @@ class BrokerCancellationOwner:
                 self._slot.task, self._slot.coroutine)
             _initialize_task(self._slot, self._loop)
             self._task_initialized = self._task_initialized_snapshot = object()
+            if self._credential_binding_snapshot is not None:
+                from .presentation_control_binding import PreparedControlBinding
+
+                PreparedControlBinding.bind_original_allocation(self._credential_binding_snapshot)
             self._initialized = True
-            BrokerCancellationOwner._guard(self)
+            if self._credential_binding_snapshot is None:
+                BrokerCancellationOwner._guard(self)
+            else:
+                # Validate retained construction only, never advertise a working
+                # signed controller before its cursor is implemented.
+                BrokerCancellationOwner._guard(self, cleanup=True)
+                PreparedControlBinding.creator_current(self._credential_binding_snapshot)
         except BaseException:
             self._failed = True
             # No unqualified clock, no assumption that a failed initializer did
@@ -243,6 +358,20 @@ class BrokerCancellationOwner:
         if (type(c) is not SocketChannel or c is not self._io_channel_origin
                 or type(scope) is not tuple or len(scope) != 10):
             _refuse()
+        credential = self._credential_binding_snapshot
+        if credential is not None:
+            from .presentation_control_binding import PreparedControlBinding
+
+            if (type(credential) is not PreparedControlBinding
+                    or self._credential_binding is not credential):
+                _refuse()
+            if reader or not cleanup:
+                # Prepared Task/key custody is not controller/work readiness.
+                raise FrameError("BI1_SIGNED_CONTROL_READER_NOT_IMPLEMENTED")
+        if reader:
+            # Covers a later credential attachment too. Local owned cleanup
+            # (reader=False) remains separate from refusing remote control IO.
+            SocketChannel._credential_work_ready(c)
         _binding(scope[1])  # exact closed field types before any dataclass equality
         SocketChannel._bindings(c)  # exact enrollment types before any field/property reads
         if (self._initialized is not True
@@ -452,6 +581,12 @@ class BrokerCancellationOwner:
     def _local_cause(self):
         # Retire before native cleanup sampling; no GO/launch can be restored.
         self._retired = True
+        producer = getattr(self, "_credential_result_snapshot", None)
+        if producer is not None:
+            from .presentation_credential_result import CredentialResultProducer
+
+            if type(producer) is CredentialResultProducer:
+                CredentialResultProducer.retire_from_control(producer, self)
         scope = self._scope_snapshot
         if type(scope) is not tuple or len(scope) != 10:
             self._failed = True
@@ -473,6 +608,11 @@ class BrokerCancellationOwner:
         finally:
             self._sampling = False
         c = self._io_channel_origin
+        if type(c) is SocketChannel:
+            from .presentation_credential_result_write import CredentialResultWriter
+            signed_writer = c._credential_result_writer_snapshot
+            if type(signed_writer) is CredentialResultWriter:
+                CredentialResultWriter.retire_from_control(signed_writer, self)
         if type(c) is SocketChannel and c._result_writer_snapshot is not None:
             from .presentation_result_transport import BrokerResultWriter
 
@@ -595,6 +735,48 @@ class BrokerCancellationOwner:
     async def _read(self):
         if self._initialized is not True or self._failed is not False:
             return None  # partial initializer remains retained, no bytes read
+        if self._credential_binding_snapshot is not None:
+            from .presentation_control_binding import PreparedControlBinding
+
+            try:
+                cursor = self._signed_cursor_snapshot
+                if cursor is None:
+                    if self._signed_cursor is not None:
+                        _refuse()
+                    PreparedControlBinding.reader_closed(self._credential_binding_snapshot)
+                else:
+                    from .presentation_credential_control import CredentialControlCursor
+
+                    if (type(cursor) is not CredentialControlCursor
+                            or self._signed_cursor is not cursor):
+                        _refuse()
+                    await CredentialControlCursor.run(cursor)
+                    phase = self._signed_go_snapshot
+                    if phase is not None:
+                        from .presentation_credential_control import CredentialGoPhase
+
+                        if type(phase) is not CredentialGoPhase or self._signed_go is not phase:
+                            _refuse()
+                        if cursor._phase == "GO":
+                            return await CredentialGoPhase.run(phase)
+                    elif self._signed_go is not None:
+                        _refuse()
+                    adoption = self._signed_cancel_snapshot
+                    if adoption is not None:
+                        from .presentation_credential_control import CredentialCancelAdoption
+
+                        if (type(adoption) is not CredentialCancelAdoption
+                                or self._signed_cancel is not adoption):
+                            _refuse()
+                        return await CredentialCancelAdoption.run(adoption)
+                    if self._signed_cancel is not None:
+                        _refuse()
+                    # Completed authenticated bytes do not mint native receipts.
+                    raise FrameError("BI1_SIGNED_CONTROL_RECEIPT_INTEGRATION_REQUIRED")
+            except BaseException:
+                self._failed = True
+                raise
+            return None
         try:
             BrokerCancellationOwner._guard(self, reader=True)
             if self._channel._reading is not False:

@@ -1,3 +1,210 @@
+## Internal signed CANCEL routing checkpoint — November 6, 2026
+
+The retained credential cleanup route now composes signed CANCEL on the original
+cleanup Task/channel/window, retaining its one-shot owner before native effects.
+Five direct cases and two actual private-socket broker correlations cover seq1/
+seq2 receipt/window/end, with real READY/resource staging but synthetic native
+peer/authority. Worker GO remains unattempted; PENDING is not CLOSED or ACK.
+
+**1,516 affected tests passed, one skipped**, 75.77 seconds; configured lint passed.
+Independent read-only review accepted the retention-order repair. Earlier fixture
+failures are retained in the evidence; updated tests distinguish dedicated signed
+routing, legitimate automatic CANCEL suffixes and historical close facts from new
+validation after metadata drift.
+
+Known no-IO role/signing refusal still retains automatic local-cleanup debt; no
+close is claimed merely because a role-neutral helper exists. Uncertain IO and
+remote custody remain separate. Production startup, pre-READY cancellation,
+results/terminal custody, worker relay/native publication/STATUS and physical/
+release qualification remain open. Character delivery is unavailable. No live
+host/settings/device or installed build changed.
+See [evidence and limits](docs/research/presentation-cancel-route-2026-11-06.md).
+
+## Work-writer final-tail repair checkpoint — November 6, 2026
+
+New synthetic tests confirmed final descriptor-tail gaps in earlier writers:
+base `8ac1edf` sent 2,586 BEGIN bytes and 1,617 GO bytes after late key retirement
+or work-task cancellation. No live traffic was involved. Fixed callback-free
+custody/policy/clock/budget fences now precede retained role and original actor/
+caller checks after all descriptor callbacks. Refusal preserves original intent
+and debt rather than sending or retrying.
+
+Nine new zero-send causals plus two existing CANCEL tail cases passed. Selected
+affected regression: **909 passed**, 48.13 seconds; configured lint passed after
+a test-only line-wrap/local-name correction. Independent read-only source review
+accepted the repair. Earlier green runs remain historical and did not cover this
+boundary; the failing byte observations are retained explicitly.
+
+This is a source repair, with no host/device/settings/build deployment. Production
+CANCEL routing, remote results/custody/worker relay/startup/native publication and
+physical/release qualification remain open. Character delivery is unavailable.
+See [evidence and limits](docs/research/presentation-work-write-tail-2026-11-06.md).
+
+## Signed CANCEL write checkpoint — November 6, 2026
+
+The original cleanup writer now transmits only the retained signed CANCEL plus
+native frame under the same consumed preparation and frozen end. Actual bounded
+byte progress, settled IO and final role/actor/budget checks precede the native
+completion bool and private local fact. Partial/uncertain writes retain debt
+without retry or deadline renewal. Both prior writers use typed CANCEL slot
+handoffs; local closure does not become a remote ACK or custody proof.
+
+Twelve direct writer cases and **1,500 affected tests passed, one skipped**,
+75.26 seconds; configured lint passed. Independent read-only review accepted GO
+intent typing and final descriptor-tail role/budget/actor repairs. Tripwires prove
+zero foreign callbacks or sends after late retirement/cancellation. Prior signer
+`86667eb` passed [CI766](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42300606324).
+Current writer CI is not yet qualified.
+
+Production CANCEL routing, pre-READY cancellation, remote closure/results/terminal
+custody, worker relay/startup/native publication/STATUS and physical/release
+qualification remain open. Character delivery remains unavailable. No live host,
+settings/device or installed build changed.
+See [evidence and limits](docs/research/presentation-cancel-write-2026-11-06.md).
+
+## After-READY CANCEL signing checkpoint — November 6, 2026
+
+The original cleanup signer now consumes exactly one native CANCEL preparation
+and binds its actual seq1/seq2, frozen 16-byte window and frame hash to original
+signed work context. Current role/cleanup checks and earliest end remain separate
+from retired work authority. Partial preparation is retained; no retry or renewed
+interval follows. This owner signs data only, with no socket completion credit.
+
+Eight direct signing cases and **887 selected affected tests** passed, 44.67 seconds;
+configured lint passed. Independent read-only review accepted the after-READY
+scope. Key retirement, expiry before/after preparation and malformed row/end
+tripwires withhold signed output, invoke no foreign callbacks and preserve the
+budget's original work/end values. Signing an after-READY CANCEL does not qualify
+pre-READY cancellation, remote custody, release or production deployment.
+
+CANCEL transport, pre-READY cancellation, signed results/terminal custody, worker
+relay/startup/native publication/STATUS and physical/release qualification remain
+open. Character delivery remains unavailable. No host/device/settings/build changed.
+See [evidence and limits](docs/research/presentation-cancel-commitment-2026-11-06.md).
+
+## Cleanup role-material checkpoint — November 6, 2026
+
+The fixed original cleanup Task can now validate current role/input/transcript
+material after joined work and policy retirement, without borrowing live-work
+permission. Existing work actor/caller/native authorization checks remain around
+the separate work entry. The cleanup entry requires original allocation, frozen
+intent, known work join, write-quiescence/cancel facts and current role material.
+It signs/sends nothing and cannot revive policy/GO authority.
+
+Six direct cleanup actor/tail cases and **878 selected affected tests** passed,
+43.35 seconds; configured lint passed. Independent read-only review accepted
+allocation/slot tuple/type/identity fences after native-tail substitution tests
+proved zero foreign indexing and unchanged budget/no network attempt. This is
+material-only source qualification, not authenticated CANCEL completion.
+
+CANCEL signing/transport, results/terminal custody, worker relay, startup/native
+publication/STATUS and physical/release qualification remain open. Character
+delivery remains unavailable. No live host/device/settings or installed build changed.
+See [evidence and limits](docs/research/presentation-cleanup-role-material-2026-11-06.md).
+
+## Internal signed GO dispatch checkpoint — November 6, 2026
+
+The original credential work path now composes signed GO transport through the
+existing native admission and single GO_SENT transition, with exact full-write
+proof and separate fixed post-GO_SENT material checks. The original task parks
+on its fenced shared cause instead of entering an unsupported unsigned result
+reader. No result token, broker receipt or execution acknowledgement follows.
+
+Six direct dispatch cases and **872 selected affected tests** passed, 44.25 seconds;
+configured lint passed. Independent read-only review accepted cause/scheduler
+fences and callback-free role-material resealing after final native checks. Late
+failures retain full-wire/native-phase facts while withholding public success.
+This selected run is narrower than the prior writer's 1,466-test regression.
+Prior writer CI760 is still running; new-source CI is not qualified.
+
+Startup, signed cleanup/results/terminal custody, worker relay/native publication,
+STATUS and physical/release qualification remain open. Character delivery remains
+unavailable. No live host/device/settings or installed build changed.
+See [evidence and limits](docs/research/presentation-signed-go-dispatch-2026-11-06.md).
+
+## Signed GO write checkpoint — November 6, 2026
+
+The original-task GO writer now sends the retained fixed signed GO record and
+frame on one original native GO write intent. Actual byte progress, current
+role/native/clock checks and owned write-readiness settlement precede the native
+write fact. Partial/uncertain IO keeps original admission/intent/debt and cannot
+retry. The completed BEGIN owner recognizes only an exact reciprocal GO IO-slot
+handoff. Historical local closure follows held original proofs, not mutable
+foreign cleanup metadata.
+
+Independent read-only source review accepted the final historical-release repair
+and completion check. **1,466 affected tests passed, one skipped**, 67.04 seconds;
+configured lint passed. Twelve writer cases include complete/partial/EAGAIN,
+unknown send/registration, zero send, key retirement, initial refusal, wrong actor,
+intent drift and foreign postjoin cleanup/allocation tripwires. Prior signer
+`beb4599` passed [CI758](https://github.com/MahdiHedhli/hermes-hmp/actions/runs/42296434170).
+Current writer CI is not yet qualified.
+
+Production sender dispatch, GO_SENT, broker custody/worker relay, startup, later
+output/terminal/publication/STATUS and physical/release qualification remain open.
+Character delivery remains unavailable. No live host/device/settings/build changed.
+See [evidence and limits](docs/research/presentation-signed-go-write-2026-11-06.md).
+
+## Fixed GO commitment checkpoint — November 6, 2026
+
+The new original-work signer derives only gateway/g2b GO sequence1 for the
+original empty frame after actual native GO_INTENT and consumed admission. It
+joins completed BEGIN/READY/transition, current role material and original end;
+no socket write, GO_SENT, resource or execution permission follows. Production
+GO transport remains closed.
+
+Independent read-only review accepted the fixed GO state seam and metadata
+repairs: closed primitive rows/exact integer ends before comparison, then exact
+expected values derived from retained READY. Selected regression before the final
+value join: **853 passed**, 39.49 seconds. After it: **eight focused cases passed**,
+2.16 seconds; configured lint passed. Admission/expiry assertions preserve actual
+pre-attempt refusal/native UNKNOWN; no rollback is inferred. Prior cancellation
+uncertainty remains recorded. No host/device/settings or installed build changed.
+See [evidence and limits](docs/research/presentation-signed-go-commitment-2026-11-06.md).
+
+## Internal signed READY dispatch checkpoint — November 6, 2026
+
+The credential branch now uses the signed exchange through the existing original
+work/caller READY barrier, with explicit producer/remote/transition receipt joins.
+Three direct cases cover valid signed READY, bad signature and cleanup request
+winning during fresh PRE_GO. Generic GO/CANCEL/result fallbacks remain closed;
+startup/key selection and resource admission remain unqualified.
+
+Full affected regression before the final explicit producer/remote identity check:
+**1,444 passed, one skipped**, 65.99 seconds. After that check, **172 focused tests**
+passed in 13.57 seconds; configured lint passed. Independent read-only review
+accepted the dispatch slice and final identity-check readback. Earlier
+unexplained cancellation failure remains recorded. No live host/device/settings
+or installed mobile build changed. Character delivery remains unavailable.
+See [evidence and limits](docs/research/presentation-signed-ready-dispatch-2026-11-06.md).
+
+## Bot-character delivery source checkpoint — November 6, 2026
+
+[Draft PR #138](https://github.com/MahdiHedhli/hermes-hmp/pull/138) now includes
+reviewed original-work native READY transition after completed signed READY and
+fresh PRE_GO authorization. Actual native STARTING/READY state, successful native
+return, current keys and fixed post-transition scope are required. Failures after
+mutation are terminal with no rollback/retry. No GO permission is created.
+
+Final affected regression: **1,438 passed, one skipped**, 63.41 seconds;
+configured lint passed. Independent read-only review's foreign-equality phase
+finding was repaired with identity checks and a zero-callback tripwire. Earlier
+836-pass/one-failure cancellation observation remains unexplained and recorded;
+later passes do not erase it. The fixture now surfaces the underlying completed
+control-task outcome rather than reading an unfinished notification Future.
+See [evidence and limits](docs/research/presentation-native-ready-transition-2026-11-06.md).
+
+Production dispatch, later signed phases, resource admission/worker GO relay,
+startup, native publication, STATUS and physical/release qualification remain
+open. Character delivery is unavailable. No host/device/settings/mobile build changed.
+
+Original-task exchange composition now joins the reviewed signed BEGIN writer,
+READY reader and fresh PRE_GO/native READY transition in one one-attempt method.
+Independent read-only review accepted it, including early exact-task rejection.
+Selected affected regression: **841 passed**, 37.97 seconds; lint passed. This
+is narrower than the prior 1,438-test transition regression and grants no startup
+or GO authority. Production selection remains closed.
+
 ## Native image verification checkpoint — November 6, 2026
 
 Independent review accepted the 120 never-started base-phase observations at exact source `5e247a6`: all 3,120 artifacts, 1,508,640 copied-source SHA/literal Git identities, 240 outcomes, 1,200 known commands without expiry/settlement, and 39/39 borrows with closed DB/listener/workers/hooks/writers. It also accepted two separately reviewed fresh Phone observations for base pair 323 (case 6, selector 16): 52 artifacts, 25,144 copied files and 20 known commands; deactivation refused then freshly accepted 15 rows, while changed eligibility refused then remained ineligible. These are bounded native observations, not production or device qualification.
