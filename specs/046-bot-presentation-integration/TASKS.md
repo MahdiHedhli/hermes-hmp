@@ -693,3 +693,8 @@ historical, not an alternative live authorization path or resolved incident.
 
 - [x] Retain original immutable configuration/package DATA across native startup and namespace eviction, with original context/fact/custody checks; focused416 checks pass.
 - [ ] Compose fixed trusted entry, full runtime/dependency/loader recipe and actual native/key factory; historical data alone cannot satisfy admission.
+
+### PS1 entry/bootstrap checkpoint — November 7, 2026
+
+- [x] Separate source entry retains original invocation before fixed bootstrap import, rejoins original scope/cell and aliases, captures activation;18 synthetic bootstrap cases/434 combined checks pass.
+- [ ] Independently admit/install exact entry and qualify native PM re-exec; compose remaining runtime/operator/native/key joins. No launch entrypoint is installed by this component.

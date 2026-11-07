@@ -1,3 +1,25 @@
+## Original gateway entry/bootstrap orchestration — November 7, 2026
+
+The separate hmp_startup package now retains the original invocation before native
+bootstrap, imports bootstrap at one fixed call site, captures actual activation
+and rejoins the original invocation plus activation/bootstrap objects. Changed
+argv/orig_argv, main module, process context, coherent scope-cell replacement or
+late gateway imports refuse; the partial owner cannot retry. The entry leaves the
+wrapper invocation intact through PM's possible interpreter re-exec. The plugin's
+closed import/registration surface is unchanged; plugin registration never imports
+this separate package. No CLI entrypoint or live gateway handoff is installed.
+
+18 disposable-bootstrap cases plus existing startup/import checks passed:434 in
+9.03s, source unchanged. Independent source review accepted the original-cell and
+late-alias repairs and package separation; lint and plugin-surface checks pass.
+A temporary pinned-tool wheel build contains exact startup source and no console
+entrypoint; installed native runtime qualification remains separate.
+These tests do not run installed Hermes bootstrap or establish native PM re-exec
+qualification. The separate entry needs its own installed-origin/inventory proof;
+the HMP package table does not cover it. Complete runtime/dependency/loader and
+operator/native/key factory joins, image delivery and physical/release testing
+remain open. Earlier unexplained regressions and sender-destination risk persist.
+
 ## Retained startup handoff — November 7, 2026
 
 Configuration and package owners now expose their original immutable historical

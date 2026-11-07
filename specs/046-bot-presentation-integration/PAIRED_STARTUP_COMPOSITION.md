@@ -185,3 +185,8 @@ then PS4's normal native acceptance/ACK path. Keep the full remaining cleanup an
 physical work visible in TASKS.md. No additional user approval is needed merely
 to author/review/test source in isolated synthetic fixtures; production credential
 installation, service changes and device/release actions remain separate scopes.
+
+The separate [gateway entry component](GATEWAY_ENTRY.md) now retains invocation
+through fixed bootstrap import before activation capture (434 combined checks).
+Its own installed origin/inventory, actual native re-exec and complete factory
+remain open; no entrypoint is installed and plugin import rules are unchanged.

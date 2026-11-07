@@ -1147,3 +1147,5 @@ exception to the closed plugin surface.
 See spec046 STARTUP_CONFIGURATION.md and GATEWAY_PACKAGE_SNAPSHOT.md for schemas,
 causal evidence and the remaining full factory requirements. Minimum native
 version/API compatibility is distinct from HMP/broker installation integrity.
+
+The separate `hmp_startup/gateway_entry.py` (outside the closed plugin package) retains original script/interpreter invocation before native bootstrap, captures actual post-bootstrap activation and refuses changed invocation. Source component only; no listener, native/key factory or runtime admission.
