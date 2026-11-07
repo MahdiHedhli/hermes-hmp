@@ -17,7 +17,11 @@ headers and endpoint details must never appear in diagnostic output or owner rep
 The read may already have happened when access is revoked, but its result must
 not be returned after an observed denial. These checks do not create an atomic
 native transaction or promise to prevent revocation after the final check, and
-must not be used as a native write authorization primitive.
+must not be treated as a native write authorization lease. The shared request-local
+observation is reused only under the separately reviewed
+[write-dispatch contract](WRITE_DISPATCH_CURRENTNESS.md), with native validation
+and explicit preflight-versus-started outcome handling; this GET slice alone
+authorizes no mutation.
 
 Causal tests: revoke controls/token family/bot authority or disable the feature
 while a read is waiting; replace context/bridge/store/identity/instance or listener
