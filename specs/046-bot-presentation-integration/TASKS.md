@@ -688,3 +688,8 @@ historical, not an alternative live authorization path or resolved incident.
       continuation/current registration/role/write-quiescence/minimum budget.
       Signed request remains disabled; no concurrent read, terminal, release or
       publication follows from local stop. Retain existing whole-work-join CANCEL.
+
+### PS1 historical handoff checkpoint — November 7, 2026
+
+- [x] Retain original immutable configuration/package DATA across native startup and namespace eviction, with original context/fact/custody checks; focused416 checks pass.
+- [ ] Compose fixed trusted entry, full runtime/dependency/loader recipe and actual native/key factory; historical data alone cannot satisfy admission.

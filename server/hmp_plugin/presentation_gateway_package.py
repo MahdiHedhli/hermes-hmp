@@ -186,19 +186,38 @@ def _snapshot_join(before, after, hashes, meta, owner, scope):
              and before.directories == after.directories and before.ancestors == after.ancestors)
 
 
+class RetainedPackageData(NamedTuple):
+    selection: GatewayStartupSelection
+    native_root: str
+    environment: str
+    package_root: str
+    manifest: bytes
+    entries: tuple
+    files: tuple
+    file_metadata: tuple
+    directory_metadata: tuple
+    ancestors: tuple
+    origins: tuple
+
+    def __repr__(self):
+        return "<RetainedPackageData historical-only no-runtime-authority>"
+
+
 class GatewayPackageOwner:
     @classmethod
     def verify(cls, configuration, raw):
         _require(cls is GatewayPackageOwner)
         activation, configuration_scope, fact, selected = _selection(configuration)
-        _require(activation._package_owner is None and activation._package_cell is None)
+        _require(activation._package_owner is None and activation._package_cell is None
+                 and activation._package_fact_cell is None)
         owner = cls.__new__(cls)
         activation._package_owner = owner  # partial owner before hashing/parsing/native effects
         activation._package_cell = (activation, owner, None)
         owner._ready = owner._failed = owner._unknown = owner._reading = False
         owner._bytes_read = owner._seen = 0
         owner._scope = owner._origin = owner._cell = owner._root_cell = None
-        owner._fact = None
+        owner._fact = owner._fact_cell = None
+        fact_cell = None
         failed = False
         try:
             _require(type(raw) is bytes and 0 < len(raw) <= _MAX_BYTES
@@ -231,17 +250,79 @@ class GatewayPackageOwner:
                          for r in s.records)
                      and all(type(r) is _Scan and r.closed is True and r.unknown is False
                              for r in meta.scans))
-            owner._fact = (owner, s, entries, origins, hashes, after)
+            data = RetainedPackageData(
+                selected, s.activation_scope.root, s.activation_scope.environment,
+                root, raw, entries,
+                tuple((item.path, item.size, item.sha256) for item in files),
+                after.files, after.directories, after.ancestors,
+                tuple((row[0], row[2], row[4], row[7]) for row in origins))
+            _require(owner._fact is None and owner._fact_cell is None
+                     and activation._package_fact_cell is None)
+            fact = (owner, s, entries, origins, hashes, after, data)
+            fact_cell = (owner, s, fact)
+            owner._fact, owner._fact_cell = fact, fact_cell
+            activation._package_fact_cell = fact_cell
             owner._ready = True  # package snapshot only; never runtime/key/native admission
             return owner
         except BaseException:
             failed = owner._failed = True
-            owner._fact = None
+            owner._fact = owner._fact_cell = None
+            if fact_cell is not None and activation._package_fact_cell is fact_cell:
+                activation._package_fact_cell = None
         if failed:
             raise PackageInventoryError(owner) from None
 
     def __repr__(self):
         return "<GatewayPackageOwner complete-package-snapshot not-runtime-admission>"
+
+    def _retained_binding(self):
+        _require(type(self) is GatewayPackageOwner and type(self._origin) is IoScope
+                 and self._scope is self._origin)
+        s, cell, root = self._origin, self._cell, self._root_cell
+        _require(type(cell) is tuple and len(cell) == 2 and cell[0] is self and cell[1] is s
+                 and type(root) is tuple and len(root) == 3
+                 and root[0] is s.activation and root[1] is self and root[2] is s
+                 and type(s.expected) is _Manifest and type(s.activation) is GatewayActivationOwner
+                 and s.activation._package_owner is self and s.activation._package_cell is root
+                 and GatewayActivationOwner._retained_scope(s.activation) is s.activation_scope
+                 and s.activation._retired is False and s.activation._uncertain is False
+                 and self._ready is True and self._failed is False
+                 and self._unknown is False and self._reading is False
+                 and type(s.context) is tuple and len(s.context) == 3
+                 and all(type(value) is int for value in s.context)
+                 and type(s.records) is list and type(s.expected.scans) is list
+                 and all(type(row) is _Descriptor and row.closed is True
+                         and row.unknown is False and row.close_attempted is True
+                         for row in s.records)
+                 and all(type(row) is _Scan and row.closed is True and row.unknown is False
+                         and row.close_attempted is True for row in s.expected.scans))
+        parent = StartupSelectionOwner._retained_binding(s.expected.selection)
+        _require(parent[0] is s.expected.selection_scope and parent[3] is s.expected.selection_cell)
+        fact = s.activation._package_fact_cell
+        _require(type(fact) is tuple and len(fact) == 3 and fact[0] is self and fact[1] is s
+                 and fact is self._fact_cell and type(fact[2]) is tuple and len(fact[2]) == 7
+                 and self._fact is fact[2] and fact[2][0] is self and fact[2][1] is s
+                 and fact[2][2] is s.expected.entries
+                 and type(fact[2][6]) is RetainedPackageData
+                 and fact[2][6].selection is s.expected.selection_data
+                 and fact[2][6].manifest is s.expected.raw)
+        return s, cell, root, fact, parent
+
+    def retained_data(self):
+        """Historical immutable inputs; never re-query PM, paths, files or module registry."""
+        failed = False
+        try:
+            s, cell, root, fact, parent = GatewayPackageOwner._retained_binding(self)
+            context = (os.getpid(), os.geteuid(), threading.get_ident())
+            _require(all(type(value) is int for value in context) and context == s.context)
+            after = GatewayPackageOwner._retained_binding(self)
+            _require(after[0] is s and after[1] is cell and after[2] is root and after[3] is fact
+                     and all(old is new for old, new in zip(parent, after[4], strict=True)))
+            return fact[2][6]
+        except BaseException:
+            failed = True
+        if failed:
+            raise PackageInventoryError(self) from None
 
     def _guard(self):
         _require(type(self) is GatewayPackageOwner and type(self._origin) is IoScope

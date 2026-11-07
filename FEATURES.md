@@ -1,3 +1,20 @@
+## Retained startup handoff — November 7, 2026
+
+Configuration and package owners now expose their original immutable historical
+inputs after gateway startup or HMP namespace replacement. Fresh acquisition
+remains early-only. Historical reads rejoin original allocation/fact identities,
+known-closed file/scan custody and process/user/thread context; changed facts or
+context refuse without overwriting replacement state. Wrong-thread reads do not
+destroy the original data. Package output excludes mutable module/loader objects.
+
+Independent source review accepted this bounded handoff.36 configuration,26 package,
+18 file-I/O,25 activation and311 layout/import checks passed:416 in8.20s, source
+unchanged. Historical DATA does not approve current imports, dependencies, runtime,
+operator intent, native execution or keys. The fixed trusted-entry/native/key
+factory and complete runtime/loader recipe remain unfinished. No deployment or
+physical image-display/release qualification is claimed. Earlier unexplained
+regression failures and the sender-destination incident remain unresolved.
+
 ## Complete HMP-package snapshot — November 7, 2026
 
 The retained startup selection now pins an entire HMP executable-package table.

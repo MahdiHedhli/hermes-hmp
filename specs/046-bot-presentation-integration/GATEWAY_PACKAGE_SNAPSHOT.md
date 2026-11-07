@@ -87,3 +87,23 @@ the original metadata receipt. Scans/reads cover only private synthetic package
 copies; no native checkout, real profile, credentials, keys or host was accessed.
 Actual installed-runtime, Linux/Darwin loader/manager and physical/release
 qualification remain open, as do the earlier unexplained broker regression cases.
+
+## Historical handoff after native startup
+
+`retained_data()` returns only the originally verified immutable data after native
+startup or namespace eviction; it does not repeat file/import/path selection or
+relax fresh-load guards. Original owner/scope/fact cells and known-closed custody
+are checked before and after actual process/user/thread sampling. Context or fact
+replacement refuses without overwriting newer state; wrong-thread reads refuse
+without retiring the original snapshot. Package projections retain original raw
+manifest, entries, primitive file observations/metadata and origin strings, never
+mutable module/spec/loader objects. These historical observations are not current
+runtime admission, operator approval, native authority or permission to load keys.
+The fixed startup factory must independently establish those remaining joins.
+
+Verification:36 configuration and26 package cases, plus18 artifact,25 activation
+and311 import/layout checks:416 passed in8.20s with source hashes unchanged. Cases
+cover late startup, namespace eviction, path changes, wrong thread, root fact drift
+and drift during context sampling; package publication also preserves a foreign
+pre-publication fact. This is isolated source qualification, not installed runtime
+or physical device/image-display qualification.

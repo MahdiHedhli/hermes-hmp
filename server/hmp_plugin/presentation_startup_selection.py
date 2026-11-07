@@ -19,6 +19,7 @@ from .presentation_gateway_activation import _LATE_MODULES, GatewayActivationOwn
 from .presentation_startup_artifacts import (
     ExpectedArtifact,
     StartupArtifactOwner,
+    _Descriptor,
     _expected,
     _Scope,
 )
@@ -97,9 +98,9 @@ class StartupSelectionOwner:
     @classmethod
     def load(cls, activation, expected):
         _require(cls is StartupSelectionOwner and type(activation) is GatewayActivationOwner)
-        GatewayActivationOwner.current(activation)
         _require(activation._selection_owner is None and activation._selection_cell is None
                  and activation._selection_fact_cell is None)
+        GatewayActivationOwner.current(activation)
         owner = cls.__new__(cls)
         activation._selection_owner = owner  # before parsing or descriptor effects
         owner._ready = owner._failed = owner._unknown = owner._reading = False
@@ -194,6 +195,49 @@ class StartupSelectionOwner:
                  and self._failed is False and self._unknown is False
                  and not any(name in sys.modules for name in _LATE_MODULES))
         return s
+
+    def _retained_binding(self):
+        """Pure original loaded DATA/closed-custody join, never live runtime approval."""
+        _require(type(self) is StartupSelectionOwner and type(self._origin) is _Scope
+                 and self._scope is self._origin)
+        s, cell, root = self._origin, self._cell, self._root_cell
+        _require(type(cell) is tuple and len(cell) == 2 and cell[0] is self and cell[1] is s
+                 and type(root) is tuple and len(root) == 4
+                 and root[0] is s.activation and root[1] is self and root[2] is s
+                 and type(s.activation) is GatewayActivationOwner
+                 and s.activation._selection_owner is self and s.activation._selection_cell is root
+                 and GatewayActivationOwner._retained_scope(s.activation) is s.activation_scope
+                 and s.activation._retired is False and s.activation._uncertain is False
+                 and self._ready is True and self._failed is False
+                 and self._unknown is False and self._reading is False
+                 and type(s.context) is tuple and len(s.context) == 3
+                 and all(type(value) is int for value in s.context)
+                 and type(root[3]) is tuple and len(root[3]) == 2 and root[3][0] is self
+                 and type(root[3][1]) is bytearray and self._buffer is root[3][1]
+                 and len(root[3][1]) == 0 and type(s.records) is list
+                 and all(type(row) is _Descriptor and row.closed is True
+                         and row.unknown is False and row.close_attempted is True
+                         for row in s.records))
+        fact = s.activation._selection_fact_cell
+        _require(type(fact) is tuple and len(fact) == 3 and fact[0] is self and fact[1] is s
+                 and type(fact[2]) is GatewayStartupSelection
+                 and self._selection is fact[2] and self._selection_cell is fact)
+        return s, cell, root, fact
+
+    def retained_data(self):
+        """Original immutable loaded selection, not current files/imports/admission."""
+        failed = False
+        try:
+            s, cell, root, fact = StartupSelectionOwner._retained_binding(self)
+            context = (os.getpid(), os.geteuid(), threading.get_ident())
+            _require(all(type(value) is int for value in context) and context == s.context)
+            after = StartupSelectionOwner._retained_binding(self)
+            _require(after[0] is s and after[1] is cell and after[2] is root and after[3] is fact)
+            return fact[2]
+        except BaseException:
+            failed = True
+        if failed:
+            raise SelectionLoadError(self) from None
 
     def _append(self, data):
         s = StartupSelectionOwner._guard(self)

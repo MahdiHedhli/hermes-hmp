@@ -90,6 +90,14 @@ if mutation == "after_hash_replace":
             replaced.append(True)
         return result
     a.StartupArtifactOwner._file = replace_after_hash
+foreign_fact = object()
+if mutation == "pre_fact_replacement":
+    actual_file = a.StartupArtifactOwner._file
+    def set_foreign_fact(current, expected):
+        result = actual_file(current, expected)
+        owner._package_fact_cell = foreign_fact
+        return result
+    a.StartupArtifactOwner._file = set_foreign_fact
 foreign_calls = []
 if mutation in ("spec_swap", "namespace_swap"):
     origin_read = p.GatewayPackageOwner._origins
@@ -107,7 +115,7 @@ if mutation in ("spec_swap", "namespace_swap"):
                 a.__spec__ = ModuleSpec(a.__name__, loader=ForeignLoader(), origin=a.__file__)
         return result
     p.GatewayPackageOwner._origins = change_origins
-success = mutation == "normal"
+success = mutation == "normal" or mutation.startswith("history_")
 try:
     checked = p.GatewayPackageOwner.verify(loaded, manifest_raw)
 except p.PackageInventoryError as error:
@@ -120,6 +128,43 @@ else:
     assert success, mutation
     assert checked._ready and checked._fact[0] is checked
     assert checked._bytes_read == sum(row["size"] for row in rows)
+if mutation.startswith("history_"):
+    original = checked.retained_data()
+    assert original.selection is loaded.retained_data()
+    original_environment = original.environment
+    if mutation == "history_late": sys.modules["gateway.run"] = ModuleType("gateway.run")
+    if mutation == "history_namespace":
+        for name in tuple(sys.modules):
+            if name.startswith(package.__name__ + "."): sys.modules[name] = ModuleType(name)
+    if mutation == "history_paths": sys.path[1] = "/synthetic/later-generation/site-packages"
+    if mutation == "history_thread":
+        outcomes = []
+        def foreign_query():
+            try: checked.retained_data()
+            except p.PackageInventoryError: outcomes.append(True)
+        worker = threading.Thread(target=foreign_query)
+        worker.start()
+        worker.join()
+        assert outcomes == [True]
+    if mutation in ("history_fact_drift", "history_context_drift"):
+        foreign = object()
+        if mutation == "history_fact_drift": owner._package_fact_cell = foreign
+        else:
+            getpid = p.os.getpid
+            def replace_during_context():
+                result = getpid()
+                owner._package_fact_cell = foreign
+                return result
+            p.os.getpid = replace_during_context
+        try: checked.retained_data()
+        except p.PackageInventoryError: pass
+        else: raise AssertionError("changed package fact accepted")
+        assert owner._package_fact_cell is foreign
+    else:
+        assert checked.retained_data() is original
+        assert original.environment == original_environment
+        assert checked._ready and not checked._failed and not owner._uncertain
+if mutation == "pre_fact_replacement": assert owner._package_fact_cell is foreign_fact
 if checked._origin is not None:
     assert all(row.closed or row.unknown for row in checked._origin.records)
     assert all(row.closed or row.unknown for row in checked._origin.expected.scans)
@@ -139,6 +184,8 @@ print(json.dumps({"mutation": mutation, "passed": True, "runtime_admitted": Fals
     "normal", "duplicate", "private_name", "generation", "unknown", "wrong_root", "changed",
     "missing", "extra", "symlink", "directory_symlink", "private_file", "directory_mode",
     "digest", "module_origin", "retired_scan", "spec_swap", "namespace_swap", "after_hash_replace",
+    "pre_fact_replacement", "history_late", "history_namespace", "history_paths", "history_thread",
+    "history_fact_drift", "history_context_drift",
 ])
 def test_pinned_complete_hmp_package(tmp_path, mutation):
     if os.name != "posix" or sys.platform not in ("darwin", "linux"):

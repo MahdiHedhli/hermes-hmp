@@ -115,7 +115,7 @@ if mutation in ("final_retire", "final_replacement"):
             else: owner._selection_fact_cell = replacement
         return result
     c.os.getpid = final_change
-success = mutation in ("normal", "separate_artifacts")
+success = mutation in ("normal", "separate_artifacts") or mutation.startswith("history_")
 try:
     loaded = c.StartupSelectionOwner.load(owner, expected)
 except c.SelectionLoadError as error:
@@ -145,6 +145,40 @@ else:
         files = a.StartupArtifactOwner.observe(owner, (row,))
         assert files._ready and owner._artifact_owner is files
         assert owner._selection_owner is loaded
+if mutation.startswith("history_"):
+    original = loaded.retained_data()
+    assert original is loaded._selection
+    if mutation == "history_late": sys.modules["gateway.run"] = ModuleType("gateway.run")
+    if mutation == "history_namespace":
+        for name in tuple(sys.modules):
+            if name.startswith(package.__name__ + "."): sys.modules[name] = ModuleType(name)
+    if mutation == "history_paths": sys.path[1] = "/synthetic/later-generation/site-packages"
+    if mutation == "history_thread":
+        outcomes = []
+        def foreign_query():
+            try: loaded.retained_data()
+            except c.SelectionLoadError: outcomes.append(True)
+        worker = threading.Thread(target=foreign_query)
+        worker.start()
+        worker.join()
+        assert outcomes == [True]
+    if mutation in ("history_fact_drift", "history_context_drift"):
+        foreign = object()
+        if mutation == "history_fact_drift": owner._selection_fact_cell = foreign
+        else:
+            getpid = c.os.getpid
+            def change_during_context():
+                result = getpid()
+                owner._selection_fact_cell = foreign
+                return result
+            c.os.getpid = change_during_context
+        try: loaded.retained_data()
+        except c.SelectionLoadError: pass
+        else: raise AssertionError("changed retained selection accepted")
+        assert owner._selection_fact_cell is foreign
+    else:
+        assert loaded.retained_data() is original
+        assert loaded._ready and not loaded._failed and not owner._uncertain
 assert all(row.closed or row.unknown for row in loaded._origin.records)
 if mutation == "buffer_swap":
     assert captures and not captures[0]
@@ -165,6 +199,8 @@ print(json.dumps({"mutation": mutation, "passed": True, "runtime_admitted": Fals
     "oversize", "digest", "wrong_name", "leaf_mode", "directory_mode", "symlink", "hardlink",
     "read_retire", "close_unknown", "buffer_swap", "foreign_hash", "final_retire",
     "final_replacement", "pre_fact_replacement", "late_load", "late_read",
+    "history_late", "history_namespace", "history_paths", "history_thread",
+    "history_fact_drift", "history_context_drift",
 ])
 def test_private_selected_startup_configuration(tmp_path, mutation):
     if os.name != "posix" or sys.platform not in ("darwin", "linux"):
