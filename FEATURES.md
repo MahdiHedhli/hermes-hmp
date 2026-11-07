@@ -1,3 +1,11 @@
+# November 7: dependency loader observations
+
+The character startup snapshot now checks standard file-loader type, name, path
+and filename form, including loader-path drift after hashing. Independent bounded
+review accepted this source hardening. Full runtime admission, cache and archive
+provenance, native/key composition and physical character delivery remain open.
+No installed gateway, device, grant, provider, model or job changed.
+
 # November 7: original startup continuation source
 
 The bot-character startup path now retains its original approved snapshot across
