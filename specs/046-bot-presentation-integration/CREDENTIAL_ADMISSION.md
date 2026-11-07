@@ -306,3 +306,7 @@ GR3 actual native/key composition still precede any credential acquisition.
 The original recipe-to-plugin package join is now source implemented (534 combined
 checks). Entry/dependency/interpreter/link/loader closure, remaining whole-startup
 accounting and actual native/key composition still precede credential acquisition.
+
+Original entry publication/origin observations are now retained and reviewed
+(548 combined checks). They remain DATA, requiring independent entry/wrapper/
+runtime/operator and actual native factory joins before any key acquisition.

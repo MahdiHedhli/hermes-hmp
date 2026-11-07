@@ -225,3 +225,8 @@ source/fixtures unchanged; source review accepted the integration and count/vaca
 repairs. The composed plugin table is complete, but the other children remain
 minimal envelopes. GR2 entry/dependency/interpreter/link/loader closure and GR3
 actual native/key factory, broker/ACK/release and physical image delivery stay open.
+
+The [original entry publication](GATEWAY_ENTRY.md#independent-original-entry-publication)
+now retains module/function/code and original started facts (548 combined checks).
+This is a prerequisite for GR2 entry-artifact consumption, not that qualification
+itself. Independent entry/wrapper bytes/control-flow, runtime and GR3 remain open.

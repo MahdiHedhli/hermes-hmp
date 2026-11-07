@@ -41,6 +41,8 @@ assert owner._activation._scope.bootstrap is sys.modules["hermes_bootstrap"]
 
 @pytest.mark.parametrize("kind", ["script", "module"])
 def test_native_relaunch_returns_through_original_entry(tmp_path, kind):
+    if os.name != "posix" or os.sys.platform not in ("darwin", "linux"):
+        pytest.skip("supported POSIX entry fixture")
     fixture = (DATA / "native_relaunch_ed1afb.py.txt").read_bytes()
     meta = json.loads((DATA / "native_relaunch_ed1afb.json").read_text())
     assert hashlib.sha256(fixture).hexdigest() == meta["fixtureSha256"]
@@ -58,8 +60,7 @@ def test_native_relaunch_returns_through_original_entry(tmp_path, kind):
     environment = tmp_path / "generation/lib/python3.14/site-packages"
     environment.mkdir(parents=True)
     script = (tmp_path / "entry.py" if kind == "script" else root / "paired_entry.py")
-    body = SCRIPT.replace('mutation != "normal"', 'mutation not in ("normal", "reexec")')
-    body = body.replace('mutation == "normal"', 'mutation in ("normal", "reexec")')
+    body = SCRIPT
     script.write_text(body + AFTER)
     arguments = [str(PACKAGE), str(root), str(environment), "reexec"]
     if kind == "script":

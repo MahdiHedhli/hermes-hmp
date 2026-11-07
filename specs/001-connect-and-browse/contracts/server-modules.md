@@ -1165,3 +1165,9 @@ loaded recipe owner and original immutable documents/count allocation. Fresh and
 historical original-binding checks are distinct; no schema2 replacement payload/
 digest or naked count can qualify the source. Package facts retain final actual
 count cells for later typed startup composition. Full runtime/native/key is open.
+
+The separate hmp_startup.gateway_entry module now retains an original started
+publication and module/function/code provenance observations. retained_data is
+historical immutable DATA; current_binding adds fresh original checks/final
+callback fences. Neither is selected artifact/wrapper attestation or authority.
+No plugin import exception or additional registration is introduced.

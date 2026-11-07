@@ -43,7 +43,8 @@ custody, independent broker startup, operation/clock binding and terminal ACK/
 release/publication. This class cannot certify any of those. No actual native
 bootstrap/re-exec, deployment or physical character display is qualified here.
 
-Packaging: a temporary build1.3.0/setuptools80.9.0/wheel0.45.1 environment produced
+Earlier packaging snapshot (before the original-publication changes): a temporary
+build1.3.0/setuptools80.9.0/wheel0.45.1 environment produced
 a wheel containing both startup files byte-for-byte, with no console entrypoints.
 The first offline local build failed for missing setuptools, then the pinned-tool
 build succeeded. No project dependency or installed Hermes environment changed.
@@ -66,3 +67,49 @@ Two re-exec cases plus prior startup coverage:436 passed in9.24s with source and
 fixture hashes unchanged. This closes command-builder fixture continuity only.
 Installed entry origin/inventory, actual PM/native bootstrap/re-exec and full
 operator/runtime/key/native factory qualification are still required.
+
+## Independent original entry publication
+
+The module now observes its actual import-time module/namespace/file/spec/loader,
+original classmethod/FunctionType/code/global references. Types are checked before
+attributes/comparisons; no caller supplies an origin map. This is provenance DATA,
+not self-approval of source bytes, executable attestation or proof that a selected
+wrapper's code executed. Independently selected artifact/wrapper qualification
+and installed control-flow evidence remain required before runtime/key admission.
+
+After actual bootstrap/activation and final original invocation/origin joins, the
+entry publishes one independent _STARTED allocation containing original owner/
+scope/cell, activation/bootstrap, origin record and immutable EntryStartupData.
+The owner mirrors that exact cell; an occupied/foreign publication is not replaced.
+A failure withdraws only its own exact publication. Re-exec establishes the new
+interpreter's own acquisition; the old image's partial owner is not promoted.
+
+_retained_binding is a pure original-allocation join. retained_data samples and
+rejoins the original process/user/thread and returns immutable historical values,
+without rereading module registries, files, paths or PM selection. Namespace/argv
+changes do not rewrite those values. current_binding adds fresh invocation,
+module/class/function/code/spec/loader and actual activation checks. Final pure
+invocation/origin fences follow its last native callback; a late callback cannot
+leave the entry or query accepting changed provenance. Wrong-process/thread
+queries refuse without altering the original ready/failed records.
+
+Queries are not authority tokens, retirement/restore mechanisms or installation
+verification. A future typed entry-artifact verifier must accept the actual owner,
+join its original activation to the actual recipe/native context and independently
+check selected entry/wrapper artifacts. It cannot bless a copied binding tuple or
+retain authority after its own startup/runtime liveness contract has failed.
+No public route or plugin registration imports the separate entry package; the
+closed plugin checker/native import boundary remains unchanged.
+
+32 entry cases plus2 disposable actual script/module exec cases and prior startup
+coverage:548 passed in16.57s with unchanged source/fixture hashes. New causals cover
+origin file/record/code/loader changes, foreign publication/bootstrap aliases,
+namespace and argument changes, wrong thread and actual forked process, final
+origin drift before publication and argument drift during fresh activation query.
+Independent read-only review accepted the bounded source component. Complete entry
+artifact/table and executed-wrapper qualification, runtime/operator/native/key
+factory, host/device and image-display/release qualification remain open.
+
+The current original-publication source checkpoint has not been rebuilt into or
+qualified as an installed wheel/device candidate. Earlier wheel evidence is
+historical and does not certify the changed source bytes.

@@ -1,3 +1,22 @@
+## Original entry publication and origin observations — November 7, 2026
+
+The existing gateway entry now retains a separate original started fact joining
+its invocation, activation/bootstrap and import-time module/spec/loader/start
+function/code/global observations. Final pure fences follow the last native
+callback; foreign publication and alias/origin changes refuse. Historical queries
+return original immutable data without module-registry rediscovery; fresh queries
+check current invocation/origin/activation. Wrong process/thread queries refuse
+without poisoning historical records. No plugin import rule was relaxed.
+
+Independent source review accepted this entry-qualification prerequisite.32 entry
+cases plus2 actual disposable re-exec cases and prior coverage passed:548 in16.57s,
+source/fixtures unchanged; lint/surface/whitespace pass. These are provenance DATA,
+not independent entry-file qualification, executed-wrapper attestation, operator
+approval or native/key permission. Entry artifact/wrapper/runtime/loader and actual
+factory integration, image display and physical/release checks remain unfinished.
+No deployment or credential acquisition occurred. Earlier unexplained regressions
+and the native sender risk remain open.
+
 ## Recipe-derived HMP package verification — November 7, 2026
 
 Package verification now consumes the plugin document held by the actual schema2

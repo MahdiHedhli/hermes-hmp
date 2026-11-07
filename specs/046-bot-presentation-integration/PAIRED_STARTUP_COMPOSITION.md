@@ -194,3 +194,9 @@ remain open; no entrypoint is installed and plugin import rules are unchanged.
 The [recipe-to-plugin child join](GATEWAY_PACKAGE_SNAPSHOT.md#schema2-original-recipe-integration)
 now consumes actual original document/count facts (534 combined checks). It does
 not complete entry/dependency/interpreter/loader or whole-startup/native/key joins.
+
+The entry now retains independent original started/module/function/code observation
+facts with fresh versus historical access and final callback fences (548 combined
+checks). See [entry publication](GATEWAY_ENTRY.md#independent-original-entry-publication).
+This does not attest executed wrapper bytes or complete installed/operator/runtime/
+native/key qualification. Full entry artifact coverage and factory composition remain open.

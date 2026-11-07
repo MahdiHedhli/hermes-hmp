@@ -728,3 +728,10 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Preserve historical recipe/configuration/data custody after namespace/path drift; occupied package refuses before fresh capture.
 - [ ] Join earlier selection and later artifact accounting into full startup limits; do not manufacture prior IO counts.
 - [ ] Complete GR2 entry/dependency/interpreter/link/loader closure, then GR3 native listener/store/bridge/identity/key factory. Full character-image runtime remains unfinished.
+
+### GR2 original entry observation checkpoint — November 7, 2026
+
+- [x] Retain independent started publication joining original invocation/activation/bootstrap and actual import-time module/function/code observations; final callback fences, historical data and fresh queries;32 entry cases/548 combined checks pass.
+- [x] Cover foreign publication/aliases, namespace/argv/source changes and wrong-thread/actual-fork refusal without poisoning historical records.
+- [ ] Qualify actual selected entry package/wrapper files and execution/control flow, with a reviewed typed original-owner/recipe binding. These observations are not artifact admission.
+- [ ] Complete remaining GR2 dependencies/interpreter/link/loader/budget and GR3 actual native/key factory; physical character display remains unfinished.
