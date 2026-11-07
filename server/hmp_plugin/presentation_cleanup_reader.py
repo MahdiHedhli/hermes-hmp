@@ -117,6 +117,8 @@ class CleanupReadGate:
         self._signed_reservation = self._signed_reservation_origin = None
         self._signed_reservation_allocation_origin = None
         self._signed_reservation_attempted = self._signed_reservation_failed = False
+        self._signed_notice = self._signed_notice_origin = None
+        self._signed_notice_allocation_origin = None
         self._preflight = self._preflight_origin = None
         self._fact = self._fact_origin = None
         self._notice = self._notice_origin = _FUTURE.__new__(_FUTURE)
@@ -188,6 +190,12 @@ class CleanupReadGate:
             inspect_signed_reservation(self._signed_reservation_origin, self)
         else:
             _require(self._signed_reservation_allocation_origin is None)
+        _require(self._signed_notice is self._signed_notice_origin)
+        if self._signed_notice_origin is not None:
+            from .presentation_credential_cleanup_notice import SignedReadNotice
+            SignedReadNotice.inspect(self._signed_notice_origin, self)
+        else:
+            _require(self._signed_notice_allocation_origin is None)
         if self._preflight is not None:
             _require(self._capture_kind == "pre" and type(self._preflight) is _Request)
             CleanupReadGate._pre_seal(self, self._preflight)
@@ -428,6 +436,12 @@ class CleanupReadGate:
                     self._signed_reservation_allocation_origin = (self, reservation)
                 except BaseException:
                     self._signed_reservation_failed = True
+                else:
+                    from .presentation_credential_cleanup_notice import SignedReadNotice
+                    try:
+                        SignedReadNotice.retain(self)
+                    except BaseException:
+                        o._unknown = True  # retained partial notice, no retry or ready credit
             return False
         if self._capture_kind == "pre":
             r = self._preflight_origin

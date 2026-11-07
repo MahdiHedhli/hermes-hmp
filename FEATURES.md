@@ -1,3 +1,29 @@
+## Signed original-work stop notification — November 6, 2026
+
+A distinct one-shot signed stop notice now retains the actual native Future and
+fact allocations, correlates the original envelope/partial-body wake stop, and
+rechecks original work actor, actual selector retirement, complete retained-role
+snapshots and earliest cleanup budget. Partial initialization, paired allocation
+substitution, final-clock key/generation/process/boot/file changes and ambiguous
+notification consume/retain unknown debt without retry or foreign dispatch.
+
+Independent read-only review accepted repaired source and causals. Final focused
+confirmation: **17 passed in8.25s**, including all14 new envelope cases, actual
+13-byte body notice and two existing broker cases. Lint/whitespace pass. There is
+NO final full-regression pass: two expanded runs each ended **one failed,1,835
+passed,one skipped** (158.94s/158.88s), in different existing broker cancellation
+cases. Exact/neighbor reruns passed but do not resolve those failures. A reviewed
+fixture diagnostic preserves original controller errors and bounded existing
+state only, without new clock sampling or payload/key data. Its newer failure-note
+branch is source-reviewed; failure reproduction after that amendment is unobserved.
+
+Signed gate.request STILL RETURNS FALSE. This is stop-notification DATA, not a
+consumer, read/CANCEL/ACK, release or publication permit. Original-cleanup current
+consumer/signing proof and same-reader drain/terminal/ACK remain next; full
+production/physical character-image delivery remains unfinished. No deployment,
+device/build/config/grant/provider changed. Broader broker reliability and native
+sender-destination risk remain unresolved.
+
 ## Disabled signed reservation preflight — November 6, 2026
 
 Signed cleanup now records a one-attempt preflight for the actual live registered

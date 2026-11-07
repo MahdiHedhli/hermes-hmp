@@ -14,6 +14,10 @@
 - [x] Implement/review disabled signed reservation preflight from actual registered
       envelope/partial-body wait, original write-quiescence/current role/frozen
       budget and post-cause custody. Request still False; no suppression/read grant.
+- [x] Implement/review original-work one-shot signed stop notice, with actual Future
+      and fact allocation cells, native partial initialization/dispatch uncertainty,
+      correlated stop/current role/earliest-budget seals and no publication retry.
+      No consumer/signing authority or cooperative route is enabled.
 - [ ] Qualify distinct signed request reservation and original-work read-ready
       notice, with current frozen budget/quiescence/role checks; no legacy fact or
       fabricated work-join substitution. See [integration contract](SIGNED_CLEANUP_HANDOFF.md).

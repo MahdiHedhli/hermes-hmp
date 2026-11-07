@@ -34,6 +34,13 @@ from .test_presentation_supervisor import context as context
     "wake_release", "wake_subclass", "wake_capture", "wake_scope", "wake_tail",
     "wake_reserve", "wake_reserve_no_write", "cancel_capture_reserve",
     "wake_reserve_tail_alloc", "wake_reserve_tail_refs", "wake_reserve_tail_barriers",
+    "wake_reserve_notice", "wake_reserve_notice_wrong_actor", "wake_reserve_notice_ambiguous",
+    "wake_reserve_notice_futurebad", "wake_reserve_notice_init_before",
+    "wake_reserve_notice_init_after", "wake_reserve_notice_swapinit",
+    "wake_reserve_notice_swapcurrent", "wake_reserve_notice_roleclock",
+    "wake_reserve_notice_generationclock", "wake_reserve_notice_bootclock",
+    "wake_reserve_notice_processclock", "wake_reserve_notice_fileclock",
+    "wake_reserve_notice_reservationclock",
 ])
 async def test_original_result_envelope(context, begin_gateway, tmp_path, monkeypatch, mutation):
     from hmp_plugin import presentation_credential_result_read as module
@@ -62,6 +69,28 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             return result
 
         monkeypatch.setattr(CleanupReadGate, "request", observed_request)
+        if "_notice_init_" in mutation or mutation.endswith("_swapinit"):
+            from hmp_plugin import presentation_credential_cleanup_notice as notice_module
+            initialize = notice_module._initialize_future
+
+            def failed_notice_init(future, loop):
+                gate = remote._cleanup_owner_snapshot._read_gate_snapshot
+                owner = gate._signed_notice_origin
+                assert owner is not None and owner._future_origin is future
+                assert gate._signed_notice_allocation_origin == (gate, owner)
+                if mutation.endswith("_swapinit"):
+                    initialize(future, loop)
+                    replacement = asyncio.get_running_loop().create_future()
+                    owner._future = owner._future_origin = replacement
+                    held["notice_original_future"] = future
+                    held["notice_swapped_future"] = replacement
+                    return
+                if mutation.endswith("_after"):
+                    initialize(future, loop)
+                held["notice_init_retained_before_effect"] = True
+                raise OSError("synthetic notice initialization uncertainty")
+
+            monkeypatch.setattr(notice_module, "_initialize_future", failed_notice_init)
         if "_reserve_tail_" in mutation:
             from hmp_plugin import presentation_credential_cleanup_reservation as reservation_module
             current = reservation_module._current
@@ -428,6 +457,88 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
 
                 monkeypatch.setattr(NativeResultEnvelopeReceiver, "_cancelled_wait_current",
                                     substituted_future)
+        if ("_reserve_notice" in mutation and "_init_" not in mutation
+                and not mutation.endswith("_swapinit")):
+            from hmp_plugin.presentation_credential_cleanup_notice import SignedReadNotice
+            try:
+                await reader.run()
+            except FrameError:
+                notice = owned._cleanup_owner_snapshot._read_gate_snapshot._signed_notice_origin
+                assert notice is not None and notice._initialized and not notice._attempted
+                if mutation.endswith("_wrong_actor"):
+                    async def wrong_notice_actor():
+                        with pytest.raises(FrameError):
+                            notice.publish()
+                    await asyncio.create_task(wrong_notice_actor())
+                    assert not notice._attempted and not notice._future_origin.done()
+                if mutation.endswith("_ambiguous"):
+                    deliver = SignedReadNotice._deliver
+
+                    def delivered_then_failed(future, fact):
+                        deliver(future, fact)
+                        held["notice_delivered_then_failed"] = True
+                        raise OSError("synthetic lost native delivery acknowledgement")
+
+                    monkeypatch.setattr(SignedReadNotice, "_deliver",
+                                        staticmethod(delivered_then_failed))
+                if mutation.endswith("_futurebad"):
+                    def foreign_future_method(*args):
+                        held["foreign_notice_future_called"] = True
+                    notice._future_origin.add_done_callback = foreign_future_method
+                clock_fault = mutation.endswith((
+                    "_roleclock", "_generationclock", "_bootclock", "_processclock", "_fileclock",
+                    "_reservationclock"))
+                if mutation.endswith("_swapcurrent") or clock_fault:
+                    remaining = RemoteCleanupOwner._remaining
+                    held["notice_remaining_calls"] = 0
+
+                    def last_clock_change(cleanup):
+                        value = remaining(cleanup)
+                        if (cleanup is owned._cleanup_owner_snapshot and notice._attempted):
+                            held["notice_remaining_calls"] += 1
+                            if held["notice_remaining_calls"] == 2:
+                                if mutation.endswith("_swapcurrent"):
+                                    held["notice_original_future"] = notice._future_origin
+                                    replacement = asyncio.get_running_loop().create_future()
+                                    notice._future = notice._future_origin = replacement
+                                    held["notice_swapped_future"] = replacement
+                                elif mutation.endswith("_reservationclock"):
+                                    class ForeignReservation:
+                                        def __getattr__(self, name):
+                                            held["foreign_notice_reservation_accessed"] = True
+                                            raise AssertionError("foreign reservation getter")
+                                    notice._reservation = ForeignReservation()
+                                elif mutation.endswith("_roleclock"):
+                                    keys["gateway"].retire()
+                                elif mutation.endswith("_generationclock"):
+                                    selection = keys["gateway"]._selection
+                                    object.__setattr__(selection, "generation",
+                                                       selection.generation + "-changed")
+                                elif mutation.endswith("_bootclock"):
+                                    keys["gateway"]._boot += "-changed"
+                                elif mutation.endswith("_processclock"):
+                                    old_pid, old_uid = keys["gateway"]._process
+                                    keys["gateway"]._process = (old_pid + 1, old_uid)
+                                else:
+                                    assert keys["gateway"]._records
+                                    keys["gateway"]._records[0].unknown = True
+                                held["notice_clock_changed"] = True
+                        return value
+
+                    monkeypatch.setattr(RemoteCleanupOwner, "_remaining", last_clock_change)
+                if mutation.endswith(("_ambiguous", "_futurebad", "_swapcurrent")) or clock_fault:
+                    with pytest.raises(FrameError):
+                        notice.publish()
+                    assert notice._failed and notice._unknown and notice._attempted
+                else:
+                    assert notice.publish() is True
+                    assert notice._published and not notice._failed
+                    assert notice._future_origin.result() is notice._fact_origin
+                    held["notice_published"] = True
+                with pytest.raises(FrameError):
+                    notice.publish()  # no second attempt, even after ambiguous delivery
+                held["notice_no_retry"] = True
+                raise
         await reader.run()
         fact = reader.current_envelope()
         assert fact.frame == held["envelope"][len(fact.raw):]
@@ -488,11 +599,22 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             assert reader._cancel_release_origin is None
             if mutation in ("wake_wait", "wake_partial", "wake_release", "wake_reserve",
                             "wake_reserve_no_write", "wake_reserve_tail_alloc",
-                            "wake_reserve_tail_refs", "wake_reserve_tail_barriers"):
+                            "wake_reserve_tail_refs", "wake_reserve_tail_barriers",
+                            "wake_reserve_notice", "wake_reserve_notice_wrong_actor",
+                            "wake_reserve_notice_ambiguous", "wake_reserve_notice_futurebad",
+                            "wake_reserve_notice_init_before", "wake_reserve_notice_init_after",
+                            "wake_reserve_notice_swapcurrent", "wake_reserve_notice_roleclock",
+                            "wake_reserve_notice_generationclock", "wake_reserve_notice_bootclock",
+                            "wake_reserve_notice_processclock", "wake_reserve_notice_fileclock",
+                            "wake_reserve_notice_reservationclock"):
                 assert reader._wake_release_origin is not None and not reader._io_unknown
                 assert not reader._active and reader._failed and not reader._buffer_origin
                 if mutation == "wake_release":
                     reader._target = reader._target_origin = reader._target_origin + 1
+                    with pytest.raises(FrameError):
+                        reader._released(channel)
+                    assert reader._io_unknown
+                elif mutation.endswith(("_swapcurrent", "_reservationclock")):
                     with pytest.raises(FrameError):
                         reader._released(channel)
                     assert reader._io_unknown
@@ -523,6 +645,40 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 if mutation == "cancel_capture_reserve":
                     assert remote._cleanup_owner_snapshot._cancel_attempted
                     assert held["reader"]._base_origin.allocation.task.cancelled()
+        if "_reserve_notice" in mutation:
+            notice = remote._cleanup_owner_snapshot._read_gate_snapshot._signed_notice_origin
+            assert notice is not None
+            if mutation.endswith("_swapinit"):
+                assert notice._failed and notice._unknown
+                assert notice._future_allocation_origin[1] is held["notice_original_future"]
+                assert notice._future_origin is held["notice_swapped_future"]
+                assert notice._future_origin is not notice._future_allocation_origin[1]
+            elif "_init_" in mutation:
+                assert held["notice_init_retained_before_effect"]
+                assert not notice._initialized and notice._failed and notice._unknown
+                assert not notice._attempted and not notice._published
+            else:
+                assert held["notice_no_retry"] and notice._attempted
+                assert "foreign_notice_future_called" not in held
+                if mutation.endswith("_ambiguous"):
+                    assert held["notice_delivered_then_failed"]
+                    assert notice._future_origin.done() and notice._failed and notice._unknown
+                    assert notice._future_origin.result() is notice._fact_origin
+                elif mutation.endswith((
+                        "_futurebad", "_swapcurrent", "_roleclock", "_generationclock",
+                        "_bootclock", "_processclock", "_fileclock", "_reservationclock")):
+                    assert not notice._future_origin.done() and notice._failed
+                    assert not notice._published
+                    if mutation.endswith(("_swapcurrent", "_roleclock", "_generationclock",
+                                          "_bootclock", "_processclock", "_fileclock",
+                                          "_reservationclock")):
+                        assert held["notice_clock_changed"]
+                        assert "foreign_notice_reservation_accessed" not in held
+                    if mutation.endswith("_swapcurrent"):
+                        assert notice._future_allocation_origin[1] is held["notice_original_future"]
+                        assert notice._future_origin is held["notice_swapped_future"]
+                else:
+                    assert held["notice_published"]
         await peer_task
         if mutation.startswith("cancel_capture"):
             assert held["signed_envelope_cleanup_capture_checked"]

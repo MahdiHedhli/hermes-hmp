@@ -89,6 +89,7 @@ from .test_presentation_supervisor import context as context
                                   "go_relay_result_sign_write_body_cancel",
                                   "go_relay_result_sign_write_body_cancel_cause_wake",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_countbad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_custodybad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_copybad",
@@ -684,7 +685,50 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     held["go_current_checked"] = True
                 finally:
                     go_checked.set()
-            frame = await BrokerServiceSpine._v2_control(spine, control)
+            try:
+                frame = await BrokerServiceSpine._v2_control(spine, control)
+            except FrameError as consumer_failure:
+                if stage in ("go_current_wrong_actor",
+                             "go_relay_result_sign_write_body_adopt_notice_ambiguous"):
+                    import json as diagnostic_json
+
+                    from hmp_plugin.presentation_remote_cleanup import _FUTURE, _TASK
+                    original_task = control._allocation_snapshot.task
+                    timeout = control._timeout_snapshot
+                    snapshot = {
+                        "task_done": _TASK.done(original_task),
+                        "task_cancelled": _TASK.cancelled(original_task),
+                        "task_cancelling": _TASK.cancelling(original_task),
+                        "failed": control._failed, "io_unknown": control._io_unknown,
+                        "parked": control._parked, "retired": control._retired,
+                        "notice_attempted": control._notice_attempted,
+                        "notice_completed": control._notice_completed,
+                        "stop_intent_present": control._stop_intent_snapshot is not None,
+                        "park_future_done": _FUTURE.done(control._park_future_snapshot),
+                        "park_future_cancelled": _FUTURE.cancelled(control._park_future_snapshot),
+                        "go_future_done": _FUTURE.done(control._go_future_snapshot),
+                        "cancel_future_done": _FUTURE.done(control._cancel_future_snapshot),
+                        "timeout_expired": (asyncio.Timeout.expired(timeout)
+                                            if type(timeout) is asyncio.Timeout else None),
+                    }
+                    try:
+                        original_end, _, cleanup_end, failed = CancellationBudget.inspect(
+                            control._scope_snapshot[3])
+                        snapshot.update(budget_original_end=original_end,
+                                        budget_end=cleanup_end, budget_failed=failed)
+                    except BaseException:
+                        snapshot["budget_metadata_refused"] = True
+                    # Exact primitive fixture state only: no new clock sample, body,
+                    # private key, error text, permission, retry or success recovery.
+                    consumer_failure.add_note(diagnostic_json.dumps(snapshot, sort_keys=True))
+                # Keep the original controller cause visible; do not turn a stale
+                # creator refusal into success or manufacture native closure.
+                original_task = control._allocation_snapshot.task
+                if original_task.done() and not original_task.cancelled():
+                    controller_failure = original_task.exception()
+                    if controller_failure is not None:
+                        raise controller_failure from consumer_failure
+                raise
             adoption = control._signed_cancel_snapshot
             assert adoption._consume_complete is True and adoption._consume_failed is False
             receipt = adoption._native_receipt_origin
@@ -961,7 +1005,7 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     held["signed_partial_cleanup_capture_checked"] = True
 
                 monkeypatch.setattr(SelectorReadiness, "wait", observed_wait)
-                if "_wake_reserve_" in stage:
+                if stage.endswith(("_reserve_countbad", "_reserve_custodybad")):
                     native = SelectorReadiness._native
                     held["reservation_native_checks"] = 0
 
@@ -1018,6 +1062,21 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     monkeypatch.setattr(asyncio, "wait", original_cause_on_registered_wait)
                 else:
                     held["body_canceller"] = asyncio.create_task(original_cause())
+            if stage.endswith("_wake_reserve_notice"):
+                try:
+                    await body.receive()
+                except FrameError:
+                    notice = owned._cleanup_owner_snapshot._read_gate_snapshot._signed_notice_origin
+                    assert notice is not None and notice._initialized
+                    assert notice.publish() is True
+                    assert notice._future_origin.result() is notice._fact_origin
+                    assert notice._fact_origin.stop is body._wake_receipt_origin
+                    assert notice._fact_origin.reservation.capture.body.committed == 13
+                    assert body._candidate_snapshot is None
+                    with pytest.raises(FrameError):
+                        notice.publish()
+                    held["body_notice_published"] = True
+                    raise
             assert await body.receive() is True
             assert body._validated and body._candidate_snapshot[1] == image()
             assert body.current_candidate() is body._fact_snapshot
@@ -1351,6 +1410,8 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     assert cleanup._read_gate_snapshot._fact_origin is None
                     if "_wake_reserve" in stage:
                         assert held["body_reservation_checked"]
+                        if stage.endswith("_wake_reserve_notice"):
+                            assert held["body_notice_published"]
                         if stage.endswith("_custodybad"):
                             assert held["reservation_buffer_replacement"] == (
                                 b"untouched synthetic replacement")

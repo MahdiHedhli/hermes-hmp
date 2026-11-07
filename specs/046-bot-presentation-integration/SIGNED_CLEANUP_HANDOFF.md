@@ -108,3 +108,14 @@ adopted-image terminal waits require their own exact cursor/allocation proof and
 are not admitted by this component; pre-READY and already-retired waits retain
 their existing paths. Full integration must cover those legitimate lifecycle
 positions rather than silently excluding them from the feature's final scope.
+
+### Signed original-work stop notice — November 6, 2026
+
+A distinct one-shot notice now retains actual native Future/fact allocations and
+correlates original envelope/body wake retirement under original work actor,
+current retained role and earliest cleanup budget. Partial initialization, paired
+alias substitution, final-clock revocation and ambiguous notification retain
+unknown debt/no retry. It has no consumer or signer: signed gate.request remains
+False and normal external Task cancellation remains. Original-cleanup current
+notice validation, concurrent-CANCEL authority and same-reader drain/terminal/ACK
+still require separate qualification. Future DATA is no I/O or release permission.
