@@ -20,6 +20,7 @@ from .presentation_broker_codec import (
     header_size,
 )
 from .presentation_credential_codec import JSON_LIMIT
+from .presentation_credential_payload_digest import PayloadDigest, PayloadDigestFact
 from .presentation_credential_phase import ConsistentCommitment, check_committed_header
 from .presentation_credential_stream import (
     _HASH_TYPE,
@@ -44,6 +45,7 @@ class DiscardedFrame(NamedTuple):
     phase: str
     sequence: int
     terminal: bytes | None
+    payload_sha256: str | None = None
 
     def __repr__(self):
         return "<DiscardedFrame consistency-DATA no-terminal-acceptance-or-release>"
@@ -62,6 +64,8 @@ class CommittedFrameDiscard:
         self._header = self._header_origin = self._header_allocation = None
         self._stream = self._stream_origin = self._stream_allocation = self._hash_allocation = None
         self._digest = self._digest_allocation = self._fact = self._fact_allocation = None
+        self._payload = self._payload_origin = self._payload_cell = None
+        self._payload_fact = self._payload_fact_cell = None
         self._context = self._context_origin = (os.getpid(), threading.get_ident())
         try:
             _require(type(commitment) is ConsistentCommitment
@@ -83,6 +87,11 @@ class CommittedFrameDiscard:
                                     binding.channel, binding.operation)
             self._expected = self._expected_origin = (phase, sequence)
             self._limit = OUTPUT_LIMIT if phase == "RESULT" else TERMINAL_LIMIT
+            if phase == "RESULT":
+                payload = PayloadDigest.__new__(PayloadDigest)
+                self._payload = self._payload_origin = payload
+                self._payload_cell = (self, payload)
+                PayloadDigest.__init__(payload)
             _require(9 <= commitment.frame_length <= 8 + HEADER_LIMIT + self._limit)
             self._initialized = True
             CommittedFrameDiscard._owned(self)
@@ -141,6 +150,35 @@ class CommittedFrameDiscard:
                  and 8 <= self._target <= 8 + HEADER_LIMIT
                  and len(self._buffer) <= self._target)
         header, stream = self._header_origin, self._stream_origin
+        if self._expected[0] == "RESULT":
+            _require(type(self._payload_origin) is PayloadDigest
+                     and self._payload is self._payload_origin
+                     and type(self._payload_cell) is tuple and len(self._payload_cell) == 2
+                     and self._payload_cell[0] is self
+                     and self._payload_cell[1] is self._payload_origin
+                     and (stream is None or type(stream) is CommittedFrameDigest))
+            PayloadDigest._metadata(self._payload_origin)
+            _require((stream is None or type(stream._received) is int)
+                     and self._payload_origin._received == (
+                         0 if stream is None else stream._received)
+                     and self._payload_origin._seed[1] is None
+                     and self._payload_origin._seed[2] == 0)
+            if self._payload_fact is None:
+                _require(self._payload_fact_cell is None)
+            else:
+                fact = self._payload_fact
+                _require(
+                    type(fact) is PayloadDigestFact
+                    and type(self._payload_fact_cell) is tuple
+                    and len(self._payload_fact_cell) == 2
+                    and self._payload_fact_cell[0] is self
+                    and self._payload_fact_cell[1] is fact
+                    and PayloadDigest.current_fact(self._payload_origin, stream._received) is fact
+                )
+        else:
+            _require(self._payload is None and self._payload_origin is None
+                     and self._payload_cell is None and self._payload_fact is None
+                     and self._payload_fact_cell is None)
         if header is None:
             _require(self._header is None and self._header_allocation is None
                      and stream is None and self._stream is None
@@ -241,6 +279,8 @@ class CommittedFrameDiscard:
                 if self._expected[0] == "TERMINAL":
                     self._terminal_origin.extend(chunk)
                 CommittedFrameDigest.feed(self._stream_origin, chunk)
+                if self._expected[0] == "RESULT":
+                    PayloadDigest.feed(self._payload_origin, chunk)
             self._inflight = False
             CommittedFrameDiscard._live(self)
             return
@@ -267,6 +307,10 @@ class CommittedFrameDiscard:
             result = CommittedFrameDigest.finish(stream)
             self._digest = result
             self._digest_allocation = (self, result)
+            if self._expected[0] == "RESULT":
+                payload_fact = PayloadDigest.finish(self._payload_origin, stream._received)
+                self._payload_fact = payload_fact
+                self._payload_fact_cell = (self, payload_fact)
             self._finish_returned = True
             CommittedFrameDiscard._owned(self)
             _require(type(result) is ConsistentFrameDigest
@@ -295,7 +339,10 @@ class CommittedFrameDiscard:
                      and (terminal is None or (type(terminal_hash) is str
                           and terminal_hash == values[0]
                           and bytes(self._terminal_origin) == terminal)))
-            fact = DiscardedFrame(result, self._expected[0], self._expected[1], terminal)
+            payload_sha = None if self._payload_fact is None else self._payload_fact.sha256
+            fact = DiscardedFrame(
+                result, self._expected[0], self._expected[1], terminal, payload_sha
+            )
             self._fact = fact
             self._fact_allocation = (self, fact)
             self._finished = True

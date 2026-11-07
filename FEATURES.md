@@ -1,3 +1,26 @@
+## RESULT-body digest correlation prerequisite — November 7, 2026
+
+The retained reader now records a separate SHA-256 of the complete RESULT/result2
+wire body, rather than confusing the full signed-frame digest with image bytes.
+Fresh RESULT frames start an empty bounded digest. Partial-body cancellation
+copies the actual captured native body hasher and count, then advances that DATA
+copy with the same newly consumed chunks. The original native hash stays frozen;
+the original full-frame stream continues unchanged. No image buffer is revived.
+
+Finished receipts join the actual digest allocation and byte count. A changed
+captured source hash refuses continuation. Lost copy/update acknowledgements stay
+UNKNOWN; failed/finished/invalid feeds clear chunk references before raising fresh
+sanitized errors. These are consistency facts, not native image validation,
+terminal acceptance, permission, ACK or release authority.
+
+Independent read-only review accepted this bounded source slice. Focused checks:
+92 passed, 218 deselected in 21.32s. Expanded affected regression: 2056 passed, 1 skipped in 184.01s (0:03:04).
+Execution source hashes are unchanged; full lint, plugin surface and whitespace pass. Production routing, terminal claim/domain and
+inherited-budget acceptance, EAGAIN waiting, CANCEL/ACK/native release and
+physical character-image delivery remain open. Existing unexplained broker
+refusals and the sender-destination incident remain unresolved. No live host,
+device, grant, provider or deployment change accompanies this source slice.
+
 ## Same-reader authenticated TERMINAL/2 frame — November 7, 2026
 
 The original read owner now starts a separate TERMINAL/2 frame only from its actual

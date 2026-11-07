@@ -4,6 +4,11 @@
 
 The package source is preserved from the private F1 implementation. See [HMP v1](../docs/architecture/contracts/HMP_V1.md) for its wire contract, [deployment](DEPLOYMENT.md) for profile routing, and [contributing](../CONTRIBUTING.md) for checks.
 
+The internal `presentation_credential_payload_digest.py` and
+`presentation_credential_cleanup_payload.py` stages retain bounded RESULT-body
+SHA-256 consistency DATA for later terminal correlation. They preserve the
+original native/full-frame hashes and do not authorize output or release.
+
 The internal `presentation_credential_cleanup_frame.py` stage continues one
 newly authenticated frame on the retained reader/socket/task, including a fully
 captured auth record with zero post-cause auth bytes and retained outer header. It returns bounded

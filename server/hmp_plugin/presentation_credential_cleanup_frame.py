@@ -328,7 +328,30 @@ def _ledger(frame):
     return step.after
 
 
+def _finished_payload(frame, seal, result, held_scope):
+    from .presentation_credential_payload_digest import PayloadDigest, PayloadDigestFact
+
+    _require(type(held_scope) is _FrameScope and frame.scope is held_scope
+             and frame.scope_origin is held_scope
+             and type(frame.scope_cell) is tuple and len(frame.scope_cell) == 2
+             and frame.scope_cell[0] is frame and frame.scope_cell[1] is held_scope)
+    p = held_scope.parser
+    if held_scope.phase == "TERMINAL":
+        _require(result.payload_sha256 is None and p._payload_origin is None)
+        return None
+    _require(type(p._payload_origin) is PayloadDigest and p._payload is p._payload_origin
+             and type(p._payload_cell) is tuple and len(p._payload_cell) == 2
+             and p._payload_cell[0] is p and p._payload_cell[1] is p._payload_origin)
+    fact = PayloadDigest.current_fact(p._payload_origin, seal.received)
+    _require(type(fact) is PayloadDigestFact and p._payload_fact is fact
+             and type(p._payload_fact_cell) is tuple and len(p._payload_fact_cell) == 2
+             and p._payload_fact_cell[0] is p and p._payload_fact_cell[1] is fact
+             and type(result.payload_sha256) is str and result.payload_sha256 is fact.sha256)
+    return fact
+
+
 def _finished(frame, seal):
+    held_scope = frame.scope
     p, result = frame.scope.parser, frame.result_origin
     _require(frame.finish_returned is True and type(result) is DiscardedFrame
              and type(frame.finish_cell) is tuple and len(frame.finish_cell) == 5
@@ -387,7 +410,9 @@ def _finished(frame, seal):
     cells = (p._header_allocation, p._stream_allocation, p._hash_allocation,
              p._fact_allocation, p._digest_allocation)
     values = (digest.frame_sha256, digest.frame_length)
+    payload = _finished_payload(frame, seal, result, held_scope)
     value = _HASH_HEX(seal.hasher)
+    _require(_finished_payload(frame, seal, result, held_scope) is payload)
     _require(type(value) is str and type(seal.digest) is str and value == seal.digest
              and frame.result is result and frame.result_origin is result
              and type(frame.result_cell) is tuple and len(frame.result_cell) == 2

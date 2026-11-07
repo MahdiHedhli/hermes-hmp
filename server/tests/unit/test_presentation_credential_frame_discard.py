@@ -54,6 +54,12 @@ def test_exact_header_then_body_discard_full_hash(phase, sequence, body):
     assert result.digest.frame_sha256 == hashlib.sha256(frame).hexdigest()
     assert result.phase == phase and result.sequence == sequence
     assert result.terminal == (body if phase == "TERMINAL" else None)
+    assert result.payload_sha256 == (
+        hashlib.sha256(body).hexdigest() if phase == "RESULT" else None
+    )
+    if phase == "RESULT":
+        assert parser._payload_origin._hasher_origin is not stream._hasher_origin
+        assert parser._payload_origin._received == len(body)
     assert not parser._terminal_origin
     assert not hasattr(result, "accepted") and not hasattr(result, "release")
     assert "synthetic" not in repr(result)

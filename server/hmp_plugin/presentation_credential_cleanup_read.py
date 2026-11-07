@@ -261,6 +261,7 @@ class NativeCleanupRead:
         owner._frame = owner._frame_origin = owner._frame_allocation_origin = None
         owner._body_finish = owner._body_finish_origin = owner._body_finish_allocation = None
         owner._terminal = owner._terminal_origin = owner._terminal_allocation = None
+        owner._payload_seed = owner._payload_seed_origin = owner._payload_seed_cell = None
         owner._terminal_frame = owner._terminal_frame_origin = owner._terminal_frame_allocation = (
             None
         )
@@ -276,6 +277,9 @@ class NativeCleanupRead:
             _require(SignedCleanupReader.current_idle(idle) is idle._fact_origin)
             NativeCleanupRead._current_work(owner)
             owner._initialized = True
+            if reservation.capture.body is not None:
+                from .presentation_credential_cleanup_payload import initialize
+                initialize(owner)
             return owner
         except BaseException:
             failed = owner._failed = owner._unknown = True
@@ -476,6 +480,9 @@ class NativeCleanupRead:
         chunk = None
         failed = False
         try:
+            if self._payload_seed_origin is not None:
+                from .presentation_credential_cleanup_payload import current_seed
+                current_seed(self)
             _require(NativeCleanupRead._current_work(self) is s)
             count = s.idle_scope[2]
             _require(type(count) is int and 0 < count <= CHUNK_LIMIT
@@ -679,6 +686,9 @@ class NativeCleanupRead:
         SignedReadNotice._role_seal(s.notice)
         from .presentation_remote_cleanup import RemoteCleanupOwner
         _require(RemoteCleanupOwner._remaining(r.capture.cleanup) > 0)
+        if self._payload_seed_origin is not None:
+            from .presentation_credential_cleanup_payload import current_seed
+            current_seed(self)
         NativeCleanupRead._final_socket_fence(self, s)
         SignedReadNotice._role_seal(s.notice)
         _require(SignedReadNotice._actor(s.notice) is r
@@ -736,6 +746,8 @@ class NativeCleanupRead:
                 expected = before._replace(received=before.received + len(chunk),
                                            digest=_HASH_HEX(copy))
                 SignedResultDiscard.feed(before.parser, chunk)
+                from .presentation_credential_cleanup_payload import feed as feed_payload
+                feed_payload(self, chunk, expected.received)
             self._consume_returned = True
             after = NativeCleanupRead._parser_seal(before.parser)
             NativeCleanupRead._same_parser(after, expected)
@@ -785,6 +797,9 @@ class NativeCleanupRead:
             SignedReadNotice._role_seal(s.notice)
             from .presentation_remote_cleanup import RemoteCleanupOwner
             _require(RemoteCleanupOwner._remaining(r.capture.cleanup) > 0)
+            if self._payload_seed_origin is not None:
+                from .presentation_credential_cleanup_payload import current_seed
+                current_seed(self)
             NativeCleanupRead._final_socket_fence(self, s)
             SignedReadNotice._role_seal(s.notice)
             _require(SignedReadNotice._cleanup_actor(s.notice) is r
@@ -987,6 +1002,8 @@ class NativeCleanupRead:
                 expected = seal._replace(received=seal.received + len(chunk),
                                          digest=_HASH_HEX(copy))
                 SignedResultDiscard.feed(parser, chunk)
+                from .presentation_credential_cleanup_payload import feed as feed_payload
+                feed_payload(self, chunk, expected.received)
             step.after = NativeCleanupRead._parser_seal(parser)
             NativeCleanupRead._same_parser(step.after, expected)
             step.fact = _NextReceipt(self, step.scope.ordinal, step.received,

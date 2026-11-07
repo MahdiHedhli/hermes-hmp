@@ -54,6 +54,7 @@ class _BodyDone(NamedTuple):
     digest: ConsistentFrameDigest
     count: int
     total_received: int
+    payload_sha256: str
 
     def __repr__(self):
         return "<BodyDone consistency-only no-terminal-or-release>"
@@ -190,6 +191,9 @@ def metadata(native, read_scope, before):
              and finish.fact_cell[0] is finish and finish.fact_cell[1] is fact
              and type(fact.count) is int and type(fact.total_received) is int
              and fact.count == s.count and fact.total_received == s.total)
+    from .presentation_credential_cleanup_payload import current_fact
+    payload = current_fact(native, before.received)
+    _require(type(fact.payload_sha256) is str and fact.payload_sha256 is payload.sha256)
     return fact
 
 
@@ -239,6 +243,7 @@ def finish_body(native):
     finish.result = finish.result_cell = finish.fact = finish.fact_cell = None
     native._body_finish = native._body_finish_origin = finish
     native._body_finish_allocation = (native, finish)
+    held_scope = finish.scope
     failed = False
     result = None
     try:
@@ -248,7 +253,9 @@ def finish_body(native):
         finish.result = result
         finish.result_cell = (finish, result)
         finish.returned = True
-        finish.fact = _BodyDone(finish.scope, result, count, total)
+        from .presentation_credential_cleanup_payload import finish as finish_payload
+        payload = finish_payload(native, before.received)
+        finish.fact = _BodyDone(held_scope, result, count, total, payload.sha256)
         finish.fact_cell = (finish, finish.fact)
         NativeCleanupRead._progress_work_current(native)
         finish.complete = True

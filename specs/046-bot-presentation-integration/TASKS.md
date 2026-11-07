@@ -2,6 +2,13 @@
 
 ## Current envelope stop preparation
 
+- [x] Add separate bounded RESULT/result2-body digest DATA from the actual fresh
+      frame or captured original native hash copy, preserving frozen native and
+      original full-frame digests; sanitized feed refusals and source-drift checks.
+- [ ] Correlate terminal claims against actual original input/domain/generation,
+      the retained RESULT-body digest and inherited earliest cleanup budget;
+      qualify lifecycle, ACK and native release before production routing.
+
 - [x] Separate historical native wake/custody binding from the existing strict
       frozen digest wrappers; actual3-byte original-digest advancement preserves
       binding but refuses old currentness/release and retains UNKNOWN/counts.

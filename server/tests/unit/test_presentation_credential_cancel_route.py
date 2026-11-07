@@ -32,6 +32,7 @@ from .test_presentation_selected_protocol import darwin_model
 from .test_presentation_supervisor import context as context
 
 _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
+    "_notice_native_finished_seedmutated",
     "_notice_native_finished_next",
     "_notice_native_finished_nextframe",
     "_notice_native_finished_initial",
@@ -121,6 +122,7 @@ _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_received",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_next",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_seedmutated",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_countbad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_custodybad",
@@ -611,6 +613,9 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                         return None
                                     signed_writer = rw.CredentialResultWriter.retain(producer)
                                     held["signed_result_writer"] = signed_writer
+                                    from hashlib import sha256 as result2_hash
+                                    held["result2_body_sha"] = result2_hash(
+                                        signed_writer._payload_snapshot).hexdigest()
                                     if stage.endswith("_wrong_actor"):
                                         async def wrong_writer():
                                             with pytest.raises(FrameError):
@@ -1323,6 +1328,26 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                             assert not native._failed and not native._unknown
                             held["body_parser_consumed"] = True
                             if stage.endswith("_notice_native_continued") or finish_case:
+                                if stage.endswith("_notice_native_finished_seedmutated"):
+                                    seed = native._payload_seed_origin
+                                    original_source = seed.source
+                                    original_source.update(b"uncredited-native-body-hash-change")
+                                    with pytest.raises(FrameError):
+                                        native.read_and_consume_next()
+                                    assert native._failed and native._unknown
+                                    assert native._body_finish_allocation is None
+                                    assert seed.data._received == 16
+                                    assert body._stream_origin is body._initialization_origin[1]
+                                    assert body._stream_origin._received == 16
+                                    assert body._hash_origin is original_source
+                                    assert original_source.hexdigest() != seed.sha256
+                                    assert (
+                                        body._committed == 13 and not body._scope_origin.accumulator
+                                    )
+                                    held["body_finish_refused"] = held["body_notice_published"] = (
+                                        True
+                                    )
+                                    raise
                                 next_fact = native.read_and_consume_next()
                                 assert next_fact.count == (
                                     len(held["native_body_tail"]) - 3 if finish_case else 3)
@@ -1434,6 +1459,13 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                         held["body_finish_refused"] = True
                                     else:
                                         held["body_finish_fact"] = native.finish_body()
+                                        assert held["body_finish_fact"].payload_sha256 == (
+                                            held["result2_body_sha"])
+                                        seed = native._payload_seed_origin
+                                        assert body._hash_origin is seed.source
+                                        assert seed.source.hexdigest() == seed.sha256
+                                        assert seed.data._hasher_origin is not seed.source
+                                        assert body._committed == seed.count == 13
                                         assert held["body_finish_fact"].digest.frame_sha256 == (
                                             body._stream_origin._commitment.frame_sha256)
                                         assert body._stream_origin is body._initialization_origin[1]

@@ -616,6 +616,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     done = native.finish_frame()
                     assert done.scope is scope
                     assert done.data.phase == scope.phase
+                    assert done.data.payload_sha256 == (
+                        hashlib.sha256(b"abcd").hexdigest() if scope.phase == "RESULT" else None)
                     assert done.data.digest.frame_length == (
                         held["native_frame_length"])
                     assert done.total_received == (
