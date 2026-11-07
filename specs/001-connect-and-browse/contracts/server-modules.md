@@ -788,3 +788,13 @@ one candidate take and canonical header/payload commitment. Original cancellatio
 withdraws owned payload references before cleanup sampling. This is signed data,
 not socket transfer, terminal settlement or publication authority. See
 [producer evidence](../../../docs/research/presentation-signed-result-producer-2026-11-06.md).
+
+### BI1 signed RESULT writer (November 6, 2026)
+
+`presentation_credential_result_write.py` owns counted signed RESULT streaming on
+the original service Task. Fixed READY slot handoff, original producer authority,
+final callback-free role/custody fence and original-controller cancellation retain
+existing scope and budget. Its private full-count fact means local delivery only,
+never terminal/native release/publication. Payload withdrawal covers producer and
+writer; uncertain writes/readiness retain debt. Production dispatch/gateway cursor
+remain open. See [writer evidence](../../../docs/research/presentation-signed-result-writer-2026-11-06.md).

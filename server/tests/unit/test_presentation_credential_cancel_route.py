@@ -44,7 +44,19 @@ from .test_presentation_supervisor import context as context
                                   "go_relay_result_sign_wrong_actor", "go_relay_result_sign_key",
                                   "go_relay_result_sign_expired", "go_relay_result_sign_take_drift",
                                   "go_relay_result_sign_post_crypto_key",
-                                  "go_relay_result_sign_take_alias"])
+                                  "go_relay_result_sign_take_alias", "go_relay_result_sign_write",
+                                  "go_relay_result_sign_write_wrong_actor",
+                                  "go_relay_result_sign_write_tail_key",
+                                  "go_relay_result_sign_write_tail_control",
+                                  "go_relay_result_sign_write_post_alias",
+                                  "go_relay_result_sign_write_settlement",
+                                  "go_relay_result_sign_write_init",
+                                  "go_relay_result_sign_write_zero",
+                                  "go_relay_result_sign_write_partial",
+                                  "go_relay_result_sign_write_unknown",
+                                  "go_relay_result_sign_write_tail_phase",
+                                  "go_relay_result_sign_write_settlement_key",
+                                  "go_relay_result_sign_write_blocked_cancel"])
 async def test_original_gateway_cancel_reaches_original_authenticated_broker(
     context, local, tmp_path, monkeypatch, stage
 ):
@@ -69,7 +81,18 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
     relay_failure = stage in ("go_relay_zero", "go_relay_partial", "go_relay_unknown",
                               "go_relay_post_drift", "go_relay_tail_key", "go_relay_tail_retired",
                               "go_relay_tail_cancel", "go_relay_tail_ready")
-    operation_failure = relay_failure or result_failure
+    writer_failure = stage in ("go_relay_result_sign_write_tail_key",
+                               "go_relay_result_sign_write_tail_control",
+                               "go_relay_result_sign_write_post_alias",
+                               "go_relay_result_sign_write_settlement",
+                               "go_relay_result_sign_write_init",
+                                  "go_relay_result_sign_write_zero",
+                               "go_relay_result_sign_write_partial",
+                               "go_relay_result_sign_write_unknown",
+                               "go_relay_result_sign_write_tail_phase",
+                               "go_relay_result_sign_write_settlement_key",
+                               "go_relay_result_sign_write_blocked_cancel")
+    operation_failure = relay_failure or result_failure or writer_failure
 
     async def broker():
         record = await BrokerServiceSpine._accept_owned(spine, end)
@@ -346,13 +369,143 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                 assert resources._result_taken and not resources._candidate_snapshot
                                 assert record.result_writer is None
                                 assert channel._result_writer is None
+                                if stage.startswith("go_relay_result_sign_write"):
+                                    from hmp_plugin import (
+                                        presentation_credential_result_write as rw,
+                                    )
+                                    if stage.endswith("_init"):
+                                        check = SocketChannel._check
+                                        calls = []
+
+                                        def refused_initial(ch):
+                                            if ch is channel and not calls:
+                                                calls.append(True)
+                                                assert producer._writer_snapshot is not None
+                                                raise FrameError("synthetic-initial-check")
+                                            return check(ch)
+
+                                        monkeypatch.setattr(SocketChannel, "_check",
+                                                            refused_initial)
+                                        with pytest.raises(FrameError):
+                                            rw.CredentialResultWriter.retain(producer)
+                                        partial = producer._writer_snapshot
+                                        assert partial._failed and partial._payload_snapshot is None
+                                        with pytest.raises(FrameError):
+                                            rw.CredentialResultWriter.retain(producer)
+                                        assert producer._writer_snapshot is partial
+                                        held["go_current_checked"] = True
+                                        return None
+                                    signed_writer = rw.CredentialResultWriter.retain(producer)
+                                    held["signed_result_writer"] = signed_writer
+                                    if stage.endswith("_wrong_actor"):
+                                        async def wrong_writer():
+                                            with pytest.raises(FrameError):
+                                                await signed_writer.send()
+                                        await asyncio.create_task(wrong_writer())
+                                        assert not signed_writer._attempted
+                                    actual_send = rw._SEND
+                                    sent = bytearray()
+                                    phase_eq = []
+                                    if "_tail_" in stage:
+                                        inheritable = rw.os.get_inheritable
+                                        changed = []
+
+                                        def changed_tail(fd):
+                                            value = inheritable(fd)
+                                            if (fd == channel._fd_snapshot and signed_writer._active
+                                                    and not changed):
+                                                changed.append(True)
+                                                if stage.endswith("_key"):
+                                                    keys["broker"].retire()
+                                                elif stage.endswith("_phase"):
+                                                    class ForeignPhase:
+                                                        def __eq__(self, other):
+                                                            phase_eq.append(True)
+                                                            raise AssertionError("foreign phase eq")
+                                                    resources._phase = ForeignPhase()
+                                                else:
+                                                    control._retired = True
+                                            return value
+
+                                        monkeypatch.setattr(rw.os, "get_inheritable", changed_tail)
+                                    if "_settlement" in stage:
+                                        settle = rw.CredentialResultWriter._settled
+
+                                        def refused_settlement(owned):
+                                            settle(owned)
+                                            if owned is signed_writer:
+                                                if stage.endswith("_key"):
+                                                    keys["broker"].retire()
+                                                else:
+                                                    raise FrameError("synthetic-settlement-refusal")
+
+                                        monkeypatch.setattr(rw.CredentialResultWriter, "_settled",
+                                                            refused_settlement)
+
+                                    def counted_result(sock, data):
+                                        if stage.endswith("_blocked_cancel"):
+                                            import errno
+                                            held["go_current_checked"] = True
+                                            go_checked.set()
+                                            raise BlockingIOError(errno.EAGAIN, "synthetic-block")
+                                        if stage.endswith("_zero"):
+                                            return 0
+                                        if stage.endswith("_partial") and sent:
+                                            return 0
+                                        if stage.endswith(("_partial", "_unknown")):
+                                            count = actual_send(sock, data[:7])
+                                        else:
+                                            count = actual_send(sock, data)
+                                        sent.extend(data[:count])
+                                        if stage.endswith("_post_alias"):
+                                            channel._credential_result_writer = object()
+                                        if stage.endswith("_unknown"):
+                                            raise OSError("synthetic-unknown-after-send")
+                                        return count
+
+                                    monkeypatch.setattr(rw, "_SEND", counted_result)
+                                    if stage.endswith("_blocked_cancel"):
+                                        with pytest.raises(asyncio.CancelledError):
+                                            await signed_writer.send()
+                                        raise asyncio.CancelledError
+                                    if writer_failure:
+                                        with pytest.raises(FrameError) as caught:
+                                            await signed_writer.send()
+                                        assert caught.value.__context__ is None
+                                        assert signed_writer._failed and not signed_writer._complete
+                                        assert signed_writer._fact_snapshot is None
+                                        assert signed_writer._payload_snapshot is None
+                                        assert producer._payload_snapshot is None
+                                        assert producer._frozen_snapshot is None
+                                        if stage.endswith("_unknown"):
+                                            assert signed_writer._offset == 0 and len(sent) == 7
+                                            assert signed_writer._unknown
+                                        else:
+                                            assert signed_writer._offset == len(sent)
+                                        if "_tail_" in stage:
+                                            assert not sent and not phase_eq
+                                        if stage.endswith("_post_alias"):
+                                            assert sent and not signed_writer._complete
+                                        with pytest.raises(FrameError):
+                                            await signed_writer.send()
+                                        held["go_current_checked"] = True
+                                        return None
+                                    fact = await signed_writer.send()
+                                    assert signed_writer._complete and not signed_writer._unknown
+                                    assert fact is signed_writer._fact_snapshot
+                                    assert fact.count == len(sent)
+                                    assert sent == raw + frozen.header + frozen.payload
+                                    assert signed_writer._payload_snapshot is None
+                                    assert not channel._writing
+                                    held["signed_result_sent"] = True
                                 frozen = None
                                 other = BrokerCancellationOwner.__new__(BrokerCancellationOwner)
                                 other._retired = True
                                 other._credential_result = producer
                                 other._credential_result_snapshot = producer
                                 assert producer.retire_from_control(other) is False
-                                assert producer._payload_snapshot is not None
+                                assert (producer._payload_snapshot is None) is (
+                                    stage.startswith("go_relay_result_sign_write"))
                                 from hmp_plugin.presentation_clock import NativeClockOwner
                                 cleanup_sample = NativeClockOwner.cleanup_sample
 
@@ -473,14 +626,16 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     await go_checked.wait()
                 if broker_task.done():
                     if broker_task.cancelled():
-                        assert stage == "go_relay_tail_cancel"
+                        assert stage in ("go_relay_tail_cancel",
+                                         "go_relay_result_sign_write_blocked_cancel")
                     else:
                         broker_task.result()  # preserve actual service failure
                 assert held["go_current_checked"]
         RemoteCleanupOwner.request(cleanup)
         async with asyncio.timeout(3):
             local_closed = await asyncio.shield(cleanup._allocations_snapshot[0].task)
-            if stage == "go_relay_tail_cancel":
+            if stage in ("go_relay_tail_cancel",
+                                         "go_relay_result_sign_write_blocked_cancel"):
                 outcome = (await asyncio.gather(broker_task, return_exceptions=True))[0]
                 assert type(outcome) is asyncio.CancelledError and broker_task.cancelled()
                 frame = None
@@ -494,6 +649,15 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 assert held["go_relay"]._complete
                 assert held["result_producer"]._payload_snapshot is None
                 assert held["result_producer"]._frozen_snapshot is None
+            if stage.endswith("_blocked_cancel"):
+                signed_writer = held["signed_result_writer"]
+                assert signed_writer._cancel_requested and signed_writer._retired
+                assert signed_writer._failed and not signed_writer._complete
+                assert signed_writer._fact_snapshot is None
+                assert signed_writer._payload_snapshot is None
+                assert signed_writer._waiter_origin._retired
+                assert not signed_writer._unknown and not signed_writer._active
+                assert held["control"]._allocation_snapshot.task.done()
             assert not cleanup._result_token and remote._result_owner is None
             return  # local cleanup result is not remote settlement
         if stage.startswith("go_relay_result"):
@@ -519,7 +683,8 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         if not broker_task.done():
             broker_task.cancel()
         await asyncio.gather(broker_task, return_exceptions=True)
-        if stage == "go_relay_tail_cancel" and broker_task.cancelled():
+        if (stage in ("go_relay_tail_cancel", "go_relay_result_sign_write_blocked_cancel")
+                and broker_task.cancelled()):
             # Only after the original service is terminal: sole fixture reaper
             # finishes its own child disposal; no replacement protocol reader.
             resources = held.get("disposable_resources")
@@ -588,3 +753,22 @@ def test_go_relay_input_fact_fences_foreign_fields_before_callbacks(tmp_path, fi
         with pytest.raises(FrameError):
             _input_shape(forged)
         assert calls == []
+
+
+def test_result_handoff_rejects_foreign_channel_before_getters():
+    from hmp_plugin.presentation_jobs import FrameError
+
+    calls = []
+
+    class ForeignChannel:
+        def __getattribute__(self, name):
+            calls.append(name)
+            raise AssertionError("foreign handoff channel getter")
+
+    writer = CredentialReadyWriter.__new__(CredentialReadyWriter)
+    writer._refs = writer._refs_snapshot = (object(), (), (), ForeignChannel(), object(), ())
+    writer._active = False
+    writer._complete = True
+    with pytest.raises(FrameError):
+        CredentialReadyWriter._metadata(writer)
+    assert not calls

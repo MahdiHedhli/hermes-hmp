@@ -27,8 +27,9 @@ not an alternative admission route. Signed BEGIN/READY/GO and pre/post-READY CAN
 have bounded source integration; production installation/startup remains open.
 The [original pre-READY read-retirement and BEGIN-derived cancellation contract](SIGNED_PRE_READY_CLEANUP.md)
 has source components/route/correlation and known-no-IO refusal local cleanup.
-None confers remote terminal/ACK or publication authority. The next actual
-execution dependency is the signed worker relay described below.
+None confers remote terminal/ACK or publication authority. The fixed signed
+worker relay and signing/result-writer components below remain separate from
+production composition and terminal qualification.
 
 The [local handoff freeze](LOCAL_HANDOFF_FREEZE.md) is integrated as source
 797dbbc through PR114 with exact-source green CI42129488493. It supplies immutable
@@ -43,6 +44,17 @@ Production dispatch is not enabled. Integrate the reviewed
 transport before claiming normal OK TERMINAL. Keep terminal-write/ACK and
 production startup qualification separate; never replace the native control
 pipe's final current/FD/time checks with a signature-only allowance.
+
+## Signed RESULT writer checkpoint
+
+The original-service immutable RESULT producer and counted signed writer now have
+bounded source components. The writer uses a fixed historical READY write-slot
+handoff, final callback-free current authority checks, actual native send counts,
+one frozen-budget controller cancellation and payload withdrawal. Full local write
+is not remote receipt or terminal/native release. See
+[writer evidence](../../docs/research/presentation-signed-result-writer-2026-11-06.md).
+Production dispatch, original gateway signed RESULT cursor, terminal/ACK and
+installed-runtime/native publication remain open; no unsigned fallback is enabled.
 
 ## Envelope and earliest first cause
 

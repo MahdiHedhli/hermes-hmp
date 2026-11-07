@@ -432,6 +432,7 @@ class SocketChannel:
         self._credential_handshake = self._credential_handshake_snapshot = None
         self._credential_begin_receiver = self._credential_begin_receiver_snapshot = None
         self._credential_ready_writer = self._credential_ready_writer_snapshot = None
+        self._credential_result_writer = self._credential_result_writer_snapshot = None
         self._credential_begin_writer = self._credential_begin_writer_snapshot = None
         self._credential_go_writer = self._credential_go_writer_snapshot = None
         self._credential_cancel_writer = self._credential_cancel_writer_snapshot = None

@@ -387,3 +387,12 @@ historical, not an alternative live authorization path or resolved incident.
 - [ ] Integrate counted signed RESULT streaming and original-controller write
       retirement, then original gateway cursor and retained terminal/ACK lifecycle.
       Preserve actual byte counts, unknown delivery debt and no unsigned fallback.
+
+- [x] Qualify original-service signed RESULT writer and fixed READY slot handoff:
+      actual bounded socket sends/counts, original-controller cancellation and
+      payload withdrawal; thirteen focused peer cases plus channel tripwire.
+      Final1,599 passed/one skipped101.50s; lint/whitespace and independent review
+      pass. No production dispatch or terminal/publication credit.
+- [ ] Compose signed RESULT with original gateway work cursor under
+      [SIGNED_RESULT_READ.md](SIGNED_RESULT_READ.md), then retained
+      terminal/ACK/startup/native publication. Local full-count fact is not receipt.

@@ -608,6 +608,11 @@ class BrokerCancellationOwner:
         finally:
             self._sampling = False
         c = self._io_channel_origin
+        if type(c) is SocketChannel:
+            from .presentation_credential_result_write import CredentialResultWriter
+            signed_writer = c._credential_result_writer_snapshot
+            if type(signed_writer) is CredentialResultWriter:
+                CredentialResultWriter.retire_from_control(signed_writer, self)
         if type(c) is SocketChannel and c._result_writer_snapshot is not None:
             from .presentation_result_transport import BrokerResultWriter
 

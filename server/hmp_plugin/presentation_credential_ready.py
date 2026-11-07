@@ -471,6 +471,13 @@ class CredentialReadyWriter:
         _require(type(self) is CredentialReadyWriter and type(self._refs) is tuple
                  and len(self._refs) == 6 and self._refs is self._refs_snapshot)
         producer, refs, scope, channel, sock, allocation = self._refs
+        _require(type(channel) is SocketChannel)
+        writing = self._active
+        result_writer = getattr(channel, "_credential_result_writer_snapshot", None)
+        if self._complete is True and self._active is False and result_writer is not None:
+            from .presentation_credential_result_write import CredentialResultWriter
+            _require(type(result_writer) is CredentialResultWriter)
+            writing = CredentialResultWriter._ready_writing(result_writer, self)
         _require(type(producer) is CredentialReadyProducer and type(refs) is tuple
                  and len(refs) == 9 and producer._refs_snapshot is refs
                  and type(scope) is tuple and len(scope) == 19 and refs[4] is scope
@@ -487,7 +494,7 @@ class CredentialReadyWriter:
                  and type(refs[7].context) is tuple and len(refs[7].context) == 2
                  and all(type(v) is int for v in refs[7].context)
                  and refs[7].context == (os.getpid(), threading.get_ident())
-                 and channel._writing is self._active
+                 and channel._writing is writing
                  and type(self._offset) is int and self._offset is self._offset_snapshot
                  and 0 <= self._offset <= 3096
                  and self._intent is self._intent_snapshot

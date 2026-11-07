@@ -19,8 +19,9 @@ from .presentation_credential_control import (
     CredentialControlCursor,
     CredentialGoPhase,
 )
-from .presentation_credential_files import RoleKeySelection
+from .presentation_credential_files import RoleKeySelection, StartupRoleKeyFiles
 from .presentation_credential_go_relay import CredentialGoRelay
+from .presentation_credential_handshake import CredentialHandshakeOwner
 from .presentation_credential_phase import _EXPECTED, check_commitment, check_committed_header
 from .presentation_jobs import OUTPUT_LIMIT, FrameError
 from .presentation_remote_cleanup import _TASK
@@ -92,6 +93,7 @@ class CredentialResultProducer:
         owner._scope = owner._scope_snapshot = _ResultScope(
             control, relay, fact, refs, refs[4].resources_snapshot, cursor,
             tuple(sorted(expected.items())), (refs[11].own_public, refs[11].peer_public))
+        owner._writer = owner._writer_snapshot = None
         owner._attempted = owner._failed = owner._retired = owner._complete = False
         owner._payload = owner._payload_snapshot = None
         owner._frozen = owner._frozen_snapshot = None
@@ -203,6 +205,27 @@ class CredentialResultProducer:
                  and cause is None and end is None and failed is False)
         return s
 
+    def _tail(self):
+        """Callback-free original role/custody/cause seal after native boundaries."""
+        s = CredentialResultProducer._local(self)
+        keys, handshake = s.refs[10], s.refs[9]
+        _require(type(keys) is StartupRoleKeyFiles and type(handshake) is CredentialHandshakeOwner
+                 and keys._ready is True and keys._refused is False
+                 and keys._private_key is s.refs[12] and keys._selection is s.refs[11]
+                 and handshake._keys is keys and handshake._key_origin is s.refs[12]
+                 and handshake._refused is False and handshake._io_unknown is False
+                 and s.control._retired is False and s.control._failed is False
+                 and s.control._io_unknown is False
+                 and s.relay_fact.scope.phase._creator_refused is False
+                 and asyncio.current_task() is s.refs[15] and _TASK.cancelling(s.refs[15]) == 0
+                 and type(s.resources._phase) is str and s.resources._phase == "LOCAL_DRAINED"
+                 and s.resources._normal_complete is True
+                 and s.resources._invalidated is False and s.resources._poisoned is False)
+        original, cause, end, failed = CancellationBudget.inspect(s.refs[17])
+        _require(type(original) is int and original == s.refs[4].deadline_ns
+                 and cause is None and end is None and failed is False)
+        return s
+
     def retire_from_control(self, control):
         """Pure owned-memory withdrawal before native cleanup sampling; no I/O."""
         if (type(self) is not CredentialResultProducer
@@ -214,9 +237,26 @@ class CredentialResultProducer:
                 or control._credential_result_snapshot is not self):
             return False
         self._retired = True
+        writer = self._writer_snapshot
+        if writer is not None:
+            from .presentation_credential_result_write import CredentialResultWriter
+            if type(writer) is CredentialResultWriter:
+                CredentialResultWriter.withdraw_from_producer(writer, self)
         self._payload = self._payload_snapshot = None
         self._frozen = self._frozen_snapshot = None
         return True
+
+    def release_after_write(self, writer):
+        """Withdraw original payload after terminal write attempt, never authorize I/O."""
+        from .presentation_credential_result_write import CredentialResultWriter, _WriteScope
+        if (type(self) is CredentialResultProducer and type(writer) is CredentialResultWriter
+                and type(writer._scope_snapshot) is _WriteScope
+                and writer._scope_snapshot.producer is self
+                and writer._scope_snapshot.result_scope is self._scope_snapshot):
+            self._retired = True
+            self._payload = self._payload_snapshot = None
+            self._frozen = self._frozen_snapshot = None
+            CredentialResultWriter.withdraw_from_producer(writer, self)
 
     def prepare(self):
         held = part = header = raw = digest = frozen = None

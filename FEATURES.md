@@ -1,3 +1,23 @@
+## Counted signed image-result writer — November 6, 2026
+
+Bot-character transport now has a reviewed original-service signed RESULT writer.
+It streams the signed record, header and bounded native payload pieces, preserves
+actual byte counts and unknown-delivery debt, and withdraws producer/writer payload
+on completion or cancellation. The original controller can cancel the exact
+blocked sender once under its frozen budget. No native callback follows a
+successful full-count fact.
+
+Thirteen focused private-peer writer cases and a final foreign-channel tripwire
+cover actual writes, partial/unknown delivery, stale authority, selector retirement
+and failure cleanup. Final affected regression: **1,599 passed, one skipped**,
+101.50 seconds; lint/whitespace and independent read-only review pass.
+
+This is component source progress, not complete phone image delivery. Production
+dispatch, original gateway signed-result cursor, terminal/ACK/startup and physical/
+release qualification remain open. No host/device/build/settings changed.
+Historical broker intermittency and the separately recorded native sender-
+destination incident remain unresolved.
+
 ## Signed native RESULT preparation — November 6, 2026
 
 Bot-character transport now has a reviewed signing-only result owner. It takes

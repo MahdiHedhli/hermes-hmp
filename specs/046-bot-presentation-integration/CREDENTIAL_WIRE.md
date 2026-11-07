@@ -312,3 +312,12 @@ transfer fact requires all actual signed-record/header/payload bytes and final
 currentness checks; it grants neither terminal settlement nor HTTP publication.
 The gateway must keep its sole original work cursor and independently validate
 the commitment and result2. Generic channel RESULT paths remain closed.
+
+## Counted signed RESULT writer checkpoint — November 6, 2026
+
+The directly tested `CredentialResultWriter` implements the counted writer
+contract above on the original service Task, with fixed READY slot handoff,
+post-native callback-free authority tail, original-controller cancellation and
+producer/writer payload withdrawal. Full-count fact is local I/O only. Production
+composition and original gateway signed-result parsing remain open. See
+[writer evidence](../../docs/research/presentation-signed-result-writer-2026-11-06.md).
