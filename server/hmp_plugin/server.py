@@ -145,6 +145,7 @@ from .request_ctx import (
     parse_peer_ip,
     peer_key,  # noqa: F401
     read_json_body,
+    single_header,
 )
 from .request_ctx import (
     ReadWorkerBudget as ReadWorkerBudget,
@@ -1020,7 +1021,96 @@ async def handle_chat_send(request: web.Request) -> web.Response:
     return _direct_send_outcome_response(outcome, guarded=guarded)
 
 
-async def _cron_endpoint(request: web.Request, *, write: bool) -> Any:
+@dataclass(frozen=True, repr=False)
+class _ControlsReadScope:
+    """Request-local original read scope; never a write lease or logged credential."""
+
+    ctx: Any
+    store: Any
+    bridge: Any
+    identity: Any
+    iid: str
+    generation: str
+    profile: str
+    authorization: str | None
+    instance: str | None
+    who: Any
+    feature: str
+
+    @classmethod
+    def capture(cls, request: web.Request, feature: str) -> _ControlsReadScope:
+        ctx = context(request)
+        who = bearer(request)
+        return cls(ctx, ctx.store, ctx.bridge, ctx.identity, ctx.iid,
+                   ctx.readiness_generation, request.match_info["p"],
+                   single_header(request, "Authorization"),
+                   single_header(request, "HMP-Instance"), who, feature)
+
+    def __repr__(self) -> str:
+        return "<ControlsReadScope redacted>"
+
+    def _same(self, request: web.Request) -> None:
+        ctx = self.ctx
+        if not (
+            context(request) is ctx and ctx.store is self.store
+            and ctx.bridge is self.bridge and ctx.identity is self.identity
+            and ctx.iid == self.iid and ctx.readiness_generation == self.generation
+            and isinstance(self.generation, str)
+            and readiness.GENERATION_RE.fullmatch(self.generation) is not None
+            and request.match_info["p"] == self.profile
+        ):
+            raise HmpError(self.unavailable)
+
+    @property
+    def unavailable(self) -> ErrorCode:
+        return ErrorCode.CRON_UNAVAILABLE if self.feature == "cron" else ErrorCode.MODEL_UNAVAILABLE
+
+    def check(self, request: web.Request) -> None:
+        self._same(request)
+        ctx = self.ctx
+        try:
+            if self.identity.still_current() is not True:
+                raise HmpError(self.unavailable)
+            current = Authenticator(self.store, self.iid, ctx.now).authenticate(
+                self.authorization, self.instance,
+            )
+            if current != self.who or not ctx.is_owner_device(current.device_id):
+                raise HmpError(ErrorCode.NOT_FOUND)
+            require_bot_authorized(self.bridge, current.user_id, self.profile)
+            if self.feature == "cron":
+                available = ctx.cron_enabled() and ctx.is_cron_available()
+            else:
+                available = ctx.model_enabled() and ctx.is_model_available()
+            if not available:
+                raise HmpError(self.unavailable)
+            # Callback-bearing checks must not substitute this request's dependencies.
+            self._same(request)
+            current = Authenticator(self.store, self.iid, ctx.now).authenticate(
+                self.authorization, self.instance,
+            )
+            if current != self.who or not ctx.is_owner_device(current.device_id):
+                raise HmpError(ErrorCode.NOT_FOUND)
+            # The final policy sample follows the final store/controls callbacks.
+            # These independent reads are not an atomic native authorization lease.
+            if self.identity.still_current() is not True:
+                raise HmpError(self.unavailable)
+            require_bot_authorized(self.bridge, current.user_id, self.profile)
+            if self.feature == "cron":
+                available = ctx.cron_enabled() and ctx.is_cron_available()
+            else:
+                available = ctx.model_enabled() and ctx.is_model_available()
+            if not available:
+                raise HmpError(self.unavailable)
+            self._same(request)
+        except HmpError:
+            raise
+        except Exception:
+            raise HmpError(self.unavailable) from None
+
+
+async def _cron_endpoint(
+    request: web.Request, *, write: bool, read_scope: _ControlsReadScope | None = None,
+) -> Any:
     """No job data or loopback call before device and profile authorization."""
     who = bearer(request)
     ctx = context(request)
@@ -1033,18 +1123,31 @@ async def _cron_endpoint(request: web.Request, *, write: bool) -> Any:
         ctx.now(),
     )
     profile = request.match_info["p"]
-    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
-    if not ctx.cron_enabled() or not ctx.is_cron_available():
+    if read_scope is not None:
+        read_scope._same(request)
+        bridge, profile, who = read_scope.bridge, read_scope.profile, read_scope.who
+    else:
+        bridge = ctx.bridge
+    await asyncio.to_thread(require_bot_authorized, _require(bridge), who.user_id, profile)
+    if read_scope is not None:
+        read_scope.check(request)
+    elif not ctx.cron_enabled() or not ctx.is_cron_available():
         raise HmpError(ErrorCode.CRON_UNAVAILABLE)
-    endpoint = await asyncio.to_thread(ctx.bridge.direct_send_endpoint, profile)
+    bridge = read_scope.bridge if read_scope is not None else ctx.bridge
+    endpoint = await asyncio.to_thread(bridge.direct_send_endpoint, profile)
+    if read_scope is not None:
+        read_scope.check(request)
     if endpoint is None:
         raise HmpError(ErrorCode.CRON_UNAVAILABLE)
     return endpoint
 
 
 async def handle_cron_list(request: web.Request) -> web.Response:
-    endpoint = await _cron_endpoint(request, write=False)
-    return json_response(await mobile_cron.call(endpoint, method="GET"))
+    scope = _ControlsReadScope.capture(request, "cron")
+    endpoint = await _cron_endpoint(request, write=False, read_scope=scope)
+    result = await mobile_cron.call(endpoint, method="GET")
+    scope.check(request)
+    return json_response(result)
 
 
 async def handle_cron_create(request: web.Request) -> web.Response:
@@ -1103,7 +1206,9 @@ async def handle_cron_resume(request: web.Request) -> web.Response:
     return json_response(result)
 
 
-async def _model_profile(request: web.Request, *, write: bool) -> str:
+async def _model_profile(
+    request: web.Request, *, write: bool, read_scope: _ControlsReadScope | None = None,
+) -> str:
     """Reject before reading a body, profile config, or model catalog."""
     who = bearer(request)
     ctx = context(request)
@@ -1116,34 +1221,48 @@ async def _model_profile(request: web.Request, *, write: bool) -> str:
         ctx.now(),
     )
     profile = request.match_info["p"]
-    await asyncio.to_thread(require_bot_authorized, _require(ctx.bridge), who.user_id, profile)
-    if not ctx.model_enabled() or not ctx.is_model_available():
+    if read_scope is not None:
+        read_scope._same(request)
+        bridge, profile, who = read_scope.bridge, read_scope.profile, read_scope.who
+    else:
+        bridge = ctx.bridge
+    await asyncio.to_thread(require_bot_authorized, _require(bridge), who.user_id, profile)
+    if read_scope is not None:
+        read_scope.check(request)
+    elif not ctx.model_enabled() or not ctx.is_model_available():
         raise HmpError(ErrorCode.MODEL_UNAVAILABLE)
     return profile
 
 
 async def handle_model_current(request: web.Request) -> web.Response:
-    profile = await _model_profile(request, write=False)
+    scope = _ControlsReadScope.capture(request, "model")
+    profile = await _model_profile(request, write=False, read_scope=scope)
     try:
-        bridge = _require(context(request).bridge)
+        bridge = _require(scope.bridge)
         raw = await asyncio.to_thread(bridge.profile_default_model, profile)
     except Exception as exc:
         log_bridge_exception(exc)
         raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
-    return json_response(mobile_model.project_current(raw))
+    result = mobile_model.project_current(raw)
+    scope.check(request)
+    return json_response(result)
 
 
 async def handle_model_options(request: web.Request) -> web.Response:
-    profile = await _model_profile(request, write=False)
+    scope = _ControlsReadScope.capture(request, "model")
+    profile = await _model_profile(request, write=False, read_scope=scope)
     try:
-        bridge = _require(context(request).bridge)
+        bridge = _require(scope.bridge)
         endpoint = await asyncio.to_thread(bridge.direct_send_endpoint, profile)
     except Exception as exc:
         log_bridge_exception(exc)
         raise HmpError(ErrorCode.MODEL_UNAVAILABLE) from exc
+    scope.check(request)
     if endpoint is None:
         raise HmpError(ErrorCode.MODEL_UNAVAILABLE)
-    return json_response(await mobile_model.options(endpoint))
+    result = await mobile_model.options(endpoint)
+    scope.check(request)
+    return json_response(result)
 
 
 async def handle_model_update(request: web.Request) -> web.Response:

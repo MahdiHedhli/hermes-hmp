@@ -1,3 +1,17 @@
+## Jobs/model read authority across awaits — November 7, 2026
+
+AR1-035-T014a now retains the original authenticated request, phone/profile and
+listener/dependency scope for jobs list, current model and model options reads.
+It checks current identity, token family/device, controls, bot authorization and
+feature/API availability after asynchronous authorization/endpoint/read work and
+before returning data. Native dispatch uses the retained bridge/profile/caller;
+callback scope drift refuses before the next read. No retry or permission grant.
+
+Independent focused review accepted the bounded source repair.105 affected and
+readiness tests pass with source unchanged; Ruff, plugin surface, privacy and
+log scans pass. Writes/native transactional authorization remain open underT014.
+This branch is not deployed and does not qualify physical behavior or image delivery.
+
 ## Unicode attribution packaged with bot presentation — November 7, 2026
 
 Exact wheel inventory verification found the existing Unicode license omitted
