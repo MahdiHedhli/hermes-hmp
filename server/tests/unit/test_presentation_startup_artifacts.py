@@ -93,11 +93,64 @@ if mutation in ("read_unknown", "retired_after_read", "file_changed", "scope_aft
             leaf.write_bytes(b"CHANGED_SYNTHETIC_CODE\n")
         return result
     a.os.read = changed_read
-success = mutation in ("normal", "empty", "multiple")
+if mutation == "complete_context_failure":
+    observed = a.StartupArtifactOwner.retain(owner, expected)
+    getpid = a.os.getpid
+    calls = []
+    def first_context_failure():
+        calls.append(True)
+        raise OSError("synthetic initial completion-context failure")
+    a.os.getpid = first_context_failure
+    try: a.StartupArtifactOwner.complete(observed)
+    except a.ArtifactObservationError as error: assert error.failed_owner is observed
+    else: raise AssertionError("initial completion context accepted")
+    a.os.getpid = getpid
+    assert observed._failed and observed._attempt_cell is owner._artifact_attempt_cell
+    assert observed._facts is None and observed._hashes is None and len(calls) == 1
+    try: a.StartupArtifactOwner.complete(observed)
+    except a.ArtifactObservationError: pass
+    else: raise AssertionError("failed completion retried")
+    assert len(calls) == 1 and not observed._origin.records
+    print(json.dumps({"mutation": mutation, "passed": True, "runtime_admitted": False}))
+    sys.exit(0)
+bool_calls = []
+if mutation == "foreign_descriptor":
+    getpid = a.os.getpid
+    class Foreign:
+        def __bool__(self):
+            bool_calls.append(True)
+            return True
+    def corrupt_final_descriptor():
+        value = getpid()
+        active = owner._artifact_owner
+        if active is not None and active._origin is not None and active._attempt_cell is not None:
+            records = active._origin.records
+            if records and all(row.closed is True for row in records):
+                records[0].closed = Foreign()
+        return value
+    a.os.getpid = corrupt_final_descriptor
+success = mutation in ("normal", "empty", "multiple", "retained")
 if success:
-    observed = a.StartupArtifactOwner.observe(owner, expected)
+    if mutation == "retained":
+        observed = a.StartupArtifactOwner.retain(owner, expected)
+        assert not observed._ready and observed._facts is None and not observed._origin.records
+        initial_count = observed._count_cell
+        row, fd = a.StartupArtifactOwner._open(observed, str(fixture), None, True)
+        a.StartupArtifactOwner._close(observed, row, fd, observed._origin, observed._root_cell)
+        assert observed._count_cell is initial_count
+        a.StartupArtifactOwner.complete(observed)
+        try: a.StartupArtifactOwner.complete(observed)
+        except a.ArtifactObservationError: pass
+        else: raise AssertionError("completion repeated")
+        assert observed._ready and not observed._failed
+    else: observed = a.StartupArtifactOwner.observe(owner, expected)
     assert observed._ready and not observed._failed and not observed._unknown
     assert observed._facts == expected
+    assert observed._hashes is observed._fact_cell[2]
+    assert observed._fact_cell is owner._artifact_fact_cell
+    assert all(type(row) is a._HashedArtifact and row.owner is observed
+               and row.scope is observed._origin and row.expected is target
+               for row,target in zip(observed._hashes, expected))
     assert observed._bytes_read == sum(row.size for row in expected)
     assert all(row.closed and row.close_attempted for row in observed._origin.records)
 else:
@@ -113,7 +166,9 @@ else:
                     "open_retired"):
         assert observed._unknown
     if mutation == "retired_after_read": assert observed._bytes_read == len(payload)
-    assert all(row.closed or row.unknown for row in observed._origin.records)
+    if mutation != "foreign_descriptor":
+        assert all(row.closed is True or row.unknown is True for row in observed._origin.records)
+    else: assert not bool_calls
     assert len(close_calls) == len(set(close_calls))
     if mutation == "open_retired":
         assert len(opened) == 2 and set(opened) == set(close_calls)
@@ -127,7 +182,8 @@ print(json.dumps({"mutation": mutation, "passed": True, "runtime_admitted": Fals
 
 
 @pytest.mark.parametrize("mutation", [
-    "normal", "empty", "multiple", "digest", "size", "duplicate", "path", "symlink",
+    "normal", "empty", "multiple", "retained", "complete_context_failure", "digest", "size",
+    "duplicate", "path", "symlink", "foreign_descriptor",
     "hardlink", "mode", "parent_mode", "ancestor_symlink", "close_unknown", "read_unknown",
     "retired_after_read", "file_changed", "scope_after_read", "open_retired",
 ])

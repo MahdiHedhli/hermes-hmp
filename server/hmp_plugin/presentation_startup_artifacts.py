@@ -66,9 +66,44 @@ class _Scope(NamedTuple):
     expected: tuple
     context: tuple
     records: list
+    parent: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
+
+
+class _PackageSource(NamedTuple):
+    owner: object
+    binding: tuple
+    count_cell: tuple
+    expected: tuple
+
+    def __repr__(self):
+        return "<OriginalPackageCountSource DATA redacted>"
+
+
+def _package_source(package):
+    from .presentation_gateway_package import GatewayPackageOwner
+    _require(type(package) is GatewayPackageOwner)
+    binding = GatewayPackageOwner._retained_binding(package)
+    _require(GatewayPackageOwner._guard(package) is binding[0])
+    after = GatewayPackageOwner._retained_binding(package)
+    _require(all(a is b for a, b in zip(binding[:4], after[:4], strict=True))
+             and all(a is b for a, b in zip(binding[4], after[4], strict=True)))
+    meta = binding[0].expected
+    _require(meta.recipe is not None and type(meta.recipe_binding) is tuple)
+    previous = tuple(row[0] for row in meta.recipe_binding[4][3]) + meta.files
+    return _PackageSource(package, binding, binding[3][2][7], previous)
+
+
+def _source_current(source):
+    _require(type(source) is _PackageSource)
+    actual = _package_source(source.owner)
+    _require(source.count_cell is actual.count_cell
+             and all(a is b for a, b in zip(source.binding[:4], actual.binding[:4], strict=True))
+             and all(a is b for a, b in zip(source.binding[4], actual.binding[4], strict=True))
+             and type(source.expected) is tuple and len(source.expected) == len(actual.expected)
+             and all(a is b for a, b in zip(source.expected, actual.expected, strict=True)))
 
 
 def _identity(row, directory=False):
@@ -154,40 +189,106 @@ def _append_configuration(owner, data):
 class StartupArtifactOwner:
     @classmethod
     def observe(cls, activation, expected):
-        _require(cls is StartupArtifactOwner and type(activation) is GatewayActivationOwner)
+        _require(cls is StartupArtifactOwner)
+        return StartupArtifactOwner.complete(StartupArtifactOwner.retain(activation, expected))
+
+    @classmethod
+    def retain(cls, activation, expected):
+        _require(cls is StartupArtifactOwner)
+        return StartupArtifactOwner._retain(activation, expected, None)
+
+    @classmethod
+    def retain_from_package(cls, package, expected):
+        _require(cls is StartupArtifactOwner)
+        source = _package_source(package)
+        return StartupArtifactOwner._retain(source.binding[0].activation, expected, source)
+
+    @classmethod
+    def _retain(cls, activation, expected, source):
+        _require(cls is StartupArtifactOwner and type(activation) is GatewayActivationOwner
+                 and activation._artifact_owner is None and activation._artifact_cell is None
+                 and activation._artifact_attempt_cell is None
+                 and activation._artifact_fact_cell is None)
         GatewayActivationOwner.current(activation)
         _require(activation._artifact_owner is None and activation._artifact_cell is None)
         owner = cls.__new__(cls)
         activation._artifact_owner = owner
-        activation._artifact_cell = (activation, owner)  # partial owner before effects
-        owner._ready = owner._failed = owner._unknown = False
+        activation._artifact_cell = (activation, owner)
+        owner._ready = owner._failed = owner._unknown = owner._reading = False
+        owner._facts = owner._hashes = owner._attempt_cell = owner._fact_cell = None
+        owner._scope = owner._origin = owner._cell = owner._root_cell = None
+        owner._count_cell = owner._initial_count_cell = None
         owner._bytes_read = 0
-        owner._reading = False
-        owner._facts = None
-        records = []
-        owner._scope = owner._origin = _Scope(
-            activation, activation._scope, expected,
-            (os.getpid(), os.geteuid(), threading.get_ident()), records)
-        owner._cell = (owner, owner._origin)
-        owner._root_cell = (activation, owner, owner._origin)
-        activation._artifact_cell = owner._root_cell
-        owner._count_cell = (owner, owner._origin, 0)
-        failed = False
         try:
-            _expected(expected)  # primitive expectations held before filesystem/crypto callbacks
+            if source is not None:
+                _require(type(source) is _PackageSource)
+                owner._bytes_read = source.count_cell[2]
+            s = _Scope(activation, activation._scope, expected,
+                       (os.getpid(), os.geteuid(), threading.get_ident()), [], source)
+            owner._scope = owner._origin = s
+            owner._cell = (owner, s)
+            owner._root_cell = (activation, owner, s)
+            activation._artifact_cell = owner._root_cell
+            owner._count_cell = owner._initial_count_cell = (owner, s, owner._bytes_read)
+            _expected(expected)
+            if source is not None:
+                _source_current(source)
+                _expected(source.expected + expected)
             StartupArtifactOwner._guard(owner)
-            facts = []
-            for row in expected:
-                observed = StartupArtifactOwner._file(owner, row)
-                facts.append(observed)
-            StartupArtifactOwner._guard(owner)
-            _require(all(r.closed is True and r.unknown is False for r in records))
-            owner._facts = tuple(facts)  # historical paths/counts/digests, not authority
+            return owner
+        except BaseException:
+            owner._failed = True
+            raise ArtifactObservationError(owner) from None
+
+    @classmethod
+    def complete(cls, owner):
+        _require(cls is StartupArtifactOwner and type(owner) is StartupArtifactOwner
+                 and type(owner._origin) is _Scope)
+        s, root = owner._origin, owner._root_cell
+        activation = s.activation
+        _require(owner._ready is False and owner._failed is False and owner._unknown is False
+                 and owner._attempt_cell is None and activation._artifact_attempt_cell is None)
+        _require(owner._scope is s and owner._origin is s and owner._root_cell is root
+                 and activation._artifact_owner is owner and activation._artifact_cell is root)
+        attempt = (owner, s, root)
+        owner._attempt_cell = activation._artifact_attempt_cell = attempt
+        fact = None
+        try:
+            context = (os.getpid(), os.geteuid(), threading.get_ident())
+            _require(all(type(v) is int for v in context) and context == s.context)
+            _require(StartupArtifactOwner._guard(owner) is s
+                     and owner._count_cell is owner._initial_count_cell
+                     and all(type(row) is _Descriptor and row.closed is True
+                             and row.unknown is False and row.close_attempted is True
+                             for row in s.records))
+            hashes = tuple(StartupArtifactOwner._file(owner, row) for row in s.expected)
+            count = owner._count_cell
+            _require(StartupArtifactOwner._guard(owner) is s
+                     and owner._root_cell is root and owner._attempt_cell is attempt
+                     and activation._artifact_attempt_cell is attempt
+                     and type(count) is tuple and len(count) == 3
+                     and count[0] is owner and count[1] is s and type(count[2]) is int
+                     and owner._count_cell is count and owner._bytes_read is count[2]
+                     and count[2] == owner._initial_count_cell[2]
+                     + sum(row.size for row in s.expected)
+                     and all(type(row) is _HashedArtifact and row.owner is owner
+                             and row.scope is s and row.expected is expected
+                             for row, expected in zip(hashes, s.expected, strict=True))
+                     and all(type(row) is _Descriptor and row.closed is True
+                             and row.unknown is False and row.close_attempted is True
+                             for row in s.records)
+                     and owner._facts is None and owner._hashes is None
+                     and owner._fact_cell is None and activation._artifact_fact_cell is None)
+            fact = (owner, s, hashes, count)
+            owner._facts = tuple(row.expected for row in hashes)
+            owner._hashes = hashes
+            owner._fact_cell = activation._artifact_fact_cell = fact
             owner._ready = True
             return owner
         except BaseException:
-            failed = owner._failed = True
-        if failed:
+            owner._failed = True
+            if fact is not None and activation._artifact_fact_cell is fact:
+                activation._artifact_fact_cell = None
             raise ArtifactObservationError(owner) from None
 
     def __repr__(self):
@@ -210,15 +311,22 @@ class StartupArtifactOwner:
                  and all(type(v) is int for v in s.context)
                  and self._failed is False and self._unknown is False
                  and type(s.records) is list and self._reading is False)
+        attempt, fact = self._attempt_cell, self._fact_cell
+        _require(s.activation._artifact_attempt_cell is attempt
+                 and s.activation._artifact_fact_cell is fact)
         actual = (os.getpid(), os.geteuid(), threading.get_ident())
         _require(all(type(v) is int for v in actual) and actual == s.context)
         GatewayActivationOwner.current(s.activation)
+        if s.parent is not None:
+            _source_current(s.parent)
         _require(self._scope is s and self._origin is s and self._cell is cell
                  and s.activation._scope is s.activation_scope
                  and s.activation._artifact_owner is self
                  and self._root_cell is root_cell and s.activation._artifact_cell is root_cell
                  and self._failed is False
-                 and self._unknown is False)
+                 and self._unknown is False and self._attempt_cell is attempt
+                 and self._fact_cell is fact and s.activation._artifact_attempt_cell is attempt
+                 and s.activation._artifact_fact_cell is fact)
         return s
 
     def _open(self, name, parent, directory):
@@ -279,6 +387,8 @@ class StartupArtifactOwner:
             raise
 
     def _read(self, fd, count, s):
+        if type(self) is StartupArtifactOwner:
+            _require(self._ready is False and self._attempt_cell is not None)
         _require(_owner_guard(self) is s and type(count) is int
                  and 0 < count <= 65536 and type(self._bytes_read) is int)
         before, cell = self._bytes_read, self._count_cell
@@ -363,6 +473,7 @@ class StartupArtifactOwner:
                 data = None
                 _require(_owner_guard(self) is s)
             data = StartupArtifactOwner._read(self, fd, 1, s)
+            count_cell, counted = self._count_cell, self._bytes_read
             _require(data == b"" and _identity(StartupArtifactOwner._fstat(self, fd, s)) == original
                      and _identity(StartupArtifactOwner._stat(self, name, parent, s)) == original)
             _require(_owner_guard(self) is s)
@@ -377,7 +488,7 @@ class StartupArtifactOwner:
                 )
             _require(_owner_guard(self) is s)
             result = expected
-            if type(self) is not StartupArtifactOwner and not _configuration(self):
+            if not _configuration(self):
                 result = _HashedArtifact(self, s, expected, original, actual_hash)
         except BaseException:
             failed = True
@@ -391,5 +502,6 @@ class StartupArtifactOwner:
                     failed = True
         if failed:
             raise ArtifactObservationError(self) from None
-        _require(_owner_guard(self) is s)
+        _require(_owner_guard(self) is s and self._count_cell is count_cell
+                 and self._bytes_read is counted)
         return result

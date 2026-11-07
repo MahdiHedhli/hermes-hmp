@@ -1171,3 +1171,10 @@ publication and module/function/code provenance observations. retained_data is
 historical immutable DATA; current_binding adds fresh original checks/final
 callback fences. Neither is selected artifact/wrapper attestation or authority.
 No plugin import exception or additional registration is introduced.
+
+`hmp_startup/entry_files.py` owns recipe-derived actual entry/wrapper filesystem
+snapshots outside plugin registration; no plugin import-policy exception.
+`StartupArtifactOwner.retain/complete/retain_from_package` preserve the one-shot
+actual descriptor/hash/count lifecycle and legacy expected-file facts. Table
+projection is DATA; original entry/wrapper execution and runtime/native/key
+authority remain separate.

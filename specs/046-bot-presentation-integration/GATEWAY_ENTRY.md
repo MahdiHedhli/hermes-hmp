@@ -113,3 +113,8 @@ factory, host/device and image-display/release qualification remain open.
 The current original-publication source checkpoint has not been rebuilt into or
 qualified as an installed wheel/device candidate. Earlier wheel evidence is
 historical and does not certify the changed source bytes.
+
+The [entry/wrapper file snapshot](ENTRY_FILE_SNAPSHOT.md) now binds actual original
+recipe/plugin/entry owners to owned file/tree observations (569 combined checks).
+It does not attest executed wrapper bytes or complete runtime/operator/native/key
+admission; the earlier immutable observation facts remain DATA.

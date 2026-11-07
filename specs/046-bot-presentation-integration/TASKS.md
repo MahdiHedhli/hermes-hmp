@@ -735,3 +735,11 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Cover foreign publication/aliases, namespace/argv/source changes and wrong-thread/actual-fork refusal without poisoning historical records.
 - [ ] Qualify actual selected entry package/wrapper files and execution/control flow, with a reviewed typed original-owner/recipe binding. These observations are not artifact admission.
 - [ ] Complete remaining GR2 dependencies/interpreter/link/loader/budget and GR3 actual native/key factory; physical character display remains unfinished.
+
+### GR2 entry/wrapper filesystem checkpoint — November 7, 2026
+
+- [x] Consume original entry child with original entry/recipe/plugin owner joins; closed complete entry table and actual wrapper path, exact internal dedup, no replacement digest/root.
+- [x] Own metadata trees before/after actual file hashes and wrapper ancestry/identity joins; preserve unknown scan/close debt and no replay.
+- [x] Retain/complete file lifecycle with one-shot-before-native-effects, actual metadata/count publication, compatible legacy facts and typed prior package budget;18 entry/21 artifact cases,569 combined checks pass.
+- [ ] Complete actual installed wrapper execution/control-flow and independent operator qualification; snapshots alone do not attest executed bytes.
+- [ ] Complete remaining selection/dependency/interpreter/link/loader accounting and native/key factory, broker/ACK/release and physical image qualification.

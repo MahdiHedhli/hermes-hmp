@@ -143,3 +143,7 @@ changed code, later namespace/path changes and wrong thread. Other three recipe
 children deliberately remain minimal envelopes in this fixture; their executable
 tables and all broader runtime/key/physical qualification remain unimplemented.
 Independent source review accepted the bounded integration and count repairs.
+
+Original plugin hash/count facts now feed the [entry/wrapper snapshot](ENTRY_FILE_SNAPSHOT.md)
+through typed retain_from_package, with combined limits (569 combined checks).
+This does not complete remaining startup accounting, runtime or native/key admission.

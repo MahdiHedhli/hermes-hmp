@@ -200,3 +200,8 @@ facts with fresh versus historical access and final callback fences (548 combine
 checks). See [entry publication](GATEWAY_ENTRY.md#independent-original-entry-publication).
 This does not attest executed wrapper bytes or complete installed/operator/runtime/
 native/key qualification. Full entry artifact coverage and factory composition remain open.
+
+The [entry filesystem snapshot](ENTRY_FILE_SNAPSHOT.md) now covers actual entry/
+wrapper files with original owner/count handoff (569 combined checks). Installed
+wrapper execution/control flow, remaining runtime/accounting and native/key
+composition still precede PS1 admission.

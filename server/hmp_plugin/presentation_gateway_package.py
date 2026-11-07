@@ -132,7 +132,14 @@ def _decode(raw, selection):
              and all(p not in ("", ".", "..") for p in root[1:].split("/"))
              and not root.startswith(selection.directory + "/")
              and not selection.directory.startswith(root + "/") and root != selection.directory)
-    rows = document["entries"]
+    entries, files = _table_rows(root, document["entries"])
+    _require(json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
+                        allow_nan=False).encode("ascii") == raw)
+    return root, entries, files
+
+
+def _table_rows(root, rows):
+    """Pure bounded table DATA; the actual verifier independently binds root/pin."""
     _require(type(rows) is list and 1 <= len(rows) <= _MAX_ENTRIES)
     entries, files, previous, directories = [], [], "", set()
     for row in rows:
@@ -155,9 +162,7 @@ def _decode(raw, selection):
             files.append(artifact)
         entries.append((path, kind))
     _expected(tuple(files))
-    _require(json.dumps(document, sort_keys=True, separators=(",", ":"), ensure_ascii=True,
-                        allow_nan=False).encode("ascii") == raw)
-    return root, tuple(entries), tuple(files)
+    return tuple(entries), tuple(files)
 
 
 def _same_origins(before, after):

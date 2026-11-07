@@ -230,3 +230,8 @@ The [original entry publication](GATEWAY_ENTRY.md#independent-original-entry-pub
 now retains module/function/code and original started facts (548 combined checks).
 This is a prerequisite for GR2 entry-artifact consumption, not that qualification
 itself. Independent entry/wrapper bytes/control-flow, runtime and GR3 remain open.
+
+The [actual entry child snapshot](ENTRY_FILE_SNAPSHOT.md) now verifies the complete
+entry package and observed wrapper from the original recipe, inheriting actual
+plugin count/expectations (569 combined checks). Dependencies/interpreter/loader,
+earlier selection accounting and executed-wrapper/native/key admission stay open.

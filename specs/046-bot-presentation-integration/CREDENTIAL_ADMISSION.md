@@ -310,3 +310,8 @@ accounting and actual native/key composition still precede credential acquisitio
 Original entry publication/origin observations are now retained and reviewed
 (548 combined checks). They remain DATA, requiring independent entry/wrapper/
 runtime/operator and actual native factory joins before any key acquisition.
+
+The actual recipe-derived entry/wrapper filesystem snapshot is now implemented
+and reviewed (569 combined checks). It is not executed-wrapper attestation or
+remaining dependency/runtime/operator/native/key admission. No key acquisition
+is enabled by these file observations. See [entry snapshot](ENTRY_FILE_SNAPSHOT.md).

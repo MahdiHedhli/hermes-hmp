@@ -1,3 +1,26 @@
+## Actual entry and wrapper file snapshots — November 7, 2026
+
+The new verifier in hmp_startup consumes the entry child from the actual recipe,
+joins the original entry/recipe/plugin owners and verifies the complete installed
+entry-package table plus the observed wrapper path. Descriptor-rooted trees before
+and after hashing, actual hash-receipt metadata and wrapper/ancestor observations
+reject missing, extra, changed, linked or same-bytes replaced files. An internal
+wrapper is deduplicated only with identical declared expectations.
+
+The shared file owner now retains before scans and completes once, with its
+attempt latched before native context effects. Actual hashes/counts are retained;
+legacy expected-file facts remain compatible. Prior recipe/plugin counts and
+expectations feed combined limits without a caller-supplied counter. Unknown scan/
+close and initial context failures cannot retry; foreign flag/name objects refuse
+without executing their methods. No plugin import rule was relaxed.
+
+Independent source review accepted this bounded snapshot/lifecycle slice.18 entry
+file and21 artifact cases plus prior coverage passed:569 in24.98s with unchanged
+source/fixtures; lint/surface/whitespace pass. Executed-wrapper attestation, remaining
+selection/dependency/interpreter/loader accounting and actual native/key factory
+admission remain open. No deployment, credential acquisition or physical image
+qualification occurred. Earlier unexplained regression and sender risks remain.
+
 ## Original entry publication and origin observations — November 7, 2026
 
 The existing gateway entry now retains a separate original started fact joining
