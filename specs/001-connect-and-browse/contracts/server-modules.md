@@ -864,3 +864,14 @@ Generic early wakes have no receipt; external Task cancellation remains separate
 The record is historical local stop only, not current kernel/role/budget/IO or
 transfer authority. The signed cooperative transition remains disabled pending
 correlation/current custody/minimum-budget qualification.
+
+### BI1 signed BODY native-cause local stop (November 6, 2026)
+
+The signed body wait holds its actual original native cause before await. Typed
+registered-wake retirement is correlated to the actual retained signed capture,
+waiter/scope/Future/binding/handle/hash/counters and output withdrawal. Separate
+original-actor and historical task-completion checks grant known local stop only.
+Generic/copied/subclassed wakes or active/historical drift retain unknown debt.
+External Task cancellation stays distinct. Envelope cause and cooperative IO
+transfer remain unqualified; signed request is disabled, and CANCEL keeps whole
+work join/current authority. See [body cause evidence](../../../docs/research/presentation-body-cause-wake-2026-11-06.md).

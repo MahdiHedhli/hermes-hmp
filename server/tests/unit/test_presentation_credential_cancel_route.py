@@ -87,6 +87,17 @@ from .test_presentation_supervisor import context as context
                                   "go_relay_result_sign_write_body_stream_pair",
                                   "go_relay_result_sign_write_body_hash_pair",
                                   "go_relay_result_sign_write_body_cancel",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_copybad",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_scopebad",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_countbad",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_capturebad",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_genericbad",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_subclassbad",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_tailbad",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_waiterbad",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_releasebad",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_releasewaiterbad",
                                   "go_relay_result_sign_write_body_cancel_stale",
                                   "go_relay_result_sign_write_body_cancel_pair",
                                   "go_relay_result_sign_write_body_cancel_progress",
@@ -820,12 +831,71 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                         observed_retirement)
                     monkeypatch.setattr(SelectorReadiness, "_wake_guard", changed_final_wake)
 
+                if stage.endswith(("_waiterbad", "_releasewaiterbad")):
+                    import socket
+                    other_left, other_right = socket.socketpair()
+                    other_left.setblocking(False)
+                    other_right.setblocking(False)
+                    held["wake_other_sockets"] = (other_left, other_right)
+                    held["wake_other_waiter"] = SelectorReadiness(other_left)
+                if stage.endswith(("_tailbad", "_waiterbad", "_releasebad", "_releasewaiterbad")):
+                    import sys
+                    wake_guard = SelectorReadiness._wake_guard
+                    def changed_body_wake_guard(waiter):
+                        value = wake_guard(waiter)
+                        caller = sys._getframe(1).f_code
+                        outer = sys._getframe(2).f_code
+                        active = (caller is SelectorReadiness._woken_local.__code__
+                            and outer is NativeResultBodyOwner._wake_retirement_current.__code__)
+                        historical = (
+                            caller is NativeResultBodyOwner._wake_retirement_released.__code__)
+                        target = historical if "_release" in stage else active
+                        actual = body._waiter_origin
+                        if historical and body._wake_receipt_origin is not None:
+                            actual = body._wake_receipt_origin.wait.waiter
+                        if (waiter is actual and target
+                                and not held.get("body_wake_tail_changed")):
+                            held["body_wake_tail_changed"] = True
+                            if "waiterbad" in stage:
+                                body._waiter = body._waiter_origin = held["wake_other_waiter"]
+                            else:
+                                body._received = body._received_snapshot = body._received + 1
+                        return value
+                    monkeypatch.setattr(SelectorReadiness, "_wake_guard", changed_body_wake_guard)
                 async def observed_wait(waiter, cutoff, **options):
                     if waiter is not body._waiter_origin:
                         return await wait(waiter, cutoff, **options)
                     waiting.set()
                     try:
                         return await wait(waiter, cutoff, **options)
+                    except body_module._ReadinessWakeRetiredError as error:
+                        if "_cause_wake" not in stage:
+                            raise
+                        if stage.endswith("_copybad"):
+                            raise body_module._ReadinessWakeRetiredError(
+                                error.retirement._replace()) from None
+                        if stage.endswith("_scopebad"):
+                            copied = waiter._origin_scope._replace()
+                            waiter._scope = waiter._scope_snapshot = waiter._origin_scope = copied
+                        if stage.endswith("_countbad"):
+                            body._received = body._received_snapshot = body._received + 1
+                        if stage.endswith("_capturebad"):
+                            gate = owned._cleanup_owner_snapshot._read_gate_snapshot
+                            copied = gate._signed_capture_origin._replace()
+                            gate._signed_capture = gate._signed_capture_origin = copied
+                        if stage.endswith("_genericbad"):
+                            raise body_module.ReadinessWakeError from None
+                        if stage.endswith("_subclassbad"):
+                            actual = error.retirement
+                            class ForeignWake(body_module._ReadinessWakeRetiredError):
+                                def __init__(self):
+                                    body_module.ReadinessWakeError.__init__(self)
+                                @property
+                                def retirement(self):
+                                    held["foreign_wake_getter"] = True
+                                    return actual
+                            raise ForeignWake() from None
+                        raise
                     except body_module._ReadinessCancelledError:
                         if stage.endswith("_stale"):
                             raise body_module._ReadinessCancelledError(stale) from None
@@ -879,7 +949,24 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     held["signed_partial_cleanup_capture_checked"] = True
 
                 monkeypatch.setattr(SelectorReadiness, "wait", observed_wait)
-                held["body_canceller"] = asyncio.create_task(original_cause())
+                if "_cause_wake" in stage:
+                    wait_native = asyncio.wait
+                    async def original_cause_on_registered_wait(futures, **options):
+                        cleanup = owned._cleanup_owner_snapshot
+                        waiter = body._waiter_origin
+                        if (asyncio.current_task() is cleanup._allocations_snapshot[1].task
+                                and waiter is not None and waiter._attempted
+                                and waiter._handle_snapshot is not None
+                                and any(f is cleanup._barriers_snapshot.cause for f in futures)
+                                and not held.get("original_body_cause_wake")):
+                            held["original_body_cause_wake"] = True
+                            RemoteCleanupOwner.request(cleanup)  # actual original-actor first cause
+                            assert not cleanup._cancel_attempted
+                            assert cleanup._read_gate_snapshot._signed_capture_origin is not None
+                        return await wait_native(futures, **options)
+                    monkeypatch.setattr(asyncio, "wait", original_cause_on_registered_wait)
+                else:
+                    held["body_canceller"] = asyncio.create_task(original_cause())
             assert await body.receive() is True
             assert body._validated and body._candidate_snapshot[1] == image()
             assert body.current_candidate() is body._fact_snapshot
@@ -1203,6 +1290,32 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 assert body._fact_snapshot is None and not body._scope_origin.accumulator
                 assert remote._job_origin_snapshot.result is None
                 assert cleanup._result_token is None
+                if "_cause_wake" in stage:
+                    task = cleanup._allocations_snapshot[1].task
+                    assert held["original_body_cause_wake"] and task.done()
+                    assert not task.cancelled() and task.cancelling() == 0
+                    assert body._cancel_receipt_snapshot is None
+                    assert not cleanup._cancel_attempted
+                    assert not cleanup._read_gate_snapshot._requested
+                    assert cleanup._read_gate_snapshot._fact_origin is None
+                    async with asyncio.timeout(3):
+                        await asyncio.shield(cleanup._allocations_snapshot[0].task)
+                    if stage.endswith("bad"):
+                        assert body._io_unknown
+                        if "_release" in stage:
+                            assert body._wake_receipt_origin is not None
+                        else:
+                            assert body._wake_receipt_origin is None
+                        with pytest.raises(FrameError):
+                            NativeResultBodyOwner._released(body, body._scope_origin.envelope)
+                        if any(name in stage for name in (
+                                "_tailbad", "_waiterbad", "_releasebad", "_releasewaiterbad")):
+                            assert held["body_wake_tail_changed"]
+                        if stage.endswith("_subclassbad"):
+                            assert "foreign_wake_getter" not in held
+                    else:
+                        assert body._wake_receipt_origin is not None and not body._io_unknown
+                        NativeResultBodyOwner._released(body, body._scope_origin.envelope)
                 if stage.endswith("_avatar_revision"):
                     assert held["revision_claim_codec_valid"]
                     assert body._finish_attempted
@@ -1442,6 +1555,11 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 held["broker_fixture_disposal_only"] = True
             else:
                 assert closed and broker_channel.close_clock()
+        other_sockets = held.get("wake_other_sockets")
+        if other_sockets is not None:
+            for other_socket in other_sockets:
+                other_socket.close()  # fixture-only unrelated unregistered descriptors
+            held["wake_other_waiter"]._future_origin.cancel()
         for key in keys.values():
             key.retire()
 

@@ -235,3 +235,19 @@ role/budget/IO or cleanup transfer. Correlate it with this original signed curso
 held wait progress and actual native cause, then independently qualify current
 custody/write quiescence/minimum budget. Signed request stays disabled until that
 transition is qualified. See [wake evidence](../../docs/research/presentation-wake-retirement-2026-11-06.md).
+
+## Signed body original native-cause correlation
+
+The body wait now holds and listens to its actual original cleanup cause Future.
+Actual registered wake retirement is matched to the held body/wait scope/Future/
+binding/handle/counters/hash allocation and actual original signed capture after
+first-cause withdrawal. Current and historical checks are separate: original
+uncancelled actor before storing, actual original task done/not-cancelled before
+local retirement. Generic/copied/subclassed signals or waiter/counter drift cannot
+provide known stop. Genuine external task cancellation remains distinct and binds
+this same held cause. See [body cause evidence](../../docs/research/presentation-body-cause-wake-2026-11-06.md).
+
+This is local stop only. Signed request remains disabled and CANCEL still requires
+whole work join/current authority; no concurrent read/transfer/terminal permission
+follows. Envelope cause wiring and current same-cursor minimum-budget continuation
+remain open. Production composition is unchanged.

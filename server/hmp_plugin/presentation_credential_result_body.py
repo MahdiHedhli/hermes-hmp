@@ -23,10 +23,15 @@ from .presentation_output_v2 import BoundedResultBufferV2, compare_parent_snapsh
 from .presentation_parent_policy import ParentPolicySnapshot
 from .presentation_readiness import (
     _CANCEL_RETIREMENT_MINT,
+    _HANDLE,
+    _WAKE_RETIREMENT_MINT,
+    ReadinessWakeError,
     SelectorReadiness,
     _CancelledWaitRetirement,
     _ReadinessCancelledError,
+    _ReadinessWakeRetiredError,
     _WakeBinding,
+    _WakeWaitRetirement,
 )
 from .presentation_readiness import (
     _Scope as _ReadinessScope,
@@ -43,6 +48,7 @@ _MINT = object()
 _RETIRE_MINT = object()
 _ADOPT_MINT = object()
 _NOTICE_MINT = object()
+_WAKE_BODY_MINT = object()
 
 
 def _require(value):
@@ -117,6 +123,7 @@ class _BodyWait(NamedTuple):
     buffer_meta: tuple
     hash_value: str
     stream_received: int
+    wake: object
 
     def __repr__(self):
         return "<BodyWait original-progress no-payload>"
@@ -130,6 +137,17 @@ class _BodyRetirement(NamedTuple):
 
     def __repr__(self):
         return "<BodyRetirement local-only payload-free>"
+
+
+class _BodyWakeRetirement(NamedTuple):
+    mint: object
+    owner: object
+    wait: _BodyWait
+    native: object
+    capture: object
+
+    def __repr__(self):
+        return "<BodyWakeRetirement original-cause local-stop-only>"
 
 
 class NativeResultBodyOwner:
@@ -190,6 +208,7 @@ class NativeResultBodyOwner:
         owner._candidate = owner._candidate_snapshot = None
         owner._fact = owner._fact_snapshot = None
         owner._cancel_receipt = owner._cancel_receipt_snapshot = None
+        owner._wake_receipt = owner._wake_receipt_origin = None
         owner._initialization = owner._initialization_origin = None
         envelope._body_owner = envelope._body_owner_snapshot = owner
         job._remote_candidate_custody_origin = job._remote_candidate_custody_snapshot = (owner, job)
@@ -699,7 +718,9 @@ class NativeResultBodyOwner:
                  and type(f) is _CancelledWaitRetirement and f.mint is _CANCEL_RETIREMENT_MINT
                  and f.owner is h.waiter and f.scope is h.native_scope and f.future is h.future
                  and type(f.binding) is _WakeBinding and f.end is h.end
-                 and f.binding.scope is h.native_scope and f.binding.future is None
+                 and f.binding.scope is h.native_scope and type(h.wake) is _FUTURE
+                 and f.binding.future is h.wake
+                 and h.wake is h.scope.envelope_scope.write_scope.refs[0]._barriers_snapshot.cause
                  and f.binding.end is h.end and type(h.end) is int
                  and type(h.received) is int and type(h.committed) is int
                  and self._received is h.received and self._received_snapshot is h.received
@@ -772,6 +793,128 @@ class NativeResultBodyOwner:
         # Repeat every held wait/progress/custody predicate after the final boundary.
         return NativeResultBodyOwner._retirement_local(self, retirement, released=released)
 
+    def _wake_retirement_metadata(self, retirement):
+        """Post-cause original progress and local stop only; no cleanup IO grant."""
+        from .presentation_cleanup_reader import CleanupReadGate
+        from .presentation_credential_cleanup_capture import (
+            SignedCleanupCapture,
+            inspect_signed_cleanup,
+        )
+        _require(type(self) is NativeResultBodyOwner and type(retirement) is _BodyWakeRetirement
+                 and retirement.mint is _WAKE_BODY_MINT and retirement.owner is self
+                 and type(retirement.wait) is _BodyWait
+                 and type(retirement.native) is _WakeWaitRetirement
+                 and type(retirement.capture) is SignedCleanupCapture)
+        h, f, c = retirement.wait, retirement.native, retirement.capture
+        _require(type(h.scope) is _BodyScope and self._scope is h.scope
+                 and self._scope_origin is h.scope and type(h.allocation) is tuple
+                 and len(h.allocation) == 3 and h.allocation[0] is h.scope
+                 and type(h.allocation[1]) is CommittedFrameDigest
+                 and type(h.allocation[2]) is _HASH and type(h.native_scope) is _ReadinessScope
+                 and type(h.waiter) is SelectorReadiness and type(h.future) is _FUTURE
+                 and type(h.wake) is _FUTURE and type(h.end) is int
+                 and type(h.received) is int and type(h.committed) is int
+                 and type(h.hash_value) is str and type(h.stream_received) is int
+                 and type(h.scope.envelope_scope) is _ResultReadScope
+                 and type(h.scope.envelope_scope.write_scope) is _BeginWriterScope
+                 and type(h.scope.envelope_scope.write_scope.refs) is tuple
+                 and len(h.scope.envelope_scope.write_scope.refs) == 12
+                 and type(f.scope) is _ReadinessScope and type(f.future) is _FUTURE
+                 and type(f.binding) is _WakeBinding and type(f.handle) is _HANDLE
+                 and type(f.handle_args) is tuple and type(f.end) is int)
+        s, b, w = h.scope, h.scope.envelope_scope.write_scope, h.waiter
+        cleanup = b.refs[0]
+        _require(type(cleanup) is RemoteCleanupOwner
+                 and type(cleanup._read_gate_snapshot) is CleanupReadGate)
+        gate = cleanup._read_gate_snapshot
+        CleanupReadGate.guard(gate)
+        _require(gate._signed_capture_origin is c and gate._signed_capture is c
+                 and inspect_signed_cleanup(c, gate, cleanup) is c
+                 and c.receiver is s.envelope and c.scope is s.envelope_scope
+                 and c.body is not None and c.body.owner is self and c.body.scope is s
+                 and c.body.active is True and c.body.validated is False
+                 and c.body.allocation is h.allocation
+                 and c.body.received is h.received and c.body.committed is h.committed
+                 and type(c.body.hash_value) is str and c.body.hash_value == h.hash_value
+                 and c.body.waiter is not None and c.body.waiter.owner is w
+                 and c.body.waiter.scope is h.native_scope and c.body.waiter.future is h.future
+                 and c.body.waiter.binding is f.binding
+                 and c.body.waiter.handle is f.handle and c.body.waiter.handle_args is f.handle_args
+                 and f.mint is _WAKE_RETIREMENT_MINT and f.owner is w
+                 and w._wake_retirement_origin is f and w._wake_retirement is f
+                 and f.scope is h.native_scope and f.future is h.future
+                 and f.binding.scope is h.native_scope and f.binding.future is h.wake
+                 and f.end is h.end and f.binding.end is h.end
+                 and h.wake is cleanup._barriers_snapshot.cause
+                 and gate._capture_cause is h.wake and _FUTURE.get_loop(h.wake) is b.loop
+                 and _FUTURE.done(h.wake) and not _FUTURE.cancelled(h.wake)
+                 and _FUTURE.result(h.wake) is None
+                 and h.native_scope.task is b.allocation.task and h.native_scope.sock is b.sock
+                 and self._waiter is w and self._waiter_origin is w
+                 and w._origin_scope is h.native_scope and w._scope_snapshot is h.native_scope
+                 and w._future is h.future and w._future_origin is h.future
+                 and w._future_snapshot is h.future and w._wake_binding is f.binding
+                 and w._wake_binding_origin is f.binding and w._handle is f.handle
+                 and w._handle_snapshot is f.handle and w._handle_args is f.handle_args
+                 and w._handle_args_snapshot is f.handle_args
+                 and w._retired is True and w._unknown is False
+                 and self._retired is True and self._io_unknown is False
+                 and self._read_intent is False and self._commit_intent is False
+                 and self._pending is None and self._pending_snapshot is None
+                 and self._received is h.received and self._received_snapshot is h.received
+                 and self._committed is h.committed and self._committed_snapshot is h.committed
+                 and h.received == h.committed
+                 and self._initialization is h.allocation
+                 and self._initialization_origin is h.allocation
+                 and self._stream is h.allocation[1] and self._stream_origin is h.allocation[1]
+                 and self._hash is h.allocation[2] and self._hash_origin is h.allocation[2]
+                 and self._hash_origin.hexdigest() == h.hash_value
+                 and self._stream_origin._received is h.stream_received
+                 and self._stream_origin._received_snapshot is h.stream_received
+                 and type(b.remote) is RemoteOperationOwner
+                 and type(s.custody) is tuple and len(s.custody) == 3
+                 and s.custody is self._wipe_custody_origin
+                 and s.custody is b.remote._output_custody_snapshot
+                 and type(s.job) is _Job and s.job is self._candidate_job_origin
+                 and s.job is b.remote._job_origin_snapshot
+                 and s.custody[0] is s.job and s.custody[1] is s.buffer
+                 and s.custody[2] is s.accumulator and s.job.output_buffer is s.buffer
+                 and s.job.remote_output_origin is s.buffer
+                 and type(s.buffer) is BoundedResultBufferV2
+                 and type(s.accumulator) is bytearray and s.buffer._buffer is s.accumulator
+                 and s.buffer._done is True and not s.accumulator
+                 and s.job.emit_revoked is True and cleanup._intent is True
+                 and self._candidate_snapshot is None and s.job.result is None
+                 and s.job.remote_result_token is None)
+        return retirement
+
+    def _wake_retirement_current(self, retirement):
+        NativeResultBodyOwner._wake_retirement_metadata(self, retirement)
+        h = retirement.wait
+        _require(asyncio.current_task() is h.scope.envelope_scope.write_scope.allocation.task
+                 and _TASK.cancelling(asyncio.current_task()) == 0
+                 and self._active is True and self._failed is False
+                 and self._wake_receipt is None and self._wake_receipt_origin is None)
+        _require(SelectorReadiness._woken_local(h.waiter, retirement.native) is retirement.native)
+        NativeResultBodyOwner._wake_retirement_metadata(self, retirement)
+        _require(asyncio.current_task() is h.scope.envelope_scope.write_scope.allocation.task
+                 and _TASK.cancelling(asyncio.current_task()) == 0
+                 and self._active is True and self._failed is False
+                 and self._wake_receipt is None and self._wake_receipt_origin is None)
+        return retirement
+
+    def _wake_retirement_released(self, retirement):
+        NativeResultBodyOwner._wake_retirement_metadata(self, retirement)
+        h = retirement.wait
+        SelectorReadiness._guard(h.waiter, actor=False)
+        SelectorReadiness._wake_guard(h.waiter)
+        NativeResultBodyOwner._wake_retirement_metadata(self, retirement)
+        task = h.scope.envelope_scope.write_scope.allocation.task
+        _require(_TASK.done(task) and not _TASK.cancelled(task) and _TASK.cancelling(task) == 0
+                 and self._active is False and self._failed is True
+                 and self._wake_receipt is retirement and self._wake_receipt_origin is retirement)
+        return retirement
+
     async def _read(self, count):
         part = None
         s = NativeResultBodyOwner._current(self)
@@ -822,9 +965,27 @@ class NativeResultBodyOwner:
                     hold = _BodyWait(s, waiter, native_scope, future,
                         b.intent.end_ns, before, committed,
                         allocation, buffer_meta,
-                        self._hash_origin.hexdigest(), self._stream_origin._received_snapshot)
+                        self._hash_origin.hexdigest(), self._stream_origin._received_snapshot,
+                        b.refs[0]._barriers_snapshot.cause)
                     try:
-                        await SelectorReadiness.wait(waiter, hold.end)
+                        await SelectorReadiness.wait(waiter, hold.end, wake=hold.wake)
+                    except _ReadinessWakeRetiredError as error:
+                        from .presentation_cleanup_reader import CleanupReadGate
+                        try:
+                            _require(type(error) is _ReadinessWakeRetiredError)
+                            gate = b.refs[0]._read_gate_snapshot
+                            _require(type(gate) is CleanupReadGate)
+                            retirement = _BodyWakeRetirement(_WAKE_BODY_MINT, self, hold,
+                                error.retirement, gate._signed_capture_origin)
+                            NativeResultBodyOwner._wake_retirement_current(self, retirement)
+                        except BaseException:
+                            self._io_unknown = True
+                            raise FrameError("BI1_SIGNED_BODY_WAKE_RETIREMENT_UNKNOWN") from None
+                        self._wake_receipt = self._wake_receipt_origin = retirement
+                        raise FrameError("BI1_SIGNED_BODY_CAUSE_STOPPED") from None
+                    except ReadinessWakeError:
+                        self._io_unknown = True  # generic wake cannot manufacture native retirement
+                        raise FrameError("BI1_SIGNED_BODY_UNQUALIFIED_WAKE") from None
                     except _ReadinessCancelledError as error:
                         _require(type(error) is _ReadinessCancelledError)
                         retirement = _BodyRetirement(_RETIRE_MINT, self, hold, error.retirement)
@@ -948,11 +1109,17 @@ class NativeResultBodyOwner:
             w._wake_binding_origin, w._handle_snapshot, w._handle_args_snapshot)
         allocation = self._initialization_origin
         receipt = self._cancel_receipt_snapshot
+        wake_receipt = self._wake_receipt_origin
         try:
             NativeResultBodyOwner._settled(self)
             _require(self._cancel_receipt is receipt and self._cancel_receipt_snapshot is receipt)
             if receipt is not None:
                 NativeResultBodyOwner._retirement_current(self, receipt, released=True)
+            _require(self._wake_receipt is wake_receipt
+                     and self._wake_receipt_origin is wake_receipt)
+            if wake_receipt is not None:
+                _require(receipt is None)
+                NativeResultBodyOwner._wake_retirement_released(self, wake_receipt)
             _require(self._scope is s and self._scope_origin is s and self._active is False
                      and self._read_intent is False and self._commit_intent is False
                      and self._pending is None and self._pending_snapshot is None

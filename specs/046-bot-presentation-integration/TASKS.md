@@ -488,3 +488,16 @@ historical, not an alternative live authorization path or resolved incident.
       current registration/custody, write quiescence and original minimum budget.
       Keep signed request disabled until full typed cooperative transition and
       isolation/expiry/stale-ack/unknown-retirement cases pass.
+
+- [x] Bind signed BODY waits to the held actual native cleanup cause and correlate
+      actual registered-wake retirement to original signed capture/wait/hash/counts/
+      custody and original uncancelled actor. Separate historical completion checks
+      preserve local stop only; exact error type and both waiter aliases are sealed
+      after final guards. Eleven cause cases pass in 7.36s; nine genuine external
+      cancellation cases pass in 6.03s; independent read-only review accepts scope.
+      Final expanded regression: 1,768 passed/one skipped in 149.49s; lint/whitespace
+      pass. Historical broker failures remain unresolved; no transfer/IO grant.
+- [ ] Wire signed envelope cause and qualify actual same-cursor cooperative
+      continuation/current registration/role/write-quiescence/minimum budget.
+      Signed request remains disabled; no concurrent read, terminal, release or
+      publication follows from local stop. Retain existing whole-work-join CANCEL.

@@ -1,3 +1,27 @@
+## Signed body native-cause wake correlation — November 6, 2026
+
+Signed body waits now listen to their actual original cleanup cause, held before
+await. Actual registered-wake retirement must match the original signed capture,
+waiter aliases, scope/Future/binding/handle, hash allocation and byte counters,
+original output withdrawal and uncancelled actor. A separate historical check
+requires actual original task completion without cancellation. Generic/copied/
+subclassed wakes and active/historical metadata drift retain unknown debt.
+
+The original-actor first-cause case now retires its registered wait and stops
+locally without Task.cancel. External task cancellation remains distinct and is
+bound to the same held native cause. Signed read transfer is still disabled;
+CANCEL retains its existing whole-work-join and authority guards. No cleanup IO,
+terminal, native release or image publication is granted by the stop receipt.
+Envelope cause wiring remains open.
+
+Eleven actual signed-body cause cases pass in 7.36s; existing nine external-cancel
+cases passed in 6.03s. Independent read-only review accepts the bounded correlation.
+Final expanded affected regression: **1,768 passed, one skipped**, 149.49s;
+lint/whitespace pass. Reviewer performed no tests or native operations. No
+deployment/device/build/config/grant/provider changes. Full signed cleanup/terminal/ACK, production composition and
+physical image delivery remain unfinished; historical broker failures and native
+sender-destination risk remain unresolved.
+
 ## Original registered-wake retirement receipt — November 6, 2026
 
 The native readiness wait now retains a typed local stop receipt only after its

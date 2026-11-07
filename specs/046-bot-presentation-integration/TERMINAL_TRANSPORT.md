@@ -177,3 +177,10 @@ The actual registered-wake retirement receipt is now a source prerequisite. It
 records only original local interest retirement; no current cleanup/terminal/ACK
 permission follows. Correlation to the actual signed cursor/native cause and
 current minimum-budget transfer remains open. See [wake evidence](../../docs/research/presentation-wake-retirement-2026-11-06.md).
+
+Signed body cause wiring now correlates actual registered wake retirement to the
+original signed progress and native cause, with original uncancelled actor and
+separate historical completion checks. This supplies known local stop only.
+Signed transfer remains disabled and CANCEL still needs whole-work join/current
+authority. Envelope cause/cooperative reading/terminal/ACK remain open. See
+[body cause evidence](../../docs/research/presentation-body-cause-wake-2026-11-06.md).
