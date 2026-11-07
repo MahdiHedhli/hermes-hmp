@@ -44,3 +44,7 @@ Tests compare actual isolated CPython cache_from_source locations after absolute
 resolution; they load no planned candidate. They do import ordinary test/helper
 and interpreter code, so this is not a claim that Python never reads bytecode.
 The pinned local3.14.9 source and actual3.11 API were inspected for the root edge.
+
+The original context retention component is now source implemented in
+[CACHE_CONTEXT.md](CACHE_CONTEXT.md): it attaches to the fixed base plan/inputs
+before IO allocation. Actual cache/absence acquisition and admission remain open.

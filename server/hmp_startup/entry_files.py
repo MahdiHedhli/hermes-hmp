@@ -72,6 +72,7 @@ class _Inputs(NamedTuple):
     runtime_plan: object
     io_slot: list
     scans: list
+    cache_context_slot: list
 
     def __repr__(self):
         return "<OriginalEntryFileInputs DATA redacted>"
@@ -183,6 +184,7 @@ class EntryFileSnapshotOwner:
         activation._entry_files_owner = owner
         owner._ready = owner._failed = owner._unknown = owner._completing = False
         owner._inputs = owner._root_cell = owner._fact_cell = owner._attempt_cell = None
+        owner._cache_context_cell = None
         owner._seen = 0
         try:
             raw = rb[4][3][2][1]
@@ -194,9 +196,12 @@ class EntryFileSnapshotOwner:
                 plan = builder(eb, rb, pb, root, entries, files, wrapper)
             owner._inputs = inputs = _Inputs(entry, eb, recipe, rb, plugin, pb, raw,
                                              root, entries, files, wrapper,
-                                             (owner, eb, rb, pb), plan, [None], [])
+                                             (owner, eb, rb, pb), plan, [None], [], [None])
             owner._root_cell = cell = (owner, inputs)
             activation._entry_files_cell = cell
+            if plan is not None:
+                from .cache_context import CacheContextOwner
+                CacheContextOwner.retain(owner)
             EntryFileSnapshotOwner._current(owner)
             return owner
         except BaseException:
@@ -293,6 +298,13 @@ class EntryFileSnapshotOwner:
             if plan is not None:
                 _require(_same_origins(dependency_origins, loaded_origins(plan)))
                 EntryFileSnapshotOwner._pure_current(owner, inputs, cell)
+            if plan is not None:
+                cache_fact = inputs.cache_context_slot[0]
+                from .cache_context import CacheContextOwner
+                _require(type(cache_fact) is tuple and len(cache_fact) == 4
+                         and type(cache_fact[0]) is CacheContextOwner
+                         and CacheContextOwner.current_binding(cache_fact[0]) is cache_fact)
+                EntryFileSnapshotOwner._pure_current(owner, inputs, cell)
             # Last origin sampling follows the last native/context callbacks.
             current_origins = EntryFileSnapshotOwner._origins(owner)
             _require(_same_origins(origins, current_origins))
@@ -340,6 +352,9 @@ class EntryFileSnapshotOwner:
                  and self._failed is False and self._unknown is False)
         inputs, cell = self._inputs, self._root_cell
         activation = inputs.recipe_binding[0].activation
+        _require(type(inputs.cache_context_slot) is list and len(inputs.cache_context_slot) == 1)
+        cache_slot = inputs.cache_context_slot
+        cache_fact = cache_slot[0]
         eb = GatewayEntryOwner.current_binding(inputs.entry)
         rb = GatewayRecipeOwner._loaded_binding(inputs.recipe)
         pb = GatewayPackageOwner._retained_binding(inputs.plugin)
@@ -350,6 +365,13 @@ class EntryFileSnapshotOwner:
                  and self._inputs is inputs and self._root_cell is cell
                  and activation._entry_files_owner is self and activation._entry_files_cell is cell
                  and self._failed is False and self._unknown is False)
+        _require(inputs.cache_context_slot is cache_slot and len(cache_slot) == 1
+                 and cache_slot[0] is cache_fact)
+        if inputs.runtime_plan is not None:
+            from .cache_context import CacheContextOwner
+            _require(type(cache_fact) is tuple and len(cache_fact) == 4
+                     and type(cache_fact[0]) is CacheContextOwner
+                     and CacheContextOwner.current_binding(cache_fact[0]) is cache_fact)
         EntryFileSnapshotOwner._pure_current(self, inputs, cell)
         return inputs
 
@@ -371,6 +393,16 @@ class EntryFileSnapshotOwner:
             from .runtime_files import plan_current
             plan_current(inputs.runtime_plan, inputs.entry_binding,
                          inputs.recipe_binding, inputs.plugin_binding)
+        _require(type(inputs.cache_context_slot) is list and len(inputs.cache_context_slot) == 1)
+        if inputs.runtime_plan is None:
+            _require(inputs.cache_context_slot[0] is None and self._cache_context_cell is None)
+        else:
+            from .cache_context import CacheContextOwner
+            cache_fact = inputs.cache_context_slot[0]
+            _require(type(cache_fact) is tuple and len(cache_fact) == 4
+                     and type(cache_fact[0]) is CacheContextOwner
+                     and CacheContextOwner.retained_binding(cache_fact[0]) is cache_fact
+                     and cache_fact[1] is self._cache_context_cell)
         original_attempt = inputs.completion_attempt
         _require(type(original_attempt) is tuple and len(original_attempt) == 4
                  and original_attempt[0] is self and original_attempt[1] is inputs.entry_binding

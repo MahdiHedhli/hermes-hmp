@@ -1,3 +1,14 @@
+# November 7: original cache context before file IO
+
+The startup snapshot now retains actual original source/cache planning context
+before artifact IO allocation and carries the same fact into continuation.
+CWD is required only for root-sensitive resolution. Independent bounded review
+accepted;14 focused cases pass. A1009-check pre-hardening baseline passed;
+final-head broader CI remains separately tracked.
+Actual cache/absence observations, runtime admission and physical bot characters
+remain unfinished. Host-local images remain unfinished. No live settings changed.
+See [contract](specs/046-bot-presentation-integration/CACHE_CONTEXT.md).
+
 # November 7: source-cache location mapping
 
 A reviewed pure mapper now covers standard POSIX CPython cache locations,

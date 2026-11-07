@@ -32,8 +32,9 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
 - [x] **PS1-CACHE-PATH-DATA** Implement/review complete supported POSIX source-cache
       location mapping, including CPython root/CWD edge. See [scope](CACHE_CANDIDATES.md).
       Actual original pre-IO context and cache/absence observations remain open.
-- [ ] **PS1-CACHE-CONTEXT** Bind original entry/recipe/plugin/interpreter and required
-      CWD before combined IO planning; preserve the actual context through continuation.
+- [x] **PS1-CACHE-CONTEXT** Retain original entry/recipe/plugin/interpreter and required
+      CWD on the fixed snapshot inputs before artifact IO allocation; preserve the
+      actual fact through continuation. [Context DATA only](CACHE_CONTEXT.md).
 - [ ] **PS1-CACHE-OBSERVE** Reserve and observe declared caches plus unresolved
       no-follow absence probes in the same original aggregate owner before completion.
       Never infer loose-cache absence or extend a completed owner.

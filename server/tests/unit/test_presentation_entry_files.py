@@ -217,7 +217,8 @@ def test_actual_entry_and_wrapper_files(tmp_path, mutation):
                  "presentation_gateway_package.py"):
         shutil.copyfile(SERVER / "hmp_plugin" / name, tmp_path / "hmp_plugin" / name)
     for name in ("__init__.py", "gateway_entry.py", "entry_files.py", "runtime_files.py",
-                 "gateway_approval.py", "gateway_continuation.py", "bytecode_headers.py"):
+                 "gateway_approval.py", "gateway_continuation.py", "bytecode_headers.py",
+                 "cache_candidates.py", "cache_context.py"):
         shutil.copyfile(SERVER / "hmp_startup" / name, tmp_path / "hmp_startup" / name)
     (tmp_path / "hmp_startup/unused.py").write_text("# SYNTHETIC UNUSED\n")
     (tmp_path / "outside.py").write_text("# SYNTHETIC OUTSIDE\n")
