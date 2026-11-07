@@ -1,3 +1,19 @@
+## Authenticated cleanup boundary commitment data — November 7, 2026
+
+Added a closed-context check for one signed broker RESULT/1 or TERMINAL/2
+commitment. The untrusted discriminator selects only a fixed signed expectation;
+other phases, wrong sequences/context/peers and damaged signatures refuse without
+parser fallback. No body is consumed and no cursor or transition is authorized.
+A direct terminal still needs a separately qualified ABORTED claim; completed
+RESULT remains required for OK. Partial-frame continuation and production dispatch
+remain unfinished; signed gate.request remains False.
+
+Independent read-only review found no issues. Focused phase/stream regression:
+61 passed in 0.28s. Initial new negative fixtures used invalid frame bodies and
+failed before reaching the helper (4 failed, 34 passed); their framing was fixed,
+with no production guard relaxation. No device, deployment or settings changed.
+Previous intermittent broker causes and sender-destination risk remain unresolved.
+
 ## Fixed cleanup-side current stop DATA — November 6, 2026
 
 The original cleanup task can now validate the signed stop notification while its

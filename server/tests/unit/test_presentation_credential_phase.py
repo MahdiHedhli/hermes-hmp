@@ -10,6 +10,7 @@ from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
 from hmp_plugin.presentation_broker_codec import BrokerBinding, encode_frame
 from hmp_plugin.presentation_credential_codec import encode_record, signing_bytes
 from hmp_plugin.presentation_credential_phase import (
+    check_broker_cleanup_commitment,
     check_commitment,
     check_committed_header,
     check_complete_frame,
@@ -71,6 +72,56 @@ def checked(data, updates=None, expected_updates=None):
         expected=dict(expected, **(expected_updates or {})),
     )
     return claim
+
+
+@pytest.mark.parametrize("phase,sequence", [("RESULT", 1), ("TERMINAL", 2)])
+def test_cleanup_boundary_authenticates_fixed_phase_sequence_data(phase, sequence):
+    data = fixture(phase, b"data", sequence)
+    binding, frame, expected, sp, rp, sign = data
+    context = {k: v for k, v in expected.items() if k not in ("phase", "sequence")}
+    fact = check_broker_cleanup_commitment(
+        sign(), sender_public=sp, receiver_public=rp, expected_context=context)
+    assert check_complete_frame(fact, frame, binding=binding).kind == phase
+    assert not hasattr(fact, "authorized")
+    for updates in ({"sequence": 3}, {"generation": "f" * 64}):
+        with pytest.raises(FrameError):
+            check_broker_cleanup_commitment(
+                sign(updates), sender_public=sp, receiver_public=rp, expected_context=context)
+    damaged = sign()[:-1] + bytes([sign()[-1] ^ 1])
+    with pytest.raises(FrameError):
+        check_broker_cleanup_commitment(
+            damaged, sender_public=sp, receiver_public=rp, expected_context=context)
+
+
+@pytest.mark.parametrize("phase,body", [
+    ("READY", b""), ("GO", b""), ("ACK", b"x" * 32), ("CANCEL", b"x" * 16),
+])
+def test_cleanup_boundary_refuses_other_signed_phases(phase, body):
+    _, _, expected, sp, rp, sign = fixture(phase, body)
+    context = {k: v for k, v in expected.items() if k not in ("phase", "sequence")}
+    context.update(role="broker", direction="b2g")
+    with pytest.raises(FrameError):
+        check_broker_cleanup_commitment(
+            sign(), sender_public=sp, receiver_public=rp, expected_context=context)
+
+
+@pytest.mark.parametrize("change", ["extra", "missing", "bool_end", "wrong_role", "wrong_peer"])
+def test_cleanup_boundary_requires_exact_retained_context_and_peer(change):
+    _, _, expected, sp, rp, sign = fixture()
+    context = {k: v for k, v in expected.items() if k not in ("phase", "sequence")}
+    if change == "extra":
+        context["phase"] = "RESULT"
+    elif change == "missing":
+        del context["channel"]
+    elif change == "bool_end":
+        context["work_end_ns"] = True
+    elif change == "wrong_role":
+        context["role"] = "gateway"
+    else:
+        rp = sp
+    with pytest.raises(FrameError):
+        check_broker_cleanup_commitment(
+            sign(), sender_public=sp, receiver_public=rp, expected_context=context)
 
 
 @pytest.mark.parametrize(

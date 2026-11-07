@@ -90,6 +90,40 @@ def check_commitment(
     return ConsistentCommitment(parsed.canonical_json, value["frame_sha256"], value["frame_length"])
 
 
+def check_broker_cleanup_commitment(
+    raw: bytes, *, sender_public: bytes, receiver_public: bytes, expected_context: dict
+) -> ConsistentCommitment:
+    """Authenticate one boundary record as RESULT/1 or TERMINAL/2 DATA.
+
+    This is not a transition permit: the original cursor owner must separately
+    prove which transitions are currently allowed, and a direct terminal must
+    still carry a qualified ABORTED claim. Never retry a refused record using a
+    different parser. No body, cursor advancement or lifecycle fact is produced.
+    """
+    context_keys = _EXPECTED - {"phase", "sequence"}
+    if (
+        type(expected_context) is not dict
+        or any(type(key) is not str for key in expected_context)
+        or expected_context.keys() != context_keys
+        or any(type(value) is not (int if key == "work_end_ns" else str)
+               for key, value in expected_context.items())
+        or expected_context["role"] != "broker"
+        or expected_context["direction"] != "b2g"
+    ):
+        _refuse()
+    # The closed codec bounds and validates the untrusted discriminator first.
+    # Its value selects only a fixed expectation, never authority or fallback.
+    parsed = decode_record(raw)
+    value = json.loads(parsed.canonical_json)
+    if value["family"] != "phase" or value["phase"] not in ("RESULT", "TERMINAL"):
+        _refuse()
+    phase = value["phase"]
+    return check_commitment(
+        raw, sender_public=sender_public, receiver_public=receiver_public,
+        expected=dict(expected_context, phase=phase, sequence=1 if phase == "RESULT" else 2),
+    )
+
+
 def check_committed_header(
     commitment: ConsistentCommitment, header: bytes, *, binding: BrokerBinding
 ) -> BrokerHeader:

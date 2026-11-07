@@ -2,6 +2,11 @@
 
 ## Current envelope stop preparation
 
+- [x] Authenticate fixed broker RESULT/1 or TERMINAL/2 boundary commitment DATA;
+      closed context and signature, no fallback. Independent read-only review passed.
+- [ ] Bind boundary dispatch to original native cursor/transition and validate direct
+      ABORTED terminal body; this helper alone grants no lifecycle or read permission.
+
 - [x] Retain payload-free original pre-await envelope waiter/Future/scope/deadline
       and byte counters through actual Task-cancellation validation and historical
       release; reject paired Future substitution after immediate wait checks.
