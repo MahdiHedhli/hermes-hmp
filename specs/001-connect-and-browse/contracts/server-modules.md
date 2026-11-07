@@ -14,8 +14,10 @@ exceptions, each an exact (module, name) allow-list entry in the surface check:
   imports `hermes_constants` and its module-level dependencies; that is accepted, because the
   adapter already imports the documented plugin base classes on every build, so it adds no new
   class of exposure (IR-6, ruling option (a); HMP v1 §12).
-- `compat.py` may import Hermes modules dynamically, but only inside its dependency probe, and only
-  for a build already on the read-compatible list (see "Startup order"; ruling on T013).
+- `compat.py` may import Hermes modules dynamically only inside its dependency probe.
+  The owner minimum-version amendment supersedes the original T013 tested-build list:
+  unknown/newer versions are attempted, subject to required APIs and legitimate security gates;
+  tested commit/sample manifests are diagnostic evidence, not feature admission.
 
 The spike is reference only. Code is rewritten and reviewed, never copied wholesale.
 
@@ -1124,3 +1126,24 @@ header/phase native read ownership, EAGAIN waiting, terminal acceptance, CANCEL/
 native release and production/physical image delivery remain unfinished. Earlier
 broker failure causes and sender-destination incident remain unresolved. No build,
 install, live host/device, grant/provider or deployment change occurred.
+
+## Current paired-startup source components (November 7, 2026)
+
+These modules are import-safe source components only; none registers a route,
+loads keys during import or imports native Hermes internals. They add no new
+exception to the closed plugin surface.
+
+- `presentation_gateway_activation.py`: original early PM/bootstrap/import-origin
+  observations; no selected-generation query, PM lease receipt or runtime admission.
+- `presentation_startup_artifacts.py`: bounded original-context artifact reads,
+  descriptor cleanup and stable hash receipts. Shared IO dispatch names exactly
+  the artifact, selection and package owners; it accepts no provider callback.
+- `presentation_startup_selection.py`: fixed private canonical configuration loader;
+  external expectations/loaded DATA are not trusted-entry/operator approval.
+- `presentation_gateway_package.py`: complete HMP package table/hash/metadata and
+  loaded-origin snapshot. Native checkout, full runtime/dependency/loader policy,
+  future imports and native/key factory composition remain separate open work.
+
+See spec046 STARTUP_CONFIGURATION.md and GATEWAY_PACKAGE_SNAPSHOT.md for schemas,
+causal evidence and the remaining full factory requirements. Minimum native
+version/API compatibility is distinct from HMP/broker installation integrity.

@@ -26,6 +26,11 @@ bounded source/fixture acceptance. Loaded matching configuration is DATA; fixed
 trusted entry/operator approval, complete inventory and native/key factory joins
 remain unimplemented. No credential generation or deployment is authorized here.
 
+The [complete HMP-package snapshot](GATEWAY_PACKAGE_SNAPSHOT.md) now has bounded
+source/fixture acceptance. Package checks do not cover the entire gateway runtime
+or dependency/loader policy. They do not hash the native checkout or introduce a
+Hermes commit allowlist; fixed trusted entry/native/key composition remains open.
+
 ## Decision and preserved boundaries
 
 Use independently installed, per-instance asymmetric role credentials to

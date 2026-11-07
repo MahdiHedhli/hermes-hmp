@@ -17,6 +17,10 @@ implementation tasks, not an established upstream Hermes blocker.
       independently expected bytes, original buffer/root fact ownership and late-load
       refusal;30 config cases plus shared artifact/activation/import checks pass (383).
       Loaded configuration is DATA, not trusted-entry/operator approval.
+- [x] PS1 HMP-package snapshot prerequisite: pinned full table, unexpected-entry
+      refusal, all-file hashes, original file/directory/ancestor metadata and loaded
+      HMP-origin consistency;19 cases plus startup/import coverage pass (403 total).
+      This is not the complete gateway runtime/dependency/loader admission recipe.
 - [ ] PS1 configuration/inventory join: fixed trusted entry/operator approval of loader inputs,
       independent expected roots/bytes, complete reachable tree and unexpected-file,
       future-import/extension/OS-loader validation before native/key composition.

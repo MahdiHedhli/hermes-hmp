@@ -71,6 +71,7 @@ CONTRACT_MODULES = {
     "presentation_gateway_activation.py",
     "presentation_startup_artifacts.py",
     "presentation_startup_selection.py",
+    "presentation_gateway_package.py",
     "presentation_credential_handshake.py",
     "presentation_credential_phase.py",
     "presentation_credential_scope.py",

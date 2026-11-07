@@ -78,6 +78,13 @@ and original publication/withdrawal causals pass with shared IO/activation/impor
 coverage (383 checks). This does not approve caller expectations or complete the
 trusted entry/full inventory/native/key composition; those PS1 tasks remain open.
 
+The [HMP package snapshot](GATEWAY_PACKAGE_SNAPSHOT.md) now verifies the retained
+selection's package-scoped manifest and loaded HMP-origin consistency, with full
+file-table/hash/stable metadata joins (403 combined checks). It is not complete
+gateway recipe/runtime/dependency/loader admission. Native checkout bytes are not
+pinned; native minimum-version/API policy and actual trusted PM origins remain a
+distinct boundary. The complete fixed factory must still join these prerequisites.
+
 ### Fixed capture interface and uncertainty
 
 Implement a fixed trusted gateway entry function, before listener creation, that

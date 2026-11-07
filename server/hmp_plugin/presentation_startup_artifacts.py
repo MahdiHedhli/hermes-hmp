@@ -40,6 +40,17 @@ class ExpectedArtifact(NamedTuple):
         return "<ExternalArtifactExpectation DATA not-approval redacted>"
 
 
+class _HashedArtifact(NamedTuple):
+    owner: object
+    scope: object
+    expected: ExpectedArtifact
+    identity: tuple
+    sha256: str
+
+    def __repr__(self):
+        return "<HashedArtifact original-descriptor DATA redacted>"
+
+
 @dataclass(repr=False)
 class _Descriptor:
     fd: int | None = None
@@ -91,20 +102,30 @@ def _configuration(owner):
     if type(owner) is StartupArtifactOwner:
         return False
     from .presentation_startup_selection import StartupSelectionOwner
-    _require(type(owner) is StartupSelectionOwner)
-    return True
+    if type(owner) is StartupSelectionOwner:
+        return True
+    from .presentation_gateway_package import GatewayPackageOwner
+    _require(type(owner) is GatewayPackageOwner)
+    return False
 
 
 def _owner_guard(owner):
     if type(owner) is StartupArtifactOwner:
         return StartupArtifactOwner._guard(owner)
     from .presentation_startup_selection import StartupSelectionOwner
-    _require(type(owner) is StartupSelectionOwner)
-    return StartupSelectionOwner._guard(owner)
+    if type(owner) is StartupSelectionOwner:
+        return StartupSelectionOwner._guard(owner)
+    from .presentation_gateway_package import GatewayPackageOwner
+    _require(type(owner) is GatewayPackageOwner)
+    return GatewayPackageOwner._guard(owner)
 
 
 def _root(owner, activation):
-    return activation._selection_cell if _configuration(owner) else activation._artifact_cell
+    if type(owner) is StartupArtifactOwner:
+        return activation._artifact_cell
+    if _configuration(owner):
+        return activation._selection_cell
+    return activation._package_cell
 
 
 def _append_configuration(owner, data):
@@ -336,6 +357,8 @@ class StartupArtifactOwner:
                 )
             _require(_owner_guard(self) is s)
             result = expected
+            if type(self) is not StartupArtifactOwner and not _configuration(self):
+                result = _HashedArtifact(self, s, expected, original, actual_hash)
         except BaseException:
             failed = True
         finally:

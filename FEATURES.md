@@ -1,3 +1,20 @@
+## Complete HMP-package snapshot — November 7, 2026
+
+The retained startup selection now pins an entire HMP executable-package table.
+Owned descriptor-rooted scans reject missing/unlisted/private entries and links;
+all declared files, including unused code, are hashed. Original per-file metadata
+from hashing is joined to both tree scans, with directory/ancestor identities.
+Same-name replacement after hashing refuses even if bytes are identical. Loaded
+HMP module/spec/path/loader references are resealed without custom equality calls.
+
+19 package cases plus configuration/file/activation/import coverage passed:403
+in6.79s, source unchanged. Independent source review accepted the metadata repair;
+lint/surface/whitespace pass. This is a package snapshot prerequisite, not complete
+gateway/runtime inventory, dependency/loader or trusted-entry/native/key admission.
+The native checkout is not hashed or version-allowlisted. No deployment, key load,
+image display or device/release qualification is enabled. Earlier unexplained
+regression failures and sender-destination incident remain unresolved.
+
 ## Private startup selection loader — November 7, 2026
 
 PS1 now has a fixed gateway-startup.json loader using the reviewed original-context
