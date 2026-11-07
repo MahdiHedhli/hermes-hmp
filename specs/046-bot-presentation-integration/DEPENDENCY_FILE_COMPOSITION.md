@@ -186,3 +186,22 @@ accounting and final identity/closure checks. This remains snapshot DATA, not
 installed runtime or native authority; see the linked contract for refusal-overread
 bounds and remaining Linux/build/physical qualification.
 D1 remains recipe1/interpreter1 regular-only with no fallback or loosened checks.
+
+## Standard file-loader observation hardening
+
+The loaded dependency-prefix snapshot now requires exact standard SourceFileLoader,
+SourcelessFileLoader or ExtensionFileLoader objects. Their primitive name/path
+fields must match the module name and declared file/spec origin; the file must
+have the corresponding standard suffix. Custom loaders and subclasses refuse
+without invoking their methods. These joins are sampled again after artifact
+completion and final callbacks, so changing a retained loader's path cannot hide
+behind unchanged loader-object identity. Unrelated native imports are outside
+this declared-prefix observation.
+
+This remains snapshot DATA. Source cache/header provenance, extension ABI and
+loaded library closure, archive/member declarations, import machinery integrity
+and actual runtime admission remain unfinished. In particular, -B does not stop
+cache reads, __cached__ does not prove which bytes executed, and a .pyc or binary
+file hash is not executed-code attestation. Existing archive bytes may be included
+in a file inventory but cannot qualify an imported member through this interface.
+Independent bounded review accepted these observation checks and limitations.

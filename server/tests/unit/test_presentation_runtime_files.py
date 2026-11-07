@@ -111,9 +111,26 @@ if mutation == "runtime_last_context_loader":
         return value
     EntryFileSnapshotOwner._origins=count_finished_origins
     a.os.getpid=final_context_loader
+if mutation == "runtime_loader_path":sample_dep.__loader__.path += ".changed"
+if mutation == "runtime_loader_name":sample_dep.__loader__.name = "other"
+if mutation == "runtime_loader_custom":
+    class CustomLoader:
+        def __getattribute__(self,name):
+            raise AssertionError("custom loader metadata must not be invoked")
+    sample_dep.__loader__=sample_dep.__spec__.loader=CustomLoader()
+if mutation == "runtime_loader_subclass":
+    from importlib.machinery import SourceFileLoader
+    class CustomSource(SourceFileLoader):pass
+    sample_dep.__loader__=sample_dep.__spec__.loader=CustomSource(
+        sample_dep.__name__,sample_dep.__file__)
+if mutation == "runtime_loader_wrong_form":
+    from importlib.machinery import SourcelessFileLoader
+    sample_dep.__loader__=sample_dep.__spec__.loader=SourcelessFileLoader(
+        sample_dep.__name__,sample_dep.__file__)
 if mutation == "runtime_search_path":
     sample_dep.__spec__.submodule_search_locations = list(sample_dep.__path__)
-if mutation in ("runtime_after_hash_replace","runtime_loader_after_hash"):
+if mutation in ("runtime_after_hash_replace","runtime_loader_after_hash",
+                "runtime_loader_path_after_hash"):
     actual_complete = a.StartupArtifactOwner.complete.__func__
     def after_completion(cls, io):
         value = actual_complete(cls, io)
@@ -121,6 +138,7 @@ if mutation in ("runtime_after_hash_replace","runtime_loader_after_hash"):
             selected=dep_root/"data.json";replacement=base/"same-bytes.bin"
             replacement.write_bytes(selected.read_bytes());replacement.chmod(0o600)
             replacement.replace(selected)
+        elif mutation == "runtime_loader_path_after_hash":sample_dep.__loader__.path += ".changed"
         else: sample_dep.__spec__.loader=object()
         return value
     a.StartupArtifactOwner.complete=classmethod(after_completion)
@@ -191,6 +209,12 @@ entry = GatewayEntryOwner.start()""",
         'mutation in ("scan_close_unknown", "runtime_scan_close_unknown")',
     )
     successes = (
+        "runtime_loader_path",
+        "runtime_loader_name",
+        "runtime_loader_custom",
+        "runtime_loader_subclass",
+        "runtime_loader_wrong_form",
+        "runtime_loader_path_after_hash",
         "runtime_normal",
         "runtime_shared",
         "runtime_file_boundary",

@@ -7,7 +7,13 @@ import os
 import posixpath
 import re
 import sys
-from importlib.machinery import ModuleSpec
+from importlib.machinery import (
+    EXTENSION_SUFFIXES,
+    ExtensionFileLoader,
+    ModuleSpec,
+    SourceFileLoader,
+    SourcelessFileLoader,
+)
 from types import ModuleType
 from typing import NamedTuple
 
@@ -477,8 +483,14 @@ def loaded_origins(plan):
         _require(
             type(origin) is str
             and origin == file
-            and loader is not None
+            and type(loader) in (SourceFileLoader, SourcelessFileLoader, ExtensionFileLoader)
             and values.get("__loader__") is loader
+            and type(vars(loader).get("name")) is str and vars(loader)["name"] == name
+            and type(vars(loader).get("path")) is str and vars(loader)["path"] == file
+            and ((type(loader) is SourceFileLoader and file.endswith(".py"))
+                 or (type(loader) is SourcelessFileLoader and file.endswith(".pyc"))
+                 or (type(loader) is ExtensionFileLoader
+                     and any(file.endswith(suffix) for suffix in EXTENSION_SUFFIXES)))
         )
         path, search = values.get("__path__"), props.get("submodule_search_locations")
         _require(
