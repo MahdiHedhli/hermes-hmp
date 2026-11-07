@@ -778,3 +778,13 @@ returned counts across alias drift; full65/known close/post-current only yields
 local control delivery, not execution ACK or RESULT/TERMINAL/publication. No
 production caller or generic credential-work gate is enabled. Unknown/partial
 work is consumed, refuses retries and retains separate protocol debt.
+
+### BI1 signed RESULT producer (November 6, 2026)
+
+`presentation_credential_result.py` owns original-service immutable native RESULT
+signing after known local GO delivery and normal native resource drain. It seals
+reciprocal GO/adoption/binding/cursor/resource identity, current key/actor/budget,
+one candidate take and canonical header/payload commitment. Original cancellation
+withdraws owned payload references before cleanup sampling. This is signed data,
+not socket transfer, terminal settlement or publication authority. See
+[producer evidence](../../../docs/research/presentation-signed-result-producer-2026-11-06.md).

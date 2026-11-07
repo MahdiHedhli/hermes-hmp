@@ -301,6 +301,38 @@ class CredentialGoRelay:
             self._write_unknown = True
             raise FrameError("BI1_CREDENTIAL_GO_RELAY_WRITE_STATE_UNKNOWN")
 
+    def completed_local(self):
+        """Historical native control-write proof; no current work/RESULT authority."""
+        _require(type(self) is CredentialGoRelay and type(self._scope) is _RelayScope
+                 and self._scope is self._scope_snapshot)
+        s, fact, claim = self._scope_snapshot, self._fact_snapshot, self._write_claim_snapshot
+        _require(type(fact) is _RelayFact and fact.mint is _RELAY_MINT
+                 and fact.owner is self and fact.scope is s and self._fact is fact
+                 and self._complete is True and self._failed is False
+                 and self._attempted is True and self._write_intent is True
+                 and self._write_returned is True and self._write_unknown is False
+                 and type(self._count) is int and self._count is self._count_snapshot
+                 and self._count == 65 and type(fact.count) is int and fact.count == 65
+                 and type(claim) is _RelayWriteIntent and claim.mint is _RELAY_MINT
+                 and claim.owner is self and claim.scope is s and claim.pipe is s.pipe
+                 and self._write_claim is claim and type(claim.data) is bytes
+                 and type(s.wire) is bytes and claim.data == s.wire and len(claim.data) == 65
+                 and type(s.control) is BrokerCancellationOwner
+                 and s.control._credential_go_relay is self
+                 and s.control._credential_go_relay_snapshot is self
+                 and s.control._go_relay_intent is True and s.control._go_relay_completed is True
+                 and type(s.pipe) is OwnedControlPipe
+                 and s.pipe._credential_go_relay is self
+                 and s.pipe._credential_go_relay_snapshot is self
+                 and s.pipe.closed is True and s.pipe.uncertain is False
+                 and s.pipe._resource_uncertain is False and s.pipe._close_attempted is True
+                 and type(fact.close) is ControlCloseObservation
+                 and fact.close is s.pipe._close_observation
+                 and fact.close is s.pipe._close_observation_identity
+                 and fact.close.descriptor is s.pipe._identity_snapshot
+                 and s.pipe._close_observation_snapshot is s.pipe._identity_snapshot)
+        return fact
+
     def relay(self):
         s = CredentialGoRelay._local(self)
         _require(self._attempted is False and self._failed is False and self._complete is False

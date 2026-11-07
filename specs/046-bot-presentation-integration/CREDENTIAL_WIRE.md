@@ -289,3 +289,26 @@ is not implemented. Resource startup must wait for the actual original signed
 control context/cursor, not merely an existing legacy controller object. The
 reviewed [control contract](SIGNED_CONTROL_OWNER.md) fixes its task, phase and
 earliest-budget requirements; no dispatcher/generic work gate is opened here.
+
+## Signed RESULT preparation checkpoint — November 6, 2026
+
+The original-service `CredentialResultProducer` now prepares the closed broker
+RESULT seq1 commitment from one native immutable candidate after normal resource
+drain and actual fixed local GO relay. Current original actor/key/clock/budget and
+reciprocal control/GO/adoption/cursor/resource checks remain required. Cancellation
+withdraws producer-owned payload references before native cleanup sampling.
+This component signs data only: no socket writer, full-transfer mint, gateway
+RESULT read, terminal/ACK or publication follows. See the
+[reviewed producer evidence](../../docs/research/presentation-signed-result-producer-2026-11-06.md).
+
+The next writer must retain one exact writer before write intent, stream the
+signed record then canonical header and payload slices on the original service
+Task, and credit each actual native count before checking mutable aliases. It
+must seal current authority immediately before each socket syscall and after
+completion, preserve short/unknown delivery without retry, and release owned
+payload on original-controller first cause. Active-write cancellation may target
+only that exact original Task under the existing frozen cleanup budget. A full
+transfer fact requires all actual signed-record/header/payload bytes and final
+currentness checks; it grants neither terminal settlement nor HTTP publication.
+The gateway must keep its sole original work cursor and independently validate
+the commitment and result2. Generic channel RESULT paths remain closed.

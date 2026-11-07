@@ -378,3 +378,12 @@ historical, not an alternative live authorization path or resolved incident.
 - [ ] Integrate the qualified fixed credential service worker-relay route with
       signed RESULT transport and original retained TERMINAL/ACK lifecycle. No
       unsigned fallback, decoded-claim permission or publication shortcut.
+
+- [x] Implement/review original-service immutable native RESULT signing-only owner:
+      actual historical GO relay, drained resources, reciprocal GO/adoption/cursor
+      custody and current role/actor/frozen budget; one native take, sticky refusal
+      and pure cancellation payload withdrawal before cleanup sampling. Seven
+      focused peer stages pass. No wire transfer/terminal/publication credit.
+- [ ] Integrate counted signed RESULT streaming and original-controller write
+      retirement, then original gateway cursor and retained terminal/ACK lifecycle.
+      Preserve actual byte counts, unknown delivery debt and no unsigned fallback.

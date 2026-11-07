@@ -213,6 +213,7 @@ class BrokerCancellationOwner:
         self._go_initialized = self._go_initialized_snapshot = None
         self._go_relay_intent = self._go_relay_completed = False
         self._credential_go_relay = self._credential_go_relay_snapshot = None
+        self._credential_result = self._credential_result_snapshot = None
         self._cancel_future = self._cancel_future_snapshot = None
         self._cancel_allocation = self._cancel_allocation_snapshot = None
         self._cancel_initialized = self._cancel_initialized_snapshot = None
@@ -580,6 +581,12 @@ class BrokerCancellationOwner:
     def _local_cause(self):
         # Retire before native cleanup sampling; no GO/launch can be restored.
         self._retired = True
+        producer = getattr(self, "_credential_result_snapshot", None)
+        if producer is not None:
+            from .presentation_credential_result import CredentialResultProducer
+
+            if type(producer) is CredentialResultProducer:
+                CredentialResultProducer.retire_from_control(producer, self)
         scope = self._scope_snapshot
         if type(scope) is not tuple or len(scope) != 10:
             self._failed = True

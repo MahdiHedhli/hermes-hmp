@@ -1,3 +1,15 @@
+## Signed native RESULT preparation — November 6, 2026
+
+Bot-character transport now has a reviewed signing-only result owner. It takes
+one immutable native result under current original actor/key/budget checks,
+seals its header and payload commitment, and withdraws retained payload on
+cancellation. Seven focused peer tests pass. Full exact-source regression: **1,584 passed,
+one skipped**, 97.96 seconds; lint and whitespace checks pass.
+
+This does not yet send the image to Mobile. Counted signed RESULT transport,
+terminal/ACK/startup integration and physical/release qualification remain open.
+No host/device/build/settings changed; historical broker intermittency is open.
+
 ## Fixed signed worker-GO relay component — November 6, 2026
 
 Bot-character transport now has a reviewed original-service worker relay, with

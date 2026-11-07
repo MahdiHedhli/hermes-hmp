@@ -40,7 +40,11 @@ from .test_presentation_supervisor import context as context
                                   "go_relay_result", "go_relay_zero", "go_relay_partial",
                                   "go_relay_unknown", "go_relay_post_drift", "go_relay_tail_key",
                                   "go_relay_tail_retired", "go_relay_tail_cancel",
-                                  "go_relay_tail_ready"])
+                                  "go_relay_tail_ready", "go_relay_result_sign",
+                                  "go_relay_result_sign_wrong_actor", "go_relay_result_sign_key",
+                                  "go_relay_result_sign_expired", "go_relay_result_sign_take_drift",
+                                  "go_relay_result_sign_post_crypto_key",
+                                  "go_relay_result_sign_take_alias"])
 async def test_original_gateway_cancel_reaches_original_authenticated_broker(
     context, local, tmp_path, monkeypatch, stage
 ):
@@ -58,9 +62,14 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
     after_go = stage == "after_go" or stage.startswith(("go_current", "go_relay"))
     control_ready, gateway_waiting = asyncio.Event(), asyncio.Event()
     go_checked = asyncio.Event()
+    result_failure = stage in ("go_relay_result_sign_key", "go_relay_result_sign_expired",
+                               "go_relay_result_sign_take_drift",
+                               "go_relay_result_sign_post_crypto_key",
+                               "go_relay_result_sign_take_alias")
     relay_failure = stage in ("go_relay_zero", "go_relay_partial", "go_relay_unknown",
                               "go_relay_post_drift", "go_relay_tail_key", "go_relay_tail_retired",
                               "go_relay_tail_cancel", "go_relay_tail_ready")
+    operation_failure = relay_failure or result_failure
 
     async def broker():
         record = await BrokerServiceSpine._accept_owned(spine, end)
@@ -225,13 +234,143 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                             relay.relay()
                         with pytest.raises(FrameError):
                             CredentialGoRelay.retain(control)
-                        if stage == "go_relay_result":
+                        if stage.startswith("go_relay_result"):
                             async with asyncio.timeout_at(end / 1e9):
                                 # Exact native owner has a poll API, no asyncio completion event.
                                 while not BrokerRegistry.poll_resource_result(  # noqa: ASYNC110
                                         spine._registry_snapshot, ticket):
                                     await asyncio.sleep(0.001)
                             held["actual_result_observed"] = True
+                            if stage.startswith("go_relay_result_sign"):
+                                import hashlib
+                                import json
+
+                                from hmp_plugin.presentation_credential_codec import decode_record
+                                from hmp_plugin.presentation_credential_result import (
+                                    CredentialResultProducer,
+                                )
+
+                                producer = CredentialResultProducer.retain(control)
+                                held["result_producer"] = producer
+                                if stage == "go_relay_result_sign_wrong_actor":
+                                    async def wrong_result():
+                                        with pytest.raises(FrameError):
+                                            producer.prepare()
+                                    await asyncio.create_task(wrong_result())
+                                    assert not producer._attempted and not producer._failed
+                                if stage == "go_relay_result_sign_key":
+                                    keys["broker"].retire()
+                                if stage == "go_relay_result_sign_expired":
+                                    from hmp_plugin.presentation_clock import NativeClockOwner
+                                    sample = NativeClockOwner.sample
+                                    calls = []
+
+                                    def expired_result(clock):
+                                        now = sample(clock)
+                                        if clock is channel._clock_owner_snapshot and not calls:
+                                            calls.append(True)
+                                            return end
+                                        return now
+
+                                    monkeypatch.setattr(NativeClockOwner, "sample", expired_result)
+                                if stage in ("go_relay_result_sign_take_drift",
+                                             "go_relay_result_sign_take_alias"):
+                                    take = BrokerRegistry.take_resource_candidate
+                                    held["result_alias_getters"] = []
+
+                                    class ForeignGo:
+                                        def __getattribute__(self, name):
+                                            held["result_alias_getters"].append(name)
+                                            raise AssertionError("foreign GO alias getter")
+
+                                    def changed_take(registry, owned_ticket):
+                                        payload = take(registry, owned_ticket)
+                                        if stage == "go_relay_result_sign_take_alias":
+                                            control._signed_go = ForeignGo()
+                                        else:
+                                            control._retired = True
+                                        return payload
+
+                                    monkeypatch.setattr(BrokerRegistry, "take_resource_candidate",
+                                                        changed_take)
+                                if stage == "go_relay_result_sign_post_crypto_key":
+                                    from hmp_plugin import (
+                                        presentation_credential_result as result_mod,
+                                    )
+                                    encode = result_mod.encode_record
+
+                                    def retired_crypto(statement, signature):
+                                        raw = encode(statement, signature)
+                                        keys["broker"].retire()
+                                        return raw
+
+                                    monkeypatch.setattr(result_mod, "encode_record", retired_crypto)
+                                if result_failure:
+                                    with pytest.raises(FrameError) as caught:
+                                        producer.prepare()
+                                    assert producer._failed and producer._retired
+                                    assert producer._payload_snapshot is None
+                                    assert producer._frozen_snapshot is None
+                                    assert caught.value.__context__ is None
+                                    trace = caught.value.__traceback__
+                                    while trace:
+                                        if trace.tb_frame.f_code.co_filename.endswith(
+                                                "presentation_credential_result.py"):
+                                            for name in ("held", "part", "header", "raw", "digest",
+                                                         "frozen"):
+                                                assert trace.tb_frame.f_locals.get(name) is None
+                                        trace = trace.tb_next
+                                    taken = stage in ("go_relay_result_sign_take_drift",
+                                                      "go_relay_result_sign_post_crypto_key",
+                               "go_relay_result_sign_take_alias")
+                                    assert resources._result_taken is taken
+                                    if taken:
+                                        assert not resources._candidate_snapshot
+                                    with pytest.raises(FrameError):
+                                        producer.prepare()
+                                    with pytest.raises(FrameError):
+                                        CredentialResultProducer.retain(control)
+                                    assert record.result_writer is None
+                                    held["go_current_checked"] = True
+                                    return None  # no transfer or terminal proof after refusal
+                                raw = producer.prepare()
+                                frozen = producer._frozen_snapshot
+                                statement = json.loads(decode_record(raw).canonical_json)
+                                digest = hashlib.sha256(frozen.header)
+                                digest.update(frozen.payload)
+                                assert statement["phase"] == "RESULT"
+                                assert statement["role"] == "broker" and statement["sequence"] == 1
+                                assert statement["frame_sha256"] == digest.hexdigest()
+                                assert statement["frame_length"] == (
+                                    len(frozen.header) + len(frozen.payload))
+                                assert resources._result_taken and not resources._candidate_snapshot
+                                assert record.result_writer is None
+                                assert channel._result_writer is None
+                                frozen = None
+                                other = BrokerCancellationOwner.__new__(BrokerCancellationOwner)
+                                other._retired = True
+                                other._credential_result = producer
+                                other._credential_result_snapshot = producer
+                                assert producer.retire_from_control(other) is False
+                                assert producer._payload_snapshot is not None
+                                from hmp_plugin.presentation_clock import NativeClockOwner
+                                cleanup_sample = NativeClockOwner.cleanup_sample
+
+                                def observed_retirement(clock):
+                                    if (clock is channel._clock_owner_snapshot
+                                            and control._retired):
+                                        assert producer._retired
+                                        assert producer._payload_snapshot is None
+                                        assert producer._frozen_snapshot is None
+                                        held["result_retired_before_clock"] = True
+                                    return cleanup_sample(clock)
+
+                                monkeypatch.setattr(NativeClockOwner, "cleanup_sample",
+                                                    observed_retirement)
+                                with pytest.raises(FrameError):
+                                    producer.prepare()
+                                with pytest.raises(FrameError):
+                                    CredentialResultProducer.retain(control)
                     else:
                         assert resources._go_attempted is False
                         assert resources._control_snapshot._go._attempted is False
@@ -255,6 +394,11 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
             assert resources._control_snapshot._go._attempted is stage.startswith("go_relay")
             status = BrokerRegistry.status(spine._registry_snapshot, native.binding)
             assert status is RegistryStatus.PENDING
+            if stage.startswith("go_relay_result_sign"):
+                producer = held["result_producer"]
+                assert producer._retired and producer._payload_snapshot is None
+                assert producer._frozen_snapshot is None
+                assert held["result_retired_before_clock"]
             return frame
         finally:
             BrokerCancellationOwner.abort(control)
@@ -342,11 +486,17 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 frame = None
             else:
                 frame = await broker_task
-        if relay_failure:
-            assert frame is None and held["go_relay"]._fact_snapshot is None
+        if operation_failure:
+            assert frame is None
+            if relay_failure:
+                assert held["go_relay"]._fact_snapshot is None
+            else:
+                assert held["go_relay"]._complete
+                assert held["result_producer"]._payload_snapshot is None
+                assert held["result_producer"]._frozen_snapshot is None
             assert not cleanup._result_token and remote._result_owner is None
             return  # local cleanup result is not remote settlement
-        if stage == "go_relay_result":
+        if stage.startswith("go_relay_result"):
             assert held["actual_result_observed"]
         assert local_closed is True and cleanup._socket_closed and cleanup._clock_closed
         assert cleanup._cancel_write_completed is True
@@ -396,7 +546,7 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         broker_channel = held.get("broker_channel")
         if broker_channel is not None:
             closed = broker_channel.close()
-            if relay_failure and not closed:
+            if operation_failure and not closed:
                 from hmp_plugin.presentation_clock import NativeClockOwner
                 # Fixture-owned native disposal after refusal; no protocol fact repaired.
                 broker_channel._socket_snapshot.close()
