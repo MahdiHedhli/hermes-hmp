@@ -26,7 +26,7 @@ from .presentation_readiness import (
 from .presentation_readiness import (
     _Scope as _ReadinessScope,
 )
-from .presentation_remote_cleanup import _TASK
+from .presentation_remote_cleanup import _TASK, _TaskAllocation
 from .presentation_result_transport import _candidate_header_wire
 
 _RECV = socket.socket.recv
@@ -270,6 +270,15 @@ class NativeResultBodyOwner:
                  and type(candidate[0]) is dict and type(candidate[1]) is bytes
                  and type(fact) is _BodyCandidate and fact.mint is _MINT
                  and fact.owner is self and fact.scope is s
+                 and all(type(v) is int for v in (
+                     fact.candidate_id, fact.header_id, fact.body_id, fact.received))
+                 and type(fact.frame_sha256) is str and len(fact.frame_sha256) == 64
+                 and type(fact.body_wire_sha256) is str and len(fact.body_wire_sha256) == 64
+                 and type(self._stream_origin._commitment_values) is tuple
+                 and len(self._stream_origin._commitment_values) == 3
+                 and type(self._stream_origin._commitment_values[0]) is bytes
+                 and type(self._stream_origin._commitment_values[1]) is str
+                 and type(self._stream_origin._commitment_values[2]) is int
                  and fact.candidate_id == id(candidate)
                  and fact.header_id == id(candidate[0]) and fact.body_id == id(candidate[1])
                  and type(fact.header_wire) is bytes
@@ -284,11 +293,40 @@ class NativeResultBodyOwner:
 
     def current_candidate(self):
         """Private data identity under current original-work authority, not release."""
-        fact = NativeResultBodyOwner._candidate_local(self)
-        NativeResultBodyOwner._settled(self)
-        NativeResultBodyOwner._current(self)
-        _require(NativeResultBodyOwner._candidate_local(self) is fact)
-        return fact
+        # A foreign actor cannot consume the original actor's private candidate.
+        _require(type(self) is NativeResultBodyOwner and type(self._scope_origin) is _BodyScope
+                 and self._scope is self._scope_origin)
+        s = self._scope_origin
+        _require(type(s.envelope) is NativeResultEnvelopeReceiver
+                 and type(s.envelope_scope) is _ResultReadScope
+                 and s.envelope._scope_origin is s.envelope_scope
+                 and s.envelope._body_owner_snapshot is self
+                 and type(s.envelope_scope.write_scope) is _BeginWriterScope
+                 and type(s.envelope_scope.write_scope.allocation) is _TaskAllocation
+                 and type(s.envelope_scope.write_scope.allocation.task) is _TASK
+                 and asyncio.current_task() is s.envelope_scope.write_scope.allocation.task
+                 and _TASK.cancelling(asyncio.current_task()) == 0)
+        fact = checked = None
+        failed = False
+        try:
+            fact = NativeResultBodyOwner._candidate_local(self)
+            NativeResultBodyOwner._settled(self)
+            s = NativeResultBodyOwner._current(self)
+            checked = check_commitment(s.envelope_fact.raw,
+                sender_public=s.envelope_scope.pins[0],
+                receiver_public=s.envelope_scope.pins[1],
+                expected=dict(s.envelope_scope.expected))
+            _require(NativeResultBodyOwner._candidate_local(self) is fact
+                     and fact.frame_sha256 == checked.frame_sha256)
+            return fact
+        except BaseException:
+            failed = True
+            self._failed = True
+            NativeResultBodyOwner.wipe(self)
+        finally:
+            fact = s = checked = None
+        if failed:
+            raise FrameError("BI1_SIGNED_RESULT_CANDIDATE_REFUSED") from None
 
     def discard(self):
         """Pure first-cause withdrawal under the original job's typed custody hook."""

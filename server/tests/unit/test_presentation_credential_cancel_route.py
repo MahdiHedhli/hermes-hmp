@@ -827,6 +827,11 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
             assert await body.receive() is True
             assert body._validated and body._candidate_snapshot[1] == image()
             assert body.current_candidate() is body._fact_snapshot
+            async def foreign_candidate_reader():
+                with pytest.raises(FrameError):
+                    body.current_candidate()
+            await asyncio.create_task(foreign_candidate_reader())
+            assert body.current_candidate() is body._fact_snapshot
             assert body._scope_origin.job.result is None
             assert body._scope_origin.job.remote_result_token is None
             assert not body._scope_origin.accumulator
@@ -847,9 +852,38 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 return sample(clock)
 
             monkeypatch.setattr(NativeClockOwner, "cleanup_sample", original_withdrawal)
+            if stage == "go_relay_result_sign_write_body_avatar":
+                current = NativeResultBodyOwner._current
+                class ForeignCommitment:
+                    def __getitem__(self, key):
+                        held["foreign_commitment_indexed"] = True
+                        raise AssertionError("foreign commitment indexing executed")
+                def substituted_current(owner):
+                    scope = current(owner)
+                    if owner is body:
+                        owner._stream_origin._commitment_values = ForeignCommitment()
+                    return scope
+                monkeypatch.setattr(NativeResultBodyOwner, "_current", substituted_current)
+                with pytest.raises(FrameError):
+                    body.current_candidate()
+                assert "foreign_commitment_indexed" not in held
+                assert body._failed and body._retired
+                assert body._candidate_snapshot is None and body._fact_snapshot is None
             if stage == "go_relay_result_sign_write_body":
                 # Paired candidate aliases do not authorize mutated validated metadata.
                 body._candidate_snapshot[0]["outcome"] = "MUTATED"
+                with pytest.raises(FrameError) as candidate_refusal:
+                    body.current_candidate()
+                assert candidate_refusal.value.__context__ is None
+                trace = candidate_refusal.value.__traceback__
+                while trace is not None:
+                    if trace.tb_frame.f_code.co_name == "current_candidate":
+                        assert all(trace.tb_frame.f_locals[k] is None
+                                   for k in ("fact", "s", "checked"))
+                    assert trace.tb_frame.f_code.co_name != "_candidate_local"
+                    trace = trace.tb_next
+                assert body._failed and body._retired
+                assert body._candidate_snapshot is None and body._fact_snapshot is None
                 with pytest.raises(FrameError):
                     body.current_candidate()
                 assert body._scope_origin.job.result is None

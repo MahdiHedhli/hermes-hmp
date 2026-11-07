@@ -1,3 +1,18 @@
+## Private signed image candidate currentness — November 6, 2026
+
+A private candidate-use check now binds original candidate/header/body identities,
+canonical metadata, signed frame and complete byte counts back to the original
+request. Follow-up review repairs fence primitive stream/fact fields and nested
+caller scopes before use, permanently withdraw admitted failed candidates, and
+raise payload-free refusals outside exception handlers. Latest focused checks:
+19 passed in 13.18 seconds, including wrong-task non-consumption, final-callback
+foreign-metadata refusal and exception-context withdrawal. A preceding broader
+run passed 1,648/one skipped in 122.43 seconds before the final scope/context
+repairs; it is not final-source coverage. One earlier overlapping focused run
+had three unexplained failures; later green runs do not resolve those failures.
+Native adoption, notification, terminal settlement and phone display remain
+unfinished. No runtime/release qualification or host/device/settings change.
+
 ## Signed image body and private candidate — November 6, 2026
 
 The original gateway work task now validates actual signed image bodies in its
