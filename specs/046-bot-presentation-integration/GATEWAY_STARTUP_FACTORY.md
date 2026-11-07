@@ -73,6 +73,24 @@ credit release remain separate requirements before fresh PRE_EMIT publication.
   separate. Test success in one stage must not complete those rows.
 
 Independent read-only architecture review identified these concrete prerequisites
-on November 7, 2026. The next source task is the approval-anchor/installer selection
-contract and loader, followed by actual loader-policy enforcement and listener
+on November 7, 2026. The next source task is the approved root contract below and approval-anchor
+loader, followed by actual loader-policy enforcement and listener
 binding. Do not collapse them into a generic callback-based factory.
+
+## Selected installation-root contract
+
+Independent review accepted deriving the root once after the original native
+bootstrap via hermes_constants.get_default_hermes_root(), the same documented API
+used by HMP identity, with the fixed suffix plugin-data/hmp/presentation/gateway-startup.
+Capture original API module/function/code and canonical root before file effects;
+changed API/root refuses rather than recapturing. Traverse the suffix descriptor-
+relative with no-follow ownership/write checks. The fixed private leaf
+gateway-approval.json selects schema2, size and SHA for the fixed sibling
+gateway-startup.json; no document-supplied path is permitted. The approval record is the explicitly
+operator-installed trust anchor, not a hash generated from served data.
+
+Join its selected IID and root to actual listener identity in the later factory.
+Loading never creates identity, directories, approval records or credentials, and
+never mutates native selection, grants or configuration. This source decision
+is not permission to read/modify installed private files. PS1-ANCHOR coding can
+proceed using isolated fixtures; runtime/loader/listener admission remains open.
