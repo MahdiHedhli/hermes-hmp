@@ -257,6 +257,7 @@ class NativeCleanupRead:
         owner._next_read = owner._next_read_origin = owner._next_read_allocation_origin = None
         owner._ledger = owner._ledger_origin = owner._ledger_allocation_origin = None
         owner._auth = owner._auth_origin = owner._auth_allocation_origin = None
+        owner._frame = owner._frame_origin = owner._frame_allocation_origin = None
         owner._progress = owner._progress_origin = owner._progress_allocation_origin = None
         owner._received = owner._received_origin = 0
         owner._native_count_allocation_origin = None
@@ -744,6 +745,13 @@ class NativeCleanupRead:
             raise FrameError("BI1_NATIVE_CLEANUP_CONSUMPTION_UNKNOWN") from None
 
     def current_progress_for_cleanup(self):
+        _require(type(self) is NativeCleanupRead)
+        if self._frame_origin is not None:
+            from .presentation_credential_cleanup_frame import current_frame_for_cleanup
+            return current_frame_for_cleanup(self)
+        return NativeCleanupRead._base_progress_for_cleanup(self)
+
+    def _base_progress_for_cleanup(self):
         s = NativeCleanupRead._origin(self)
         r = SignedReadNotice._cleanup_actor(s.notice)
         _require(self._consume_complete is True)
@@ -1169,6 +1177,18 @@ class NativeCleanupRead:
         if failed:
             raise FrameError("BI1_NATIVE_CLEANUP_AUTHENTICATION_UNKNOWN") from None
 
+    def start_frame(self):
+        from .presentation_credential_cleanup_frame import start_frame
+        return start_frame(self)
+
+    def read_frame_next(self):
+        from .presentation_credential_cleanup_frame import read_frame_next
+        return read_frame_next(self)
+
+    def finish_frame(self):
+        from .presentation_credential_cleanup_frame import finish_frame
+        return finish_frame(self)
+
     def _drop_pending(self):
         _require(type(self) is NativeCleanupRead)
         self._pending = self._pending_origin = self._pending_allocation_origin = None
@@ -1203,3 +1223,5 @@ class NativeCleanupRead:
             if (type(step_cell) is tuple and len(step_cell) == 2
                     and step_cell[0] is self and type(step_cell[1]) is _NextRead):
                 step_cell[1].pending = step_cell[1].pending_cell = None
+            from .presentation_credential_cleanup_frame import retire_frame_pending
+            retire_frame_pending(self)

@@ -30,8 +30,15 @@
       exact full digest; no auth replay, RESULT buffer or terminal claim authority.
       Independently anchored header/digest/hash, bounded metadata transfer and25
       positive/refusal cases; native binding below remains required.
-- [ ] Bind verified phase DATA to the explicit grammar-allowed outer-header stage;
-      no auth restart/fallback, no captured-prefix byte credit or terminal acceptance.
+- [x] Bind newly completed authentication to one original-reader RESULT/1 or
+      TERMINAL/1 frame stage; fixed parser dispatch, actual allocation continuity,
+      cumulative counts and eight synthetic positive/refusal causals. DATA only.
+- [ ] Admit captured-complete authentication plus retained outer header without
+      new auth-byte receive/consume credit, parser reset or fabricated progress.
+- [ ] Complete an originally partial body using its SAME original digest; the
+      new-frame parser does not qualify that path.
+- [ ] Qualify subsequent explicit grammar transitions and terminal acceptance;
+      no auth restart/fallback or captured-prefix byte credit.
 
 - [x] Retain one-shot original-reader IDLE admission before native currentness;
       independently anchor owner/scope/fact, exact bounded count/original minimum

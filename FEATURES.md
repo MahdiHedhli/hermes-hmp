@@ -1,3 +1,27 @@
+## Original-reader committed frame stage — November 7, 2026
+
+The retained native reader now advances from actual newly completed authentication
+into one exact-needed RESULT/1 or TERMINAL/1 frame on its original socket and work
+Task. The captured pre-cancellation phase selects grammar only; live work remains
+UNKNOWN. Independently retained frame/parser/step allocations and cumulative byte
+counts survive callback failures. Fixed class dispatch rejects instance overrides.
+Completed header, stream, hash, digest and returned-fact identities are rejoined
+before returning consistency DATA; no terminal claim or release is granted.
+
+Eight focused synthetic cases pass: RESULT and TERMINAL data, corrupt body hash,
+foreign auth scope, feed/finish overrides, post-finish ledger substitution and a
+copied header allocation. Independent read-only review found no remaining blocker
+in this slice. Exact expanded regression: 1,992 passed, 1 skipped in 177.42s; full lint,
+plugin surface and whitespace checks pass. Execution source hashes are unchanged.
+
+Scope remains incomplete: captured-complete authentication with a retained outer
+header needs a zero-new-byte transition, and an already partial body must finish
+its SAME original digest. EAGAIN waiting, next-record grammar, terminal acceptance,
+CANCEL/ACK/native release, production routing and physical character-image delivery
+remain open. Earlier broker failures and the native sender-destination incident
+remain unresolved. No app build/install, live host, grant/provider or deployment
+change was made by this source work.
+
 ## Bounded committed-frame discard parser — November 7, 2026
 
 `presentation_credential_frame_discard.py` now parses one bounded outer-header
