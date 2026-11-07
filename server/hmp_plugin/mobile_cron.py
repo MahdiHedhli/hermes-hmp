@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import Any
 from urllib.parse import quote
@@ -194,6 +194,7 @@ def project_response(method: str, raw: Any) -> dict[str, Any]:
 async def call(
     endpoint: Any, *, method: str, job: str | None = None,
     action: str | None = None, body: Mapping[str, Any] | None = None,
+    before_dispatch: Callable[[], None] | None = None,
 ) -> dict[str, Any]:
     """Make one bounded loopback request. Never retry an uncertain write."""
     host = getattr(endpoint, "host", None)
@@ -225,9 +226,41 @@ async def call(
         total=_TOTAL_TIMEOUT_S, connect=0.5, sock_connect=0.5,
         sock_read=_TOTAL_TIMEOUT_S,
     )
+    session_options: dict[str, Any] = {}
+    if method != "GET":
+        # aiohttp may transparently retry DELETE on a lost connection. One local
+        # attempt must cover both middleware entry and its acquired-connection send.
+        request_type = getattr(aiohttp, "ClientRequest", None)
+        if not isinstance(request_type, type) or not callable(getattr(request_type, "send", None)):
+            raise HmpError(ErrorCode.CRON_UNAVAILABLE)
+        attempted = sent = False
+
+        def check() -> None:
+            if before_dispatch is not None and before_dispatch() is not None:
+                raise HmpError(ErrorCode.CRON_UNAVAILABLE)
+
+        async def once(request, handler):
+            nonlocal attempted
+            if attempted:
+                raise HmpError(ErrorCode.CRON_UNAVAILABLE)
+            attempted = True
+            check()
+            return await handler(request)
+
+        class ControlledRequest(request_type):
+            async def send(self, connection):
+                nonlocal sent
+                if not attempted or sent:
+                    raise HmpError(ErrorCode.CRON_UNAVAILABLE)
+                sent = True  # a refused/uncertain send is never replayed
+                check()
+                # ClientSession owns and closes this acquired connection on refusal.
+                return await super().send(connection)
+
+        session_options = {"request_class": ControlledRequest, "middlewares": (once,)}
     try:
         async with (
-            aiohttp.ClientSession(trust_env=False, timeout=timeout) as session,
+            aiohttp.ClientSession(trust_env=False, timeout=timeout, **session_options) as session,
             session.request(
                 method, url, json=body, allow_redirects=False,
                 headers={"Authorization": f"Bearer {key}"},
@@ -242,7 +275,7 @@ async def call(
             data = await response.content.read(_MAX_RESPONSE_BYTES + 1)
     except HmpError:
         raise
-    except (aiohttp.ClientError, TimeoutError, OSError) as exc:
+    except (aiohttp.ClientError, TimeoutError, OSError, TypeError) as exc:
         raise HmpError(ErrorCode.CRON_UNAVAILABLE) from exc
     if len(data) > _MAX_RESPONSE_BYTES:
         raise HmpError(ErrorCode.CRON_UNAVAILABLE)

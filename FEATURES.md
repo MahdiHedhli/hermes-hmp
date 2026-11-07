@@ -1,3 +1,20 @@
+## Delete/pause/resume transport handoff — November 7, 2026
+
+AR1-035-T014c adds original-phone/profile/listener/task checks to the HTTP jobs
+mutations, retaining the original endpoint and target across awaits. A fresh
+private session has fixed one-attempt middleware and a one-send request class;
+it samples current authority before connect and at acquired-connection send,
+blocks transparent mutation replay and preserves fixed loopback/timeout/size/
+redirect constraints. Refusals use the session-owned connection cleanup boundary.
+
+Independent contract/source review accepted this bounded mitigation.163 affected
+HTTP/native-write/read/cron/model/readiness checks pass with source unchanged.
+Real disposable route fixtures prove acquired-connection controls revocation
+returns404 with zero HTTP bytes and peer EOF; lost-ack peers see one request;
+positive actions preserve responses. Ruff, surface, privacy and log scans pass.
+Not deployed or physically qualified. Post-dispatch outcomes/native atomicity
+remain open; no live job, model, grant, provider or host change was performed.
+
 ## Native jobs/model write handoff — November 7, 2026
 
 AR1-035-T014b adds original-scope checks after body parsing and at the actual
