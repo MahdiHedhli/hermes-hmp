@@ -275,7 +275,9 @@ load path remains recipe1/interpreter1, and D1 runtime snapshots reject recipe2
 before acquiring an artifact owner. There is no format detection or fallback.
 
 This is the L1 document-loading prerequisite in
-[EXECUTABLE_LINK_SNAPSHOT.md](EXECUTABLE_LINK_SNAPSHOT.md), not selected link-plan
-decoding or filesystem link/target observation. Those and original aggregate
-readlink/hash accounting still need implementation. No native/key admission,
+[EXECUTABLE_LINK_SNAPSHOT.md](EXECUTABLE_LINK_SNAPSHOT.md). L2 now decodes and
+retains the original selected link plan, including stricter target pins and
+aggregate reservations. Actual filesystem link/target observation and original
+readlink/hash accounting still need L3 implementation; completion refuses before
+artifact acquisition until then. No native/key admission,
 executed image, actual PM lease or phone image delivery is qualified.

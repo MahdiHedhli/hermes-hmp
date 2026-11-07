@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import json
 import os
+import posixpath
 import re
 import sys
 from importlib.machinery import ModuleSpec
 from types import ModuleType
 from typing import NamedTuple
 
+from hmp_plugin import presentation_startup_artifacts as _artifacts
 from hmp_plugin.presentation_gateway_package import _PRIVATE, _table_rows
 from hmp_plugin.presentation_startup_artifacts import ExpectedArtifact, _expected, _HashedArtifact
 
@@ -38,14 +40,14 @@ def _pairs(rows):
     return result
 
 
-def _document(raw, kind, generation, keys):
-    _require(type(raw) is bytes)
+def _document(raw, kind, generation, keys, schema=1):
+    _require(type(schema) is int and schema in (1, 2) and type(raw) is bytes)
     value = json.loads(raw, object_pairs_hook=_pairs)
     _require(
         type(value) is dict
         and value.keys() == keys
         and type(value["schema"]) is int
-        and value["schema"] == 1
+        and value["schema"] == schema
         and type(value["kind"]) is str
         and value["kind"] == kind
         and type(value["generation"]) is str
@@ -122,6 +124,82 @@ class RuntimePackage(NamedTuple):
     files: tuple
 
 
+class LinkHop(NamedTuple):
+    path: str
+    target: bytes
+    destination: str
+
+    def __repr__(self):
+        return "<SelectedExecutableLinkHop DATA redacted>"
+
+
+class ExecutableLinkPlan(NamedTuple):
+    hops: tuple
+    target: ExpectedArtifact
+    uid: int
+    mode: int
+    text_bytes: int
+
+    def __repr__(self):
+        return "<SelectedExecutableLinkPlan DATA redacted>"
+
+
+def _link_plan(value, executable, permitted, startup_uid):
+    _require(type(value) is dict and value.keys() == {"hops", "final"})
+    rows, final = value["hops"], value["final"]
+    _require(type(rows) is list and 1 <= len(rows) <= 8)
+    hops, seen, path = [], set(), executable
+    for row in rows:
+        _require(type(row) is dict and row.keys() == {"path", "target", "destination"})
+        selected = _path(row["path"])
+        destination = _path(row["destination"])
+        permitted(selected)
+        permitted(destination)
+        _require(selected == path and selected not in seen)
+        seen.add(selected)
+        text = row["target"]
+        _require(type(text) is str and 1 <= len(text) <= 4096
+                 and all(32 <= ord(c) != 127 for c in text))
+        parts = text.split("/")
+        if text.startswith("/"):
+            suffix = parts[1:]
+        else:
+            leading = 0
+            while leading < len(parts) and parts[leading] == "..":
+                leading += 1
+            _require(leading <= len(posixpath.dirname(selected).split("/")) - 1)
+            suffix = parts[leading:]
+        _require(bool(suffix) and all(
+            part not in ("", ".", "..")
+            and part.casefold() not in _PRIVATE_COMPONENTS
+            and not part.casefold().startswith(".env.") for part in suffix
+        ))
+        try:
+            target = text.encode("utf-8")
+        except UnicodeError:
+            raise RuntimeFilesError from None
+        _require(1 <= len(target) <= 4096)
+        lexical = posixpath.normpath(
+            text if text.startswith("/") else posixpath.join(posixpath.dirname(selected), text)
+        )
+        _require(lexical == destination and destination not in seen)
+        hops.append(LinkHop(selected, target, destination))
+        path = destination
+    _require(type(final) is dict
+             and final.keys() == {"path", "size", "sha256", "uid", "mode"})
+    final_path = _path(final["path"])
+    permitted(final_path)
+    _require(final_path == path and final_path not in seen
+             and type(startup_uid) is int and startup_uid >= 0
+             and type(final["uid"]) is int and final["uid"] in (0, startup_uid)
+             and type(final["mode"]) is int and 0 <= final["mode"] <= 0o777
+             and not final["mode"] & 0o022 and bool(final["mode"] & 0o111))
+    target = ExpectedArtifact(final_path, final["size"], final["sha256"])
+    _expected((target,))
+    return ExecutableLinkPlan(tuple(hops), target, final["uid"], final["mode"],
+                              sum(len(hop.target) for hop in hops))
+
+
 class RuntimeFilePlan(NamedTuple):
     entry_binding: tuple
     recipe_binding: tuple
@@ -137,13 +215,26 @@ class RuntimeFilePlan(NamedTuple):
     declarations: tuple
     dependency_paths: tuple
     modules: tuple
+    executable_link: ExecutableLinkPlan | None
 
     def __repr__(self):
         return "<OriginalCombinedRuntimeFilePlan DATA redacted>"
 
 
 def build_runtime_plan(eb, rb, pb, entry_root, entry_entries, entry_files, wrapper):
-    """Internal projection; the entry owner separately joins these original bindings."""
+    """Regular-only D1 projection; no executable-link fallback."""
+    return _build_runtime_plan(eb, rb, pb, entry_root, entry_entries, entry_files, wrapper, 1)
+
+
+def build_runtime_link_plan(eb, rb, pb, entry_root, entry_entries, entry_files, wrapper):
+    """Explicit selected-link DATA; actual observation needs the original IO composition."""
+    return _build_runtime_plan(eb, rb, pb, entry_root, entry_entries, entry_files, wrapper, 2)
+
+
+def _build_runtime_plan(eb, rb, pb, entry_root, entry_entries, entry_files, wrapper, schema):
+    _require(type(schema) is int and schema in (1, 2)
+             and type(rb[0].expected.recipe_schema) is int
+             and rb[0].expected.recipe_schema == schema)
     generation = rb[0].expected.selection.generation
     environment = rb[0].activation_scope.environment
     runtime = eb[2][6].interpreter
@@ -167,7 +258,9 @@ def build_runtime_plan(eb, rb, pb, entry_root, entry_entries, entry_files, wrapp
         interp_raw,
         "HMP_GATEWAY_INTERPRETER",
         generation,
-        {"schema", "kind", "generation", "runtime", "loader_policy", "packages", "files"},
+        {"schema", "kind", "generation", "runtime", "loader_policy", "packages", "files"}
+        | ({"executable_link"} if schema == 2 else set()),
+        schema,
     )
     _require(
         type(dep["environment"]) is str
@@ -192,6 +285,8 @@ def build_runtime_plan(eb, rb, pb, entry_root, entry_entries, entry_files, wrapp
         for root in forbidden:
             _require(not _inside(path, root) and (not tree or not _inside(root, path)))
 
+    link = (_link_plan(interp["executable_link"], executable, permitted, rb[0].context[1])
+            if schema == 2 else None)
     meta = pb[0].expected
     packages = [
         RuntimePackage(meta.root, meta.entries, meta.files),
@@ -247,9 +342,14 @@ def build_runtime_plan(eb, rb, pb, entry_root, entry_entries, entry_files, wrapp
         )
     )
     interpreter_files = tuple(
-        files_from(interp["files"], lambda path: path == executable or _inside(path, stdlib))
+        files_from(interp["files"], lambda path: _inside(path, stdlib)
+                   or path == (executable if link is None else link.target.path))
     )
-    _require(any(row.path == executable for row in interpreter_files))
+    target_path = executable if link is None else link.target.path
+    _require(any(row.path == target_path for row in interpreter_files))
+    if link is not None:
+        _require(any(row.path == link.target.path and row.size == link.target.size
+                     and row.sha256 == link.target.sha256 for row in interpreter_files))
     _require(len(packages) <= 32 and sum(len(row.entries) for row in packages) <= 20000)
     roots = sorted(row.path for row in packages)
     _require(
@@ -270,6 +370,12 @@ def build_runtime_plan(eb, rb, pb, entry_root, entry_entries, entry_files, wrapp
             _require(row.size == held.size and row.sha256 == held.sha256)
         references.append((row, held))
     all_files = tuple(canonical.values())
+    if link is not None:
+        _require(all(hop.path not in canonical
+                     and not any(_inside(hop.path, root) for root in roots) for hop in link.hops))
+        held = canonical[link.target.path]
+        _require(held.size == link.target.size and held.sha256 == link.target.sha256)
+        link = ExecutableLinkPlan(link.hops, held, link.uid, link.mode, link.text_bytes)
     prior = pb[3][2][4]
     _require(type(prior) is tuple and len(prior) == len(meta.files))
     for receipt, row in zip(prior, meta.files, strict=True):
@@ -284,6 +390,12 @@ def build_runtime_plan(eb, rb, pb, entry_root, entry_entries, entry_files, wrapp
     pending = tuple(row for row in all_files if row.path not in prior_paths)
     previous = meta.selection_scope.expected + tuple(row[0] for row in meta.recipe_binding[4][3])
     _expected(previous + all_files)
+    if link is not None:
+        prefix = pb[3][2][7][2]
+        _require(type(prefix) is int and prefix >= 0
+                 and len(previous) + len(all_files) + len(link.hops) <= _artifacts._MAX_FILES
+                 and prefix + sum(row.size for row in pending) + 2 * link.text_bytes
+                 <= _artifacts._MAX_TOTAL)
     loose = tuple(row for row in all_files if not any(_inside(row.path, root) for root in roots))
     modules = dep["modules"]
     _require(
@@ -318,6 +430,7 @@ def build_runtime_plan(eb, rb, pb, entry_root, entry_entries, entry_files, wrapp
         tuple(references),
         tuple(sorted({row.path for row in dependencies})),
         tuple(modules),
+        link,
     )
 
 
@@ -330,6 +443,10 @@ def plan_current(plan, eb, rb, pb):
         and plan.dependency_raw is rb[4][3][3][1]
         and plan.interpreter_raw is rb[4][3][4][1]
         and plan.runtime is eb[2][6].interpreter
+        and ((rb[0].expected.recipe_schema == 1 and plan.executable_link is None)
+             or (rb[0].expected.recipe_schema == 2
+                 and type(plan.executable_link) is ExecutableLinkPlan
+                 and any(plan.executable_link.target is row for row in plan.all_files)))
     )
 
 

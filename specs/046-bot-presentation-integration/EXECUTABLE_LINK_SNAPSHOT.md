@@ -1,7 +1,7 @@
 # Selected executable leaf-link snapshot
 
-Status: L1 explicit recipe document-version path is source implemented/reviewed.
-L2 link-plan decoding and L3 original-owner link/target IO remain unfinished.
+Status: L1 explicit recipe documents and L2 immutable link-plan retention are
+source implemented/reviewed. L3 original-owner link/target IO remains unfinished.
 Full desktop character delivery remains required; no upstream blocker is established.
 No route, key loading, host change or production admission follows this document.
 
@@ -22,11 +22,13 @@ independently pinned schema2 private selection and original descriptor/count own
 No body-driven version detection, automatic migration, fallback or retry.
 
 D1 `retain_runtime_files` refuses recipe2 before retaining an entry-file owner or
-acquiring an artifact owner. A future explicit `retain_runtime_link_files` path
-must consume recipe2/interpreter2 only. Legacy entry-only DATA remains explicitly
+acquiring an artifact owner. The explicit `retain_runtime_link_files` path
+consumes recipe2/interpreter2 only and retains a plan, never completed custody.
+Completion refuses before artifact acquisition and permanently fails that owner;
+L3 must use a fresh startup allocation, not resume/upgrade a refused owner. Legacy entry-only DATA remains explicitly
 entry-only; it is never substituted for either runtime variant or admission.
 
-## L2 closed interpreter2 plan (frozen design; decoder pending)
+## L2 closed interpreter2 plan (source implemented/reviewed)
 
 Retain existing interpreter1 field names/semantics with schema2 and exactly one
 additional `executable_link` member. Its closed shape is:
@@ -45,11 +47,20 @@ Each target is exact UTF-8 link text,1..4096 bytes, without NUL/control characte
 Absolute or relative text is permitted, but relative text is joined to the selected
 hop parent and normalized LEXICALLY; it must equal the independently selected
 canonical destination. No resolve(), automatic discovery or followed-path proof.
-Lexical equality does not establish safe filesystem traversal.
+Raw target components also reject private names, empty components and dot
+cancellation. Relative targets may have bounded leading `../` components only;
+later `.`/`..` cancellation is refused, and leading parent count cannot exceed
+the selected parent's depth. Absolute targets permit no dot cancellation.
+This avoids lexical removal of an intermediate private or symlink component.
+L3 must still no-follow-walk all actual hop/target parent ancestry: lexical
+equality does not establish safe filesystem traversal. Hop paths are loose and
+disjoint from all declared package trees and regular artifact declarations;
+no package-tree scan exception is introduced.
 
 Final size/SHA obey existing regular-file limits. uid is an exact nonnegative int
 permitted by the original startup ownership policy (root or retained startup UID).
-mode is exact permission bits0..0777, with no group/other write; existing no-setid,
+mode is exact permission bits0..0777, with at least one execute bit and no
+group/other write; existing no-setid,
 regular-file and single-link checks remain unchanged. Actual uid/mode must match.
 The original executable is admitted through exactly one variant: regular D1 row
 or the explicit link chain. Every terminal target must also have its exact regular
@@ -95,8 +106,8 @@ closure, native/key factory, broker ACK/release or physical image delivery.
 
 ## L1 source checkpoint
 
-The new explicit loader reads canonical recipe2/interpreter2 documents under the
-original private IO lifecycle. It does not yet decode executable_link, inspect a
+The earlier L1 checkpoint reads canonical recipe2/interpreter2 documents under the
+original private IO lifecycle. L1 alone does not decode executable_link, inspect a
 symlink or hash its target. Tests cover old/new loader confusion, wrong child/version/
 generation, bool/unknown schemas, no recapture and D1 refusal before artifact IO.
 
@@ -104,3 +115,23 @@ Final L1 verification:641 affected startup checks pass with source hashes unchan
 plus9 actual Python3.11 child fixtures in a separate driver (not the full plugin
 suite). Independent bounded source review accepted the version split. Ruff,
 closed plugin surface and privacy scans pass. These counts do not qualify links.
+
+## L2 source checkpoint
+
+The new retained runtime plan derives exact interpreter2 link declarations from
+the original recipe/entry/plugin bindings. Its target points to the canonical
+regular-file row; stricter UID/mode constraints stay in the same immutable plan.
+Budget checks reserve both text observations against the original actual plugin
+count and pending regular rows, including hop declarations in the file limit.
+These are preflight reservations, not measured readlink/hash credit.
+
+Temporary absolute/relative/leading-parent/multi-hop symlink fixtures exercise
+planning only. Completion explicitly refuses before artifact ownership/IO and
+permanently fails the plan owner; no link metadata or final target hash is
+published by this source slice. L3 and installed/native/physical acceptance remain
+required. Unknown plans cannot fall back to D1 or an entry-only result.
+
+Final L2 verification:680 affected startup checks pass with source unchanged.48
+actual Python3.11 child checks cover9 recipe/refusal and39 link-plan cases; this
+is not the full3.11 suite. Independent review accepted the raw-path/immutable-
+plan boundaries. Ruff, plugin-surface, privacy and test-log scans pass.

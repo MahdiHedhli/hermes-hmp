@@ -133,14 +133,21 @@ class EntryFileSnapshotOwner:
         return EntryFileSnapshotOwner._retain(entry, recipe, plugin, True)
 
     @classmethod
+    def retain_runtime_link_files(cls, entry, recipe, plugin):
+        """Selected link plan only; completion refuses until original link IO is implemented."""
+        _require(cls is EntryFileSnapshotOwner)
+        return EntryFileSnapshotOwner._retain(entry, recipe, plugin, True, True)
+
+    @classmethod
     def retain(cls, entry, recipe, plugin):
         """Entry-only compatibility path; never a complete runtime snapshot."""
         _require(cls is EntryFileSnapshotOwner)
         return EntryFileSnapshotOwner._retain(entry, recipe, plugin, False)
 
     @classmethod
-    def _retain(cls, entry, recipe, plugin, runtime_files):
-        _require(type(runtime_files) is bool)
+    def _retain(cls, entry, recipe, plugin, runtime_files, executable_links=False):
+        _require(type(runtime_files) is bool and type(executable_links) is bool
+                 and (runtime_files or not executable_links))
         _require(cls is EntryFileSnapshotOwner and type(entry) is GatewayEntryOwner
                  and type(recipe) is GatewayRecipeOwner and type(plugin) is GatewayPackageOwner)
         try:
@@ -148,7 +155,8 @@ class EntryFileSnapshotOwner:
             original_recipe = GatewayRecipeOwner._retained_binding(recipe)
             original_plugin = GatewayPackageOwner._retained_binding(plugin)
             if runtime_files:
-                _require(original_recipe[0].expected.recipe_schema == 1)
+                _require(original_recipe[0].expected.recipe_schema
+                         == (2 if executable_links else 1))
             activation = original_recipe[0].activation
             _require(original_entry[2][3] is activation is original_plugin[0].activation
                      and activation._entry_files_owner is None
@@ -181,8 +189,9 @@ class EntryFileSnapshotOwner:
             root, entries, files, wrapper = _decode(raw, eb, rb)
             plan = None
             if runtime_files:
-                from .runtime_files import build_runtime_plan
-                plan = build_runtime_plan(eb, rb, pb, root, entries, files, wrapper)
+                from .runtime_files import build_runtime_link_plan, build_runtime_plan
+                builder = build_runtime_link_plan if executable_links else build_runtime_plan
+                plan = builder(eb, rb, pb, root, entries, files, wrapper)
             owner._inputs = inputs = _Inputs(entry, eb, recipe, rb, plugin, pb, raw,
                                              root, entries, files, wrapper,
                                              (owner, eb, rb, pb), plan, [None], [])
@@ -204,6 +213,8 @@ class EntryFileSnapshotOwner:
         inputs, cell = owner._inputs, owner._root_cell
         try:
             EntryFileSnapshotOwner._pure_current(owner, inputs, cell)
+            # Planning is not link custody. A refused owner cannot be upgraded or resumed.
+            _require(inputs.runtime_plan is None or inputs.runtime_plan.executable_link is None)
             _require(type(inputs.io_slot) is list and len(inputs.io_slot) == 1
                      and inputs.io_slot[0] is None and owner._fact_cell is None
                      and owner._attempt_cell is None

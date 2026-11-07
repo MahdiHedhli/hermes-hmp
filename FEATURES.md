@@ -1,3 +1,22 @@
+## Original executable-link plan retention — November 7, 2026
+
+GR2-LINKS-L2 now derives an immutable selected link plan from the original
+recipe2/interpreter2, entry and plugin bindings. The first hop is the captured
+executable; exact target text, lexical destinations and terminal regular-file
+pins are checked. Private/intermediate cancellation is refused; bounded leading
+parent traversal is supported. The canonical target retains stricter UID and
+executable-mode constraints even when ordinary file rows share it. Hops and both
+text observations are reserved under the original cumulative file/byte limits.
+
+Independent focused source review accepted planning only.680 affected startup
+checks pass with source unchanged, plus48 actual Python3.11 child checks (not
+full3.11 qualification). Ruff, plugin surface, privacy and log scans pass.
+
+Retention is not link custody. Completion permanently refuses before acquiring
+an artifact owner; no actual readlink or target hash is credited by this slice.
+L3 original-owner link/target IO, runtime/loader/native/key/broker admission and
+physical character delivery remain unfinished. No installed/live change occurred.
+
 ## Explicit executable-link recipe documents — November 7, 2026
 
 GR2-LINKS-L1 adds a distinct load_executable_links document path: recipe2 and
