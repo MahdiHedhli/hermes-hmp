@@ -1,3 +1,19 @@
+## Current HMP wheel verification — November 7, 2026
+
+Built source `e3148f266cfc13abb3bf4665d2ab8d510bf3cc0a` into a wheel using build1.3.0,
+setuptools80.9.0 and wheel0.45.1 in an isolated build environment.
+Wheel SHA256: `8c998a4ca4838127b4ec88304bf2493146e8ca23a12a84a61f4ade4db5422e1e`.
+All160 packaged code/resource files match the committed source exactly, including
+hmp_startup/__init__.py, gateway_entry.py and entry_files.py. The complete ZIP
+inventory has no duplicate/missing/unexpected package files, and RECORD hashes
+and lengths were independently read back. No console entry point was introduced.
+
+This supersedes the earlier historical wheel evidence only for packaging of this
+source commit. It is not an installed gateway startup, runtime admission,
+credential/key activation, image route, physical device or release qualification.
+The package was neither imported nor installed. Bot-character delivery and
+host-local image deployment remain outstanding; the broader goal stays active.
+
 ## Original selection IO accounting — November 7, 2026
 
 The startup selection's actual read-count allocation is now retained in its
