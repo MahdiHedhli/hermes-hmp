@@ -159,10 +159,34 @@ if mutation == "context_failure":
         if owner._recipe_owner is not None: raise OSError("synthetic initial context failure")
         return getpid()
     g.os.getpid = context_callback
+if mutation == "foreign_counter_after_context":
+    real_pid = g.os.getpid
+    ordered = []
+    class ForeignCounter:
+        def __le__(self, other):
+            ordered.append(True)
+            raise AssertionError("foreign ordering")
+        __ge__ = __le__
+    def foreign_after_context():
+        value = real_pid()
+        active = owner._recipe_owner
+        if active is not None and active._origin is not None:
+            active._bytes_read = ForeignCounter()
+        return value
+    g.os.getpid = foreign_after_context
+if mutation == "document_budget_boundary":
+    g._TOTAL_LIMIT = len(recipe_raw) + sum(map(len, children))
+if mutation == "selection_count_swap":
+    def swap_selection_count(fd, count):
+        result = actual_read(fd, count)
+        if result:
+            loaded._count_cell = (loaded, loaded._origin, loaded._bytes_read)
+        return result
+    a.os.read = swap_selection_count
 try:
     checked = g.GatewayRecipeOwner.load(loaded, size)
 except g.GatewayRecipeError as error:
-    assert mutation != "normal", mutation
+    assert mutation not in ("normal", "document_budget_boundary"), mutation
     checked = error.failed_owner
     if mutation in ("late", "candidate_bool", "candidate_over", "schema1_config"):
         assert checked is None and owner._recipe_owner is None
@@ -172,14 +196,14 @@ except g.GatewayRecipeError as error:
     if mutation == "fact_swap": assert owner._recipe_fact_cell is foreign
     else: assert owner._recipe_fact_cell is None
 else:
-    assert mutation == "normal", mutation
+    assert mutation in ("normal", "document_budget_boundary"), mutation
     assert checked._ready and not checked._failed and not checked._unknown
     assert checked._fact_cell is owner._recipe_fact_cell
     docs = checked._fact_cell[3]
     assert len(docs) == 5 and docs[0][1] == recipe_raw
     assert [row[1] for row in docs[1:]] == children
-    assert checked._bytes_read == len(recipe_raw) + sum(map(len, children))
-if mutation == "aggregate": assert checked._bytes_read == len(recipe_raw)
+    assert checked._bytes_read == len(raw) + len(recipe_raw) + sum(map(len, children))
+if mutation == "aggregate": assert checked._bytes_read == len(raw) + len(recipe_raw)
 if mutation == "plan_swap": assert owner._recipe_plan_cell is foreign
 if mutation == "document_count_swap":
     assert replaced_cell is not None and checked._count_cell is replaced_cell
@@ -190,6 +214,7 @@ if checked is not None and mutation != "buffer_swap": assert not checked._buffer
 if checked is not None and checked._origin is not None:
     assert all(row.closed or row.unknown for row in checked._origin.records)
 assert len(closes) == len(set(closes))
+if mutation == "foreign_counter_after_context": assert ordered == []
 if mutation == "normal":
     original_scope = checked._origin
     sys.path[1] = "/synthetic/new-generation/site-packages"
@@ -212,6 +237,7 @@ print(json.dumps({"mutation": mutation, "runtime_admitted": False}))
     "context_failure", "recipe_nan", "recipe_missing", "candidate_bool", "candidate_over",
     "document_final_swap", "plan_swap", "schema1_config", "child_schema_bool",
     "read_count_swap", "document_count_swap", "final_count_swap",
+    "document_budget_boundary", "selection_count_swap", "foreign_counter_after_context",
 ])
 def test_owned_recipe_and_fixed_child_documents(tmp_path, mutation):
     if os.name != "posix" or sys.platform not in ("darwin", "linux"):

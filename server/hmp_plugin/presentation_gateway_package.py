@@ -70,7 +70,7 @@ def _selection(owner, recipe=None, binding=None):
     activation = s.activation
     _require(type(activation) is GatewayActivationOwner)
     cell = activation._selection_fact_cell
-    _require(type(cell) is tuple and len(cell) == 3 and cell[0] is owner and cell[1] is s
+    _require(type(cell) is tuple and len(cell) == 4 and cell[0] is owner and cell[1] is s
              and type(cell[2]) is GatewayStartupSelection
              and type(cell[2].schema) is int and cell[2].schema == (1 if recipe is None else 2)
              and owner._selection is cell[2]
@@ -285,7 +285,8 @@ class GatewayPackageOwner:
                      and current[3] is selected)
             root, entries, files = _decode(raw, selected)
             if recipe is not None:
-                _expected(tuple(row[0] for row in binding[4][3]) + files)
+                _expected(configuration_scope.expected
+                          + tuple(row[0] for row in binding[4][3]) + files)
             meta = _Manifest(configuration, configuration_scope, fact, selected, raw,
                              root, entries, files, [], recipe, binding)
             s = IoScope(activation, activation._scope, meta,

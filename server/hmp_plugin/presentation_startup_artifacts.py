@@ -92,7 +92,8 @@ def _package_source(package):
              and all(a is b for a, b in zip(binding[4], after[4], strict=True)))
     meta = binding[0].expected
     _require(meta.recipe is not None and type(meta.recipe_binding) is tuple)
-    previous = tuple(row[0] for row in meta.recipe_binding[4][3]) + meta.files
+    previous = (meta.selection_scope.expected
+                + tuple(row[0] for row in meta.recipe_binding[4][3]) + meta.files)
     return _PackageSource(package, binding, binding[3][2][7], previous)
 
 

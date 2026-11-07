@@ -122,7 +122,8 @@ class GatewayRecipeOwner:
             owner._cell = (owner, s)
             owner._root_cell = root = (activation, owner, s, (owner, buffer))
             activation._recipe_cell = root
-            owner._count_cell = (owner, s, 0)
+            owner._bytes_read = s.expected.configuration_cell[3][2]
+            owner._count_cell = (owner, s, owner._bytes_read)
             raw = GatewayRecipeOwner._document(owner, s.expected.expected)
             actual_count = owner._count_cell
             originals = ((s.expected.expected, raw),)
@@ -147,7 +148,8 @@ class GatewayRecipeOwner:
                      and actual_count[0] is owner and actual_count[1] is s
                      and type(actual_count[2]) is int and owner._count_cell is actual_count
                      and owner._bytes_read is actual_count[2]
-                     and owner._bytes_read == recipe_size + sum(row.size for row in rows)
+                     and owner._bytes_read == s.expected.configuration_cell[3][2]
+                     + recipe_size + sum(row.size for row in rows)
                      and all(type(row) is _Descriptor and row.closed is True
                              and row.close_attempted is True and row.unknown is False
                              for row in s.records)
@@ -205,7 +207,8 @@ class GatewayRecipeOwner:
                  and type(self._bytes_read) is int and self._bytes_read == count[2])
         expected = (s.expected.expected, *plan[2])
         _expected(expected)
-        _require(0 < count[2] <= _TOTAL_LIMIT and count[2] == sum(row.size for row in expected)
+        _require(0 < count[2] <= _TOTAL_LIMIT + parent[3][3][2]
+                 and count[2] == parent[3][3][2] + sum(row.size for row in expected)
                  and all(type(row) is tuple and len(row) == 2 and row[0] is wanted
                          and type(row[1]) is bytes and len(row[1]) == wanted.size
                          for row, wanted in zip(fact[3], expected, strict=True)))
@@ -244,7 +247,8 @@ class GatewayRecipeOwner:
                  and self._failed is False and self._unknown is False and self._reading is False
                  and self._ready is False and self._fact_cell is None
                  and s.activation._recipe_fact_cell is None
-                 and type(self._bytes_read) is int and 0 <= self._bytes_read <= _TOTAL_LIMIT)
+                 and type(self._bytes_read) is int
+                 and 0 <= self._bytes_read <= _TOTAL_LIMIT + 65536)
         plan_cell = self._plan_cell
         if plan_cell is not None:
             _require(type(plan_cell) is tuple and len(plan_cell) == 3
@@ -265,6 +269,12 @@ class GatewayRecipeOwner:
                  and self._unknown is False and self._reading is False
                  and self._ready is False and self._fact_cell is None
                  and s.activation._recipe_fact_cell is None)
+        parent = StartupSelectionOwner._retained_binding(s.expected.configuration)
+        _require(parent[0] is s.expected.configuration_scope
+                 and parent[3] is s.expected.configuration_cell
+                 and type(self._bytes_read) is int
+                 and parent[3][3][2] <= self._bytes_read
+                 <= _TOTAL_LIMIT + parent[3][3][2])
         return s
 
     def _append(self, data):

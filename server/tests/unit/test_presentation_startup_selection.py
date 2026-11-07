@@ -83,7 +83,7 @@ if mutation == "close_unknown":
         if len(calls) == 1: raise OSError("synthetic lost close acknowledgement")
     a.os.close = lost_close
 foreign_fact = object()
-if mutation in ("buffer_swap", "foreign_hash", "pre_fact_replacement"):
+if mutation in ("buffer_swap", "foreign_hash", "pre_fact_replacement", "hash_count_swap"):
     actual_hash = c.hashlib.sha256
     class ForeignDigest:
         def __eq__(self, other):
@@ -94,6 +94,10 @@ if mutation in ("buffer_swap", "foreign_hash", "pre_fact_replacement"):
     def altered_hash(data=b""):
         if data == raw:
             if mutation == "foreign_hash": return DigestResult()
+            if mutation == "hash_count_swap":
+                active = owner._selection_owner
+                active._count_cell = (active, active._origin, active._bytes_read)
+                return actual_hash(data)
             if mutation == "pre_fact_replacement":
                 owner._selection_fact_cell = foreign_fact
                 return actual_hash(data)
@@ -163,9 +167,11 @@ if mutation.startswith("history_"):
         worker.start()
         worker.join()
         assert outcomes == [True]
-    if mutation in ("history_fact_drift", "history_context_drift"):
+    if mutation in ("history_fact_drift", "history_context_drift", "history_count_drift"):
         foreign = object()
         if mutation == "history_fact_drift": owner._selection_fact_cell = foreign
+        elif mutation == "history_count_drift":
+            loaded._count_cell = (loaded, loaded._origin, loaded._bytes_read)
         else:
             getpid = c.os.getpid
             def change_during_context():
@@ -176,7 +182,7 @@ if mutation.startswith("history_"):
         try: loaded.retained_data()
         except c.SelectionLoadError: pass
         else: raise AssertionError("changed retained selection accepted")
-        assert owner._selection_fact_cell is foreign
+        if mutation != "history_count_drift": assert owner._selection_fact_cell is foreign
     else:
         assert loaded.retained_data() is original
         assert loaded._ready and not loaded._failed and not owner._uncertain
@@ -214,9 +220,9 @@ print(json.dumps({"mutation": mutation, "passed": True, "runtime_admitted": Fals
     "noncanonical",
     "oversize", "digest", "wrong_name", "leaf_mode", "directory_mode", "symlink", "hardlink",
     "read_retire", "close_unknown", "buffer_swap", "foreign_hash", "final_retire",
-    "final_replacement", "pre_fact_replacement", "late_load", "late_read",
+    "final_replacement", "pre_fact_replacement", "hash_count_swap", "late_load", "late_read",
     "history_late", "history_namespace", "history_paths", "history_thread",
-    "history_fact_drift", "history_context_drift",
+    "history_fact_drift", "history_context_drift", "history_count_drift",
 ])
 @pytest.mark.parametrize("version", [1, 2])
 def test_private_selected_startup_configuration(tmp_path, mutation, version):

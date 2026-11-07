@@ -138,3 +138,21 @@ The [GR1 document loader](GATEWAY_RECIPE.md#current-gr1-document-loading-source-
 now reads the recipe and four fixed child envelopes under original IO/aggregate
 ownership (517 combined checks). Full child-table/runtime/native/key admission
 and fixed entry/operator composition remain open.
+
+## Original selection IO accounting — November 7, 2026
+
+The startup selection's actual read-count allocation is now retained in its
+original closed fact and checked before publication, during historical reads,
+and across later recipe acquisition. The recipe inherits that actual count;
+package/entry file accounting carries it forward without resetting the budget.
+Aggregate artifact expectations also include the original selection file.
+
+The recipe's existing 32MiB document cap remains document-only. Its cumulative
+counter permits exactly the original selection prefix plus that cap, while the
+combined artifact limit covers the selection, recipe documents and code files.
+Same-value count-cell replacement refuses; a scaled boundary test distinguishes
+valid document-cap completion from accidentally charging the prefix twice.
+
+This is a startup accounting repair, not completed runtime admission or installed
+bot-image delivery. Dependency/interpreter/link/loader coverage, trusted execution,
+operator/native/key composition, broker acceptance and physical checks remain open.

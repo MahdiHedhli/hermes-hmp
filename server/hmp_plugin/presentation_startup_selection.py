@@ -146,6 +146,10 @@ class StartupSelectionOwner:
                      and owner._buffer is buffer and root_cell[3] is buffer_cell
                      and len(buffer) == expected.size)
             raw = bytes(buffer)
+            count = owner._count_cell
+            _require(type(count) is tuple and len(count) == 3 and count[0] is owner
+                     and count[1] is s and type(count[2]) is int
+                     and owner._bytes_read is count[2] and count[2] == expected.size)
             digest = hashlib.sha256(raw).hexdigest()
             _require(type(digest) is str and digest == expected.sha256
                      and StartupSelectionOwner._guard(owner) is s
@@ -157,14 +161,16 @@ class StartupSelectionOwner:
                      and owner._root_cell is root_cell and activation._selection_cell is root_cell)
             _require(owner._selection is None and owner._selection_cell is None
                      and activation._selection_fact_cell is None)
-            fact_cell = (owner, s, selection)
+            _require(owner._count_cell is count and owner._bytes_read is count[2])
+            fact_cell = (owner, s, selection, count)
             owner._selection = selection
             owner._selection_cell = fact_cell
             activation._selection_fact_cell = fact_cell
             _require(StartupSelectionOwner._guard(owner) is s
                      and owner._selection is selection and owner._selection_cell is fact_cell
                      and activation._selection_fact_cell is fact_cell
-                     and owner._root_cell is root_cell and activation._selection_cell is root_cell)
+                     and owner._root_cell is root_cell and activation._selection_cell is root_cell
+                     and owner._count_cell is count and owner._bytes_read is count[2])
             owner._ready = True
         except BaseException:
             failed = owner._failed = True
@@ -210,6 +216,8 @@ class StartupSelectionOwner:
                  and s.activation._selection_owner is self and self._buffer is root[3][1]
                  and self._failed is False and self._unknown is False
                  and not any(name in sys.modules for name in _LATE_MODULES))
+        if self._ready is True:
+            _require(StartupSelectionOwner._retained_binding(self)[0] is s)
         return s
 
     def _retained_binding(self):
@@ -235,9 +243,16 @@ class StartupSelectionOwner:
                          and row.unknown is False and row.close_attempted is True
                          for row in s.records))
         fact = s.activation._selection_fact_cell
-        _require(type(fact) is tuple and len(fact) == 3 and fact[0] is self and fact[1] is s
+        _require(type(fact) is tuple and len(fact) == 4 and fact[0] is self and fact[1] is s
                  and type(fact[2]) is GatewayStartupSelection
-                 and self._selection is fact[2] and self._selection_cell is fact)
+                 and self._selection is fact[2] and self._selection_cell is fact
+                 and type(fact[3]) is tuple and len(fact[3]) == 3
+                 and fact[3][0] is self and fact[3][1] is s
+                 and type(fact[3][2]) is int and self._count_cell is fact[3]
+                 and self._bytes_read is fact[3][2]
+                 and type(s.expected) is tuple and len(s.expected) == 1
+                 and type(s.expected[0]) is ExpectedArtifact
+                 and fact[3][2] == s.expected[0].size)
         return s, cell, root, fact
 
     def retained_data(self):
