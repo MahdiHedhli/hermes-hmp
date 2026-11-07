@@ -72,6 +72,7 @@ CONTRACT_MODULES = {
     "presentation_credential_phase.py",
     "presentation_credential_scope.py",
     "presentation_credential_stream.py",
+    "presentation_credential_frame_discard.py",
     "presentation_credential_work.py",
     "presentation_credential_begin.py",
     "presentation_credential_control.py",

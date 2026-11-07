@@ -1094,3 +1094,33 @@ digest, waiting after EAGAIN, concurrent CANCEL, terminal/ACK/native release and
 production/physical image delivery remain open. Earlier broker failure causes and
 sender-destination incident remain unresolved. No app build/install, live host,
 device, grant/provider or deployment change occurred.
+
+## Bounded committed-frame discard parser — November 7, 2026
+
+`presentation_credential_frame_discard.py` now parses one bounded outer-header
+prefix/header and its exact committed body without replaying authentication bytes.
+`CommittedFrameDiscard` is consistency DATA only: constructing a commitment is not
+signature provenance or an I/O permit. The actual header and digest allocation
+are anchored before digest initialization; the original hash remains joined to
+that header/binding. RESULT body bytes are hashed/discarded without an image
+accumulator. Only TERMINAL metadata, at most4096 bytes, is retained privately; its
+captured bytes are independently rehashed with the header and joined to the final
+stream digest before transfer to a bounded data fact. No ABORTED claim is accepted.
+
+Exact-needed chunks prevent overread/terminal scanning. Hash mismatch, copied
+digest, partial initialization, lost hash acknowledgement, foreign header/hash
+allocation, changed return values and metadata changed after hashing fail closed,
+wipe only owned buffers and do not retry. DiscardedFrame is not lifecycle, native
+acceptance, ACK or release proof. Native integration must hold the actual original
+AuthReceipt, establish the allowed grammar transition and bind the actual parser
+allocation to the same reader/task/socket before any I/O. That wiring remains open.
+
+Independent read-only review accepted source and hardening. Exact expanded affected
+regression:1,983 passed,1 skipped in173.26s; full lint, plugin surface and whitespace
+pass. Twenty-five focused data cases passed in0.15s and overlap the expanded run;
+RESULT chunking and TERMINAL0/1/2 include maximum terminal metadata. Current
+functional source hashes match execution. Original partial-body digest integration,
+header/phase native read ownership, EAGAIN waiting, terminal acceptance, CANCEL/ACK/
+native release and production/physical image delivery remain unfinished. Earlier
+broker failure causes and sender-destination incident remain unresolved. No build,
+install, live host/device, grant/provider or deployment change occurred.

@@ -26,6 +26,10 @@
 - [x] Verify the completed original auth record once, with independently retained
       attempt/result, finished-parser continuity, held pre-crypto counts and post-
       callback native/role/alias seals. Positive RESULT and nine refusal causals.
+- [x] Parse bounded committed RESULT/TERMINAL frame DATA from header prefix through
+      exact full digest; no auth replay, RESULT buffer or terminal claim authority.
+      Independently anchored header/digest/hash, bounded metadata transfer and25
+      positive/refusal cases; native binding below remains required.
 - [ ] Bind verified phase DATA to the explicit grammar-allowed outer-header stage;
       no auth restart/fallback, no captured-prefix byte credit or terminal acceptance.
 
