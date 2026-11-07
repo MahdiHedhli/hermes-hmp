@@ -43,6 +43,14 @@ CONFIG_PREFIX = CONFIG_PREFIX.replace(
     'gateway_inventory_sha256="4" * 64',
     'gateway_inventory_sha256=hashlib.sha256(manifest_raw).hexdigest()',
 )
+CONFIG_PREFIX = CONFIG_PREFIX.replace("document = dict(schema=1, kind=",
+                                      "document = dict(schema=(2 if package_mutation == "
+                                      "'selection_v2' else 1), kind=", 1)
+CONFIG_PREFIX = CONFIG_PREFIX.replace(
+    "c.StartupSelectionOwner.load(owner, expected)",
+    "(c.StartupSelectionOwner.load_recipe_selection if package_mutation == 'selection_v2' "
+    "else c.StartupSelectionOwner.load)(owner, expected)",
+)
 PACKAGE_SUFFIX = r'''
 mutation = package_mutation
 package_spec = importlib.util.spec_from_file_location(
@@ -122,8 +130,13 @@ except p.PackageInventoryError as error:
     assert not success, str(error)
     checked = error.failed_owner
     assert str(error) == "BI1_GATEWAY_PACKAGE_REFUSED"
-    assert checked is owner._package_owner and checked._failed and not checked._ready
-    assert checked._fact is None
+    if mutation == "selection_v2":
+        assert checked is None and owner._package_owner is None
+        assert owner._package_cell is None and owner._package_fact_cell is None
+        assert loaded._ready and loaded._selection.schema == 2
+    else:
+        assert checked is owner._package_owner and checked._failed and not checked._ready
+        assert checked._fact is None
 else:
     assert success, mutation
     assert checked._ready and checked._fact[0] is checked
@@ -165,7 +178,7 @@ if mutation.startswith("history_"):
         assert original.environment == original_environment
         assert checked._ready and not checked._failed and not owner._uncertain
 if mutation == "pre_fact_replacement": assert owner._package_fact_cell is foreign_fact
-if checked._origin is not None:
+if checked is not None and checked._origin is not None:
     assert all(row.closed or row.unknown for row in checked._origin.records)
     assert all(row.closed or row.unknown for row in checked._origin.expected.scans)
 if mutation in ("extra", "missing", "symlink", "directory_symlink", "private_file", "retired_scan"):
@@ -181,7 +194,8 @@ print(json.dumps({"mutation": mutation, "passed": True, "runtime_admitted": Fals
 
 
 @pytest.mark.parametrize("mutation", [
-    "normal", "duplicate", "private_name", "generation", "unknown", "wrong_root", "changed",
+    "normal", "selection_v2", "duplicate", "private_name", "generation", "unknown", "wrong_root",
+    "changed",
     "missing", "extra", "symlink", "directory_symlink", "private_file", "directory_mode",
     "digest", "module_origin", "retired_scan", "spec_swap", "namespace_swap", "after_hash_replace",
     "pre_fact_replacement", "history_late", "history_namespace", "history_paths", "history_thread",

@@ -112,3 +112,24 @@ cover late startup, namespace eviction, path changes, wrong thread, root fact dr
 and drift during context sampling; package publication also preserves a foreign
 pre-publication fact. This is isolated source qualification, not installed runtime
 or physical device/image-display qualification.
+
+## Explicit schema versions and remaining complete recipe
+
+`StartupSelectionOwner.load` remains fixed schema1/package-only. The separate
+`load_recipe_selection` selects schema2/full-recipe-pin semantics before reading;
+there is no document-driven autodetection, downgrade or retry. Both enter the same
+original IO/publication lifecycle and return GatewayStartupSelection with an exact
+integer schema field retained at the end of the immutable tuple. A matching hash
+without this retained version cannot establish recipe type or approval.
+
+The old package verifier refuses schema2 before package acquisition, even with a
+package-matching inventory digest. Both fixed loaders refuse alternate recapture
+on the original activation and reject subclass dispatch before callbacks. Shared
+private-file/canonical-schema/history/custody causals run against each version.
+Four cross/unknown-version cases and package-only non-promotion are also covered.
+
+477 combined checks passed in12.63s with source/fixture hashes unchanged. Review
+accepted the version separation; this implements only the first GR1 slice of
+[GATEWAY_RECIPE.md](GATEWAY_RECIPE.md). The complete recipe and four fixed child
+loads, shared aggregate budget, entry/dependency/link/loader validation and actual
+native/key factory are still open. A schema2 selection alone approves nothing.

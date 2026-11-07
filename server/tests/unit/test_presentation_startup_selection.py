@@ -131,6 +131,7 @@ else:
     assert success, mutation
     selection = loaded._selection
     assert type(selection) is c.GatewayStartupSelection
+    assert selection.schema == document["schema"]
     assert selection.iid == document["iid"] and selection.directory == str(fixture)
     assert len(selection.gateway_public) == len(selection.broker_public) == 32
     assert owner._selection_fact_cell is loaded._selection_cell
@@ -188,6 +189,21 @@ assert len(calls) == len(set(calls)) and "foreign equality" not in calls
 try: c.StartupSelectionOwner.load(owner, expected)
 except Exception: pass
 else: raise AssertionError("selection recapture accepted")
+for blocked_method in (c.StartupSelectionOwner.load,
+                       c.StartupSelectionOwner.load_recipe_selection):
+    try: blocked_method(owner, expected)
+    except c.SelectionLoadError: pass
+    else: raise AssertionError("alternate-version recapture accepted")
+class WrongOwner(c.StartupSelectionOwner):
+    @classmethod
+    def _load(cls, *args):
+        calls.append("subclass callback")
+        raise AssertionError("subclass dispatch")
+for method in (WrongOwner.load, WrongOwner.load_recipe_selection):
+    try: method(owner, expected)
+    except c.SelectionLoadError: pass
+    else: raise AssertionError("subclass loader accepted")
+assert "subclass callback" not in calls
 print(json.dumps({"mutation": mutation, "passed": True, "runtime_admitted": False}))
 '''
 
@@ -202,11 +218,17 @@ print(json.dumps({"mutation": mutation, "passed": True, "runtime_admitted": Fals
     "history_late", "history_namespace", "history_paths", "history_thread",
     "history_fact_drift", "history_context_drift",
 ])
-def test_private_selected_startup_configuration(tmp_path, mutation):
+@pytest.mark.parametrize("version", [1, 2])
+def test_private_selected_startup_configuration(tmp_path, mutation, version):
     if os.name != "posix" or sys.platform not in ("darwin", "linux"):
         pytest.skip("current supported POSIX startup fixture")
+    suffix = SUFFIX
+    if version == 2:
+        suffix = suffix.replace("schema=1", "schema=2", 1).replace(
+            "c.StartupSelectionOwner.load(owner, expected)",
+            "c.StartupSelectionOwner.load_recipe_selection(owner, expected)")
     completed = subprocess.run(
-        [sys.executable, "-I", "-B", "-c", PREFIX + SUFFIX, str(MODULE), "normal", mutation,
+        [sys.executable, "-I", "-B", "-c", PREFIX + suffix, str(MODULE), "normal", mutation,
          str(ARTIFACT_MODULE), str(SELECTION_MODULE), str(tmp_path.resolve())],
         cwd=tmp_path, env={"LANG": "C", "LC_ALL": "C"}, capture_output=True, text=True,
         timeout=10, check=False,
@@ -215,3 +237,20 @@ def test_private_selected_startup_configuration(tmp_path, mutation):
     assert json.loads(completed.stdout) == {
         "mutation": mutation, "passed": True, "runtime_admitted": False,
     }
+
+
+@pytest.mark.parametrize("document_version,loader_version", [(1, 2), (2, 1), (3, 1), (3, 2)])
+def test_selection_version_requires_explicit_matching_loader(
+    tmp_path, document_version, loader_version,
+):
+    suffix = SUFFIX.replace("schema=1", f"schema={document_version}", 1)
+    suffix = suffix.replace("success = mutation in", "success = False and mutation in")
+    if loader_version == 2:
+        suffix = suffix.replace("c.StartupSelectionOwner.load(owner, expected)",
+                                "c.StartupSelectionOwner.load_recipe_selection(owner, expected)")
+    result = subprocess.run(
+        [sys.executable, "-I", "-B", "-c", PREFIX + suffix, str(MODULE), "normal", "normal",
+         str(ARTIFACT_MODULE), str(SELECTION_MODULE), str(tmp_path.resolve())],
+        env={"LANG": "C", "LC_ALL": "C"}, capture_output=True, text=True, timeout=10)
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["runtime_admitted"] is False

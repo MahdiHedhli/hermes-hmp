@@ -1149,3 +1149,7 @@ causal evidence and the remaining full factory requirements. Minimum native
 version/API compatibility is distinct from HMP/broker installation integrity.
 
 The separate `hmp_startup/gateway_entry.py` (outside the closed plugin package) retains original script/interpreter invocation before native bootstrap, captures actual post-bootstrap activation and refuses changed invocation. Source component only; no listener, native/key factory or runtime admission.
+
+`presentation_startup_selection.py` now has fixed schema1 `load` and explicit
+schema2 `load_recipe_selection`; GatewayStartupSelection retains its exact schema.
+The package-only verifier accepts only schema1. Full recipe/factory admission remains open.

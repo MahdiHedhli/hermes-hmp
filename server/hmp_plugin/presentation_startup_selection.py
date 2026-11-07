@@ -52,6 +52,7 @@ class GatewayStartupSelection(NamedTuple):
     broker_inventory_sha256: str
     loader_policy: str
     directory: str
+    schema: int
 
     def __repr__(self):
         return "<GatewayStartupSelection loaded-not-admitted redacted>"
@@ -65,13 +66,14 @@ def _pairs(pairs):
     return result
 
 
-def _decode(raw, directory):
+def _decode(raw, directory, schema):
+    _require(type(schema) is int and schema in (1, 2))
     _require(type(raw) is bytes and 0 < len(raw) <= _LIMIT)
     document = json.loads(raw, object_pairs_hook=_pairs)
     _require(type(document) is dict and document.keys() == _KEYS)
     _require(all(type(value) is (int if key in ("schema", "protocol") else str)
                  for key, value in document.items()))
-    _require(document["schema"] == 1 and document["kind"] == "HMP_GATEWAY_STARTUP_SELECTION"
+    _require(document["schema"] == schema and document["kind"] == "HMP_GATEWAY_STARTUP_SELECTION"
              and document["protocol"] == 2 and document["algorithm"] == "Ed25519"
              and _IID.fullmatch(document["iid"]) is not None)
     iid_raw = base64.b32decode(document["iid"].upper() + "====")
@@ -91,12 +93,25 @@ def _decode(raw, directory):
         document["iid"], document["credential_generation"],
         bytes.fromhex(document["gateway_public"]), bytes.fromhex(document["broker_public"]),
         document["gateway_inventory_sha256"], document["broker_inventory_sha256"],
-        document["loader_policy"], directory)
+        document["loader_policy"], directory, schema)
 
 
 class StartupSelectionOwner:
     @classmethod
     def load(cls, activation, expected):
+        """Schema1 package-only selection; never interpret as a full recipe pin."""
+        _require(cls is StartupSelectionOwner)
+        return StartupSelectionOwner._load(activation, expected, 1)
+
+    @classmethod
+    def load_recipe_selection(cls, activation, expected):
+        """Schema2 complete-recipe selection DATA; no fallback or runtime admission."""
+        _require(cls is StartupSelectionOwner)
+        return StartupSelectionOwner._load(activation, expected, 2)
+
+    @classmethod
+    def _load(cls, activation, expected, schema):
+        _require(type(schema) is int and schema in (1, 2))
         _require(cls is StartupSelectionOwner and type(activation) is GatewayActivationOwner)
         _require(activation._selection_owner is None and activation._selection_cell is None
                  and activation._selection_fact_cell is None)
@@ -135,8 +150,9 @@ class StartupSelectionOwner:
             _require(type(digest) is str and digest == expected.sha256
                      and StartupSelectionOwner._guard(owner) is s
                      and owner._root_cell is root_cell and activation._selection_cell is root_cell)
-            selection = _decode(raw, expected.path.rsplit("/", 1)[0])
+            selection = _decode(raw, expected.path.rsplit("/", 1)[0], schema)
             _require(type(selection) is GatewayStartupSelection
+                     and type(selection.schema) is int and selection.schema == schema
                      and StartupSelectionOwner._guard(owner) is s
                      and owner._root_cell is root_cell and activation._selection_cell is root_cell)
             _require(owner._selection is None and owner._selection_cell is None

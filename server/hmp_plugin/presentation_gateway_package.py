@@ -53,7 +53,9 @@ def _selection(owner):
     _require(type(activation) is GatewayActivationOwner)
     cell = activation._selection_fact_cell
     _require(type(cell) is tuple and len(cell) == 3 and cell[0] is owner and cell[1] is s
-             and type(cell[2]) is GatewayStartupSelection and owner._selection is cell[2]
+             and type(cell[2]) is GatewayStartupSelection
+             and type(cell[2].schema) is int and cell[2].schema == 1
+             and owner._selection is cell[2]
              and owner._selection_cell is cell and owner._ready is True
              and owner._failed is False and owner._unknown is False)
     _require(StartupSelectionOwner._guard(owner) is s

@@ -21,6 +21,9 @@ implementation tasks, not an established upstream Hermes blocker.
       refusal, all-file hashes, original file/directory/ancestor metadata and loaded
       HMP-origin consistency;19 cases plus startup/import coverage pass (403 total).
       This is not the complete gateway runtime/dependency/loader admission recipe.
+- [ ] GR1–GR3: implement the [complete versioned gateway recipe](GATEWAY_RECIPE.md),
+      original child pins/entry/runtime coverage and actual native/key composition.
+      Existing schema1 package snapshots cannot satisfy this gate.
 - [ ] PS1 configuration/inventory join: fixed trusted entry/operator approval of loader inputs,
       independent expected roots/bytes, complete reachable tree and unexpected-file,
       future-import/extension/OS-loader validation before native/key composition.
@@ -703,3 +706,10 @@ historical, not an alternative live authorization path or resolved incident.
 
 - [x] Observe actual disposable exec and wrapper re-entry for script/module launch using pinned native relaunch_command source; provenance reviewed;436 combined checks pass.
 - [ ] Qualify actual installed entry and native bootstrap/PM activation/lease continuity; this fixture does not satisfy those gates or complete PS1.
+
+### GR1 explicit version-selection slice — November 7, 2026
+
+- [x] Freeze complete recipe pin/child/native-boundary contract; independently reviewed.
+- [x] Preserve fixed schema1 loading and add explicit schema2 selection DATA, with no fallback/alternate recapture; package-only verifier refuses schema2 before IO;477 combined checks pass.
+- [ ] Finish GR1 original complete-recipe/fixed-child IO and shared aggregate budget.
+- [ ] Finish GR2 entry/dependency/runtime/link/loader and GR3 actual native/key joins; no authority or deployment is enabled by this checkpoint.

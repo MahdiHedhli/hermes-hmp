@@ -294,3 +294,7 @@ See [evidence and limits](../../docs/research/presentation-credential-native-inp
 Unsigned phases remain refused until original streaming and direct broker IO
 paths receive the typed signed transport; this is not native authorization or
 production runtime admission.
+
+The remaining complete factory uses the [versioned gateway recipe contract](GATEWAY_RECIPE.md).
+Explicit schema2 selection loading is implemented as DATA only; schema1 stays
+package-only. Full recipe/child aggregate checks and native/key admission remain open.

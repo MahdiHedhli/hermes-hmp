@@ -1,3 +1,21 @@
+## Versioned gateway recipe selection — November 7, 2026
+
+The complete gateway recipe contract now separates the native trusted baseline
+from HMP entry/package/dependency integrity. A native Hermes commit remains
+diagnostic, not a version allowlist. Existing schema1 selection pins package-only
+bytes; fixed load_recipe_selection explicitly selects schema2 and retains that
+version in immutable data. Neither loader auto-detects or falls back. Alternate
+version recapture and subclass callbacks refuse. The package-only verifier rejects
+schema2 before creating an IO owner, even when its digest matches package bytes.
+
+Independent review accepted the contract and bounded version-separation source.
+76 configuration,27 package and remaining startup/import checks passed:477 in
+12.63s, source/fixtures unchanged; lint/surface/whitespace checks pass. This is the
+first GR1 slice. Full recipe/fixed-child loading, shared aggregate enforcement,
+entry/dependency/runtime/link/loader coverage and actual native/key composition
+remain unimplemented. No runtime authority, deployment, key load, image display or
+physical/release qualification follows. Prior regression and sender risks remain.
+
 ## Gateway re-exec continuity check — November 7, 2026
 
 Actual disposable process-image replacement now verifies both script and module
