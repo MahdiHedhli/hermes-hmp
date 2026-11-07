@@ -9,7 +9,13 @@ import hashlib
 import socket
 from typing import NamedTuple
 
-from .presentation_broker_codec import HEADER_LIMIT, BrokerBinding
+from .presentation_broker_codec import (
+    HEADER_LIMIT,
+    BrokerBinding,
+    BrokerHeader,
+    _binding,
+    encode_header,
+)
 from .presentation_credential_cleanup_notice import SignedReadNotice
 from .presentation_credential_frame_discard import CommittedFrameDiscard, DiscardedFrame
 from .presentation_credential_stream import (
@@ -24,6 +30,10 @@ _HASH_HEX = _HASH_TYPE.hexdigest
 _HASH_COPY = _HASH_TYPE.copy
 _HASH_UPDATE = _HASH_TYPE.update
 _SHA256 = hashlib.sha256
+# Internal dispatch identities choose an already-owned frame slot. They cannot
+# mint a scope, bypass actor checks or supply caller-selected parser/IO state.
+_FIRST_FRAME = object()
+_TERMINAL_FRAME = object()
 
 
 def _require(value):
@@ -116,7 +126,12 @@ class _Step:
 
 
 def _scope(native, read_scope):
-    from .presentation_credential_cleanup_read import _AuthAttempt, _AuthReceipt
+    from .presentation_credential_cleanup_read import (
+        _AuthAttempt,
+        _AuthReceipt,
+        _AuthScope,
+        _ParserSeal,
+    )
 
     frame = native._frame_origin
     cell = native._frame_allocation_origin
@@ -129,7 +144,15 @@ def _scope(native, read_scope):
     _require(s.native is native and s.read_scope is read_scope
              and type(s.auth) is _AuthAttempt and s.auth is native._auth_origin
              and s.auth.complete is True and type(s.receipt) is _AuthReceipt
-             and s.receipt is s.auth.fact and type(s.auth.fact_cell) is tuple
+             and s.receipt is s.auth.fact
+             and type(s.receipt.scope) is _AuthScope and s.receipt.scope is s.auth.scope
+             and s.auth.scope is s.auth.scope_origin
+             and type(s.auth.scope_allocation) is tuple and len(s.auth.scope_allocation) == 2
+             and s.auth.scope_allocation[0] is s.auth
+             and s.auth.scope_allocation[1] is s.receipt.scope
+             and type(s.receipt.scope.before) is _ParserSeal
+             and type(s.receipt.scope.before.value) is bytes
+             and type(s.auth.fact_cell) is tuple
              and len(s.auth.fact_cell) == 2 and s.auth.fact_cell[1] is s.receipt
              and type(s.phase) is str and s.phase in ("RESULT", "TERMINAL")
              and type(s.sequence) is int and s.sequence == 1
@@ -163,20 +186,54 @@ def _scope(native, read_scope):
     return frame
 
 
-def _snapshot(frame):
-    p = frame.scope.parser
+def _snapshot(frame, *, held_scope=None):
+    from .presentation_credential_cleanup_read import _AuthReceipt
+    from .presentation_credential_cleanup_terminal import _AuthFact
+
+    if held_scope is None:
+        held_scope = frame.scope
+    _require(type(held_scope) is _FrameScope and frame.scope is held_scope
+             and frame.scope_origin is held_scope
+             and type(frame.scope_cell) is tuple and len(frame.scope_cell) == 2
+             and frame.scope_cell[0] is frame and frame.scope_cell[1] is held_scope
+             and type(held_scope.receipt) in (_AuthReceipt, _AuthFact)
+             and type(held_scope.phase) is str and type(held_scope.sequence) is int)
+    p = held_scope.parser
     _require(type(p) is CommittedFrameDiscard)
     needed = CommittedFrameDiscard.needed.fget(p)
-    _require(p._claim_origin is frame.scope.receipt.checked
-             and p._binding_origin is frame.scope.binding
-             and p._expected == (frame.scope.phase, frame.scope.sequence))
+    _require(frame.scope is held_scope and frame.scope_origin is held_scope
+             and type(frame.scope_cell) is tuple and len(frame.scope_cell) == 2
+             and frame.scope_cell[0] is frame and frame.scope_cell[1] is held_scope
+             and p._claim_origin is held_scope.receipt.checked
+             and p._binding_origin is held_scope.binding
+             and type(p._expected) is tuple and p._expected is p._expected_origin
+             and len(p._expected) == 2 and type(p._expected[0]) is str
+             and type(p._expected[1]) is int
+             and p._expected == (held_scope.phase, held_scope.sequence))
     stream = p._stream_origin
     hasher = digest = None
     received = 0
     if stream is not None:
-        _require(type(stream) is CommittedFrameDigest and type(stream._hasher_origin) is _HASH_TYPE)
+        _require(type(stream) is CommittedFrameDigest and type(stream._hasher_origin) is _HASH_TYPE
+                 and type(stream._received) is int)
         hasher, received = stream._hasher_origin, stream._received
         digest = _HASH_HEX(hasher)
+    _require(frame.scope is held_scope and frame.scope_origin is held_scope
+             and type(frame.scope_cell) is tuple and len(frame.scope_cell) == 2
+             and frame.scope_cell[0] is frame and frame.scope_cell[1] is held_scope
+             and type(p._buffer_origin) is bytearray and p._buffer is p._buffer_origin
+             and type(p._buffer_allocation) is tuple and len(p._buffer_allocation) == 2
+             and p._buffer_allocation[0] is p and p._buffer_allocation[1] is p._buffer_origin
+             and type(p._terminal_origin) is bytearray and p._terminal is p._terminal_origin
+             and type(p._terminal_allocation) is tuple and len(p._terminal_allocation) == 2
+             and p._terminal_allocation[0] is p
+             and p._terminal_allocation[1] is p._terminal_origin
+             and type(p._target_origin) is int and p._target is p._target_origin
+             and p._stream_origin is stream and p._stream is stream)
+    if stream is not None:
+        _require(type(stream._received) is int and stream._received == received
+                 and stream._received_snapshot is stream._received
+                 and stream._hasher_origin is hasher and stream._hasher is hasher)
     return _FrameSeal(p, p._buffer_origin, bytes(p._buffer_origin), p._target_origin,
         p._header_origin, stream, hasher, received, digest, p._terminal_origin,
         bytes(p._terminal_origin), needed)
@@ -212,11 +269,14 @@ def _ledger(frame):
              and type(ledger.seal) is _FrameSeal)
     step = frame.step_origin
     if step is None:
-        _require(frame.step is None and frame.step_cell is None and ledger.ordinal == 0)
+        _require(frame.step is None and frame.step_cell is None
+                 and frame.active_step_cell is None and ledger.ordinal == 0)
         return ledger.seal
     _require(type(step) is _Step and frame.step is step
              and type(frame.step_cell) is tuple and len(frame.step_cell) == 2
              and frame.step_cell[0] is frame and frame.step_cell[1] is step
+             and type(frame.active_step_cell) is tuple and len(frame.active_step_cell) == 2
+             and frame.active_step_cell[0] is frame and frame.active_step_cell[1] is step
              and type(step.scope) is _StepScope and step.scope is step.scope_origin
              and type(step.scope_cell) is tuple and len(step.scope_cell) == 2
              and step.scope_cell[0] is step and step.scope_cell[1] is step.scope
@@ -356,8 +416,10 @@ def _finished(frame, seal):
 def _current_work(native, scope):
     from .presentation_credential_cleanup_read import NativeCleanupRead
 
-    NativeCleanupRead._progress_work_current(native)
     frame = _scope(native, scope)
+    held_scope = frame.scope
+    NativeCleanupRead._progress_work_current(native)
+    _require(_scope(native, scope) is frame and frame.scope is held_scope)
     if not frame.initialized:
         _require(frame.ledger is None and frame.step is None)
         return frame
@@ -365,7 +427,7 @@ def _current_work(native, scope):
     if frame.finish_returned:
         _finished(frame, seal)
     else:
-        _same(_snapshot(frame), seal)
+        _same(_snapshot(frame, held_scope=held_scope), seal)
     SignedReadNotice._role_seal(scope.notice)
     _require(SignedReadNotice._actor(scope.notice) is scope.idle_scope[0].reservation
              and _scope(native, scope) is frame and _ledger(frame) is seal)
@@ -385,9 +447,10 @@ def _wipe(frame):
                 owned[1][:] = b"\x00" * len(owned[1])
                 owned[1].clear()
         parser._failed = True
-    step = frame.step_origin
-    if type(step) is _Step:
-        step.pending = step.pending_cell = None
+    owned = frame.active_step_cell
+    if (type(owned) is tuple and len(owned) == 2 and owned[0] is frame
+            and type(owned[1]) is _Step):
+        owned[1].pending = owned[1].pending_cell = None
 
 
 def _fail(native, scope, frame):
@@ -453,16 +516,17 @@ def start_frame(native):
     frame.initialized = frame.failed = frame.finish_attempted = False
     frame.finish_returned = frame.complete = frame.outer_attempted = False
     frame.ledger = frame.ledger_origin = frame.ledger_cell = None
-    frame.step = frame.step_origin = frame.step_cell = None
+    frame.step = frame.step_origin = frame.step_cell = frame.active_step_cell = None
     frame.result = frame.result_origin = frame.result_cell = frame.done = frame.done_cell = None
     frame.finish_cell = None
     native._frame = native._frame_origin = frame
     native._frame_allocation_origin = (native, frame)
+    held_scope = frame.scope
     failed = False
     try:
         _current_work(native, s)
-        CommittedFrameDiscard.__init__(parser, receipt.checked, binding=frame.scope.binding,
-                                      phase=frame.scope.phase, sequence=frame.scope.sequence)
+        CommittedFrameDiscard.__init__(parser, receipt.checked, binding=held_scope.binding,
+                                      phase=held_scope.phase, sequence=held_scope.sequence)
         frame.outer_attempted = True
         offset = 0
         while offset < len(outer):
@@ -470,7 +534,7 @@ def start_frame(native):
             _require(count > 0)
             CommittedFrameDiscard.feed(parser, outer[offset:offset + count])
             offset += count
-        seal = _snapshot(frame)
+        seal = _snapshot(frame, held_scope=held_scope)
         total = receipt.total_received
         _require(type(total) is int and total >= 0)
         ledger = _Ledger(0, total, total, seal)
@@ -486,9 +550,13 @@ def start_frame(native):
         raise FrameError("BI1_NATIVE_FRAME_START_UNKNOWN") from None
 
 
-def _dispatch_snapshot(frame, seal, requested):
-    """Fixed metadata/hash seals after final FD/mode probes; no clock/peer call."""
-    p = frame.scope.parser
+def _dispatch_metadata(frame, seal, requested, held_scope):
+    """Pure original joins after the last native/hash callback."""
+    _require(type(held_scope) is _FrameScope and frame.scope is held_scope
+             and frame.scope_origin is held_scope
+             and type(frame.scope_cell) is tuple and len(frame.scope_cell) == 2
+             and frame.scope_cell[0] is frame and frame.scope_cell[1] is held_scope)
+    p = held_scope.parser
     _require(type(p) is CommittedFrameDiscard and p is seal.parser
              and p._initialized is True and p._failed is False and p._finished is False
              and p._inflight is False and p._finish_attempted is False
@@ -501,9 +569,9 @@ def _dispatch_snapshot(frame, seal, requested):
              and bytes(seal.terminal) == seal.terminal_value
              and p._header is seal.header and p._header_origin is seal.header
              and p._stream is seal.stream and p._stream_origin is seal.stream
-             and p._claim is frame.scope.receipt.checked
-             and p._claim_origin is frame.scope.receipt.checked
-             and p._binding is frame.scope.binding and p._binding_origin is frame.scope.binding)
+             and p._claim is held_scope.receipt.checked
+             and p._claim_origin is held_scope.receipt.checked
+             and p._binding is held_scope.binding and p._binding_origin is held_scope.binding)
     if seal.stream is None:
         _require(seal.header is None and type(seal.target) is int
                  and requested == seal.target - len(seal.value))
@@ -517,16 +585,55 @@ def _dispatch_snapshot(frame, seal, requested):
                  and type(stream._body_length) is int
                  and stream._received == seal.received
                  and requested == min(CHUNK_LIMIT, stream._body_length - stream._received)
-                 and _HASH_HEX(seal.hasher) == seal.digest)
+                 and type(seal.header) is BrokerHeader
+                 and type(seal.header.kind) is str and seal.header.kind == held_scope.phase
+                 and type(seal.header.sequence) is int
+                 and seal.header.sequence == held_scope.sequence
+                 and type(seal.header.version) is int and seal.header.version == 2
+                 and type(seal.header.body_length) is int
+                 and seal.header.body_length == stream._body_length)
+        _binding(held_scope.binding)
+        _binding(seal.header.binding)
+        _require(
+            seal.header.binding == held_scope.binding and encode_header(seal.header) == seal.value
+        )
+
+
+def _dispatch_snapshot(frame, seal, requested, *, held_scope):
+    _dispatch_metadata(frame, seal, requested, held_scope)
+    if seal.stream is not None:
+        digest = _HASH_HEX(seal.hasher)
+        _require(type(digest) is str and digest == seal.digest)
+    _dispatch_metadata(frame, seal, requested, held_scope)
+
+
+def _owned_frame(native, scope, slot):
+    if slot is _FIRST_FRAME:
+        return _scope(native, scope)
+    _require(slot is _TERMINAL_FRAME)
+    from .presentation_credential_cleanup_terminal_frame import _scope as terminal_scope
+    return terminal_scope(native, scope)
+
+
+def _current_frame(native, scope, slot):
+    if slot is _FIRST_FRAME:
+        return _current_work(native, scope)
+    _require(slot is _TERMINAL_FRAME)
+    from .presentation_credential_cleanup_terminal_frame import _current_work as terminal_current
+    return terminal_current(native, scope)
 
 
 def read_frame_next(native):
+    return _read_frame_next(native, _FIRST_FRAME)
+
+
+def _read_frame_next(native, slot):
     from . import presentation_credential_cleanup_read as read_module
     from .presentation_credential_cleanup_read import _WIRE_LIMIT, NativeCleanupRead
 
     s = NativeCleanupRead._origin(native)
     r = SignedReadNotice._actor(s.notice)
-    frame = _scope(native, s)
+    frame = _owned_frame(native, s, slot)
     _require(frame.initialized is True and frame.finish_attempted is False)
     seal = _ledger(frame)
     _require(type(seal.needed) is int and 0 < seal.needed <= CHUNK_LIMIT)
@@ -544,22 +651,26 @@ def read_frame_next(native):
     step.after = step.fact = step.fact_cell = step.committed_ledger = None
     frame.step = frame.step_origin = step
     frame.step_cell = (frame, step)
+    frame.active_step_cell = (frame, step)
     failed = False
     chunk = copy = None
-    held_parser = frame.scope.parser
+    held_scope = frame.scope
+    held_parser = held_scope.parser
     try:
-        _current_work(native, s)
+        _current_frame(native, s, slot)
         _require(before.received + step.requested <= _WIRE_LIMIT)
         channel = r.capture.channel
         _require(channel._reading is False and channel._writing is False)
         NativeCleanupRead._final_socket_fence(native, s)
         SignedReadNotice._role_seal(s.notice)
-        _dispatch_snapshot(frame, seal, step.requested)
+        _dispatch_snapshot(frame, seal, step.requested, held_scope=held_scope)
         SignedReadNotice._role_seal(s.notice)
-        _require(_scope(native, s) is frame and _ledger(frame) is seal
+        _require(_owned_frame(native, s, slot) is frame and _ledger(frame) is seal
                  and SignedReadNotice._actor(s.notice) is r
                  and read_module._RECV is socket.socket.recv
-                 and type(read_module._DONTWAIT) is int and read_module._DONTWAIT > 0)
+                 and type(read_module._DONTWAIT) is int and read_module._DONTWAIT > 0
+                 and r.capture.channel is channel and channel._socket is s.sock
+                 and channel._reading is False and channel._writing is False)
         step.attempted = step.inflight = step.reading_owned = True
         channel._reading = True
         chunk = NativeCleanupRead._receive(s.sock, step.requested)
@@ -572,18 +683,21 @@ def read_frame_next(native):
             step.pending_cell = (step, chunk, step.received)
         cell = frame.step_cell
         _require(type(cell) is tuple and len(cell) == 2 and cell[0] is frame and cell[1] is step
+                 and frame.step is step and frame.step_origin is step
+                 and type(frame.active_step_cell) is tuple and len(frame.active_step_cell) == 2
+                 and frame.active_step_cell[0] is frame and frame.active_step_cell[1] is step
                  and channel._socket is s.sock and channel._reading is True)
         channel._reading = False
         step.inflight = step.reading_owned = False
-        _current_work(native, s)
+        _current_frame(native, s, slot)
         expected_hash = None
         if seal.stream is not None:
             copy = _HASH_COPY(seal.hasher)
             _HASH_UPDATE(copy, chunk)
             expected_hash = _HASH_HEX(copy)
-            _current_work(native, s)
+            _current_frame(native, s, slot)
         CommittedFrameDiscard.feed(held_parser, chunk)
-        after = _snapshot(frame)
+        after = _snapshot(frame, held_scope=held_scope)
         if seal.stream is None:
             _require(after.value == seal.value + chunk and after.terminal_value == b"")
             if after.stream is not None:
@@ -596,13 +710,13 @@ def read_frame_next(native):
                      and after.digest == expected_hash
                      and after.terminal is seal.terminal
                      and after.terminal_value == (seal.terminal_value + chunk
-                         if frame.scope.phase == "TERMINAL" else b""))
+                         if held_scope.phase == "TERMINAL" else b""))
         step.after = after
-        step.fact = _FrameReadFact(frame.scope, step.scope.ordinal, step.received,
+        step.fact = _FrameReadFact(held_scope, step.scope.ordinal, step.received,
             before.received + step.received, before.committed + step.received, after)
         step.fact_cell = (step, step.fact)
         step.fed = True
-        _current_work(native, s)
+        _current_frame(native, s, slot)
         ledger = _Ledger(step.scope.ordinal, step.fact.total_received,
                          step.fact.total_committed, after)
         step.committed_ledger = ledger
@@ -624,6 +738,8 @@ def read_frame_next(native):
         cell = frame.step_cell
         if (step.reading_owned is True and step.inflight is True
                 and type(cell) is tuple and len(cell) == 2 and cell[0] is frame and cell[1] is step
+                and type(frame.active_step_cell) is tuple and len(frame.active_step_cell) == 2
+                and frame.active_step_cell[0] is frame and frame.active_step_cell[1] is step
                 and r.capture.channel._socket is s.sock and r.capture.channel._reading is True):
             r.capture.channel._reading = False
             step.reading_owned = step.inflight = False
@@ -632,11 +748,15 @@ def read_frame_next(native):
 
 
 def finish_frame(native):
+    return _finish_frame(native, _FIRST_FRAME)
+
+
+def _finish_frame(native, slot):
     from .presentation_credential_cleanup_read import NativeCleanupRead
 
     s = NativeCleanupRead._origin(native)
     SignedReadNotice._actor(s.notice)
-    frame = _scope(native, s)
+    frame = _owned_frame(native, s, slot)
     seal = _ledger(frame)
     _require(frame.initialized is True and frame.finish_attempted is False and seal.needed == 0)
     ledger, step, held_scope = frame.ledger_origin, frame.step_origin, frame.scope
@@ -647,12 +767,12 @@ def finish_frame(native):
     frame.finish_attempted = True
     failed = False
     try:
-        _current_work(native, s)
+        _current_frame(native, s, slot)
         result = CommittedFrameDiscard.finish(held_scope.parser)
         frame.result = frame.result_origin = result
         frame.result_cell = (frame, result)
         frame.finish_returned = True
-        _current_work(native, s)
+        _current_frame(native, s, slot)
         frame.done = _FrameDone(held_scope, result, count, total)
         frame.done_cell = (frame, frame.done)
         frame.complete = True
@@ -665,14 +785,25 @@ def finish_frame(native):
 
 
 def current_frame_for_cleanup(native):
+    return _current_frame_for_cleanup(native, _FIRST_FRAME)
+
+
+def _current_frame_for_cleanup(native, slot):
     from .presentation_credential_cleanup_read import NativeCleanupRead
 
     s = NativeCleanupRead._origin(native)
     SignedReadNotice._cleanup_actor(s.notice)
-    frame = _scope(native, s)
+    frame = _owned_frame(native, s, slot)
     failed = False
     try:
-        NativeCleanupRead._base_progress_for_cleanup(native)
+        held_scope = frame.scope
+        if slot is _FIRST_FRAME:
+            NativeCleanupRead._base_progress_for_cleanup(native)
+        else:
+            _require(slot is _TERMINAL_FRAME)
+            from .presentation_credential_cleanup_terminal import current_for_cleanup
+            _require(current_for_cleanup(native) is held_scope.receipt)
+        _require(_owned_frame(native, s, slot) is frame and frame.scope is held_scope)
         _require(frame.initialized is True)
         seal = _ledger(frame)
         if frame.finish_returned:
@@ -683,13 +814,13 @@ def current_frame_for_cleanup(native):
                      and frame.done.scope is frame.scope and frame.done.data is frame.result_origin)
             value = frame.done
         else:
-            _same(_snapshot(frame), seal)
+            _same(_snapshot(frame, held_scope=held_scope), seal)
             step = frame.step_origin
             _require(step is None or step.complete is True)
             value = frame.scope.receipt if step is None else step.fact
         SignedReadNotice._role_seal(s.notice)
         _require(SignedReadNotice._cleanup_actor(s.notice) is s.idle_scope[0].reservation
-                 and _scope(native, s) is frame and _ledger(frame) is seal)
+                 and _owned_frame(native, s, slot) is frame and _ledger(frame) is seal)
         return value
     except BaseException:
         failed = True

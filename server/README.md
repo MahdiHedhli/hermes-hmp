@@ -19,3 +19,8 @@ image buffer, accept a terminal or authorize native release.
 TERMINAL/2 authentication record after actual RESULT/1 consistency completion.
 It retains original read ownership and byte accounting. Terminal frame/body
 handling and release remain separate unfinished work.
+
+`presentation_credential_cleanup_terminal_frame.py` admits a distinct frame from
+its original verified TERMINAL/2 auth receipt. It uses fixed owned-slot dispatch
+through the shared frame reader. Returned bounded metadata/hash consistency is
+not terminal claim, ACK or native release acceptance.

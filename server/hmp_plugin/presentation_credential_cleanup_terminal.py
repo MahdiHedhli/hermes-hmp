@@ -455,7 +455,9 @@ def read_next(native):
         _require(_scope(native, s) is stage and _state(stage, pure=True) is seal
                  and SignedReadNotice._actor(s.notice) is r
                  and nr._RECV is socket.socket.recv
-                 and type(nr._DONTWAIT) is int and nr._DONTWAIT > 0)
+                 and type(nr._DONTWAIT) is int and nr._DONTWAIT > 0
+                 and r.capture.channel is channel and channel._socket is s.sock
+                 and channel._reading is False and channel._writing is False)
         step.attempted = step.inflight = step.reading_owned = True
         channel._reading = True
         chunk = NativeCleanupRead._receive(s.sock, requested)
@@ -517,6 +519,8 @@ def read_next(native):
                 and stage.step is step and stage.step_origin is step
                 and type(stage.step_cell) is tuple and len(stage.step_cell) == 2
                 and stage.step_cell[0] is stage and stage.step_cell[1] is step
+                and type(stage.active_read_cell) is tuple and len(stage.active_read_cell) == 2
+                and stage.active_read_cell[0] is stage and stage.active_read_cell[1] is step
                 and r.capture.channel._socket is s.sock and r.capture.channel._reading is True):
             r.capture.channel._reading = False
             step.inflight = step.reading_owned = False

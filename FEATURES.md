@@ -1,3 +1,38 @@
+## Same-reader authenticated TERMINAL/2 frame — November 7, 2026
+
+The original read owner now starts a separate TERMINAL/2 frame only from its actual
+completed successor-auth allocation and receipt. The first RESULT frame and its
+parser/counters remain retained. Both the full-frame and original partial-body
+RESULT paths reach bounded terminal bytes and the exact signed frame digest on
+the same socket/task under the original role and earliest cleanup end.
+
+RESULT and terminal frames share the fixed exact-needed read/finish algorithm.
+Two private dispatch identities select only already-owned frame slots and their
+fixed currentness validators; they cannot provide a caller-selected parser,
+phase, socket, receipt or authority. Held scopes survive constructor/feed/hash
+boundaries; independently retained active-step cells preserve actual counts and
+pending ownership after paired slot drift. Final dispatch reseals canonical
+header/binding/hash metadata and both live I/O claims after the last callbacks.
+An uncertain or competing read/write claim is never overwritten or cleared.
+
+New synthetic cases cover both RESULT predecessor paths, bad terminal hash,
+constructor acknowledgement loss, auth-scope clock drift, post-feed scope/receipt
+replacement, paired step drift, changed finish data/ledger, final dispatch scope
+substitution and final read/write claim changes on frame and auth reads. Actual
+terminal bytes remain opaque bounded DATA; the fixture's b"abcd" is deliberately
+not a qualified terminal claim. Independent read-only review accepted the source.
+Exact-source checks:41 focused cases passed in14.05s; expanded affected regression
+2,038 passed,1 skipped in192.34s. Full lint, plugin surface and whitespace pass;
+execution source hashes match. Focused cases overlap the expanded run.
+
+A pre-terminal-frame auth acquisition refusal in an earlier focused run remains
+unexplained; its isolated constructor case later passed. Later green runs do not
+establish that cause. Earlier broker failures and the sender-destination incident
+also remain unresolved. Terminal domain-claim/cleanup-budget acceptance, earlier
+terminal lifecycle positions, EAGAIN waiting, CANCEL/ACK/native release, production
+routing and physical character-image delivery remain open. No app build/install,
+live host/device/grant/provider or deployment change occurred.
+
 ## Same-reader RESULT/1 to TERMINAL/2 authentication — November 7, 2026
 
 The original native reader now admits a distinct next authentication record only

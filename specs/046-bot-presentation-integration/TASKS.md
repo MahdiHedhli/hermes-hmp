@@ -45,9 +45,15 @@
       record on the same task/socket, with cumulative counts, current predecessor
       seals and bounded step retirement; both full-frame/partial-body predecessors.
       Thirteen new private-socket cases; authentication DATA only.
-- [ ] Read the next authenticated TERMINAL/2 frame/body and qualify terminal claim
-      acceptance; retain direct/earlier terminal lifecycle positions separately.
-      No auth restart/fallback or captured-prefix byte credit.
+- [x] Read the next authenticated TERMINAL/2 frame/body and verify its full hash
+      on the same native reader, separately retained parser/counters and bounded
+      metadata, including both original RESULT completion paths. Consistency only.
+- [ ] Qualify terminal domain claim and inherited cleanup end, keeping direct/
+      earlier terminal lifecycle positions separate. No auth restart/fallback or
+      captured-prefix byte credit.
+- [ ] Explain the pre-terminal-frame auth acquisition refusal observed in the
+      constructor causal's first grouped run; retain original250ms budget/guards
+      and distinguish the later isolated pass from root-cause evidence.
 
 - [x] Retain one-shot original-reader IDLE admission before native currentness;
       independently anchor owner/scope/fact, exact bounded count/original minimum

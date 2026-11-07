@@ -88,6 +88,7 @@ CONTRACT_MODULES = {
     "presentation_credential_cleanup_frame.py",
     "presentation_credential_cleanup_body.py",
     "presentation_credential_cleanup_terminal.py",
+    "presentation_credential_cleanup_terminal_frame.py",
     "presentation_credential_begin_write.py",
     "presentation_credential_ready_read.py",
     "presentation_credential_ready_transition.py",

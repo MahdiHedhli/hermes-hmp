@@ -33,6 +33,7 @@ from .test_presentation_supervisor import context as context
 
 _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
     "_notice_native_finished_next",
+    "_notice_native_finished_nextframe",
     "_notice_native_finished_initial",
     "_notice_native_finished_lost",
     "_notice_native_finished_digest",
@@ -118,6 +119,7 @@ _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_seal",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_resultcell",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_received",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_next",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_countbad",
@@ -189,7 +191,7 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         # qualify broker currentness or a complete successful result writer.
         await native_body_ready.wait()
         extra = b""
-        if stage.endswith("_notice_native_finished_next"):
+        if stage.endswith(("_notice_native_finished_next", "_notice_native_finished_nextframe")):
             import hashlib
             import json
 
@@ -201,12 +203,19 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
             )
             raw = held["signed_result_writer"]._scope_snapshot.raw
             value = json.loads(decode_record(raw).canonical_json)
-            terminal_frame = encode_frame(binding, "TERMINAL", 2, b"abcd", version=2)
+            actual_binding = held[
+                "gateway_body"
+            ]._scope_origin.envelope_scope.write_scope.intent.binding
+            held["terminal_fixture_binding_reconciled"] = binding != actual_binding
+            terminal_frame = encode_frame(actual_binding, "TERMINAL", 2, b"abcd", version=2)
             value.update(phase="TERMINAL", sequence=2,
                 frame_sha256=hashlib.sha256(terminal_frame).hexdigest(),
                 frame_length=len(terminal_frame))
             extra = encode_record(value, keys["broker"]._private_key.sign(signing_bytes(value)))
             held["body_terminal_auth_wire"] = extra
+            if stage.endswith("_notice_native_finished_nextframe"):
+                held["body_terminal_frame_wire"] = terminal_frame
+                extra += terminal_frame
         await asyncio.get_running_loop().sock_sendall(sock, tail + extra)
         held["native_body_tail"] = tail
         native_body_queued.set()
@@ -229,9 +238,17 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                "go_relay_result_sign_write_settlement_key",
                                "go_relay_result_sign_write_blocked_cancel")
     finish_case = "_notice_native_finished" in stage
-    body_next = stage.endswith("_notice_native_finished_next")
-    finish_failure = finish_case and not stage.endswith((
-        "_notice_native_finished", "_notice_native_finished_next"))
+    body_frame = stage.endswith("_notice_native_finished_nextframe")
+    body_next = stage.endswith(
+        ("_notice_native_finished_next", "_notice_native_finished_nextframe")
+    )
+    finish_failure = finish_case and not stage.endswith(
+        (
+            "_notice_native_finished",
+            "_notice_native_finished_next",
+            "_notice_native_finished_nextframe",
+        )
+    )
     body_stage = stage.startswith("go_relay_result_sign_write_body")
     body_fault = (body_stage and "_body_adopt" not in stage and stage not in (
                                               "go_relay_result_sign_write_body",
@@ -1251,7 +1268,8 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                         def body_native_observer(owner):
                             value = observer(owner)
                             assert owner is native
-                            assert value.count == (len(held["body_terminal_auth_wire"])
+                            assert value.count == (4 if body_frame else
+                                                   len(held["body_terminal_auth_wire"])
                                                    if body_next else
                                                    len(held["native_body_tail"]) - 3
                                                    if finish_case else 3)
@@ -1259,7 +1277,14 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                 13 + len(held["native_body_tail"]) if finish_case else
                                 19 if stage.endswith("_notice_native_continued") else
                                 16 if stage.endswith("_notice_native_consumed") else 13)
-                            if body_next:
+                            if body_frame:
+                                assert value is native._terminal_frame_origin.done
+                                assert value.total_received == (
+                                    len(held["native_body_tail"])
+                                    + len(held["body_terminal_auth_wire"])
+                                    + len(held["body_terminal_frame_wire"])
+                                )
+                            elif body_next:
                                 assert value is native._terminal_origin.fact
                                 assert value.total_received == (
                                     len(held["native_body_tail"]) + value.count)
@@ -1428,6 +1453,17 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                                     native.read_terminal_auth().ordinal == ordinal
                                                 )
                                             next_auth = native.finish_terminal_auth()
+                                            if body_frame:
+                                                terminal_scope = native.start_terminal_frame()
+                                                assert terminal_scope.receipt is next_auth
+                                                for ordinal in (1, 2, 3):
+                                                    fact = native.read_terminal_frame()
+                                                    assert fact.ordinal == ordinal
+                                                terminal_data = native.finish_terminal_frame()
+                                                assert terminal_data.data.terminal == b"abcd"
+                                                assert terminal_data.total_received == (
+                                                    next_auth.total_received
+                                                    + len(held["body_terminal_frame_wire"]))
                                             assert next_auth.count == len(
                                                 held["body_terminal_auth_wire"]
                                             )
