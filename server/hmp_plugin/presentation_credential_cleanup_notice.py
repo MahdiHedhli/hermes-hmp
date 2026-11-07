@@ -162,7 +162,17 @@ class SignedReadNotice:
         return r
 
     def _stop_metadata(self):
-        """Original stopped-cursor DATA; neither actor is selected by this helper."""
+        """Original frozen stop DATA; no tolerance for digest advancement."""
+        stop, end = SignedReadNotice._stop_binding_metadata(self)
+        c = self._reservation.capture
+        if c.body is not None:
+            NativeResultBodyOwner._wake_retirement_metadata(c.body.owner, stop)
+        after, current_end = SignedReadNotice._stop_binding_metadata(self)
+        _require(after is stop and current_end <= end)
+        return stop, current_end
+
+    def _stop_binding_metadata(self):
+        """Historical wake/scope binding only, not parser progress or IO authority."""
         from .presentation_cleanup_reader import CleanupReadGate
 
         _require(type(self) is SignedReadNotice)
@@ -198,7 +208,7 @@ class SignedReadNotice:
                      and body._wake_receipt is stop and stop.wait.waiter is r.wait.owner
                      and stop.native.scope is r.wait.scope and stop.native.future is r.wait.future
                      and body._failed is True and body._active is False)
-            NativeResultBodyOwner._wake_retirement_metadata(body, stop)
+            NativeResultBodyOwner._wake_binding_metadata(body, stop)
         RemoteCleanupOwner._quiescence_binding(o)
         _, _, end, failed = CancellationBudget.inspect(r.budget)
         _require(type(end) is int and 0 < end <= r.end and failed is False)

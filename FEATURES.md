@@ -1,3 +1,18 @@
+## Image parser continuity preparation — November 7, 2026
+
+Native body/notice validation now separates original historical wake/custody
+binding from the existing frozen digest wrappers. Current authority paths still
+require those strict wrappers. An actual original3-byte pending tail advances the
+SAME digest from13 to16 with no image accumulator; historical binding remains,
+but stopped currentness and historical release refuse and retain UNKNOWN/count3.
+This is a prerequisite refactor, not qualified parser transfer or image delivery.
+Independent read-only review accepted source and causal. Affected body/envelope/
+cancellation regression:196 passed in82.82s; focused2 overlap. Lint, plugin surface
+and whitespace pass. Earlier fixture import shadowing and the intentional old
+release refusal are retained in private logs; fixes changed test expectations only.
+Pytest reported81 existing temp-cleanup warnings. Earlier broad failures remain
+unresolved. No build, deployment, device, grant or provider change.
+
 ## Parser-handoff refusal evidence — November 7, 2026
 
 The original-task/native matrix now includes an actual same-parser feed of the

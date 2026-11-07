@@ -2,6 +2,11 @@
 
 ## Current envelope stop preparation
 
+- [x] Separate historical native wake/custody binding from the existing strict
+      frozen digest wrappers; actual3-byte original-digest advancement preserves
+      binding but refuses old currentness/release and retains UNKNOWN/counts.
+      No authority path switches to weaker binding-only helpers.
+
 - [x] Qualify one bounded original-task/socket native receive with post-clock fixed
       FD/mode probes, final metadata/I/O claim fences, independent native-count and
       pending-byte ownership, fixed cleanup observer and work-exit pending retirement.

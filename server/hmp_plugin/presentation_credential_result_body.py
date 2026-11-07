@@ -794,7 +794,22 @@ class NativeResultBodyOwner:
         return NativeResultBodyOwner._retirement_local(self, retirement, released=released)
 
     def _wake_retirement_metadata(self, retirement):
-        """Post-cause original progress and local stop only; no cleanup IO grant."""
+        """Frozen stopped digest plus original binding; never tolerates progress."""
+        NativeResultBodyOwner._wake_binding_metadata(self, retirement)
+        h = retirement.wait
+        actual = self._hash_origin.hexdigest()
+        # A separate future continuity owner may advance this SAME digest. The
+        # historical binding helper above does not certify that advancement;
+        # this stopped validator must continue to require the captured counters.
+        _require(type(actual) is str and actual == h.hash_value
+                 and type(self._stream_origin._received) is int
+                 and self._stream_origin._received is h.stream_received
+                 and self._stream_origin._received_snapshot is h.stream_received)
+        NativeResultBodyOwner._wake_binding_metadata(self, retirement)
+        return retirement
+
+    def _wake_binding_metadata(self, retirement):
+        """Original wake binding only; no digest progress, currentness or IO grant."""
         from .presentation_cleanup_reader import CleanupReadGate
         from .presentation_credential_cleanup_capture import (
             SignedCleanupCapture,
@@ -868,9 +883,6 @@ class NativeResultBodyOwner:
                  and self._initialization_origin is h.allocation
                  and self._stream is h.allocation[1] and self._stream_origin is h.allocation[1]
                  and self._hash is h.allocation[2] and self._hash_origin is h.allocation[2]
-                 and self._hash_origin.hexdigest() == h.hash_value
-                 and self._stream_origin._received is h.stream_received
-                 and self._stream_origin._received_snapshot is h.stream_received
                  and type(b.remote) is RemoteOperationOwner
                  and type(s.custody) is tuple and len(s.custody) == 3
                  and s.custody is self._wipe_custody_origin

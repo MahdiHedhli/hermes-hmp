@@ -6,6 +6,43 @@ Existing signed `CleanupReadGate.request` remains False. Existing CANCEL signing
 still requires actual whole-work join. No runtime flag or legacy-owner cast may
 substitute for the new contract.
 
+## Historical wake binding versus parser continuity
+
+The native body's `_wake_binding_metadata` and notice's `_stop_binding_metadata`
+retain the original capture/cause, native wake, task/socket allocation and wiped
+output custody. They deliberately do **not** certify mutable digest progress.
+Existing `_wake_retirement_metadata` and `_stop_metadata` still require the exact
+captured digest/hash counters. No production authority path switches to binding
+helpers alone. Actual raw feed into the original digest can preserve historical
+binding while old currentness and historical release correctly refuse UNKNOWN.
+
+The next integration must be a fixed `NativeCleanupRead.consume_pending()` on
+its original work actor, not a caller-created parser wrapper or replacement task:
+
+1. While frozen validators are valid, hold the actual pending/count allocation,
+   original parser/digest allocation, notice/reservation and native wake proof.
+2. Irreversibly consume the one attempt and allocate its independent continuity
+   cell before feed/hash effects. Reentry cannot adopt or repeat the allocation.
+3. Feed those actual bytes once into the SAME parser/digest. Do not restore the
+   wiped image accumulator, replay earlier bytes or reset reader/phase flags.
+4. Retain the actual resulting progress before native callbacks. A distinct typed
+   current-progress validator must bind that progress to the original allocation,
+   historical wake and fixed role/actor/budget/socket checks after callbacks.
+5. Only committed continuity may withdraw pending aliases and produce a progress
+   receipt. Feed/hash/postcheck uncertainty preserves counts and UNKNOWN, clears
+   pending payload and consumes the attempt permanently; never rollback/replay.
+
+The fixed cleanup observer must recognize that same continuity state. Old public
+stop/IDLE/current-pending methods continue refusing after transfer. Repeated reads
+need monotonic syscall/commit accounting on the retained original owner, without
+resetting `run_once`. Auth completion, RESULT/TERMINAL boundaries, concurrent
+CANCEL, terminal acceptance and ACK remain explicit subsequent integrations.
+
+Required causal checks: duplicate consume, partial feed failure, role retirement
+following feed/hash, coherent parser/digest replacement, counter or actual-count
+mismatch, postcallback drift, and original work exit during consumption. No new
+cleanup budget, parser, route, signing permission or production gate is implied.
+
 ## Two facts and their ordering
 
 1. A synchronous request reservation is considered after the actual pre-poison
