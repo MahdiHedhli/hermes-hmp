@@ -698,3 +698,8 @@ historical, not an alternative live authorization path or resolved incident.
 
 - [x] Separate source entry retains original invocation before fixed bootstrap import, rejoins original scope/cell and aliases, captures activation;18 synthetic bootstrap cases/434 combined checks pass.
 - [ ] Independently admit/install exact entry and qualify native PM re-exec; compose remaining runtime/operator/native/key joins. No launch entrypoint is installed by this component.
+
+### PS1 native command-builder fixture checkpoint — November 7, 2026
+
+- [x] Observe actual disposable exec and wrapper re-entry for script/module launch using pinned native relaunch_command source; provenance reviewed;436 combined checks pass.
+- [ ] Qualify actual installed entry and native bootstrap/PM activation/lease continuity; this fixture does not satisfy those gates or complete PS1.

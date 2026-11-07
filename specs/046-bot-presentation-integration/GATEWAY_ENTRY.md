@@ -47,3 +47,22 @@ Packaging: a temporary build1.3.0/setuptools80.9.0/wheel0.45.1 environment produ
 a wheel containing both startup files byte-for-byte, with no console entrypoints.
 The first offline local build failed for missing setuptools, then the pinned-tool
 build succeeded. No project dependency or installed Hermes environment changed.
+
+## Pinned native command-builder exec evidence
+
+The native relaunch_command definition was extracted without importing any native
+module from ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df, hermes_cli/venv_sync.py
+SHA2567688851ccadc994bc3b799a4a25577edaf465b7553b8887892c8b36e1811ffe0.
+The source fixture and JSON provenance live in server/tests/unit/data.
+This version pin attributes a compatibility experiment; it is not a production
+version equality/allowlist gate. Tests call only the pinned command builder in
+a disposable bootstrap and perform actual os.execv for script and module launches.
+The wrapper is entered again with the same PID/application arguments and a new
+interpreter invocation, before fresh original-owner activation capture. No native
+bootstrap, PM selection/lease, installed home or gateway listener is executed.
+
+Independent review verified both hashes, source extraction and causal assertions.
+Two re-exec cases plus prior startup coverage:436 passed in9.24s with source and
+fixture hashes unchanged. This closes command-builder fixture continuity only.
+Installed entry origin/inventory, actual PM/native bootstrap/re-exec and full
+operator/runtime/key/native factory qualification are still required.

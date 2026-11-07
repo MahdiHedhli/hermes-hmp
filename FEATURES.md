@@ -1,3 +1,19 @@
+## Gateway re-exec continuity check — November 7, 2026
+
+Actual disposable process-image replacement now verifies both script and module
+wrapper re-entry using the exact relaunch_command function extracted from native
+ed1afb082eb3e46cf2edae9d8f68fb67b09ee4df. The fixture retains its source/fixture
+hash provenance. Both runs preserve application arguments, change interpreter
+invocation, retain the same PID and return through the entry's pre-bootstrap owner
+before activation capture. No gateway.run or installed native bootstrap is run.
+
+Independent read-only review accepted the bounded evidence and provenance. Two
+re-exec cases plus existing startup checks passed:436 in9.24s, source/fixtures
+unchanged. This qualifies the pinned command-builder fixture with actual synthetic
+exec, not live PM selection/lease/bootstrap or installed entry/runtime admission.
+The complete native/key factory, character-image delivery and physical/release
+qualification remain open. Prior unexplained regressions and sender risk persist.
+
 ## Original gateway entry/bootstrap orchestration — November 7, 2026
 
 The separate hmp_startup package now retains the original invocation before native
