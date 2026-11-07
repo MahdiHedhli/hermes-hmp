@@ -1,0 +1,257 @@
+"""Fixed recipe/child document IO under schema2; DATA, not runtime admission."""
+from __future__ import annotations
+
+import hashlib
+import json
+import os
+import threading
+from typing import NamedTuple
+
+from .presentation_gateway_activation import GatewayActivationOwner
+from .presentation_startup_artifacts import (
+    ExpectedArtifact,
+    StartupArtifactOwner,
+    _Descriptor,
+    _expected,
+    _Scope,
+)
+from .presentation_startup_selection import GatewayStartupSelection, StartupSelectionOwner
+
+_RECIPE_LIMIT = 65536
+_CHILD_LIMIT = 8 * 1024 * 1024
+_TOTAL_LIMIT = 32 * 1024 * 1024
+_CHILDREN = (("plugin", "gateway-package.json"), ("entry", "gateway-entry.json"),
+             ("dependencies", "gateway-dependencies.json"),
+             ("interpreter", "gateway-interpreter.json"))
+
+
+class GatewayRecipeError(Exception):
+    def __init__(self, owner=None):
+        super().__init__("BI1_GATEWAY_RECIPE_REFUSED")
+        self.failed_owner = owner
+
+
+def _require(value):
+    if value is not True:
+        raise GatewayRecipeError
+
+
+def _pairs(pairs):
+    result = {}
+    for key, value in pairs:
+        _require(key not in result)
+        result[key] = value
+    return result
+
+
+class _Recipe(NamedTuple):
+    configuration: StartupSelectionOwner
+    configuration_scope: object
+    configuration_cell: tuple
+    selection: GatewayStartupSelection
+    expected: ExpectedArtifact
+    documents: list
+
+    def __repr__(self):
+        return "<GatewayRecipeOriginalInputs redacted>"
+
+
+def _plan(raw, meta):
+    document = json.loads(raw, object_pairs_hook=_pairs)
+    _require(type(document) is dict and document.keys() == {
+        "schema", "kind", "generation", "plugin", "entry", "dependencies", "interpreter"}
+        and type(document["schema"]) is int and document["schema"] == 1
+        and type(document["kind"]) is str and document["kind"] == "HMP_GATEWAY_RECIPE"
+        and type(document["generation"]) is str
+        and document["generation"] == meta.selection.generation)
+    rows = []
+    for name, filename in _CHILDREN:
+        value = document[name]
+        _require(type(value) is dict and value.keys() == {"size", "sha256"}
+                 and type(value["size"]) is int and 0 < value["size"] <= _CHILD_LIMIT)
+        rows.append(ExpectedArtifact(meta.selection.directory + "/" + filename,
+                                     value["size"], value["sha256"]))
+    rows = tuple(rows)
+    _expected(rows)
+    _require(meta.expected.size + sum(row.size for row in rows) <= _TOTAL_LIMIT
+             and json.dumps(document, sort_keys=True, separators=(",", ":"),
+                            ensure_ascii=True, allow_nan=False).encode("ascii") == raw)
+    return rows
+
+
+class GatewayRecipeOwner:
+    @classmethod
+    def load(cls, configuration, recipe_size):
+        _require(cls is GatewayRecipeOwner and type(configuration) is StartupSelectionOwner)
+        origin = configuration._origin
+        _require(type(origin) is _Scope and type(origin.activation) is GatewayActivationOwner)
+        activation = origin.activation
+        _require(activation._recipe_owner is None and activation._recipe_cell is None
+                 and activation._recipe_plan_cell is None and activation._recipe_fact_cell is None)
+        try:
+            parent = StartupSelectionOwner._guard(configuration)
+            selected = StartupSelectionOwner.retained_data(configuration)
+        except BaseException:
+            raise GatewayRecipeError from None
+        _require(parent is origin and type(selected) is GatewayStartupSelection
+                 and type(selected.schema) is int
+                 and selected.schema == 2 and type(recipe_size) is int
+                 and 0 < recipe_size <= _RECIPE_LIMIT)
+        _require(activation._recipe_owner is None and activation._recipe_cell is None
+                 and activation._recipe_plan_cell is None and activation._recipe_fact_cell is None)
+        owner = cls.__new__(cls)
+        activation._recipe_owner = owner  # partial owner before file/hash/parse effects
+        owner._ready = owner._failed = owner._unknown = owner._reading = False
+        owner._bytes_read = 0
+        owner._plan_cell = owner._fact_cell = None
+        owner._active = None
+        buffer = bytearray()
+        owner._buffer = buffer
+        owner._scope = owner._origin = owner._cell = owner._root_cell = None
+        owner._count_cell = None
+        fact = None
+        failed = False
+        try:
+            owner._scope = owner._origin = _Scope(
+                activation, parent.activation_scope,
+                _Recipe(configuration, parent, configuration._selection_cell, selected,
+                        ExpectedArtifact(selected.directory + "/gateway-recipe.json",
+                                         recipe_size, selected.gateway_inventory_sha256), []),
+                (os.getpid(), os.geteuid(), threading.get_ident()), [])
+            s = owner._origin
+            owner._cell = (owner, s)
+            owner._root_cell = root = (activation, owner, s, (owner, buffer))
+            activation._recipe_cell = root
+            owner._count_cell = (owner, s, 0)
+            raw = GatewayRecipeOwner._document(owner, s.expected.expected)
+            originals = ((s.expected.expected, raw),)
+            rows = _plan(raw, s.expected)
+            _require(GatewayRecipeOwner._guard(owner) is s and owner._root_cell is root
+                     and owner._plan_cell is None and activation._recipe_plan_cell is None)
+            plan_cell = (owner, s, rows)
+            owner._plan_cell = activation._recipe_plan_cell = plan_cell
+            for row in rows:
+                body = GatewayRecipeOwner._document(owner, row)
+                originals += ((row, body),)
+            _require(GatewayRecipeOwner._guard(owner) is s and owner._root_cell is root
+                     and owner._plan_cell is plan_cell and activation._recipe_plan_cell is plan_cell
+                     and len(s.expected.documents) == len(originals) == 5 and owner._active is None
+                     and all(type(observed) is tuple and len(observed) == 2
+                             and observed[0] is held[0] and observed[1] is held[1]
+                             for observed, held in zip(
+                                 s.expected.documents, originals, strict=True))
+                     and owner._bytes_read == recipe_size + sum(row.size for row in rows)
+                     and all(type(row) is _Descriptor and row.closed is True
+                             and row.close_attempted is True and row.unknown is False
+                             for row in s.records)
+                     and owner._fact_cell is None and activation._recipe_fact_cell is None
+                     and owner._ready is False)
+            fact = (owner, s, plan_cell, originals)
+            owner._fact_cell = activation._recipe_fact_cell = fact
+            owner._ready = True
+            return owner
+        except BaseException:
+            owner._failed = failed = True
+            if fact is not None and activation._recipe_fact_cell is fact:
+                activation._recipe_fact_cell = None
+            owner._fact_cell = None
+        finally:
+            buffer[:] = b"\0" * len(buffer)
+            buffer.clear()
+        if failed:
+            raise GatewayRecipeError(owner) from None
+
+    def _guard(self):
+        _require(type(self) is GatewayRecipeOwner and type(self._origin) is _Scope
+                 and self._scope is self._origin)
+        s, cell, root = self._origin, self._cell, self._root_cell
+        _require(type(cell) is tuple and len(cell) == 2 and cell[0] is self and cell[1] is s
+                 and type(root) is tuple and len(root) == 4 and root[0] is s.activation
+                 and root[1] is self and root[2] is s and type(root[3]) is tuple
+                 and len(root[3]) == 2 and root[3][0] is self and type(root[3][1]) is bytearray
+                 and self._buffer is root[3][1] and type(s.expected) is _Recipe
+                 and type(s.context) is tuple and len(s.context) == 3
+                 and all(type(v) is int for v in s.context) and type(s.records) is list
+                 and type(s.expected.documents) is list
+                 and type(s.activation) is GatewayActivationOwner
+                 and s.activation._recipe_owner is self and s.activation._recipe_cell is root
+                 and s.activation._recipe_plan_cell is self._plan_cell
+                 and self._failed is False and self._unknown is False and self._reading is False
+                 and self._ready is False and self._fact_cell is None
+                 and s.activation._recipe_fact_cell is None
+                 and type(self._bytes_read) is int and 0 <= self._bytes_read <= _TOTAL_LIMIT)
+        plan_cell = self._plan_cell
+        if plan_cell is not None:
+            _require(type(plan_cell) is tuple and len(plan_cell) == 3
+                     and plan_cell[0] is self and plan_cell[1] is s
+                     and type(plan_cell[2]) is tuple and len(plan_cell[2]) == 4)
+        context = (os.getpid(), os.geteuid(), threading.get_ident())
+        _require(all(type(v) is int for v in context) and context == s.context
+                 and StartupSelectionOwner._guard(s.expected.configuration)
+                 is s.expected.configuration_scope
+                 and s.expected.configuration._selection_cell is s.expected.configuration_cell
+                 and s.activation._selection_fact_cell is s.expected.configuration_cell
+                 and s.expected.configuration._selection is s.expected.selection
+                 and self._scope is s and self._origin is s and self._cell is cell
+                 and self._root_cell is root and s.activation._recipe_cell is root
+                 and s.activation._recipe_owner is self
+                 and self._plan_cell is plan_cell and s.activation._recipe_plan_cell is plan_cell
+                 and self._buffer is root[3][1] and self._failed is False
+                 and self._unknown is False and self._reading is False
+                 and self._ready is False and self._fact_cell is None
+                 and s.activation._recipe_fact_cell is None)
+        return s
+
+    def _append(self, data):
+        s = GatewayRecipeOwner._guard(self)
+        active, buffer, root = self._active, self._buffer, self._root_cell
+        _require(type(active) is ExpectedArtifact and type(data) is bytes
+                 and len(buffer) + len(data) <= active.size)
+        buffer.extend(data)
+        _require(GatewayRecipeOwner._guard(self) is s and self._active is active
+                 and self._buffer is buffer and self._root_cell is root)
+
+    def _document(self, expected):
+        s = GatewayRecipeOwner._guard(self)
+        buffer, root = self._buffer, self._root_cell
+        _require(not buffer and self._active is None)
+        if self._plan_cell is None:
+            _require(expected is s.expected.expected and len(s.expected.documents) == 0)
+        else:
+            index = len(s.expected.documents) - 1
+            _require(0 <= index < 4 and expected is self._plan_cell[2][index])
+        _expected((expected,))
+        self._active = expected
+        try:
+            StartupArtifactOwner._file(self, expected)
+            _require(GatewayRecipeOwner._guard(self) is s and self._active is expected
+                     and self._buffer is buffer and self._root_cell is root
+                     and len(buffer) == expected.size)
+            raw = bytes(buffer)
+            digest = hashlib.sha256(raw).hexdigest()
+            _require(type(digest) is str and digest == expected.sha256
+                     and GatewayRecipeOwner._guard(self) is s and self._active is expected
+                     and self._buffer is buffer and self._root_cell is root)
+            if self._plan_cell is not None:
+                index = len(s.expected.documents) - 1
+                child = json.loads(raw, object_pairs_hook=_pairs)
+                kind = ("HMP_GATEWAY_PACKAGE", "HMP_GATEWAY_ENTRY",
+                        "HMP_GATEWAY_DEPENDENCIES", "HMP_GATEWAY_INTERPRETER")[index]
+                _require(type(child) is dict and type(child.get("schema")) is int
+                         and child["schema"] == 1 and type(child.get("kind")) is str
+                         and child["kind"] == kind and type(child.get("generation")) is str
+                         and child["generation"] == s.expected.selection.generation
+                         and json.dumps(child, sort_keys=True, separators=(",", ":"),
+                                        ensure_ascii=True, allow_nan=False).encode("ascii") == raw
+                         and GatewayRecipeOwner._guard(self) is s
+                         and self._buffer is buffer and self._active is expected
+                         and self._root_cell is root)
+            s.expected.documents.append((expected, raw))
+            self._active = None
+            return raw
+        finally:
+            buffer[:] = b"\0" * len(buffer)
+            buffer.clear()
+
+    def __repr__(self):
+        return "<GatewayRecipeOwner document-DATA not-runtime-admitted>"

@@ -105,8 +105,11 @@ def _configuration(owner):
     if type(owner) is StartupSelectionOwner:
         return True
     from .presentation_gateway_package import GatewayPackageOwner
-    _require(type(owner) is GatewayPackageOwner)
-    return False
+    if type(owner) is GatewayPackageOwner:
+        return False
+    from .presentation_gateway_recipe import GatewayRecipeOwner
+    _require(type(owner) is GatewayRecipeOwner)
+    return True
 
 
 def _owner_guard(owner):
@@ -116,22 +119,36 @@ def _owner_guard(owner):
     if type(owner) is StartupSelectionOwner:
         return StartupSelectionOwner._guard(owner)
     from .presentation_gateway_package import GatewayPackageOwner
-    _require(type(owner) is GatewayPackageOwner)
-    return GatewayPackageOwner._guard(owner)
+    if type(owner) is GatewayPackageOwner:
+        return GatewayPackageOwner._guard(owner)
+    from .presentation_gateway_recipe import GatewayRecipeOwner
+    _require(type(owner) is GatewayRecipeOwner)
+    return GatewayRecipeOwner._guard(owner)
 
 
 def _root(owner, activation):
     if type(owner) is StartupArtifactOwner:
         return activation._artifact_cell
-    if _configuration(owner):
+    from .presentation_startup_selection import StartupSelectionOwner
+    if type(owner) is StartupSelectionOwner:
         return activation._selection_cell
-    return activation._package_cell
+    from .presentation_gateway_package import GatewayPackageOwner
+    if type(owner) is GatewayPackageOwner:
+        return activation._package_cell
+    from .presentation_gateway_recipe import GatewayRecipeOwner
+    _require(type(owner) is GatewayRecipeOwner)
+    return activation._recipe_cell
 
 
 def _append_configuration(owner, data):
     if _configuration(owner):
         from .presentation_startup_selection import StartupSelectionOwner
-        StartupSelectionOwner._append(owner, data)
+        if type(owner) is StartupSelectionOwner:
+            StartupSelectionOwner._append(owner, data)
+        else:
+            from .presentation_gateway_recipe import GatewayRecipeOwner
+            _require(type(owner) is GatewayRecipeOwner)
+            GatewayRecipeOwner._append(owner, data)
 
 
 class StartupArtifactOwner:

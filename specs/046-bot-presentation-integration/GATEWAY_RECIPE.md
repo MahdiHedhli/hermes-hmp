@@ -1,7 +1,8 @@
 # Gateway factory recipe and pin ownership
 
-Status: implementation contract for the remaining PS1 factory, not runtime
-admission. No installed source, setting, credential or route changes follow.
+Status: GR1 document-loading source implemented/reviewed; GR2 and GR3 remain
+open. This is not runtime admission. No installed source, setting, credential or
+route changes follow.
 
 ## Resolve the existing pin mismatch
 
@@ -147,7 +148,7 @@ Neither fixture re-exec nor source hash testing qualifies actual installed PM
 activation/lease, runtime/link/loader, host deployment, physical image delivery
 or release. Those actual observations remain separate required evidence.
 
-## Current implementation checkpoint
+## Earlier version-selection checkpoint
 
 The fixed schema1 load and schema2 load_recipe_selection paths now share the same
 original private-file owner, preserve exact schema in immutable data, and reject
@@ -160,3 +161,40 @@ checks pass in12.63s with unchanged source/fixtures.
 GR1 is not complete: full recipe/fixed-child reading and aggregate enforcement
 remain to implement. GR2 and GR3 remain open. No schema2 selection, package result
 or passing test grants runtime/native/key authority or device qualification.
+
+## Current GR1 document-loading source checkpoint
+
+GatewayRecipeOwner.load accepts the actual schema2 selection owner and a bounded
+positive recipe_size candidate. That length is DATA, not approval: actual private
+leaf metadata, exact read/EOF and the selection-pinned SHA must agree. The fixed
+entry still has to acquire this candidate safely and compose the complete startup;
+no request or parsed manifest may select a file path. Unknown or oversized lengths
+refuse without document acquisition. There is no fallback/version recapture.
+
+The fixed recipe plus four child files use the original private-file IO lifecycle.
+The complete top recipe is canonical/closed and pins each fixed child's size/SHA.
+Declared aggregate overflow refuses before child reads; all actual counts share
+one original counter. Original root/parent/plan/buffer cells are rejoined across
+callbacks. Each child must be canonical JSON with exact integer schema1, the
+fixed HMP_GATEWAY_PACKAGE/ENTRY/DEPENDENCIES/INTERPRETER kind and original selected
+generation. Child-specific fields/tables and executable closure are GR2, not yet
+validated. The positive document fixtures deliberately have no executable tables.
+
+Review found mutable staging rows could replace previously read bytes. The loader
+now holds every actual returned expected/raw pair independently and compares exact
+object identities after its final guard, publishing only that original immutable
+tuple. Both later-child and final-context substitution causals refuse. Foreign
+plan/fact state is preserved; original failed/uncertain descriptors receive at
+most their owned close attempt. A partial context-capture failure remains attached
+to its retained failed owner. A duplicate after native/path drift refuses before
+fresh parent callbacks and cannot poison the original activation snapshot.
+
+39 recipe cases and prior startup/import checks passed:517 in14.22s, source/fixture
+hashes unchanged. Independent source review accepted the bounded component. No
+installed/native bootstrap, keys, providers, host/device traffic or deployment.
+GR1 source document IO is implemented; fixed entry/operator composition and GR2/
+GR3 runtime/child-table/native/key authority and physical qualification remain open.
+The document counter is not a reset allowance for future artifact reads: GR2 must
+retain its original known counts and enforce the existing whole-startup file/byte
+limits in addition to the32MiB document-phase limit. No new scalar count may serve
+as evidence that earlier IO occurred.

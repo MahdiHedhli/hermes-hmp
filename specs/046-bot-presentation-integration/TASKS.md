@@ -711,5 +711,12 @@ historical, not an alternative live authorization path or resolved incident.
 
 - [x] Freeze complete recipe pin/child/native-boundary contract; independently reviewed.
 - [x] Preserve fixed schema1 loading and add explicit schema2 selection DATA, with no fallback/alternate recapture; package-only verifier refuses schema2 before IO;477 combined checks pass.
-- [ ] Finish GR1 original complete-recipe/fixed-child IO and shared aggregate budget.
+- [x] GR1 source document IO: actual complete-recipe/four fixed child reads, canonical common envelopes and shared aggregate budget;39 cases/517 combined checks pass. Fixed entry/operator wiring remains open.
 - [ ] Finish GR2 entry/dependency/runtime/link/loader and GR3 actual native/key joins; no authority or deployment is enabled by this checkpoint.
+
+### GR1 original document publication checkpoint — November 7, 2026
+
+- [x] Bind published recipe/child DATA to independently held actual returned byte objects; later-child/final-callback row substitution refuses.
+- [x] Retain partial initialization and unknown read/close debt; foreign plan/fact state is preserved; busy owners refuse before fresh capture.
+- [ ] GR2 validate complete child tables, entry/dependency/runtime/link/loader closure and original artifact-count handoff.
+- [ ] GR3 bind actual native listener/store/bridge/identity service and role keys; broker startup and terminal acceptance/ACK/release remain required.

@@ -99,6 +99,8 @@ class GatewayActivationOwner:
         owner._artifact_owner = owner._artifact_cell = None
         owner._selection_owner = owner._selection_cell = owner._selection_fact_cell = None
         owner._package_owner = owner._package_cell = owner._package_fact_cell = None
+        owner._recipe_owner = owner._recipe_cell = None
+        owner._recipe_plan_cell = owner._recipe_fact_cell = None
         failed = False
         try:
             context = (os.getpid(), os.geteuid(), threading.get_ident())

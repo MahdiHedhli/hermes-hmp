@@ -133,3 +133,8 @@ accepted the version separation; this implements only the first GR1 slice of
 [GATEWAY_RECIPE.md](GATEWAY_RECIPE.md). The complete recipe and four fixed child
 loads, shared aggregate budget, entry/dependency/link/loader validation and actual
 native/key factory are still open. A schema2 selection alone approves nothing.
+
+The [GR1 document loader](GATEWAY_RECIPE.md#current-gr1-document-loading-source-checkpoint)
+now reads the recipe and four fixed child envelopes under original IO/aggregate
+ownership (517 combined checks). Full child-table/runtime/native/key admission
+and fixed entry/operator composition remain open.

@@ -1,3 +1,22 @@
+## Owned complete-recipe document loader — November 7, 2026
+
+GR1 source now reads the pinned recipe and four fixed private child documents
+through one original IO owner and cumulative counter. Declared aggregate overflow
+refuses before child IO; actual counts and closed descriptor custody must match.
+The top recipe is closed/canonical; children require canonical JSON and fixed
+schema/kind/generation envelopes. Their executable tables remain unqualified.
+Publication uses independently held original expected/raw objects, rejecting a
+staging-row replacement during later IO or the final context callback. Failed or
+occupied startup owners cannot recapture, overwrite replacement facts or load keys.
+
+Independent source review accepted the provenance repair.39 private recipe cases
+plus prior startup/import coverage passed:517 in14.22s with source/fixtures
+unchanged. Lint, plugin surface and whitespace checks pass. Positive child fixtures
+intentionally omit executable tables: this is document DATA, not runtime admission.
+GR2 entry/dependency/link/loader validation and GR3 actual native/key composition,
+image delivery and physical/release qualification remain open. No deployment or
+credential read occurred. Earlier regression and sender risks remain unresolved.
+
 ## Versioned gateway recipe selection — November 7, 2026
 
 The complete gateway recipe contract now separates the native trusted baseline

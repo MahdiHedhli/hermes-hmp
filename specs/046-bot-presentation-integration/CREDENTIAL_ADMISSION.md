@@ -298,3 +298,7 @@ production runtime admission.
 The remaining complete factory uses the [versioned gateway recipe contract](GATEWAY_RECIPE.md).
 Explicit schema2 selection loading is implemented as DATA only; schema1 stays
 package-only. Full recipe/child aggregate checks and native/key admission remain open.
+
+GR1 recipe/fixed-child document IO is now implemented and reviewed (517 combined
+checks). Its common child envelopes are DATA; GR2 full table/runtime/loader and
+GR3 actual native/key composition still precede any credential acquisition.

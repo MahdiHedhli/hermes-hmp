@@ -1153,3 +1153,9 @@ The separate `hmp_startup/gateway_entry.py` (outside the closed plugin package) 
 `presentation_startup_selection.py` now has fixed schema1 `load` and explicit
 schema2 `load_recipe_selection`; GatewayStartupSelection retains its exact schema.
 The package-only verifier accepts only schema1. Full recipe/factory admission remains open.
+
+`presentation_gateway_recipe.py` reads the pinned closed recipe plus four fixed
+private canonical child envelopes under original configuration/root/plan/data
+identity and shared document budgets. Immutable original raw snapshots are DATA,
+not validated executable tables, runtime/native/key admission or route authority.
+The shared artifact IO dispatch recognizes this exact owner only.
