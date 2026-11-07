@@ -1,3 +1,22 @@
+## Explicit executable-link recipe documents — November 7, 2026
+
+GR2-LINKS-L1 adds a distinct load_executable_links document path: recipe2 and
+interpreter2 are selected before IO and retained in original immutable inputs.
+The existing load path stays recipe1/interpreter1; other children stay schema1.
+D1 runtime snapshots refuse recipe2 before artifact acquisition, with no version
+detection, fallback, retry or relaxed regular-file check.
+
+Independent focused contract/source review accepted this bounded prerequisite.
+641 affected startup checks pass with source hashes unchanged;9 actual Python3.11
+child checks pass separately, not full3.11 qualification. Ruff, closed plugin
+surface and privacy scans pass. The frozen executable link contract defines exact
+selected hops, target UID/mode pins, descriptor-relative no-follow observation and
+both readlink byte charges through the same original IO owner.
+
+Only document loading is implemented here. Link-plan decoding and actual link/
+target observation remain unfinished, followed by runtime/loader/native/key/broker
+and physical character delivery. No installed runtime, key, host or route changed.
+
 ## Unicode attribution packaged with bot presentation — November 7, 2026
 
 Exact wheel inventory verification found the existing Unicode license omitted

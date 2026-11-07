@@ -147,6 +147,8 @@ class EntryFileSnapshotOwner:
             original_entry = GatewayEntryOwner._retained_binding(entry)
             original_recipe = GatewayRecipeOwner._retained_binding(recipe)
             original_plugin = GatewayPackageOwner._retained_binding(plugin)
+            if runtime_files:
+                _require(original_recipe[0].expected.recipe_schema == 1)
             activation = original_recipe[0].activation
             _require(original_entry[2][3] is activation is original_plugin[0].activation
                      and activation._entry_files_owner is None

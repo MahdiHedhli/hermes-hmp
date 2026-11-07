@@ -51,6 +51,7 @@ class _Recipe(NamedTuple):
     selection: GatewayStartupSelection
     expected: ExpectedArtifact
     documents: list
+    recipe_schema: int
 
     def __repr__(self):
         return "<GatewayRecipeOriginalInputs redacted>"
@@ -60,7 +61,7 @@ def _plan(raw, meta):
     document = json.loads(raw, object_pairs_hook=_pairs)
     _require(type(document) is dict and document.keys() == {
         "schema", "kind", "generation", "plugin", "entry", "dependencies", "interpreter"}
-        and type(document["schema"]) is int and document["schema"] == 1
+        and type(document["schema"]) is int and document["schema"] == meta.recipe_schema
         and type(document["kind"]) is str and document["kind"] == "HMP_GATEWAY_RECIPE"
         and type(document["generation"]) is str
         and document["generation"] == meta.selection.generation)
@@ -82,7 +83,20 @@ def _plan(raw, meta):
 class GatewayRecipeOwner:
     @classmethod
     def load(cls, configuration, recipe_size):
-        _require(cls is GatewayRecipeOwner and type(configuration) is StartupSelectionOwner)
+        """Original recipe1/interpreter1 document path; no version detection."""
+        _require(cls is GatewayRecipeOwner)
+        return GatewayRecipeOwner._load(configuration, recipe_size, 1)
+
+    @classmethod
+    def load_executable_links(cls, configuration, recipe_size):
+        """Explicit recipe2/interpreter2 documents; link IO/admission remains separate."""
+        _require(cls is GatewayRecipeOwner)
+        return GatewayRecipeOwner._load(configuration, recipe_size, 2)
+
+    @classmethod
+    def _load(cls, configuration, recipe_size, recipe_schema):
+        _require(cls is GatewayRecipeOwner and type(configuration) is StartupSelectionOwner
+                 and type(recipe_schema) is int and recipe_schema in (1, 2))
         origin = configuration._origin
         _require(type(origin) is _Scope and type(origin.activation) is GatewayActivationOwner)
         activation = origin.activation
@@ -116,7 +130,8 @@ class GatewayRecipeOwner:
                 activation, parent.activation_scope,
                 _Recipe(configuration, parent, configuration._selection_cell, selected,
                         ExpectedArtifact(selected.directory + "/gateway-recipe.json",
-                                         recipe_size, selected.gateway_inventory_sha256), []),
+                                         recipe_size, selected.gateway_inventory_sha256),
+                        [], recipe_schema),
                 (os.getpid(), os.geteuid(), threading.get_ident()), [])
             s = owner._origin
             owner._cell = (owner, s)
@@ -180,7 +195,9 @@ class GatewayRecipeOwner:
                  and root[1] is self and root[2] is s and type(root[3]) is tuple
                  and len(root[3]) == 2 and root[3][0] is self and type(root[3][1]) is bytearray
                  and self._buffer is root[3][1] and not root[3][1]
-                 and type(s.expected) is _Recipe and type(s.activation) is GatewayActivationOwner
+                 and type(s.expected) is _Recipe and type(s.expected.recipe_schema) is int
+                 and s.expected.recipe_schema in (1, 2)
+                 and type(s.activation) is GatewayActivationOwner
                  and s.activation._recipe_owner is self and s.activation._recipe_cell is root
                  and GatewayActivationOwner._retained_scope(s.activation) is s.activation_scope
                  and s.activation._retired is False and s.activation._uncertain is False
@@ -249,6 +266,8 @@ class GatewayRecipeOwner:
                  and s.activation._recipe_fact_cell is None
                  and type(self._bytes_read) is int
                  and 0 <= self._bytes_read <= _TOTAL_LIMIT + 65536)
+        _require(type(s.expected) is _Recipe and type(s.expected.recipe_schema) is int
+                 and s.expected.recipe_schema in (1, 2))
         plan_cell = self._plan_cell
         if plan_cell is not None:
             _require(type(plan_cell) is tuple and len(plan_cell) == 3
@@ -316,7 +335,8 @@ class GatewayRecipeOwner:
                 kind = ("HMP_GATEWAY_PACKAGE", "HMP_GATEWAY_ENTRY",
                         "HMP_GATEWAY_DEPENDENCIES", "HMP_GATEWAY_INTERPRETER")[index]
                 _require(type(child) is dict and type(child.get("schema")) is int
-                         and child["schema"] == 1 and type(child.get("kind")) is str
+                         and child["schema"] == (s.expected.recipe_schema if index == 3 else 1)
+                         and type(child.get("kind")) is str
                          and child["kind"] == kind and type(child.get("generation")) is str
                          and child["generation"] == s.expected.selection.generation
                          and json.dumps(child, sort_keys=True, separators=(",", ":"),
