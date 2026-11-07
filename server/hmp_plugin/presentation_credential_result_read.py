@@ -45,10 +45,24 @@ _RESULT_READ_MINT = object()
 _RESULT_CANCEL_MINT = object()
 
 
+class _ResultWaitHold(NamedTuple):
+    scope: object
+    waiter: object
+    native_scope: object
+    future: object
+    end: int
+    consumed: int
+    target: int
+
+    def __repr__(self):
+        return "<ResultWaitHold original-pre-await redacted>"
+
+
 class _ResultWaitRetirement(NamedTuple):
     mint: object
     scope: object
     readiness: object
+    hold: _ResultWaitHold
     consumed: int
     target: int
     values: bytes
@@ -61,6 +75,7 @@ class _ResultReadRetirement(NamedTuple):
     mint: object
     scope: object
     readiness: object
+    hold: _ResultWaitHold
     consumed: int
     target: int
 
@@ -360,6 +375,8 @@ class NativeResultEnvelopeReceiver:
                     SelectorReadiness.__init__(waiter, b.sock)
                     origin, future = waiter._origin_scope, waiter._future_origin
                     cutoff = b.intent.end_ns
+                    hold = _ResultWaitHold(s, waiter, origin, future, cutoff,
+                                           consumed, target)
                     try:
                         await SelectorReadiness.wait(waiter, cutoff)
                     except _ReadinessCancelledError as error:
@@ -368,9 +385,11 @@ class NativeResultEnvelopeReceiver:
                         _require(type(fact) is _CancelledWaitRetirement
                                  and fact.mint is _CANCEL_RETIREMENT_MINT
                                  and fact.owner is waiter and fact.scope is origin
-                                 and fact.future is future and fact.end is cutoff)
+                                 and fact.future is future and fact.end is cutoff
+                                 and self._waiter is hold.waiter
+                                 and self._waiter_origin is hold.waiter)
                         raise _OwnedResultWaitCancelled(_ResultWaitRetirement(
-                            _RESULT_CANCEL_MINT, s, fact, consumed, target, values)) from None
+                            _RESULT_CANCEL_MINT, s, fact, hold, consumed, target, values)) from None
                     _require(self._waiter_origin is waiter and waiter._retired is True
                              and waiter._unknown is False)
                     _require(NativeResultEnvelopeReceiver._guard(self) is s)
@@ -423,10 +442,17 @@ class NativeResultEnvelopeReceiver:
                      and _TASK.cancelling(b.allocation.task) > 0
                      and self._failed is False and self._active is True
                      and self._cancel_release is None and self._cancel_release_origin is None)
+        hold = receipt.hold
+        _require(type(hold) is _ResultWaitHold and hold.scope is s
+                 and type(hold.waiter) is SelectorReadiness
+                 and hold.consumed is receipt.consumed and hold.target is receipt.target
+                 and hold.end is b.intent.end_ns)
         fact = receipt.readiness
         _require(type(fact) is _CancelledWaitRetirement
                  and fact.mint is _CANCEL_RETIREMENT_MINT
-                 and type(fact.owner) is SelectorReadiness
+                 and type(fact.owner) is SelectorReadiness and fact.owner is hold.waiter
+                 and fact.scope is hold.native_scope and fact.future is hold.future
+                 and fact.end is hold.end
                  and self._waiter is fact.owner and self._waiter_origin is fact.owner)
         waiter = fact.owner
         SelectorReadiness._guard(waiter, actor=not released)
@@ -453,7 +479,7 @@ class NativeResultEnvelopeReceiver:
             _require(asyncio.current_task() is b.allocation.task
                      and _TASK.cancelling(b.allocation.task) > 0
                      and self._failed is False and self._active is True)
-            return _ResultReadRetirement(_RESULT_CANCEL_MINT, s, fact,
+            return _ResultReadRetirement(_RESULT_CANCEL_MINT, s, fact, hold,
                                         receipt.consumed, receipt.target)
         return receipt
 

@@ -251,3 +251,11 @@ This is local stop only. Signed request remains disabled and CANCEL still requir
 whole work join/current authority; no concurrent read/transfer/terminal permission
 follows. Envelope cause wiring and current same-cursor minimum-budget continuation
 remain open. Production composition is unchanged.
+
+### Envelope pre-await cancellation binding — November 6, 2026
+
+A payload-free original wait hold now binds envelope scope, waiter, native scope,
+Future, deadline and counters through cancellation and historical release. Paired
+Future-alias/receipt substitution after immediate wait checks is refused. This
+prepares, but does not enable, envelope native-cause wake or signed cooperative
+cleanup. Existing Task cancellation and whole-work-join requirements remain.

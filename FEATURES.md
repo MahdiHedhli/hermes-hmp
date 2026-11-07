@@ -1,3 +1,19 @@
+## Signed envelope pre-await cancellation hold — November 6, 2026
+
+Envelope cancellation and historical release now bind the original waiter,
+native scope, Future, deadline and counters held before await. The hold is
+payload-free; bounded partial-header failure cleanup remains unchanged. A paired
+replacement of all waiter Future aliases and native receipt after immediate
+wait checks is refused against the original hold, retaining unknown debt.
+
+Independent read-only review accepted the source and revised causal test.
+Affected envelope/body/readiness/cancellation regression: **212 passed in 62.16s**;
+lint and whitespace pass. This is a focused regression, not a new full-suite run.
+Envelope native-cause wake, signed cooperative transfer, terminal/ACK, production
+composition and physical character-image delivery remain open. No deployment,
+device build, host setting, grant or provider changed. Historical broker failures
+and the native sender-destination risk remain unresolved.
+
 ## Signed body native-cause wake correlation — November 6, 2026
 
 Signed body waits now listen to their actual original cleanup cause, held before

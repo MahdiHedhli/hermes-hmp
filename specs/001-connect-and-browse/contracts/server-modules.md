@@ -875,3 +875,11 @@ Generic/copied/subclassed wakes or active/historical drift retain unknown debt.
 External Task cancellation stays distinct. Envelope cause and cooperative IO
 transfer remain unqualified; signed request is disabled, and CANCEL keeps whole
 work join/current authority. See [body cause evidence](../../../docs/research/presentation-body-cause-wake-2026-11-06.md).
+
+### Envelope pre-await cancellation binding — November 6, 2026
+
+A payload-free original wait hold now binds envelope scope, waiter, native scope,
+Future, deadline and counters through cancellation and historical release. Paired
+Future-alias/receipt substitution after immediate wait checks is refused. This
+prepares, but does not enable, envelope native-cause wake or signed cooperative
+cleanup. Existing Task cancellation and whole-work-join requirements remain.

@@ -1,5 +1,16 @@
 # BI1 integration tasks
 
+## Current envelope stop preparation
+
+- [x] Retain payload-free original pre-await envelope waiter/Future/scope/deadline
+      and byte counters through actual Task-cancellation validation and historical
+      release; reject paired Future substitution after immediate wait checks.
+- [ ] Wire the actual native cleanup-cause wake into envelope waits with distinct
+      typed current/historical stop receipts and frozen signed capture correlation.
+      No cooperative reader transfer or whole-work-join relaxation is enabled.
+
+See [bounded source checkpoint](../../docs/research/presentation-envelope-wait-hold-2026-11-06.md).
+
 ## Current credential direction
 
 The independently reviewed local role-credential contract supersedes the

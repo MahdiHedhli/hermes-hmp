@@ -27,7 +27,8 @@ from .test_presentation_supervisor import context as context
     "valid", "fragmented", "signature", "scope", "sequence", "oversize_auth",
     "oversize_body", "wrong_header", "unknown_recv", "count_drift", "tail_key",
     "wrong_actor", "cancel_wait", "cancel_partial", "initial", "deadline",
-    "tail_policy", "expected_row", "cancel_generic", "cancel_foreign_end", "premature",
+    "tail_policy", "expected_row", "cancel_generic", "cancel_foreign_end",
+    "cancel_foreign_future", "premature",
     "cancel_capture_wait", "cancel_capture_partial",
 ])
 async def test_original_result_envelope(context, begin_gateway, tmp_path, monkeypatch, mutation):
@@ -273,6 +274,22 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     raise
 
             monkeypatch.setattr(SelectorReadiness, "wait", observed_wait)
+            if mutation == "cancel_foreign_future":
+                cancelled_current = NativeResultEnvelopeReceiver._cancelled_wait_current
+
+                def substituted_future(owner, receipt, *, released=False):
+                    assert not released and receipt.hold.future is receipt.readiness.future
+                    replacement = asyncio.get_running_loop().create_future()
+                    replacement.cancel()
+                    waiter = receipt.readiness.owner
+                    waiter._future = waiter._future_origin = waiter._future_snapshot = replacement
+                    substituted = receipt._replace(
+                        readiness=receipt.readiness._replace(future=replacement))
+                    held["post_wait_future_substitution"] = True
+                    return cancelled_current(owner, substituted, released=released)
+
+                monkeypatch.setattr(NativeResultEnvelopeReceiver, "_cancelled_wait_current",
+                                    substituted_future)
         await reader.run()
         fact = reader.current_envelope()
         assert fact.frame == held["envelope"][len(fact.raw):]
@@ -320,8 +337,10 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 assert reader._cancel_release_origin is not None
                 assert not reader._active and not reader._io_unknown
                 assert reader._consumed == (4 if mutation.endswith("partial") else 0)
-            if mutation in ("cancel_generic", "cancel_foreign_end"):
+            if mutation in ("cancel_generic", "cancel_foreign_end", "cancel_foreign_future"):
                 assert reader._cancel_release_origin is None and reader._io_unknown
+            if mutation == "cancel_foreign_future":
+                assert held["post_wait_future_substitution"]
         await peer_task
         if mutation.startswith("cancel_capture"):
             assert held["signed_envelope_cleanup_capture_checked"]
