@@ -272,6 +272,36 @@ class SignedReadNotice:
                  and material[2] is r.capture.channel and material[3] is b.refs[8])
         return r
 
+    def current_stop_for_reader(self):
+        """Fixed original reader's post-notification cursor currentness check.
+
+        This is the pre-admission check, not permission to recv or register a
+        fresh interest. The actual delivered notice, stopped cursor and original
+        work actor must remain joined after native/clock callbacks. A future
+        reader owner must separately retain its exact framing/digest allocation.
+        """
+        r = SignedReadNotice._actor(self)
+        _require(self._initialized is True and self._published is True)
+        failed = False
+        try:
+            fact, stop, end = SignedReadNotice._ready_metadata(self)
+            current_stop, current_end = SignedReadNotice._current(self)
+            _require(current_stop is stop and current_end <= end)
+            # _current samples native selector/FD and the original clock. Seal
+            # the delivered Future/fact again, rather than accepting publication
+            # history as current admission after those callbacks.
+            actual, after_stop, after_end = SignedReadNotice._ready_metadata(self)
+            _require(actual is fact and after_stop is stop and after_end <= current_end)
+            SignedReadNotice._role_seal(self)
+            _require(SignedReadNotice._actor(self) is r
+                     and SignedReadNotice._ready_metadata(self)[0] is fact)
+            return fact
+        except BaseException:
+            failed = self._failed = self._unknown = True
+            r.capture.cleanup._unknown = True
+        if failed:
+            raise FrameError("BI1_SIGNED_READER_STOP_CURRENTNESS_UNKNOWN") from None
+
     def _current(self):
         stop, end = SignedReadNotice._stop(self)
         r = self._reservation

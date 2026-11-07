@@ -2,6 +2,10 @@
 
 ## Current envelope stop preparation
 
+- [x] Add fixed original-reader post-notification stop-currentness validation,
+      repeating actual Future/fact/cursor/role/actor seals after native callbacks.
+      Data only; exact parser/digest admission and receive ownership remain open.
+
 - [x] Retain one bounded partial cleanup authentication record through exact-needed
       reads; fixed signed phase consistency, no overread/restart, permanent refusal.
       Component data only, with independent read-only review and focused causals.

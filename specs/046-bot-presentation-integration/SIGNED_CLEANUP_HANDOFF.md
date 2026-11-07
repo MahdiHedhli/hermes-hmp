@@ -174,3 +174,26 @@ physical/release qualification remain open; signed gate.request stays False.
 The current helper covers only RESULT/1 and TERMINAL/2 authentication data.
 Earlier direct-terminal sequence positions need their own retained transition
 expectations before production composition; they are not implicitly admitted.
+
+## Original reader post-notification currentness — November 7, 2026
+
+The original uncancelled reader can now revalidate the actual delivered stop
+Future/fact and exact stopped envelope/body cursor after selector/FD and original
+cleanup-clock callbacks. It repeats retained role, stopped counts, Future/fact
+allocation and fixed reader-actor seals. Wrong/premature actors refuse without
+consuming the original state; admitted currentness drift retains unknown debt.
+
+Independent read-only review accepted the source. The initial focused run found
+four test synchronization timeouts: a new foreign-actor await after publication
+let original cleanup enter its work join before the fixture probe was installed.
+The foreign-actor probe now runs before publication; no protocol state is restored
+and no guard relaxed. Focused rerun: 20 passed, 42 deselected in 6.48s. Actual
+13-byte partial-body currentness is also covered. Final exact-source expanded
+credential/cleanup/terminal/layout regression: 1,114 passed in 139.66s. Full
+server/tools lint and whitespace checks pass.
+
+This is a required pre-admission currentness check, NOT running-reader admission,
+receive/registration permission, concurrent CANCEL or terminal/ACK/native release.
+The future reader owner still must bind its exact parser/digest allocation and
+account for every native byte; signed gate.request remains False. No deployment,
+build, install or settings changed. Prior broker causes and sender risk stay open.

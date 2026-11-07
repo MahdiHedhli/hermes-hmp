@@ -1106,6 +1106,9 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     assert notice._fact_origin.stop is body._wake_receipt_origin
                     assert notice._fact_origin.reservation.capture.body.committed == 13
                     assert body._candidate_snapshot is None
+                    assert notice.current_stop_for_reader() is notice._fact_origin
+                    assert notice.current_stop_for_reader().stop is body._wake_receipt_origin
+                    assert body._candidate_snapshot is None and not body._scope_origin.accumulator
                     with pytest.raises(FrameError):
                         notice.current_stop_for_cleanup()  # sender cannot borrow cleanup actor
                     checked = asyncio.Event()

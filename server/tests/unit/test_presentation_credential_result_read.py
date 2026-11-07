@@ -44,6 +44,7 @@ from .test_presentation_supervisor import context as context
     "wake_reserve_notice_cleanup", "wake_reserve_notice_cleanup_copybad",
     "wake_reserve_notice_cleanup_futurebad", "wake_reserve_notice_cleanup_rolebad",
     "wake_reserve_wait_dispatchbad", "wake_reserve_wait_futurebad",
+    "wake_reserve_notice_reader_copybad", "wake_reserve_notice_reader_rolebad",
 ])
 async def test_original_result_envelope(context, begin_gateway, tmp_path, monkeypatch, mutation):
     from hmp_plugin import presentation_credential_result_read as module
@@ -495,6 +496,14 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             except FrameError:
                 notice = owned._cleanup_owner_snapshot._read_gate_snapshot._signed_notice_origin
                 assert notice is not None and notice._initialized and not notice._attempted
+                with pytest.raises(FrameError):
+                    notice.current_stop_for_reader()  # publication is not yet delivered
+                assert not notice._failed and not notice._unknown
+                async def wrong_reader_actor():
+                    with pytest.raises(FrameError):
+                        notice.current_stop_for_reader()
+                await asyncio.create_task(wrong_reader_actor())
+                assert not notice._failed and not notice._unknown
                 if mutation.endswith("_wrong_actor"):
                     async def wrong_notice_actor():
                         with pytest.raises(FrameError):
@@ -566,6 +575,31 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     assert notice._published and not notice._failed
                     assert notice._future_origin.result() is notice._fact_origin
                     held["notice_published"] = True
+                    if "_notice_reader_" in mutation:
+                        remaining_for_reader = RemoteCleanupOwner._remaining
+
+                        def reader_clock_drift(cleanup):
+                            value = remaining_for_reader(cleanup)
+                            if (asyncio.current_task() is reader._base_origin.allocation.task
+                                    and not held.get("reader_notice_tail_changed")):
+                                held["reader_notice_tail_changed"] = True
+                                if mutation.endswith("_copybad"):
+                                    copied = notice._fact_origin._replace()
+                                    notice._fact = notice._fact_origin = copied
+                                else:
+                                    keys["gateway"].retire()
+                            return value
+
+                        monkeypatch.setattr(RemoteCleanupOwner, "_remaining", reader_clock_drift)
+                        with pytest.raises(FrameError):
+                            notice.current_stop_for_reader()
+                        assert held["reader_notice_tail_changed"]
+                        assert notice._failed and notice._unknown
+                        assert owned._cleanup_owner_snapshot._unknown
+                    else:
+                        assert notice.current_stop_for_reader() is notice._fact_origin
+                        assert notice.current_stop_for_reader() is notice._fact_origin
+                        held["reader_notice_validated"] = True
                 if "_notice_cleanup" in mutation:
                     with pytest.raises(FrameError):
                         notice.current_stop_for_cleanup()  # sender is not the cleanup actor
@@ -613,6 +647,9 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                 and not held.get("cleanup_notice_checked")):
                             checking = True
                             try:
+                                with pytest.raises(FrameError):
+                                    notice.current_stop_for_reader()
+                                assert not notice._failed and not notice._unknown
                                 if mutation.endswith("bad"):
                                     with pytest.raises(FrameError):
                                         notice.current_stop_for_cleanup()
@@ -673,7 +710,7 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
                 await remote.go()
             reader = held["reader"]
-            if "_notice_cleanup" in mutation:
+            if "_notice_cleanup" in mutation or "_notice_reader_" in mutation:
                 # The caller may refuse as soon as the actual cause completes,
                 # before the original sender/cleanup rendezvous has run.
                 async with asyncio.timeout_at(reader._base_origin.intent.end_ns / 1e9):
@@ -725,6 +762,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             "wake_reserve_notice_cleanup", "wake_reserve_notice_cleanup_copybad",
                             "wake_reserve_notice_cleanup_futurebad",
                             "wake_reserve_notice_cleanup_rolebad",
+                            "wake_reserve_notice_reader_copybad",
+                            "wake_reserve_notice_reader_rolebad",
                             "wake_reserve_wait_dispatchbad"):
                 assert reader._wake_release_origin is not None and not reader._io_unknown
                 assert not reader._active and reader._failed and not reader._buffer_origin
@@ -734,7 +773,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                         reader._released(channel)
                     assert reader._io_unknown
                 elif mutation.endswith(("_swapcurrent", "_reservationclock",
-                                        "_cleanup_copybad", "_cleanup_futurebad")):
+                                        "_cleanup_copybad", "_cleanup_futurebad",
+                                        "_reader_copybad")):
                     with pytest.raises(FrameError):
                         reader._released(channel)
                     assert reader._io_unknown
@@ -792,7 +832,10 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             else:
                 assert held["notice_no_retry"] and notice._attempted
                 assert "foreign_notice_future_called" not in held
-                if "_notice_cleanup" in mutation:
+                if "_notice_reader_" in mutation:
+                    assert held["notice_published"] and held["reader_notice_tail_changed"]
+                    assert notice._failed and notice._unknown
+                elif "_notice_cleanup" in mutation:
                     assert held["cleanup_notice_checked"]
                     if mutation.endswith("bad"):
                         assert held["cleanup_notice_tail_changed"]
