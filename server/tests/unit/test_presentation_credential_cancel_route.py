@@ -11,6 +11,8 @@ from io import FileIO
 
 import pytest
 
+from hmp_plugin import presentation_cancel_budget as budget_api
+from hmp_plugin import presentation_credential_cleanup_budget as cb
 from hmp_plugin.presentation_authority import AuthorityRefusalError
 from hmp_plugin.presentation_broker_cancel import (
     _CANCEL_RECEIPT_MINT,
@@ -33,7 +35,14 @@ from .test_presentation_supervisor import context as context
 
 _NEXT_FRAME_SUFFIXES = ("_notice_native_finished_nextframe",
     "_notice_native_finished_nextframe_badclaim",
-    "_notice_native_finished_nextframe_claimslot")
+    "_notice_native_finished_nextframe_claimslot",
+    "_notice_native_finished_nextframe_budgetshorter",
+    "_notice_native_finished_nextframe_budgetlater",
+    "_notice_native_finished_nextframe_budgetlost",
+    "_notice_native_finished_nextframe_budgetdrift",
+    "_notice_native_finished_nextframe_budgetfuture",
+    "_notice_native_finished_nextframe_budgetexpired",
+    "_notice_native_finished_nextframe_budgetslot")
 _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
     "_notice_native_finished_seedmutated",
     "_notice_native_finished_next",
@@ -126,6 +135,13 @@ _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe_badclaim",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe_claimslot",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe_budgetshorter",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe_budgetlater",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe_budgetlost",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe_budgetdrift",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe_budgetfuture",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe_budgetexpired",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe_budgetslot",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_next",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_seedmutated",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished",
@@ -233,7 +249,23 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 hashlib.sha256(domain_wire).hexdigest(), "OK", 0, held["result2_body_sha"])
             if stage.endswith("_nextframe_badclaim"):
                 claim = claim._replace(result_sha256="0" * 64)
-            held["terminal_claim_wire"] = encode_handoff(claim)
+            stamp = None
+            if stage.endswith(("_budgetshorter", "_budgetlater", "_budgetlost", "_budgetdrift",
+                               "_budgetfuture", "_budgetexpired", "_budgetslot")):
+                from hmp_plugin.presentation_cancel_budget import CancellationBudget
+                from hmp_plugin.presentation_terminal_claim import CleanupStamp
+                budget = write.remote._cleanup_budget
+                _, original_now, original_end, failed = CancellationBudget.inspect(budget)
+                assert not failed and type(original_end) is int
+                delta = 1 if stage.endswith("_budgetlater") else -10_000_000
+                sender_end = original_end + delta
+                if stage.endswith("_budgetfuture"):
+                    sender_end = request["deadline_ns"] + 250_000_000
+                elif stage.endswith("_budgetexpired"):
+                    sender_end = original_now - 1
+                stamp = CleanupStamp(sender_end - 250_000_000, sender_end)
+                held["terminal_sender_end"] = stamp.end_ns
+            held["terminal_claim_wire"] = encode_handoff(claim, stamp)
             terminal_frame = encode_frame(actual_binding, "TERMINAL", 2,
                 held["terminal_claim_wire"], version=2)
             value.update(phase="TERMINAL", sequence=2,
@@ -1577,6 +1609,98 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                                     assert correlated.predecessor is (
                                                         held["body_finish_fact"])
                                                     assert "no-budget-adoption" in repr(correlated)
+                                                    budget_type = budget_api.CancellationBudget
+                                                    budget = native._scope_origin.idle_scope[3]
+                                                    before_end = budget_type.inspect(budget)[
+                                                        2
+                                                    ]
+
+                                                    async def wrong_budget_actor():
+                                                        with pytest.raises((FrameError,
+                                                                            AuthorityRefusalError)):
+                                                            native.inherit_terminal_cleanup()
+
+                                                    await asyncio.create_task(wrong_budget_actor())
+                                                    assert native._budget_publication is None
+                                                    if stage.endswith(
+                                                        (
+                                                            "_budgetlost",
+                                                            "_budgetdrift",
+                                                            "_budgetfuture",
+                                                            "_budgetexpired",
+                                                            "_budgetslot",
+                                                        )
+                                                    ):
+                                                        real_inherit, writes = cb._INHERIT, []
+                                                        foreign_calls = []
+
+                                                        class ForeignBudgetRefs:
+                                                            def __getitem__(self, key):
+                                                                foreign_calls.append(key)
+                                                                raise AssertionError("foreign refs")
+
+                                                        def lost_budget_ack(owner, window, now):
+                                                            writes.append(owner)
+                                                            real_inherit(owner, window, now)
+                                                            if stage.endswith("_budgetdrift"):
+                                                                reservation = (
+                                                                    correlated.scope.idle_scope[
+                                                                        0
+                                                                    ].reservation
+                                                                )
+                                                                cleanup = (
+                                                                    reservation.capture.cleanup
+                                                                )
+                                                                replacement = ForeignBudgetRefs()
+                                                                cleanup._refs = replacement
+                                                                cleanup._refs_snapshot = replacement
+                                                                return None
+                                                            if stage.endswith("_budgetslot"):
+                                                                native._budget_publication_cell = (
+                                                                    ForeignBudgetRefs())
+                                                            if stage.endswith("_budgetlost"):
+                                                                raise FrameError(
+                                                                    "SYNTHETIC_BUDGET_ACK_LOST")
+                                                            return None
+
+                                                        monkeypatch.setattr(
+                                                            cb, "_INHERIT", lost_budget_ack
+                                                        )
+                                                        with pytest.raises((FrameError,
+                                                                            AuthorityRefusalError)):
+                                                            native.inherit_terminal_cleanup()
+                                                        _, _, actual_end, broken = (
+                                                            budget_type.inspect(budget))
+                                                        assert broken and actual_end == min(
+                                                            before_end, held["terminal_sender_end"])
+                                                        expected_writes = (
+                                                            [] if stage.endswith("_budgetfuture")
+                                                            else [budget])
+                                                        assert writes == expected_writes
+                                                        with pytest.raises((FrameError,
+                                                                            AuthorityRefusalError)):
+                                                            native.inherit_terminal_cleanup()
+                                                        assert writes == expected_writes
+                                                        assert foreign_calls == []
+                                                        held["body_finish_refused"] = True
+                                                        held["body_notice_published"] = True
+                                                        raise FrameError(
+                                                            "SYNTHETIC_BUDGET_NO_RETRY"
+                                                        ) from None
+                                                    budget_fact = native.inherit_terminal_cleanup()
+                                                    assert budget_fact.budget is budget
+                                                    assert budget_fact.previous_end == before_end
+                                                    sender_end = held.get(
+                                                        "terminal_sender_end", before_end
+                                                    )
+                                                    assert budget_fact.effective_end == min(
+                                                        before_end, sender_end)
+                                                    assert budget_type.inspect(budget)[
+                                                        2
+                                                    ] == (budget_fact.effective_end)
+                                                    assert "no-ACK" in repr(budget_fact)
+                                                    with pytest.raises(FrameError):
+                                                        native.inherit_terminal_cleanup()
                                                 with pytest.raises(FrameError):
                                                     native.correlate_terminal_claim()
                                                 assert terminal_data.total_received == (
@@ -2036,6 +2160,16 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                             raise outcome  # preserve actual original actor/fixture error
                         if stage.endswith("_notice_native_hashlost"):
                             assert held["body_hash_ack_lost"] and not native_body_observed.is_set()
+                        elif stage.endswith(("_budgetlost", "_budgetdrift", "_budgetfuture",
+                                             "_budgetexpired", "_budgetslot")):
+                            assert held["body_finish_refused"]
+                            step = held["native_body_owner"]._budget_publication_origin
+                            assert step.failed
+                            assert step.attempted is not stage.endswith("_budgetfuture")
+                            assert step.returned is stage.endswith(
+                                ("_budgetdrift", "_budgetexpired", "_budgetslot")
+                            )
+                            assert not step.complete
                         elif finish_failure:
                             assert held["body_finish_refused"] and not native_body_observed.is_set()
                         else:

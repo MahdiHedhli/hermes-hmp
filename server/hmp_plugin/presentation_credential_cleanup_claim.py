@@ -175,3 +175,55 @@ def correlate(native):
         attempt.failed = failed = True
     if failed:
         raise FrameError("BI1_NATIVE_TERMINAL_CORRELATION_UNKNOWN") from None
+
+
+def _metadata(native):
+    """Retained correlation joins only; no live clock or filesystem effects."""
+    from .presentation_credential_cleanup_read import NativeCleanupRead
+    from .presentation_credential_cleanup_terminal_frame import _scope
+
+    scope = NativeCleanupRead._origin(native)
+    attempt = native._claim_attempt_origin
+    _require(type(attempt) is _Attempt and native._claim_attempt is attempt
+             and type(native._claim_attempt_cell) is tuple
+             and len(native._claim_attempt_cell) == 2
+             and native._claim_attempt_cell[0] is native
+             and native._claim_attempt_cell[1] is attempt
+             and attempt.failed is False and attempt.complete is True)
+    fact = attempt.fact
+    _require(type(fact) is _Correlation and type(attempt.fact_cell) is tuple
+             and len(attempt.fact_cell) == 2 and attempt.fact_cell[0] is attempt
+             and attempt.fact_cell[1] is fact and fact.native is native and fact.scope is scope)
+    frame = _scope(native, scope)
+    _require(fact.frame is frame and frame.complete is True
+             and type(frame.done) is _FrameDone and type(frame.done_cell) is tuple
+             and len(frame.done_cell) == 2 and frame.done_cell[0] is frame
+             and frame.done_cell[1] is frame.done and frame.done.scope is frame.scope
+             and frame.done.data is frame.result_origin
+             and type(frame.done.data) is DiscardedFrame
+             and type(frame.done.data.terminal) is bytes
+             and frame.scope.auth.scope.predecessor is fact.predecessor
+             and type(fact.expected) is _Expected and type(fact.handoff) is TerminalHandoff)
+    return fact
+
+
+def current(native):
+    """Original actor/current context, still DATA rather than cleanup admission."""
+    from .presentation_credential_cleanup_notice import SignedReadNotice
+    from .presentation_credential_cleanup_terminal_frame import _current_work
+    from .presentation_terminal_claim import encode_handoff
+
+    fact = _metadata(native)
+    SignedReadNotice._actor(fact.scope.notice)
+    frame = fact.frame
+    done, scope, done_cell = frame.done, frame.scope, frame.done_cell
+    _current_work(native, fact.scope)
+    _require(_metadata(native) is fact)
+    expected = _expected(native, fact.scope, frame)
+    _match(expected, fact.handoff)
+    wire = encode_handoff(fact.handoff.claim, fact.handoff.cleanup)
+    _current_work(native, fact.scope)
+    _require(_metadata(native) is fact and expected == fact.expected
+             and frame.scope is scope and frame.done is done and frame.done_cell is done_cell
+             and type(wire) is bytes and wire == done.data.terminal)
+    return fact

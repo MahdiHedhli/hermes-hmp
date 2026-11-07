@@ -4,6 +4,11 @@
 
 The package source is preserved from the private F1 implementation. See [HMP v1](../docs/architecture/contracts/HMP_V1.md) for its wire contract, [deployment](DEPLOYMENT.md) for profile routing, and [contributing](../CONTRIBUTING.md) for checks.
 
+The internal `presentation_credential_cleanup_budget.py` stage publishes only the
+minimum of an authenticated sender stamp and the original native cleanup end.
+It admits only the original actor, refuses active/competing readers, and retains
+unknown publication without restoration or replay; no ACK or release is granted.
+
 The internal `presentation_credential_cleanup_claim.py` stage compares a canonical
 TERMINAL/2 handoff with original request/context and completed RESULT-body DATA.
 It returns a one-shot correlation fact, never budget adoption, ACK or release.

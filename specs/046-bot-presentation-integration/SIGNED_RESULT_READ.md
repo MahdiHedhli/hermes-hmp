@@ -1,3 +1,33 @@
+## Signed-reader nonrenewing cleanup-budget publication — November 7, 2026
+
+The original reader now has a one-shot operation taking no caller-supplied window.
+It uses only its current correlated TERMINAL/2 handoff and original qualified native
+clock, request deadline and existing CancellationBudget. A sender stamp publishes
+only min(existing end, sender end); an absent stamp preserves the existing end.
+A future start refuses before publication. An already-expired stamp cannot produce
+a successful continuation. No new budget, reader, interest or unsigned read fact
+is created; active legacy change/wait state and competing channel IO refuse.
+
+The original work actor is admitted before creating an attempt. Original cleanup,
+gate, refs, channel and budget are retained and resealed before indexing after
+publication/currentness boundaries. A real shorter end survives lost acknowledgement,
+paired Foreign refs drift or publication-cell drift. Failure is sticky, never
+restores the previous end and never retries the arithmetic update.
+
+This qualifies only signed min-budget publication at the completed-RESULT/2
+correlation position. It is not native producer closure, terminal acceptance,
+CANCEL/ACK, resource release or production activation. Earlier/direct terminal
+positions, EAGAIN waiting and physical character-image delivery remain open.
+Existing unexplained broker refusals and the native sender-destination incident
+remain unresolved. No live host/device/grant/provider or deployment changes.
+
+Independent read-only review accepted the held-root publication repair.
+Focused native cases:10 passed,114 deselected in7.37s. Expanded exact-source
+regression:2,085 passed,1 skipped in194.04s. Source hashes are unchanged; lint,
+plugin surface and whitespace pass. Focused cases overlap the expanded run.
+Initial fixture-only expectation/selection mistakes remain in private logs;
+production security guards were not weakened.
+
 ## Original-reader TERMINAL claim correlation DATA — November 7, 2026
 
 The completed RESULT/1 to TERMINAL/2 path now decodes the bounded canonical

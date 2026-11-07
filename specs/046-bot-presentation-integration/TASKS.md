@@ -8,9 +8,12 @@
 - [x] Correlate completed-RESULT TERMINAL/2 DATA against actual original input,
       profile/operation, generation/domain and retained RESULT-body digest;
       original-actor admission and final held-cell refusal causals are covered.
-- [ ] Validate inherited earliest cleanup budget and native producer closure;
-      cover earlier/direct terminal positions, lifecycle, ACK and native release
-      before production routing.
+- [x] Publish signed sender cleanup stamp only as a minimum on the original
+      native budget after current correlation; reject future/expired continuation,
+      wrong actor and lost/drifted publication without renewal, restore or replay.
+- [ ] Qualify native producer closure and terminal acceptance; cover earlier/direct
+      terminal positions, EAGAIN waiting, lifecycle, ACK and native release before
+      production routing.
 
 - [x] Separate historical native wake/custody binding from the existing strict
       frozen digest wrappers; actual3-byte original-digest advancement preserves
