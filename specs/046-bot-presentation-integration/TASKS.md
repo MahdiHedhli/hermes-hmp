@@ -5,9 +5,12 @@
 - [x] Add separate bounded RESULT/result2-body digest DATA from the actual fresh
       frame or captured original native hash copy, preserving frozen native and
       original full-frame digests; sanitized feed refusals and source-drift checks.
-- [ ] Correlate terminal claims against actual original input/domain/generation,
-      the retained RESULT-body digest and inherited earliest cleanup budget;
-      qualify lifecycle, ACK and native release before production routing.
+- [x] Correlate completed-RESULT TERMINAL/2 DATA against actual original input,
+      profile/operation, generation/domain and retained RESULT-body digest;
+      original-actor admission and final held-cell refusal causals are covered.
+- [ ] Validate inherited earliest cleanup budget and native producer closure;
+      cover earlier/direct terminal positions, lifecycle, ACK and native release
+      before production routing.
 
 - [x] Separate historical native wake/custody binding from the existing strict
       frozen digest wrappers; actual3-byte original-digest advancement preserves

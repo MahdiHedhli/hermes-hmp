@@ -262,6 +262,7 @@ class NativeCleanupRead:
         owner._body_finish = owner._body_finish_origin = owner._body_finish_allocation = None
         owner._terminal = owner._terminal_origin = owner._terminal_allocation = None
         owner._payload_seed = owner._payload_seed_origin = owner._payload_seed_cell = None
+        owner._claim_attempt = owner._claim_attempt_origin = owner._claim_attempt_cell = None
         owner._terminal_frame = owner._terminal_frame_origin = owner._terminal_frame_allocation = (
             None
         )
@@ -1339,6 +1340,10 @@ class NativeCleanupRead:
     def read_terminal_frame(self):
         from .presentation_credential_cleanup_terminal_frame import read_next
         return read_next(self)
+
+    def correlate_terminal_claim(self):
+        from .presentation_credential_cleanup_claim import correlate
+        return correlate(self)
 
     def finish_terminal_frame(self):
         from .presentation_credential_cleanup_terminal_frame import finish

@@ -1,3 +1,35 @@
+## Original-reader TERMINAL claim correlation DATA — November 7, 2026
+
+The completed RESULT/1 to TERMINAL/2 path now decodes the bounded canonical
+handoff and compares every claim field with original retained evidence: instance,
+listener, broker, channel, operation, profile/kind/deadline, challenge/epoch,
+input and worker-source digests, installation generation, actual native clock
+domain, and the separate RESULT/result2-body digest. The clock-domain hash uses
+the producer's tuple/boot-hex encoding, not the handshake's different dictionary
+encoding. Only OK/exit-zero after a completed RESULT is supported at this position.
+
+The original work actor is admitted before the one-shot attempt. Held immutable
+cells, scopes and wire references are resealed after decode/hash/currentness
+boundaries; foreign replacement cells are never indexed. Wrong-task admission
+leaves the owner's attempt available. A signed wrong result digest or late cell
+replacement refuses completion and cannot be retried as a new outcome.
+
+This is correlation DATA only. Matching does not adopt a sender cleanup stamp,
+qualify native producer closure, accept the terminal, emit ACK, release native
+resources or activate production routing. Earlier/direct terminal positions,
+inherited earliest-budget validation, EAGAIN waiting, lifecycle and physical
+character-image delivery remain open. The existing broker refusals and native
+sender-destination incident remain unresolved. No live host/device/grant/provider
+or deployment change accompanies this slice.
+
+Independent read-only review accepted the original-actor/context/held-cell
+repairs. Focused checks:21 passed,114 deselected in2.40s. Expanded affected run:
+1 failed,2,075 passed,1 skipped in189.76s. Its sole failure was the new module
+missing from the explicit contract inventory, not a runtime case. The inventory
+was corrected and all302 layout/import checks passed in2.45s. Functional source
+hashes remained unchanged; lint, plugin surface and whitespace pass. No combined
+post-inventory rerun is claimed; the original failed evidence is retained.
+
 ## RESULT-body digest correlation prerequisite — November 7, 2026
 
 The retained reader now records a separate SHA-256 of the complete RESULT/result2

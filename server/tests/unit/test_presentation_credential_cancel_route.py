@@ -31,10 +31,13 @@ from .test_presentation_remote import prepare
 from .test_presentation_selected_protocol import darwin_model
 from .test_presentation_supervisor import context as context
 
+_NEXT_FRAME_SUFFIXES = ("_notice_native_finished_nextframe",
+    "_notice_native_finished_nextframe_badclaim",
+    "_notice_native_finished_nextframe_claimslot")
 _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
     "_notice_native_finished_seedmutated",
     "_notice_native_finished_next",
-    "_notice_native_finished_nextframe",
+    *_NEXT_FRAME_SUFFIXES,
     "_notice_native_finished_initial",
     "_notice_native_finished_lost",
     "_notice_native_finished_digest",
@@ -121,6 +124,8 @@ _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_resultcell",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_received",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe_badclaim",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_nextframe_claimslot",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_next",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished_seedmutated",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native_finished",
@@ -193,7 +198,7 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         # qualify broker currentness or a complete successful result writer.
         await native_body_ready.wait()
         extra = b""
-        if stage.endswith(("_notice_native_finished_next", "_notice_native_finished_nextframe")):
+        if stage.endswith(("_notice_native_finished_next", *_NEXT_FRAME_SUFFIXES)):
             import hashlib
             import json
 
@@ -209,13 +214,34 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 "gateway_body"
             ]._scope_origin.envelope_scope.write_scope.intent.binding
             held["terminal_fixture_binding_reconciled"] = binding != actual_binding
-            terminal_frame = encode_frame(actual_binding, "TERMINAL", 2, b"abcd", version=2)
+            from hmp_plugin.presentation_input_v3 import decode_input_v3
+            from hmp_plugin.presentation_terminal_claim import (
+                StartedClaim,
+                claim_binding,
+                encode_handoff,
+            )
+            write = held["gateway_body"]._scope_origin.envelope_scope.write_scope
+            packet = write.intent.packet
+            request = decode_input_v3(packet)
+            domain = write.remote._clock_domain_values_snapshot
+            domain_wire = json.dumps((domain[0], domain[1], domain[2].hex(), domain[3]),
+                separators=(",", ":"), ensure_ascii=True).encode("ascii")
+            claim = StartedClaim(claim_binding(actual_binding), request["profile"],
+                request["operation"], request["deadline_ns"], request["challenge"],
+                request["epoch"], hashlib.sha256(packet).hexdigest(),
+                request["source_manifest_sha"], value["generation"],
+                hashlib.sha256(domain_wire).hexdigest(), "OK", 0, held["result2_body_sha"])
+            if stage.endswith("_nextframe_badclaim"):
+                claim = claim._replace(result_sha256="0" * 64)
+            held["terminal_claim_wire"] = encode_handoff(claim)
+            terminal_frame = encode_frame(actual_binding, "TERMINAL", 2,
+                held["terminal_claim_wire"], version=2)
             value.update(phase="TERMINAL", sequence=2,
                 frame_sha256=hashlib.sha256(terminal_frame).hexdigest(),
                 frame_length=len(terminal_frame))
             extra = encode_record(value, keys["broker"]._private_key.sign(signing_bytes(value)))
             held["body_terminal_auth_wire"] = extra
-            if stage.endswith("_notice_native_finished_nextframe"):
+            if stage.endswith(_NEXT_FRAME_SUFFIXES):
                 held["body_terminal_frame_wire"] = terminal_frame
                 extra += terminal_frame
         await asyncio.get_running_loop().sock_sendall(sock, tail + extra)
@@ -240,15 +266,15 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                "go_relay_result_sign_write_settlement_key",
                                "go_relay_result_sign_write_blocked_cancel")
     finish_case = "_notice_native_finished" in stage
-    body_frame = stage.endswith("_notice_native_finished_nextframe")
+    body_frame = stage.endswith(_NEXT_FRAME_SUFFIXES)
     body_next = stage.endswith(
-        ("_notice_native_finished_next", "_notice_native_finished_nextframe")
+        ("_notice_native_finished_next", *_NEXT_FRAME_SUFFIXES)
     )
     finish_failure = finish_case and not stage.endswith(
         (
             "_notice_native_finished",
             "_notice_native_finished_next",
-            "_notice_native_finished_nextframe",
+            *_NEXT_FRAME_SUFFIXES,
         )
     )
     body_stage = stage.startswith("go_relay_result_sign_write_body")
@@ -1273,11 +1299,15 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                         def body_native_observer(owner):
                             value = observer(owner)
                             assert owner is native
-                            assert value.count == (4 if body_frame else
-                                                   len(held["body_terminal_auth_wire"])
-                                                   if body_next else
-                                                   len(held["native_body_tail"]) - 3
-                                                   if finish_case else 3)
+                            assert value.count == (
+                                len(held["terminal_claim_wire"])
+                                if body_frame
+                                else len(held["body_terminal_auth_wire"])
+                                if body_next
+                                else len(held["native_body_tail"]) - 3
+                                if finish_case
+                                else 3
+                            )
                             assert body._stream_origin._received == (
                                 13 + len(held["native_body_tail"]) if finish_case else
                                 19 if stage.endswith("_notice_native_continued") else
@@ -1488,11 +1518,67 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                             if body_frame:
                                                 terminal_scope = native.start_terminal_frame()
                                                 assert terminal_scope.receipt is next_auth
-                                                for ordinal in (1, 2, 3):
+                                                ordinal = 0
+                                                while terminal_scope.parser.needed:
+                                                    ordinal += 1
                                                     fact = native.read_terminal_frame()
                                                     assert fact.ordinal == ordinal
                                                 terminal_data = native.finish_terminal_frame()
-                                                assert terminal_data.data.terminal == b"abcd"
+                                                assert (
+                                                    terminal_data.data.terminal
+                                                    == held["terminal_claim_wire"]
+                                                )
+                                                if stage.endswith("_nextframe_claimslot"):
+                                                    from hmp_plugin import (
+                                                        presentation_credential_cleanup_claim as cc,
+                                                    )
+                                                    real_hash, calls = cc._SHA256, []
+                                                    foreign_calls = []
+
+                                                    class ForeignClaimCell:
+                                                        def __getitem__(self, key):
+                                                            foreign_calls.append(key)
+                                                            raise AssertionError("foreign indexing")
+
+                                                    def drift_claim_slot(value):
+                                                        calls.append(None)
+                                                        result = real_hash(value)
+                                                        if len(calls) == 3:
+                                                            native._claim_attempt_cell = (
+                                                                ForeignClaimCell()
+                                                            )
+                                                        return result
+
+                                                    monkeypatch.setattr(
+                                                        cc, "_SHA256", drift_claim_slot
+                                                    )
+                                                if stage.endswith(("_nextframe_badclaim",
+                                                                   "_nextframe_claimslot")):
+                                                    with pytest.raises(FrameError):
+                                                        native.correlate_terminal_claim()
+                                                    assert native._claim_attempt_origin.failed
+                                                    assert not native._claim_attempt_origin.complete
+                                                    if stage.endswith("_nextframe_claimslot"):
+                                                        assert foreign_calls == []
+                                                else:
+                                                    async def wrong_claim_actor():
+                                                        with pytest.raises(FrameError):
+                                                            native.correlate_terminal_claim()
+
+                                                    await asyncio.create_task(wrong_claim_actor())
+                                                    assert native._claim_attempt is None
+                                                    assert native._claim_attempt_origin is None
+                                                    assert native._claim_attempt_cell is None
+                                                    correlated = native.correlate_terminal_claim()
+                                                    assert (
+                                                        correlated.handoff.claim.result_sha256
+                                                        == (held["result2_body_sha"])
+                                                    )
+                                                    assert correlated.predecessor is (
+                                                        held["body_finish_fact"])
+                                                    assert "no-budget-adoption" in repr(correlated)
+                                                with pytest.raises(FrameError):
+                                                    native.correlate_terminal_claim()
                                                 assert terminal_data.total_received == (
                                                     next_auth.total_received
                                                     + len(held["body_terminal_frame_wire"]))
