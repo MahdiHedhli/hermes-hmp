@@ -561,6 +561,23 @@ async def begin_gateway(local, monkeypatch):
             from hmp_plugin.presentation_credential_result_read import NativeResultEnvelopeReceiver
             assert type(result_reader) is NativeResultEnvelopeReceiver
             result_unknown = result_reader._io_unknown
+        native_read_unknown = False
+        if result_reader is not None:
+            from hmp_plugin.presentation_credential_cleanup_notice import SignedReadNotice
+            from hmp_plugin.presentation_credential_cleanup_read import (
+                NativeCleanupRead,
+                owned_native_read,
+            )
+            root = result_reader._base_origin.refs[0]
+            notice = root._read_gate_snapshot._signed_notice_origin
+            if type(notice) is SignedReadNotice:
+                native = owned_native_read(notice)
+                if type(native) is NativeCleanupRead:
+                    owned = native._scope_allocation_origin
+                    native_read_unknown = (
+                        type(owned) is tuple and len(owned) == 2 and owned[0] is native
+                        and owned[1].idle_scope[0].reservation.capture.channel is channel
+                        and native._attempted and native._failed and native._unknown)
         release_drift = False
         if go_writer is not None:
             go_base = go_writer._scope_snapshot.signed_scope.ready_scope.read_scope.write_scope
@@ -578,7 +595,7 @@ async def begin_gateway(local, monkeypatch):
                     or (go_writer is not None and (go_writer._unknown or go_writer._failed))
                     or (cancel_writer is not None
                         and (cancel_writer._unknown or cancel_writer._failed))
-                    or release_drift or result_unknown)
+                    or release_drift or result_unknown or native_read_unknown)
             if channel._closed_known:
                 assert release_drift  # prior actual closure is historical, not new credit
                 assert channel._close_fact is channel._close_fact_snapshot

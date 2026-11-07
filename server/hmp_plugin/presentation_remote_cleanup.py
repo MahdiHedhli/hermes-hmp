@@ -782,6 +782,7 @@ class RemoteCleanupOwner:
 
         if self._initialized is not True or self._unknown is not False:
             return False  # partial initialization never opens work
+        original_read_gate = self._read_gate_snapshot
         barriers = self._barriers_snapshot
         ready = barriers.ready if type(barriers) is _BarrierAllocation else None
         cause = barriers.cause if type(barriers) is _BarrierAllocation else None
@@ -903,6 +904,13 @@ class RemoteCleanupOwner:
                 _FUTURE.set_result(result_notice, False)
             raise
         finally:
+            # Owned memory retirement does not need current initialization/role
+            # authority. The held original gate and actual work actor select it.
+            try:
+                from .presentation_credential_cleanup_read import retire_pending_on_work_exit
+                retire_pending_on_work_exit(original_read_gate, self)
+            except BaseException:
+                self._unknown = True
             if self._initialized is True:
                 try:
                     RemoteCleanupOwner._publish_write_quiescence(self)
@@ -990,7 +998,15 @@ class RemoteCleanupOwner:
                     self._unknown = True
                     return False
                 if (_FUTURE.done(notice_future) and not _TASK.done(work)):
-                    SignedReadNotice.current_stop_for_cleanup(signed_notice)
+                    from .presentation_credential_cleanup_read import (
+                        NativeCleanupRead,
+                        owned_native_read,
+                    )
+                    pending_reader = owned_native_read(signed_notice)
+                    if pending_reader is not None and pending_reader._attempted is True:
+                        NativeCleanupRead.current_for_cleanup(pending_reader)
+                    else:
+                        SignedReadNotice.current_stop_for_cleanup(signed_notice)
             sent = False
             if gate._requested is True:
                 if gate._fact_origin is None and not _TASK.done(work):

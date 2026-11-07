@@ -244,6 +244,8 @@ class SignedReadNotice:
         """
         r = SignedReadNotice._cleanup_actor(self)
         _require(self._initialized is True and self._published is True)
+        from .presentation_credential_cleanup_read import require_unadvanced_notice
+        require_unadvanced_notice(self)
         failed = False
         try:
             fact, stop, end = SignedReadNotice._ready_metadata(self)
@@ -294,6 +296,8 @@ class SignedReadNotice:
         """
         r = SignedReadNotice._actor(self)
         _require(self._initialized is True and self._published is True)
+        from .presentation_credential_cleanup_read import require_unadvanced_notice
+        require_unadvanced_notice(self)
         failed = False
         try:
             fact, stop, end = SignedReadNotice._ready_metadata(self)
@@ -527,6 +531,8 @@ class SignedStoppedCursor:
                  and type(self._notice_origin) is SignedReadNotice)
         notice = self._notice_origin
         reservation = SignedReadNotice._actor(notice)  # fixed original actor
+        from .presentation_credential_cleanup_read import require_unadvanced_notice
+        require_unadvanced_notice(notice)
         failed = False
         try:
             fact = SignedStoppedCursor._metadata(self)
@@ -573,6 +579,7 @@ class SignedCleanupReader:
         _require(cursor._reader is None and cursor._reader_origin is None
                  and cursor._reader_allocation_origin is None)
         owner = cls.__new__(cls)
+        owner._native_read = owner._native_read_origin = owner._native_read_allocation_origin = None
         owner._cursor = owner._cursor_origin = cursor
         owner._cursor_allocation_origin = (owner, cursor)
         owner._scope = owner._scope_origin = owner._scope_allocation_origin = None
@@ -689,6 +696,8 @@ class SignedCleanupReader:
         notice = cursor._notice_origin
         reservation = SignedReadNotice._actor(notice)  # wrong actor cannot poison admission
         _require(self._admitted is True)
+        from .presentation_credential_cleanup_read import require_unadvanced_notice
+        require_unadvanced_notice(notice)
         failed = False
         try:
             SignedCleanupReader._cursor_current(self)

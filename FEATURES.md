@@ -1,3 +1,65 @@
+## One bounded original-task native read — November 7, 2026
+
+`presentation_credential_cleanup_read.py` now owns one nonblocking receive on the
+SAME original authenticated socket/task after IDLE admission. Its exact request
+count comes from the bound parser, with no caller count/address/flags or new
+reader/interest. Fixed C socket/backend identity, nonblocking/timeout/inheritable
+probes run AFTER the final clock callback; full typed metadata, original role/
+actor/budget/parser/count and I/O claims repeat before receive. Fixed native
+MSG_DONTWAIT is used. An independent payload-free count allocation is retained
+BEFORE post-read callbacks, separately from privately owned pending bytes.
+
+Root observes pending counts on its fixed cleanup actor, without a signing grant.
+Old unadvanced stop/cursor/IDLE APIs refuse reuse after the read attempt. The
+actual original work's finally path finds its native owner through independent
+allocation cells on the originally held gate and drops unconsumed pending aliases.
+Observed native counts survive UNKNOWN; a chunk receipt is never frame credit.
+There is no parser/hash/accumulator advancement or result candidate restoration.
+
+Independent review required the post-clock descriptor/mode fence and final full
+metadata/I/O-claim seal; both are implemented. Eighteen focused header cases pass,
+including real private-socket timeout/blocking/dup2 with ZERO receives, final-probe
+foreign-counter/claim drift, post-read role/descriptor/pending/count/scope/receipt
+substitution, EOF, actual EAGAIN and ambiguous receive acknowledgement. Source
+failure paths retain counts, not payload/error aliases, and never retry. The
+original13-byte body plus an injected3-byte tail also passes pending-read checks;
+its original digest remains at13 and accumulator stays empty. That fixture tail
+is NOT broker-writer/currentness or whole-frame qualification.
+
+Earlier test-only failures are retained: a broad ambiguous-notice selector matched
+the new receive case (renamed narrowly); strict plain-int checking initially
+rejected stdlib MsgFlag (fixed by exact stdlib-type C conversion); existing close-
+debt teardown needed the precise new allocated NativeCleanupRead unknown reason.
+No production close guard or role/currentness rule was relaxed.
+
+This is ONE PENDING READ only. Parser consumption/active digest handoff, native
+readiness continuation, full drain, concurrent CANCEL, terminal/ACK/native release
+and production character delivery remain unfinished. Signed gate.request stays
+False; production still parks after GO. No build/install/deployment/host/device
+change was performed; tests used only owned private synthetic Unix sockets.
+A further real-task case invalidates only the synthetic root initialization flag
+AFTER a successful8-byte read and actual cleanup observation: held-original memory
+retirement still drops pending aliases and preserves counts/UNKNOWN, without
+restoring the flag. Retirement now runs independently of that initialization
+flag; write-quiescence publication remains guarded as before. Nineteen focused
+native header cases pass in6.19s. The prior expanded run is retained as a FAILURE:
+1 failed,1,926 passed,1 skipped in174.24s. Its existing go_relay broker-control
+reader refused and broker closure stayed false. Failure-only primitive cursor/
+timeout/notice state capture was extended; no new native clock sample or success
+recovery is added. The cause is unresolved, regardless of any later green run.
+The second broad run also remains a FAILURE: 1 failed,1,927 passed,1 skipped in
+181.56s, now at the existing body_adopt_capture_phase broker cancellation-adoption
+refusal. No production control/close guard was changed. Failure-only primitive
+capture was extended to that exact case; its failure branch has not thereby been
+qualified. New native-read cases passed; broad broker lifecycle/release remains
+unqualified. The isolated go_relay/body selection passed3 cases in2.83s, which
+shows an available path but does NOT resolve either broad failure. The latest
+body_adopt_capture_phase isolated rerun passed1 case in1.88s; its new diagnostic
+failure branch was not exercised, and the broad failure remains unresolved.
+This checkpoint is source-only and NOT a green whole-transport qualification.
+
+Prior intermittent broker causes and native sender-destination risk remain open.
+
 ## One-shot original reader IDLE admission — November 7, 2026
 
 `SignedCleanupReader` now retains one actual partial owner on the bound original

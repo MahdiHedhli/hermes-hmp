@@ -54,6 +54,18 @@ from .test_presentation_supervisor import context as context
     "wake_reserve_notice_cursoradmissionearlybad",
     "wake_reserve_notice_cursoradmissionreservationbad",
     "wake_reserve_notice_cursoradmissionendbad",
+    "wake_reserve_notice_native",
+    "wake_reserve_notice_native_keybad", "wake_reserve_notice_native_pendingbad",
+    "wake_reserve_notice_native_lostack", "wake_reserve_notice_native_eof",
+    "wake_reserve_notice_native_blocked", "wake_reserve_notice_native_receiptbad",
+    "wake_reserve_notice_native_timeoutbad", "wake_reserve_notice_native_blockingbad",
+    "wake_reserve_notice_native_fdbad",
+    "wake_reserve_notice_native_probecounterbad",
+    "wake_reserve_notice_native_probereadingbad",
+    "wake_reserve_notice_native_probewritingbad",
+    "wake_reserve_notice_native_posttimeoutbad", "wake_reserve_notice_native_postfdbad",
+    "wake_reserve_notice_native_counterbad", "wake_reserve_notice_native_pendingpairbad",
+    "wake_reserve_notice_native_scopebad", "wake_reserve_notice_native_workflagbad",
 ])
 async def test_original_result_envelope(context, begin_gateway, tmp_path, monkeypatch, mutation):
     from hmp_plugin import presentation_credential_result_read as module
@@ -67,6 +79,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
     begin = asyncio.Event()
     go = asyncio.Event()
     waiting = asyncio.Event()
+    native_ready, native_queued, native_observed = (
+        asyncio.Event(), asyncio.Event(), asyncio.Event())
     retain = NativeBeginWriter.retain
     if "reserve" in mutation:
         from hmp_plugin.presentation_cleanup_reader import CleanupReadGate
@@ -188,6 +202,21 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 if mutation == "wake_partial":
                     await loop.sock_sendall(peer, b"HBA1")
                 await waiting.wait()
+                if "_notice_native" in mutation:
+                    await native_ready.wait()
+                    frame = encode_frame(b.intent.binding, "RESULT", 1, b"abcd", version=2)
+                    value.update(phase="RESULT", sequence=1,
+                                 frame_sha256=hashlib.sha256(frame).hexdigest(),
+                                 frame_length=len(frame))
+                    raw = encode_record(
+                        value, keys["broker"]._private_key.sign(signing_bytes(value)))
+                    held["native_expected"] = raw[:8]
+                    if mutation.endswith("_eof"):
+                        import socket
+                        peer.shutdown(socket.SHUT_WR)
+                    elif not mutation.endswith("_blocked"):
+                        await loop.sock_sendall(peer, raw[:8] + b"not-consumed")
+                    native_queued.set()
                 return
             if mutation.startswith("cancel"):
                 if mutation.endswith("partial"):
@@ -509,6 +538,10 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             except FrameError:
                 notice = owned._cleanup_owner_snapshot._read_gate_snapshot._signed_notice_origin
                 assert notice is not None and notice._initialized and not notice._attempted
+                if "_notice_native" in mutation:
+                    native_ready.set()
+                    async with asyncio.timeout_at(reader._base_origin.intent.end_ns / 1e9):
+                        await native_queued.wait()
                 with pytest.raises(FrameError):
                     notice.current_stop_for_reader()  # publication is not yet delivered
                 assert not notice._failed and not notice._unknown
@@ -680,6 +713,227 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             if not mutation.endswith((
                                     "_cursoradmissioninitbad", "_cursoradmissionearlybad")):
                                 assert not idle_reader._failed
+                            if "_notice_native" in mutation:
+                                from hmp_plugin.presentation_credential_cleanup_read import (
+                                    NativeCleanupRead,
+                                )
+                                native = NativeCleanupRead.retain(idle_reader)
+                                held["native_owner"] = native
+                                fence = NativeCleanupRead._final_socket_fence
+                                dispatch = NativeCleanupRead._dispatch_metadata
+
+                                def observed_fence(owner, scope):
+                                    try:
+                                        return fence(owner, scope)
+                                    except BaseException as error:
+                                        held["native_pre_io_failure"] = error
+                                        held["native_pre_io_failure_stage"] = "socket_fence"
+                                        raise
+
+                                def observed_dispatch(owner, scope):
+                                    try:
+                                        return dispatch(owner, scope)
+                                    except BaseException as error:
+                                        held["native_pre_io_failure"] = error
+                                        held["native_pre_io_failure_stage"] = "dispatch_metadata"
+                                        raise
+
+                                monkeypatch.setattr(NativeCleanupRead, "_final_socket_fence",
+                                                    observed_fence)
+                                monkeypatch.setattr(NativeCleanupRead, "_dispatch_metadata",
+                                                    observed_dispatch)
+                                receive = NativeCleanupRead._receive
+                                held["native_calls"] = 0
+
+                                def observed_receive(sock, count):
+                                    held["native_calls"] += 1
+                                    assert sock is reader._base_origin.sock and count == 8
+                                    try:
+                                        value = receive(sock, count)
+                                    except OSError as error:
+                                        held["native_receive_errno"] = error.errno
+                                        raise
+                                    held["native_returned_count"] = len(value)
+                                    if mutation.endswith("_lostack"):
+                                        raise OSError("synthetic lost receive acknowledgement")
+                                    return value
+
+                                monkeypatch.setattr(NativeCleanupRead, "_receive",
+                                                    staticmethod(observed_receive))
+                                probe_case = mutation.endswith((
+                                    "_probecounterbad", "_probereadingbad", "_probewritingbad"))
+                                if probe_case:
+                                    from hmp_plugin import (
+                                        presentation_credential_cleanup_read as nr,
+                                    )
+                                    timeout_probe = nr._TIMEOUT
+
+                                    def changed_final_probe(sock):
+                                        value = timeout_probe(sock)
+                                        if not held.get("native_probe_changed"):
+                                            held["native_probe_changed"] = True
+                                            if mutation.endswith("_probecounterbad"):
+                                                class ForeignCounter:
+                                                    def __eq__(self, other):
+                                                        held["foreign_native_counter_eq"] = True
+                                                        raise AssertionError("foreign counter")
+                                                native._received = native._received_origin = (
+                                                    ForeignCounter())
+                                            elif mutation.endswith("_probereadingbad"):
+                                                reader._base_origin.channel._reading = True
+                                            else:
+                                                reader._base_origin.channel._writing = True
+                                        return value
+
+                                    monkeypatch.setattr(nr, "_TIMEOUT", changed_final_probe)
+                                if mutation.endswith((
+                                        "_timeoutbad", "_blockingbad", "_fdbad",
+                                        "_posttimeoutbad", "_postfdbad")):
+                                    native_remaining = RemoteCleanupOwner._remaining
+
+                                    def native_fd_clock_fault(cleanup):
+                                        value = native_remaining(cleanup)
+                                        post = mutation.endswith(("_posttimeoutbad", "_postfdbad"))
+                                        if (native._attempted and (native._returned if post
+                                                                  else not native._returned)
+                                                and not held.get("native_fd_changed")):
+                                            held["native_fd_changed"] = True
+                                            sock = reader._base_origin.sock
+                                            if mutation.endswith((
+                                                    "_timeoutbad", "_posttimeoutbad")):
+                                                sock.settimeout(0.2)
+                                            elif mutation.endswith("_blockingbad"):
+                                                sock.setblocking(True)
+                                            else:
+                                                import os
+                                                import socket
+                                                left, right = socket.socketpair()
+                                                left.setblocking(False)
+                                                right.setblocking(False)
+                                                held["native_fd_fixture_sockets"] = (
+                                                    sock, left, right)
+                                                os.dup2(left.fileno(), sock.fileno(),
+                                                        inheritable=False)
+                                        return value
+
+                                    monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                                        native_fd_clock_fault)
+                                if mutation.endswith((
+                                        "_keybad", "_pendingbad", "_pendingpairbad",
+                                        "_counterbad", "_scopebad")):
+                                    native_remaining = RemoteCleanupOwner._remaining
+
+                                    def native_clock_fault(cleanup):
+                                        value = native_remaining(cleanup)
+                                        if (native._count_known
+                                                and not held.get("native_clock_changed")):
+                                            held["native_clock_changed"] = True
+                                            assert native._received == 8
+                                            if mutation.endswith("_keybad"):
+                                                keys["gateway"].retire()
+                                            elif mutation.endswith("_counterbad"):
+                                                class ForeignNativeCount:
+                                                    def __eq__(self, other):
+                                                        held["foreign_native_count_eq"] = True
+                                                        raise AssertionError("foreign native count")
+                                                native._received = native._received_origin = (
+                                                    ForeignNativeCount())
+                                            elif mutation.endswith("_scopebad"):
+                                                held["native_original_scope"] = native._scope_origin
+                                                copied = native._scope_origin._replace()
+                                                native._scope = native._scope_origin = copied
+                                            else:
+                                                replacement = bytearray(b"untouched replacement")
+                                                if mutation.endswith("_pendingpairbad"):
+                                                    replacement = bytes(bytearray(
+                                                        native._pending_origin))
+                                                    assert replacement is not (
+                                                        native._pending_allocation_origin[1])
+                                                held["native_replacement"] = replacement
+                                                native._pending = replacement
+                                                native._pending_origin = replacement
+                                        return value
+
+                                    monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                                        native_clock_fault)
+                                observer = NativeCleanupRead.current_for_cleanup
+
+                                def observed_native(owner):
+                                    value = observer(owner)
+                                    assert owner is native and value.count == 8
+                                    with pytest.raises(FrameError):
+                                        native.current_pending()
+                                    with pytest.raises(FrameError):
+                                        notice.current_stop_for_cleanup()
+                                    assert not notice._unknown
+                                    native_observed.set()
+                                    return value
+
+                                monkeypatch.setattr(NativeCleanupRead, "current_for_cleanup",
+                                                    observed_native)
+                                native_failure = mutation.endswith((
+                                    "_keybad", "_pendingbad", "_lostack", "_eof", "_blocked",
+                                    "_timeoutbad", "_blockingbad", "_fdbad",
+                                    "_probecounterbad", "_probereadingbad", "_probewritingbad",
+                                    "_posttimeoutbad", "_postfdbad", "_counterbad",
+                                    "_pendingpairbad", "_scopebad"))
+                                if native_failure:
+                                    with pytest.raises(FrameError):
+                                        native.run_once()
+                                    assert native._failed and native._unknown
+                                    assert native._pending_origin is None
+                                else:
+                                    try:
+                                        receipt = native.run_once()
+                                    except FrameError:
+                                        if "native_pre_io_failure" in held:
+                                            raise held["native_pre_io_failure"] from None
+                                        raise
+                                    held["native_original_receipt"] = receipt
+                                    assert receipt.count == 8
+                                    assert native.current_pending() is receipt
+                                    assert native._pending_origin == held["native_expected"]
+                                    assert not cursor._parser._buffer_origin
+                                if mutation.endswith("_receiptbad"):
+                                    native_remaining = RemoteCleanupOwner._remaining
+
+                                    def native_receipt_drift(cleanup):
+                                        value = native_remaining(cleanup)
+                                        if not held.get("native_receipt_changed"):
+                                            held["native_receipt_changed"] = True
+                                            copied = native._fact_origin._replace()
+                                            native._fact = native._fact_origin = copied
+                                        return value
+
+                                    monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                                        native_receipt_drift)
+                                    with pytest.raises(FrameError):
+                                        native.current_pending()
+                                    assert native._fact_allocation_origin[1] is receipt
+                                with pytest.raises(FrameError):
+                                    native.run_once()
+                                with pytest.raises(FrameError):
+                                    idle_reader.current_idle()
+                                if mutation.endswith(("_timeoutbad", "_blockingbad", "_fdbad")):
+                                    assert held["native_fd_changed"]
+                                    assert held["native_calls"] == 0
+                                    assert held["native_pre_io_failure_stage"] == "socket_fence"
+                                elif probe_case:
+                                    assert held["native_probe_changed"]
+                                    assert held["native_calls"] == 0
+                                    assert (held["native_pre_io_failure_stage"]
+                                            == "dispatch_metadata")
+                                    assert "foreign_native_counter_eq" not in held
+                                else:
+                                    assert held["native_calls"] == 1
+                                if mutation in ("wake_reserve_notice_native",
+                                                "wake_reserve_notice_native_workflagbad"):
+                                    assert not native._failed and not notice._unknown
+                                    async with asyncio.timeout_at(
+                                            reader._base_origin.intent.end_ns / 1e9):
+                                        await native_observed.wait()
+                                    if mutation.endswith("_workflagbad"):
+                                        owned._cleanup_owner_snapshot._initialized = False
                             assert (cursor._parser._buffer_origin
                                     == notice._reservation.capture.envelope.values)
                             if mutation.endswith((
@@ -791,9 +1045,14 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                     original_parser = held["cursor_original_parser"]
                                     assert cursor._parser_allocation_origin[1] is original_parser
                                     assert cursor._parser_origin is not original_parser
-                        with pytest.raises(FrameError):
+                        with pytest.raises((FrameError, AuthorityRefusalError)):
                             SignedStoppedCursor.retain(notice)
-                        if "_notice_cursor" in mutation:
+                        if "_notice_native" in mutation:
+                            assert not cursor._failed
+                            if mutation not in ("wake_reserve_notice_native",
+                                                "wake_reserve_notice_native_workflagbad"):
+                                assert native._failed and notice._unknown
+                        elif "_notice_cursor" in mutation:
                             assert cursor._failed and notice._unknown
                             assert owned._cleanup_owner_snapshot._unknown
                         else:
@@ -878,7 +1137,7 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     async with asyncio.timeout_at(reader._base_origin.intent.end_ns / 1e9):
                         # Same original work Task; no replacement reader.
                         await cleanup_checked.wait()
-                with pytest.raises(FrameError):
+                with pytest.raises((FrameError, AuthorityRefusalError)):
                     notice.publish()  # no second attempt, even after ambiguous delivery
                 held["notice_no_retry"] = True
                 raise
@@ -913,7 +1172,7 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 await remote.go()
             reader = held["reader"]
             if ("_notice_cleanup" in mutation or "_notice_reader_" in mutation
-                    or "_notice_cursor" in mutation):
+                    or "_notice_cursor" in mutation or "_notice_native" in mutation):
                 # The caller may refuse as soon as the actual cause completes,
                 # before the original sender/cleanup rendezvous has run.
                 async with asyncio.timeout_at(reader._base_origin.intent.end_ns / 1e9):
@@ -977,6 +1236,25 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             "wake_reserve_notice_cursoradmissionearlybad",
                             "wake_reserve_notice_cursoradmissionreservationbad",
                             "wake_reserve_notice_cursoradmissionendbad",
+                            "wake_reserve_notice_native",
+                            "wake_reserve_notice_native_keybad",
+                            "wake_reserve_notice_native_pendingbad",
+                            "wake_reserve_notice_native_lostack",
+                            "wake_reserve_notice_native_eof",
+                            "wake_reserve_notice_native_blocked",
+                            "wake_reserve_notice_native_receiptbad",
+                            "wake_reserve_notice_native_timeoutbad",
+                            "wake_reserve_notice_native_blockingbad",
+                            "wake_reserve_notice_native_fdbad",
+                            "wake_reserve_notice_native_probecounterbad",
+                            "wake_reserve_notice_native_probereadingbad",
+                            "wake_reserve_notice_native_probewritingbad",
+                            "wake_reserve_notice_native_posttimeoutbad",
+                            "wake_reserve_notice_native_postfdbad",
+                            "wake_reserve_notice_native_counterbad",
+                            "wake_reserve_notice_native_pendingpairbad",
+                            "wake_reserve_notice_native_scopebad",
+                            "wake_reserve_notice_native_workflagbad",
                             "wake_reserve_wait_dispatchbad"):
                 assert reader._wake_release_origin is not None and not reader._io_unknown
                 assert not reader._active and reader._failed and not reader._buffer_origin
@@ -991,6 +1269,14 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     with pytest.raises(FrameError):
                         reader._released(channel)
                     assert reader._io_unknown
+                elif mutation in ("wake_reserve_notice_native_fdbad",
+                                  "wake_reserve_notice_native_postfdbad",
+                                  "wake_reserve_notice_native_probereadingbad",
+                                  "wake_reserve_notice_native_probewritingbad",
+                                  "wake_reserve_notice_native_workflagbad"):
+                    # Native fd debt is checked separately; do not turn the
+                    # historical local wake record into current descriptor credit.
+                    pass
                 else:
                     reader._released(channel)
             else:
@@ -1080,6 +1366,48 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                         assert notice._future_origin is held["notice_swapped_future"]
                 else:
                     assert held["notice_published"]
+            if "_notice_native" in mutation:
+                native = held["native_owner"]
+                if mutation in ("wake_reserve_notice_native",
+                                "wake_reserve_notice_native_workflagbad"):
+                    assert native_observed.is_set()
+                if mutation.endswith((
+                        "_lostack", "_blocked", "_timeoutbad", "_blockingbad", "_fdbad")):
+                    assert not native._count_known and not native._returned
+                    assert native._fact_origin is None
+                    if mutation.endswith("_lostack"):
+                        assert held["native_returned_count"] == 8
+                    if mutation.endswith("_blocked"):
+                        import errno
+                        assert held["native_receive_errno"] in (errno.EAGAIN, errno.EWOULDBLOCK)
+                elif mutation.endswith("_eof"):
+                    assert native._received == 0 and native._count_known
+                    assert native._fact_origin is None
+                elif "_native_probe" in mutation:
+                    assert not native._returned and not native._count_known
+                    assert "foreign_native_counter_eq" not in held
+                    if mutation.endswith("_probereadingbad"):
+                        assert reader._base_origin.channel._reading is True
+                    elif mutation.endswith("_probewritingbad"):
+                        assert reader._base_origin.channel._writing is True
+                elif mutation.endswith("_counterbad"):
+                    assert native._native_count_allocation_origin[1] == 8
+                    assert "foreign_native_count_eq" not in held
+                else:
+                    assert native._received == 8 and native._count_known
+                    assert native._native_count_allocation_origin[1] == 8
+                assert native._failed and native._unknown
+                assert native._pending_origin is None
+                assert native._pending_allocation_origin is None
+                assert remote._cleanup_owner_snapshot._unknown
+                if mutation.endswith("_workflagbad"):
+                    assert remote._cleanup_owner_snapshot._initialized is False
+                if mutation.endswith("_pendingbad"):
+                    assert held["native_replacement"] == b"untouched replacement"
+                if mutation.endswith("_pendingpairbad"):
+                    assert held["native_replacement"] == held["native_expected"]
+                if mutation.endswith("_scopebad"):
+                    assert native._scope_allocation_origin[1] is held["native_original_scope"]
         await peer_task
         if mutation.startswith("cancel_capture"):
             assert held["signed_envelope_cleanup_capture_checked"]
@@ -1095,5 +1423,9 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
         if not peer_task.done():
             peer_task.cancel()
         await asyncio.gather(peer_task, return_exceptions=True)
+        for fixture_socket in held.get("native_fd_fixture_sockets", ()):
+            # Exact test-created/rebound descriptors only, after actual task
+            # termination and protocol refusal; no production release fact.
+            fixture_socket.close()
         for key in keys.values():
             key.retire()

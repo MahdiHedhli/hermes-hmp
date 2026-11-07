@@ -91,6 +91,7 @@ from .test_presentation_supervisor import context as context
                                   "go_relay_result_sign_write_body_cancel_cause_wake",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice",
+                                  "go_relay_result_sign_write_body_cancel_cause_wake_reserve_notice_native",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_countbad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_reserve_custodybad",
                                   "go_relay_result_sign_write_body_cancel_cause_wake_copybad",
@@ -152,6 +153,16 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
     after_go = stage == "after_go" or stage.startswith(("go_current", "go_relay"))
     control_ready, gateway_waiting = asyncio.Event(), asyncio.Event()
     go_checked = asyncio.Event()
+    native_body_ready, native_body_queued, native_body_observed = (
+        asyncio.Event(), asyncio.Event(), asyncio.Event())
+
+    async def queue_native_body_tail(sock, tail):
+        # Original private synthetic peer fault injection only. This does not
+        # qualify broker currentness or a complete successful result writer.
+        await native_body_ready.wait()
+        await asyncio.get_running_loop().sock_sendall(sock, tail)
+        held["native_body_tail"] = tail
+        native_body_queued.set()
     result_failure = stage in ("go_relay_result_sign_key", "go_relay_result_sign_expired",
                                "go_relay_result_sign_take_drift",
                                "go_relay_result_sign_post_crypto_key",
@@ -585,6 +596,12 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                                     count = actual_send(sock, data[:13])
                                                     sent.extend(data[:count])
                                                     held["partial_body_sent"] = count
+                                                    if stage.endswith("_notice_native"):
+                                                        tail = bytes(data[13:16])
+
+                                                        task = asyncio.create_task(
+                                                            queue_native_body_tail(sock, tail))
+                                                        held["native_body_sender"] = task
                                                     return count
                                                 return 0  # truncated synthetic peer
                                             if stage.endswith("_digest"):
@@ -721,14 +738,26 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
             try:
                 frame = await BrokerServiceSpine._v2_control(spine, control)
             except FrameError as consumer_failure:
-                if stage in ("go_current_wrong_actor",
-                             "go_relay_result_sign_write_body_adopt_notice_ambiguous"):
+                if stage in ("go_relay", "go_current_wrong_actor",
+                             "go_relay_result_sign_write_body_adopt_notice_ambiguous",
+                             "go_relay_result_sign_write_body_adopt_capture_phase"):
                     import json as diagnostic_json
 
                     from hmp_plugin.presentation_remote_cleanup import _FUTURE, _TASK
                     original_task = control._allocation_snapshot.task
                     timeout = control._timeout_snapshot
+                    from hmp_plugin.presentation_cleanup_reader import (
+                        CleanupReadGate as DiagnosticGate,
+                    )
+                    from hmp_plugin.presentation_credential_control import CredentialControlCursor
+                    original_cursor = control._signed_cursor_snapshot
+                    gateway_root = remote._cleanup_owner_snapshot
+                    gateway_gate = (gateway_root._read_gate_snapshot
+                                    if type(gateway_root) is RemoteCleanupOwner else None)
                     snapshot = {
+                        "signed_gateway_notice_present": (
+                            type(gateway_gate) is DiagnosticGate
+                            and gateway_gate._signed_notice_allocation_origin is not None),
                         "task_done": _TASK.done(original_task),
                         "task_cancelled": _TASK.cancelled(original_task),
                         "task_cancelling": _TASK.cancelling(original_task),
@@ -744,6 +773,10 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                         "timeout_expired": (asyncio.Timeout.expired(timeout)
                                             if type(timeout) is asyncio.Timeout else None),
                     }
+                    if type(original_cursor) is CredentialControlCursor:
+                        for field in ("_failed", "_io_unknown", "_read_intent", "_complete"):
+                            value = original_cursor.__dict__.get(field)
+                            snapshot["cursor" + field] = value if type(value) is bool else None
                     try:
                         original_end, _, cleanup_end, failed = CancellationBudget.inspect(
                             control._scope_snapshot[3])
@@ -1095,12 +1128,16 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     monkeypatch.setattr(asyncio, "wait", original_cause_on_registered_wait)
                 else:
                     held["body_canceller"] = asyncio.create_task(original_cause())
-            if stage.endswith("_wake_reserve_notice"):
+            if "_wake_reserve_notice" in stage:
                 try:
                     await body.receive()
                 except FrameError:
                     notice = owned._cleanup_owner_snapshot._read_gate_snapshot._signed_notice_origin
                     assert notice is not None and notice._initialized
+                    if stage.endswith("_notice_native"):
+                        native_body_ready.set()
+                        async with asyncio.timeout_at(end / 1e9):
+                            await native_body_queued.wait()
                     assert notice.publish() is True
                     assert notice._future_origin.result() is notice._fact_origin
                     assert notice._fact_origin.stop is body._wake_receipt_origin
@@ -1123,6 +1160,35 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     assert idle_fact.scope[1] is cursor._parser_origin
                     assert idle_fact.scope[2] == cursor._parser.needed
                     assert body._candidate_snapshot is None and not body._scope_origin.accumulator
+                    if stage.endswith("_notice_native"):
+                        from hmp_plugin.presentation_credential_cleanup_read import (
+                            NativeCleanupRead,
+                        )
+                        native = NativeCleanupRead.retain(idle_reader)
+                        held["native_body_owner"] = native
+                        observer = NativeCleanupRead.current_for_cleanup
+
+                        def body_native_observer(owner):
+                            value = observer(owner)
+                            assert owner is native and value.count == 3
+                            assert body._stream_origin._received == 13
+                            held["body_notice_consumed"] = True
+                            native_body_observed.set()
+                            return value
+
+                        monkeypatch.setattr(NativeCleanupRead, "current_for_cleanup",
+                                            body_native_observer)
+                        receipt = native.run_once()
+                        assert receipt.count == 3
+                        assert native.current_pending() is receipt
+                        assert native._pending_origin == held["native_body_tail"]
+                        assert body._stream_origin._received == 13
+                        assert body._committed == 13 and body._candidate_snapshot is None
+                        assert not body._scope_origin.accumulator
+                        async with asyncio.timeout_at(end / 1e9):
+                            await native_body_observed.wait()
+                        held["body_notice_published"] = True
+                        raise
                     with pytest.raises(FrameError):
                         notice.current_stop_for_cleanup()  # sender cannot borrow cleanup actor
                     checked = asyncio.Event()
@@ -1512,13 +1578,19 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 assert cleanup._result_token is None
                 if "_cause_wake" in stage:
                     task = cleanup._allocations_snapshot[1].task
-                    if stage.endswith("_wake_reserve_notice"):
+                    if "_wake_reserve_notice" in stage:
                         async with asyncio.timeout_at(end / 1e9):
                             outcome = (await asyncio.gather(task, return_exceptions=True))[0]
                         if (not held.get("body_notice_published")
                                 and isinstance(outcome, BaseException)):
                             raise outcome  # preserve actual original actor/fixture error
                         assert held["body_notice_consumed"]
+                        if stage.endswith("_notice_native"):
+                            native = held["native_body_owner"]
+                            assert native._received == 3 and native._count_known
+                            assert native._pending_origin is None
+                            assert native._pending_allocation_origin is None
+                            assert native._failed and native._unknown and cleanup._unknown
                     assert held["original_body_cause_wake"] and task.done()
                     assert not task.cancelled() and task.cancelling() == 0
                     assert body._cancel_receipt_snapshot is None
@@ -1527,7 +1599,7 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     assert cleanup._read_gate_snapshot._fact_origin is None
                     if "_wake_reserve" in stage:
                         assert held["body_reservation_checked"]
-                        if stage.endswith("_wake_reserve_notice"):
+                        if "_wake_reserve_notice" in stage:
                             assert held["body_notice_published"]
                         if stage.endswith("_custodybad"):
                             assert held["reservation_buffer_replacement"] == (
@@ -1731,6 +1803,11 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
             assert held["body_retired_before_clock"]
             assert held["gateway_body"]._candidate_snapshot is None
     finally:
+        native_body_sender = held.get("native_body_sender")
+        if native_body_sender is not None:
+            if not native_body_sender.done():
+                native_body_sender.cancel()
+            await asyncio.gather(native_body_sender, return_exceptions=True)
         body_canceller = held.get("body_canceller")
         if body_canceller is not None:
             if not body_canceller.done():

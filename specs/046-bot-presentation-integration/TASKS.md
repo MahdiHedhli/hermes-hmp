@@ -2,6 +2,13 @@
 
 ## Current envelope stop preparation
 
+- [x] Qualify one bounded original-task/socket native receive with post-clock fixed
+      FD/mode probes, final metadata/I/O claim fences, independent native-count and
+      pending-byte ownership, fixed cleanup observer and work-exit pending retirement.
+      No parser/feed/hash/frame credit, readiness continuation or cooperative route.
+- [ ] Consume actual native pending bytes into the original bound parser/digest
+      under a distinct active-progress handoff; never replay bytes or relax old stops.
+
 - [x] Retain one-shot original-reader IDLE admission before native currentness;
       independently anchor owner/scope/fact, exact bounded count/original minimum
       end, malformed metadata refusal, partial attribution and held-original failure.
@@ -51,6 +58,9 @@
       closure. Controlled causal does not resolve earlier broad broker failures.
 - [ ] Diagnose original broad-suite broker cancellation failures from actual
       bounded state/underlying-task evidence; passing reruns are not resolution.
+      November7 broad failures include go_relay control-read refusal/closeFalse
+      and body_adopt_capture_phase cancellation-adoption refusal. Both remain
+      unqualified despite passing isolated reruns; primitive diagnostics retained.
 - [x] Add/review fixed original-cleanup current stop-DATA validation and bounded
       original notice/work wait with actual Future/task dispatch fences. Separate
       sender/receiver actors; actual live/completed-work and partial-body causals.
