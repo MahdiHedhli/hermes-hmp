@@ -1,3 +1,18 @@
+## Native jobs/model write handoff — November 7, 2026
+
+AR1-035-T014b adds original-scope checks after body parsing and at the actual
+worker entry for create/edit jobs and profile default-model updates. It retains
+the original phone/profile/listener and exact native callable/arguments, refuses
+observed cancellation or authority drift before invocation, and permits one
+handoff only. Native invocation failures remain separate from preflight refusals;
+no retries or post-mutation authorization filtering were introduced.
+
+Independent focused contract/source review accepted the bounded mitigation.150
+read/write/cron/model/readiness checks pass with source unchanged, plus Ruff,
+closed plugin surface, privacy and log scans. This is source only, not deployed.
+Delete/pause/resume transport, post-dispatch revocation/response and native atomic
+transactions remain open. No live job/model/provider/grant change was performed.
+
 ## Jobs/model read authority across awaits — November 7, 2026
 
 AR1-035-T014a now retains the original authenticated request, phone/profile and

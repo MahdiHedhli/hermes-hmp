@@ -158,8 +158,8 @@ def test_endpoint_scope_change_prevents_subsequent_read(tmp_path: Path, monkeypa
 
 def test_scope_repr_redacts_headers(tmp_path):
     # Even failure/reporting code must not accidentally render retained credentials.
-    scope = server._ControlsReadScope(*(["synthetic-secret"] * 11))
-    assert repr(scope) == "<ControlsReadScope redacted>"
+    scope = server._ControlsRequestScope(*(["synthetic-secret"] * 12))
+    assert repr(scope) == "<ControlsRequestScope redacted>"
 
 
 @pytest.mark.parametrize("route", ["jobs", "model/default", "model/options"])
