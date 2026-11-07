@@ -6,6 +6,11 @@ This document grants no credential creation, production authority or deployment 
 desktop display-name, classic/blobatar and custom-static-image feature remains
 required. This does not replace delivery with a snapshot or a no-GO fixture.
 
+The reviewed next installed-startup/acceptance contract is
+[PAIRED_STARTUP_COMPOSITION.md](PAIRED_STARTUP_COMPOSITION.md), tracked as PS1–PS5
+in TASKS.md. These are unimplemented HMP composition tasks, not an established
+upstream API blocker or permission to promote the synthetic bootstrap verifier.
+
 ## Decision and preserved boundaries
 
 Use independently installed, per-instance asymmetric role credentials to

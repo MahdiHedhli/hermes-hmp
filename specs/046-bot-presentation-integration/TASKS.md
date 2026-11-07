@@ -1,5 +1,22 @@
 # BI1 integration tasks
 
+## Installed-startup and native acceptance critical path
+
+See [paired startup composition](PAIRED_STARTUP_COMPOSITION.md). These are HMP
+implementation tasks, not an established upstream Hermes blocker.
+
+- [ ] PS1: original gateway startup owner, actual activated PM generation/HMP
+      entry binding, native observation/drain composition and gateway-only key custody.
+- [ ] PS2: independently selected isolated broker runtime/parser/worker and
+      manager/reaper ownership, broker-only keys closed before worker creation.
+- [ ] PS3: exact original role/channel/handshake binding and revocation preserving
+      local cleanup debt; no caller-provided qualification flag.
+- [ ] PS4: original normal native terminal acceptance, DRAIN, signed counted ACK,
+      original controller acceptance, distinct journal/native credit release and
+      fresh PRE_EMIT before authenticated candidate publication.
+- [ ] PS5: cleanup/ABORTED/earlier terminal variants and actual Linux/Darwin runtime,
+      installation, physical and release qualification, each with its own evidence.
+
 ## Current envelope stop preparation
 
 - [x] Reseal completed normal correlation DATA through original fact/allocation,

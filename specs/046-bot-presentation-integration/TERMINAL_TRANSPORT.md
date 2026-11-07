@@ -4,6 +4,11 @@ This is the implementation contract for full character delivery, not a reduced
 feature or a qualification receipt. The envelope codec/transcript alone enable
 no terminal dispatch, ACK permission, image emission or registry/native release.
 
+The fixed startup and native acceptance composition is now specified in
+[PAIRED_STARTUP_COMPOSITION.md](PAIRED_STARTUP_COMPOSITION.md). No upstream blocker
+has been established for that implementation. The synthetic bootstrap verifier
+remains synthetic and cannot supply production admission.
+
 ## Current concrete prerequisites
 
 The gateway's reviewed post-GO cleanup retains its original reader while sending

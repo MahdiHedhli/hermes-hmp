@@ -1,3 +1,19 @@
+## Installed-startup acceptance critical path — November 7, 2026
+
+Source review identified the remaining character-image admission prerequisite as
+HMP installed-startup composition, not an established upstream Hermes blocker.
+The reviewed paired-startup contract now specifies fixed gateway/broker owners,
+actual activated PM/import-origin capture, independently selected runtime/key
+expectations, original channel ownership and separate native read-worker DRAIN,
+broker closure, signed ACK, journal/native credit release and fresh PRE_EMIT.
+Synthetic bootstrap verification is never promoted to production admission.
+Hermes compatibility uses minimum version/API capabilities, not a commit allowlist.
+
+PS1–PS5 are saved in spec046 TASKS.md. They remain implementation/qualification
+work; this checkpoint adds no production factory, acceptance, image display,
+deployment or device/release claim. Existing unexplained regression failures and
+sender-destination incident remain unresolved. The broader feature goal is active.
+
 ## Completion DATA consumer custody — November 7, 2026
 
 The normal receiver now exposes `current_correlation()` only to its original work
