@@ -41,8 +41,9 @@ def planned_cache_path(source, tag, optimize, prefix, cwd):
     """
     _location(source)
     _require(source.endswith(".py") and type(tag) is str and 0 < len(tag) <= 128
-             and all(c in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-"
-                     for c in tag)
+             and all(32 <= ord(c) != 127 and c != "/"
+                     and not 0xD800 <= ord(c) <= 0xDFFF for c in tag)
+             and len(tag.encode("utf-8")) <= 512
              and type(optimize) is int and 0 <= optimize <= 2147483647
              and (prefix is None or type(prefix) is str)
              and (cwd is None or type(cwd) is str))

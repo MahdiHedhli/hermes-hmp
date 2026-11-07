@@ -16,7 +16,7 @@ For /root.py, CPython may return a relative cache path; the mapping resolves its
 actual location against the supplied original CWD. Therefore parity means equal
 absolute location, not necessarily equal raw text from cache_from_source.
 The implementation is POSIX-specific; no Windows path or loader policy is claimed.
-Foreign values, bool/negative/unbounded optimization, tag separators, noncanonical
+Foreign values, bool/negative/unbounded optimization, slash/ASCII-control tags, noncanonical
 or private resource paths refuse without invoking coercion/equality hooks.
 
 ## Mandatory pre-IO integration

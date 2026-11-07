@@ -16,7 +16,8 @@ sys.path.insert(0,sys.argv[1])
 from hmp_startup.cache_candidates import planned_cache_path,CacheCandidateError
 case=json.loads(sys.argv[2])
 if type(case) is list:
-    source,prefix,optimize=case
+    source,prefix,optimize=case[:3]
+    if len(case)==4:sys.implementation.cache_tag=case[3]
     sys.pycache_prefix=prefix
     actual=importlib.util.cache_from_source(
         source,optimization='' if optimize==0 else str(optimize))
@@ -52,7 +53,11 @@ print(json.dumps({'passed':True,'planned_candidate_loaded':False,'admitted':Fals
 '''
 
 SOURCES = ('/root.py', '/.py', '/pkg/mod.py', '/pkg/a.b.py', '/pkg/with space.py', '/pkg/café.py')
-PARITY = tuple(itertools.product(SOURCES, (None, '/cache', '/'), (0, 1, 2, 10)))
+PARITY = (*itertools.product(SOURCES, (None, '/cache', '/'), (0, 1, 2, 10)),
+    ('/pkg/mod.py', None, 0, 'tag.with.dots'),
+    ('/root.py', '/cache', 2, 'tag café'),
+    ('/pkg/mod.py', '/', 10, 'tag with spaces'),
+)
 REFUSALS = ('foreign_source', 'foreign_tag', 'foreign_optimize', 'foreign_prefix', 'foreign_cwd',
             'bool_optimize', 'negative_optimize', 'huge_optimize', 'tag_separator',
             'relative_prefix', 'dot_prefix', 'private_source', 'private_cache',
