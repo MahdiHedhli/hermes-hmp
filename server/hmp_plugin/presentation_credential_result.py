@@ -249,10 +249,13 @@ class CredentialResultProducer:
     def release_after_write(self, writer):
         """Withdraw original payload after terminal write attempt, never authorize I/O."""
         from .presentation_credential_result_write import CredentialResultWriter, _WriteScope
-        if (type(self) is CredentialResultProducer and type(writer) is CredentialResultWriter
-                and type(writer._scope_snapshot) is _WriteScope
-                and writer._scope_snapshot.producer is self
-                and writer._scope_snapshot.result_scope is self._scope_snapshot):
+        if type(self) is not CredentialResultProducer or type(writer) is not CredentialResultWriter:
+            return
+        cell = writer._scope_cell
+        if (type(cell) is tuple and len(cell) == 2 and cell[0] is writer
+                and type(cell[1]) is _WriteScope and cell[1].producer is self
+                and cell[1].result_scope is self._scope_snapshot
+                and self._writer is writer and self._writer_snapshot is writer):
             self._retired = True
             self._payload = self._payload_snapshot = None
             self._frozen = self._frozen_snapshot = None

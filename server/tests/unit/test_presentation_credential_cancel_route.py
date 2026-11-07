@@ -73,12 +73,17 @@ _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
                                   "go_relay_result_sign_expired", "go_relay_result_sign_take_drift",
                                   "go_relay_result_sign_post_crypto_key",
                                   "go_relay_result_sign_take_alias", "go_relay_result_sign_write",
+                                  "go_relay_result_sign_write_completed_fact",
+                                  "go_relay_result_sign_write_completed_scope",
                                   "go_relay_result_sign_write_wrong_actor",
                                   "go_relay_result_sign_write_tail_key",
                                   "go_relay_result_sign_write_tail_control",
                                   "go_relay_result_sign_write_post_alias",
                                   "go_relay_result_sign_write_settlement",
                                   "go_relay_result_sign_write_init",
+                                  "go_relay_result_sign_write_hashinit",
+                                  "go_relay_result_sign_write_hashscope",
+                                  "go_relay_result_sign_write_hashsha",
                                   "go_relay_result_sign_write_zero",
                                   "go_relay_result_sign_write_partial",
                                   "go_relay_result_sign_write_unknown",
@@ -291,6 +296,9 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                "go_relay_result_sign_write_post_alias",
                                "go_relay_result_sign_write_settlement",
                                "go_relay_result_sign_write_init",
+                                  "go_relay_result_sign_write_hashinit",
+                                  "go_relay_result_sign_write_hashscope",
+                                  "go_relay_result_sign_write_hashsha",
                                   "go_relay_result_sign_write_zero",
                                "go_relay_result_sign_write_partial",
                                "go_relay_result_sign_write_unknown",
@@ -647,7 +655,10 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                     from hmp_plugin import (
                                         presentation_credential_result_write as rw,
                                     )
-                                    if stage.endswith("_init"):
+
+                                    if stage.endswith(
+                                        ("_init", "_hashinit", "_hashscope", "_hashsha")
+                                    ):
                                         check = SocketChannel._check
                                         calls = []
 
@@ -658,10 +669,44 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                                 raise FrameError("synthetic-initial-check")
                                             return check(ch)
 
-                                        monkeypatch.setattr(SocketChannel, "_check",
-                                                            refused_initial)
-                                        with pytest.raises(FrameError):
+                                        foreign_hash_calls = []
+                                        if stage.endswith(("_hashinit", "_hashscope", "_hashsha")):
+                                            real_hash = rw._PAYLOAD_SHA
+
+                                            class ForeignHashScope:
+                                                def __getattribute__(self, name):
+                                                    foreign_hash_calls.append(name)
+                                                    raise AssertionError("foreign hash scope")
+
+                                            class ForeignHashSHA:
+                                                def __eq__(self, value):
+                                                    foreign_hash_calls.append("eq")
+                                                    raise AssertionError("foreign hash digest")
+
+                                            def lost_acquisition_hash(payload):
+                                                result = real_hash(payload)
+                                                calls.append(True)
+                                                writer = producer._writer_snapshot
+                                                if stage.endswith("_hashscope"):
+                                                    changed = ForeignHashScope()
+                                                elif stage.endswith("_hashsha"):
+                                                    changed = writer._scope_snapshot._replace(
+                                                        payload_sha=ForeignHashSHA())
+                                                else:
+                                                    raise FrameError(
+                                                        "SYNTHETIC_PAYLOAD_HASH_ACK_LOST")
+                                                writer._scope = writer._scope_snapshot = changed
+                                                return result
+
+                                            monkeypatch.setattr(rw, "_PAYLOAD_SHA",
+                                                                lost_acquisition_hash)
+                                        else:
+                                            monkeypatch.setattr(SocketChannel, "_check",
+                                                                refused_initial)
+                                        with pytest.raises(FrameError) as caught:
                                             rw.CredentialResultWriter.retain(producer)
+                                        assert caught.value.__context__ is None
+                                        assert foreign_hash_calls == []
                                         partial = producer._writer_snapshot
                                         assert partial._failed and partial._payload_snapshot is None
                                         with pytest.raises(FrameError):
@@ -817,6 +862,50 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                         assert sent == raw + frozen.header + frozen.payload
                                     assert signed_writer._payload_snapshot is None
                                     assert not channel._writing
+                                    if (stage == "go_relay_result_sign_write"
+                                            or stage.startswith(
+                                                "go_relay_result_sign_write_completed_")):
+                                        from hmp_plugin import (
+                                            presentation_credential_result_completed,
+                                        )
+                                        rc = presentation_credential_result_completed
+                                        assert rc.current(signed_writer) is fact
+                                        assert fact.scope.payload_sha == hashlib.sha256(
+                                            frozen.payload).hexdigest()
+                                        assert producer._payload_snapshot is None
+                                        assert producer._frozen_snapshot is None
+                                        from hmp_plugin.presentation_terminal_claim import (
+                                            LocalStartedProducer,
+                                        )
+                                        if stage.endswith("_completed_fact"):
+                                            changed = fact._replace(count=fact.count + 1)
+                                            signed_writer._fact = changed
+                                            signed_writer._fact_snapshot = changed
+                                        elif stage.endswith("_completed_scope"):
+                                            changed = fact.scope._replace(payload_sha="0" * 64)
+                                            signed_writer._scope = changed
+                                            signed_writer._scope_snapshot = changed
+                                        if stage.startswith(
+                                            "go_relay_result_sign_write_completed_"
+                                        ):
+                                            with pytest.raises(FrameError):
+                                                LocalStartedProducer.retain(
+                                                    spine, fact.scope.result_scope.refs[1])
+                                            native_record = fact.scope.result_scope.refs[4]
+                                            assert native_record.terminal_producer._failed
+                                            with pytest.raises(FrameError):
+                                                LocalStartedProducer.retain(
+                                                    spine, fact.scope.result_scope.refs[1])
+                                        else:
+                                            terminal = LocalStartedProducer.retain(
+                                                spine, fact.scope.result_scope.refs[1])
+                                            claim = terminal.claim_data()
+                                            assert claim.outcome == "OK" and claim.exit_code == 0
+                                            assert claim.result_sha256 == fact.scope.payload_sha
+                                            assert terminal._transfer_snapshot is fact
+                                            assert terminal._observation_snapshot is (
+                                                resources._observation_identity)
+                                        assert producer._payload_snapshot is None
                                     held["signed_result_sent"] = True
                                 frozen = None
                                 other = BrokerCancellationOwner.__new__(BrokerCancellationOwner)

@@ -4,6 +4,12 @@
 
 The package source is preserved from the private F1 implementation. See [HMP v1](../docs/architecture/contracts/HMP_V1.md) for its wire contract, [deployment](DEPLOYMENT.md) for profile routing, and [contributing](../CONTRIBUTING.md) for checks.
 
+The internal `presentation_credential_result_completed.py` validator binds the
+completed signed RESULT byte count and body digest after output withdrawal to
+its original actor, control and native local resource closure. The terminal
+producer's normal signed branch can mint historical claim DATA; signed terminal
+export/delivery, late cleanup transitions and acceptance remain unqualified.
+
 The internal `presentation_credential_cleanup_budget.py` stage publishes only the
 minimum of an authenticated sender stamp and the original native cleanup end.
 It admits only the original actor, refuses active/competing readers, and retains

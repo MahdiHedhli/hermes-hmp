@@ -1,3 +1,38 @@
+## Signed RESULT transfer to native local claim — November 7, 2026
+
+The signed writer retains an independent original scope/completion cell and the
+full RESULT/result2-body digest. Acquisition independently hashes the actual
+immutable payload, compares only its pre-held typed digest after scope/payload
+identity fences, and reseals currentness before any write. Successful transfer
+retains the actual counted write receipt while clearing producer/writer payload
+and frozen output references.
+
+A separate completed-transfer validator checks that original receipt, exact
+count, settled waiter, original service actor/role/control and native normal-drained
+resources. LocalStartedProducer can now join this signed transfer with its actual
+original local closure observation and input receipt to mint historical OK claim
+DATA. The legacy unsigned branch remains distinct; a malformed signed writer is
+never reinterpreted as unsigned. Scope/count substitution anchors producer refusal
+and prevents a second mint. Hash acknowledgement loss and Foreign scope/digest
+substitution refuse without invoking foreign getters/equality; original owned
+payload withdrawal uses its independent allocation cell and does not restore scope.
+
+This qualifies the normal signed local producer bridge in the synthetic native
+fixture, whose peer/clock qualification remains mocked. Trusted runtime/startup,
+signed terminal exporter/delivery and late cleanup transitions, remote acceptance,
+ACK/native release, earlier/direct terminal positions and EAGAIN waiting remain
+open. No production activation or physical character-image delivery is claimed.
+Existing unexplained broker refusals and the sender-destination incident remain
+unresolved. No live host/device/grant/provider or deployment change occurred.
+
+Independent read-only review accepted the held-hash and original-ownership
+withdrawal repairs. Focused native cases:6 passed,123 deselected in3.50s.
+Expanded exact-source regression:2,091 passed,1 skipped in201.56s. Functional
+source hashes remained unchanged; lint, plugin surface and whitespace pass.
+Focused cases overlap the expanded run. Initial negative-test fixture failures
+used the connection instead of the native registry record; corrected without
+weakening production checks, with original private evidence retained.
+
 # Started-reader terminal proof and publication lifecycle
 
 ## End state and non-substitutable ownership planes

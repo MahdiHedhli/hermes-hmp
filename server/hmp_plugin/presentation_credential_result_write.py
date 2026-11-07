@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import errno
+import hashlib
 import os
 import socket
 from contextlib import suppress
@@ -23,6 +24,7 @@ _SEND = socket.socket.send
 _FILENO = socket.socket.fileno
 _TIMEOUT = socket.socket.gettimeout
 _MINT = object()
+_PAYLOAD_SHA = hashlib.sha256
 
 
 def _require(value):
@@ -41,6 +43,7 @@ class _WriteScope(NamedTuple):
     header: bytes
     length: int
     digest: str
+    payload_sha: str
 
     def __repr__(self):
         return "<SignedResultWriteScope payload-free redacted>"
@@ -74,7 +77,9 @@ class CredentialResultWriter:
         owner = cls.__new__(cls)
         owner._scope = owner._scope_snapshot = _WriteScope(
             producer, s, channel, channel._socket_snapshot, ready, s.refs[15],
-            f.raw, f.header, len(f.payload), f.frame_sha)
+            f.raw, f.header, len(f.payload), f.frame_sha, f.payload_sha)
+        owner._scope_cell = (owner, owner._scope_snapshot)
+        owner._completion_cell = None
         owner._payload = owner._payload_snapshot = f.payload
         owner._attempted = owner._active = owner._inflight = False
         owner._failed = owner._unknown = owner._complete = owner._retired = False
@@ -85,15 +90,28 @@ class CredentialResultWriter:
         producer._writer = producer._writer_snapshot = owner
         channel._credential_result_writer = channel._credential_result_writer_snapshot = owner
         failed = False
+        payload = value = held_scope = scope_cell = expected_sha = None
         try:
             CredentialResultWriter._current(owner)
+            held_scope, scope_cell = owner._scope_snapshot, owner._scope_cell
+            expected_sha = held_scope.payload_sha
+            _require(type(expected_sha) is str)
+            payload = owner._payload_snapshot
+            value = _PAYLOAD_SHA(payload).hexdigest()
+            _require(type(value) is str and owner._scope is held_scope
+                     and owner._scope_snapshot is held_scope and owner._scope_cell is scope_cell
+                     and owner._payload is payload and owner._payload_snapshot is payload)
+            _require(value == expected_sha)
+            CredentialResultWriter._current(owner)
+            _require(owner._scope is held_scope and owner._scope_snapshot is held_scope
+                     and owner._scope_cell is scope_cell and owner._payload_snapshot is payload)
         except BaseException:
             failed = True
             owner._failed = owner._retired = True
             owner._payload = owner._payload_snapshot = None
             CredentialResultProducer.release_after_write(producer, owner)
         finally:
-            f = None
+            f = payload = value = held_scope = scope_cell = expected_sha = None
         if failed:
             raise FrameError("BI1_CREDENTIAL_RESULT_WRITER_ACQUISITION_REFUSED") from None
         return owner
@@ -131,6 +149,9 @@ class CredentialResultWriter:
                  and type(s.header) is bytes and 8 < len(s.header) <= 1032
                  and type(s.length) is int and 4 <= s.length <= OUTPUT_LIMIT
                  and type(s.digest) is str and len(s.digest) == 64
+                 and type(s.payload_sha) is str and len(s.payload_sha) == 64
+                 and type(self._scope_cell) is tuple and len(self._scope_cell) == 2
+                 and self._scope_cell[0] is self and self._scope_cell[1] is s
                  and self._payload is self._payload_snapshot
                  and type(self._payload) is bytes and len(self._payload) == s.length
                  and type(self._offset) is int and self._offset is self._offset_snapshot
@@ -157,7 +178,8 @@ class CredentialResultWriter:
         _require(CredentialResultProducer._current(s.producer) is s.result_scope)
         f = s.producer._frozen_snapshot
         _require(f is not None and f.raw is s.raw and f.header is s.header
-                 and f.payload is self._payload_snapshot and f.frame_sha == s.digest)
+                 and f.payload is self._payload_snapshot and f.frame_sha == s.digest
+                 and f.payload_sha == s.payload_sha)
         SocketChannel._check(s.channel)
         _require(CredentialResultWriter._local(self) is s)
         # Last callbacks must not leave a stale key/control/actor or descriptor.
@@ -175,9 +197,11 @@ class CredentialResultWriter:
 
     def withdraw_from_producer(self, producer):
         """Pure payload withdrawal, no task cancellation or authority acquisition."""
-        if (type(self) is CredentialResultWriter and type(self._scope_snapshot) is _WriteScope
-                and self._scope is self._scope_snapshot
-                and self._scope_snapshot.producer is producer
+        if type(self) is not CredentialResultWriter:
+            return
+        cell = self._scope_cell
+        if (type(cell) is tuple and len(cell) == 2 and cell[0] is self
+                and type(cell[1]) is _WriteScope and cell[1].producer is producer
                 and type(producer) is CredentialResultProducer
                 and producer._writer is self and producer._writer_snapshot is self
                 and producer._retired is True):
@@ -274,6 +298,7 @@ class CredentialResultWriter:
             _require(CredentialResultWriter._current(self) is s and self._payload is held)
             # No native/callback boundary remains before this tentative local fact.
             self._fact = self._fact_snapshot = _ResultTransfer(_MINT, self, s, self._offset)
+            self._completion_cell = (self, self._fact_snapshot)
             self._complete = True
         except asyncio.CancelledError:
             failed = cancelled = True
