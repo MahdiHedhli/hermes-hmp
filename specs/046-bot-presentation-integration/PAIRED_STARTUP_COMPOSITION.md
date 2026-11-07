@@ -190,3 +190,7 @@ The separate [gateway entry component](GATEWAY_ENTRY.md) now retains invocation
 through fixed bootstrap import before activation capture (434 combined checks).
 Its own installed origin/inventory, actual native re-exec and complete factory
 remain open; no entrypoint is installed and plugin import rules are unchanged.
+
+The [recipe-to-plugin child join](GATEWAY_PACKAGE_SNAPSHOT.md#schema2-original-recipe-integration)
+now consumes actual original document/count facts (534 combined checks). It does
+not complete entry/dependency/interpreter/loader or whole-startup/native/key joins.

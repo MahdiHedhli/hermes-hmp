@@ -720,3 +720,11 @@ historical, not an alternative live authorization path or resolved incident.
 - [x] Retain partial initialization and unknown read/close debt; foreign plan/fact state is preserved; busy owners refuse before fresh capture.
 - [ ] GR2 validate complete child tables, entry/dependency/runtime/link/loader closure and original artifact-count handoff.
 - [ ] GR3 bind actual native listener/store/bridge/identity service and role keys; broker startup and terminal acceptance/ACK/release remain required.
+
+### GR2 recipe-to-plugin child checkpoint — November 7, 2026
+
+- [x] Consume actual retained schema2 recipe plugin bytes/expectations through verify_recipe; no caller replacement payload/digest or schema1 downgrade.
+- [x] Carry actual document count allocation into package IO; seal post-read/document-hash/final-package count identity and retain final actual cell;14 composed cases/534 combined checks pass.
+- [x] Preserve historical recipe/configuration/data custody after namespace/path drift; occupied package refuses before fresh capture.
+- [ ] Join earlier selection and later artifact accounting into full startup limits; do not manufacture prior IO counts.
+- [ ] Complete GR2 entry/dependency/interpreter/link/loader closure, then GR3 native listener/store/bridge/identity/key factory. Full character-image runtime remains unfinished.

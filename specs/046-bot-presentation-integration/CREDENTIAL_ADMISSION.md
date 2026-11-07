@@ -302,3 +302,7 @@ package-only. Full recipe/child aggregate checks and native/key admission remain
 GR1 recipe/fixed-child document IO is now implemented and reviewed (517 combined
 checks). Its common child envelopes are DATA; GR2 full table/runtime/loader and
 GR3 actual native/key composition still precede any credential acquisition.
+
+The original recipe-to-plugin package join is now source implemented (534 combined
+checks). Entry/dependency/interpreter/link/loader closure, remaining whole-startup
+accounting and actual native/key composition still precede credential acquisition.

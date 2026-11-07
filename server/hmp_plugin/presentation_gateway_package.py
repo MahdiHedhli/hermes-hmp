@@ -18,6 +18,7 @@ from types import ModuleType
 from typing import NamedTuple
 
 from .presentation_gateway_activation import GatewayActivationOwner
+from .presentation_gateway_recipe import GatewayRecipeOwner, _same_recipe_binding
 from .presentation_startup_artifacts import (
     ExpectedArtifact,
     StartupArtifactOwner,
@@ -46,7 +47,24 @@ def _require(value):
         raise PackageInventoryError
 
 
-def _selection(owner):
+def _vacant(configuration):
+    _require(type(configuration) is StartupSelectionOwner
+             and type(configuration._origin) is IoScope)
+    activation = configuration._origin.activation
+    _require(type(activation) is GatewayActivationOwner
+             and activation._package_owner is None and activation._package_cell is None
+             and activation._package_fact_cell is None)
+
+
+def _selection(owner, recipe=None, binding=None):
+    actual = None
+    if recipe is not None:
+        _require(type(recipe) is GatewayRecipeOwner)
+        actual = GatewayRecipeOwner._loaded_binding(recipe)
+        _require(binding is not None and _same_recipe_binding(binding, actual)
+                 and owner is actual[0].expected.configuration)
+    else:
+        _require(binding is None)
     _require(type(owner) is StartupSelectionOwner and type(owner._origin) is IoScope)
     s = owner._origin
     activation = s.activation
@@ -54,13 +72,15 @@ def _selection(owner):
     cell = activation._selection_fact_cell
     _require(type(cell) is tuple and len(cell) == 3 and cell[0] is owner and cell[1] is s
              and type(cell[2]) is GatewayStartupSelection
-             and type(cell[2].schema) is int and cell[2].schema == 1
+             and type(cell[2].schema) is int and cell[2].schema == (1 if recipe is None else 2)
              and owner._selection is cell[2]
              and owner._selection_cell is cell and owner._ready is True
              and owner._failed is False and owner._unknown is False)
     _require(StartupSelectionOwner._guard(owner) is s
              and activation._selection_fact_cell is cell and owner._selection_cell is cell
              and owner._selection is cell[2] and owner._ready is True)
+    if actual is not None:
+        _require(_same_recipe_binding(actual, GatewayRecipeOwner._retained_binding(recipe)))
     return activation, s, cell, cell[2]
 
 
@@ -74,6 +94,8 @@ class _Manifest(NamedTuple):
     entries: tuple
     files: tuple
     scans: list
+    recipe: object = None
+    recipe_binding: tuple | None = None
 
     def __repr__(self):
         return "<HmpPackageManifest pinned-DATA redacted>"
@@ -209,14 +231,35 @@ class GatewayPackageOwner:
     @classmethod
     def verify(cls, configuration, raw):
         _require(cls is GatewayPackageOwner)
-        activation, configuration_scope, fact, selected = _selection(configuration)
+        return GatewayPackageOwner._verify(configuration, raw, None, None)
+
+    @classmethod
+    def verify_recipe(cls, recipe):
+        _require(cls is GatewayPackageOwner and type(recipe) is GatewayRecipeOwner)
+        try:
+            original = GatewayRecipeOwner._retained_binding(recipe)
+            configuration = original[0].expected.configuration
+            _vacant(configuration)  # occupied startup refuses before fresh native callbacks
+            binding = GatewayRecipeOwner._loaded_binding(recipe)
+            _require(_same_recipe_binding(original, binding))
+            raw = binding[4][3][1][1]
+        except BaseException:
+            raise PackageInventoryError from None
+        return GatewayPackageOwner._verify(configuration, raw, recipe, binding)
+
+    @classmethod
+    def _verify(cls, configuration, raw, recipe, binding):
+        _require(cls is GatewayPackageOwner)
+        _vacant(configuration)
+        activation, configuration_scope, fact, selected = _selection(configuration, recipe, binding)
         _require(activation._package_owner is None and activation._package_cell is None
                  and activation._package_fact_cell is None)
         owner = cls.__new__(cls)
         activation._package_owner = owner  # partial owner before hashing/parsing/native effects
         activation._package_cell = (activation, owner, None)
         owner._ready = owner._failed = owner._unknown = owner._reading = False
-        owner._bytes_read = owner._seen = 0
+        owner._bytes_read = 0 if recipe is None else binding[4][4][2]
+        owner._seen = 0
         owner._scope = owner._origin = owner._cell = owner._root_cell = None
         owner._fact = owner._fact_cell = None
         fact_cell = None
@@ -224,25 +267,34 @@ class GatewayPackageOwner:
         try:
             _require(type(raw) is bytes and 0 < len(raw) <= _MAX_BYTES
                      and type(selected.gateway_inventory_sha256) is str)
+            if recipe is None:
+                expected_hash = selected.gateway_inventory_sha256
+            else:
+                expected_document = binding[4][3][1]
+                _require(raw is expected_document[1])
+                expected_hash = expected_document[0].sha256
             digest = hashlib.sha256(raw).hexdigest()
-            _require(type(digest) is str and digest == selected.gateway_inventory_sha256)
-            current = _selection(configuration)
+            _require(type(digest) is str and digest == expected_hash)
+            current = _selection(configuration, recipe, binding)
             _require(current[1] is configuration_scope and current[2] is fact
                      and current[3] is selected)
             root, entries, files = _decode(raw, selected)
+            if recipe is not None:
+                _expected(tuple(row[0] for row in binding[4][3]) + files)
             meta = _Manifest(configuration, configuration_scope, fact, selected, raw,
-                             root, entries, files, [])
+                             root, entries, files, [], recipe, binding)
             s = IoScope(activation, activation._scope, meta,
                         (os.getpid(), os.geteuid(), threading.get_ident()), [])
             owner._scope = owner._origin = s
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)
             activation._package_cell = owner._root_cell
-            owner._count_cell = (owner, s, 0)
+            owner._count_cell = (owner, s, owner._bytes_read)
             _require(sys.dont_write_bytecode is True)  # no unlisted caches created during entry
             before = GatewayPackageOwner._tree(owner)
             _require(type(before) is _Tree and before.entries == entries)
             hashes = tuple(StartupArtifactOwner._file(owner, artifact) for artifact in files)
+            actual_count = owner._count_cell
             after = GatewayPackageOwner._tree(owner)
             _snapshot_join(before, after, hashes, meta, owner, s)
             origins = GatewayPackageOwner._origins(owner)
@@ -258,9 +310,15 @@ class GatewayPackageOwner:
                 tuple((item.path, item.size, item.sha256) for item in files),
                 after.files, after.directories, after.ancestors,
                 tuple((row[0], row[2], row[4], row[7]) for row in origins))
-            _require(owner._fact is None and owner._fact_cell is None
+            initial_count = 0 if recipe is None else binding[4][4][2]
+            _require(type(actual_count) is tuple and len(actual_count) == 3
+                     and actual_count[0] is owner and actual_count[1] is s
+                     and type(actual_count[2]) is int and owner._count_cell is actual_count
+                     and owner._bytes_read is actual_count[2]
+                     and actual_count[2] == initial_count + sum(row.size for row in files)
+                     and owner._fact is None and owner._fact_cell is None
                      and activation._package_fact_cell is None)
-            fact = (owner, s, entries, origins, hashes, after, data)
+            fact = (owner, s, entries, origins, hashes, after, data, actual_count)
             fact_cell = (owner, s, fact)
             owner._fact, owner._fact_cell = fact, fact_cell
             activation._package_fact_cell = fact_cell
@@ -300,14 +358,24 @@ class GatewayPackageOwner:
                          and row.close_attempted is True for row in s.expected.scans))
         parent = StartupSelectionOwner._retained_binding(s.expected.selection)
         _require(parent[0] is s.expected.selection_scope and parent[3] is s.expected.selection_cell)
+        if s.expected.recipe is not None:
+            _require(type(s.expected.recipe) is GatewayRecipeOwner
+                     and _same_recipe_binding(s.expected.recipe_binding,
+                         GatewayRecipeOwner._retained_binding(s.expected.recipe)))
+        else:
+            _require(s.expected.recipe_binding is None)
         fact = s.activation._package_fact_cell
         _require(type(fact) is tuple and len(fact) == 3 and fact[0] is self and fact[1] is s
-                 and fact is self._fact_cell and type(fact[2]) is tuple and len(fact[2]) == 7
+                 and fact is self._fact_cell and type(fact[2]) is tuple and len(fact[2]) == 8
                  and self._fact is fact[2] and fact[2][0] is self and fact[2][1] is s
                  and fact[2][2] is s.expected.entries
                  and type(fact[2][6]) is RetainedPackageData
                  and fact[2][6].selection is s.expected.selection_data
-                 and fact[2][6].manifest is s.expected.raw)
+                 and fact[2][6].manifest is s.expected.raw
+                 and type(fact[2][7]) is tuple and len(fact[2][7]) == 3
+                 and fact[2][7] is self._count_cell and fact[2][7][0] is self
+                 and fact[2][7][1] is s and type(fact[2][7][2]) is int
+                 and type(self._bytes_read) is int and self._bytes_read == fact[2][7][2])
         return s, cell, root, fact, parent
 
     def retained_data(self):
@@ -343,7 +411,7 @@ class GatewayPackageOwner:
         context = (os.getpid(), os.geteuid(), threading.get_ident())
         _require(all(type(v) is int for v in context) and context == s.context)
         meta = s.expected
-        current = _selection(meta.selection)
+        current = _selection(meta.selection, meta.recipe, meta.recipe_binding)
         _require(current[0] is s.activation and current[1] is meta.selection_scope
                  and current[2] is meta.selection_cell and current[3] is meta.selection_data
                  and self._scope is s and self._origin is s and self._cell is cell

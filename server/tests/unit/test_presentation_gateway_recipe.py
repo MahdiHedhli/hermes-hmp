@@ -99,6 +99,38 @@ if mutation in ("read_retire", "read_unknown", "buffer_swap", "document_swap",
             if mutation == "plan_swap": owner._recipe_plan_cell = foreign
         return result
     a.os.read = read_callback
+if mutation == "read_count_swap":
+    armed = False
+    replacement_count = None
+    real_pid = g.os.getpid
+    def arm_read(fd, count):
+        global armed
+        result = actual_read(fd, count)
+        if result: armed = True
+        return result
+    def replace_count_in_guard():
+        global armed, replacement_count
+        value = real_pid()
+        active = owner._recipe_owner
+        if armed and active is not None and active._reading is False and active._bytes_read > 0:
+            armed = False
+            replacement_count = (active, active._origin, active._bytes_read)
+            active._count_cell = replacement_count
+        return value
+    a.os.read = arm_read
+    g.os.getpid = replace_count_in_guard
+if mutation == "document_count_swap":
+    real_hash = g.hashlib.sha256
+    replaced_cell = None
+    def replace_in_extra_hash(data=b""):
+        global replaced_cell
+        active = owner._recipe_owner
+        if active is not None and active._origin is not None:
+            if len(active._origin.expected.documents) == 4 and data == children[3]:
+                replaced_cell = (active, active._origin, active._bytes_read)
+                active._count_cell = replaced_cell
+        return real_hash(data)
+    g.hashlib.sha256 = replace_in_extra_hash
 if mutation == "close_unknown":
     def close_callback(fd):
         actual_close(fd)
@@ -109,14 +141,16 @@ size = len(recipe_raw)
 if mutation == "candidate_size": size -= 1
 if mutation == "candidate_bool": size = True
 if mutation == "candidate_over": size = 65537
-if mutation == "document_final_swap":
+if mutation in ("document_final_swap", "final_count_swap"):
     getpid = g.os.getpid
     def final_context():
         value = getpid()
         active = owner._recipe_owner
         if active is not None and active._origin is not None:
             docs = active._origin.expected.documents
-            if len(docs) == 5: docs[0] = (docs[0][0], b"{}")
+            if len(docs) == 5:
+                if mutation == "document_final_swap": docs[0] = (docs[0][0], b"{}")
+                else: active._count_cell = (active, active._origin, active._bytes_read)
         return value
     g.os.getpid = final_context
 if mutation == "context_failure":
@@ -147,6 +181,11 @@ else:
     assert checked._bytes_read == len(recipe_raw) + sum(map(len, children))
 if mutation == "aggregate": assert checked._bytes_read == len(recipe_raw)
 if mutation == "plan_swap": assert owner._recipe_plan_cell is foreign
+if mutation == "document_count_swap":
+    assert replaced_cell is not None and checked._count_cell is replaced_cell
+if mutation == "read_count_swap":
+    assert replacement_count is not None and checked._count_cell is replacement_count
+    assert checked._unknown
 if checked is not None and mutation != "buffer_swap": assert not checked._buffer
 if checked is not None and checked._origin is not None:
     assert all(row.closed or row.unknown for row in checked._origin.records)
@@ -172,6 +211,7 @@ print(json.dumps({"mutation": mutation, "runtime_admitted": False}))
     "buffer_swap", "document_swap", "fact_swap", "close_unknown", "candidate_size",
     "context_failure", "recipe_nan", "recipe_missing", "candidate_bool", "candidate_over",
     "document_final_swap", "plan_swap", "schema1_config", "child_schema_bool",
+    "read_count_swap", "document_count_swap", "final_count_swap",
 ])
 def test_owned_recipe_and_fixed_child_documents(tmp_path, mutation):
     if os.name != "posix" or sys.platform not in ("darwin", "linux"):

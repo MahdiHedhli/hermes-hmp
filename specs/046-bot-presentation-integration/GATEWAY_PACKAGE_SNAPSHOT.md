@@ -107,3 +107,39 @@ cover late startup, namespace eviction, path changes, wrong thread, root fact dr
 and drift during context sampling; package publication also preserves a foreign
 pre-publication fact. This is isolated source qualification, not installed runtime
 or physical device/image-display qualification.
+
+## Schema2 original recipe integration
+
+GatewayPackageOwner.verify_recipe accepts the actual retained GatewayRecipeOwner.
+It derives the configuration and plugin expected/raw objects from that owner's
+original immutable document fact; no replacement raw argument or optional expected
+digest is exposed. Fresh original recipe bindings are checked across callbacks.
+The old verify(configuration, raw) still accepts schema1 only. A tuple copied from
+the recipe fact is DATA and cannot substitute for its owner or root allocation.
+
+The private verifier retains the actual recipe scope/plan/fact and original
+document-count cell in its metadata. Its byte counter starts from that allocation's
+known count, then actual file reads advance it. Combined file/byte limits apply to
+the five recipe documents plus this plugin package. This is not total startup
+accounting: earlier private selection IO and later entry/dependency/interpreter
+artifacts still require their original typed handoffs in the complete factory.
+
+The actual final package count cell is frozen immediately after hashing and
+rejoined after final tree/origin callbacks, checked against inherited document
+count plus actual verified file lengths, and retained in the package fact. The
+shared file reader also rejoins its actual count allocation after its guard; the
+recipe document reader holds it through extra hash/JSON and publication callbacks.
+Equal-valued replacement refuses; no synthesized count, reset or replay is admitted.
+
+Historical accessors use pure original recipe/configuration/closed-custody joins,
+with no new module lookup, file read or PM selection. Occupied package acquisition
+refuses before fresh callbacks, preserving original data after gateway/path drift.
+This remains historical DATA, not admission of current modules or native authority.
+
+14 composed cases plus42 recipe and prior coverage:534 passed in16.45s with source/
+fixtures unchanged. Cases cover actual fixed private documents, full plugin tree/
+hash verification, wrong/copied source, count drift/substitution, missing/unlisted/
+changed code, later namespace/path changes and wrong thread. Other three recipe
+children deliberately remain minimal envelopes in this fixture; their executable
+tables and all broader runtime/key/physical qualification remain unimplemented.
+Independent source review accepted the bounded integration and count repairs.

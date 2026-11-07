@@ -124,14 +124,17 @@ class GatewayRecipeOwner:
             activation._recipe_cell = root
             owner._count_cell = (owner, s, 0)
             raw = GatewayRecipeOwner._document(owner, s.expected.expected)
+            actual_count = owner._count_cell
             originals = ((s.expected.expected, raw),)
             rows = _plan(raw, s.expected)
             _require(GatewayRecipeOwner._guard(owner) is s and owner._root_cell is root
-                     and owner._plan_cell is None and activation._recipe_plan_cell is None)
+                     and owner._plan_cell is None and activation._recipe_plan_cell is None
+                     and owner._count_cell is actual_count)
             plan_cell = (owner, s, rows)
             owner._plan_cell = activation._recipe_plan_cell = plan_cell
             for row in rows:
                 body = GatewayRecipeOwner._document(owner, row)
+                actual_count = owner._count_cell
                 originals += ((row, body),)
             _require(GatewayRecipeOwner._guard(owner) is s and owner._root_cell is root
                      and owner._plan_cell is plan_cell and activation._recipe_plan_cell is plan_cell
@@ -140,13 +143,17 @@ class GatewayRecipeOwner:
                              and observed[0] is held[0] and observed[1] is held[1]
                              for observed, held in zip(
                                  s.expected.documents, originals, strict=True))
+                     and type(actual_count) is tuple and len(actual_count) == 3
+                     and actual_count[0] is owner and actual_count[1] is s
+                     and type(actual_count[2]) is int and owner._count_cell is actual_count
+                     and owner._bytes_read is actual_count[2]
                      and owner._bytes_read == recipe_size + sum(row.size for row in rows)
                      and all(type(row) is _Descriptor and row.closed is True
                              and row.close_attempted is True and row.unknown is False
                              for row in s.records)
                      and owner._fact_cell is None and activation._recipe_fact_cell is None
                      and owner._ready is False)
-            fact = (owner, s, plan_cell, originals)
+            fact = (owner, s, plan_cell, originals, actual_count)
             owner._fact_cell = activation._recipe_fact_cell = fact
             owner._ready = True
             return owner
@@ -160,6 +167,64 @@ class GatewayRecipeOwner:
             buffer.clear()
         if failed:
             raise GatewayRecipeError(owner) from None
+
+    def _retained_binding(self):
+        """Original closed document DATA/counter custody, never current admission."""
+        _require(type(self) is GatewayRecipeOwner and type(self._origin) is _Scope
+                 and self._scope is self._origin)
+        s, cell, root = self._origin, self._cell, self._root_cell
+        _require(type(cell) is tuple and len(cell) == 2 and cell[0] is self and cell[1] is s
+                 and type(root) is tuple and len(root) == 4 and root[0] is s.activation
+                 and root[1] is self and root[2] is s and type(root[3]) is tuple
+                 and len(root[3]) == 2 and root[3][0] is self and type(root[3][1]) is bytearray
+                 and self._buffer is root[3][1] and not root[3][1]
+                 and type(s.expected) is _Recipe and type(s.activation) is GatewayActivationOwner
+                 and s.activation._recipe_owner is self and s.activation._recipe_cell is root
+                 and GatewayActivationOwner._retained_scope(s.activation) is s.activation_scope
+                 and s.activation._retired is False and s.activation._uncertain is False
+                 and self._ready is True and self._failed is False and self._unknown is False
+                 and self._reading is False and self._active is None
+                 and type(s.context) is tuple and len(s.context) == 3
+                 and all(type(v) is int for v in s.context) and type(s.records) is list
+                 and all(type(row) is _Descriptor and row.closed is True
+                         and row.close_attempted is True and row.unknown is False
+                         for row in s.records))
+        parent = StartupSelectionOwner._retained_binding(s.expected.configuration)
+        _require(parent[0] is s.expected.configuration_scope
+                 and parent[3] is s.expected.configuration_cell
+                 and parent[3][2] is s.expected.selection)
+        plan, fact, count = self._plan_cell, self._fact_cell, self._count_cell
+        _require(type(plan) is tuple and len(plan) == 3 and plan[0] is self and plan[1] is s
+                 and s.activation._recipe_plan_cell is plan
+                 and type(plan[2]) is tuple and len(plan[2]) == 4
+                 and type(fact) is tuple and len(fact) == 5 and fact[0] is self and fact[1] is s
+                 and fact[2] is plan and s.activation._recipe_fact_cell is fact
+                 and type(fact[3]) is tuple and len(fact[3]) == 5
+                 and type(count) is tuple and len(count) == 3 and fact[4] is count
+                 and count[0] is self and count[1] is s and type(count[2]) is int
+                 and type(self._bytes_read) is int and self._bytes_read == count[2])
+        expected = (s.expected.expected, *plan[2])
+        _expected(expected)
+        _require(0 < count[2] <= _TOTAL_LIMIT and count[2] == sum(row.size for row in expected)
+                 and all(type(row) is tuple and len(row) == 2 and row[0] is wanted
+                         and type(row[1]) is bytes and len(row[1]) == wanted.size
+                         for row, wanted in zip(fact[3], expected, strict=True)))
+        return s, cell, root, plan, fact, parent
+
+    def _loaded_binding(self):
+        """Fresh early-startup join of original loaded document facts; no IO."""
+        try:
+            binding = GatewayRecipeOwner._retained_binding(self)
+            s = binding[0]
+            context = (os.getpid(), os.geteuid(), threading.get_ident())
+            _require(all(type(v) is int for v in context) and context == s.context
+                     and StartupSelectionOwner._guard(s.expected.configuration)
+                     is s.expected.configuration_scope)
+            after = GatewayRecipeOwner._retained_binding(self)
+            _require(_same_recipe_binding(binding, after))
+            return binding
+        except BaseException:
+            raise GatewayRecipeError(self) from None
 
     def _guard(self):
         _require(type(self) is GatewayRecipeOwner and type(self._origin) is _Scope
@@ -224,14 +289,17 @@ class GatewayRecipeOwner:
         self._active = expected
         try:
             StartupArtifactOwner._file(self, expected)
+            count_cell, counted = self._count_cell, self._bytes_read
             _require(GatewayRecipeOwner._guard(self) is s and self._active is expected
                      and self._buffer is buffer and self._root_cell is root
-                     and len(buffer) == expected.size)
+                     and len(buffer) == expected.size and self._count_cell is count_cell
+                     and self._bytes_read is counted)
             raw = bytes(buffer)
             digest = hashlib.sha256(raw).hexdigest()
             _require(type(digest) is str and digest == expected.sha256
                      and GatewayRecipeOwner._guard(self) is s and self._active is expected
-                     and self._buffer is buffer and self._root_cell is root)
+                     and self._buffer is buffer and self._root_cell is root
+                     and self._count_cell is count_cell and self._bytes_read is counted)
             if self._plan_cell is not None:
                 index = len(s.expected.documents) - 1
                 child = json.loads(raw, object_pairs_hook=_pairs)
@@ -245,7 +313,8 @@ class GatewayRecipeOwner:
                                         ensure_ascii=True, allow_nan=False).encode("ascii") == raw
                          and GatewayRecipeOwner._guard(self) is s
                          and self._buffer is buffer and self._active is expected
-                         and self._root_cell is root)
+                         and self._root_cell is root and self._count_cell is count_cell
+                         and self._bytes_read is counted)
             s.expected.documents.append((expected, raw))
             self._active = None
             return raw
@@ -255,3 +324,11 @@ class GatewayRecipeOwner:
 
     def __repr__(self):
         return "<GatewayRecipeOwner document-DATA not-runtime-admitted>"
+
+
+def _same_recipe_binding(before, after):
+    _require(type(before) is tuple and type(after) is tuple and len(before) == len(after) == 6
+             and type(before[5]) is tuple and type(after[5]) is tuple
+             and len(before[5]) == len(after[5]) == 4)
+    return (all(old is new for old, new in zip(before[:5], after[:5], strict=True))
+            and all(old is new for old, new in zip(before[5], after[5], strict=True)))

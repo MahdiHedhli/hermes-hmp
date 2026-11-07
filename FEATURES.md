@@ -1,3 +1,23 @@
+## Recipe-derived HMP package verification — November 7, 2026
+
+Package verification now consumes the plugin document held by the actual schema2
+recipe owner, never a supplied replacement payload or digest. Legacy verification
+remains schema1/package-only. Original recipe/configuration/plan/fact/count objects
+are rejoined around callbacks; copied tuples and changed sources/counts refuse.
+Package IO inherits the recipe's actual count allocation, enforces combined
+recipe-document/package-file limits and retains its own final actual count cell.
+Post-read, extra document-hash/JSON and final package callbacks cannot substitute
+an equal-valued counter. Occupied owners refuse before fresh activation checks.
+Historical data survives later namespace/path changes without runtime permission.
+
+Independent source review accepted the integration, count and vacancy repairs.
+14 composed recipe/package cases,42 recipe cases and prior coverage passed:534
+in16.45s, source/fixtures unchanged; lint/surface/whitespace pass. This verifies
+the plugin slice only. Entry/dependency/interpreter tables, remaining startup
+budget composition, loader policy and actual native/key factory are still open.
+No deployment, credential acquisition, image display or device/release qualification
+is claimed. Earlier unexplained regressions and sender risk remain unresolved.
+
 ## Owned complete-recipe document loader — November 7, 2026
 
 GR1 source now reads the pinned recipe and four fixed private child documents

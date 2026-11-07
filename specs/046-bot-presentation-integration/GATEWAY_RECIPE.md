@@ -198,3 +198,30 @@ The document counter is not a reset allowance for future artifact reads: GR2 mus
 retain its original known counts and enforce the existing whole-startup file/byte
 limits in addition to the32MiB document-phase limit. No new scalar count may serve
 as evidence that earlier IO occurred.
+
+## GR2 plugin child integration checkpoint
+
+The actual retained recipe owner can now feed its original plugin document into
+GatewayPackageOwner.verify_recipe. The package verifier does not accept caller
+replacement raw/digest values for schema2. Recipe facts now retain their actual
+original count allocation alongside original immutable document pairs. Pure
+historical and fresh early binding checks retain/rejoin parent/root/plan/fact/
+closed descriptors and count before/after callbacks. Source binding and exact
+count-cell substitutions refuse, even if a replacement has the same numeric value.
+
+Recipe count publication holds the actual last read cell through extra hash/JSON
+and the final guard; package publication holds its actual post-hash count through
+subsequent scans/origin callbacks. The shared read tail is sealed as well. The
+plugin's retained count is ready for a later typed handoff, not reconstructed from
+an arbitrary scalar. Occupied startup owners refuse before fresh native callbacks.
+
+This combined limit covers the five recipe documents and plugin files only. Full
+startup must still join earlier original selection IO and later entry/dependency/
+interpreter artifacts under the existing whole-startup limits. No new allowance
+or expected-size sum may replace those original IO observations.
+
+14 composed cases and42 recipe cases plus prior coverage:534 passed in16.45s with
+source/fixtures unchanged; source review accepted the integration and count/vacancy
+repairs. The composed plugin table is complete, but the other children remain
+minimal envelopes. GR2 entry/dependency/interpreter/link/loader closure and GR3
+actual native/key factory, broker/ACK/release and physical image delivery stay open.

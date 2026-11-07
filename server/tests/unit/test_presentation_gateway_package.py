@@ -53,12 +53,14 @@ CONFIG_PREFIX = CONFIG_PREFIX.replace(
 )
 PACKAGE_SUFFIX = r'''
 mutation = package_mutation
+package.__path__ = [str(root)]
 package_spec = importlib.util.spec_from_file_location(
     package.__name__ + ".presentation_gateway_package",
     str(root / "presentation_gateway_package.py"))
 p = importlib.util.module_from_spec(package_spec)
 sys.modules[package_spec.name] = p
 package_spec.loader.exec_module(p)
+package.__path__ = []  # fixed empty synthetic namespace after loading fixture modules
 unused = root / "unused.py"
 if mutation == "changed": unused.write_bytes(b"CHANGED_SYNTHETIC_CODE")
 if mutation == "missing": unused.unlink()
@@ -189,6 +191,8 @@ assert loaded._selection is not None  # package failure never fabricates/rewrite
 try: p.GatewayPackageOwner.verify(loaded, manifest_raw)
 except Exception: pass
 else: raise AssertionError("package verification reminted")
+if mutation == "normal" or mutation.startswith("history_"):
+    assert not owner._uncertain
 print(json.dumps({"mutation": mutation, "passed": True, "runtime_admitted": False}))
 '''
 
@@ -209,7 +213,8 @@ def test_pinned_complete_hmp_package(tmp_path, mutation):
     configuration = tmp_path / "private-config"
     configuration.mkdir(mode=0o700)
     for name in ("presentation_gateway_activation.py", "presentation_startup_artifacts.py",
-                 "presentation_startup_selection.py", "presentation_gateway_package.py"):
+                 "presentation_startup_selection.py", "presentation_gateway_package.py",
+                 "presentation_gateway_recipe.py"):
         shutil.copyfile(ARTIFACT_MODULE.with_name(name), root / name)
         (root / name).chmod(0o600)
     (root / "unused.py").write_text("# SYNTHETIC UNUSED CODE\n")

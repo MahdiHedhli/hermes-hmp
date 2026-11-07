@@ -1159,3 +1159,9 @@ private canonical child envelopes under original configuration/root/plan/data
 identity and shared document budgets. Immutable original raw snapshots are DATA,
 not validated executable tables, runtime/native/key admission or route authority.
 The shared artifact IO dispatch recognizes this exact owner only.
+
+`GatewayPackageOwner.verify_recipe` derives its plugin child only from the actual
+loaded recipe owner and original immutable documents/count allocation. Fresh and
+historical original-binding checks are distinct; no schema2 replacement payload/
+digest or naked count can qualify the source. Package facts retain final actual
+count cells for later typed startup composition. Full runtime/native/key is open.

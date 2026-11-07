@@ -291,10 +291,13 @@ class StartupArtifactOwner:
             _require(type(data) is bytes)
             same = (self._scope is s and self._origin is s and self._bytes_read is before
                     and self._count_cell is cell and self._reading is True)
-            self._bytes_read = before + len(data)  # actual count before any post-read check
-            self._count_cell = (self, s, self._bytes_read)
+            after = before + len(data)  # actual count before any post-read check
+            after_cell = (self, s, after)
+            self._bytes_read = after
+            self._count_cell = after_cell
             self._reading = False
-            _require(same and len(data) <= count and _owner_guard(self) is s)
+            _require(same and len(data) <= count and _owner_guard(self) is s
+                     and self._bytes_read is after and self._count_cell is after_cell)
             return data
         except BaseException:
             self._unknown = True
