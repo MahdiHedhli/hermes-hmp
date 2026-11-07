@@ -1109,6 +1109,14 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     assert notice.current_stop_for_reader() is notice._fact_origin
                     assert notice.current_stop_for_reader().stop is body._wake_receipt_origin
                     assert body._candidate_snapshot is None and not body._scope_origin.accumulator
+                    from hmp_plugin.presentation_credential_cleanup_notice import (
+                        SignedStoppedCursor,
+                    )
+                    cursor = SignedStoppedCursor.retain(notice)
+                    assert cursor.current() is cursor
+                    assert cursor._parser._stream_origin is body._initialization_origin[1]
+                    assert cursor._parser._stream_origin._received == 13
+                    assert body._candidate_snapshot is None and not body._scope_origin.accumulator
                     with pytest.raises(FrameError):
                         notice.current_stop_for_cleanup()  # sender cannot borrow cleanup actor
                     checked = asyncio.Event()
@@ -1141,6 +1149,33 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     monkeypatch.setattr(RemoteCleanupOwner, "_remaining", body_cleanup_probe)
                     async with asyncio.timeout_at(end / 1e9):
                         await checked.wait()
+                    # The original native envelope binding, not the digest's
+                    # mutable aliases, selects the expected identity.
+                    from hmp_plugin.presentation_broker_codec import BrokerBinding
+                    remaining_for_binding = RemoteCleanupOwner._remaining
+                    original_binding = body._scope_origin.envelope_scope.write_scope.intent.binding
+
+                    def body_binding_clock_drift(cleanup):
+                        value = remaining_for_binding(cleanup)
+                        if (asyncio.current_task() is cleanup._allocations_snapshot[1].task
+                                and not held.get("body_cursor_binding_changed")):
+                            held["body_cursor_binding_changed"] = True
+                            replacement = BrokerBinding(
+                                original_binding.iid, original_binding.listener,
+                                original_binding.broker, original_binding.channel,
+                                original_binding.operation)
+                            cursor._parser._binding = cursor._parser._binding_origin = replacement
+                            stream = cursor._parser._stream_origin
+                            stream._binding = stream._binding_origin = replacement
+                            assert replacement == original_binding
+                            assert replacement is not original_binding
+                        return value
+
+                    monkeypatch.setattr(RemoteCleanupOwner, "_remaining", body_binding_clock_drift)
+                    with pytest.raises(FrameError):
+                        cursor.current()
+                    assert held["body_cursor_binding_changed"] and cursor._failed
+                    assert notice._unknown and owned._cleanup_owner_snapshot._unknown
                     with pytest.raises(FrameError):
                         notice.publish()
                     held["body_notice_published"] = True

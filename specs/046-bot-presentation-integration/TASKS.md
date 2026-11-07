@@ -2,6 +2,14 @@
 
 ## Current envelope stop preparation
 
+- [x] Retain original stopped authentication parser/outer-header framing or SAME
+      partial-body digest, with independent parser/state allocations before effects
+      and postcallback currentness. Exact-type replacement and partial-init refusal.
+- [x] Authenticate early TERMINAL sequence data against retained expected sequence;
+      RESULT only1, TERMINAL exact0..2. Lifecycle/ABORTED claim admission remains open.
+- [ ] Qualify native receive/registration and exact next-byte accounting on this
+      original bound reader, without enabling concurrent signing or publication.
+
 - [x] Add fixed original-reader post-notification stop-currentness validation,
       repeating actual Future/fact/cursor/role/actor seals after native callbacks.
       Data only; exact parser/digest admission and receive ownership remain open.
@@ -10,7 +18,7 @@
       reads; fixed signed phase consistency, no overread/restart, permanent refusal.
       Component data only, with independent read-only review and focused causals.
 
-- [x] Authenticate fixed broker RESULT/1 or TERMINAL/2 boundary commitment DATA;
+- [x] Authenticate broker RESULT/1 or TERMINAL/0..2 at the retained expected sequence;
       closed context and signature, no fallback. Independent read-only review passed.
 - [ ] Bind boundary dispatch to original native cursor/transition and validate direct
       ABORTED terminal body; this helper alone grants no lifecycle or read permission.
@@ -23,14 +31,15 @@
       Independent read-only review accepted the bounded local-stop implementation.
 - [x] Implement/review bounded signed RESULT discard DATA continuation from partial
       authentication/header or SAME supplied partial-body digest; no body retention,
-      scanning or runtime read authority. Exact runtime allocation binding remains next.
+      scanning or runtime read authority. Parser/digest allocation binding is retained;
+      native receive ownership remains open.
 - [x] Implement/review disabled signed reservation preflight from actual registered
       envelope/partial-body wait, original write-quiescence/current role/frozen
       budget and post-cause custody. Request still False; no suppression/read grant.
 - [x] Implement/review original-work one-shot signed stop notice, with actual Future
       and fact allocation cells, native partial initialization/dispatch uncertainty,
       correlated stop/current role/earliest-budget seals and no publication retry.
-      No consumer/signing authority or cooperative route is enabled.
+      Stop-data consumers exist; no receive/signing authority or cooperative route is enabled.
 - [x] Verify actual broker parked-CANCEL expiry under the original250ms timeout:
       receipt retained, late consumption refused, frozen end unchanged, no credit/
       closure. Controlled causal does not resolve earlier broad broker failures.

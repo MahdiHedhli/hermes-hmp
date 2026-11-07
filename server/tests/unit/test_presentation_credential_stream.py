@@ -147,7 +147,7 @@ def cleanup_auth_fixture(phase="RESULT", sequence=1):
     from hmp_plugin.presentation_credential_stream import SignedCleanupAuthPrefix
 
     _, frame, expected, sender, receiver, sign = phase_fixture(phase, b"data", sequence)
-    context = {k: v for k, v in expected.items() if k not in ("phase", "sequence")}
+    context = {k: v for k, v in expected.items() if k != "phase"}
     raw = sign()
 
     def make(prefix=b""):
@@ -157,7 +157,9 @@ def cleanup_auth_fixture(phase="RESULT", sequence=1):
     return make, raw, frame
 
 
-@pytest.mark.parametrize("phase,sequence", [("RESULT", 1), ("TERMINAL", 2)])
+@pytest.mark.parametrize("phase,sequence", [
+    ("RESULT", 1), ("TERMINAL", 0), ("TERMINAL", 1), ("TERMINAL", 2),
+])
 @pytest.mark.parametrize("cut", [0, 1, 7, 8, 9, 73, -1, -2])
 def test_cleanup_auth_preserves_same_partial_record_without_body(phase, sequence, cut):
     make, raw, frame = cleanup_auth_fixture(phase, sequence)

@@ -93,22 +93,23 @@ def check_commitment(
 def check_broker_cleanup_commitment(
     raw: bytes, *, sender_public: bytes, receiver_public: bytes, expected_context: dict
 ) -> ConsistentCommitment:
-    """Authenticate one boundary record as RESULT/1 or TERMINAL/2 DATA.
+    """Authenticate RESULT/1 or TERMINAL/0..2 at a retained sequence, DATA only.
 
     This is not a transition permit: the original cursor owner must separately
     prove which transitions are currently allowed, and a direct terminal must
     still carry a qualified ABORTED claim. Never retry a refused record using a
     different parser. No body, cursor advancement or lifecycle fact is produced.
     """
-    context_keys = _EXPECTED - {"phase", "sequence"}
+    context_keys = _EXPECTED - {"phase"}
     if (
         type(expected_context) is not dict
         or any(type(key) is not str for key in expected_context)
         or expected_context.keys() != context_keys
-        or any(type(value) is not (int if key == "work_end_ns" else str)
+        or any(type(value) is not (int if key in ("sequence", "work_end_ns") else str)
                for key, value in expected_context.items())
         or expected_context["role"] != "broker"
         or expected_context["direction"] != "b2g"
+        or expected_context["sequence"] not in (0, 1, 2)
     ):
         _refuse()
     # The closed codec bounds and validates the untrusted discriminator first.
@@ -118,9 +119,11 @@ def check_broker_cleanup_commitment(
     if value["family"] != "phase" or value["phase"] not in ("RESULT", "TERMINAL"):
         _refuse()
     phase = value["phase"]
+    if phase == "RESULT" and expected_context["sequence"] != 1:
+        _refuse()
     return check_commitment(
         raw, sender_public=sender_public, receiver_public=receiver_public,
-        expected=dict(expected_context, phase=phase, sequence=1 if phase == "RESULT" else 2),
+        expected=dict(expected_context, phase=phase),
     )
 
 

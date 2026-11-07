@@ -354,3 +354,39 @@ receive/registration permission, concurrent CANCEL or terminal/ACK/native releas
 The future reader owner still must bind its exact parser/digest allocation and
 account for every native byte; signed gate.request remains False. No deployment,
 build, install or settings changed. Prior broker causes and sender risk stay open.
+
+## Original stopped parser/digest binding — November 7, 2026
+
+Added one-attempt `SignedStoppedCursor` acquisition on the original reader after
+actual delivered-stop currentness. The actual parser is independently retained
+BEFORE construction, with a separate original state allocation. An envelope
+keeps its exact partial authentication record plus any frozen outer-header
+remainder; a partial body reuses the SAME original committed-frame digest and
+received/committed count, without copying or restoring image data. Currentness
+reseals those originals after notice/native/clock callbacks. Partial parser
+construction failure remains attributable and cannot retry.
+
+Review found that paired parser/state aliases alone could accept a coherent
+replacement. Independent allocation anchors fix that finding; the actual final-
+clock exact-type replacement causal now refuses and preserves the original
+allocation. Independent read-only re-review accepted. Focused envelope causals:
+23 passed; actual original13-byte body digest binding: one passed in1.71s.
+The body parser and stream additionally retain the ORIGINAL envelope intent's
+binding identity, rather than selecting the expected binding from mutable digest
+aliases. A final-clock equal-but-distinct binding substitution across both parser
+and stream refuses; focused causal: one passed in1.75s. No protocol state was
+restored. The pre-refinement expanded run passed1,138 cases in133.90s; it is not
+claimed as final-source coverage. Final exact-source expanded regression:
+1,138 passed in138.08s; full server/tools lint and whitespace checks pass.
+
+Cleanup authentication now requires the retained expected broker sequence, not
+a sequence chosen from the wire: RESULT only1; TERMINAL exact0,1,2 as appropriate
+to the retained sequence. This closes the earlier fixed-TERMINAL/2 data-helper
+limitation. It does not itself establish a lifecycle transition or validate an
+ABORTED claim. No production early-abort qualification is claimed.
+
+The bound cursor exposes NO feed/recv/registration/signing method. Native read
+admission, exact next-byte accounting, concurrent CANCEL, terminal/ACK/native
+release and production character-image delivery remain unfinished; signed
+request stays False. No deployment/build/install/settings/device changed. Earlier
+broker causes and native sender-destination risk remain unresolved.

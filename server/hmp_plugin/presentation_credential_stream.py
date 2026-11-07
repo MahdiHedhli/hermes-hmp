@@ -374,15 +374,16 @@ class SignedCleanupAuthPrefix:
         self._header_done = self._header_done_origin = False
         failed = False
         try:
-            keys = _EXPECTED - {"phase", "sequence"}
+            keys = _EXPECTED - {"phase"}
             _require(type(prefix) is bytes and len(prefix) <= RECORD_LIMIT
                      and type(expected_context) is dict
                      and all(type(k) is str for k in expected_context)
                      and expected_context.keys() == keys
-                     and all(type(v) is (int if k == "work_end_ns" else str)
+                     and all(type(v) is (int if k in ("sequence", "work_end_ns") else str)
                              for k, v in expected_context.items())
                      and expected_context["role"] == "broker"
                      and expected_context["direction"] == "b2g"
+                     and expected_context["sequence"] in (0, 1, 2)
                      and type(sender_public) is bytes and len(sender_public) == 32
                      and type(receiver_public) is bytes and len(receiver_public) == 32
                      and sender_public != receiver_public)
@@ -424,11 +425,11 @@ class SignedCleanupAuthPrefix:
                  and all(type(v) is bytes and len(v) == 32 for v in self._pins)
                  and self._pins[0] != self._pins[1]
                  and type(self._expected) is tuple and self._expected is self._expected_origin
-                 and len(self._expected) == len(_EXPECTED) - 2
+                 and len(self._expected) == len(_EXPECTED) - 1
                  and all(type(row) is tuple and len(row) == 2 and type(row[0]) is str
-                         and type(row[1]) is (int if row[0] == "work_end_ns" else str)
+                         and type(row[1]) is (int if row[0] in ("sequence", "work_end_ns") else str)
                          for row in self._expected)
-                 and {row[0] for row in self._expected} == _EXPECTED - {"phase", "sequence"})
+                 and {row[0] for row in self._expected} == _EXPECTED - {"phase"})
 
     @property
     def needed(self):

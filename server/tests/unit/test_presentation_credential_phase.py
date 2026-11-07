@@ -74,11 +74,13 @@ def checked(data, updates=None, expected_updates=None):
     return claim
 
 
-@pytest.mark.parametrize("phase,sequence", [("RESULT", 1), ("TERMINAL", 2)])
+@pytest.mark.parametrize("phase,sequence", [
+    ("RESULT", 1), ("TERMINAL", 0), ("TERMINAL", 1), ("TERMINAL", 2),
+])
 def test_cleanup_boundary_authenticates_fixed_phase_sequence_data(phase, sequence):
     data = fixture(phase, b"data", sequence)
     binding, frame, expected, sp, rp, sign = data
-    context = {k: v for k, v in expected.items() if k not in ("phase", "sequence")}
+    context = {k: v for k, v in expected.items() if k != "phase"}
     fact = check_broker_cleanup_commitment(
         sign(), sender_public=sp, receiver_public=rp, expected_context=context)
     assert check_complete_frame(fact, frame, binding=binding).kind == phase
@@ -98,7 +100,7 @@ def test_cleanup_boundary_authenticates_fixed_phase_sequence_data(phase, sequenc
 ])
 def test_cleanup_boundary_refuses_other_signed_phases(phase, body):
     _, _, expected, sp, rp, sign = fixture(phase, body)
-    context = {k: v for k, v in expected.items() if k not in ("phase", "sequence")}
+    context = {k: v for k, v in expected.items() if k != "phase"}
     context.update(role="broker", direction="b2g")
     with pytest.raises(FrameError):
         check_broker_cleanup_commitment(
@@ -108,7 +110,7 @@ def test_cleanup_boundary_refuses_other_signed_phases(phase, body):
 @pytest.mark.parametrize("change", ["extra", "missing", "bool_end", "wrong_role", "wrong_peer"])
 def test_cleanup_boundary_requires_exact_retained_context_and_peer(change):
     _, _, expected, sp, rp, sign = fixture()
-    context = {k: v for k, v in expected.items() if k not in ("phase", "sequence")}
+    context = {k: v for k, v in expected.items() if k != "phase"}
     if change == "extra":
         context["phase"] = "RESULT"
     elif change == "missing":
@@ -119,6 +121,16 @@ def test_cleanup_boundary_requires_exact_retained_context_and_peer(change):
         context["role"] = "gateway"
     else:
         rp = sp
+    with pytest.raises(FrameError):
+        check_broker_cleanup_commitment(
+            sign(), sender_public=sp, receiver_public=rp, expected_context=context)
+
+
+@pytest.mark.parametrize("sequence", [0, 1, 2])
+def test_early_terminal_cannot_choose_another_retained_sequence(sequence):
+    _, _, expected, sp, rp, sign = fixture("TERMINAL", b"data", sequence)
+    context = {k: v for k, v in expected.items() if k != "phase"}
+    context["sequence"] = (sequence + 1) % 3
     with pytest.raises(FrameError):
         check_broker_cleanup_commitment(
             sign(), sender_public=sp, receiver_public=rp, expected_context=context)

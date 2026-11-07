@@ -67,6 +67,7 @@ class SignedReadNotice:
         owner._initialized = owner._init_attempted = False
         owner._attempted = owner._published = owner._failed = owner._unknown = False
         owner._fact = owner._fact_origin = owner._fact_allocation_origin = None
+        owner._cursor = owner._cursor_origin = owner._cursor_allocation_origin = None
         # Retain every possibly partial native allocation before its first effect.
         gate._signed_notice = gate._signed_notice_origin = owner
         gate._signed_notice_allocation_origin = (gate, owner)
@@ -134,6 +135,15 @@ class SignedReadNotice:
                      and len(self._fact_allocation_origin) == 2
                      and self._fact_allocation_origin[0] is self
                      and self._fact_allocation_origin[1] is fact and self._attempted is True)
+        cursor = self._cursor_origin
+        if cursor is None:
+            _require(self._cursor is None and self._cursor_allocation_origin is None)
+        else:
+            _require(type(cursor) is SignedStoppedCursor and self._cursor is cursor
+                     and type(self._cursor_allocation_origin) is tuple
+                     and len(self._cursor_allocation_origin) == 2
+                     and self._cursor_allocation_origin[0] is self
+                     and self._cursor_allocation_origin[1] is cursor)
         return self
 
     def _actor(self):
@@ -355,3 +365,164 @@ class SignedReadNotice:
             r.capture.cleanup._unknown = True
         if failed:
             raise FrameError("BI1_SIGNED_READ_NOTICE_PUBLICATION_UNKNOWN") from None
+
+
+class SignedStoppedCursor:
+    """Original stopped cursor/parser binding; not native receive permission.
+
+    Acquisition is one attempt after delivered notice, on the original work
+    task. It retains only framing bytes, or the SAME original partial-body
+    digest. This component exposes no feed, registration or recv operation.
+    """
+
+    @classmethod
+    def retain(cls, notice):
+        from .presentation_credential_codec import payload_size
+        from .presentation_credential_stream import SignedCleanupAuthPrefix, SignedResultDiscard
+
+        _require(cls is SignedStoppedCursor and type(notice) is SignedReadNotice)
+        SignedReadNotice._actor(notice)
+        fact = SignedReadNotice.current_stop_for_reader(notice)
+        _require(notice._cursor is None and notice._cursor_origin is None
+                 and notice._cursor_allocation_origin is None)
+        owner = cls.__new__(cls)
+        owner._notice = owner._notice_origin = notice
+        owner._fact = owner._fact_origin = fact
+        owner._parser = owner._parser_origin = None
+        owner._parser_allocation_origin = None
+        owner._parser_state_allocation_origin = None
+        owner._outer = owner._outer_origin = None
+        owner._parser_state = owner._parser_state_origin = None
+        owner._initialized = owner._failed = False
+        # A partial parser allocation remains attributable even if construction
+        # or the final currentness boundary refuses. No second acquisition.
+        notice._cursor = notice._cursor_origin = owner
+        notice._cursor_allocation_origin = (notice, owner)
+        failed = False
+        try:
+            c = fact.reservation.capture
+            prefix = c.envelope.values
+            if c.body is None:
+                end = 8 + payload_size(prefix[:8]) if len(prefix) >= 8 else len(prefix)
+                owner._outer = owner._outer_origin = prefix[end:]
+                parser = SignedCleanupAuthPrefix.__new__(SignedCleanupAuthPrefix)
+                owner._parser = owner._parser_origin = parser
+                owner._parser_allocation_origin = (owner, parser, c)
+                SignedCleanupAuthPrefix.__init__(
+                    parser, prefix[:end], sender_public=c.scope.pins[0],
+                    receiver_public=c.scope.pins[1],
+                    expected_context={k: v for k, v in c.scope.expected if k != "phase"})
+                owner._parser_state = owner._parser_state_origin = (
+                    parser._buffer_origin, bytes(parser._buffer_origin),
+                    parser._target_origin, parser._header_done_origin)
+            else:
+                owner._outer = owner._outer_origin = b""
+                parser = SignedResultDiscard.__new__(SignedResultDiscard)
+                owner._parser = owner._parser_origin = parser
+                owner._parser_allocation_origin = (owner, parser, c)
+                SignedResultDiscard.__init__(
+                    parser, prefix, sender_public=c.scope.pins[0],
+                    receiver_public=c.scope.pins[1], expected=dict(c.scope.expected),
+                    binding=c.scope.write_scope.intent.binding,
+                    stream=c.body.allocation[1])
+                owner._parser_state = owner._parser_state_origin = (
+                    parser._stream_origin, c.body.allocation[2], c.body.received,
+                    c.body.committed, c.body.hash_value)
+            owner._parser_state_allocation_origin = (owner, parser, owner._parser_state_origin)
+            owner._initialized = True
+            SignedStoppedCursor.current(owner)
+            return owner
+        except BaseException:
+            failed = owner._failed = notice._failed = notice._unknown = True
+            fact.reservation.capture.cleanup._unknown = True
+        if failed:
+            raise FrameError("BI1_SIGNED_STOPPED_CURSOR_ACQUISITION_UNKNOWN") from None
+
+    def __repr__(self):
+        return "<SignedStoppedCursor original-parser-binding no-recv-permission>"
+
+    def _metadata(self):
+        from .presentation_credential_stream import (
+            CommittedFrameDigest,
+            SignedCleanupAuthPrefix,
+            SignedResultDiscard,
+        )
+
+        _require(type(self) is SignedStoppedCursor and self._initialized is True
+                 and self._failed is False
+                 and type(self._notice) is SignedReadNotice
+                 and self._notice is self._notice_origin
+                 and type(self._fact) is _SignedReadReady and self._fact is self._fact_origin
+                 and self._fact.owner is self._notice
+                 and self._notice._cursor_origin is self and self._notice._cursor is self
+                 and self._notice._fact_origin is self._fact
+                 and self._parser is self._parser_origin
+                 and type(self._outer) is bytes and self._outer is self._outer_origin
+                 and type(self._parser_state) is tuple
+                 and self._parser_state is self._parser_state_origin)
+        c = self._fact.reservation.capture
+        parser, held = self._parser_origin, self._parser_state_origin
+        allocation = self._parser_allocation_origin
+        state_allocation = self._parser_state_allocation_origin
+        _require(type(allocation) is tuple and len(allocation) == 3
+                 and allocation[0] is self and allocation[1] is parser and allocation[2] is c
+                 and type(state_allocation) is tuple and len(state_allocation) == 3
+                 and state_allocation[0] is self and state_allocation[1] is parser
+                 and state_allocation[2] is held)
+        SignedReadNotice.inspect(self._notice, c.gate)
+        if c.body is None:
+            _require(type(parser) is SignedCleanupAuthPrefix and len(held) == 4
+                     and type(held[0]) is bytearray and type(held[1]) is bytes
+                     and type(held[2]) is int and type(held[3]) is bool)
+            SignedCleanupAuthPrefix._guard(parser)
+            _require(type(c.scope.pins) is tuple and len(c.scope.pins) == 2
+                     and all(type(v) is bytes and len(v) == 32 for v in c.scope.pins)
+                     and type(c.scope.expected) is tuple
+                     and all(type(row) is tuple and len(row) == 2 and type(row[0]) is str
+                             and type(row[1]) is (int if row[0] in ("sequence", "work_end_ns")
+                                                 else str) for row in c.scope.expected))
+            prefix = c.envelope.values
+            _require(parser._buffer_origin is held[0]
+                     and bytes(parser._buffer_origin) == held[1]
+                     and parser._target_origin is held[2]
+                     and parser._header_done_origin is held[3]
+                     and held[1] + self._outer_origin == prefix
+                     and parser._pins_origin is parser._pins
+                     and parser._pins == c.scope.pins
+                     and parser._expected == tuple((k, v) for k, v in c.scope.expected
+                                                   if k != "phase"))
+        else:
+            _require(type(parser) is SignedResultDiscard and len(held) == 5
+                     and type(held[0]) is CommittedFrameDigest
+                     and type(held[2]) is int and type(held[3]) is int
+                     and type(held[4]) is str and self._outer_origin == b"")
+            SignedResultDiscard._guard(parser)
+            _require(parser._stage == "body" and parser._stream_origin is held[0]
+                     and parser._binding is c.scope.write_scope.intent.binding
+                     and parser._binding_origin is c.scope.write_scope.intent.binding
+                     and held[0]._binding is c.scope.write_scope.intent.binding
+                     and held[0]._binding_origin is c.scope.write_scope.intent.binding
+                     and held[0] is c.body.allocation[1]
+                     and held[1] is c.body.allocation[2]
+                     and held[2] == c.body.received and held[3] == c.body.committed
+                     and held[4] == c.body.hash_value
+                     and held[0]._received is c.body.committed
+                     and held[0]._received_snapshot is c.body.committed)
+        return self._fact
+
+    def current(self):
+        _require(type(self) is SignedStoppedCursor
+                 and type(self._notice_origin) is SignedReadNotice)
+        notice = self._notice_origin
+        SignedReadNotice._actor(notice)  # foreign actor must not poison original binding
+        failed = False
+        try:
+            fact = SignedStoppedCursor._metadata(self)
+            _require(SignedReadNotice.current_stop_for_reader(notice) is fact)
+            _require(SignedStoppedCursor._metadata(self) is fact)
+            return self
+        except BaseException:
+            failed = self._failed = notice._failed = notice._unknown = True
+            self._fact_origin.reservation.capture.cleanup._unknown = True
+        if failed:
+            raise FrameError("BI1_SIGNED_STOPPED_CURSOR_CURRENTNESS_UNKNOWN") from None

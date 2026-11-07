@@ -45,6 +45,8 @@ from .test_presentation_supervisor import context as context
     "wake_reserve_notice_cleanup_futurebad", "wake_reserve_notice_cleanup_rolebad",
     "wake_reserve_wait_dispatchbad", "wake_reserve_wait_futurebad",
     "wake_reserve_notice_reader_copybad", "wake_reserve_notice_reader_rolebad",
+    "wake_reserve_notice_cursorinitbad", "wake_reserve_notice_cursorstatebad",
+    "wake_reserve_notice_cursorpairbad",
 ])
 async def test_original_result_envelope(context, begin_gateway, tmp_path, monkeypatch, mutation):
     from hmp_plugin import presentation_credential_result_read as module
@@ -490,7 +492,10 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                     substituted_future)
         if ("_reserve_notice" in mutation and "_init_" not in mutation
                 and not mutation.endswith("_swapinit")):
-            from hmp_plugin.presentation_credential_cleanup_notice import SignedReadNotice
+            from hmp_plugin.presentation_credential_cleanup_notice import (
+                SignedReadNotice,
+                SignedStoppedCursor,
+            )
             try:
                 await reader.run()
             except FrameError:
@@ -599,6 +604,81 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     else:
                         assert notice.current_stop_for_reader() is notice._fact_origin
                         assert notice.current_stop_for_reader() is notice._fact_origin
+                        if mutation.endswith("_cursorinitbad"):
+                            from hmp_plugin.presentation_credential_stream import (
+                                SignedCleanupAuthPrefix,
+                            )
+                            initialize_cursor = SignedCleanupAuthPrefix.__init__
+
+                            def initialized_cursor_then_failed(parser, *args, **options):
+                                assert notice._cursor_allocation_origin[1] is notice._cursor_origin
+                                assert notice._cursor_origin._parser_origin is parser
+                                initialize_cursor(parser, *args, **options)
+                                held["cursor_partial_retained"] = True
+                                raise OSError("synthetic parser init acknowledgement lost")
+
+                            monkeypatch.setattr(SignedCleanupAuthPrefix, "__init__",
+                                                initialized_cursor_then_failed)
+                            with pytest.raises(FrameError):
+                                SignedStoppedCursor.retain(notice)
+                            cursor = notice._cursor_origin
+                            assert not cursor._initialized and cursor._failed
+                            assert held["cursor_partial_retained"]
+                        else:
+                            cursor = SignedStoppedCursor.retain(notice)
+                            assert cursor.current() is cursor
+                            assert (cursor._parser._buffer_origin
+                                    == notice._reservation.capture.envelope.values)
+                            if mutation.endswith(("_cursorstatebad", "_cursorpairbad")):
+                                original_remaining = RemoteCleanupOwner._remaining
+
+                                def cursor_clock_drift(cleanup):
+                                    value = original_remaining(cleanup)
+                                    work_task = reader._base_origin.allocation.task
+                                    if (asyncio.current_task() is work_task
+                                            and not held.get("cursor_state_changed")):
+                                        held["cursor_state_changed"] = True
+                                        if mutation.endswith("_cursorpairbad"):
+                                            from hmp_plugin.presentation_credential_stream import (
+                                                SignedCleanupAuthPrefix,
+                                            )
+                                            capture = notice._reservation.capture
+                                            held["cursor_original_parser"] = cursor._parser_origin
+                                            replacement = SignedCleanupAuthPrefix(
+                                                capture.envelope.values,
+                                                sender_public=capture.scope.pins[0],
+                                                receiver_public=capture.scope.pins[1],
+                                                expected_context={
+                                                    k: v for k, v in capture.scope.expected
+                                                    if k != "phase"})
+                                            cursor._parser = cursor._parser_origin = replacement
+                                            state = (replacement._buffer_origin,
+                                                     bytes(replacement._buffer_origin),
+                                                     replacement._target_origin,
+                                                     replacement._header_done_origin)
+                                            cursor._parser_state = state
+                                            cursor._parser_state_origin = state
+                                        else:
+                                            parser = cursor._parser
+                                            parser._target = parser._target_origin = 9
+                                    return value
+
+                                monkeypatch.setattr(RemoteCleanupOwner, "_remaining",
+                                                    cursor_clock_drift)
+                                with pytest.raises(FrameError):
+                                    cursor.current()
+                                assert held["cursor_state_changed"] and cursor._failed
+                                if mutation.endswith("_cursorpairbad"):
+                                    original_parser = held["cursor_original_parser"]
+                                    assert cursor._parser_allocation_origin[1] is original_parser
+                                    assert cursor._parser_origin is not original_parser
+                        with pytest.raises(FrameError):
+                            SignedStoppedCursor.retain(notice)
+                        if "_notice_cursor" in mutation:
+                            assert cursor._failed and notice._unknown
+                            assert owned._cleanup_owner_snapshot._unknown
+                        else:
+                            assert not cursor._failed and not notice._unknown
                         held["reader_notice_validated"] = True
                 if "_notice_cleanup" in mutation:
                     with pytest.raises(FrameError):
@@ -710,7 +790,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             with pytest.raises((FrameError, AuthorityRefusalError, asyncio.CancelledError)):
                 await remote.go()
             reader = held["reader"]
-            if "_notice_cleanup" in mutation or "_notice_reader_" in mutation:
+            if ("_notice_cleanup" in mutation or "_notice_reader_" in mutation
+                    or "_notice_cursor" in mutation):
                 # The caller may refuse as soon as the actual cause completes,
                 # before the original sender/cleanup rendezvous has run.
                 async with asyncio.timeout_at(reader._base_origin.intent.end_ns / 1e9):
@@ -764,6 +845,9 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             "wake_reserve_notice_cleanup_rolebad",
                             "wake_reserve_notice_reader_copybad",
                             "wake_reserve_notice_reader_rolebad",
+                            "wake_reserve_notice_cursorinitbad",
+                            "wake_reserve_notice_cursorstatebad",
+                            "wake_reserve_notice_cursorpairbad",
                             "wake_reserve_wait_dispatchbad"):
                 assert reader._wake_release_origin is not None and not reader._io_unknown
                 assert not reader._active and reader._failed and not reader._buffer_origin
