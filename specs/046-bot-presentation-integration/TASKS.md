@@ -18,8 +18,13 @@
       the SAME bound authentication parser or original body digest. Independent
       pre-boundary attempt/progress cells, irreversible consumption, fixed cleanup
       observer, postcallback currentness and no replay; reviewed one-shot slice.
-- [ ] Continue exact-needed reads on the retained original reader with monotonic
-      syscall/commit accounting; never reset one-shot attempt flags or old stops.
+- [x] Continue immediate nonblocking exact-needed reads on the original reader;
+      original flags unchanged, one current step/ledger, actual syscall-attempt /
+      received / parsed accounting, no linked history, record-boundary refusal.
+- [ ] Qualify waiting after EAGAIN with fresh owned registration/retirement under
+      the original actor/deadline; never reuse the retired selector registration.
+- [ ] Verify completed auth record and grammar-bound phase dispatch without
+      restarting authentication or counting retained prefix bytes as newly read.
 
 - [x] Retain one-shot original-reader IDLE admission before native currentness;
       independently anchor owner/scope/fact, exact bounded count/original minimum

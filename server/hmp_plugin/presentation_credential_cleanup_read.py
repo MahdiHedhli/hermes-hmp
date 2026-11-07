@@ -11,6 +11,7 @@ import socket
 import stat
 from typing import NamedTuple
 
+from .presentation_broker_codec import HEADER_LIMIT, TERMINAL_LIMIT
 from .presentation_cleanup_reader import CleanupReadGate
 from .presentation_credential_cleanup_notice import (
     SignedCleanupReader,
@@ -18,7 +19,7 @@ from .presentation_credential_cleanup_notice import (
     SignedStoppedCursor,
 )
 from .presentation_credential_cleanup_reservation import inspect_signed_reservation
-from .presentation_credential_codec import payload_size
+from .presentation_credential_codec import RECORD_LIMIT, payload_size
 from .presentation_credential_stream import (
     _HASH_TYPE,
     CHUNK_LIMIT,
@@ -26,7 +27,7 @@ from .presentation_credential_stream import (
     SignedCleanupAuthPrefix,
     SignedResultDiscard,
 )
-from .presentation_jobs import FrameError
+from .presentation_jobs import OUTPUT_LIMIT, FrameError
 from .presentation_readiness import _BACKEND, SelectorReadiness
 from .presentation_readiness import _Scope as _ReadinessScope
 
@@ -41,6 +42,7 @@ _DONTWAIT = (int.__int__(_DONTWAIT_RAW)
              if type(_DONTWAIT_RAW) in (int, socket.MsgFlag) else None)
 _BACKEND_FILENO = None if _BACKEND is None else _BACKEND.fileno
 _MINT = object()
+_WIRE_LIMIT = OUTPUT_LIMIT + TERMINAL_LIMIT + 2 * (RECORD_LIMIT + 8 + HEADER_LIMIT)
 _HASH_COPY = _HASH_TYPE.copy
 _HASH_UPDATE = _HASH_TYPE.update
 _HASH_HEX = _HASH_TYPE.hexdigest
@@ -111,6 +113,45 @@ class _ConsumedReceipt(NamedTuple):
         return "<ConsumedReceipt parser-progress-only no-frame-or-release-credit>"
 
 
+class _ProgressLedger(NamedTuple):
+    owner: object
+    ordinal: int
+    received: int
+    committed: int
+    seal: _ParserSeal
+
+    def __repr__(self):
+        return "<ProgressLedger counts-and-parser-only>"
+
+
+class _NextScope(NamedTuple):
+    owner: object
+    scope: _ReadScope
+    before: _ProgressLedger
+    ordinal: int
+
+    def __repr__(self):
+        return "<NextScope same-original-reader>"
+
+
+class _NextReceipt(NamedTuple):
+    owner: object
+    ordinal: int
+    count: int
+    total_received: int
+    total_committed: int
+    after: _ParserSeal
+
+    def __repr__(self):
+        return "<NextReceipt parser-progress-only no-frame-or-release>"
+
+
+class _NextRead:
+    # Step DATA, never a replacement reader, task, selector or socket owner.
+    def __repr__(self):
+        return "<NextRead bounded-step payload-redacted>"
+
+
 def owned_native_read(notice):
     """Independent allocation discovery only; never currentness or IO admission."""
     _require(type(notice) is SignedReadNotice)
@@ -174,6 +215,8 @@ class NativeCleanupRead:
         owner._consume_attempted = owner._consume_returned = owner._consume_complete = False
         owner._consume_allocation_origin = None
         owner._consume_attempt_allocation_origin = None
+        owner._next_read = owner._next_read_origin = owner._next_read_allocation_origin = None
+        owner._ledger = owner._ledger_origin = owner._ledger_allocation_origin = None
         owner._progress = owner._progress_origin = owner._progress_allocation_origin = None
         owner._received = owner._received_origin = 0
         owner._native_count_allocation_origin = None
@@ -569,8 +612,9 @@ class NativeCleanupRead:
         _require(_FUTURE.done(notice._future_origin)
                  and not _FUTURE.cancelled(notice._future_origin)
                  and _FUTURE.result(notice._future_origin) is notice._fact_origin)
+        current_seal = NativeCleanupRead._continuation_seal(self, s, fact.after)
         NativeCleanupRead._same_parser(
-            NativeCleanupRead._parser_seal(cell[2].parser), fact.after)
+            NativeCleanupRead._parser_seal(cell[2].parser), current_seal)
         return s
 
     def _progress_work_current(self):
@@ -585,7 +629,8 @@ class NativeCleanupRead:
         SignedReadNotice._role_seal(s.notice)
         _require(SignedReadNotice._actor(s.notice) is r
                  and NativeCleanupRead._consumption_metadata(self) is s)
-        return self._progress_origin
+        step = self._next_read_origin
+        return self._progress_origin if step is None or step.fact is None else step.fact
 
     def consume_pending(self):
         s = NativeCleanupRead._origin(self)
@@ -669,7 +714,9 @@ class NativeCleanupRead:
             SignedReadNotice._role_seal(s.notice)
             _require(SignedReadNotice._cleanup_actor(s.notice) is r
                      and NativeCleanupRead._consumption_metadata(self) is s)
-            return self._progress_origin
+            step = self._next_read_origin
+            _require(step is None or step.complete is True)
+            return self._progress_origin if step is None else step.fact
         except BaseException:
             failed = self._failed = self._unknown = True
             s.notice._failed = s.notice._unknown = True
@@ -677,6 +724,225 @@ class NativeCleanupRead:
             NativeCleanupRead._drop_pending(self)
         if failed:
             raise FrameError("BI1_NATIVE_CLEANUP_PROGRESS_OBSERVER_UNKNOWN") from None
+
+    def _continuation_seal(self, scope, initial):
+        step = self._next_read_origin
+        if step is None:
+            _require(self._next_read is None and self._next_read_allocation_origin is None
+                     and self._ledger is None and self._ledger_origin is None
+                     and self._ledger_allocation_origin is None)
+            return initial
+        _require(type(step) is _NextRead and self._next_read is step
+                 and type(self._next_read_allocation_origin) is tuple
+                 and len(self._next_read_allocation_origin) == 2
+                 and self._next_read_allocation_origin[0] is self
+                 and self._next_read_allocation_origin[1] is step
+                 and type(step.scope) is _NextScope and step.scope is step.scope_origin
+                 and type(step.scope_allocation) is tuple and len(step.scope_allocation) == 2
+                 and step.scope_allocation[0] is step
+                 and step.scope_allocation[1] is step.scope
+                 and step.scope.owner is self and step.scope.scope is scope
+                 and type(step.scope.before) is _ProgressLedger)
+        before, ledger = step.scope.before, self._ledger_origin
+        _require(before.owner is self and type(before.ordinal) is int
+                 and type(before.received) is int and type(before.committed) is int
+                 and 0 <= before.ordinal < _WIRE_LIMIT
+                 and 0 < before.received == before.committed <= _WIRE_LIMIT
+                 and type(before.seal) is _ParserSeal
+                 and type(step.scope.ordinal) is int
+                 and step.scope.ordinal == before.ordinal + 1
+                 and type(ledger) is _ProgressLedger and self._ledger is ledger
+                 and type(self._ledger_allocation_origin) is tuple
+                 and len(self._ledger_allocation_origin) == 2
+                 and self._ledger_allocation_origin[0] is self
+                 and self._ledger_allocation_origin[1] is ledger
+                 and all(type(v) is int for v in ledger[1:4])
+                 and type(ledger.seal) is _ParserSeal and ledger.owner is self
+                 and type(step.received) is int
+                 and all(type(v) is bool for v in (step.attempted, step.returned,
+                     step.count_known, step.fed, step.complete, step.failed,
+                     step.inflight, step.reading_owned))
+                 and step.failed is False and step.inflight is False
+                 and step.reading_owned is False)
+        if not step.count_known:
+            _require(step.count_cell is None and step.received == 0
+                     and step.pending is None and step.returned is False and step.fed is False)
+        else:
+            _require(type(step.count_cell) is tuple and len(step.count_cell) == 2
+                     and step.count_cell[0] is step and type(step.count_cell[1]) is int
+                     and type(step.received) is int and step.received is step.count_cell[1]
+                     and step.returned is True and step.attempted is True
+                     and type(step.requested) is int
+                     and 0 < step.received <= step.requested <= CHUNK_LIMIT
+                     and before.received + step.received <= _WIRE_LIMIT)
+        if step.complete:
+            _require(step.pending is None and step.pending_cell is None
+                     and ledger is step.committed_ledger and step.fed is True
+                     and ledger.owner is self and ledger.ordinal == step.scope.ordinal
+                     and ledger.received == before.received + step.received
+                     and ledger.committed == before.committed + step.received
+                     and ledger.seal is step.after)
+        else:
+            _require(ledger is before)
+            if step.count_known:
+                _require(type(step.pending_cell) is tuple and len(step.pending_cell) == 3
+                         and step.pending_cell[0] is step and type(step.pending) is bytes
+                         and step.pending_cell[1] is step.pending
+                         and type(step.pending_cell[2]) is int
+                         and step.pending_cell[2] == len(step.pending) == step.received)
+        if step.fed:
+            _require(type(step.after) is _ParserSeal and type(step.fact) is _NextReceipt
+                     and type(step.fact_cell) is tuple and len(step.fact_cell) == 2
+                     and step.fact_cell[0] is step and step.fact_cell[1] is step.fact
+                     and all(type(v) is int for v in step.fact[1:5])
+                     and step.fact.owner is self and step.fact.ordinal == step.scope.ordinal
+                     and step.fact.count == step.received
+                     and step.fact.total_received == before.received + step.received
+                     and step.fact.total_committed == before.committed + step.received
+                     and step.fact.after is step.after)
+            return step.after
+        _require(step.after is None and step.fact is None and step.fact_cell is None)
+        return before.seal
+
+    def read_and_consume_next(self):
+        s = NativeCleanupRead._origin(self)
+        r = SignedReadNotice._actor(s.notice)
+        _require(self._consume_complete is True and self._failed is False
+                 and self._unknown is False)
+        progress, allocation = self._progress_origin, self._progress_allocation_origin
+        _require(type(progress) is _ConsumedReceipt and self._progress is progress
+                 and progress.mint is _MINT and progress.owner is self and progress.scope is s
+                 and type(progress.after) is _ParserSeal
+                 and type(allocation) is tuple and len(allocation) == 2
+                 and allocation[0] is self and allocation[1] is progress)
+        NativeCleanupRead._continuation_seal(self, s, progress.after)
+        previous = self._next_read_origin
+        _require(previous is None or (type(previous) is _NextRead and previous.complete is True))
+        if previous is None:
+            before = _ProgressLedger(self, 0, self._received, self._received,
+                                     self._progress_origin.after)
+        else:
+            before = self._ledger_origin
+        boundary = before.seal
+        if type(boundary.parser) is SignedCleanupAuthPrefix:
+            _require(type(boundary.target) is int and type(boundary.value) is bytes)
+            needed = boundary.target - len(boundary.value)
+        else:
+            _require(type(boundary.parser) is SignedResultDiscard
+                     and type(boundary.stream) is CommittedFrameDigest
+                     and type(boundary.stream._body_length) is int
+                     and type(boundary.received) is int)
+            needed = min(CHUNK_LIMIT, boundary.stream._body_length - boundary.received)
+        # A completed record is a boundary, never an invitation to restart it.
+        _require(type(needed) is int and 0 < needed <= CHUNK_LIMIT)
+        step = _NextRead.__new__(_NextRead)
+        step.scope = step.scope_origin = _NextScope(self, s, before, before.ordinal + 1)
+        step.scope_allocation = (step, step.scope)
+        step.attempted = step.returned = step.count_known = step.fed = step.complete = False
+        step.failed = step.inflight = step.reading_owned = False
+        step.received = 0
+        step.requested = step.count_cell = step.pending = step.pending_cell = None
+        step.after = step.fact = step.fact_cell = step.committed_ledger = None
+        # This new bounded step replaces only a committed predecessor. Its scope
+        # retains counts/seal, never the predecessor step or a linked receipt.
+        self._ledger = self._ledger_origin = before
+        self._ledger_allocation_origin = (self, before)
+        self._next_read = self._next_read_origin = step
+        self._next_read_allocation_origin = (self, step)
+        chunk = copy = None
+        failed = False
+        try:
+            NativeCleanupRead._progress_work_current(self)
+            seal = before.seal
+            parser = seal.parser
+            if type(parser) is SignedCleanupAuthPrefix:
+                needed = seal.target - len(seal.value)
+            else:
+                _require(type(parser) is SignedResultDiscard
+                         and type(seal.stream) is CommittedFrameDigest)
+                needed = min(CHUNK_LIMIT, seal.stream._body_length - seal.received)
+            _require(type(needed) is int and 0 < needed <= CHUNK_LIMIT
+                     and before.received + needed <= _WIRE_LIMIT)
+            step.requested = needed
+            channel = r.capture.channel
+            _require(channel._reading is False and channel._writing is False)
+            NativeCleanupRead._final_socket_fence(self, s)
+            SignedReadNotice._role_seal(s.notice)
+            _require(SignedReadNotice._actor(s.notice) is r
+                     and NativeCleanupRead._consumption_metadata(self) is s
+                     and _RECV is socket.socket.recv
+                     and type(_DONTWAIT) is int and _DONTWAIT > 0)
+            step.attempted = step.inflight = step.reading_owned = True
+            channel._reading = True
+            chunk = NativeCleanupRead._receive(s.sock, needed)
+            step.returned = True
+            if type(chunk) is bytes:
+                step.received = len(chunk)
+                step.count_cell = (step, step.received)
+                step.count_known = True
+                step.pending = chunk
+                step.pending_cell = (step, chunk, step.received)
+            allocation = self._next_read_allocation_origin
+            _require(type(allocation) is tuple and len(allocation) == 2
+                     and allocation[0] is self and allocation[1] is step
+                     and step.reading_owned is True and step.inflight is True
+                     and channel._socket is s.sock and channel._reading is True)
+            channel._reading = False
+            step.inflight = step.reading_owned = False
+            NativeCleanupRead._progress_work_current(self)
+            if type(parser) is SignedCleanupAuthPrefix:
+                value = seal.value + chunk
+                target, header_done = seal.target, seal.header_done
+                if header_done is False and len(value) == 8:
+                    target, header_done = 8 + payload_size(value), True
+                expected = seal._replace(value=value, target=target, header_done=header_done)
+                SignedCleanupAuthPrefix.feed(parser, chunk)
+            else:
+                copy = _HASH_COPY(seal.hasher)
+                _HASH_UPDATE(copy, chunk)
+                expected = seal._replace(received=seal.received + len(chunk),
+                                         digest=_HASH_HEX(copy))
+                SignedResultDiscard.feed(parser, chunk)
+            step.after = NativeCleanupRead._parser_seal(parser)
+            NativeCleanupRead._same_parser(step.after, expected)
+            step.fact = _NextReceipt(self, step.scope.ordinal, step.received,
+                before.received + step.received, before.committed + step.received, step.after)
+            step.fact_cell = (step, step.fact)
+            step.fed = True
+            NativeCleanupRead._progress_work_current(self)
+            ledger = _ProgressLedger(self, step.scope.ordinal,
+                step.fact.total_received, step.fact.total_committed, step.after)
+            step.committed_ledger = ledger
+            self._ledger = self._ledger_origin = ledger
+            self._ledger_allocation_origin = (self, ledger)
+            step.pending = step.pending_cell = None
+            step.complete = True
+            NativeCleanupRead._consumption_metadata(self)
+            if previous is not None:
+                # Only the fully committed predecessor is retired, after the
+                # successor commit is sealed. Break its private self-cells so
+                # repeated short reads do not wait for cyclic GC to reclaim it.
+                previous.scope_allocation = previous.count_cell = previous.fact_cell = None
+                previous.failed = True
+            return step.fact
+        except BaseException:
+            failed = step.failed = self._failed = self._unknown = True
+            s.notice._failed = s.notice._unknown = True
+            r.capture.cleanup._unknown = True
+        finally:
+            chunk = copy = None
+            step.pending = step.pending_cell = None
+            if (step.reading_owned is True and step.inflight is True
+                    and type(self._next_read_allocation_origin) is tuple
+                    and len(self._next_read_allocation_origin) == 2
+                    and self._next_read_allocation_origin[0] is self
+                    and self._next_read_allocation_origin[1] is step
+                    and r.capture.channel._socket is s.sock
+                    and r.capture.channel._reading is True):
+                r.capture.channel._reading = False
+                step.reading_owned = step.inflight = False
+        if failed:
+            raise FrameError("BI1_NATIVE_CLEANUP_CONTINUATION_UNKNOWN") from None
 
     def _drop_pending(self):
         _require(type(self) is NativeCleanupRead)
@@ -708,3 +974,7 @@ class NativeCleanupRead:
             self._failed = self._unknown = True
             cleanup._unknown = True
             NativeCleanupRead._drop_pending(self)
+            step_cell = self._next_read_allocation_origin
+            if (type(step_cell) is tuple and len(step_cell) == 2
+                    and step_cell[0] is self and type(step_cell[1]) is _NextRead):
+                step_cell[1].pending = step_cell[1].pending_cell = None

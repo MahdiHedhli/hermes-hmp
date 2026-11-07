@@ -1033,3 +1033,33 @@ first-boundary failure/restoration causal. No authority guard was relaxed.
 Earlier broad broker failures and the sender-destination incident remain unresolved;
 this green run does not establish their causes or certify full transport release.
 No build, install, live host/device, grant/provider or deployment change occurred.
+
+## Monotonic original-reader continuation — November 7, 2026
+
+`NativeCleanupRead.read_and_consume_next()` now performs another exact-needed
+nonblocking receive and same-parser feed on the original socket/task. Original
+one-shot flags are never reset. One retained step plus cumulative received/parsed
+counts replaces only a sealed committed predecessor; no linked receipt journal,
+new reader, selector interest or cleanup budget exists. Actual return/count/pending
+custody precedes postchecks; parser/hash progress precedes final currentness.
+Only a sealed commit permits another ordinal. Needed0 stops at a record boundary.
+EAGAIN, EOF, lost acknowledgement or post-native drift stays UNKNOWN with no retry.
+
+Private causal fixtures reach the end of a real signed auth record without reading
+the following outer header, perform two short reads with increasing ordinals and
+reclaim the prior step without waiting for cyclic GC, reject foreign progress
+before getters, and retain actual counts on foreign post-recv allocation without
+calling its indexing hook. Original body continuation advances the SAME digest
+13->16->19 while old body committed13 and the wiped image accumulator stay fixed.
+Independent read-only review required two earlier type fences; both are repaired.
+Predecessor private self-cells retire only AFTER the successor commit is sealed.
+
+Exact expanded regression:1,947 passed,1 skipped in171.15s; full lint, plugin surface
+and whitespace pass. Six header causals and one body causal overlap this result.
+Earlier fixture faults (wrong observer scheduling, insufficient queued auth bytes,
+shared suffix classification and stale historical release expectation) are retained;
+production guards were not relaxed. EAGAIN waiting/registration, authentication
+verification and phase dispatch, full drain, concurrent CANCEL, terminal/ACK/native
+release and production/physical character-image delivery remain open. Earlier broad
+broker failure causes and the native sender-destination incident remain unresolved.
+No app build/install, live host/device, grant/provider or deployment change occurred.

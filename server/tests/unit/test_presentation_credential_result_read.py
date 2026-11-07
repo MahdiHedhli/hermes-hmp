@@ -68,6 +68,12 @@ from .test_presentation_supervisor import context as context
     "wake_reserve_notice_native_scopebad", "wake_reserve_notice_native_workflagbad",
     "wake_reserve_notice_native_parseradvancebad",
     "wake_reserve_notice_native_consume",
+    "wake_reserve_notice_native_consume_next",
+    "wake_reserve_notice_native_consume_next_short",
+    "wake_reserve_notice_native_consume_next_blocked",
+    "wake_reserve_notice_native_consume_next_lostack",
+    "wake_reserve_notice_native_consume_next_alloc",
+    "wake_reserve_notice_native_consume_next_foreign",
     "wake_reserve_notice_native_consume_initial",
     "wake_reserve_notice_native_consume_retired",
     "wake_reserve_notice_native_consume_partial",
@@ -80,6 +86,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
     from hmp_plugin import presentation_credential_result_read as module
     from hmp_plugin.presentation_readiness import SelectorReadiness
 
+    next_case = "_native_consume_next" in mutation
+    next_failure = next_case and mutation.endswith(("_blocked", "_lostack", "_alloc", "_foreign"))
     prepared = await prepare(context, begin_gateway)
     authority, operation, _, channel, peer, _, packet, _ = prepared
     handshake_owner, keys, _ = await handshake(prepared, tmp_path)
@@ -223,6 +231,10 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                     if mutation.endswith("_eof"):
                         import socket
                         peer.shutdown(socket.SHUT_WR)
+                    elif next_case:
+                        held["next_record_length"] = len(raw)
+                        await loop.sock_sendall(peer, raw[:8] if mutation.endswith("_blocked")
+                                               else raw + frame)
                     elif not mutation.endswith("_blocked"):
                         await loop.sock_sendall(peer, raw[:8] + b"not-consumed")
                     native_queued.set()
@@ -756,14 +768,31 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
 
                                 def observed_receive(sock, count):
                                     held["native_calls"] += 1
-                                    assert sock is reader._base_origin.sock and count == 8
+                                    assert sock is reader._base_origin.sock
+                                    if (next_case
+                                            and held["native_calls"] > 1):
+                                        assert count == native._next_read_origin.requested
+                                    else:
+                                        assert count == 8
                                     try:
-                                        value = receive(sock, count)
+                                        value = receive(sock, min(count, 6) if (
+                                            next_case and mutation.endswith("_short")
+                                            and held["native_calls"] > 1) else count)
                                     except OSError as error:
                                         held["native_receive_errno"] = error.errno
                                         raise
                                     held["native_returned_count"] = len(value)
-                                    if mutation.endswith("_lostack"):
+                                    if next_case and held["native_calls"] > 1:
+                                        held["next_actual_received"] = len(value)
+                                        if mutation.endswith("_alloc"):
+                                            class ForeignStepAllocation:
+                                                def __getitem__(self, key):
+                                                    held["foreign_step_getitem"] = True
+                                                    raise AssertionError("foreign step access")
+                                            native._next_read_allocation_origin = (
+                                                ForeignStepAllocation())
+                                    if (mutation.endswith("_lostack")
+                                            and (not next_case or held["native_calls"] > 1)):
                                         raise OSError("synthetic lost receive acknowledgement")
                                     return value
 
@@ -869,7 +898,14 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
 
                                 def observed_native(owner):
                                     value = observer(owner)
-                                    assert owner is native and value.count == 8
+                                    assert owner is native
+                                    if next_case:
+                                        assert not next_failure
+                                        assert value is native._next_read_origin.fact
+                                        assert (value.total_received
+                                                == native._ledger_origin.received)
+                                    else:
+                                        assert value.count == 8
                                     with pytest.raises(FrameError):
                                         native.current_pending()
                                     with pytest.raises(FrameError):
@@ -880,7 +916,7 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
 
                                 monkeypatch.setattr(NativeCleanupRead, "current_for_cleanup",
                                                     observed_native)
-                                native_failure = mutation.endswith((
+                                native_failure = not next_case and mutation.endswith((
                                     "_keybad", "_pendingbad", "_lostack", "_eof", "_blocked",
                                     "_timeoutbad", "_blockingbad", "_fdbad",
                                     "_probecounterbad", "_probereadingbad", "_probewritingbad",
@@ -903,7 +939,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                     assert native.current_pending() is receipt
                                     assert native._pending_origin == held["native_expected"]
                                     assert not cursor._parser._buffer_origin
-                                if "_native_consume_" in mutation:
+                                if ("_native_consume_" in mutation
+                                        and not next_case):
                                     from hmp_plugin.presentation_credential_stream import (
                                         SignedCleanupAuthPrefix,
                                     )
@@ -985,12 +1022,10 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                         assert native._consume_allocation_origin is None
                                     assert "foreign_consume_count_eq" not in held
                                     held["parser_consumption_failed"] = True
-                                if mutation.endswith("_consume"):
+                                if mutation.endswith("_consume") or next_case:
                                     async def wrong_consumer():
                                         with pytest.raises(FrameError):
                                             native.consume_pending()
-                                    await asyncio.create_task(wrong_consumer())
-                                    assert not native._consume_attempted
                                     consumed = native.consume_pending()
                                     assert consumed.count == 8
                                     assert consumed.before.parser is cursor._parser_origin
@@ -1005,6 +1040,72 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                         native.current_pending()
                                     assert not native._failed and not native._unknown
                                     held["parser_consumption_checked"] = True
+                                    if next_case:
+                                        from hmp_plugin.presentation_credential_stream import (
+                                            SignedCleanupAuthPrefix,
+                                        )
+                                        parser = cursor._parser_origin
+                                        needed = SignedCleanupAuthPrefix.needed.fget(parser)
+                                        if mutation.endswith("_foreign"):
+                                            class ForeignProgress:
+                                                def __getattr__(self, name):
+                                                    held["foreign_progress_getter"] = True
+                                                    raise AssertionError("foreign progress access")
+                                            replacement = ForeignProgress()
+                                            native._progress = native._progress_origin = replacement
+                                            with pytest.raises(FrameError):
+                                                native.read_and_consume_next()
+                                            assert "foreign_progress_getter" not in held
+                                            assert native._next_read_origin is None
+                                            assert native._ledger_origin is None
+                                            assert held["native_calls"] == 1
+                                        elif next_failure:
+                                            with pytest.raises(FrameError):
+                                                native.read_and_consume_next()
+                                            step = native._next_read_origin
+                                            assert (step.attempted and step.failed
+                                                    and not step.complete)
+                                            assert (step.pending is None
+                                                    and step.pending_cell is None)
+                                            if mutation.endswith("_alloc"):
+                                                assert step.count_known and step.received == needed
+                                                assert "foreign_step_getitem" not in held
+                                            else:
+                                                assert not step.count_known and not step.returned
+                                            with pytest.raises(FrameError):
+                                                native.read_and_consume_next()
+                                            assert held["native_calls"] == 2
+                                        else:
+                                            next_fact = native.read_and_consume_next()
+                                            assert next_fact.ordinal == 1
+                                            assert next_fact.count == (
+                                                6 if mutation.endswith("_short") else needed)
+                                            assert (next_fact.total_received
+                                                    == next_fact.total_committed)
+                                            assert next_fact.after.parser is parser
+                                            if mutation.endswith("_short"):
+                                                import weakref
+                                                old_step = weakref.ref(native._next_read_origin)
+                                                second = native.read_and_consume_next()
+                                                assert second.ordinal == 2 and second.count == 6
+                                                assert second.total_received == 20
+                                                assert old_step() is None  # no linked history
+                                            else:
+                                                assert next_fact.total_received == 8 + needed
+                                                assert (SignedCleanupAuthPrefix.needed.fget(parser)
+                                                        == 0)
+                                                ledger = native._ledger_origin
+                                                step = native._next_read_origin
+                                                with pytest.raises(FrameError):
+                                                    native.read_and_consume_next()
+                                                assert native._ledger_origin is ledger
+                                                assert native._next_read_origin is step
+                                            assert native._next_read_origin.pending is None
+                                            assert not native._failed and not native._unknown
+                                        held["next_read_checked"] = True
+                                    if not next_failure:
+                                        await asyncio.create_task(wrong_consumer())
+                                        assert native._consume_complete and not native._failed
                                 if mutation.endswith("_parseradvancebad"):
                                     from hmp_plugin.presentation_credential_stream import (
                                         SignedCleanupAuthPrefix,
@@ -1054,17 +1155,27 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                             == "dispatch_metadata")
                                     assert "foreign_native_counter_eq" not in held
                                 else:
-                                    assert held["native_calls"] == 1
+                                    assert held["native_calls"] == (
+                                        3 if next_case and mutation.endswith("_short") else
+                                        1 if mutation.endswith("_foreign") else
+                                        2 if next_case else 1)
                                 if mutation in ("wake_reserve_notice_native",
                                                 "wake_reserve_notice_native_workflagbad",
-                                                "wake_reserve_notice_native_consume"):
+                                                "wake_reserve_notice_native_consume",
+                                                "wake_reserve_notice_native_consume_next",
+                                                "wake_reserve_notice_native_consume_next_short"):
                                     assert not native._failed and not notice._unknown
                                     async with asyncio.timeout_at(
                                             reader._base_origin.intent.end_ns / 1e9):
                                         await native_observed.wait()
                                     if mutation.endswith("_workflagbad"):
                                         owned._cleanup_owner_snapshot._initialized = False
-                            if "_native_consume_" in mutation:
+                            if next_case:
+                                assert held["next_read_checked"]
+                                if not next_failure:
+                                    assert (bytes(cursor._parser._buffer_origin)
+                                            == native._next_read_origin.after.value)
+                            elif "_native_consume_" in mutation:
                                 assert held["parser_consumption_failed"]
                                 count = (0 if mutation.endswith("_initial") else
                                          4 if mutation.endswith("_partial") else 8)
@@ -1194,9 +1305,14 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             SignedStoppedCursor.retain(notice)
                         if "_notice_native" in mutation:
                             assert not cursor._failed
-                            if mutation not in ("wake_reserve_notice_native",
+                            if mutation.endswith("_consume_next_foreign"):
+                                assert not native._failed
+                                assert "foreign_progress_getter" not in held
+                            elif mutation not in ("wake_reserve_notice_native",
                                                 "wake_reserve_notice_native_workflagbad",
-                                                "wake_reserve_notice_native_consume"):
+                                                "wake_reserve_notice_native_consume",
+                                                "wake_reserve_notice_native_consume_next",
+                                                "wake_reserve_notice_native_consume_next_short"):
                                 assert native._failed and notice._unknown
                         elif "_notice_cursor" in mutation:
                             assert cursor._failed and notice._unknown
@@ -1403,6 +1519,12 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             "wake_reserve_notice_native_workflagbad",
                             "wake_reserve_notice_native_parseradvancebad",
                             "wake_reserve_notice_native_consume",
+                            "wake_reserve_notice_native_consume_next",
+                            "wake_reserve_notice_native_consume_next_short",
+                            "wake_reserve_notice_native_consume_next_blocked",
+                            "wake_reserve_notice_native_consume_next_lostack",
+                            "wake_reserve_notice_native_consume_next_alloc",
+                            "wake_reserve_notice_native_consume_next_foreign",
                             "wake_reserve_notice_native_consume_initial",
                             "wake_reserve_notice_native_consume_retired",
                             "wake_reserve_notice_native_consume_partial",
@@ -1428,8 +1550,9 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                   "wake_reserve_notice_native_postfdbad",
                                   "wake_reserve_notice_native_probereadingbad",
                                   "wake_reserve_notice_native_probewritingbad",
-                                  "wake_reserve_notice_native_workflagbad"):
-                    # Native fd debt is checked separately; do not turn the
+                                  "wake_reserve_notice_native_workflagbad",
+                                  "wake_reserve_notice_native_consume_next_alloc"):
+                    # Native fd/claim debt is checked separately; do not turn the
                     # historical local wake record into current descriptor credit.
                     pass
                 else:
@@ -1525,9 +1648,11 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 native = held["native_owner"]
                 if mutation in ("wake_reserve_notice_native",
                                 "wake_reserve_notice_native_workflagbad",
-                                "wake_reserve_notice_native_consume"):
+                                "wake_reserve_notice_native_consume",
+                                "wake_reserve_notice_native_consume_next",
+                                "wake_reserve_notice_native_consume_next_short"):
                     assert native_observed.is_set()
-                if mutation.endswith((
+                if not next_case and mutation.endswith((
                         "_lostack", "_blocked", "_timeoutbad", "_blockingbad", "_fdbad")):
                     assert not native._count_known and not native._returned
                     assert native._fact_origin is None
