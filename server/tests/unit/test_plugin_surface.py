@@ -410,3 +410,54 @@ def test_fixed_token_event_imports_are_lazy_adapter_only(pkg: Path, statement: s
 def test_unreviewed_parser_import_variants_remain_closed(pkg: Path, statement: str) -> None:
     _append(pkg, "presentation_yaml_adapter.py", f"def forbidden():\n    {statement}\n")
     assert ("S1", "presentation_yaml_adapter.py") in _rules(pkg)
+
+
+@pytest.mark.parametrize(
+    "module,body,ok",
+    [
+        (
+            "presentation_startup_artifacts.py",
+            "def f():\n    from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
+            True,
+        ),
+        (
+            "presentation_startup_artifacts.py",
+            "def f():\n    from hmp_startup.runtime_files import "
+            "ExecutableLinkPlan, RuntimeFilePlan\n",
+            True,
+        ),
+        (
+            "presentation_startup_artifacts.py",
+            "from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
+            False,
+        ),
+        (
+            "presentation_startup_artifacts.py",
+            "def f():\n    from hmp_startup.entry_files import OtherOwner\n",
+            False,
+        ),
+        (
+            "presentation_startup_artifacts.py",
+            "def f():\n    from hmp_startup.entry_files import *\n",
+            False,
+        ),
+        (
+            "presentation_startup_artifacts.py",
+            "def f():\n    import hmp_startup.entry_files\n",
+            False,
+        ),
+        (
+            "reads.py",
+            "def f():\n    from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
+            False,
+        ),
+        (
+            "bridge.py",
+            "def f():\n    from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
+            False,
+        ),
+    ],
+)
+def test_startup_type_imports_stay_closed(pkg: Path, module: str, body: str, ok: bool) -> None:
+    _append(pkg, module, body)
+    assert (("S1", module) not in _rules(pkg)) is ok

@@ -1,4 +1,4 @@
-"""Original selected-link plans over disposable symlinks; no new link IO/authority."""
+"""Original selected-link retention over disposable symlinks; no completion here."""
 from __future__ import annotations
 
 import pytest
@@ -112,13 +112,6 @@ else:
         assert len([row for row,held in plan.declarations if held is link.target])==2
     if mutation=="link_byte_boundary":
         assert original_bytes+sum(row.size for row in plan.pending)+2*link.text_bytes==a._MAX_TOTAL
-    try:EntryFileSnapshotOwner.complete(retained)
-    except EntryFilesError:pass
-    else:raise AssertionError("unimplemented link IO promoted to completion")
-    assert retained._failed and not retained._ready and retained._inputs.io_slot==[None]
-    try:EntryFileSnapshotOwner.complete(retained)
-    except EntryFilesError:pass
-    else:raise AssertionError("refused plan completion replayed")
 assert entry._activation._artifact_owner is None
 assert entry._activation._entry_files_fact_cell is None
 assert plugin._bytes_read==original_bytes
@@ -158,6 +151,6 @@ def link_script():
     "link_mode_write", "link_mode_setid", "link_mode_noexec", "link_regular_conflict",
     "link_in_tree", "link_file_boundary", "link_file_over", "link_byte_boundary", "link_byte_over",
 ])
-def test_original_link_plan_retention_and_completion_refusal(tmp_path, monkeypatch, mutation):
+def test_original_link_plan_retention(tmp_path, monkeypatch, mutation):
     monkeypatch.setattr(base, "SCRIPT", link_script())
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)

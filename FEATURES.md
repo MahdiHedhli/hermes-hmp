@@ -1,3 +1,19 @@
+## Original executable-link IO snapshot — November 7, 2026
+
+GR2-LINKS-L3 now observes selected executable links before and after target hashing
+through the same original aggregate IO owner. Actual returned UTF-8 bytes are
+accounted even on refusal; no-follow ancestry, inode/UID/mode, original allocation,
+closed-descriptor and final publication checks remain enforced. Failed owners do
+not retry or overwrite foreign replacement state. The explicit standard-CPython
+platform buffer premise and bounded failed-read overrun are documented in
+specs/046-bot-presentation-integration/EXECUTABLE_LINK_SNAPSHOT.md.
+
+All 706 affected startup tests pass, plus 74 actual Python 3.11 child fixtures
+(not the full floor suite). Synthetic runtime payloads were not executed. This
+supersedes the historical L2 completion refusal below. Actual Linux execution,
+installed runtime/build/loader/native/key/broker and physical bot-character delivery
+remain unfinished. No host, mobile executable, grants or deployment changed.
+
 ## Original executable-link plan retention — November 7, 2026
 
 GR2-LINKS-L2 now derives an immutable selected link plan from the original

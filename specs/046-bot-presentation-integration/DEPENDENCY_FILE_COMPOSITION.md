@@ -180,7 +180,9 @@ future imports/loaded-library policy and original native/key factory remain open
 The explicit recipe2/interpreter2 path now retains the typed link plan described
 in [EXECUTABLE_LINK_SNAPSHOT.md](EXECUTABLE_LINK_SNAPSHOT.md). It preserves the
 original binding/canonical target row, UID/mode constraints and reservations for
-hops plus both readlink observations. This is planning DATA only. Completion
-refuses before artifact acquisition until L3 integrates real link observations
-and target hashing through the original owner; no link-read credit is minted.
+hops plus both readlink observations. L3 now performs real link observations
+and target hashing through the same original aggregate owner, with actual byte
+accounting and final identity/closure checks. This remains snapshot DATA, not
+installed runtime or native authority; see the linked contract for refusal-overread
+bounds and remaining Linux/build/physical qualification.
 D1 remains recipe1/interpreter1 regular-only with no fallback or loosened checks.

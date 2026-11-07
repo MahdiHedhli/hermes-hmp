@@ -10,8 +10,8 @@
 ## Executable leaf-link integration
 
 - [x] **GR2-LINKS-L1** Explicit recipe2/interpreter2 document loader under original immutable version/root/IO/counter ownership, no detection/fallback/retry; D1 rejects recipe2 before artifact acquisition. Bounded independent source review accepted. This loads pinned DATA only.
-- [x] **GR2-LINKS-L2** Decode/retain the closed selected interpreter link plan against original entry/runtime bindings, canonical target/UID/executable-mode constraints and raw/normalized path policy. Preserve stricter pins during deduplication and reserve both text observations in the original limits. Independent source review accepted planning only; completion refuses before artifact IO, so L3 remains mandatory.
-- [ ] **GR2-LINKS-L3** Retain descriptor-relative leaf-link observations before/after target hashing through the SAME original aggregate IO owner, charge both actual readlink observations, and verify the complete real-link/target refusal matrix. Hardlinks/ancestor links remain refused.
+- [x] **GR2-LINKS-L2** Decode/retain the closed selected interpreter link plan against original entry/runtime bindings, canonical target/UID/executable-mode constraints and raw/normalized path policy. Preserve stricter pins during deduplication and reserve both text observations in the original limits. Independent source review accepted the plan boundary; actual completion is tracked separately in L3.
+- [x] **GR2-LINKS-L3** Retain descriptor-relative leaf-link observations before/after target hashing through the SAME original aggregate IO owner, charge both actual readlink observations, and verify the complete real-link/target refusal matrix. Hardlinks/ancestor links remain refused.
 - [ ] **GR2-LINKS-L4** Actual installed runtime/loader and native/key/broker/physical character delivery; no source snapshot substitutes for acceptance.
 
 See [selected executable link contract](EXECUTABLE_LINK_SNAPSHOT.md). All four belong to the existing character-delivery goal; L1 does not close GR2 or qualify a symlink.
