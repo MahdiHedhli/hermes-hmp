@@ -1,3 +1,13 @@
+# November 7: original startup continuation source
+
+The bot-character startup path now retains its original approved snapshot across
+native imports, with independent source review and 880 affected checks passing.
+This is a prerequisite: actual runtime/import admission, listener/native/key
+composition and physical character delivery remain incomplete. Host-local images
+remain unavailable under the frozen deployment scope. No device, gateway, grant,
+provider, model or scheduled-job changes were made for this source work.
+See [contract](specs/046-bot-presentation-integration/STARTUP_CONTINUATION.md).
+
 ## Fixed operator approval loader — November 7, 2026
 
 The startup path now derives an independent private approval anchor from the

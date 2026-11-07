@@ -174,3 +174,9 @@ actual interpreter execution, loader/native/key/broker composition or phone imag
 Independent review accepted the final original-owner guard and closed lazy-import
 delta. Linux exact-source CI is pending; local 706 startup / 74 actual Python 3.11
 child fixtures and 89 surface checks are distinct evidence, not installed acceptance.
+
+## Explicit continuation handoff
+
+The early invocation guard still rejects late native/listener modules. Separate
+private invocation-value checks support only the explicitly retained original
+[continuation DATA](STARTUP_CONTINUATION.md); they do not admit late entry startup.

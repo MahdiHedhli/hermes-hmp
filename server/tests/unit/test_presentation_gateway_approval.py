@@ -272,8 +272,7 @@ def test_fixed_operator_approval(tmp_path: Path, case: str):
     assert json.loads(result.stdout)['case'] == case
 
 
-@pytest.mark.parametrize("variant", ["entry", "runtime", "links", "document_boundary"])
-def test_operator_approval_composes_with_original_snapshot(tmp_path, monkeypatch, variant):
+def operator_composed_script(variant):
     from . import test_presentation_entry_files as base
     from .test_presentation_executable_link_io import io_script
     from .test_presentation_runtime_files import runtime_script
@@ -317,5 +316,13 @@ assert configuration._bytes_read==len(operator_raw)+len(selection)
             "assert recipe._bytes_read==len(operator_raw)+len(selection)"
             "+recipe_module._TOTAL_LIMIT")
     mutation = {"runtime": "runtime_normal", "links": "link_absolute"}.get(variant, "normal")
+    return script, mutation
+
+
+@pytest.mark.parametrize("variant", ["entry", "runtime", "links", "document_boundary"])
+def test_operator_approval_composes_with_original_snapshot(tmp_path, monkeypatch, variant):
+    from . import test_presentation_entry_files as base
+
+    script, mutation = operator_composed_script(variant)
     monkeypatch.setattr(base, "SCRIPT", script)
     base.test_actual_entry_and_wrapper_files(tmp_path, mutation)

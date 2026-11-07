@@ -23,6 +23,9 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
 - [x] **PS1-ANCHOR** Freeze trusted installer/entry root selection and implement
       independent private approval-anchor loader, avoiding circular hash approval.
       Source/review and original-prefix composed tests complete; see OPERATOR_APPROVAL.md.
+- [x] **PS1-CONTINUATION-DATA** Retain original completed startup lineage before
+      native imports, with sticky refusal and callback identity fences. See
+      [contract](STARTUP_CONTINUATION.md). This does not complete PS1-LOADER.
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
 - [ ] **PS1-LISTENER** Bind original admitted startup to actual listener/native owner,

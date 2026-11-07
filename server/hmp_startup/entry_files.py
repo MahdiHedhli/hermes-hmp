@@ -322,6 +322,8 @@ class EntryFileSnapshotOwner:
             snapshot = after[0][1] if plan is None else after
             origin_snapshot = origins if plan is None else (origins, dependency_origins)
             fact = (owner, inputs, io, file_fact, snapshot, origin_snapshot)
+            if plan is not None:
+                fact += (loose_after,)  # retain original observed ancestry for continuation
             owner._fact_cell = activation._entry_files_fact_cell = fact
             owner._ready = True
             return owner
@@ -351,13 +353,13 @@ class EntryFileSnapshotOwner:
         EntryFileSnapshotOwner._pure_current(self, inputs, cell)
         return inputs
 
-    def _pure_current(self, inputs, cell):
+    def _pure_lineage(self, inputs, cell):
         activation = inputs.recipe_binding[0].activation
         eb = GatewayEntryOwner._retained_binding(inputs.entry)
         rb = GatewayRecipeOwner._retained_binding(inputs.recipe)
         pb = GatewayPackageOwner._retained_binding(inputs.plugin)
         _require(all(a is b for a, b in zip(eb, inputs.entry_binding, strict=True))
-                 and GatewayEntryOwner._invocation_state(inputs.entry, eb[0], eb[1]) is eb[0]
+                 and GatewayEntryOwner._invocation_values(inputs.entry, eb[0], eb[1]) is eb[0]
                  and gateway_entry._origin_current(eb[2][5]) is eb[2][5]
                  and _same_recipe_binding(inputs.recipe_binding, rb)
                  and _same_package(inputs.plugin_binding, pb)
@@ -380,6 +382,11 @@ class EntryFileSnapshotOwner:
         else:
             _require(self._completing is True and attempt is original_attempt
                      and activation._entry_files_attempt_cell is original_attempt)
+
+    def _pure_current(self, inputs, cell):
+        EntryFileSnapshotOwner._pure_lineage(self, inputs, cell)
+        eb = inputs.entry_binding
+        _require(GatewayEntryOwner._invocation_state(inputs.entry, eb[0], eb[1]) is eb[0])
 
     def _io_current(self, io):
         inputs = EntryFileSnapshotOwner._current(self)
