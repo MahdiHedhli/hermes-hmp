@@ -1223,24 +1223,40 @@ async def handle_cron_edit(request: web.Request) -> web.Response:
     return json_response({"job": mobile_cron.project_job(raw)})
 
 
+async def _cron_http_mutation(
+    request: web.Request, *, method: str, action: str | None = None,
+) -> web.Response:
+    scope = _ControlsRequestScope.capture(request, "cron")
+    task = _require(asyncio.current_task())
+    original_job = request.match_info["job_id"]
+    endpoint = await _cron_endpoint(request, write=True, controls_scope=scope)
+    job_id = mobile_cron.job_id(original_job)
+    scope.check(request)
+
+    def preflight() -> None:
+        if asyncio.current_task() is not task or task.done() or task.cancelling():
+            raise asyncio.CancelledError
+        scope.check()
+        if task.done() or task.cancelling():
+            raise asyncio.CancelledError
+
+    result = await mobile_cron.call(
+        endpoint, method=method, job=job_id, action=action, before_dispatch=preflight,
+    )
+    # Native completion/uncertainty is preserved: no post-mutation auth refusal or replay.
+    return json_response(result)
+
+
 async def handle_cron_delete(request: web.Request) -> web.Response:
-    endpoint = await _cron_endpoint(request, write=True)
-    job_id = mobile_cron.job_id(request.match_info["job_id"])
-    return json_response(await mobile_cron.call(endpoint, method="DELETE", job=job_id))
+    return await _cron_http_mutation(request, method="DELETE")
 
 
 async def handle_cron_pause(request: web.Request) -> web.Response:
-    endpoint = await _cron_endpoint(request, write=True)
-    job_id = mobile_cron.job_id(request.match_info["job_id"])
-    result = await mobile_cron.call(endpoint, method="POST", job=job_id, action="pause")
-    return json_response(result)
+    return await _cron_http_mutation(request, method="POST", action="pause")
 
 
 async def handle_cron_resume(request: web.Request) -> web.Response:
-    endpoint = await _cron_endpoint(request, write=True)
-    job_id = mobile_cron.job_id(request.match_info["job_id"])
-    result = await mobile_cron.call(endpoint, method="POST", job=job_id, action="resume")
-    return json_response(result)
+    return await _cron_http_mutation(request, method="POST", action="resume")
 
 
 async def _model_profile(
