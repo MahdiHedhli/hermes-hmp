@@ -417,6 +417,36 @@ def test_unreviewed_parser_import_variants_remain_closed(pkg: Path, statement: s
     [
         (
             "presentation_startup_artifacts.py",
+            "def f():\n    from hmp_startup.gateway_approval import GatewayApprovalOwner\n",
+            True,
+        ),
+        (
+            "presentation_startup_selection.py",
+            "def f():\n    from hmp_startup.gateway_approval import GatewayApprovalOwner\n",
+            True,
+        ),
+        (
+            "presentation_startup_selection.py",
+            "def f():\n    from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
+            False,
+        ),
+        (
+            "presentation_startup_selection.py",
+            "from hmp_startup.gateway_approval import GatewayApprovalOwner\n",
+            False,
+        ),
+        (
+            "presentation_startup_selection.py",
+            "def f():\n    from hmp_startup.gateway_approval import OtherOwner\n",
+            False,
+        ),
+        (
+            "reads.py",
+            "def f():\n    from hmp_startup.gateway_approval import GatewayApprovalOwner\n",
+            False,
+        ),
+        (
+            "presentation_startup_artifacts.py",
             "def f():\n    from hmp_startup.entry_files import EntryFileSnapshotOwner\n",
             True,
         ),

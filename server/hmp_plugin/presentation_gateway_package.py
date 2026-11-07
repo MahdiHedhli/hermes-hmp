@@ -28,7 +28,11 @@ from .presentation_startup_artifacts import (
     _identity,
 )
 from .presentation_startup_artifacts import _Scope as IoScope
-from .presentation_startup_selection import GatewayStartupSelection, StartupSelectionOwner
+from .presentation_startup_selection import (
+    GatewayStartupSelection,
+    StartupSelectionOwner,
+    _configuration_rows,
+)
 
 _MAX_BYTES = 8 * 1024 * 1024
 _MAX_ENTRIES = 20000
@@ -285,7 +289,7 @@ class GatewayPackageOwner:
                      and current[3] is selected)
             root, entries, files = _decode(raw, selected)
             if recipe is not None:
-                _expected(configuration_scope.expected
+                _expected(_configuration_rows(configuration)
                           + tuple(row[0] for row in binding[4][3]) + files)
             meta = _Manifest(configuration, configuration_scope, fact, selected, raw,
                              root, entries, files, [], recipe, binding)

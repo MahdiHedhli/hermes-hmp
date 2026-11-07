@@ -156,3 +156,16 @@ valid document-cap completion from accidentally charging the prefix twice.
 This is a startup accounting repair, not completed runtime admission or installed
 bot-image delivery. Dependency/interpreter/link/loader coverage, trusted execution,
 operator/native/key composition, broker acceptance and physical checks remain open.
+
+
+## Original operator-approval integration
+
+The fixed [operator approval loader](OPERATOR_APPROVAL.md) now supplies the independent
+selection expectation through StartupSelectionOwner.load_operator_selection. The
+original approval owns its fixed root, actual closed read receipt and observed count;
+selection inherits that actual prefix. Its original approved recipe variant/size
+is enforced by recipe loading and current/retained joins before IO. Package/runtime
+plans retain both configuration file rows, with no reset or invented read credit.
+The existing external-ExpectedArtifact entry points remain DATA-only prerequisites;
+they do not acquire the new operator lineage by passing a matching tuple. No runtime,
+listener/native/key or phone-image admission follows this source integration.

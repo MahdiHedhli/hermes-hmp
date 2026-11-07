@@ -41,6 +41,36 @@ class ExpectedArtifact(NamedTuple):
         return "<ExternalArtifactExpectation DATA not-approval redacted>"
 
 
+class OperatorApprovalPath(NamedTuple):
+    """Fixed operator-private trust anchor, explicitly not a pinned artifact."""
+    path: str
+
+    def __repr__(self):
+        return "<OperatorApprovalPath fixed-private-anchor redacted>"
+
+
+class _OperatorFileReceipt(NamedTuple):
+    owner: object
+    scope: object
+    path: OperatorApprovalPath
+    identity: tuple
+    sha256: str
+    count: tuple
+    descriptors: tuple
+    reads: tuple
+
+    def __repr__(self):
+        return "<OriginalOperatorFileObservation not-runtime-admission redacted>"
+
+
+@dataclass(repr=False)
+class _ReadEffect:
+    before: tuple
+    after: tuple | None = None
+    returned: bool = False
+    unknown: bool = False
+
+
 class _HashedArtifact(NamedTuple):
     owner: object
     scope: object
@@ -69,6 +99,7 @@ class _Scope(NamedTuple):
     records: list
     parent: object = None
     runtime: object = None
+    reads: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
@@ -239,7 +270,8 @@ def _package_source(package):
              and all(a is b for a, b in zip(binding[4], after[4], strict=True)))
     meta = binding[0].expected
     _require(meta.recipe is not None and type(meta.recipe_binding) is tuple)
-    previous = (meta.selection_scope.expected
+    from .presentation_startup_selection import _configuration_rows
+    previous = (_configuration_rows(meta.selection)
                 + tuple(row[0] for row in meta.recipe_binding[4][3]) + meta.files)
     return _PackageSource(package, binding, binding[3][2][7], previous)
 
@@ -291,7 +323,10 @@ def _configuration(owner):
     if type(owner) is GatewayPackageOwner:
         return False
     from .presentation_gateway_recipe import GatewayRecipeOwner
-    _require(type(owner) is GatewayRecipeOwner)
+    if type(owner) is GatewayRecipeOwner:
+        return True
+    from hmp_startup.gateway_approval import GatewayApprovalOwner
+    _require(type(owner) is GatewayApprovalOwner)
     return True
 
 
@@ -305,8 +340,11 @@ def _owner_guard(owner):
     if type(owner) is GatewayPackageOwner:
         return GatewayPackageOwner._guard(owner)
     from .presentation_gateway_recipe import GatewayRecipeOwner
-    _require(type(owner) is GatewayRecipeOwner)
-    return GatewayRecipeOwner._guard(owner)
+    if type(owner) is GatewayRecipeOwner:
+        return GatewayRecipeOwner._guard(owner)
+    from hmp_startup.gateway_approval import GatewayApprovalOwner
+    _require(type(owner) is GatewayApprovalOwner)
+    return GatewayApprovalOwner._guard(owner)
 
 
 def _root(owner, activation):
@@ -319,8 +357,11 @@ def _root(owner, activation):
     if type(owner) is GatewayPackageOwner:
         return activation._package_cell
     from .presentation_gateway_recipe import GatewayRecipeOwner
-    _require(type(owner) is GatewayRecipeOwner)
-    return activation._recipe_cell
+    if type(owner) is GatewayRecipeOwner:
+        return activation._recipe_cell
+    from hmp_startup.gateway_approval import GatewayApprovalOwner
+    _require(type(owner) is GatewayApprovalOwner)
+    return activation._approval_cell
 
 
 def _append_configuration(owner, data):
@@ -330,8 +371,12 @@ def _append_configuration(owner, data):
             StartupSelectionOwner._append(owner, data)
         else:
             from .presentation_gateway_recipe import GatewayRecipeOwner
-            _require(type(owner) is GatewayRecipeOwner)
-            GatewayRecipeOwner._append(owner, data)
+            if type(owner) is GatewayRecipeOwner:
+                GatewayRecipeOwner._append(owner, data)
+            else:
+                from hmp_startup.gateway_approval import GatewayApprovalOwner
+                _require(type(owner) is GatewayApprovalOwner)
+                GatewayApprovalOwner._append(owner, data)
 
 
 class StartupArtifactOwner:
@@ -613,6 +658,14 @@ class StartupArtifactOwner:
         before, cell = self._bytes_read, self._count_cell
         _require(type(cell) is tuple and len(cell) == 3 and cell[0] is self
                  and cell[1] is s and type(cell[2]) is int and cell[2] == before)
+        root, owner_cell = self._root_cell, self._cell
+        effect = None
+        read_index = None
+        if s.reads is not None:
+            _require(type(s.reads) is list)
+            read_index = len(s.reads)
+            effect = _ReadEffect(cell)
+            s.reads.append(effect)  # original allocation before read effects
         self._reading = True
         data = None
         try:
@@ -621,19 +674,27 @@ class StartupArtifactOwner:
             runtime = s.runtime
             same = (self._scope is s and self._origin is s and self._bytes_read is before
                     and self._count_cell is cell and self._reading is True
+                    and self._root_cell is root and self._cell is owner_cell
                     and (runtime is None or runtime.count[0] is cell))
             after = before + len(data)  # actual count before any post-read check
             after_cell = (self, s, after)
-            self._bytes_read = after
-            self._count_cell = after_cell
+            if effect is not None:
+                effect.after, effect.returned = after_cell, True
+            if same:
+                self._bytes_read = after
+                self._count_cell = after_cell
             if runtime is not None and same:
                 runtime.count[0] = after_cell
             self._reading = False
-            _require(same and len(data) <= count and _owner_guard(self) is s
+            _require(same and (effect is None or (len(s.reads) == read_index + 1
+                      and s.reads[read_index] is effect))
+                     and len(data) <= count and _owner_guard(self) is s
                      and self._bytes_read is after and self._count_cell is after_cell)
             return data
         except BaseException:
             self._unknown = True
+            if effect is not None:
+                effect.unknown = True
             raise
         finally:
             data = None
@@ -825,8 +886,15 @@ class StartupArtifactOwner:
 
     def _file(self, expected):
         s = _owner_guard(self)
+        anchor = type(expected) is OperatorApprovalPath
+        if anchor:
+            from hmp_startup.gateway_approval import GatewayApprovalOwner
+            _require(type(self) is GatewayApprovalOwner and type(s.expected) is tuple
+                     and len(s.expected) == 1 and s.expected[0] is expected)
+        else:
+            _require(type(expected) is ExpectedArtifact)
         root_cell = self._root_cell
-        held, directories = [], []
+        held, directories, read_effects = [], [], []
         progress = self._count_cell if s.runtime is not None else None
         data = digest = None
         result = None
@@ -850,7 +918,8 @@ class StartupArtifactOwner:
             before = StartupArtifactOwner._stat(self, name, parent, s)
             original = _identity(before)
             _require(stat.S_ISREG(before.st_mode) and before.st_uid in (0, s.context[1])
-                     and before.st_nlink == 1 and before.st_size == expected.size
+                     and before.st_nlink == 1
+                     and (0 < before.st_size <= 4096 if anchor else before.st_size == expected.size)
                      and not before.st_mode & (0o022 | stat.S_ISUID | stat.S_ISGID))
             if _configuration(self):
                 _require(before.st_uid == s.context[1] and stat.S_IMODE(before.st_mode) == 0o600)
@@ -858,11 +927,13 @@ class StartupArtifactOwner:
             held.append((row, fd))
             _require(_identity(StartupArtifactOwner._fstat(self, fd, s)) == original)
             digest = hashlib.sha256()
-            remaining = expected.size
+            remaining = before.st_size if anchor else expected.size
             while remaining:
                 _require(_owner_guard(self) is s)
                 _require(progress is None or self._count_cell is progress)
                 data = StartupArtifactOwner._read(self, fd, min(remaining, 65536), s)
+                if anchor:
+                    read_effects.append(s.reads[-1])
                 if progress is not None:
                     progress = self._count_cell
                 _require(0 < len(data) <= remaining)
@@ -874,13 +945,16 @@ class StartupArtifactOwner:
                 _require(_owner_guard(self) is s)
             _require(progress is None or self._count_cell is progress)
             data = StartupArtifactOwner._read(self, fd, 1, s)
+            if anchor:
+                read_effects.append(s.reads[-1])
             count_cell, counted = self._count_cell, self._bytes_read
             _require(data == b"" and _identity(StartupArtifactOwner._fstat(self, fd, s)) == original
                      and _identity(StartupArtifactOwner._stat(self, name, parent, s)) == original)
             _require(_owner_guard(self) is s)
             actual_hash = digest.hexdigest()
             _require(_owner_guard(self) is s
-                     and type(actual_hash) is str and actual_hash == expected.sha256)
+                     and type(actual_hash) is str
+                     and (anchor or actual_hash == expected.sha256))
             for name, parent, directory, signature in directories:
                 _require(
                     _identity(StartupArtifactOwner._fstat(self, directory, s), True) == signature
@@ -889,7 +963,10 @@ class StartupArtifactOwner:
                 )
             _require(_owner_guard(self) is s)
             result = expected
-            if not _configuration(self):
+            if anchor:
+                result = _OperatorFileReceipt(self, s, expected, original, actual_hash, count_cell,
+                                              tuple(row for row, _ in held), tuple(read_effects))
+            elif not _configuration(self):
                 result = _HashedArtifact(self, s, expected, original, actual_hash)
         except BaseException:
             failed = True

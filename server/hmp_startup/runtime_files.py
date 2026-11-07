@@ -388,7 +388,9 @@ def _build_runtime_plan(eb, rb, pb, entry_root, entry_entries, entry_files, wrap
         )
     prior_paths = {row.path for row in meta.files}
     pending = tuple(row for row in all_files if row.path not in prior_paths)
-    previous = meta.selection_scope.expected + tuple(row[0] for row in meta.recipe_binding[4][3])
+    from hmp_plugin.presentation_startup_selection import _configuration_rows
+    previous = _configuration_rows(meta.selection) + tuple(
+        row[0] for row in meta.recipe_binding[4][3])
     _expected(previous + all_files)
     if link is not None:
         prefix = pb[3][2][7][2]
