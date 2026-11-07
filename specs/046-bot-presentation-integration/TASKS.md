@@ -23,8 +23,11 @@
       received / parsed accounting, no linked history, record-boundary refusal.
 - [ ] Qualify waiting after EAGAIN with fresh owned registration/retirement under
       the original actor/deadline; never reuse the retired selector registration.
-- [ ] Verify completed auth record and grammar-bound phase dispatch without
-      restarting authentication or counting retained prefix bytes as newly read.
+- [x] Verify the completed original auth record once, with independently retained
+      attempt/result, finished-parser continuity, held pre-crypto counts and post-
+      callback native/role/alias seals. Positive RESULT and nine refusal causals.
+- [ ] Bind verified phase DATA to the explicit grammar-allowed outer-header stage;
+      no auth restart/fallback, no captured-prefix byte credit or terminal acceptance.
 
 - [x] Retain one-shot original-reader IDLE admission before native currentness;
       independently anchor owner/scope/fact, exact bounded count/original minimum

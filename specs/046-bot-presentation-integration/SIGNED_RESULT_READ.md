@@ -549,3 +549,34 @@ verification and phase dispatch, full drain, concurrent CANCEL, terminal/ACK/nat
 release and production/physical character-image delivery remain open. Earlier broad
 broker failure causes and the native sender-destination incident remain unresolved.
 No app build/install, live host/device, grant/provider or deployment change occurred.
+
+## Original-reader authentication completion — November 7, 2026
+
+`NativeCleanupRead.finish_authentication()` now verifies the completed original
+bounded authentication record exactly once. Pure completed-parser admission and
+an independently retained attempt precede native/currentness/signature boundaries.
+The actual returned commitment is retained before callbacks and joined to the
+actual raw record, original parser/pins/context, retained sequence and canonical
+frame values. Finished-parser state is admitted only through that returned attempt,
+never from a finished flag alone. Role, actor, original budget, socket and actual
+allocation aliases reseal before an authentication receipt; the fixed cleanup
+observer recognizes the same state. Cumulative post-cause counts are captured
+before crypto and retained unchanged; captured prefix bytes are not counted again.
+
+Ten private causal cases cover one positive RESULT record, invalid signature,
+actual verification followed by lost acknowledgement or role retirement, post-clock
+checked-result copy, initial native failure/restoration, final verifier foreign
+ledger/count/scope substitutions, and inconsistent returned commitment values.
+All refuse without replay or foreign getter/equality access. Review required the
+post-crypto count/ledger fence; held primitive counts/local immutable scope and
+new fault tests repair it. Failure wipes only the captured original auth buffer.
+
+Independent read-only review accepted source/repairs. Exact affected regression:
+1,957 passed,1 skipped in169.79s; full lint, surface and whitespace pass. The ten
+focused cases passed in3.19s and overlap that run. Functional source hashes remain
+unchanged through execution. Authentication phase is DATA, not permission to read
+or accept a frame. Header/phase transition, direct ABORTED eligibility, full frame
+digest, waiting after EAGAIN, concurrent CANCEL, terminal/ACK/native release and
+production/physical image delivery remain open. Earlier broker failure causes and
+sender-destination incident remain unresolved. No app build/install, live host,
+device, grant/provider or deployment change occurred.

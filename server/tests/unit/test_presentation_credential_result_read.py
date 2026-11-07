@@ -69,6 +69,16 @@ from .test_presentation_supervisor import context as context
     "wake_reserve_notice_native_parseradvancebad",
     "wake_reserve_notice_native_consume",
     "wake_reserve_notice_native_consume_next",
+    "wake_reserve_notice_native_consume_next_auth",
+    "wake_reserve_notice_native_consume_next_auth_signature",
+    "wake_reserve_notice_native_consume_next_auth_lost",
+    "wake_reserve_notice_native_consume_next_auth_retired",
+    "wake_reserve_notice_native_consume_next_auth_copy",
+    "wake_reserve_notice_native_consume_next_auth_initial",
+    "wake_reserve_notice_native_consume_next_auth_ledger",
+    "wake_reserve_notice_native_consume_next_auth_counter",
+    "wake_reserve_notice_native_consume_next_auth_values",
+    "wake_reserve_notice_native_consume_next_auth_scope",
     "wake_reserve_notice_native_consume_next_short",
     "wake_reserve_notice_native_consume_next_blocked",
     "wake_reserve_notice_native_consume_next_lostack",
@@ -87,6 +97,10 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
     from hmp_plugin.presentation_readiness import SelectorReadiness
 
     next_case = "_native_consume_next" in mutation
+    auth_case = "_consume_next_auth" in mutation
+    auth_failure = auth_case and mutation.endswith((
+        "_signature", "_lost", "_retired", "_copy", "_initial", "_ledger", "_counter",
+        "_values", "_scope"))
     next_failure = next_case and mutation.endswith(("_blocked", "_lostack", "_alloc", "_foreign"))
     prepared = await prepare(context, begin_gateway)
     authority, operation, _, channel, peer, _, packet, _ = prepared
@@ -232,6 +246,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                         import socket
                         peer.shutdown(socket.SHUT_WR)
                     elif next_case:
+                        if auth_case and mutation.endswith("_signature"):
+                            raw = raw[:-1] + bytes([raw[-1] ^ 1])
                         held["next_record_length"] = len(raw)
                         await loop.sock_sendall(peer, raw[:8] if mutation.endswith("_blocked")
                                                else raw + frame)
@@ -901,7 +917,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                     assert owner is native
                                     if next_case:
                                         assert not next_failure
-                                        assert value is native._next_read_origin.fact
+                                        assert value is (native._auth_origin.fact if auth_case
+                                                         else native._next_read_origin.fact)
                                         assert (value.total_received
                                                 == native._ledger_origin.received)
                                     else:
@@ -1103,7 +1120,108 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                             assert native._next_read_origin.pending is None
                                             assert not native._failed and not native._unknown
                                         held["next_read_checked"] = True
-                                    if not next_failure:
+                                        if auth_case:
+                                            finish = SignedCleanupAuthPrefix.finish
+                                            held["auth_finish_calls"] = 0
+
+                                            def observed_auth_finish(parser):
+                                                held["auth_finish_calls"] += 1
+                                                result = finish(parser)
+                                                if mutation.endswith("_lost"):
+                                                    raise OSError(
+                                                        "synthetic auth acknowledgement lost")
+                                                if mutation.endswith("_retired"):
+                                                    keys["gateway"].retire()
+                                                if mutation.endswith("_ledger"):
+                                                    class ForeignAuthLedger:
+                                                        def __getattr__(self, name):
+                                                            held["auth_ledger_getter"] = True
+                                                            raise AssertionError("foreign ledger")
+                                                    native._ledger_origin = ForeignAuthLedger()
+                                                if mutation.endswith("_counter"):
+                                                    class ForeignAuthCount:
+                                                        def __eq__(self, other):
+                                                            held["auth_count_eq"] = True
+                                                            raise AssertionError("foreign counter")
+                                                    native._next_read_origin.received = (
+                                                        ForeignAuthCount())
+                                                if mutation.endswith("_values"):
+                                                    from dataclasses import replace
+                                                    result = replace(result,
+                                                        frame_length=result.frame_length + 1)
+                                                if mutation.endswith("_scope"):
+                                                    class ForeignAuthScope:
+                                                        def __getattr__(self, name):
+                                                            held["auth_scope_getter"] = True
+                                                            raise AssertionError(
+                                                                "foreign auth scope")
+                                                    native._auth_origin.scope = ForeignAuthScope()
+                                                return result
+
+                                            monkeypatch.setattr(SignedCleanupAuthPrefix, "finish",
+                                                                observed_auth_finish)
+                                            if mutation.endswith("_initial"):
+                                                fence = NativeCleanupRead._final_socket_fence
+
+                                                def first_auth_fence(owner, scope):
+                                                    if owner._auth_origin is not None:
+                                                        monkeypatch.setattr(NativeCleanupRead,
+                                                            "_final_socket_fence", fence)
+                                                        raise FrameError("SYNTHETIC_AUTH_BOUNDARY")
+                                                    return fence(owner, scope)
+
+                                                monkeypatch.setattr(NativeCleanupRead,
+                                                    "_final_socket_fence", first_auth_fence)
+                                            if mutation.endswith("_copy"):
+                                                remaining = RemoteCleanupOwner._remaining
+
+                                                def auth_copy_after_clock(cleanup):
+                                                    value = remaining(cleanup)
+                                                    attempt = native._auth_origin
+                                                    if (attempt is not None and attempt.returned
+                                                            and not held.get("auth_copied")):
+                                                        from dataclasses import replace
+                                                        held["auth_copied"] = True
+                                                        held["auth_actual_checked"] = (
+                                                            attempt.checked)
+                                                        attempt.checked = replace(attempt.checked)
+                                                    return value
+
+                                                monkeypatch.setattr(RemoteCleanupOwner,
+                                                    "_remaining", auth_copy_after_clock)
+                                            if auth_failure:
+                                                with pytest.raises(FrameError):
+                                                    native.finish_authentication()
+                                                attempt = native._auth_origin
+                                                assert attempt.failed and not attempt.complete
+                                                assert not parser._buffer_origin
+                                                assert native._failed and native._unknown
+                                                assert "auth_ledger_getter" not in held
+                                                assert "auth_count_eq" not in held
+                                                assert "auth_scope_getter" not in held
+                                                assert attempt.scope_origin.total_received == (
+                                                    held["next_record_length"])
+                                                with pytest.raises(FrameError):
+                                                    native.finish_authentication()
+                                            else:
+                                                fact = native.finish_authentication()
+                                                assert fact.phase == "RESULT"
+                                                assert fact.scope.before.parser is parser
+                                                assert fact.checked is native._auth_origin.checked
+                                                assert (fact.total_received
+                                                        == held["next_record_length"])
+                                                assert (parser._finished
+                                                        and not parser._buffer_origin)
+                                                assert native._auth_origin.complete
+                                                with pytest.raises(FrameError):
+                                                    native.finish_authentication()
+                                                with pytest.raises(FrameError):
+                                                    native.read_and_consume_next()
+                                                assert not native._failed and not native._unknown
+                                            assert held["auth_finish_calls"] == (
+                                                0 if mutation.endswith("_initial") else 1)
+                                            held["auth_completion_checked"] = True
+                                    if not next_failure and not auth_failure:
                                         await asyncio.create_task(wrong_consumer())
                                         assert native._consume_complete and not native._failed
                                 if mutation.endswith("_parseradvancebad"):
@@ -1163,7 +1281,9 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                                 "wake_reserve_notice_native_workflagbad",
                                                 "wake_reserve_notice_native_consume",
                                                 "wake_reserve_notice_native_consume_next",
-                                                "wake_reserve_notice_native_consume_next_short"):
+                                                "wake_reserve_notice_native_consume_next_short"
+                                                ) or (
+                                        auth_case and not auth_failure):
                                     assert not native._failed and not notice._unknown
                                     async with asyncio.timeout_at(
                                             reader._base_origin.intent.end_ns / 1e9):
@@ -1172,7 +1292,10 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                         owned._cleanup_owner_snapshot._initialized = False
                             if next_case:
                                 assert held["next_read_checked"]
-                                if not next_failure:
+                                if auth_case:
+                                    assert held["auth_completion_checked"]
+                                    assert not cursor._parser._buffer_origin
+                                elif not next_failure:
                                     assert (bytes(cursor._parser._buffer_origin)
                                             == native._next_read_origin.after.value)
                             elif "_native_consume_" in mutation:
@@ -1308,6 +1431,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             if mutation.endswith("_consume_next_foreign"):
                                 assert not native._failed
                                 assert "foreign_progress_getter" not in held
+                            elif auth_case and not auth_failure:
+                                assert native._auth_origin.complete and not native._failed
                             elif mutation not in ("wake_reserve_notice_native",
                                                 "wake_reserve_notice_native_workflagbad",
                                                 "wake_reserve_notice_native_consume",
@@ -1520,6 +1645,16 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                             "wake_reserve_notice_native_parseradvancebad",
                             "wake_reserve_notice_native_consume",
                             "wake_reserve_notice_native_consume_next",
+                            "wake_reserve_notice_native_consume_next_auth",
+                            "wake_reserve_notice_native_consume_next_auth_signature",
+                            "wake_reserve_notice_native_consume_next_auth_lost",
+                            "wake_reserve_notice_native_consume_next_auth_retired",
+                            "wake_reserve_notice_native_consume_next_auth_copy",
+                            "wake_reserve_notice_native_consume_next_auth_initial",
+                            "wake_reserve_notice_native_consume_next_auth_ledger",
+                            "wake_reserve_notice_native_consume_next_auth_counter",
+                            "wake_reserve_notice_native_consume_next_auth_values",
+                            "wake_reserve_notice_native_consume_next_auth_scope",
                             "wake_reserve_notice_native_consume_next_short",
                             "wake_reserve_notice_native_consume_next_blocked",
                             "wake_reserve_notice_native_consume_next_lostack",
@@ -1650,7 +1785,8 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                                 "wake_reserve_notice_native_workflagbad",
                                 "wake_reserve_notice_native_consume",
                                 "wake_reserve_notice_native_consume_next",
-                                "wake_reserve_notice_native_consume_next_short"):
+                                "wake_reserve_notice_native_consume_next_short") or (
+                        auth_case and not auth_failure):
                     assert native_observed.is_set()
                 if not next_case and mutation.endswith((
                         "_lostack", "_blocked", "_timeoutbad", "_blockingbad", "_fdbad")):

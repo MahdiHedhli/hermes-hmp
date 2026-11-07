@@ -6,9 +6,11 @@ release. Original work exit retires payload and preserves unknown protocol debt.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import socket
 import stat
+import threading
 from typing import NamedTuple
 
 from .presentation_broker_codec import HEADER_LIMIT, TERMINAL_LIMIT
@@ -19,7 +21,8 @@ from .presentation_credential_cleanup_notice import (
     SignedStoppedCursor,
 )
 from .presentation_credential_cleanup_reservation import inspect_signed_reservation
-from .presentation_credential_codec import RECORD_LIMIT, payload_size
+from .presentation_credential_codec import JSON_LIMIT, RECORD_LIMIT, payload_size
+from .presentation_credential_phase import ConsistentCommitment
 from .presentation_credential_stream import (
     _HASH_TYPE,
     CHUNK_LIMIT,
@@ -152,6 +155,42 @@ class _NextRead:
         return "<NextRead bounded-step payload-redacted>"
 
 
+class _AuthScope(NamedTuple):
+    owner: object
+    scope: _ReadScope
+    before: _ParserSeal
+    progress: _ConsumedReceipt
+    step: object
+    ledger: object
+    receipt: object
+    count: int
+    total_received: int
+
+    def __repr__(self):
+        return "<AuthScope original-completed-record redacted>"
+
+
+class _AuthReceipt(NamedTuple):
+    owner: object
+    scope: _AuthScope
+    checked: ConsistentCommitment
+    values: tuple
+    count: int
+    total_received: int
+
+    @property
+    def phase(self):
+        return self.values[3]
+
+    def __repr__(self):
+        return "<AuthReceipt authenticated-phase-DATA no-transition-permission>"
+
+
+class _AuthAttempt:
+    def __repr__(self):
+        return "<AuthAttempt original-parser one-shot redacted>"
+
+
 def owned_native_read(notice):
     """Independent allocation discovery only; never currentness or IO admission."""
     _require(type(notice) is SignedReadNotice)
@@ -217,6 +256,7 @@ class NativeCleanupRead:
         owner._consume_attempt_allocation_origin = None
         owner._next_read = owner._next_read_origin = owner._next_read_allocation_origin = None
         owner._ledger = owner._ledger_origin = owner._ledger_allocation_origin = None
+        owner._auth = owner._auth_origin = owner._auth_allocation_origin = None
         owner._progress = owner._progress_origin = owner._progress_allocation_origin = None
         owner._received = owner._received_origin = 0
         owner._native_count_allocation_origin = None
@@ -613,8 +653,10 @@ class NativeCleanupRead:
                  and not _FUTURE.cancelled(notice._future_origin)
                  and _FUTURE.result(notice._future_origin) is notice._fact_origin)
         current_seal = NativeCleanupRead._continuation_seal(self, s, fact.after)
-        NativeCleanupRead._same_parser(
-            NativeCleanupRead._parser_seal(cell[2].parser), current_seal)
+        authenticated = NativeCleanupRead._auth_metadata(self, s, current_seal)
+        if authenticated is None:
+            NativeCleanupRead._same_parser(
+                NativeCleanupRead._parser_seal(cell[2].parser), current_seal)
         return s
 
     def _progress_work_current(self):
@@ -629,6 +671,9 @@ class NativeCleanupRead:
         SignedReadNotice._role_seal(s.notice)
         _require(SignedReadNotice._actor(s.notice) is r
                  and NativeCleanupRead._consumption_metadata(self) is s)
+        auth = self._auth_origin
+        if auth is not None and auth.returned is True:
+            return auth.fact
         step = self._next_read_origin
         return self._progress_origin if step is None or step.fact is None else step.fact
 
@@ -714,6 +759,10 @@ class NativeCleanupRead:
             SignedReadNotice._role_seal(s.notice)
             _require(SignedReadNotice._cleanup_actor(s.notice) is r
                      and NativeCleanupRead._consumption_metadata(self) is s)
+            auth = self._auth_origin
+            if auth is not None:
+                _require(auth.complete is True)
+                return auth.fact
             step = self._next_read_origin
             _require(step is None or step.complete is True)
             return self._progress_origin if step is None else step.fact
@@ -808,7 +857,7 @@ class NativeCleanupRead:
         s = NativeCleanupRead._origin(self)
         r = SignedReadNotice._actor(s.notice)
         _require(self._consume_complete is True and self._failed is False
-                 and self._unknown is False)
+                 and self._unknown is False and self._auth_origin is None)
         progress, allocation = self._progress_origin, self._progress_allocation_origin
         _require(type(progress) is _ConsumedReceipt and self._progress is progress
                  and progress.mint is _MINT and progress.owner is self and progress.scope is s
@@ -943,6 +992,182 @@ class NativeCleanupRead:
                 step.reading_owned = step.inflight = False
         if failed:
             raise FrameError("BI1_NATIVE_CLEANUP_CONTINUATION_UNKNOWN") from None
+
+    def _auth_metadata(self, scope, current_seal):
+        auth = self._auth_origin
+        if auth is None:
+            _require(self._auth is None and self._auth_allocation_origin is None)
+            return None
+        _require(type(auth) is _AuthAttempt and self._auth is auth
+                 and type(self._auth_allocation_origin) is tuple
+                 and len(self._auth_allocation_origin) == 2
+                 and self._auth_allocation_origin[0] is self
+                 and self._auth_allocation_origin[1] is auth
+                 and type(auth.scope) is _AuthScope and auth.scope is auth.scope_origin
+                 and type(auth.scope_allocation) is tuple and len(auth.scope_allocation) == 2
+                 and auth.scope_allocation[0] is auth and auth.scope_allocation[1] is auth.scope
+                 and auth.scope.owner is self and auth.scope.scope is scope
+                 and auth.scope.before is current_seal
+                 and auth.scope.progress is self._progress_origin
+                 and auth.scope.step is self._next_read_origin
+                 and auth.scope.ledger is self._ledger_origin
+                 and type(auth.scope.count) is int and type(auth.scope.total_received) is int
+                 and all(type(v) is bool for v in (auth.returned, auth.complete, auth.failed))
+                 and auth.failed is False)
+        if auth.returned is False:
+            _require(auth.complete is False and auth.checked is None
+                     and auth.checked_cell is None and auth.fact is None and auth.fact_cell is None)
+            return None
+        held_scope = auth.scope
+        before, checked = held_scope.before, auth.checked
+        parser = before.parser
+        _require(type(parser) is SignedCleanupAuthPrefix
+                 and type(before.context) is tuple and len(before.context) == 2
+                 and all(type(v) is int for v in before.context))
+        live_context = (os.getpid(), threading.get_ident())
+        # Native context sampling precedes the final pure alias/role seals.
+        _require(self._auth is auth and self._auth_origin is auth
+                 and type(self._auth_allocation_origin) is tuple
+                 and len(self._auth_allocation_origin) == 2
+                 and self._auth_allocation_origin[0] is self
+                 and self._auth_allocation_origin[1] is auth
+                 and auth.scope is held_scope and auth.scope_origin is held_scope
+                 and type(auth.scope_allocation) is tuple and len(auth.scope_allocation) == 2
+                 and auth.scope_allocation[0] is auth
+                 and auth.scope_allocation[1] is held_scope and auth.checked is checked
+                 and auth.returned is True and auth.failed is False
+                 and held_scope.progress is self._progress_origin
+                 and held_scope.step is self._next_read_origin
+                 and held_scope.ledger is self._ledger_origin
+                 and type(self._received) is int and self._received is self._received_origin
+                 and NativeCleanupRead._continuation_seal(
+                     self, scope, held_scope.progress.after) is current_seal)
+        SignedReadNotice._role_seal(scope.notice)
+        _require(type(parser) is SignedCleanupAuthPrefix
+                 and parser is scope.idle_scope[1]
+                 and type(before.buffer) is bytearray and type(before.value) is bytes
+                 and type(before.target) is int
+                 and 73 <= len(before.value) == before.target <= RECORD_LIMIT
+                 and before.header_done is True
+                 and parser._initialized is True and parser._failed is False
+                 and parser._finished is True and parser._buffer is before.buffer
+                 and parser._buffer_origin is before.buffer and len(before.buffer) == 0
+                 and parser._pins is before.pins and parser._pins_origin is before.pins
+                 and parser._expected is before.expected
+                 and parser._expected_origin is before.expected
+                 and parser._context is before.context and parser._context_origin is before.context
+                 and type(before.context) is tuple and len(before.context) == 2
+                 and all(type(v) is int for v in before.context)
+                 and before.context == live_context
+                 and parser._target is before.target and parser._target_origin is before.target
+                 and parser._header_done is True and parser._header_done_origin is True
+                 and type(checked) is ConsistentCommitment
+                 and type(auth.checked_cell) is tuple and len(auth.checked_cell) == 2
+                 and auth.checked_cell[0] is auth and auth.checked_cell[1] is checked
+                 and type(auth.values) is tuple and len(auth.values) == 4
+                 and type(checked.canonical_json) is bytes
+                 and 1 <= len(checked.canonical_json) <= JSON_LIMIT
+                 and checked.canonical_json is auth.values[0]
+                 and checked.canonical_json == before.value[8:-64]
+                 and type(checked.frame_sha256) is str and checked.frame_sha256 is auth.values[1]
+                 and type(checked.frame_length) is int and checked.frame_length is auth.values[2]
+                 and type(auth.values[3]) is str and auth.values[3] in ("RESULT", "TERMINAL"))
+        fact = auth.fact
+        _require(type(fact) is _AuthReceipt and fact.owner is self and fact.scope is auth.scope
+                 and fact.checked is checked and fact.values is auth.values
+                 and type(auth.fact_cell) is tuple and len(auth.fact_cell) == 2
+                 and auth.fact_cell[0] is auth and auth.fact_cell[1] is fact
+                 and type(fact.count) is int and type(fact.total_received) is int
+                 and fact.count == held_scope.count
+                 and fact.total_received == held_scope.total_received)
+        step, ledger = auth.scope.step, auth.scope.ledger
+        if step is None:
+            _require(auth.scope.receipt is self._progress_origin
+                     and fact.count == self._received and fact.total_received == self._received)
+        else:
+            _require(type(step) is _NextRead and step.complete is True
+                     and type(ledger) is _ProgressLedger
+                     and auth.scope.receipt is step.fact
+                     and fact.count == step.received and fact.total_received == ledger.received)
+        return fact
+
+    def finish_authentication(self):
+        s = NativeCleanupRead._origin(self)
+        r = SignedReadNotice._actor(s.notice)
+        _require(self._consume_complete is True and self._failed is False
+                 and self._unknown is False and self._auth_origin is None
+                 and self._auth is None and self._auth_allocation_origin is None)
+        progress, cell = self._progress_origin, self._progress_allocation_origin
+        _require(type(progress) is _ConsumedReceipt and self._progress is progress
+                 and progress.owner is self and progress.scope is s and progress.mint is _MINT
+                 and type(progress.after) is _ParserSeal
+                 and type(cell) is tuple and len(cell) == 2
+                 and cell[0] is self and cell[1] is progress)
+        before = NativeCleanupRead._continuation_seal(self, s, progress.after)
+        parser = before.parser
+        # Pure completed-record admission precedes the irreversible attempt.
+        _require(type(parser) is SignedCleanupAuthPrefix and parser is s.idle_scope[1]
+                 and type(before.buffer) is bytearray and type(before.value) is bytes
+                 and type(before.target) is int and before.header_done is True
+                 and 73 <= len(before.value) == before.target <= RECORD_LIMIT
+                 and parser._buffer is before.buffer and parser._buffer_origin is before.buffer
+                 and bytes(before.buffer) == before.value)
+        step = self._next_read_origin
+        receipt = progress if step is None else step.fact
+        _require(type(receipt) is (_ConsumedReceipt if step is None else _NextReceipt)
+                 and type(receipt.count) is int)
+        count = receipt.count
+        total = count if step is None else receipt.total_received
+        _require(type(total) is int and 0 < count <= total <= _WIRE_LIMIT)
+        auth = _AuthAttempt.__new__(_AuthAttempt)
+        auth_scope = _AuthScope(self, s, before, progress,
+            step, self._ledger_origin, receipt, count, total)
+        auth.scope = auth.scope_origin = auth_scope
+        auth.scope_allocation = (auth, auth_scope)
+        auth.returned = auth.complete = auth.failed = False
+        auth.checked = auth.checked_cell = auth.values = auth.fact = auth.fact_cell = None
+        self._auth = self._auth_origin = auth
+        self._auth_allocation_origin = (self, auth)
+        failed = False
+        checked = value = None
+        try:
+            NativeCleanupRead._progress_work_current(self)
+            checked = SignedCleanupAuthPrefix.finish(parser)
+            auth.checked = checked
+            auth.checked_cell = (auth, checked)
+            auth.returned = True
+            _require(type(checked) is ConsistentCommitment
+                     and type(checked.canonical_json) is bytes
+                     and 1 <= len(checked.canonical_json) <= JSON_LIMIT
+                     and type(checked.frame_sha256) is str and type(checked.frame_length) is int)
+            value = json.loads(checked.canonical_json)
+            _require(type(value) is dict and value.get("family") == "phase"
+                     and type(value.get("phase")) is str
+                     and value["phase"] in ("RESULT", "TERMINAL")
+                     and type(value.get("frame_sha256")) is str
+                     and value["frame_sha256"] == checked.frame_sha256
+                     and type(value.get("frame_length")) is int
+                     and value["frame_length"] == checked.frame_length)
+            auth.values = (checked.canonical_json, checked.frame_sha256,
+                           checked.frame_length, value["phase"])
+            auth.fact = _AuthReceipt(self, auth_scope, checked, auth.values, count, total)
+            auth.fact_cell = (auth, auth.fact)
+            NativeCleanupRead._progress_work_current(self)
+            auth.complete = True
+            NativeCleanupRead._consumption_metadata(self)
+            return auth.fact
+        except BaseException:
+            failed = auth.failed = self._failed = self._unknown = True
+            s.notice._failed = s.notice._unknown = True
+            r.capture.cleanup._unknown = True
+        finally:
+            checked = value = None
+            if failed:
+                # Held actual bounded auth storage only, never a replacement buffer.
+                before.buffer.clear()
+                NativeCleanupRead._drop_pending(self)
+        if failed:
+            raise FrameError("BI1_NATIVE_CLEANUP_AUTHENTICATION_UNKNOWN") from None
 
     def _drop_pending(self):
         _require(type(self) is NativeCleanupRead)
