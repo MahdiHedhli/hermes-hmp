@@ -30,6 +30,8 @@ from .test_presentation_supervisor import context as context
     "tail_policy", "expected_row", "cancel_generic", "cancel_foreign_end",
     "cancel_foreign_future", "premature",
     "cancel_capture_wait", "cancel_capture_partial",
+    "wake_wait", "wake_partial", "wake_copy", "wake_generic", "wake_count",
+    "wake_release", "wake_subclass", "wake_capture", "wake_scope", "wake_tail",
 ])
 async def test_original_result_envelope(context, begin_gateway, tmp_path, monkeypatch, mutation):
     from hmp_plugin import presentation_credential_result_read as module
@@ -81,6 +83,11 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 assert part
                 actual.extend(part)
             assert actual == wire
+            if mutation.startswith("wake"):
+                if mutation == "wake_partial":
+                    await loop.sock_sendall(peer, b"HBA1")
+                await waiting.wait()
+                return
             if mutation.startswith("cancel"):
                 if mutation.endswith("partial"):
                     await loop.sock_sendall(peer, b"HBA1")
@@ -255,6 +262,71 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 return reader._base_origin.intent.end_ns if reader._started else now
 
             monkeypatch.setattr(module.NativeClockOwner, "sample", expired_sample)
+        if mutation.startswith("wake"):
+            native_wait = asyncio.wait
+
+            async def request_at_registered_wait(futures, **options):
+                waiter = reader._waiter_origin
+                if (asyncio.current_task() is reader._base_origin.allocation.task
+                        and waiter is not None and waiter._attempted
+                        and waiter._handle_snapshot is not None
+                        and reader._base_origin.refs[0]._barriers_snapshot.cause in futures
+                        and not held.get("actual_cause_requested")
+                        and (mutation != "wake_partial" or reader._consumed == 4)):
+                    held["actual_cause_requested"] = True
+                    RemoteCleanupOwner.request(reader._base_origin.refs[0])
+                    waiting.set()
+                return await native_wait(futures, **options)
+
+            monkeypatch.setattr(asyncio, "wait", request_at_registered_wait)
+            if mutation in ("wake_copy", "wake_generic", "wake_subclass"):
+                actual_wait = SelectorReadiness.wait
+
+                async def altered_wake(waiter, end, **options):
+                    try:
+                        return await actual_wait(waiter, end, **options)
+                    except module._ReadinessWakeRetiredError as error:
+                        if mutation == "wake_generic":
+                            raise module.ReadinessWakeError from None
+                        if mutation == "wake_subclass":
+                            class ForeignWake(module._ReadinessWakeRetiredError):
+                                @property
+                                def retirement(self):
+                                    held["foreign_wake_getter"] = True
+                                    return None
+
+                            raise ForeignWake.__new__(ForeignWake) from None
+                        raise module._ReadinessWakeRetiredError(
+                            error.retirement._replace()) from None
+
+                monkeypatch.setattr(SelectorReadiness, "wait", altered_wake)
+            if mutation in ("wake_count", "wake_capture", "wake_scope"):
+                actual_stop = NativeResultEnvelopeReceiver._wake_stopped
+
+                def drifted_stop(owner, receipt, **options):
+                    if mutation == "wake_count":
+                        owner._consumed = owner._consumed_origin = receipt.hold.consumed + 1
+                    elif mutation == "wake_capture":
+                        gate = owner._base_origin.refs[0]._read_gate_snapshot
+                        copied = receipt.capture._replace()
+                        gate._signed_capture = gate._signed_capture_origin = copied
+                        receipt = receipt._replace(capture=copied)
+                    else:
+                        waiter = receipt.hold.waiter
+                        copied = receipt.hold.native_scope._replace()
+                        waiter._scope = waiter._scope_snapshot = waiter._origin_scope = copied
+                    return actual_stop(owner, receipt, **options)
+
+                monkeypatch.setattr(NativeResultEnvelopeReceiver, "_wake_stopped", drifted_stop)
+            if mutation == "wake_tail":
+                original_woken = SelectorReadiness._woken_local
+
+                def tail_drift(waiter, fact):
+                    value = original_woken(waiter, fact)
+                    reader._target = reader._target_origin = reader._target_origin + 1
+                    return value
+
+                monkeypatch.setattr(SelectorReadiness, "_woken_local", tail_drift)
         if mutation.startswith("cancel"):
             wait = SelectorReadiness.wait
 
@@ -341,6 +413,25 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 assert reader._cancel_release_origin is None and reader._io_unknown
             if mutation == "cancel_foreign_future":
                 assert held["post_wait_future_substitution"]
+        if mutation.startswith("wake"):
+            assert held["actual_cause_requested"]
+            reader = held["reader"]
+            task = reader._base_origin.allocation.task
+            assert task.done() and not task.cancelled() and task.cancelling() == 0
+            assert reader._cancel_release_origin is None
+            if mutation in ("wake_wait", "wake_partial", "wake_release"):
+                assert reader._wake_release_origin is not None and not reader._io_unknown
+                assert not reader._active and reader._failed and not reader._buffer_origin
+                if mutation == "wake_release":
+                    reader._target = reader._target_origin = reader._target_origin + 1
+                    with pytest.raises(FrameError):
+                        reader._released(channel)
+                    assert reader._io_unknown
+                else:
+                    reader._released(channel)
+            else:
+                assert reader._wake_release_origin is None and reader._io_unknown
+            assert "foreign_wake_getter" not in held
         await peer_task
         if mutation.startswith("cancel_capture"):
             assert held["signed_envelope_cleanup_capture_checked"]

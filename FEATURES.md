@@ -1,3 +1,25 @@
+## Signed envelope native-cause wake — November 6, 2026
+
+Envelope waits now listen to their actual original cleanup cause held before
+await. A distinct local stop receipt correlates the actual native registered-wake
+retirement with the pre-poison signed capture, original scope/Future/binding/
+handle/deadline/counters and absence of a body owner. Current uncancelled original
+actor and historical done/noncancelled Task checks remain separate. Original
+bounded header bytes are wiped; the receipt refers to existing frozen header
+metadata and contains no image body. Genuine Task cancellation stays distinct.
+
+Copied/generic/subclassed wakes, paired capture/scope/counter substitutions and
+final/current/historical drift retain unknown debt. Historical refusal is sticky.
+Independent read-only review accepted source and causals. Thirty-four envelope
+cases passed in 9.54s. Final expanded regression: **1,779 passed, one skipped** in
+155.44s; lint/whitespace pass. Initial failed tests are recorded in research.
+
+Signed cooperative reader transfer remains disabled and CANCEL retains its
+whole-work-join/current-authority requirements. Full cleanup/terminal/ACK,
+production composition and physical character-image delivery remain unfinished.
+No deployment/device/build/config/grant/provider changed. Historical broker
+failures and native sender-destination risk remain unresolved.
+
 ## Signed envelope pre-await cancellation hold — November 6, 2026
 
 Envelope cancellation and historical release now bind the original waiter,

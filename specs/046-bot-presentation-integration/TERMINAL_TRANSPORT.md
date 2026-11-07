@@ -184,3 +184,14 @@ separate historical completion checks. This supplies known local stop only.
 Signed transfer remains disabled and CANCEL still needs whole-work join/current
 authority. Envelope cause/cooperative reading/terminal/ACK remain open. See
 [body cause evidence](../../docs/research/presentation-body-cause-wake-2026-11-06.md).
+
+### Envelope native-cause local stop — November 6, 2026
+
+Original envelope waits now bind the actual cleanup cause and exact native wake
+retirement to the frozen signed capture and original pre-await cursor. A distinct
+no-image-body envelope stop receipt separates original uncancelled Task currentness
+from historical completed-task revalidation. Generic/copied/subclassed wake and
+metadata drift retain unknown debt; historical refusal is sticky unknown. External
+Task cancellation stays separate. Signed cooperative transfer remains disabled;
+CANCEL still requires its existing whole-work join and current role/budget checks.
+No terminal/ACK/publication/native release follows from local stop.

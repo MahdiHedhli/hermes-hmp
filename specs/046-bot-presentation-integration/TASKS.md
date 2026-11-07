@@ -5,9 +5,11 @@
 - [x] Retain payload-free original pre-await envelope waiter/Future/scope/deadline
       and byte counters through actual Task-cancellation validation and historical
       release; reject paired Future substitution after immediate wait checks.
-- [ ] Wire the actual native cleanup-cause wake into envelope waits with distinct
+- [x] Wire the actual native cleanup-cause wake into envelope waits with distinct
       typed current/historical stop receipts and frozen signed capture correlation.
-      No cooperative reader transfer or whole-work-join relaxation is enabled.
+      Independent read-only review accepted the bounded local-stop implementation.
+- [ ] Qualify signed cooperative cursor transfer/drain and terminal/ACK against
+      the same original capture/budget; no whole-work-join relaxation is enabled.
 
 See [bounded source checkpoint](../../docs/research/presentation-envelope-wait-hold-2026-11-06.md).
 

@@ -259,3 +259,14 @@ Future, deadline and counters through cancellation and historical release. Paire
 Future-alias/receipt substitution after immediate wait checks is refused. This
 prepares, but does not enable, envelope native-cause wake or signed cooperative
 cleanup. Existing Task cancellation and whole-work-join requirements remain.
+
+### Envelope native-cause local stop — November 6, 2026
+
+Original envelope waits now bind the actual cleanup cause and exact native wake
+retirement to the frozen signed capture and original pre-await cursor. A distinct
+no-image-body envelope stop receipt separates original uncancelled Task currentness
+from historical completed-task revalidation. Generic/copied/subclassed wake and
+metadata drift retain unknown debt; historical refusal is sticky unknown. External
+Task cancellation stays separate. Signed cooperative transfer remains disabled;
+CANCEL still requires its existing whole-work join and current role/budget checks.
+No terminal/ACK/publication/native release follows from local stop.
