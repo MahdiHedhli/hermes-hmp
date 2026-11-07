@@ -154,4 +154,3 @@ Independent read-only review found no issues. Focused phase/stream regression:
 failed before reaching the helper (4 failed, 34 passed); their framing was fixed,
 with no production guard relaxation. No device, deployment or settings changed.
 Previous intermittent broker causes and sender-destination risk remain unresolved.
-
