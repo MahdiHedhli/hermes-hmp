@@ -14,8 +14,10 @@ exceptions, each an exact (module, name) allow-list entry in the surface check:
   imports `hermes_constants` and its module-level dependencies; that is accepted, because the
   adapter already imports the documented plugin base classes on every build, so it adds no new
   class of exposure (IR-6, ruling option (a); HMP v1 §12).
-- `compat.py` may import Hermes modules dynamically, but only inside its dependency probe, and only
-  for a build already on the read-compatible list (see "Startup order"; ruling on T013).
+- `compat.py` may import Hermes modules dynamically only inside its dependency probe.
+  The owner minimum-version amendment supersedes the original T013 tested-build list:
+  unknown/newer versions are attempted, subject to required APIs and legitimate security gates;
+  tested commit/sample manifests are diagnostic evidence, not feature admission.
 
 The spike is reference only. Code is rewritten and reviewed, never copied wholesale.
 
@@ -485,7 +487,7 @@ Native/helper/socket/current device and release qualifications remain separate.
 
 - `presentation_process.py`: fixed launch attempt custody, exact terminal waitpid and one signal-zero group observation. No destructive signal, runtime qualification or native route binding.
 
-- `presentation_control_pipe.py`: owned nonblocking schema2 input/one GO/control closure; binding only, no native authorization or process termination.
+- `presentation_control_pipe.py`: owned nonblocking schema3 input/one GO/control closure; native completed-input write observation is local only, no native authorization or process termination.
 
 - `presentation_input_v3.py`: closed input3 parent-policy/work transfer; no legacy decoder fallback or native authority. Actual entry migration/result2 remain pending.
 
@@ -535,6 +537,18 @@ and optional local-media isolation checks remain enforced. HMP receive paths and
 retained cursor integration are not activated by admitting this primitive.
 
 
+### BI1 owned write readiness (November 6, 2026)
+
+The same module now exposes exact `SelectorWriteReadiness` for a single borrowed
+write-slot notification. Immutable scope seals read/write direction to the exact
+concrete class; there is no caller-selected authority flag. Writer registration,
+callback and retirement preserve the concurrent reader. Unknown acquisition or
+retirement retains debt, and initialization cannot reset a retained owner even
+after a partial Future acquisition. Both directions retain original task, socket,
+FD/backend, process/thread and deadline checks. No bytes are sent, no READY grammar
+is advanced and no production caller is enabled by this prerequisite.
+
+
 ### BI1 normal RESULT cursor integration (November 5, 2026)
 
 The existing `presentation_result_transport.py` now uses owned readiness plus
@@ -572,3 +586,595 @@ See [pre-result cursor](../../046-bot-presentation-integration/PRE_RESULT_CURSOR
 read-scope fact, bounded discard/terminal-data cursor and owned minimum-deadline
 notice. It cannot grant join/closure, ACK, native credit, image emission or runtime
 admission. See [cleanup reader](../../046-bot-presentation-integration/CLEANUP_READER.md).
+
+### BI1 reviewed credential source modules (November 6, 2026)
+
+The exact package census adds only these seven independently source-reviewed
+modules; unknown Python files still fail `test_module_set_is_exactly_the_contract_tree`.
+They add no plugin registration, route, tool, provider or live service.
+
+- `presentation_credential_codec.py`: closed bounded HBA1 data records; decoding is not signature authority.
+- `presentation_credential_transcript.py`: bilateral signed transcript consistency against supplied original context/pins; not runtime admission.
+- `presentation_credential_scope.py`: scope digest from exact bounded original input3; not filesystem/native permission.
+- `presentation_credential_phase.py`: signed context/header/body consistency data; not lifecycle or custody authority.
+- `presentation_credential_stream.py`: original-header and bounded-chunk digest data; not signature, completed transfer or publication permission.
+- `presentation_credential_files.py`: startup-only private role-file acquisition/closure and retirement; no signer endpoint, key generation or runtime qualification.
+- `presentation_credential_handshake.py`: original-task/socket handshake, IO exclusion and one-attempt original native-input correlation; no production factory or unsigned phase fallback.
+
+The full paired runtime and signed direct/streaming phase paths remain unfinished.
+See [current tasks](../../046-bot-presentation-integration/TASKS.md) and the
+[credential contract](../../046-bot-presentation-integration/CREDENTIAL_ADMISSION.md).
+The census explicitly extends Hermes-free import checks to these files; it does
+not weaken the closed plugin registration or optional-media import boundaries.
+
+- `presentation_credential_work.py`: original native work-task fixed BEGIN signing producer; no transport, GO or publication permission.
+
+- `presentation_credential_begin.py`: retained original broker-task signed BEGIN read cursor; no native input adoption or worker authority.
+
+- `presentation_credential_queued.py`: original adopted connection/key/input-receipt pre-resource queued-current check; no resource or GO permit.
+
+- `presentation_control_binding.py`: prepared original controller task/key-context handoff; preparation alone remains a hard no-IO stop.
+- `presentation_credential_control.py`: original controller-task first signed GO/CANCEL frame staging; explicit signed pre-GO CANCEL adoption joins existing native grammar/budget/receipt and owned local park/stop. Typed GO read/native receipt may precede same-task signed CANCELseq2 under original work/earliest cleanup budget; the dedicated original-service CANCEL consumer is distinct from generic work. The actual signed READY writer is joined before a GO-read receipt when present;
+production resource admission, worker relay and dispatch remain closed.
+
+- `presentation_credential_ready.py`: fixed original-service READY producer plus retained
+  signed socket writer, original write/grammar intent, concrete progress/owned readiness,
+  original completion-Future allocation and same-reader GO join. No resource admission,
+  worker GO relay or production activation. Historical local retirement is distinct
+  from signing/current-material success; uncertain native IO retains debt.
+
+
+### BI1 cancelled original control-read retirement (November 6, 2026)
+
+`presentation_readiness.py` can carry a private payload-free cancellation fact
+only after actual native Task cancellation and positive retirement with its
+pre-await scope/Future/wake/handle/cutoff unchanged. The signed control cursor in
+`presentation_credential_control.py` joins that exact await to original per-frame
+allocation/buffer/count facts, wipes its original buffer and propagates cancellation
+without authenticated completion. Historical close checks original Task.done AND
+cancelled; unknown syscall/readiness/pending/drift/fake/stale state retains debt.
+Work/material guards, deadlines and generic credential transports remain unchanged.
+See [evidence and limits](../../docs/research/presentation-cancelled-control-read-2026-11-06.md).
+
+
+### BI1 original-work signed BEGIN writer (November 6, 2026)
+
+`presentation_credential_begin_write.py` derives only the original fixed signed
+BEGIN plus input3 frame from `NativePhaseWorkOwner` and its already reserved
+`_BeginWriteIntent`. Original task/allocation/source/key/native authority, concrete
+send progress and owned writability remain joined. One native completion check
+precedes `_BeginWriteFact` on that SAME intent; no second reserve/authorize-send.
+Maximum input3 includes its four-byte envelope. No production caller, signed READY
+reader or generic credential gate opening is added. Historical local settlement
+requires joined original work Task and known IO; it grants no remote/resource
+credit. See [evidence and limits](../../docs/research/presentation-signed-begin-write-2026-11-06.md).
+
+
+### BI1 original-work signed READY receiver (November 6, 2026)
+
+`presentation_credential_ready_read.py` derives one receive admission only from
+completed `NativeBeginWriter` signed/native evidence on the original live work
+allocation. It joins original send completion and consumes the existing native
+receive claim once before bounded direct reads/owned readiness. Broker READY seq0
+signature, original context/input scope and empty-frame hash are checked, with
+original packet/binding/clock/key/task joins before and after callbacks. A private
+read completion/current check grants no native READY transition, resource or GO
+permission. Unknown/partial/cancelled reads retain debt; context-free failure wipes
+only the original buffer. Production callers and generic credential gates stay
+unchanged. See [evidence and limits](../../docs/research/presentation-signed-ready-read-2026-11-06.md).
+
+`presentation_credential_ready_transition.py` retains the original signed READY
+reader and its completed native BEGIN allocation. It performs fresh PRE_GO,
+then exactly one native READY mutation on that original work task. Its fixed
+post-state material guard requires actual STARTING/READY ledger state, no GO or
+child, current keys and signed READY, original clock/deadline and a known native
+return. Unknown outcomes remain terminal; no rollback, retry, production caller,
+resource admission or worker GO authority is supplied.
+
+### Fixed native GO commitment (November 6, 2026)
+
+`presentation_credential_go.py` derives only a fixed signed gateway GO sequence1
+empty-frame commitment from the original completed BEGIN/READY transition and
+actual consumed native GO_INTENT admission. It uses the original work Task,
+current role material, native authority and original deadline. Closed primitive
+metadata and pre/post crypto checks prevent foreign callbacks/publication after
+retirement. It grants no socket-write, GO_SENT, resource or execution permission.
+
+### Fixed original-work signed GO writer (November 6, 2026)
+
+`presentation_credential_go_write.py` writes only the retained fixed GO commitment
+on the original native work Task, using one original GO write intent. Actual
+bounded byte progress, exact EAGAIN readiness retirement and final current checks
+precede the native write fact; uncertainty preserves debt. The completed BEGIN
+owner recognizes only a typed reciprocal GO IO-slot description. Historical local
+release requires actual original Task.done and held cleanup/allocation proofs,
+without following foreign mutable metadata. No production sender dispatch,
+GO_SENT, worker relay, broker custody or native publication follows.
+
+The current internal `RemoteOperationOwner` credential GO branch uses the fixed
+signer/writer and original native GO_SENT call, validating exact local write proof
+before and fixed current material afterward. `RemoteCleanupOwner` publishes only
+local GO readiness then parks the original work Task on the exact fenced native
+cause Future; unsigned result fallback is not attempted. No result token, worker
+execution, startup factory or production activation is provided by this slice.
+
+### After-READY fixed CANCEL commitment (November 6, 2026)
+
+`presentation_credential_cancel_commitment.py` signs only the exact native
+`_prepare_cancel` result on the original cleanup allocation: actual seq1/seq2,
+16-byte frozen window/body hash and original signed work context. It consumes
+preparation once, preserves earliest cleanup end and withholds output after key,
+metadata or deadline drift. Exact primitive types precede comparison/iteration.
+No pre-READY signing, socket write, remote custody, release or startup permission
+follows from this owner; local cleanup remains independent of role retirement.
+
+### After-READY original-cleanup signed CANCEL writer (November 6, 2026)
+
+`presentation_credential_cancel_write.py` transmits only the exact retained CANCEL
+commitment/frame on the original cleanup Task and frozen native preparation.
+Whole bounded signed-wire progress and settled/current role/actor/budget checks
+precede the existing completion bool and private local fact. Both earlier writers
+use typed reciprocal slot descriptions. Unknown IO cannot retry/renew or settle
+closure. Historical local IO requires the original cleanup actor or actually done
+Task with original context. No remote ACK/custody, pre-READY path or production
+sender dispatch follows.
+
+The internal credential `send_cancel` route composes fixed after-READY signing and
+transport only on the original cleanup Task/channel. It retains the partial signer
+before native checks and consumes one preparation. Actual reader/consumer tests
+correlate seq/window/end without broker ACK, worker relay or resource release.
+Known no-IO signing refusal has independently checked local-only retirement;
+remote UNKNOWN and uncertain IO stay conservative. Production startup and full terminal/cleanup qualification
+remain open.
+
+### Distinct BEGIN-derived pre-READY CANCEL commitment (November 6, 2026)
+
+`presentation_credential_pre_ready_cancel.py` retains a separate data-only signer
+on the original cleanup allocation before native/crypto checks. It joins the
+completed original signed BEGIN and exact cancelled READY-read retirement, with
+no READY transition or GO attempt. The existing native preparation consumes the
+already-frozen earliest seq1/window under original quiescence/cause/clock gates.
+Actual BEGIN signature/current role/material/budget checks surround signing;
+failed or consumed owners cannot retry. No socket writer, native completion, ACK,
+remote release or production route is provided. Post-READY signing remains separate.
+
+### Distinct pre-READY CANCEL writer (November 6, 2026)
+
+`presentation_credential_pre_ready_cancel_write.py` retains one bounded seq1
+wire on the original cleanup actor and frozen native window. A fixed typed BEGIN
+slot handoff permits only that original writer's active flag, without recursion
+or phase authority. Actual native send counts, settled waits and current original
+role/custody/budget checks precede the private completion fact and existing native
+completion bool. Unknown IO cannot retry or borrow historical closure. Known
+local retirement after original cleanup completion is independent of key revocation.
+The explicit SocketChannel release branch accepts only the fixed new writer type.
+No automatic pre-READY route, broker ACK/resource release or startup is enabled.
+
+The original credential cleanup route now chooses this fixed pre-READY component
+only from the retained exact producer's absent READY transition; the component
+independently requires original completed BEGIN and cancelled read proof. Failed
+proof never falls back to post-READY or unsigned transport. Three actual private
+peer stages correlate seq/window/end without worker execution or remote closure.
+Pre-READY known-no-IO signing refusal now shares the fixed original-actor local
+retirement predicate with the post-READY owner; the other signer slot must be
+absent. Complete no-output/no-writer/current cleanup proofs repeat after native
+budget checks, and socket close independently proves IO settlement. Original
+refusal and remote UNKNOWN remain even after actual socket/clock close.
+
+### Original-service current GO read validator (November 6, 2026)
+
+`CredentialGoPhase.creator_current` revalidates the original signed GO on the
+original service actor after notification, current role/clock/cause-free budget
+and native control checks. Wrong actor/early call cannot poison; an admitted
+currentness refusal is sticky. The return is the original native read receipt,
+not a worker relay/RESULT/terminal permit. Generic credential work gates remain
+closed. The fixed final-pipe-write relay contract is in SIGNED_GO_RELAY.md.
+
+### Original service fixed signed worker-GO relay (November 6, 2026)
+
+`presentation_credential_go_relay.py` retains the original current signed GO,
+completed READY/input and exact service/resources/pipe/process before native
+effects. A fixed typed reciprocal fence follows existing OwnedControlPipe
+current/FD/time callbacks immediately before native write. Held intent preserves
+returned counts across alias drift; full65/known close/post-current only yields
+local control delivery, not execution ACK or RESULT/TERMINAL/publication. No
+production caller or generic credential-work gate is enabled. Unknown/partial
+work is consumed, refuses retries and retains separate protocol debt.
+
+### BI1 signed RESULT producer (November 6, 2026)
+
+`presentation_credential_result.py` owns original-service immutable native RESULT
+signing after known local GO delivery and normal native resource drain. It seals
+reciprocal GO/adoption/binding/cursor/resource identity, current key/actor/budget,
+one candidate take and canonical header/payload commitment. Original cancellation
+withdraws owned payload references before cleanup sampling. This is signed data,
+not socket transfer, terminal settlement or publication authority. See
+[producer evidence](../../../docs/research/presentation-signed-result-producer-2026-11-06.md).
+
+### BI1 signed RESULT writer (November 6, 2026)
+
+`presentation_credential_result_write.py` owns counted signed RESULT streaming on
+the original service Task. Fixed READY slot handoff, original producer authority,
+final callback-free role/custody fence and original-controller cancellation retain
+existing scope and budget. Its private full-count fact means local delivery only,
+never terminal/native release/publication. Payload withdrawal covers producer and
+writer; uncertain writes/readiness retain debt. Production dispatch/gateway cursor
+remain open. See [writer evidence](../../../docs/research/presentation-signed-result-writer-2026-11-06.md).
+
+### BI1 gateway result custody tail (November 6, 2026)
+
+`presentation_remote.py` adds a distinct fixed `_result_intent_local` conjunction
+for actual GO_SENT, original native custody and credential work actor/material.
+It does not reuse GO_INTENT through a caller-selectable phase, sample time or
+allow socket I/O. Original signed result cursor/cleanup integration remains open.
+See [tail evidence](../../../docs/research/presentation-gateway-result-custody-tail-2026-11-06.md).
+
+### BI1 gateway signed RESULT envelope (November 6, 2026)
+
+`presentation_credential_result_read.py` retains original-work bounded HBA1 and
+RESULT-header reads from actual completed native GO_SENT. It verifies original
+pinned scope and the committed header and preserves native counts/cancellation
+selector retirement. The fixed historical READY read-claim handoff is not a generic
+work grant. Its fact is envelope data only, no body digest/result2/native candidate,
+terminal or publication. See [envelope evidence](../../../docs/research/presentation-signed-result-envelope-2026-11-06.md).
+
+### BI1 signed body/private candidate (November 6, 2026)
+
+`presentation_credential_result_body.py` extends the original signed envelope read
+claim to actual body streaming, signed full-frame digest and independent original
+native result2/parent/revision validation. It retains one private candidate and an
+independent stream/hash allocation. The job's typed discard-only hook withdraws
+that owner before first cleanup sampling. Exact held cancellation retirement and
+post-callback release checks preserve unknown debt. The reviewed private adoption
+component now installs the original native job result/token/RESULT_VALIDATED under
+an independent adoption allocation and separate fixed post-adoption authority tail.
+Its dedicated signed-owner slots never masquerade as legacy RemoteResultOwner.
+First cause withdraws native/private output; no terminal, notification, publication
+or production dispatch follows. See [body evidence](../../../docs/research/presentation-signed-result-body-2026-11-06.md)
+and [adoption evidence](../../../docs/research/presentation-signed-native-adoption-2026-11-06.md).
+
+### BI1 signed original-caller readiness (November 6, 2026)
+
+The signed body owner now publishes one original-work readiness notice to the
+original native cleanup Future. Separate fixed original-caller material and native
+notification tails validate the current original caller without borrowing the
+original-work actor gate. Retained metadata grants no authority; the closed signed
+result_ready branch rechecks actual notice/allocation, key/policy/socket/budget
+and adopted result. Future/scheduler checks follow the final native callback;
+ambiguous scheduling withdraws native/private output and cannot retry. No image,
+terminal or release is returned. Production reader/cleanup/terminal composition
+remains open. See [notification evidence](../../../docs/research/presentation-signed-result-notification-2026-11-06.md).
+
+### BI1 signed cleanup progress capture (November 6, 2026)
+
+`presentation_credential_cleanup_capture.py` freezes actual original signed
+envelope/body framing, digest allocation and wait scope/Future/registration
+metadata before first-cause poisoning. It copies bounded envelope metadata only,
+not an image body, and creates no reader, clock, deadline or IO permission.
+Its inspector checks frozen structural data only, without claiming current kernel
+ownership, wait retirement, quiescence or release. The gate's signed discriminator
+never falls back to a legacy cursor; request deliberately returns False until
+typed cooperative continuation is qualified. Original native withdrawal/cancellation
+remains in force. Live phase checks use enum identity before foreign comparison.
+
+### BI1 actual registered-wake retirement (November 6, 2026)
+
+`presentation_readiness.py` retains a typed receipt only after actual registered
+interest retirement following the original wake. Original pre-await scope/Future/
+binding/handle/arguments/end and uncancelled actor are resealed after final guards.
+Generic early wakes have no receipt; external Task cancellation remains separate.
+The record is historical local stop only, not current kernel/role/budget/IO or
+transfer authority. The signed cooperative transition remains disabled pending
+correlation/current custody/minimum-budget qualification.
+
+### BI1 signed BODY native-cause local stop (November 6, 2026)
+
+The signed body wait holds its actual original native cause before await. Typed
+registered-wake retirement is correlated to the actual retained signed capture,
+waiter/scope/Future/binding/handle/hash/counters and output withdrawal. Separate
+original-actor and historical task-completion checks grant known local stop only.
+Generic/copied/subclassed wakes or active/historical drift retain unknown debt.
+External Task cancellation stays distinct. Envelope cause and cooperative IO
+transfer remain unqualified; signed request is disabled, and CANCEL keeps whole
+work join/current authority. See [body cause evidence](../../../docs/research/presentation-body-cause-wake-2026-11-06.md).
+
+### Envelope pre-await cancellation binding — November 6, 2026
+
+A payload-free original wait hold now binds envelope scope, waiter, native scope,
+Future, deadline and counters through cancellation and historical release. Paired
+Future-alias/receipt substitution after immediate wait checks is refused. This
+prepares, but does not enable, envelope native-cause wake or signed cooperative
+cleanup. Existing Task cancellation and whole-work-join requirements remain.
+
+### Envelope native-cause local stop — November 6, 2026
+
+Original envelope waits now bind the actual cleanup cause and exact native wake
+retirement to the frozen signed capture and original pre-await cursor. A distinct
+no-image-body envelope stop receipt separates original uncancelled Task currentness
+from historical completed-task revalidation. Generic/copied/subclassed wake and
+metadata drift retain unknown debt; historical refusal is sticky unknown. External
+Task cancellation stays separate. Signed cooperative transfer remains disabled;
+CANCEL still requires its existing whole-work join and current role/budget checks.
+No terminal/ACK/publication/native release follows from local stop.
+
+### Signed discard data continuation — November 6, 2026
+
+`SignedResultDiscard` continues exact partial signed RESULT framing and bounded
+body hashing without retaining image bytes. A supplied partial digest is reused
+by identity, never copied/replayed; runtime owner/allocation proof remains separate.
+It validates pinned commitment/header/full hash, refuses overread/scanning/restart
+and clears input aliases on stable refusal. This grants no socket/actor/budget,
+read transfer, terminal/ACK/native release or publication authority. Integrate only
+through distinct signed reservation and original-work read-ready admission.
+
+### Disabled signed reservation preflight — November 6, 2026
+
+The original registered envelope/partial-body wait can now yield a one-attempt
+preflight record tied to frozen capture/cause, actual write-quiescence, current
+retained role and original cleanup budget. Post-callback structural/counter/native
+custody seals refuse drift. It is retained DATA only: signed gate.request STILL
+RETURNS FALSE and external Task cancellation remains. No read-ready notice,
+read/CANCEL/ACK authority, release or publication follows. Separate original-work
+admission/notice and full same-task continuation remain prerequisites.
+
+### Signed original-work stop notice — November 6, 2026
+
+A distinct one-shot notice now retains actual native Future/fact allocations and
+correlates original envelope/body wake retirement under original work actor,
+current retained role and earliest cleanup budget. Partial initialization, paired
+alias substitution, final-clock revocation and ambiguous notification retain
+unknown debt/no retry. It has no consumer or signer: signed gate.request remains
+False and normal external Task cancellation remains. Original-cleanup current
+notice validation, concurrent-CANCEL authority and same-reader drain/terminal/ACK
+still require separate qualification. Future DATA is no I/O or release permission.
+
+### Fixed cleanup-side current stop DATA — November 6, 2026
+
+The original cleanup actor can now validate an actually delivered signed stop
+notice against the original live uncancelled reader, allocation, role and earliest
+budget. Root bounds a wait on the actual retained notice/work pair, with dispatch
+checks AFTER clock callbacks and held-identity rechecks after await. Wrong sender/
+completed-work queries refuse; currentness drift retains unknown debt. This is
+stop DATA only: signed request remains False, read-admission/concurrent-CANCEL
+authority is absent, and original work-join/signing gates stay unchanged.
+
+## One bounded original-task native read — November 7, 2026
+
+`presentation_credential_cleanup_read.py` now owns one nonblocking receive on the
+SAME original authenticated socket/task after IDLE admission. Its exact request
+count comes from the bound parser, with no caller count/address/flags or new
+reader/interest. Fixed C socket/backend identity, nonblocking/timeout/inheritable
+probes run AFTER the final clock callback; full typed metadata, original role/
+actor/budget/parser/count and I/O claims repeat before receive. Fixed native
+MSG_DONTWAIT is used. An independent payload-free count allocation is retained
+BEFORE post-read callbacks, separately from privately owned pending bytes.
+
+Root observes pending counts on its fixed cleanup actor, without a signing grant.
+Old unadvanced stop/cursor/IDLE APIs refuse reuse after the read attempt. The
+actual original work's finally path finds its native owner through independent
+allocation cells on the originally held gate and drops unconsumed pending aliases.
+Observed native counts survive UNKNOWN; a chunk receipt is never frame credit.
+There is no parser/hash/accumulator advancement or result candidate restoration.
+
+Independent review required the post-clock descriptor/mode fence and final full
+metadata/I/O-claim seal; both are implemented. Eighteen focused header cases pass,
+including real private-socket timeout/blocking/dup2 with ZERO receives, final-probe
+foreign-counter/claim drift, post-read role/descriptor/pending/count/scope/receipt
+substitution, EOF, actual EAGAIN and ambiguous receive acknowledgement. Source
+failure paths retain counts, not payload/error aliases, and never retry. The
+original13-byte body plus an injected3-byte tail also passes pending-read checks;
+its original digest remains at13 and accumulator stays empty. That fixture tail
+is NOT broker-writer/currentness or whole-frame qualification.
+
+Earlier test-only failures are retained: a broad ambiguous-notice selector matched
+the new receive case (renamed narrowly); strict plain-int checking initially
+rejected stdlib MsgFlag (fixed by exact stdlib-type C conversion); existing close-
+debt teardown needed the precise new allocated NativeCleanupRead unknown reason.
+No production close guard or role/currentness rule was relaxed.
+
+This is ONE PENDING READ only. Parser consumption/active digest handoff, native
+readiness continuation, full drain, concurrent CANCEL, terminal/ACK/native release
+and production character delivery remain unfinished. Signed gate.request stays
+False; production still parks after GO. No build/install/deployment/host/device
+change was performed; tests used only owned private synthetic Unix sockets.
+A further real-task case invalidates only the synthetic root initialization flag
+AFTER a successful8-byte read and actual cleanup observation: held-original memory
+retirement still drops pending aliases and preserves counts/UNKNOWN, without
+restoring the flag. Retirement now runs independently of that initialization
+flag; write-quiescence publication remains guarded as before. Nineteen focused
+native header cases pass in6.19s. The prior expanded run is retained as a FAILURE:
+1 failed,1,926 passed,1 skipped in174.24s. Its existing go_relay broker-control
+reader refused and broker closure stayed false. Failure-only primitive cursor/
+timeout/notice state capture was extended; no new native clock sample or success
+recovery is added. The cause is unresolved, regardless of any later green run.
+The second broad run also remains a FAILURE: 1 failed,1,927 passed,1 skipped in
+181.56s, now at the existing body_adopt_capture_phase broker cancellation-adoption
+refusal. No production control/close guard was changed. Failure-only primitive
+capture was extended to that exact case; its failure branch has not thereby been
+qualified. New native-read cases passed; broad broker lifecycle/release remains
+unqualified. The isolated go_relay/body selection passed3 cases in2.83s, which
+shows an available path but does NOT resolve either broad failure. The latest
+body_adopt_capture_phase isolated rerun passed1 case in1.88s; its new diagnostic
+failure branch was not exercised, and the broad failure remains unresolved.
+This checkpoint is source-only and NOT a green whole-transport qualification.
+
+Prior intermittent broker causes and native sender-destination risk remain open.
+
+## One-shot original-parser consumption — November 7, 2026
+
+`NativeCleanupRead.consume_pending()` now feeds one actual pending allocation
+on its original work actor into the SAME authentication parser or original body
+digest. A distinct attempt allocation is retained before the first currentness
+boundary; failure consumes the attempt even if no feed occurred. An independent
+parser/count origin cell precedes feed/hash effects. Body expected progress uses
+a pinned native hash copy without replacing the actual original stream/hash.
+The actual after-state is retained before native callbacks and joined to fixed
+role/actor/original budget/socket checks. Only then are pending aliases withdrawn.
+The fixed cleanup observer recognizes that same progress. Old stopped/IDLE/pending
+APIs do not revive. Work exit still records UNKNOWN because full drain is unfinished.
+
+Actual private fixtures cover received8-byte auth-prefix consumption and the
+SAME original digest13->16 for a3-byte body tail, with no image accumulator or
+candidate restoration. Wrong actor/duplicate, initial boundary failure with
+method restoration, partial feed, role retirement, coherent parser buffer copy,
+foreign count, post-clock progress receipt copy/socket mode, and actual post-hash
+lost acknowledgement refuse without replay; observed counts remain retained.
+Independent read-only review found and required the pre-boundary attempt latch;
+that repair and causal were accepted. No reader task/interest, new budget,
+signing, frame/terminal/ACK/native release or production gate is granted.
+
+Repeated native reads, record-boundary dispatch/auth completion, full drain,
+concurrent CANCEL, terminal/ACK and phone character-image delivery remain open.
+Exact affected transport regression:1,940 passed,1 skipped in168.05s. Full lint,
+plugin surface and whitespace checks pass. Eight focused header consumption cases
+and two body cases overlap this run. An isolated private basetemp avoids unrelated
+pytest garbage cleanup; no existing temporary evidence was manually deleted.
+The initial header fixture misclassified the new successful consumed state; that
+expectation was corrected. Review required the early attempt-latch repair and its
+first-boundary failure/restoration causal. No authority guard was relaxed.
+Earlier broad broker failures and the sender-destination incident remain unresolved;
+this green run does not establish their causes or certify full transport release.
+No build, install, live host/device, grant/provider or deployment change occurred.
+
+## Monotonic original-reader continuation — November 7, 2026
+
+`NativeCleanupRead.read_and_consume_next()` now performs another exact-needed
+nonblocking receive and same-parser feed on the original socket/task. Original
+one-shot flags are never reset. One retained step plus cumulative received/parsed
+counts replaces only a sealed committed predecessor; no linked receipt journal,
+new reader, selector interest or cleanup budget exists. Actual return/count/pending
+custody precedes postchecks; parser/hash progress precedes final currentness.
+Only a sealed commit permits another ordinal. Needed0 stops at a record boundary.
+EAGAIN, EOF, lost acknowledgement or post-native drift stays UNKNOWN with no retry.
+
+Private causal fixtures reach the end of a real signed auth record without reading
+the following outer header, perform two short reads with increasing ordinals and
+reclaim the prior step without waiting for cyclic GC, reject foreign progress
+before getters, and retain actual counts on foreign post-recv allocation without
+calling its indexing hook. Original body continuation advances the SAME digest
+13->16->19 while old body committed13 and the wiped image accumulator stay fixed.
+Independent read-only review required two earlier type fences; both are repaired.
+Predecessor private self-cells retire only AFTER the successor commit is sealed.
+
+Exact expanded regression:1,947 passed,1 skipped in171.15s; full lint, plugin surface
+and whitespace pass. Six header causals and one body causal overlap this result.
+Earlier fixture faults (wrong observer scheduling, insufficient queued auth bytes,
+shared suffix classification and stale historical release expectation) are retained;
+production guards were not relaxed. EAGAIN waiting/registration, authentication
+verification and phase dispatch, full drain, concurrent CANCEL, terminal/ACK/native
+release and production/physical character-image delivery remain open. Earlier broad
+broker failure causes and the native sender-destination incident remain unresolved.
+No app build/install, live host/device, grant/provider or deployment change occurred.
+
+## Original-reader authentication completion — November 7, 2026
+
+`NativeCleanupRead.finish_authentication()` now verifies the completed original
+bounded authentication record exactly once. Pure completed-parser admission and
+an independently retained attempt precede native/currentness/signature boundaries.
+The actual returned commitment is retained before callbacks and joined to the
+actual raw record, original parser/pins/context, retained sequence and canonical
+frame values. Finished-parser state is admitted only through that returned attempt,
+never from a finished flag alone. Role, actor, original budget, socket and actual
+allocation aliases reseal before an authentication receipt; the fixed cleanup
+observer recognizes the same state. Cumulative post-cause counts are captured
+before crypto and retained unchanged; captured prefix bytes are not counted again.
+
+Ten private causal cases cover one positive RESULT record, invalid signature,
+actual verification followed by lost acknowledgement or role retirement, post-clock
+checked-result copy, initial native failure/restoration, final verifier foreign
+ledger/count/scope substitutions, and inconsistent returned commitment values.
+All refuse without replay or foreign getter/equality access. Review required the
+post-crypto count/ledger fence; held primitive counts/local immutable scope and
+new fault tests repair it. Failure wipes only the captured original auth buffer.
+
+Independent read-only review accepted source/repairs. Exact affected regression:
+1,957 passed,1 skipped in169.79s; full lint, surface and whitespace pass. The ten
+focused cases passed in3.19s and overlap that run. Functional source hashes remain
+unchanged through execution. Authentication phase is DATA, not permission to read
+or accept a frame. Header/phase transition, direct ABORTED eligibility, full frame
+digest, waiting after EAGAIN, concurrent CANCEL, terminal/ACK/native release and
+production/physical image delivery remain open. Earlier broker failure causes and
+sender-destination incident remain unresolved. No app build/install, live host,
+device, grant/provider or deployment change occurred.
+
+## Bounded committed-frame discard parser — November 7, 2026
+
+`presentation_credential_frame_discard.py` now parses one bounded outer-header
+prefix/header and its exact committed body without replaying authentication bytes.
+`CommittedFrameDiscard` is consistency DATA only: constructing a commitment is not
+signature provenance or an I/O permit. The actual header and digest allocation
+are anchored before digest initialization; the original hash remains joined to
+that header/binding. RESULT body bytes are hashed/discarded without an image
+accumulator. Only TERMINAL metadata, at most4096 bytes, is retained privately; its
+captured bytes are independently rehashed with the header and joined to the final
+stream digest before transfer to a bounded data fact. No ABORTED claim is accepted.
+
+Exact-needed chunks prevent overread/terminal scanning. Hash mismatch, copied
+digest, partial initialization, lost hash acknowledgement, foreign header/hash
+allocation, changed return values and metadata changed after hashing fail closed,
+wipe only owned buffers and do not retry. DiscardedFrame is not lifecycle, native
+acceptance, ACK or release proof. Native integration must hold the actual original
+AuthReceipt, establish the allowed grammar transition and bind the actual parser
+allocation to the same reader/task/socket before any I/O. That wiring remains open.
+
+Independent read-only review accepted source and hardening. Exact expanded affected
+regression:1,983 passed,1 skipped in173.26s; full lint, plugin surface and whitespace
+pass. Twenty-five focused data cases passed in0.15s and overlap the expanded run;
+RESULT chunking and TERMINAL0/1/2 include maximum terminal metadata. Current
+functional source hashes match execution. Original partial-body digest integration,
+header/phase native read ownership, EAGAIN waiting, terminal acceptance, CANCEL/ACK/
+native release and production/physical image delivery remain unfinished. Earlier
+broker failure causes and sender-destination incident remain unresolved. No build,
+install, live host/device, grant/provider or deployment change occurred.
+
+## Current paired-startup source components (November 7, 2026)
+
+These modules are import-safe source components only; none registers a route,
+loads keys during import or imports native Hermes internals. They add no new
+exception to the closed plugin surface.
+
+- `presentation_gateway_activation.py`: original early PM/bootstrap/import-origin
+  observations; no selected-generation query, PM lease receipt or runtime admission.
+- `presentation_startup_artifacts.py`: bounded original-context artifact reads,
+  descriptor cleanup and stable hash receipts. Shared IO dispatch names exactly
+  the artifact, selection and package owners; it accepts no provider callback.
+- `presentation_startup_selection.py`: fixed private canonical configuration loader;
+  external expectations/loaded DATA are not trusted-entry/operator approval.
+- `presentation_gateway_package.py`: complete HMP package table/hash/metadata and
+  loaded-origin snapshot. Native checkout, full runtime/dependency/loader policy,
+  future imports and native/key factory composition remain separate open work.
+
+See spec046 STARTUP_CONFIGURATION.md and GATEWAY_PACKAGE_SNAPSHOT.md for schemas,
+causal evidence and the remaining full factory requirements. Minimum native
+version/API compatibility is distinct from HMP/broker installation integrity.
+
+The separate `hmp_startup/gateway_entry.py` (outside the closed plugin package) retains original script/interpreter invocation before native bootstrap, captures actual post-bootstrap activation and refuses changed invocation. Source component only; no listener, native/key factory or runtime admission.
+
+`presentation_startup_selection.py` now has fixed schema1 `load` and explicit
+schema2 `load_recipe_selection`; GatewayStartupSelection retains its exact schema.
+The package-only verifier accepts only schema1. Full recipe/factory admission remains open.
+
+`presentation_gateway_recipe.py` reads the pinned closed recipe plus four fixed
+private canonical child envelopes under original configuration/root/plan/data
+identity and shared document budgets. Immutable original raw snapshots are DATA,
+not validated executable tables, runtime/native/key admission or route authority.
+The shared artifact IO dispatch recognizes this exact owner only.
+
+`GatewayPackageOwner.verify_recipe` derives its plugin child only from the actual
+loaded recipe owner and original immutable documents/count allocation. Fresh and
+historical original-binding checks are distinct; no schema2 replacement payload/
+digest or naked count can qualify the source. Package facts retain final actual
+count cells for later typed startup composition. Full runtime/native/key is open.
+
+The separate hmp_startup.gateway_entry module now retains an original started
+publication and module/function/code provenance observations. retained_data is
+historical immutable DATA; current_binding adds fresh original checks/final
+callback fences. Neither is selected artifact/wrapper attestation or authority.
+No plugin import exception or additional registration is introduced.
+
+`hmp_startup/entry_files.py` owns recipe-derived actual entry/wrapper filesystem
+snapshots outside plugin registration; no plugin import-policy exception.
+`StartupArtifactOwner.retain/complete/retain_from_package` preserve the one-shot
+actual descriptor/hash/count lifecycle and legacy expected-file facts. Table
+projection is DATA; original entry/wrapper execution and runtime/native/key
+authority remain separate.

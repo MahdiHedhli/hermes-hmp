@@ -429,6 +429,15 @@ class SocketChannel:
         self._pre_result_cursor_origin = None
         self._clock_owner = self._clock_owner_snapshot = None
         self._clock_closed_known = False
+        self._credential_handshake = self._credential_handshake_snapshot = None
+        self._credential_begin_receiver = self._credential_begin_receiver_snapshot = None
+        self._credential_ready_writer = self._credential_ready_writer_snapshot = None
+        self._credential_result_writer = self._credential_result_writer_snapshot = None
+        self._credential_begin_writer = self._credential_begin_writer_snapshot = None
+        self._credential_go_writer = self._credential_go_writer_snapshot = None
+        self._credential_cancel_writer = self._credential_cancel_writer_snapshot = None
+        self._credential_ready_receiver = self._credential_ready_receiver_snapshot = None
+        self._credential_result_receiver = self._credential_result_receiver_snapshot = None
         try:
             _require(type(sock) is socket.socket and type(enrollment) is StartupEnrollment
                      and type(role) is str and role in ("gateway", "broker")
@@ -609,9 +618,91 @@ class SocketChannel:
                  and self._clock_closed_known is False)
         return clock
 
+    def _credential_external_idle(self):
+        owner = getattr(self, "_credential_handshake", None)
+        _require(owner is getattr(self, "_credential_handshake_snapshot", None))
+        if owner is not None:
+            from .presentation_credential_handshake import CredentialHandshakeOwner
+            _require(type(owner) is CredentialHandshakeOwner)
+            CredentialHandshakeOwner._released(owner, self)
+
+        receiver = getattr(self, "_credential_begin_receiver", None)
+        _require(receiver is getattr(self, "_credential_begin_receiver_snapshot", None))
+        if receiver is not None:
+            from .presentation_credential_begin import CredentialBeginReceiver
+            _require(type(receiver) is CredentialBeginReceiver)
+            CredentialBeginReceiver._released(receiver, self)
+
+        writer = getattr(self, "_credential_ready_writer", None)
+        _require(writer is getattr(self, "_credential_ready_writer_snapshot", None))
+        if writer is not None:
+            from .presentation_credential_ready import CredentialReadyWriter
+            _require(type(writer) is CredentialReadyWriter)
+            CredentialReadyWriter._released(writer, self)
+
+        result_reader = getattr(self, "_credential_result_receiver", None)
+        _require(result_reader is getattr(self, "_credential_result_receiver_snapshot", None))
+        if result_reader is not None:
+            from .presentation_credential_result_read import NativeResultEnvelopeReceiver
+            _require(type(result_reader) is NativeResultEnvelopeReceiver)
+            NativeResultEnvelopeReceiver._released(result_reader, self)
+
+        begin_writer = getattr(self, "_credential_begin_writer", None)
+        _require(begin_writer is getattr(self, "_credential_begin_writer_snapshot", None))
+        if begin_writer is not None:
+            from .presentation_credential_begin_write import NativeBeginWriter
+            _require(type(begin_writer) is NativeBeginWriter)
+            NativeBeginWriter._released(begin_writer, self)
+
+        cancel_writer = getattr(self, "_credential_cancel_writer", None)
+        _require(cancel_writer is getattr(self, "_credential_cancel_writer_snapshot", None))
+        if cancel_writer is not None:
+            from .presentation_credential_cancel_write import NativeCancelWriter
+            from .presentation_credential_pre_ready_cancel_write import NativePreReadyCancelWriter
+            if type(cancel_writer) is NativePreReadyCancelWriter:
+                NativePreReadyCancelWriter._released(cancel_writer, self)
+            else:
+                _require(type(cancel_writer) is NativeCancelWriter)
+                NativeCancelWriter._released(cancel_writer, self)
+
+        go_writer = getattr(self, "_credential_go_writer", None)
+        _require(go_writer is getattr(self, "_credential_go_writer_snapshot", None))
+        if go_writer is not None:
+            from .presentation_credential_go_write import NativeGoWriter
+            _require(type(go_writer) is NativeGoWriter)
+            NativeGoWriter._released(go_writer, self)
+
+        ready_receiver = getattr(self, "_credential_ready_receiver", None)
+        _require(ready_receiver is getattr(self, "_credential_ready_receiver_snapshot", None))
+        if ready_receiver is not None:
+            from .presentation_credential_ready_read import NativeReadyReceiver
+            _require(type(ready_receiver) is NativeReadyReceiver)
+            NativeReadyReceiver._released(ready_receiver, self)
+
+        control = getattr(self, "_cancel_receiver", None)
+        _require(control is getattr(self, "_cancel_receiver_snapshot", None))
+        if control is not None:
+            from .presentation_broker_cancel import BrokerCancellationOwner
+            from .presentation_credential_control import CredentialControlCursor
+            _require(type(control) is BrokerCancellationOwner and self._cancel_receiver is control)
+            cursor = control._signed_cursor_snapshot
+            if cursor is not None:
+                _require(type(cursor) is CredentialControlCursor
+                         and control._signed_cursor is cursor)
+                if cursor._cancel_release is not None:
+                    CredentialControlCursor._released_cancelled(cursor, self)
+
+    def _credential_work_ready(self):
+        self._credential_external_idle()
+        # No unsigned body fallback after a credential exchange. A future typed
+        # phase transport must replace this refusal, never a boolean switch.
+        if getattr(self, "_credential_handshake", None) is not None:
+            raise FrameError("BI1_CREDENTIAL_PHASE_INTEGRATION_REQUIRED")
+
     def close_clock(self) -> bool:
         """Distinct local clock-FD fact; socket close alone never establishes it."""
         try:
+            self._credential_external_idle()
             self._bindings()
             _require(self._closed_known is True)
             if self._clock_owner_snapshot is None:
@@ -641,6 +732,7 @@ class SocketChannel:
         return bytes(data)
 
     def claim_remote(self, owner) -> None:
+        self._credential_external_idle()
         from .presentation_remote import RemoteOperationOwner
 
         self._bindings()
@@ -651,6 +743,7 @@ class SocketChannel:
         self._check()  # failed authentication leaves the same allocation retained
 
     def _authorize_io(self, owner, direction, binding, end_ns, frame=None):
+        self._credential_work_ready()
         if self._remote_owner is None:
             _require(owner is None)
             return
@@ -717,6 +810,78 @@ class SocketChannel:
             raise
         finally:
             self._reading = False
+
+    def _reserve_credential_begin(self, remote):
+        """Reserve original BEGIN without writing or granting transport permission.
+
+        Called only on the native cleanup owner's actual work allocation after
+        the original PRE_GO/BEGIN_INTENT transition. No caller frame/digest and
+        no reset: the eventual signed transport must consume this same intent.
+        """
+        from .presentation_credential_handshake import CredentialHandshakeOwner
+        from .presentation_jobs import RemotePhase
+        from .presentation_remote import RemoteOperationOwner
+        from .presentation_remote_cleanup import _TASK, RemoteCleanupOwner
+
+        _require(type(self) is SocketChannel and type(remote) is RemoteOperationOwner)
+        RemoteOperationOwner._retained_local(remote)
+        credential = remote._credential_handshake_snapshot
+        cleanup = remote._cleanup_owner_snapshot
+        _require(type(credential) is CredentialHandshakeOwner
+                 and type(cleanup) is RemoteCleanupOwner
+                 and remote._channel_snapshot is self
+                 and self._credential_handshake is credential
+                 and self._credential_handshake_snapshot is credential)
+        RemoteCleanupOwner.authorize_work(cleanup)
+        _require(cleanup._caller_snapshot is credential._task
+                 and _TASK.cancelling(cleanup._caller_snapshot) == 0)
+        CredentialHandshakeOwner._released(credential, self)
+        CredentialHandshakeOwner._native_input_local(
+            credential, remote, remote._credential_binding_snapshot)
+        CredentialHandshakeOwner._native_join_fence(
+            credential, remote, phase=RemotePhase.BEGIN_INTENT)
+        RemoteOperationOwner._check(remote, RemotePhase.BEGIN_INTENT)
+        _require(self._begin_write_intent is None and self._begin_write_intent_snapshot is None
+                 and self._begin_write_fact is None and self._begin_write_fact_snapshot is None
+                 and self._reading is False and self._writing is False
+                 and self._work_write_retired is False
+                 and remote._begin_attempted is True and remote._send_claimed is False)
+        frame = BrokerFrame(BrokerHeader(remote._binding_snapshot, "BEGIN", 0,
+                            len(remote._packet_snapshot), 2), remote._packet_snapshot)
+        # Existing original admission, not a second implementation of it.
+        RemoteOperationOwner._authorize_channel(
+            remote, self, "send", remote._binding_snapshot, remote._end_snapshot, frame)
+        # Native/clock callbacks above cannot change the original local scope
+        # before its no-IO reservation is retained.
+        RemoteCleanupOwner.authorize_work(cleanup)
+        RemoteOperationOwner._retained_local(remote)
+        CredentialHandshakeOwner._native_input_local(
+            credential, remote, remote._credential_binding_snapshot)
+        row = CredentialHandshakeOwner._native_join_fence(
+            credential, remote, phase=RemotePhase.BEGIN_INTENT)
+        _require(cleanup._caller_snapshot is credential._task
+                 and _TASK.cancelling(cleanup._caller_snapshot) == 0
+                 and type(remote._end_snapshot) is int
+                 and remote._end_snapshot == row["deadline_ns"]
+                 and self._socket_snapshot is self._socket
+                 and self._socket_snapshot is remote._seal_snapshot[9]
+                 and self._values_snapshot is self._values
+                 and self._values_snapshot is remote._seal_snapshot[8]
+                 and self._identity_snapshot is self._identity
+                 and self._identity_snapshot is remote._seal_snapshot[10]
+                 and self._credential_handshake is credential
+                 and self._credential_handshake_snapshot is credential
+                 and remote._send_claimed is True and remote._send_completed is False
+                 and remote._receive_claimed is False
+                 and self._begin_write_intent is None and self._begin_write_intent_snapshot is None
+                 and self._begin_write_fact is None and self._begin_write_fact_snapshot is None
+                 and self._reading is False and self._writing is False
+                 and self._work_write_retired is False)
+        intent = _BeginWriteIntent(remote, self, self._socket_snapshot, self._values_snapshot,
+            self._identity_snapshot, remote._binding_snapshot, remote._packet_snapshot,
+            remote._end_snapshot, 2, object())
+        self._begin_write_intent = self._begin_write_intent_snapshot = intent
+        return intent  # not a completed write, signature, worker admission or GO fact
 
     async def send(self, frame: BrokerFrame, end_ns: int, *, owner=None) -> None:
         self._bindings()
@@ -787,6 +952,7 @@ class SocketChannel:
                  and type(intent.wire) is bytes and type(intent.token) is object)
 
     async def send_go(self, remote):
+        self._credential_work_ready()
         from .presentation_jobs import RemotePhase
         from .presentation_remote import RemoteOperationOwner
         from .presentation_remote_cleanup import _LOOP, RemoteCleanupOwner
@@ -826,7 +992,12 @@ class SocketChannel:
         """One cleanup-only CANCEL; ordinary retired work IO stays refused."""
         from .presentation_remote_cleanup import _LOOP, RemoteCleanupOwner
 
+        self._credential_external_idle()
         _require(type(owner) is RemoteCleanupOwner)
+        if self._credential_handshake_snapshot is not None:
+            await RemoteCleanupOwner._send_credential_cancel(owner, self)
+            return
+        self._credential_work_ready()
         data = RemoteCleanupOwner._prepare_cancel(owner, self)
         self._writing = True
         try:
@@ -850,6 +1021,7 @@ class SocketChannel:
 
     def close(self) -> bool:
         try:
+            self._credential_external_idle()
             self._bindings()
             if self._closing:
                 self._integrity_lost = self._refused = True
@@ -1146,6 +1318,11 @@ class _Connection:
         self.control_task = None
         self.accept_unknown = False
         self.terminal = None
+        self.credential_adoption_attempted = False
+        self.credential_adoption_complete = False
+        self.credential_adoption_failed = False
+        self.credential_grammar_snapshot = None
+        self.credential_work = self.credential_work_snapshot = None
 
 
 class ServiceAcquisitionError(FrameError):
@@ -1172,7 +1349,7 @@ class BrokerServiceSpine:
         self._records: list[_Connection] = []
         self._records_snapshot = self._records
         self._accepting = self._stopping = self._refused = self._integrity_lost = False
-        self._registry = None
+        self._registry = self._registry_snapshot = None
         self._accept_task = None
         self._accept_wait = None
         self._accept_registration_unknown = False
@@ -1198,7 +1375,7 @@ class BrokerServiceSpine:
         # One registry per service lifetime, never per connection. Its replay
         # bitmap remains even after a terminal unlaunched tombstone is ACKed.
         registry = BrokerRegistry.__new__(BrokerRegistry)
-        self._registry = registry
+        self._registry = self._registry_snapshot = registry
         registry.__init__(enrollment.scope, parser_package=parser_package)
 
     def _metadata(self) -> None:
@@ -1426,6 +1603,13 @@ class BrokerServiceSpine:
 
         _require(type(owner) is BrokerCancellationOwner)
         try:
+            if owner._credential_binding_snapshot is not None:
+                from .presentation_credential_control import CredentialCancelAdoption
+
+                adoption = owner._signed_cancel_snapshot
+                _require(type(adoption) is CredentialCancelAdoption
+                         and owner._signed_cancel is adoption)
+                return await CredentialCancelAdoption.wait_notice(adoption, self)
             BrokerCancellationOwner._guard(owner)
             task, notice = owner._allocation_snapshot.task, owner._cancel_future_snapshot
             await asyncio.wait((task, notice), return_when=asyncio.FIRST_COMPLETED)
@@ -1452,6 +1636,113 @@ class BrokerServiceSpine:
         _, _, end, failed = CancellationBudget.inspect(owner._scope_snapshot[3])
         _require(owner._retired is False and end is None and not failed)
         _task_allows_work()
+
+    def _adopt_credential_begin(self, record):
+        """One original service connection's checked input; no worker/GO start.
+
+        Source-only seam: production role startup and complete signed phase IO
+        must be integrated before the dispatcher may call it.
+        """
+        from .presentation_credential_begin import CredentialBeginReceiver
+        from .presentation_remote_cleanup import _TASK
+
+        _require(type(self) is BrokerServiceSpine and type(record) is _Connection)
+        BrokerServiceSpine._metadata(self)
+        _require(sum(owned is record for owned in self._records_snapshot) == 1
+                 and type(record.task) is _TASK and asyncio.current_task() is record.task
+                 and record.credential_adoption_attempted is False
+                 and record.credential_adoption_complete is False
+                 and record.credential_adoption_failed is False)
+        record.credential_adoption_attempted = True  # never reset, before native effects
+        registry = self._registry_snapshot
+        channel = record.channel_snapshot
+        receiver = None
+        task = record.task
+        ticket = grammar = packet = result = first = row = None
+        failed = cancelled = False
+
+        def retained():
+            BrokerServiceSpine._metadata(self)
+            _require(self._registry is registry and self._registry_snapshot is registry
+                     and self._refused is False and self._stopping is False
+                     and self._integrity_lost is False
+                     and sum(owned is record for owned in self._records_snapshot) == 1
+                     and record.task is task and asyncio.current_task() is task
+                     and _TASK.cancelling(task) == 0
+                     and record.channel is channel and record.channel_snapshot is channel
+                     and record.socket is channel._socket_snapshot
+                     and channel._enrollment_snapshot is self._enrollment_snapshot
+                     and self._enrollment_snapshot.protocol_version == 2
+                     and channel._credential_begin_receiver is receiver
+                     and channel._credential_begin_receiver_snapshot is receiver
+                     and receiver._task is task and receiver._original_channel is channel
+                     and record.local_closed is False and record.clock_closed is False
+                     and record.accept_unknown is False
+                     and record.cancel_owner is None and record.result_writer is None
+                     and record.result_writer_snapshot is None and record.control_task is None
+                     and record.terminal is None
+                     and record.credential_adoption_attempted is True
+                     and record.credential_adoption_complete is False
+                     and record.credential_adoption_failed is False
+                     and record.ticket is ticket and record.grammar is grammar
+                     and record.credential_grammar_snapshot is grammar)
+
+        try:
+            _require(type(registry) is BrokerRegistry and self._registry is registry
+                     and type(channel) is SocketChannel and record.channel is channel)
+            receiver = channel._credential_begin_receiver_snapshot
+            _require(type(receiver) is CredentialBeginReceiver
+                     and channel._credential_begin_receiver is receiver)
+            retained()
+            BrokerServiceSpine._current(self)
+            result = CredentialBeginReceiver._completed_current(receiver)
+            retained()
+            binding = receiver._binding_snapshot
+            packet = result.packet
+            row = decode_input_v3(packet)
+            _require(row["iid"] == binding.iid)
+            # Admission remains under receiver's earlier original local end;
+            # registry work conserves the independently signed original end.
+            grammar = OperationGrammar.__new__(OperationGrammar)
+            record.grammar = record.credential_grammar_snapshot = grammar
+            OperationGrammar.__init__(grammar, binding, role="broker", protocol_version=2)
+            first = BrokerFrame(BrokerHeader(binding, "BEGIN", 0, len(packet), 2), packet)
+            OperationGrammar.observe(grammar, first, sender="client")
+            BrokerServiceSpine._current(self)
+            _require(CredentialBeginReceiver._completed_current(receiver) is result)
+            retained()
+            ticket = BrokerRegistry.reserve(registry, binding, row["profile"], row["operation"],
+                                            row["deadline_ns"])
+            record.ticket = ticket  # retain exact original result before any postcheck
+            retained()
+            _require(CredentialBeginReceiver._completed_current(receiver) is result)
+            BrokerServiceSpine._current(self)
+            _require(CredentialBeginReceiver._completed_current(receiver) is result)
+            retained()
+            BrokerRegistry.bind_input_receipt_once(registry, ticket, packet)
+            BrokerServiceSpine._current(self)
+            _require(CredentialBeginReceiver._completed_current(receiver) is result)
+            retained()
+            from .presentation_credential_queued import CredentialQueuedOwner
+
+            _require(record.credential_work is None and record.credential_work_snapshot is None)
+            work = CredentialQueuedOwner.__new__(CredentialQueuedOwner)
+            record.credential_work = record.credential_work_snapshot = work
+            CredentialQueuedOwner.__init__(work, self, record)
+            record.credential_adoption_complete = True
+            return ticket  # queued input only, no worker/resources/GO authority
+        except asyncio.CancelledError:
+            failed = cancelled = True
+        except BaseException:
+            failed = True
+        finally:
+            packet = result = first = row = None
+            if failed:
+                record.credential_adoption_failed = True
+        if cancelled:
+            raise asyncio.CancelledError from None
+        if failed:
+            raise FrameError("BI1_BROKER_CREDENTIAL_ADOPTION_REFUSED") from None
 
     async def _dispatch_v2(self, record, admission_end_ns):
         from .presentation_broker_cancel import BrokerCancellationOwner

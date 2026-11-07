@@ -32,12 +32,13 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["hmp_plugin*"]
+include = ["hmp_plugin*", "hmp_startup*"]
 
 # The manifest and build lists ship inside the wheel, next to their readers.
 [tool.setuptools.package-data]
 hmp_plugin = [
     "plugin.yaml",
+    "UNICODE_LICENSE.txt",
     "read_compat_builds.json",
     "write_supported_builds.json",
     "direct_send_supported_builds.json",

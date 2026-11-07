@@ -1,4 +1,4 @@
-# BI1 external reader custodian — proposed no-core-change path
+# BI1 external reader custodian — no-core-change source direction
 
 Status: architecture/source foundations and the [enrolled no-GO service spine](SERVICE_SPINE.md)
 are independently reviewed. A fresh Darwin no-GO service fixture now completes
@@ -14,13 +14,22 @@ native global reaper/configuration is changed. This retains full desktop name,
 classic/blobatar and custom static image parity; it is not a manual snapshot
 substitute for that scope.
 
+## Current authentication direction
+
+Use the independently reviewed [local role-credential contract](CREDENTIAL_ADMISSION.md).
+It supersedes the unfinished Mach production-admission proposal while preserving
+this separate custodian topology and all original native/custody boundaries.
+Bounded handshake and original input correlation do not qualify the runtime or
+open full delivery. See [the current source checkpoint](../../docs/research/presentation-credential-native-input-2026-11-06.md).
+
 ## Authority and trust split
 
 Gateway retains original phone authentication, canonical bot authorization,
 listener/store/device/profile generation, directory policy, original two-second
 monotonic deadline, native pre-GO/pre-emit checks and the sole HTTP emission.
-Original bearer/headers/keys never leave it. The broker has no gateway, Hermes,
-provider, identity or credential initialization and does not assert phone rights.
+Original bearer/headers/keys never leave it. The broker initializes no gateway, Hermes, provider, phone identity or pairing
+credentials and does not assert phone rights. Under the selected contract it holds
+only its independently installed role private key and the gateway public pin.
 Its sole privileged task is the existing fixed isolated reader and exact child,
 pipe, wait, termination and cleanup custody under the separately reviewed topology.
 The shared-group child contract supersedes any exclusive-reader-group assumption:

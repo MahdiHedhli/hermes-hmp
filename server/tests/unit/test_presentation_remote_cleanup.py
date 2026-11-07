@@ -647,3 +647,49 @@ async def test_public_ready_post_native_record_drift_refuses_without_foreign_cal
         assert record.headers is not None
     finally:
         setattr(record, field, held)  # test-only disposal after the refusal outcome
+
+
+@pytest.mark.asyncio
+async def test_original_work_join_refuses_final_clock_dispatch_shadow(prepared_v2, monkeypatch):
+    authority, operation, _, _, peer, _, _, _ = prepared_v2
+    _, public, owner = await start_waiting(prepared_v2)
+    work = owner._allocations_snapshot[1].task
+    remaining = cleanup.RemoteCleanupOwner._remaining
+    changed, calls = [], []
+
+    def final_clock(scope):
+        value = remaining(scope)
+        if (scope is owner and asyncio.current_task() is owner._allocations_snapshot[0].task
+                and owner._cancel_write_completed and not cleanup._TASK.done(work) and not changed):
+            def foreign_callback(*args, **kwargs):
+                calls.append(True)
+                raise AssertionError("foreign owned-work dispatch")
+            work.add_done_callback = foreign_callback
+            changed.append(True)
+        return value
+
+    monkeypatch.setattr(cleanup.RemoteCleanupOwner, "_remaining", final_clock)
+    try:
+        public.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await public
+        cancel = await read_selected(peer, prepared_v2[7])
+        assert cancel.header.kind == "CANCEL"  # actual original permitted write, not ACK/closure
+        assert await joined_cleanup(owner) is False
+        assert changed and calls == [] and owner._unknown and not owner._work_joined
+        assert not owner._socket_closed and not owner._clock_closed
+        assert authority._record(operation).headers is not None
+        assert not owner._remote_snapshot._job_origin_snapshot.credit_released
+    finally:
+        peer.shutdown(socket.SHUT_WR)  # fixture peer finishes its own stream; no protocol credit
+        loop = asyncio.get_running_loop()
+        until = loop.time() + 1
+        # Observer only: awaiting the deliberately shadowed Task would dispatch it.
+        while not cleanup._TASK.done(work):
+            assert loop.time() < until
+            await asyncio.sleep(0.005)
+        if changed:
+            del work.add_done_callback  # only after actual terminal; fixture teardown, no retry
+        if not cleanup._TASK.cancelled(work):
+            cleanup._TASK.exception(work)  # observe actual original terminal failure if present
+    assert calls == [] and owner._unknown and not owner._work_joined
