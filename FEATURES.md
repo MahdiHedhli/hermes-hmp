@@ -1,3 +1,16 @@
+# November 7: original loader source-hash provenance
+
+The interpreter origin now retains the actual frozen SourceLoader get_code
+class/function/code/globals and its native source_hash builtin/key, rather than
+assuming the public utility chooses the same key. Currentness refuses drift.
+Independent bounded review accepted.70 focused cases pass on Python3.14 and70
+actual Python3.11 children; broader verification recorded1041 passes and two
+fixture failures, then all339 affected-module cases passed after reviewed test
+corrections. This is not a full final-head all-checks claim.
+Same-read source hashing and actual cache-selection enforcement remain next.
+Bot-character delivery and host-local images remain unfinished; no live settings
+changed. See [loader work](specs/046-bot-presentation-integration/LOADER_POLICY_IMPLEMENTATION.md).
+
 # November 7: original-owner cache absence observations
 
 Startup snapshots now observe unresolved loose-cache absence before and after

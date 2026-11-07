@@ -53,3 +53,31 @@ Independent read-only architecture review accepted this implementation order and
 identified the source buffer, original algorithm/key, timestamp and selection/
 fallback contracts as concrete prerequisites. No execution was performed by the
 reviewer; no stage above is marked implemented by that review.
+
+## Source-hash origin implementation in progress
+
+The interpreter observation now retains the actual frozen external SourceLoader
+class and get_code function/code/globals, native source_hash builtin, and exact
+loader-selected key owner/name/integer value. Module aliases and primitive
+metadata are checked before comparisons. Currentness rejoins the original
+allocations; it neither invokes replacement functions nor selects a key from
+importlib.util.source_hash. Unsupported loader key schemes refuse.
+
+Initial implementation used utility provenance; independent review correctly
+required actual loader provenance instead. The corrected implementation passed
+70 focused cases on Python 3.14.9 and 70 actual Python 3.11.15 children. Two
+synthetic actual-loader cases observe the key and source bytes used by get_code
+while replacing the utility function; synthetic code is compiled/unmarshalled
+but never executed. Seven entry-currentness causals cover changed builtin,
+function, code, key, globals and malformed metadata.
+
+Broader startup verification completed with 1,041 passes and two fixture
+failures: the exact module list omitted the new cache observation module, and
+the link close-fault injector now fired during an earlier cache probe. Production
+source hashes were unchanged. Independent review accepted the precise fixture
+corrections; all 339 affected-module cases passed after those test-only changes. The corrected
+lost-close case also passed in an actual Python 3.11 child. No production changes
+were needed after the 1,041-pass baseline. This is not a
+completed source-hashing/selection stage.
+Same-original-read bounded source buffering/hash, timestamp/hash cache selection
+and runtime consumption remain unimplemented. No live runtime changed.

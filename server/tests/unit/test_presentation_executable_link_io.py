@@ -69,7 +69,8 @@ if mutation=="io_close_unknown":
         global close_fault
         io=entry._activation._artifact_owner
         actual_close(fd)
-        if io is not None and io._attempt_cell is not None and not close_fault:
+        if (io is not None and io._attempt_cell is not None and not close_fault
+                and len(read_calls)==1):
             close_fault=True
             raise OSError("synthetic lost close outcome")
     a.os.close=close_callback

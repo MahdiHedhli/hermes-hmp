@@ -7,12 +7,13 @@ later factory still supplies independent installation/operator/runtime checks.
 from __future__ import annotations
 
 import _imp
+import importlib._bootstrap_external
 import importlib.util
 import os
 import sys
 import threading
 from importlib.machinery import ModuleSpec
-from types import CodeType, FunctionType, ModuleType, SimpleNamespace
+from types import BuiltinFunctionType, CodeType, FunctionType, ModuleType, SimpleNamespace
 from typing import NamedTuple
 
 from hmp_plugin.presentation_gateway_activation import GatewayActivationOwner
@@ -86,6 +87,61 @@ def _cache_policy():
     return origin
 
 
+class _SourceHashOrigin(NamedTuple):
+    module: ModuleType
+    loader_type: type
+    function: FunctionType
+    code: CodeType
+    builtin: BuiltinFunctionType
+    key_owner: ModuleType
+    key_name: str
+    key: int
+
+    def __repr__(self):
+        return "<OriginalInterpreterSourceHash redacted>"
+
+
+def _source_hash_origin(native):
+    module = sys.modules.get("_frozen_importlib_external")
+    _require(type(module) is ModuleType and module is importlib._bootstrap_external
+             and sys.modules.get("importlib._bootstrap_external") is module)
+    loader_type = vars(module).get("SourceLoader")
+    _require(type(loader_type) is type)
+    function = vars(loader_type).get("get_code")
+    _require(type(function) is FunctionType and function.__globals__ is vars(module)
+             and type(function.__module__) is str
+             and function.__module__ == "_frozen_importlib_external")
+    code = function.__code__
+    names = code.co_names
+    _require(type(code) is CodeType and type(names) is tuple
+             and all(type(name) is str for name in names)
+             and vars(module).get("_imp") is native and "source_hash" in names)
+    if "pyc_magic_number_token" in names:
+        _require("_RAW_MAGIC_NUMBER" not in names)
+        key_owner, key_name = native, "pyc_magic_number_token"
+    else:
+        _require("_RAW_MAGIC_NUMBER" in names)
+        key_owner, key_name = module, "_RAW_MAGIC_NUMBER"
+    key = vars(key_owner).get(key_name)
+    builtin = vars(native).get("source_hash")
+    _require(type(key) is int and 0 <= key < 2 ** 64
+             and type(builtin) is BuiltinFunctionType and builtin.__self__ is native
+             and type(builtin.__name__) is str and builtin.__name__ == "source_hash"
+             and type(builtin.__module__) is str and builtin.__module__ == "_imp")
+    return _SourceHashOrigin(module, loader_type, function, code, builtin,
+                             key_owner, key_name, key)
+
+
+def _same_source_hash(origin, current):
+    _require(type(origin) is _SourceHashOrigin and type(current) is _SourceHashOrigin
+             and type(origin.key) is int and type(origin.key_name) is str)
+    return (current.module is origin.module and current.loader_type is origin.loader_type
+            and current.function is origin.function
+            and current.code is origin.code and current.builtin is origin.builtin
+            and current.key_owner is origin.key_owner and current.key_name == origin.key_name
+            and current.key == origin.key)
+
+
 class _InterpreterOrigin(NamedTuple):
     implementation: SimpleNamespace
     version: object
@@ -94,6 +150,7 @@ class _InterpreterOrigin(NamedTuple):
     bytecode_module: ModuleType
     bytecode_magic: bytes
     cache_policy: _CachePolicyOrigin
+    source_hash: _SourceHashOrigin
 
     def __repr__(self):
         return "<OriginalInterpreterOrigin redacted>"
@@ -123,8 +180,9 @@ def _interpreter():
     _require(type(bytecode) is ModuleType and bytecode is importlib.util)
     magic = vars(bytecode).get("MAGIC_NUMBER")
     _require(type(magic) is bytes and len(magic) == 4)
+    cache = _cache_policy()
     return _InterpreterOrigin(implementation, version, flags, data, bytecode, magic,
-                              _cache_policy())
+                              cache, _source_hash_origin(cache.module))
 
 
 def _interpreter_current(origin):
@@ -136,7 +194,8 @@ def _interpreter_current(origin):
              and current.bytecode_magic is origin.bytecode_magic
              and type(origin.cache_policy) is _CachePolicyOrigin
              and current.cache_policy.module is origin.cache_policy.module
-             and _cache_values(current.cache_policy) == _cache_values(origin.cache_policy))
+             and _cache_values(current.cache_policy) == _cache_values(origin.cache_policy)
+             and _same_source_hash(origin.source_hash, current.source_hash))
     return origin
 
 

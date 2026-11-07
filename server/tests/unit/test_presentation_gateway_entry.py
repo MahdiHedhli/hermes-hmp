@@ -102,6 +102,28 @@ if success:
     if mutation == "current_interpreter_cache_write_type":sys.dont_write_bytecode=1
     if mutation == "current_interpreter_cache_unknown":
         entry._imp.check_hash_based_pycs="unsupported"
+    hash_origin = original_binding[0].interpreter.source_hash
+    if mutation == "current_interpreter_hash_builtin":
+        entry._imp.source_hash = lambda *args: (_ for _ in ()).throw(AssertionError("called"))
+    if mutation == "current_interpreter_hash_function":
+        hash_origin.loader_type.get_code = lambda self, name: b'not-used'
+    if mutation == "current_interpreter_hash_code":
+        def changed_hash(data): return b'not-used'
+        hash_origin.function.__code__ = changed_hash.__code__
+    if mutation == "current_interpreter_hash_key":
+        setattr(hash_origin.key_owner, hash_origin.key_name, hash_origin.key ^ 1)
+    if mutation == "current_interpreter_hash_foreign_key":
+        class ForeignKey:
+            def __eq__(self, other):
+                foreign_runtime_calls.append(True);raise AssertionError("foreign hash key")
+        setattr(hash_origin.key_owner, hash_origin.key_name, ForeignKey())
+    if mutation == "current_interpreter_hash_globals":
+        vars(hash_origin.module)['_imp'] = ModuleType('_imp')
+    if mutation == "current_interpreter_hash_module_name":
+        class ForeignName:
+            def __eq__(self, other):
+                foreign_runtime_calls.append(True);raise AssertionError("foreign function module")
+        hash_origin.function.__module__ = ForeignName()
     old_method = vars(GatewayEntryOwner)["start"]
     old_code = old_method.__func__.__code__
     if mutation == "retained_namespace":
@@ -284,6 +306,10 @@ if mutation.startswith("post_activation_"):
     "retained_cache_mode_always", "retained_cache_mode_never", "retained_cache_prefix",
     "retained_cache_root_prefix", "current_interpreter_cache_write_type",
     "current_interpreter_cache_unknown",
+    "current_interpreter_hash_builtin", "current_interpreter_hash_function",
+    "current_interpreter_hash_code", "current_interpreter_hash_key",
+    "current_interpreter_hash_foreign_key", "current_interpreter_hash_globals",
+    "current_interpreter_hash_module_name",
     "typing_alias_binding", "typing_alias_namespace", "typing_alias_module",
     "current_alias_binding", "current_alias_namespace", "current_alias_module",
 ])
