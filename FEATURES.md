@@ -1,3 +1,21 @@
+## Private startup selection loader — November 7, 2026
+
+PS1 now has a fixed gateway-startup.json loader using the reviewed original-context
+file-I/O owner. It enforces private owner/modes, no-follow stable bounded reads,
+external expected size/hash and a closed canonical11-field selection schema.
+Instance IDs match canonical HMP Base32 semantics; role keys are public pins only.
+Unknown fields, private keys, commands, URLs and arbitrary parsed paths refuse.
+A late load or startup appearing during read fails. Failure preserves replacement
+state, withdraws only its own root fact and clears the original capture buffer.
+
+30 config,18 artifact,25 activation and310 layout/import cases passed:383 in5.71s,
+source unchanged. Independent read-only review accepted the bounded loader;
+lint/surface/whitespace pass. Loading matching file bytes is DATA, not operator
+approval or native/runtime admission. The fixed trusted entry, full inventory/
+loader validation and actual native/key factory remain unfinished. No keys,
+host settings, device installs, deployment or character-image display are enabled.
+Existing unexplained regression failures and sender-destination incident remain open.
+
 ## Owned startup artifact checks — November 7, 2026
 
 PS1 now includes a bounded owner for actual selected-file observations tied to the

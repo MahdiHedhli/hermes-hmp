@@ -17,9 +17,14 @@ inventory/native admission. The trusted entry, factory and native composition
 remain open; see the paired-startup contract for current evidence and limits.
 
 `presentation_startup_artifacts.py` supplies bounded selected-file observations
-only. The fixed operator-configuration approval loader and full inventory/loader
-join remain unimplemented. Matching caller-provided file expectations is never an
+only. The bounded private-file loader is implemented; fixed trusted-entry/operator
+approval of its inputs and the full inventory/loader join remain unimplemented. Matching caller-provided file expectations is never an
 admission token or permission to load keys, bind authority, send ACK or publish.
+
+The fixed [private startup selection loader](STARTUP_CONFIGURATION.md) now has
+bounded source/fixture acceptance. Loaded matching configuration is DATA; fixed
+trusted entry/operator approval, complete inventory and native/key factory joins
+remain unimplemented. No credential generation or deployment is authorized here.
 
 ## Decision and preserved boundaries
 

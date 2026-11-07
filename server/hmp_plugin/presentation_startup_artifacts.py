@@ -87,6 +87,32 @@ def _expected(rows):
         _require(total <= _MAX_TOTAL)
 
 
+def _configuration(owner):
+    if type(owner) is StartupArtifactOwner:
+        return False
+    from .presentation_startup_selection import StartupSelectionOwner
+    _require(type(owner) is StartupSelectionOwner)
+    return True
+
+
+def _owner_guard(owner):
+    if type(owner) is StartupArtifactOwner:
+        return StartupArtifactOwner._guard(owner)
+    from .presentation_startup_selection import StartupSelectionOwner
+    _require(type(owner) is StartupSelectionOwner)
+    return StartupSelectionOwner._guard(owner)
+
+
+def _root(owner, activation):
+    return activation._selection_cell if _configuration(owner) else activation._artifact_cell
+
+
+def _append_configuration(owner, data):
+    if _configuration(owner):
+        from .presentation_startup_selection import StartupSelectionOwner
+        StartupSelectionOwner._append(owner, data)
+
+
 class StartupArtifactOwner:
     @classmethod
     def observe(cls, activation, expected):
@@ -158,7 +184,7 @@ class StartupArtifactOwner:
         return s
 
     def _open(self, name, parent, directory):
-        s = StartupArtifactOwner._guard(self)
+        s = _owner_guard(self)
         row = _Descriptor()
         s.records.append(row)  # original descriptor allocation before open
         root_cell, fd = self._root_cell, None
@@ -170,7 +196,7 @@ class StartupArtifactOwner:
             fd = os.open(name, flags, dir_fd=parent)
             _require(type(fd) is int and fd >= 0)
             row.fd = fd
-            _require(StartupArtifactOwner._guard(self) is s)
+            _require(_owner_guard(self) is s)
             return row, fd
         except BaseException:
             row.unknown = self._unknown = True
@@ -186,26 +212,36 @@ class StartupArtifactOwner:
         _require(type(s) is _Scope and type(s.context) is tuple and len(s.context) == 3
                  and all(type(v) is int for v in s.context))
         actual = (os.getpid(), os.geteuid(), threading.get_ident())
-        _require(all(type(v) is int for v in actual) and actual == s.context
-                 and type(row) is _Descriptor and row.fd is fd and type(fd) is int
-                 and row.close_attempted is False and type(s.records) is list
-                 and any(original is row for original in s.records)
-                 and type(root_cell) is tuple and len(root_cell) == 3
-                 and root_cell[0] is s.activation and root_cell[1] is self and root_cell[2] is s
-                 and self._root_cell is root_cell and s.activation._artifact_cell is root_cell
-                 and GatewayActivationOwner._retained_scope(s.activation) is s.activation_scope)
+        _require(
+            all(type(v) is int for v in actual)
+            and actual == s.context
+            and type(row) is _Descriptor
+            and row.fd is fd
+            and type(fd) is int
+            and row.close_attempted is False
+            and type(s.records) is list
+            and any(original is row for original in s.records)
+            and type(root_cell) is tuple
+            and len(root_cell) == (4 if _configuration(self) else 3)
+            and root_cell[0] is s.activation
+            and root_cell[1] is self
+            and root_cell[2] is s
+            and self._root_cell is root_cell
+            and _root(self, s.activation) is root_cell
+            and GatewayActivationOwner._retained_scope(s.activation) is s.activation_scope
+        )
         row.close_attempted = True
         try:
             os.close(fd)
             row.closed = True
-            _require(self._root_cell is root_cell and s.activation._artifact_cell is root_cell
+            _require(self._root_cell is root_cell and _root(self, s.activation) is root_cell
                      and GatewayActivationOwner._retained_scope(s.activation) is s.activation_scope)
         except BaseException:
             row.unknown = self._unknown = True
             raise
 
     def _read(self, fd, count, s):
-        _require(StartupArtifactOwner._guard(self) is s and type(count) is int
+        _require(_owner_guard(self) is s and type(count) is int
                  and 0 < count <= 65536 and type(self._bytes_read) is int)
         before, cell = self._bytes_read, self._count_cell
         _require(type(cell) is tuple and len(cell) == 3 and cell[0] is self
@@ -220,7 +256,7 @@ class StartupArtifactOwner:
             self._bytes_read = before + len(data)  # actual count before any post-read check
             self._count_cell = (self, s, self._bytes_read)
             self._reading = False
-            _require(same and len(data) <= count and StartupArtifactOwner._guard(self) is s)
+            _require(same and len(data) <= count and _owner_guard(self) is s)
             return data
         except BaseException:
             self._unknown = True
@@ -229,19 +265,19 @@ class StartupArtifactOwner:
             data = None
 
     def _stat(self, name, parent, s):
-        _require(StartupArtifactOwner._guard(self) is s)
+        _require(_owner_guard(self) is s)
         value = os.stat(name, dir_fd=parent, follow_symlinks=False)
-        _require(type(value) is os.stat_result and StartupArtifactOwner._guard(self) is s)
+        _require(type(value) is os.stat_result and _owner_guard(self) is s)
         return value
 
     def _fstat(self, fd, s):
-        _require(StartupArtifactOwner._guard(self) is s)
+        _require(_owner_guard(self) is s)
         value = os.fstat(fd)
-        _require(type(value) is os.stat_result and StartupArtifactOwner._guard(self) is s)
+        _require(type(value) is os.stat_result and _owner_guard(self) is s)
         return value
 
     def _file(self, expected):
-        s = StartupArtifactOwner._guard(self)
+        s = _owner_guard(self)
         root_cell = self._root_cell
         held, directories = [], []
         data = digest = None
@@ -260,32 +296,37 @@ class StartupArtifactOwner:
                          and (not mode & 0o022 or (info.st_uid == 0 and bool(mode & stat.S_ISVTX))))
                 directories.append((name, parent, fd, signature))
                 parent = fd
+            if _configuration(self):
+                _require(info.st_uid == s.context[1] and stat.S_IMODE(info.st_mode) == 0o700)
             name = expected.path.rsplit("/", 1)[1]
             before = StartupArtifactOwner._stat(self, name, parent, s)
             original = _identity(before)
             _require(stat.S_ISREG(before.st_mode) and before.st_uid in (0, s.context[1])
                      and before.st_nlink == 1 and before.st_size == expected.size
                      and not before.st_mode & (0o022 | stat.S_ISUID | stat.S_ISGID))
+            if _configuration(self):
+                _require(before.st_uid == s.context[1] and stat.S_IMODE(before.st_mode) == 0o600)
             row, fd = StartupArtifactOwner._open(self, name, parent, False)
             held.append((row, fd))
             _require(_identity(StartupArtifactOwner._fstat(self, fd, s)) == original)
             digest = hashlib.sha256()
             remaining = expected.size
             while remaining:
-                _require(StartupArtifactOwner._guard(self) is s)
+                _require(_owner_guard(self) is s)
                 data = StartupArtifactOwner._read(self, fd, min(remaining, 65536), s)
                 _require(0 < len(data) <= remaining)
                 remaining -= len(data)
-                _require(StartupArtifactOwner._guard(self) is s)
+                _require(_owner_guard(self) is s)
+                _append_configuration(self, data)
                 digest.update(data)
                 data = None
-                _require(StartupArtifactOwner._guard(self) is s)
+                _require(_owner_guard(self) is s)
             data = StartupArtifactOwner._read(self, fd, 1, s)
             _require(data == b"" and _identity(StartupArtifactOwner._fstat(self, fd, s)) == original
                      and _identity(StartupArtifactOwner._stat(self, name, parent, s)) == original)
-            _require(StartupArtifactOwner._guard(self) is s)
+            _require(_owner_guard(self) is s)
             actual_hash = digest.hexdigest()
-            _require(StartupArtifactOwner._guard(self) is s
+            _require(_owner_guard(self) is s
                      and type(actual_hash) is str and actual_hash == expected.sha256)
             for name, parent, directory, signature in directories:
                 _require(
@@ -293,7 +334,7 @@ class StartupArtifactOwner:
                     and _identity(StartupArtifactOwner._stat(self, name, parent, s), True)
                     == signature
                 )
-            _require(StartupArtifactOwner._guard(self) is s)
+            _require(_owner_guard(self) is s)
             result = expected
         except BaseException:
             failed = True
@@ -307,5 +348,5 @@ class StartupArtifactOwner:
                     failed = True
         if failed:
             raise ArtifactObservationError(self) from None
-        _require(StartupArtifactOwner._guard(self) is s)
+        _require(_owner_guard(self) is s)
         return result

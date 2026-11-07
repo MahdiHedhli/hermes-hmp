@@ -13,7 +13,11 @@ implementation tasks, not an established upstream Hermes blocker.
       ownership, no-follow traversal, actual bytes/hash/metadata and one-close cleanup;
      18 file cases +25 activation +309 layout/import checks pass (352 total).
       Expected-file tuples are not approved configuration or complete inventory.
-- [ ] PS1 configuration/inventory join: fixed owner-controlled operator loader,
+- [x] PS1 private-file loader prerequisite: fixed filename/modes/canonical schema,
+      independently expected bytes, original buffer/root fact ownership and late-load
+      refusal;30 config cases plus shared artifact/activation/import checks pass (383).
+      Loaded configuration is DATA, not trusted-entry/operator approval.
+- [ ] PS1 configuration/inventory join: fixed trusted entry/operator approval of loader inputs,
       independent expected roots/bytes, complete reachable tree and unexpected-file,
       future-import/extension/OS-loader validation before native/key composition.
 - [ ] PS1: original gateway startup owner, actual activated PM generation/HMP

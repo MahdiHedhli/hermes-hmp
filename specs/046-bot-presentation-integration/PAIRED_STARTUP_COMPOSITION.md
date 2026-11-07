@@ -72,6 +72,12 @@ expected tuples are DATA. Fixed operator-loader approval and full reachable-tree
 unexpected-file, future-module/extension and OS-loader coverage remain prerequisites
 before the fixed native/key factory may consume these observations as a conjunct.
 
+The bounded [private selection loader](STARTUP_CONFIGURATION.md) is now source
+implemented and independently reviewed. Its closed schema/private FD ownership
+and original publication/withdrawal causals pass with shared IO/activation/import
+coverage (383 checks). This does not approve caller expectations or complete the
+trusted entry/full inventory/native/key composition; those PS1 tasks remain open.
+
 ### Fixed capture interface and uncertainty
 
 Implement a fixed trusted gateway entry function, before listener creation, that
