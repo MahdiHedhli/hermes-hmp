@@ -246,8 +246,8 @@ class EntryFileSnapshotOwner:
                 loose, prior = plan.loose, plan.prior
                 dependency_origins = loaded_origins(plan)
             linked = plan is not None and plan.executable_link is not None
-            if linked:
-                io = StartupArtifactOwner.retain_from_runtime_entry(owner)
+            if plan is not None:
+                io = StartupArtifactOwner.retain_from_cache_entry(owner)
                 _require(inputs.io_slot[0] is io)
             else:
                 io = StartupArtifactOwner.retain_from_package(plugin, expected)
@@ -331,11 +331,13 @@ class EntryFileSnapshotOwner:
                      and owner._fact_cell is None and activation._entry_files_fact_cell is None
                      and owner._completing is True and owner._attempt_cell is attempt
                      and activation._entry_files_attempt_cell is attempt)
+            if plan is not None:
+                _require(StartupArtifactOwner.seal_cache_observation(io) is io._cache_fact)
             snapshot = after[0][1] if plan is None else after
             origin_snapshot = origins if plan is None else (origins, dependency_origins)
             fact = (owner, inputs, io, file_fact, snapshot, origin_snapshot)
             if plan is not None:
-                fact += (loose_after,)  # retain original observed ancestry for continuation
+                fact += (loose_after, io._cache_fact)  # original ancestry and cache observations
             owner._fact_cell = activation._entry_files_fact_cell = fact
             owner._ready = True
             return owner

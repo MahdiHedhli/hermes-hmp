@@ -223,6 +223,15 @@ class _ModuleScanner(ast.NodeVisitor):
                 "hmp_startup.gateway_approval": {"GatewayApprovalOwner"},
                 "hmp_startup.runtime_files": {"ExecutableLinkPlan", "RuntimeFilePlan"},
             }
+            cache_joins = {
+                "hmp_startup.cache_context": {"CacheContextOwner"},
+                "hmp_startup.entry_files": {"EntryFileSnapshotOwner", "_Inputs"},
+                "hmp_startup.runtime_files": {"RuntimeFilePlan", "_inside", "_path"},
+            }
+            if (self.name == "presentation_startup_cache.py"
+                    and self._function_depth > 0 and names
+                    and set(names) <= cache_joins.get(module, set())):
+                return
             if (
                 self.name in (
                     "presentation_startup_artifacts.py", "presentation_startup_selection.py")

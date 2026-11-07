@@ -140,3 +140,10 @@ as a seventh field for the original startup continuation. Legacy entry-only
 facts remain six fields. This retains observations already acquired through the
 original IO owner; it adds neither reads nor native admission. See
 [continuation](STARTUP_CONTINUATION.md).
+
+## Cache-observed strict snapshot
+
+The newer strict runtime fact adds the original cache sidecar as field eight;
+file fact variants remain four/five fields and legacy entry-only facts six.
+See [actual cache observations](CACHE_OBSERVATIONS.md). The earlier seven-field
+runtime fact is historical DATA and cannot satisfy this newer continuation join.

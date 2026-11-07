@@ -1,3 +1,14 @@
+# November 7: original-owner cache absence observations
+
+Startup snapshots now observe unresolved loose-cache absence before and after
+file hashing through the same original bounded IO owner. Exact no-follow ENOENT,
+ancestor identity, descriptor closure, count and late-slot joins refuse ambiguous
+or changed state. Independent bounded review accepted; 85 integrated, 102 boundary and 17 actual Python 3.11
+compatibility cases pass. The observations are sampled DATA, not import
+or native admission. Bot-character delivery and host-local images remain
+unfinished. No live settings changed.
+See [scope](specs/046-bot-presentation-integration/CACHE_OBSERVATIONS.md).
+
 # November 7: original cache context before file IO
 
 The startup snapshot now retains actual original source/cache planning context

@@ -23,7 +23,7 @@ snapshot=checked
 original_io=snapshot._fact_cell[2]
 original_bytes=original_io._bytes_read
 original_resources=tuple(snapshot._fact_cell[2]._origin.records)
-assert len(snapshot._fact_cell)==7
+assert len(snapshot._fact_cell)==8
 loose=snapshot._fact_cell[6]
 assert len(loose)==len(snapshot._inputs.runtime_plan.loose)
 for (path,(identity,ancestors)),expected in zip(

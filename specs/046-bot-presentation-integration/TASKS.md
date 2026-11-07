@@ -35,9 +35,11 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
 - [x] **PS1-CACHE-CONTEXT** Retain original entry/recipe/plugin/interpreter and required
       CWD on the fixed snapshot inputs before artifact IO allocation; preserve the
       actual fact through continuation. [Context DATA only](CACHE_CONTEXT.md).
-- [ ] **PS1-CACHE-OBSERVE** Reserve and observe declared caches plus unresolved
+- [x] **PS1-CACHE-OBSERVE** Reserve and observe declared caches plus unresolved
       no-follow absence probes in the same original aggregate owner before completion.
       Never infer loose-cache absence or extend a completed owner.
+      Original-owner loose absence source and sidecar are implemented;
+      [verification scope](CACHE_OBSERVATIONS.md) remains separately tracked.
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
 - [ ] **PS1-LISTENER** Bind original admitted startup to actual listener/native owner,

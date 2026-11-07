@@ -101,6 +101,7 @@ class _Scope(NamedTuple):
     parent: object = None
     runtime: object = None
     reads: object = None
+    cache: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
@@ -406,7 +407,17 @@ class StartupArtifactOwner:
                                            runtime.plan.pending, source, runtime)
 
     @classmethod
-    def _retain(cls, activation, expected, source, runtime=None):
+    def retain_from_cache_entry(cls, entry):
+        from .presentation_startup_cache import source_from_entry
+        _require(cls is StartupArtifactOwner)
+        cache = source_from_entry(entry)
+        runtime = (_runtime_source(entry) if cache.plan.executable_link is not None else None)
+        source = _package_source(cache.inputs.plugin)
+        return StartupArtifactOwner._retain(source.binding[0].activation,
+                                           cache.plan.pending, source, runtime, cache)
+
+    @classmethod
+    def _retain(cls, activation, expected, source, runtime=None, cache=None):
         _require(cls is StartupArtifactOwner and type(activation) is GatewayActivationOwner
                  and activation._artifact_owner is None and activation._artifact_cell is None
                  and activation._artifact_attempt_cell is None
@@ -420,13 +431,15 @@ class StartupArtifactOwner:
         owner._facts = owner._hashes = owner._attempt_cell = owner._fact_cell = None
         owner._scope = owner._origin = owner._cell = owner._root_cell = None
         owner._count_cell = owner._initial_count_cell = None
+        owner._cache_fact = None
         owner._bytes_read = 0
         try:
             if source is not None:
                 _require(type(source) is _PackageSource)
                 owner._bytes_read = source.count_cell[2]
             s = _Scope(activation, activation._scope, expected,
-                       (os.getpid(), os.geteuid(), threading.get_ident()), [], source, runtime)
+                       (os.getpid(), os.geteuid(), threading.get_ident()), [], source, runtime,
+                       None, cache)
             owner._scope = owner._origin = s
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)
@@ -443,6 +456,14 @@ class StartupArtifactOwner:
                 _require(len(source.expected) + len(expected) + len(runtime.link.hops) <= _MAX_FILES
                          and owner._bytes_read + sum(row.size for row in expected)
                          + 2 * runtime.link.text_bytes <= _MAX_TOTAL)
+            if cache is not None:
+                from .presentation_startup_cache import source_current
+                source_current(cache)
+                _require(cache.plan.pending is expected
+                         and (cache.inputs.io_slot[0] is None or cache.inputs.io_slot[0] is owner)
+                         and len(source.expected) + len(expected) + len(cache.paths)
+                         + (0 if runtime is None else len(runtime.link.hops)) <= _MAX_FILES)
+                cache.inputs.io_slot[0] = owner
             _expected(expected)
             if source is not None:
                 _source_current(source)
@@ -475,6 +496,10 @@ class StartupArtifactOwner:
                              and row.unknown is False and row.close_attempted is True
                              for row in s.records))
             runtime = s.runtime
+            cache_before = cache_after = None
+            if s.cache is not None:
+                from .presentation_startup_cache import observe_pass
+                cache_before = observe_pass(s.cache, owner, 0, None)
             before = after = link_fact = None
             if runtime is not None:
                 _require(runtime.before[0] is None and runtime.after[0] is None
@@ -505,6 +530,10 @@ class StartupArtifactOwner:
                          and stat.S_IMODE(targets[0].identity[2]) == runtime.link.mode)
                 link_fact = _LinkTargetObservation(owner, s, runtime, before, after,
                                                    targets[0], owner._count_cell)
+            if s.cache is not None:
+                from .presentation_startup_cache import seal
+                cache_after = observe_pass(s.cache, owner, 1, cache_before)
+                _require(seal(s.cache, owner, cache_before, cache_after) is s.cache)
             count = owner._count_cell
             _require(StartupArtifactOwner._guard(owner) is s
                      and owner._root_cell is root and owner._attempt_cell is attempt
@@ -529,6 +558,10 @@ class StartupArtifactOwner:
                          and link_fact.count is count)
             fact = ((owner, s, hashes, count) if runtime is None
                     else (owner, s, hashes, count, link_fact))
+            if s.cache is not None:
+                _require(seal(s.cache, owner, cache_before, cache_after) is s.cache
+                         and owner._cache_fact is None)
+                owner._cache_fact = (owner, s, s.cache, cache_before, cache_after, count)
             owner._facts = tuple(row.expected for row in hashes)
             owner._hashes = hashes
             owner._fact_cell = activation._artifact_fact_cell = fact
@@ -571,6 +604,11 @@ class StartupArtifactOwner:
             _source_current(s.parent)
         if s.runtime is not None:
             _runtime_current(s.runtime, self)
+        if s.cache is not None:
+            from .presentation_startup_cache import owned_current
+            owned_current(s.cache, self)
+            if fact is not None:
+                _require(StartupArtifactOwner.seal_cache_observation(self) is self._cache_fact)
         if s.runtime is not None and fact is not None:
             _require(type(fact) is tuple and len(fact) == 5
                      and type(fact[4]) is _LinkTargetObservation)
@@ -883,6 +921,16 @@ class StartupArtifactOwner:
         )
         _require(metadata == fact.after.target and _owner_guard(self) is s
                  and self._fact_cell[4] is fact and self._count_cell is fact.count)
+        return fact
+
+    def seal_cache_observation(self):
+        from .presentation_startup_cache import seal
+        _require(type(self) is StartupArtifactOwner)
+        fact = self._cache_fact
+        _require(type(fact) is tuple and len(fact) == 6
+                 and fact[0] is self and fact[1] is self._origin is self._scope
+                 and fact[2] is self._origin.cache and fact[5] is self._count_cell)
+        _require(seal(fact[2], self, fact[3], fact[4]) is fact[2])
         return fact
 
     def _file(self, expected):
