@@ -823,6 +823,10 @@ claim to actual body streaming, signed full-frame digest and independent origina
 native result2/parent/revision validation. It retains one private candidate and an
 independent stream/hash allocation. The job's typed discard-only hook withdraws
 that owner before first cleanup sampling. Exact held cancellation retirement and
-post-callback release checks preserve unknown debt. Native adoption, terminal,
-publication and production dispatch remain open. See
-[body evidence](../../../docs/research/presentation-signed-result-body-2026-11-06.md).
+post-callback release checks preserve unknown debt. The reviewed private adoption
+component now installs the original native job result/token/RESULT_VALIDATED under
+an independent adoption allocation and separate fixed post-adoption authority tail.
+Its dedicated signed-owner slots never masquerade as legacy RemoteResultOwner.
+First cause withdraws native/private output; no terminal, notification, publication
+or production dispatch follows. See [body evidence](../../../docs/research/presentation-signed-result-body-2026-11-06.md)
+and [adoption evidence](../../../docs/research/presentation-signed-native-adoption-2026-11-06.md).

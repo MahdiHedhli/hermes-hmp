@@ -1,3 +1,27 @@
+## Signed image native adoption component — November 6, 2026
+
+The original signed body owner can now attach its validated image candidate to
+its original native job with one opaque result token and RESULT_VALIDATED phase.
+A dedicated signed-owner slot preserves the closed legacy result-owner contract.
+Independent adoption allocation, current original actor/keys/policy/socket/budget
+and a fixed post-adoption authority tail prevent paired replacement or phase
+rollback. First cause withdraws both native result/token and private references
+before the cleanup clock sample. This grants no terminal, release or publication.
+
+Twenty-eight signed-body cases pass in 18.81 seconds, including nine adoption
+cases covering actual image adoption, duplicate/wrong-task calls, key retirement,
+mutable header, post-native token drift, pending/coherent paired substitution,
+attempt reset and post-crypto foreign fact refusal. Independent read-only review
+accepts the private adoption component. Final affected regression: **1,662 passed,
+one skipped**, 126.11 seconds; lint/whitespace pass. An earlier broader run had one
+existing cleanup-cursor refusal (1,659 passed, one skipped, 126.45s), whose cause
+remains unresolved; the green confirmation does not resolve that failure.
+
+Signed result notification, original cooperative cleanup cursor/terminal/ACK,
+production composition/publication and physical/release checks remain open.
+Full phone character-image delivery is unfinished. No host/device/build/settings/
+keys/grants/provider changes; the sender-destination incident remains unresolved.
+
 ## Private signed image candidate currentness — November 6, 2026
 
 A private candidate-use check now binds original candidate/header/body identities,

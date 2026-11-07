@@ -3,8 +3,9 @@
 Status: the fixed GO_SENT custody tail, signed envelope cursor and same-original-
 work body/private-candidate owner are source components. Signed body digest and
 independent native result2/parent/revision validation are implemented separately
-from native adoption, cooperative cleanup continuation and production dispatch,
-which remain open. Preserve the complete requested character image, not a snapshot
+from native adoption, cooperative cleanup continuation and production dispatch.
+A private native adoption component is now under final verification; notification,
+cooperative cleanup continuation and production dispatch remain open. Preserve the complete requested character image, not a snapshot
 or unsigned compatibility fallback. The broker producer/writer are separate
 qualified components; local full write is not gateway receipt or native release.
 
@@ -165,3 +166,25 @@ closed. The new job hook is discard-only; no existing selected-owner candidate
 fact or terminal receipt is fabricated. Body validation does not authorize image
 emission or prove native DRAIN/PRE_EMIT/resource/terminal release. Cooperative
 signed cleanup-cursor and production continuation remain separate work.
+
+## Private native adoption component
+
+The signed body owner retains a dedicated original remote slot before native
+initialization; it never occupies the legacy `RemoteResultOwner` slots. A one-shot
+original-task `adopt` transition rechecks the validated candidate and independent
+adoption allocation immediately before installing the original job result/token
+and `RESULT_VALIDATED`. No callback follows that installation. A duplicate or
+wrong-task call cannot consume another transition.
+
+`current_adopted` uses its separate fixed native `RESULT_VALIDATED` tail, current
+role material, original socket identity and cause-free budget. It never temporarily
+resets phase or accepts a phase selector. It uses the held immutable candidate
+fact after cryptographic callbacks, then repeats original candidate/token/custody
+joins after the final native descriptor boundary. Admitted failure withdraws both
+the private candidate and original job result/token with payload-free refusal;
+first-cause withdrawal remains ahead of cleanup clock sampling.
+
+This is private adoption only. The public readiness method still recognizes only
+the selected legacy owner; signed notification needs an explicitly reviewed caller
+contract. The original signed work task still parks in production after GO. No
+terminal, ACK, native release or HTTP/image delivery follows from adoption.

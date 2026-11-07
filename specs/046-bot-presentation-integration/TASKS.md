@@ -430,10 +430,22 @@ historical, not an alternative live authorization path or resolved incident.
       metadata cases prove no getter execution and no actor poisoning (5 passed,
       0.38s); independent read-only review accepts the bounded tests. This is not
       native candidate adoption or phone display.
-- [ ] Implement a distinct fixed post-adoption authority tail for the exact signed
+- [x] Implement a distinct fixed post-adoption authority tail for the exact signed
       body owner, preserving original native job/token/candidate joins, current
-      keys/policy/clock/budget and first-cause withdrawal. Current signed envelope
-      and result-intent tails are GO_SENT-only; never reset phase or select phase
-      through a caller argument to reuse them. Keep legacy RemoteResultOwner slots
-      closed to the signed owner. Then qualify native adoption/result notification,
-      cooperative cleanup/terminal continuation and production publication.
+      keys/policy/clock/budget and first-cause withdrawal. The original envelope
+      and result-intent tails remain GO_SENT-only; the new tail is fixed to actual
+      RESULT_VALIDATED, without phase reset/selector or legacy owner substitution.
+      Notification, cooperative cleanup/terminal and publication remain open below.
+
+- [x] Implement and independently review private signed native candidate adoption:
+      dedicated original owner slot, independent adoption/token allocation, original
+      actor one-shot native RESULT_VALIDATED transition, fixed post-adoption tail,
+      first-cause native/private withdrawal and payload-free refusal. Twenty-eight
+      body cases passed in 18.81s, nine exercising adoption/currentness. Final
+      affected regression: 1,662 passed/one skipped in 126.11s; lint/whitespace and
+      independent read-only review pass. Earlier cleanup refusal remains unresolved;
+      no production publication credit.
+- [ ] Qualify original-caller signed result notification without reusing the
+      original-work actor gate, then integrate original cooperative signed cleanup
+      cursor, terminal/ACK and production dispatch. No generic caller-selected
+      actor/phase bypass, fake legacy owner, phase reset or competing receiver.

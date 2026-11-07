@@ -58,6 +58,15 @@ from .test_presentation_supervisor import context as context
                                   "go_relay_result_sign_write_settlement_key",
                                   "go_relay_result_sign_write_blocked_cancel",
                                   "go_relay_result_sign_write_body",
+                                  "go_relay_result_sign_write_body_adopt",
+                                  "go_relay_result_sign_write_body_adopt_wrong_actor",
+                                  "go_relay_result_sign_write_body_adopt_key",
+                                  "go_relay_result_sign_write_body_adopt_header",
+                                  "go_relay_result_sign_write_body_adopt_tail_token",
+                                  "go_relay_result_sign_write_body_adopt_pending_pair",
+                                  "go_relay_result_sign_write_body_adopt_pair",
+                                  "go_relay_result_sign_write_body_adopt_attempt",
+                                  "go_relay_result_sign_write_body_adopt_fact",
                                   "go_relay_result_sign_write_body_wrong_actor",
                                   "go_relay_result_sign_write_body_avatar",
                                   "go_relay_result_sign_write_body_avatar_revision",
@@ -136,10 +145,14 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                "go_relay_result_sign_write_settlement_key",
                                "go_relay_result_sign_write_blocked_cancel")
     body_stage = stage.startswith("go_relay_result_sign_write_body")
-    body_fault = body_stage and stage not in ("go_relay_result_sign_write_body",
+    body_fault = (body_stage and "_body_adopt" not in stage and stage not in (
+                                              "go_relay_result_sign_write_body",
+                                              "go_relay_result_sign_write_body_adopt",
                                               "go_relay_result_sign_write_body_wrong_actor",
-                                              "go_relay_result_sign_write_body_avatar")
-    operation_failure = relay_failure or result_failure or writer_failure or body_fault
+                                              "go_relay_result_sign_write_body_avatar"))
+    adopted_key_retirement = stage == "go_relay_result_sign_write_body_adopt_key"
+    operation_failure = (relay_failure or result_failure or writer_failure or body_fault
+                         or adopted_key_retirement)
 
     async def broker():
         record = await BrokerServiceSpine._accept_owned(spine, end)
@@ -837,6 +850,98 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
             assert not body._scope_origin.accumulator
             from hmp_plugin.presentation_jobs import RemotePhase
             assert owned._job_origin_snapshot.remote_phase is RemotePhase.GO_SENT
+            if "_body_adopt" in stage:
+                if stage.endswith("_wrong_actor"):
+                    async def wrong_adoption_actor():
+                        with pytest.raises(FrameError):
+                            body.adopt()
+                    await asyncio.create_task(wrong_adoption_actor())
+                    assert not body._adoption_attempted and not body._failed
+                if stage.endswith(("_pending_pair", "_attempt")):
+                    from hmp_plugin.presentation_clock import NativeClockOwner
+                    from hmp_plugin.presentation_credential_result_body import _BodyAdoption
+                    sample_adoption = NativeClockOwner.sample
+                    def replace_pending(clock):
+                        now = sample_adoption(clock)
+                        if body._adoption_origin is not None:
+                            if stage.endswith("_attempt"):
+                                body._adoption_attempted = False
+                            else:
+                                prior = body._adoption_origin
+                                body._adoption = body._adoption_origin = _BodyAdoption(
+                                    prior.mint, body, prior.scope, prior.candidate_fact, object())
+                            held["pending_adoption_replaced"] = True
+                        return now
+                    monkeypatch.setattr(NativeClockOwner, "sample", replace_pending)
+                    with pytest.raises(FrameError):
+                        body.adopt()
+                    assert held["pending_adoption_replaced"]
+                    assert body._failed and body._retired
+                    assert body._scope_origin.job.result is None
+                    assert body._scope_origin.job.remote_result_token is None
+                else:
+                    assert body.adopt() is True
+                    assert body.current_adopted() is body._adoption_origin
+                    assert body._scope_origin.job.result is body._candidate_snapshot
+                    assert body._scope_origin.job.remote_result_token is body._token_origin
+                    assert body._scope_origin.job.remote_phase is RemotePhase.RESULT_VALIDATED
+                    assert owned._result_owner_snapshot is None  # no legacy owner masquerade
+                    with pytest.raises(FrameError):
+                        body.adopt()
+                    assert body.current_adopted() is body._adoption_origin
+                    if stage.endswith("_wrong_actor"):
+                        async def wrong_adopted_reader():
+                            with pytest.raises(FrameError):
+                                body.current_adopted()
+                        await asyncio.create_task(wrong_adopted_reader())
+                        assert body.current_adopted() is body._adoption_origin
+                    if stage.endswith("_pair"):
+                        from hmp_plugin.presentation_credential_result_body import _BodyAdoption
+                        prior = body._adoption_origin
+                        token = object()
+                        body._token = body._token_origin = token
+                        body._adoption = body._adoption_origin = _BodyAdoption(
+                            prior.mint, body, prior.scope, prior.candidate_fact, token)
+                        body._scope_origin.job.remote_result_token = token
+                    if stage.endswith("_fact"):
+                        from hmp_plugin import presentation_credential_result_body as body_module
+                        check = body_module.check_commitment
+                        class ForeignFact:
+                            def __getattribute__(self, name):
+                                held["foreign_adopted_fact_accessed"] = True
+                                raise AssertionError("foreign adopted fact accessed")
+                        def replaced_fact(*args, **kwargs):
+                            checked = check(*args, **kwargs)
+                            body._fact = body._fact_snapshot = ForeignFact()
+                            return checked
+                        monkeypatch.setattr(body_module, "check_commitment", replaced_fact)
+                    if stage.endswith("_key"):
+                        keys["gateway"].retire()
+                    if stage.endswith("_header"):
+                        body._candidate_snapshot[0]["outcome"] = "MUTATED"
+                    if stage.endswith("_tail_token"):
+                        from hmp_plugin import presentation_credential_result_body as body_module
+                        timeout = body_module._TIMEOUT
+                        def changed_timeout(sock):
+                            value = timeout(sock)
+                            if sock is body._scope_origin.envelope_scope.write_scope.sock:
+                                body._scope_origin.job.remote_result_token = object()
+                                held["adopted_tail_token_changed"] = True
+                            return value
+                        monkeypatch.setattr(body_module, "_TIMEOUT", changed_timeout)
+                    if stage.endswith(("_key", "_header", "_tail_token", "_pair", "_fact")):
+                        with pytest.raises(FrameError) as adopted_refusal:
+                            body.current_adopted()
+                        assert adopted_refusal.value.__context__ is None
+                        assert body._failed and body._retired
+                        assert body._candidate_snapshot is None and body._adoption_origin is None
+                        assert body._adoption_allocation_origin is None
+                        assert body._scope_origin.job.result is None
+                        assert body._scope_origin.job.remote_result_token is None
+                        if stage.endswith("_tail_token"):
+                            assert held["adopted_tail_token_changed"]
+                        if stage.endswith("_fact"):
+                            assert "foreign_adopted_fact_accessed" not in held
             from hmp_plugin.presentation_clock import NativeClockOwner
             sample = NativeClockOwner.cleanup_sample
 
@@ -845,6 +950,9 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                         and owned._cleanup_owner_snapshot._intent):
                     assert body._retired and body._candidate_snapshot is None
                     assert body._fact_snapshot is None
+                    assert body._adoption_origin is None and body._token_origin is None
+                    assert body._scope_origin.job.result is None
+                    assert body._scope_origin.job.remote_result_token is None
                     with pytest.raises(FrameError):
                         body.current_candidate()
                     assert not body._scope_origin.accumulator
@@ -979,6 +1087,16 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     if task.done() and not task.cancelled():
                         task.result()
                 raise
+            if adopted_key_retirement:
+                # Retired signing authority cannot authorize a later cancel/terminal receipt.
+                assert held["gateway_body"]._failed and held["gateway_body"]._retired
+                assert remote._job_origin_snapshot.result is None
+                assert remote._job_origin_snapshot.remote_result_token is None
+                assert cleanup._result_token is None
+                RemoteCleanupOwner.request(cleanup)
+                async with asyncio.timeout(3):
+                    await asyncio.shield(cleanup._allocations_snapshot[0].task)
+                return  # fixture-only disposal; no remote settlement credit
             control = held["control"]
             async with asyncio.timeout_at(end / 1e9):
                 await asyncio.wait((control._go_future_snapshot, control._allocation_snapshot.task),
@@ -1075,13 +1193,17 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 if selector is not None:
                     type(selector).close(selector)
         gateway_closed = gateway.close()
-        if not gateway_closed and body_fault:
+        if not gateway_closed and (body_fault or adopted_key_retirement):
             from hmp_plugin.presentation_clock import NativeClockOwner
             own_body = held.get("gateway_body")
             if own_body is None:
                 assert gateway._credential_result_receiver_snapshot._io_unknown
-            else:
+            elif not adopted_key_retirement:
                 assert own_body._io_unknown
+            else:
+                assert own_body._failed and own_body._retired
+                assert own_body._scope_origin.job.result is None
+                assert own_body._scope_origin.job.remote_result_token is None
             gateway._socket_snapshot.close()  # fixture-owned disposal, no release fact
             assert NativeClockOwner.close_local(gateway._clock_owner_snapshot)
         else:
