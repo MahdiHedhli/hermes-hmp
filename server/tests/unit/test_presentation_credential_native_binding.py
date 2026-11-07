@@ -555,6 +555,12 @@ async def begin_gateway(local, monkeypatch):
         transition = None if reader is None else reader._transition_snapshot
         go_writer = channel._credential_go_writer_snapshot
         cancel_writer = channel._credential_cancel_writer_snapshot
+        result_reader = channel._credential_result_receiver_snapshot
+        result_unknown = False
+        if result_reader is not None:
+            from hmp_plugin.presentation_credential_result_read import NativeResultEnvelopeReceiver
+            assert type(result_reader) is NativeResultEnvelopeReceiver
+            result_unknown = result_reader._io_unknown
         release_drift = False
         if go_writer is not None:
             go_base = go_writer._scope_snapshot.signed_scope.ready_scope.read_scope.write_scope
@@ -572,7 +578,7 @@ async def begin_gateway(local, monkeypatch):
                     or (go_writer is not None and (go_writer._unknown or go_writer._failed))
                     or (cancel_writer is not None
                         and (cancel_writer._unknown or cancel_writer._failed))
-                    or release_drift)
+                    or release_drift or result_unknown)
             if channel._closed_known:
                 assert release_drift  # prior actual closure is historical, not new credit
                 assert channel._close_fact is channel._close_fact_snapshot

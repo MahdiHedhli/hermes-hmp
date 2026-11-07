@@ -188,6 +188,13 @@ class NativeReadyReceiver:
         _require(type(self) is NativeReadyReceiver and type(self._scope) is _ReadyReadScope
                  and self._scope is self._scope_origin)
         s, b = self._scope_origin, self._base_origin
+        _require(type(b) is _BeginWriterScope and type(b.channel) is SocketChannel)
+        reading = self._active
+        result_reader = b.channel._credential_result_receiver_snapshot
+        if self._complete is True and self._active is False and result_reader is not None:
+            from .presentation_credential_result_read import NativeResultEnvelopeReceiver
+            _require(type(result_reader) is NativeResultEnvelopeReceiver)
+            reading = NativeResultEnvelopeReceiver._ready_reading(result_reader, self)
         _require(s.owner is self and type(s.writer) is NativeBeginWriter
                  and type(b) is _BeginWriterScope and self._base is b
                  and s.write_scope is b and s.writer is self._writer is self._writer_origin
@@ -224,7 +231,7 @@ class NativeReadyReceiver:
                  and 0 <= len(self._buffer) <= self._consumed <= self._target <= _LIMIT
                  and self._pending is self._pending_origin
                  and self._waiter is self._waiter_origin
-                 and b.channel._reading is self._active
+                 and b.channel._reading is reading
                  and self._completion is self._completion_origin)
         _require(self._cancel_release is self._cancel_release_origin)
         if self._cancel_release_origin is not None:

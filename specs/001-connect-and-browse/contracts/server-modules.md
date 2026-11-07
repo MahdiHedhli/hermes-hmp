@@ -806,3 +806,12 @@ for actual GO_SENT, original native custody and credential work actor/material.
 It does not reuse GO_INTENT through a caller-selectable phase, sample time or
 allow socket I/O. Original signed result cursor/cleanup integration remains open.
 See [tail evidence](../../../docs/research/presentation-gateway-result-custody-tail-2026-11-06.md).
+
+### BI1 gateway signed RESULT envelope (November 6, 2026)
+
+`presentation_credential_result_read.py` retains original-work bounded HBA1 and
+RESULT-header reads from actual completed native GO_SENT. It verifies original
+pinned scope and the committed header and preserves native counts/cancellation
+selector retirement. The fixed historical READY read-claim handoff is not a generic
+work grant. Its fact is envelope data only, no body digest/result2/native candidate,
+terminal or publication. See [envelope evidence](../../../docs/research/presentation-signed-result-envelope-2026-11-06.md).

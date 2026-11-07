@@ -1,3 +1,25 @@
+## Original gateway signed RESULT envelope — November 6, 2026
+
+The gateway now has a reviewed original-work reader for the pinned signed RESULT
+record and bounded outer header. It retains actual read counts, checks native
+GO_SENT custody after descriptor callbacks and preserves exact local selector
+cancellation retirement. A fixed historical READY read-claim handoff keeps that
+same original task/cursor. Premature and wrong-task calls do not consume/poison
+original admission; admitted failures are one-shot and cannot retry.
+
+Twenty focused cases passed in 6.24 seconds; a final premature-admission case also
+passes and is included in the final broader run: **1,628 passed, one skipped**,
+108.30 seconds. Lint/whitespace and independent read-only review pass. The concrete
+optional-field compatibility failure found during broader testing was repaired
+and reverified. Historical broker intermittency and the separate native sender-
+destination incident remain unresolved.
+
+This authenticates the envelope/header only: no image body digest, result2/native
+candidate, complete result, terminal ACK or publication is inferred. Committed
+body streaming, native candidate/cleanup continuation, production dispatch/startup
+and physical/release qualification remain open. No host/device/build/keys/grants/
+providers/settings changed. Full phone character-image delivery is incomplete.
+
 ## Gateway image-result custody prerequisite — November 6, 2026
 
 The gateway now has a reviewed fixed GO_SENT custody check for the upcoming signed

@@ -1,8 +1,9 @@
 # Original gateway signed RESULT cursor
 
-Status: receiver integration contract; the fixed gateway GO_SENT custody-tail
-prerequisite is implemented separately. No receiver or production dispatch is
-enabled by this document. Preserve the complete requested character image, not a snapshot
+Status: the fixed GO_SENT custody tail and original-work signed envelope cursor
+are source components. The cursor stops after authenticated bounded outer header;
+image-body/result2/candidate/cleanup continuation and production dispatch remain
+open. Preserve the complete requested character image, not a snapshot
 or unsigned compatibility fallback. The broker producer/writer are separate
 qualified components; local full write is not gateway receipt or native release.
 
@@ -66,6 +67,15 @@ remote terminal settlement from local task/FD retirement. Keep the original
 first-cause hook ahead of native clock sampling so any new private candidate cell
 is withdrawn together with native output custody.
 
+## Envelope component checkpoint
+
+`NativeResultEnvelopeReceiver` now retains a one-shot original-work cursor for
+bounded HBA1 and committed RESULT outer header only. Actual counts, current final
+GO_SENT custody and exact known local selector-cancellation retirement are checked.
+The historical READY read slot recognizes only the reciprocal fixed result owner.
+No body digest or native result follows from its private envelope fact. See
+[envelope evidence](../../docs/research/presentation-signed-result-envelope-2026-11-06.md).
+
 ## Signed record and original frame
 
 Read one bounded HBA1 RESULT record from the original socket/cursor, under the
@@ -111,3 +121,30 @@ short/unknown/torn writes, duplicate RESULT and no retries. Keep metadata-only
 receipt distinct from private candidate, terminal OK/ABORTED, ACK, native release,
 registry retirement and HTTP publication. Physical/runtime startup/release tests
 remain required separately.
+
+## Body continuation after the envelope component
+
+Extend the retained original envelope owner/cursor; do not allocate a second
+socket consumer after `current_envelope`. Its actual `raw`/canonical outer-header
+bytes and original expected pins/context are the starting commitment. Feed those
+actual header bytes to `CommittedFrameDigest`, then native body chunks directly
+to both that digest and the original `BoundedResultBufferV2`. No full concatenated
+outer frame or new body-sized staging array. Take declared length from the checked
+header and require exact consumed/committed totals and final signed frame digest.
+
+Retain the original output buffer, independent bytearray custody, parent result
+context, challenge/epoch, native operation and expected avatar revision before
+body read effects; never follow a substituted job buffer during feed or withdrawal.
+Existing native finish/parent snapshot/outcome/cleanup/revision checks remain
+independent of envelope authentication. Recheck authority after hash/feed/finish
+boundaries and before private candidate adoption. The original first-cause path
+must clear any new candidate references before native cleanup clock sampling.
+
+`RemoteResultOwner`, `_CandidateFact` and the native job's remote candidate slots
+currently have closed selected-owner contracts. Add an explicitly reviewed fixed
+typed bridge for the new signed owner rather than fabricating one of those facts,
+assigning its type-incompatible slots, changing native remote phase early or
+inferring terminal/publication authority. Preserve one clearable candidate cell
+and separately retained original native wipe custody. Partial body/hash progress
+must be available to the same cleanup cursor under its earliest frozen budget;
+all remote/native release and terminal/ACK/publication gates remain separate.

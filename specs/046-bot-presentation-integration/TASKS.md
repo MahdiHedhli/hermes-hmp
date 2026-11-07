@@ -403,3 +403,13 @@ historical, not an alternative live authorization path or resolved incident.
       confirmation1,606 passed/one skipped102.87s; lint/whitespace/source review pass.
       Earlier existing signed-cancellation failure is unresolved and preserved.
       This is not a result reader, I/O grant or publication transition.
+
+- [x] Qualify original gateway signed RESULT envelope cursor with fixed native
+      GO_SENT admission, bounded HBA1/header reads, reciprocal historical READY
+      read claim and exact local cancellation retirement. Twenty-one cases in
+      final1,628 passed/one skipped108.30s; lint/whitespace/source review pass.
+      Envelope only; no image body, native candidate or publication credit.
+- [ ] Continue that same signed cursor through committed image body/result2 and
+      original native parent/revision validation, then typed candidate withdrawal,
+      cleanup discard/terminal continuation and production dispatch. No second
+      reader or envelope-to-image/terminal/publication shortcut.

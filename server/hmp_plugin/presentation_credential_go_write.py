@@ -71,6 +71,7 @@ class NativeGoWriter:
         owner._offset = owner._offset_snapshot = 0
         owner._waiter = owner._waiter_origin = None
         owner._fact = owner._fact_snapshot = None
+        owner._result_receiver = owner._result_receiver_snapshot = None
         commitment._writer = commitment._writer_snapshot = owner
         b.channel._credential_go_writer = b.channel._credential_go_writer_snapshot = owner
         try:
