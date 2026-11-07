@@ -423,3 +423,17 @@ historical, not an alternative live authorization path or resolved incident.
 - [ ] Add reviewed typed native candidate adoption/result notification and same
       cooperative signed cleanup cursor/terminal continuation. Preserve private
       ownership, earliest cause and no competing reader or cancelled-task revival.
+
+- [x] Qualify private candidate-use refusal boundaries: exact original actor scopes,
+      primitive signed-stream/fact fields, canonical header identity, sticky admitted
+      withdrawal and payload-free exception context. Five additional foreign nested
+      metadata cases prove no getter execution and no actor poisoning (5 passed,
+      0.38s); independent read-only review accepts the bounded tests. This is not
+      native candidate adoption or phone display.
+- [ ] Implement a distinct fixed post-adoption authority tail for the exact signed
+      body owner, preserving original native job/token/candidate joins, current
+      keys/policy/clock/budget and first-cause withdrawal. Current signed envelope
+      and result-intent tails are GO_SENT-only; never reset phase or select phase
+      through a caller argument to reuse them. Keep legacy RemoteResultOwner slots
+      closed to the signed owner. Then qualify native adoption/result notification,
+      cooperative cleanup/terminal continuation and production publication.

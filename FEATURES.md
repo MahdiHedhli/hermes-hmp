@@ -6,9 +6,10 @@ request. Follow-up review repairs fence primitive stream/fact fields and nested
 caller scopes before use, permanently withdraw admitted failed candidates, and
 raise payload-free refusals outside exception handlers. Latest focused checks:
 19 passed in 13.18 seconds, including wrong-task non-consumption, final-callback
-foreign-metadata refusal and exception-context withdrawal. A preceding broader
-run passed 1,648/one skipped in 122.43 seconds before the final scope/context
-repairs; it is not final-source coverage. One earlier overlapping focused run
+foreign-metadata refusal and exception-context withdrawal. Final production-source
+regression passed 1,648/one skipped in 124.37 seconds. Five additional independently
+reviewed preflight causals passed in 0.38 seconds; they ran separately because their
+new file was added after the broader suite expanded its input glob. One earlier overlapping focused run
 had three unexplained failures; later green runs do not resolve those failures.
 Native adoption, notification, terminal settlement and phone display remain
 unfinished. No runtime/release qualification or host/device/settings change.
