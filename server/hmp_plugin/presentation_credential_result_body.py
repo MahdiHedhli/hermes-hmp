@@ -260,6 +260,36 @@ class NativeResultBodyOwner:
         _require(NativeResultBodyOwner._local(self) is s)
         return s
 
+    def _candidate_local(self):
+        """Recheck the minted private candidate; this grants no native adoption."""
+        s = NativeResultBodyOwner._local(self)
+        candidate, fact = self._candidate_snapshot, self._fact_snapshot
+        _require(self._validated is True and self._active is False
+                 and self._attempted is True and self._finish_attempted is True
+                 and type(candidate) is tuple and len(candidate) == 2
+                 and type(candidate[0]) is dict and type(candidate[1]) is bytes
+                 and type(fact) is _BodyCandidate and fact.mint is _MINT
+                 and fact.owner is self and fact.scope is s
+                 and fact.candidate_id == id(candidate)
+                 and fact.header_id == id(candidate[0]) and fact.body_id == id(candidate[1])
+                 and type(fact.header_wire) is bytes
+                 and _candidate_header_wire(candidate[0]) == fact.header_wire
+                 and fact.received == self._received_snapshot == self._committed_snapshot
+                 and fact.received == s.envelope_fact.header.body_length
+                 and fact.body_wire_sha256 == self._hash_origin.hexdigest()
+                 and self._stream_origin._finished is True
+                 and fact.frame_sha256 == self._stream_origin._commitment_values[1]
+                 and not s.accumulator and s.buffer._done is True)
+        return fact
+
+    def current_candidate(self):
+        """Private data identity under current original-work authority, not release."""
+        fact = NativeResultBodyOwner._candidate_local(self)
+        NativeResultBodyOwner._settled(self)
+        NativeResultBodyOwner._current(self)
+        _require(NativeResultBodyOwner._candidate_local(self) is fact)
+        return fact
+
     def discard(self):
         """Pure first-cause withdrawal under the original job's typed custody hook."""
         _require(type(self) is NativeResultBodyOwner)

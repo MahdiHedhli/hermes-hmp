@@ -826,6 +826,7 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 held["body_canceller"] = asyncio.create_task(original_cause())
             assert await body.receive() is True
             assert body._validated and body._candidate_snapshot[1] == image()
+            assert body.current_candidate() is body._fact_snapshot
             assert body._scope_origin.job.result is None
             assert body._scope_origin.job.remote_result_token is None
             assert not body._scope_origin.accumulator
@@ -839,11 +840,20 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                         and owned._cleanup_owner_snapshot._intent):
                     assert body._retired and body._candidate_snapshot is None
                     assert body._fact_snapshot is None
+                    with pytest.raises(FrameError):
+                        body.current_candidate()
                     assert not body._scope_origin.accumulator
                     held["body_retired_before_clock"] = True
                 return sample(clock)
 
             monkeypatch.setattr(NativeClockOwner, "cleanup_sample", original_withdrawal)
+            if stage == "go_relay_result_sign_write_body":
+                # Paired candidate aliases do not authorize mutated validated metadata.
+                body._candidate_snapshot[0]["outcome"] = "MUTATED"
+                with pytest.raises(FrameError):
+                    body.current_candidate()
+                assert body._scope_origin.job.result is None
+                assert body._scope_origin.job.remote_result_token is None
             return result
 
         monkeypatch.setattr(RemoteOperationOwner, "_go_exchange", original_signed_body)

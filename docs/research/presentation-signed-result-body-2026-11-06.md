@@ -113,3 +113,9 @@ recorded separately below.
 Final affected exact-source regression including all nineteen body cases:
 **1,648 passed, one skipped in 123.36s**. Lint/whitespace and independent read-only
 review pass. No historical failure is erased or reclassified by this run.
+
+### Private candidate currentness follow-up
+
+The signed body owner now exposes a private `current_candidate` identity check. It rechecks the minted fact, original candidate/header/body identities, canonical header bytes, original hash allocation and signed-frame digest, complete byte counts, settled reader, and current original-work authority, then repeats the candidate fence after authority callbacks. It does not adopt into the native job, change phase, publish bytes, or release credit.
+
+Focused verification: 19 body transport cases passed (12.65 seconds), including a positive current-candidate check, mutated validated header refusal without native publication, and first-cause withdrawal refusal. This is focused coverage only; the prior full regression belongs to the previous checkpoint. Native adoption, terminal settlement, runtime deployment and physical display remain incomplete.
