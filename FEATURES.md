@@ -1,3 +1,27 @@
+## Signed cleanup progress capture — November 6, 2026
+
+First cause now captures the actual signed envelope/body framing, original hash
+allocation and wait scope/Future/registration identity before native poisoning.
+It retains bounded envelope metadata and counters, not a copied image body, new
+reader or cleanup allowance. Output withdrawal remains ahead of cleanup sampling.
+The signed discriminator cannot fall back to a legacy unsigned cursor.
+
+This is frozen progress DATA only. Its inspector does not assert live kernel
+ownership, wait retirement, quiescence or release. Cooperative signed request
+still returns False: original Task cancellation remains in force until the typed
+continuation, minimum-budget and current registration checks are qualified.
+Independent read-only review accepts this capture-only prerequisite. Focused
+checks cover actual adopted/notice captures (11 passed/9.44s), partial body/wait
+capture (9 passed/5.88s), a foreign-phase zero-comparison refusal (1 passed/1.78s),
+and empty/partial signed envelope capture (2 passed/1.40s). Final expanded
+regression: **1,742 passed, one skipped**, 146.11s; lint/whitespace pass. Reviewer
+performed no tests or native operations. No deployment/device/build/config/grant/
+provider changes.
+
+Same-task cooperative read transfer/drain, signed terminal/ACK, production reader
+composition/publication and physical/release delivery remain unfinished. Historical
+broker failures and the native sender-destination incident remain unresolved.
+
 ## Signed image original-caller readiness — November 6, 2026
 
 The native signed-image path now has an original-work readiness publisher and a

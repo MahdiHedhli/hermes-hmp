@@ -842,3 +842,15 @@ and adopted result. Future/scheduler checks follow the final native callback;
 ambiguous scheduling withdraws native/private output and cannot retry. No image,
 terminal or release is returned. Production reader/cleanup/terminal composition
 remains open. See [notification evidence](../../../docs/research/presentation-signed-result-notification-2026-11-06.md).
+
+### BI1 signed cleanup progress capture (November 6, 2026)
+
+`presentation_credential_cleanup_capture.py` freezes actual original signed
+envelope/body framing, digest allocation and wait scope/Future/registration
+metadata before first-cause poisoning. It copies bounded envelope metadata only,
+not an image body, and creates no reader, clock, deadline or IO permission.
+Its inspector checks frozen structural data only, without claiming current kernel
+ownership, wait retirement, quiescence or release. The gate's signed discriminator
+never falls back to a legacy cursor; request deliberately returns False until
+typed cooperative continuation is qualified. Original native withdrawal/cancellation
+remains in force. Live phase checks use enum identity before foreign comparison.

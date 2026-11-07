@@ -59,6 +59,7 @@ from .test_presentation_supervisor import context as context
                                   "go_relay_result_sign_write_blocked_cancel",
                                   "go_relay_result_sign_write_body",
                                   "go_relay_result_sign_write_body_adopt",
+                                  "go_relay_result_sign_write_body_adopt_capture_phase",
                                   "go_relay_result_sign_write_body_adopt_notice",
                                   "go_relay_result_sign_write_body_adopt_notice_actors",
                                   "go_relay_result_sign_write_body_adopt_notice_scheduler",
@@ -844,7 +845,38 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
 
                 async def original_cause():
                     await waiting.wait()
-                    RemoteCleanupOwner.request(owned._cleanup_owner_snapshot)
+                    from hmp_plugin.presentation_clock import NativeClockOwner
+                    from hmp_plugin.presentation_credential_cleanup_capture import (
+                        inspect_signed_cleanup,
+                    )
+                    cleanup = owned._cleanup_owner_snapshot
+                    sample = NativeClockOwner.cleanup_sample
+                    def withdrawn_partial_before_clock(clock):
+                        if clock is owned._clock_owner_snapshot and cleanup._intent:
+                            assert body._retired and body._candidate_snapshot is None
+                            assert not body._scope_origin.accumulator
+                            assert body._scope_origin.job.result is None
+                            assert body._scope_origin.job.remote_result_token is None
+                            held["partial_capture_withdrawn_before_clock"] = True
+                        return sample(clock)
+                    monkeypatch.setattr(NativeClockOwner, "cleanup_sample",
+                                        withdrawn_partial_before_clock)
+                    RemoteCleanupOwner.request(cleanup)
+                    gate = cleanup._read_gate_snapshot
+                    captured = gate._signed_capture_origin
+                    assert captured is not None
+                    assert inspect_signed_cleanup(captured, gate, cleanup) is captured
+                    assert captured.body.owner is body and captured.body.active
+                    assert not captured.body.validated and captured.envelope.complete
+                    assert captured.body.received == captured.body.committed == 0
+                    assert captured.body.waiter.owner is body._waiter_origin
+                    assert captured.body.waiter.scope.task is cleanup._allocations_snapshot[1].task
+                    assert not captured.body.waiter.future_done
+                    assert captured.write is None  # no invented pre-GO-notice quiescence
+                    assert not gate._requested and gate._fact_origin is None
+                    assert cleanup._cancel_attempted and not cleanup._work_joined
+                    assert held["partial_capture_withdrawn_before_clock"]
+                    held["signed_partial_cleanup_capture_checked"] = True
 
                 monkeypatch.setattr(SelectorReadiness, "wait", observed_wait)
                 held["body_canceller"] = asyncio.create_task(original_cause())
@@ -1038,6 +1070,31 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
             def original_withdrawal(clock):
                 if (clock is owned._clock_owner_snapshot
                         and owned._cleanup_owner_snapshot._intent):
+                    if stage in (
+                            "go_relay_result_sign_write_body_wrong_actor",
+                            "go_relay_result_sign_write_body_adopt",
+                            "go_relay_result_sign_write_body_adopt_wrong_actor",
+                            "go_relay_result_sign_write_body_adopt_notice",
+                            "go_relay_result_sign_write_body_adopt_notice_actors"):
+                        from hmp_plugin.presentation_credential_cleanup_capture import (
+                            inspect_signed_cleanup,
+                        )
+                        cleanup = owned._cleanup_owner_snapshot
+                        gate = cleanup._read_gate_snapshot
+                        capture = gate._signed_capture_origin
+                        assert capture is not None
+                        assert inspect_signed_cleanup(capture, gate, cleanup) is capture
+                        assert capture.receiver is envelope
+                        assert capture.scope is envelope._scope_origin
+                        assert capture.body.owner is body and capture.body.validated
+                        assert capture.body.scope is body._scope_origin
+                        assert capture.body.received == body._received_snapshot
+                        assert capture.body.allocation is body._initialization_origin
+                        assert capture.envelope.complete and not capture.envelope.active
+                        assert capture.work is cleanup._allocations_snapshot[1]
+                        assert not gate._requested and gate._fact_origin is None
+                        assert not gate._activated  # frozen DATA, not cooperative permission
+                        held["signed_cleanup_capture_checked"] = True
                     assert body._retired and body._candidate_snapshot is None
                     assert body._fact_snapshot is None
                     assert body._adoption_origin is None and body._token_origin is None
@@ -1260,7 +1317,21 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     else:
                         broker_task.result()  # preserve actual service failure
                 assert held["go_current_checked"]
+        if stage.endswith("_capture_phase"):
+            class ForeignCapturePhase:
+                def __eq__(self, other):
+                    held["foreign_capture_phase_equality"] = True
+                    return False
+            remote._job_origin_snapshot.remote_phase = ForeignCapturePhase()
         RemoteCleanupOwner.request(cleanup)
+        if stage.endswith("_capture_phase"):
+            gate = cleanup._read_gate_snapshot
+            assert "foreign_capture_phase_equality" not in held
+            assert gate._capture_kind == "signed" and gate._capture_failed
+            assert gate._signed_capture_origin is None and gate._fact_origin is None
+            assert not gate._requested and not gate._activated
+            assert held["gateway_body"]._retired
+            assert remote._job_origin_snapshot.result is None
         async with asyncio.timeout(3):
             local_closed = await asyncio.shield(cleanup._allocations_snapshot[0].task)
             if stage in ("go_relay_tail_cancel",

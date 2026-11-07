@@ -165,3 +165,10 @@ Original-caller readiness now has separate fixed authority from original-work
 publishing; it does not substitute for terminal claim/ACK. Ambiguous native Future
 scheduling consumes its attempt and withdraws output even if the Future became
 done. See [notification evidence](../../docs/research/presentation-signed-result-notification-2026-11-06.md).
+
+The signed cleanup progress capture is now a frozen-data source prerequisite, not
+a cleanup read transfer. It preserves original framing/hash/wait identities before
+poisoning without copying an image body; output withdrawal remains ahead of clock
+sampling. Signed request stays disabled until the same-task wake/retirement/current
+custody/minimum-budget continuation is qualified. Terminal/ACK remain separate.
+See [capture evidence](../../docs/research/presentation-signed-cleanup-capture-2026-11-06.md).

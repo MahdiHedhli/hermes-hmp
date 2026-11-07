@@ -206,3 +206,20 @@ as well as native/private output. See [notification evidence](../../docs/researc
 
 Production reader composition and cooperative signed cleanup/terminal/ACK remain
 open. No image bytes or release authority follow from a readiness Boolean.
+
+## First-cause signed progress capture prerequisite
+
+The read gate now records the actual signed framing/body/hash allocation and
+original wait scope/Future/registration metadata before native poisoning. The
+frozen inspector is data-only: it proves no live wait retirement, quiescence,
+transfer, clock allowance or remote credit. The signed request branch deliberately
+returns False, preserving original Task cancellation until current typed
+cooperative continuation is qualified. Bad signed metadata cannot select a legacy
+unsigned reader. Bounded envelope metadata may be retained; image body bytes are
+not copied and original native output is still withdrawn before cleanup sampling.
+See [capture evidence](../../docs/research/presentation-signed-cleanup-capture-2026-11-06.md).
+
+The next transition must correlate actual native cause wake/registration retirement
+with this held original progress, not consume the snapshot as an IO grant. Same
+Task/socket/framing/hash offsets and the earliest existing cleanup ceiling must
+survive. No new reader, phase reset, timer renewal or fabricated retirement fact.

@@ -461,3 +461,17 @@ historical, not an alternative live authorization path or resolved incident.
       only with the reviewed same cooperative cleanup cursor and signed terminal/ACK;
       retain original actor, budget and native cancellation/unknown debt. Then
       qualify startup/publication and physical/release delivery without shortcuts.
+
+- [x] Capture original signed cleanup progress before first-cause poisoning as
+      frozen DATA: actual envelope/body/hash allocation and native wait scope,
+      Future, registration/flags. Preserve zero image-body copy, no new read/clock/
+      deadline, enum-identity checks and no signed-to-legacy fallback. Independent
+      read-only review and targeted actual envelope/body/adoption/notice cases pass.
+      Final expanded affected regression: 1,742 passed/one skipped in 146.11s;
+      lint/whitespace pass. The inspector grants no IO, quiescence, retirement,
+      transfer or release; historical broker failures remain unresolved.
+- [ ] Qualify a distinct typed same-original-Task signed cleanup transition from
+      held progress, with actual native cause wake/known wait retirement, current
+      original custody/role, original write quiescence and minimum budget. Keep
+      signed request disabled until those checks and causal isolation tests pass;
+      then continue signed body discard/terminal authentication without a new reader.

@@ -112,6 +112,8 @@ class CleanupReadGate:
         self._request = self._request_origin = None
         self._capture_attempted = self._capture_failed = False
         self._capture_kind = self._capture_receiver = self._capture_cause = None
+        self._signed_capture = self._signed_capture_origin = None
+        self._signed_capture_allocation_origin = None
         self._preflight = self._preflight_origin = None
         self._fact = self._fact_origin = None
         self._notice = self._notice_origin = _FUTURE.__new__(_FUTURE)
@@ -155,12 +157,22 @@ class CleanupReadGate:
                      self._done, self._eof, self._capture_attempted, self._capture_failed))
                  and self._preflight is self._preflight_origin
                  and (self._capture_kind is None or (type(self._capture_kind) is str
-                      and self._capture_kind in ("none", "pre", "result")))
+                      and self._capture_kind in ("none", "pre", "result", "signed")))
                  and self._request is self._request_origin
                  and self._fact is self._fact_origin
                  and self._change is self._change_origin
                  and type(self._epoch) is int and 0 <= self._epoch < 1 << 63
                  and type(self._generation) is int and 0 <= self._generation < 1 << 63)
+        _require(self._signed_capture is self._signed_capture_origin)
+        if self._signed_capture_origin is not None:
+            from .presentation_credential_cleanup_capture import inspect_signed_cleanup
+            allocation = self._signed_capture_allocation_origin
+            _require(self._capture_kind == "signed" and type(allocation) is tuple
+                     and len(allocation) == 2 and allocation[0] is self
+                     and allocation[1] is self._signed_capture_origin)
+            inspect_signed_cleanup(self._signed_capture_origin, self, o)
+        else:
+            _require(self._signed_capture_allocation_origin is None)
         if self._preflight is not None:
             _require(self._capture_kind == "pre" and type(self._preflight) is _Request)
             CleanupReadGate._pre_seal(self, self._preflight)
@@ -327,6 +339,16 @@ class CleanupReadGate:
             self._capture_cause = o._barriers_snapshot.cause
             _require(type(self._capture_cause) is _FUTURE
                      and not _FUTURE.done(self._capture_cause))
+            signed = getattr(channel, "_credential_result_receiver_snapshot", None)
+            if (signed is not None
+                    or getattr(channel, "_credential_result_receiver", None) is not None):
+                from .presentation_credential_cleanup_capture import capture_signed_cleanup
+                self._capture_kind = "signed"  # never reinterpret as a legacy unsigned cursor
+                self._capture_receiver = signed
+                captured = capture_signed_cleanup(self, o, signed)
+                self._signed_capture = self._signed_capture_origin = captured
+                self._signed_capture_allocation_origin = (self, captured)
+                return
             self._capture_receiver = channel._result_receiver_snapshot
             if self._capture_receiver is not None:
                 self._capture_kind = "result"
@@ -376,6 +398,9 @@ class CleanupReadGate:
         CleanupReadGate.guard(self)
         o = self._owner_origin
         if self._failed or o._unknown or self._capture_failed:
+            return False
+        if self._capture_kind == "signed":
+            # Progress DATA only. A typed current cooperative continuation is not qualified yet.
             return False
         if self._capture_kind == "pre":
             r = self._preflight_origin

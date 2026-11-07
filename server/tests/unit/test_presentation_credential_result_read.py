@@ -28,6 +28,7 @@ from .test_presentation_supervisor import context as context
     "oversize_body", "wrong_header", "unknown_recv", "count_drift", "tail_key",
     "wrong_actor", "cancel_wait", "cancel_partial", "initial", "deadline",
     "tail_policy", "expected_row", "cancel_generic", "cancel_foreign_end", "premature",
+    "cancel_capture_wait", "cancel_capture_partial",
 ])
 async def test_original_result_envelope(context, begin_gateway, tmp_path, monkeypatch, mutation):
     from hmp_plugin import presentation_credential_result_read as module
@@ -80,10 +81,33 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
                 actual.extend(part)
             assert actual == wire
             if mutation.startswith("cancel"):
-                if mutation == "cancel_partial":
+                if mutation.endswith("partial"):
                     await loop.sock_sendall(peer, b"HBA1")
                 await waiting.wait()
-                assert b.allocation.task.cancel()
+                if mutation.startswith("cancel_capture"):
+                    from hmp_plugin.presentation_credential_cleanup_capture import (
+                        inspect_signed_cleanup,
+                    )
+                    cleanup = b.remote._cleanup_owner_snapshot
+                    RemoteCleanupOwner.request(cleanup)
+                    gate = cleanup._read_gate_snapshot
+                    captured = gate._signed_capture_origin
+                    assert captured is not None
+                    assert inspect_signed_cleanup(captured, gate, cleanup) is captured
+                    assert captured.receiver is held["reader"] and captured.body is None
+                    assert captured.envelope.active and not captured.envelope.complete
+                    assert captured.envelope.completion is None
+                    expected = b"HBA1" if mutation.endswith("partial") else b""
+                    assert captured.envelope.values == expected
+                    assert captured.envelope.consumed == len(expected)
+                    assert captured.envelope.waiter.scope.task is b.allocation.task
+                    assert not captured.envelope.waiter.future_done
+                    assert captured.write is None
+                    assert cleanup._cancel_attempted and not cleanup._work_joined
+                    assert not gate._requested and gate._fact_origin is None
+                    held["signed_envelope_cleanup_capture_checked"] = True
+                else:
+                    assert b.allocation.task.cancel()
                 return
             frame = encode_frame(b.intent.binding, "RESULT", 1, b"abcd", version=2)
             header_end = 8 + header_size(frame[:8])
@@ -236,7 +260,7 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             async def observed_wait(waiter, end, **options):
                 task = writer._scope_snapshot.signed_scope.producer._refs[6].task
                 if (waiter._origin_scope.task is task
-                        and (mutation != "cancel_partial" or reader._consumed == 4)):
+                        and (not mutation.endswith("partial") or reader._consumed == 4)):
                     waiting.set()
                 try:
                     return await wait(waiter, end, **options)
@@ -291,13 +315,16 @@ async def test_original_result_envelope(context, begin_gateway, tmp_path, monkey
             if mutation == "unknown_recv":
                 assert reader._consumed == 0 and held["native_received"] > 0
                 assert reader._io_unknown
-            if mutation in ("cancel_wait", "cancel_partial"):
+            if mutation in ("cancel_wait", "cancel_partial",
+                            "cancel_capture_wait", "cancel_capture_partial"):
                 assert reader._cancel_release_origin is not None
                 assert not reader._active and not reader._io_unknown
-                assert reader._consumed == (4 if mutation == "cancel_partial" else 0)
+                assert reader._consumed == (4 if mutation.endswith("partial") else 0)
             if mutation in ("cancel_generic", "cancel_foreign_end"):
                 assert reader._cancel_release_origin is None and reader._io_unknown
         await peer_task
+        if mutation.startswith("cancel_capture"):
+            assert held["signed_envelope_cleanup_capture_checked"]
         assert remote._result_owner is None
         assert remote._cleanup_owner_snapshot._result_token is None
     finally:
