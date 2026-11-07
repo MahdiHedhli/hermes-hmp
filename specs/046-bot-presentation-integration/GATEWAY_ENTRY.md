@@ -174,4 +174,3 @@ actual interpreter execution, loader/native/key/broker composition or phone imag
 Independent review accepted the final original-owner guard and closed lazy-import
 delta. Linux exact-source CI is pending; local 706 startup / 74 actual Python 3.11
 child fixtures and 89 surface checks are distinct evidence, not installed acceptance.
-

@@ -16,6 +16,19 @@
 
 See [selected executable link contract](EXECUTABLE_LINK_SNAPSHOT.md). All four belong to the existing character-delivery goal; L1 does not close GR2 or qualify a symlink.
 
+## Fixed startup factory implementation order
+
+See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
+
+- [ ] **PS1-ANCHOR** Freeze trusted installer/entry root selection and implement
+      independent private approval-anchor loader, avoiding circular hash approval.
+- [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
+      snapshot DATA cannot mint startup admission.
+- [ ] **PS1-LISTENER** Bind original admitted startup to actual listener/native owner,
+      with fixed currentness methods and explicit PresentationNativeService wiring.
+- [ ] **PS1-KEYS** Acquire only the gateway role key after those joins; broker and
+      terminal/ACK/PRE_EMIT remain separate acceptance tasks.
+
 ## Installed-startup and native acceptance critical path
 
 See [paired startup composition](PAIRED_STARTUP_COMPOSITION.md). These are HMP
