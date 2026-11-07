@@ -29,6 +29,14 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
 - [x] **PS1-BYTECODE-HEADER-DATA** Observe selected headers during original hashing
       and classify against original interpreter magic without execution or extra IO.
       See [scope and remaining gates](BYTECODE_HEADERS.md); not runtime admission.
+- [x] **PS1-CACHE-PATH-DATA** Implement/review complete supported POSIX source-cache
+      location mapping, including CPython root/CWD edge. See [scope](CACHE_CANDIDATES.md).
+      Actual original pre-IO context and cache/absence observations remain open.
+- [ ] **PS1-CACHE-CONTEXT** Bind original entry/recipe/plugin/interpreter and required
+      CWD before combined IO planning; preserve the actual context through continuation.
+- [ ] **PS1-CACHE-OBSERVE** Reserve and observe declared caches plus unresolved
+      no-follow absence probes in the same original aggregate owner before completion.
+      Never infer loose-cache absence or extend a completed owner.
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
 - [ ] **PS1-LISTENER** Bind original admitted startup to actual listener/native owner,

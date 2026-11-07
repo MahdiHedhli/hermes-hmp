@@ -1,3 +1,12 @@
+# November 7: source-cache location mapping
+
+A reviewed pure mapper now covers standard POSIX CPython cache locations,
+including root-source/CWD behavior, cache prefixes and optimization levels.
+This is path DATA only. Original pre-IO context, actual cache/absence observations,
+full runtime admission and physical character delivery remain unfinished.
+Host-local images remain unfinished; no live host or device settings changed.
+See [scope](specs/046-bot-presentation-integration/CACHE_CANDIDATES.md).
+
 # November 7: effective cache policy continuity source
 
 The character startup observation now binds the original interpreter's hash-check
