@@ -9,6 +9,7 @@ import socket
 import stat
 from typing import NamedTuple
 
+from .presentation_authority import ParentAuthorityAdapter
 from .presentation_broker_service import SocketChannel
 from .presentation_clock import NativeClockOwner
 from .presentation_credential_begin_write import _BeginWriterScope
@@ -17,7 +18,7 @@ from .presentation_credential_result_read import NativeResultEnvelopeReceiver, _
 from .presentation_credential_stream import CommittedFrameDigest
 from .presentation_credential_work import NativePhaseWorkOwner
 from .presentation_input_v3 import decode_input_v3
-from .presentation_jobs import FrameError, RemotePhase, State, _Job
+from .presentation_jobs import FrameError, JobOwner, RemotePhase, State, _Job
 from .presentation_output_v2 import BoundedResultBufferV2, compare_parent_snapshot
 from .presentation_parent_policy import ParentPolicySnapshot
 from .presentation_readiness import (
@@ -31,7 +32,7 @@ from .presentation_readiness import (
     _Scope as _ReadinessScope,
 )
 from .presentation_remote import RemoteOperationOwner
-from .presentation_remote_cleanup import _TASK, _TaskAllocation
+from .presentation_remote_cleanup import _FUTURE, _TASK, RemoteCleanupOwner, _TaskAllocation
 from .presentation_result_transport import _candidate_header_wire
 
 _RECV = socket.socket.recv
@@ -41,6 +42,7 @@ _HASH = type(hashlib.sha256())
 _MINT = object()
 _RETIRE_MINT = object()
 _ADOPT_MINT = object()
+_NOTICE_MINT = object()
 
 
 def _require(value):
@@ -90,6 +92,17 @@ class _BodyAdoption(NamedTuple):
 
     def __repr__(self):
         return "<SignedBodyAdoption private-native-candidate no-release>"
+
+
+class _BodyNotice(NamedTuple):
+    mint: object
+    owner: object
+    scope: object
+    adoption: object
+    allocation: tuple
+
+    def __repr__(self):
+        return "<SignedResultNotice private-readiness no-data-release>"
 
 
 class _BodyWait(NamedTuple):
@@ -156,6 +169,15 @@ class NativeResultBodyOwner:
         owner._adoption = owner._adoption_origin = None
         owner._adoption_allocation_origin = None
         owner._token = owner._token_origin = None
+        owner._notice_attempted = owner._notified = False
+        owner._notice = owner._notice_snapshot = owner._notice_fact_allocation_origin = None
+        cleanup = b.refs[0]
+        _require(type(cleanup) is RemoteCleanupOwner
+                 and type(cleanup._result_barrier_snapshot) is tuple
+                 and len(cleanup._result_barrier_snapshot) == 1
+                 and type(cleanup._result_barrier_snapshot[0]) is _FUTURE)
+        owner._notice_allocation_origin = (cleanup, cleanup._result_barrier_snapshot,
+            cleanup._result_barrier_snapshot[0], b.allocation, cleanup._caller_snapshot)
         b.remote._signed_result_owner = b.remote._signed_result_owner_snapshot = owner
         owner._failed = owner._retired = owner._validated = owner._io_unknown = False
         owner._read_intent = owner._commit_intent = owner._finish_attempted = False
@@ -217,7 +239,8 @@ class NativeResultBodyOwner:
                      is envelope and type(self._active) is bool)
         return self._active  # fixed original read claim, never authority
 
-    def _local(self):
+    def _metadata(self):
+        """Retained data joins only; no actor, authority or publication grant."""
         _require(type(self) is NativeResultBodyOwner and type(self._scope) is _BodyScope
                  and self._scope is self._scope_origin)
         s = self._scope_origin
@@ -243,12 +266,11 @@ class NativeResultBodyOwner:
                  and s.job._remote_candidate_custody_snapshot[1] is s.job
                  and s.job._remote_candidate_custody_origin
                      is s.job._remote_candidate_custody_snapshot
-                 and asyncio.current_task() is s.envelope_scope.write_scope.allocation.task
-                 and _TASK.cancelling(s.envelope_scope.write_scope.allocation.task) == 0
                  and all(type(v) is bool for v in (self._initialized, self._attempted, self._active,
                      self._failed, self._retired, self._validated, self._io_unknown,
                      self._read_intent, self._commit_intent, self._finish_attempted,
-                     self._adopted, self._adoption_attempted))
+                     self._adopted, self._adoption_attempted,
+                     self._notice_attempted, self._notified))
                  and self._failed is False and self._retired is False and self._io_unknown is False
                  and type(self._received) is int and self._received is self._received_snapshot
                  and type(self._committed) is int and self._committed is self._committed_snapshot
@@ -309,15 +331,20 @@ class NativeResultBodyOwner:
                  and s.buffer._done is self._finish_attempted)
         return s
 
+    def _local(self):
+        s = NativeResultBodyOwner._metadata(self)
+        _require(NativeResultBodyOwner._actor(self) is s)
+        return s
+
     def _current(self):
         s = NativeResultBodyOwner._local(self)
         _require(NativeResultEnvelopeReceiver.current_envelope(s.envelope) is s.envelope_fact)
         _require(NativeResultBodyOwner._local(self) is s)
         return s
 
-    def _candidate_local(self):
-        """Recheck the minted private candidate; this grants no native adoption."""
-        s = NativeResultBodyOwner._local(self)
+    def _candidate_metadata(self):
+        """Recheck minted private data only; this grants no actor or native authority."""
+        s = NativeResultBodyOwner._metadata(self)
         candidate, fact = self._candidate_snapshot, self._fact_snapshot
         _require(self._validated is True and self._active is False
                  and self._attempted is True and self._finish_attempted is True
@@ -346,7 +373,11 @@ class NativeResultBodyOwner:
                  and not s.accumulator and s.buffer._done is True)
         return fact
 
-    def _actor(self):
+    def _candidate_local(self):
+        NativeResultBodyOwner._actor(self)
+        return NativeResultBodyOwner._candidate_metadata(self)
+
+    def _actor_scope(self):
         # A foreign actor cannot consume the original actor's private candidate.
         _require(type(self) is NativeResultBodyOwner and type(self._scope_origin) is _BodyScope
                  and self._scope is self._scope_origin)
@@ -357,9 +388,21 @@ class NativeResultBodyOwner:
                  and s.envelope._body_owner_snapshot is self
                  and type(s.envelope_scope.write_scope) is _BeginWriterScope
                  and type(s.envelope_scope.write_scope.allocation) is _TaskAllocation
-                 and type(s.envelope_scope.write_scope.allocation.task) is _TASK
-                 and asyncio.current_task() is s.envelope_scope.write_scope.allocation.task
+                 and type(s.envelope_scope.write_scope.allocation.task) is _TASK)
+        return s
+
+    def _actor(self):
+        s = NativeResultBodyOwner._actor_scope(self)
+        _require(asyncio.current_task() is s.envelope_scope.write_scope.allocation.task
                  and _TASK.cancelling(asyncio.current_task()) == 0)
+        return s
+
+    def _caller_actor(self):
+        s = NativeResultBodyOwner._actor_scope(self)
+        b = s.envelope_scope.write_scope
+        _require(type(b.refs) is tuple and len(b.refs) == 12
+                 and type(b.refs[0]) is RemoteCleanupOwner)
+        RemoteCleanupOwner.authorize_result_caller(b.refs[0])
         return s
 
     def current_candidate(self):
@@ -429,6 +472,12 @@ class NativeResultBodyOwner:
         NativeResultBodyOwner._candidate_local(self)
         return s
 
+    def _adoption_metadata(self):
+        s = NativeResultBodyOwner._metadata(self)
+        _require(self._adopted is True and self._active is False)
+        NativeResultBodyOwner._candidate_metadata(self)
+        return s
+
     def current_adopted(self):
         """Fixed post-adoption authority; never resets native phase to GO_SENT."""
         s = NativeResultBodyOwner._actor(self)
@@ -471,6 +520,130 @@ class NativeResultBodyOwner:
         if failed:
             raise FrameError("BI1_SIGNED_RESULT_ADOPTED_REFUSED") from None
 
+    def _caller_current(self):
+        s = NativeResultBodyOwner._caller_actor(self)
+        _require(NativeResultBodyOwner._adoption_metadata(self) is s)
+        b, fact = s.envelope_scope.write_scope, self._adoption_origin
+        NativeResultBodyOwner._settled(self)
+        material = NativePhaseWorkOwner._result_caller_material(b.producer)
+        _require(material[0] is b.remote and material[2] is b.channel)
+        record = b.remote._record_snapshot
+        _require(ParentAuthorityAdapter._current(b.remote._authority_snapshot, record)
+                 and JobOwner._current(record.owner, s.job)
+                 and ParentAuthorityAdapter._current(b.remote._authority_snapshot, record))
+        RemoteOperationOwner._work_now(b.remote)
+        SocketChannel._check(b.channel)
+        _require(SocketChannel._qualified_clock(b.channel) is b.refs[8])
+        now = NativeClockOwner.sample(b.refs[8])
+        _require(type(now) is int and 0 <= now < b.intent.end_ns)
+        checked = check_commitment(s.envelope_fact.raw,
+            sender_public=s.envelope_scope.pins[0], receiver_public=s.envelope_scope.pins[1],
+            expected=dict(s.envelope_scope.expected))
+        _require(fact.candidate_fact.frame_sha256 == checked.frame_sha256)
+        fd = _FILENO(b.sock)
+        row = os.fstat(fd)
+        _require(type(fd) is int and fd == b.channel._fd_snapshot
+                 and (fd, row.st_dev, row.st_ino, stat.S_IFMT(row.st_mode))
+                     == b.channel._identity_snapshot
+                 and os.get_blocking(fd) is False and _TIMEOUT(b.sock) == 0.0
+                 and os.get_inheritable(fd) is False)
+        RemoteOperationOwner._result_notification_local(b.remote, b.channel, b.intent.end_ns)
+        _require(NativeResultBodyOwner._adoption_metadata(self) is s
+                 and self._adoption_origin is fact)
+        return fact
+
+    def _notice_metadata(self):
+        s = NativeResultBodyOwner._adoption_metadata(self)
+        a = self._notice_allocation_origin
+        _require(type(a) is tuple and len(a) == 5 and type(a[0]) is RemoteCleanupOwner)
+        RemoteCleanupOwner._guard(a[0])
+        _require(type(a[1]) is tuple and len(a[1]) == 1 and type(a[2]) is _FUTURE
+                 and a[1][0] is a[2] and a[0]._result_barrier_snapshot is a[1]
+                 and a[0]._result_barrier is a[1] and a[0]._result_notice_snapshot is a[2]
+                 and type(a[3]) is _TaskAllocation
+                 and a[3] is s.envelope_scope.write_scope.allocation
+                 and a[0]._allocations_snapshot[1] is a[3]
+                 and type(a[4]) is _TASK and a[0]._caller_snapshot is a[4]
+                 and a[0] is s.envelope_scope.write_scope.refs[0]
+                 and self._notice is self._notice_snapshot)
+        cell = self._notice_fact_allocation_origin
+        _require(type(cell) is tuple and len(cell) == 2 and cell[0] is s
+                 and type(cell[1]) is _BodyNotice and cell[1] is self._notice_snapshot
+                 and cell[1].mint is _NOTICE_MINT and cell[1].owner is self
+                 and cell[1].scope is s and cell[1].adoption is self._adoption_origin
+                 and cell[1].allocation is a and self._notice_attempted is True)
+        return cell[1]
+
+    def notify(self):
+        """Original-work one-shot readiness notification; no result data or release."""
+        s = NativeResultBodyOwner._actor(self)
+        _require(self._notice_attempted is False and self._notified is False)
+        self._notice_attempted = True
+        failed = False
+        a = fact = None
+        try:
+            NativeResultBodyOwner.current_adopted(self)
+            a = self._notice_allocation_origin
+            _require(type(a) is tuple and len(a) == 5 and type(a[0]) is RemoteCleanupOwner
+                     and a[0]._go_notice_fact is not None and type(a[2]) is _FUTURE
+                     and not _FUTURE.done(a[2]) and a[0]._result_token_snapshot is None)
+            fact = _BodyNotice(_NOTICE_MINT, self, s, self._adoption_origin, a)
+            self._notice = self._notice_snapshot = fact
+            self._notice_fact_allocation_origin = (s, fact)
+            from .presentation_broker_cancel import _native_future_methods
+            from .presentation_readiness import _scheduler_safe
+            _native_future_methods(a[2])
+            _scheduler_safe(s.envelope_scope.write_scope.loop)
+            NativeResultBodyOwner.current_adopted(self)
+            _require(NativeResultBodyOwner._notice_metadata(self) is fact)
+            # The last native currentness callback can change scheduler/Future dispatch.
+            _native_future_methods(a[2])
+            _scheduler_safe(s.envelope_scope.write_scope.loop)
+            _require(NativeResultBodyOwner._actor(self) is s
+                     and NativeResultBodyOwner._notice_metadata(self) is fact
+                     and self._notice_attempted is True and self._notified is False
+                     and a[0]._result_token_snapshot is None and a[0]._result_token is None
+                     and not _FUTURE.done(a[2]))
+            a[0]._result_token = a[0]._result_token_snapshot = self._token_origin
+            self._notified = True  # one-shot intent before possibly partial native scheduling
+            _FUTURE.set_result(a[2], True)
+            return True
+        except BaseException:
+            failed = True
+            self._failed = True
+            NativeResultBodyOwner.wipe(self)
+        finally:
+            s = a = fact = None
+        if failed:
+            raise FrameError("BI1_SIGNED_RESULT_NOTIFICATION_REFUSED") from None
+
+    def current_notice(self):
+        """Original-caller current readiness only; no image/header/token returned."""
+        NativeResultBodyOwner._caller_actor(self)
+        failed = False
+        fact = a = None
+        try:
+            _require(self._notified is True)
+            fact = NativeResultBodyOwner._notice_metadata(self)
+            a = fact.allocation
+            _require(_FUTURE.done(a[2]) and not _FUTURE.cancelled(a[2])
+                     and _FUTURE.result(a[2]) is True
+                     and a[0]._result_token is self._token_origin
+                     and a[0]._result_token_snapshot is self._token_origin)
+            NativeResultBodyOwner._caller_current(self)
+            _require(NativeResultBodyOwner._notice_metadata(self) is fact
+                     and a[0]._result_token is self._token_origin
+                     and a[0]._result_token_snapshot is self._token_origin)
+            return True
+        except BaseException:
+            failed = True
+            self._failed = True
+            NativeResultBodyOwner.wipe(self)
+        finally:
+            fact = a = None
+        if failed:
+            raise FrameError("BI1_SIGNED_RESULT_NOTICE_CURRENT_REFUSED") from None
+
     def discard(self):
         """Pure first-cause withdrawal under the original job's typed custody hook."""
         _require(type(self) is NativeResultBodyOwner)
@@ -480,6 +653,14 @@ class NativeResultBodyOwner:
                 and type(origin[0]) is _Job and origin[0] is self._candidate_job_origin):
             origin[0].result = None
             origin[0].remote_result_token = None
+        allocation = self._notice_allocation_origin
+        if (type(allocation) is tuple and len(allocation) == 5
+                and type(allocation[0]) is RemoteCleanupOwner
+                and type(allocation[0]._remote_snapshot) is RemoteOperationOwner
+                and allocation[0]._remote_snapshot._job_origin_snapshot
+                    is self._candidate_job_origin):
+            allocation[0]._result_token = allocation[0]._result_token_snapshot = None
+        self._notice = self._notice_snapshot = self._notice_fact_allocation_origin = None
         self._token = self._token_origin = None
         self._adoption = self._adoption_origin = None
         self._adoption_allocation_origin = None

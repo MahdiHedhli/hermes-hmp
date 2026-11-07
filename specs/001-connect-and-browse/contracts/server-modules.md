@@ -830,3 +830,15 @@ Its dedicated signed-owner slots never masquerade as legacy RemoteResultOwner.
 First cause withdraws native/private output; no terminal, notification, publication
 or production dispatch follows. See [body evidence](../../../docs/research/presentation-signed-result-body-2026-11-06.md)
 and [adoption evidence](../../../docs/research/presentation-signed-native-adoption-2026-11-06.md).
+
+### BI1 signed original-caller readiness (November 6, 2026)
+
+The signed body owner now publishes one original-work readiness notice to the
+original native cleanup Future. Separate fixed original-caller material and native
+notification tails validate the current original caller without borrowing the
+original-work actor gate. Retained metadata grants no authority; the closed signed
+result_ready branch rechecks actual notice/allocation, key/policy/socket/budget
+and adopted result. Future/scheduler checks follow the final native callback;
+ambiguous scheduling withdraws native/private output and cannot retry. No image,
+terminal or release is returned. Production reader/cleanup/terminal composition
+remains open. See [notification evidence](../../../docs/research/presentation-signed-result-notification-2026-11-06.md).

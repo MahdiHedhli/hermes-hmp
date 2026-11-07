@@ -435,7 +435,7 @@ historical, not an alternative live authorization path or resolved incident.
       keys/policy/clock/budget and first-cause withdrawal. The original envelope
       and result-intent tails remain GO_SENT-only; the new tail is fixed to actual
       RESULT_VALIDATED, without phase reset/selector or legacy owner substitution.
-      Notification, cooperative cleanup/terminal and publication remain open below.
+      Cooperative cleanup/terminal and publication remain open below.
 
 - [x] Implement and independently review private signed native candidate adoption:
       dedicated original owner slot, independent adoption/token allocation, original
@@ -445,7 +445,19 @@ historical, not an alternative live authorization path or resolved incident.
       affected regression: 1,662 passed/one skipped in 126.11s; lint/whitespace and
       independent read-only review pass. Earlier cleanup refusal remains unresolved;
       no production publication credit.
-- [ ] Qualify original-caller signed result notification without reusing the
-      original-work actor gate, then integrate original cooperative signed cleanup
-      cursor, terminal/ACK and production dispatch. No generic caller-selected
-      actor/phase bypass, fake legacy owner, phase reset or competing receiver.
+- [x] Qualify original-caller signed result notification without reusing the
+      original-work actor gate. No generic caller-selected actor/phase bypass,
+      fake legacy owner, phase reset or competing receiver. Production/cleanup
+      integration remains separate below.
+
+- [x] Implement and independently review original-work signed result notification
+      and fixed original-caller readiness, retaining actual native Future/barrier/
+      allocation and role/policy/socket/budget. Nine actual private-peer causals
+      passed in 7.84s, including final dispatch substitution and native ambiguous
+      scheduling failure. Final expanded affected regression: 1,738 passed, one
+      skipped in 142.79s, including legacy result-ready consumers; lint/whitespace
+      and independent read-only review pass. No image/terminal/release returned.
+- [ ] Compose original signed receiver/body/adoption/notification into production
+      only with the reviewed same cooperative cleanup cursor and signed terminal/ACK;
+      retain original actor, budget and native cancellation/unknown debt. Then
+      qualify startup/publication and physical/release delivery without shortcuts.

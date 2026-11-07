@@ -988,6 +988,17 @@ class RemoteCleanupOwner:
             raise AuthorityRefusalError
         _task_allows_work()
 
+    def authorize_result_caller(self):
+        """Fixed original notification caller, never original work or cleanup actor."""
+        RemoteCleanupOwner._guard(self)
+        if (self._intent or self._unknown
+                or asyncio.current_task() is not self._caller_snapshot
+                or _TASK.cancelling(self._caller_snapshot) != 0
+                or _TASK.done(self._allocations_snapshot[1].task)
+                or _TASK.cancelling(self._allocations_snapshot[1].task) != 0):
+            raise AuthorityRefusalError
+        _task_allows_work()
+
     async def go(self):
         from .presentation_jobs import JobOwner, RemotePhase, State
         from .presentation_remote import RemoteOperationOwner
@@ -1050,13 +1061,26 @@ class RemoteCleanupOwner:
                 raise AuthorityRefusalError
             RemoteOperationOwner._work_now(self._remote_snapshot)
             RemoteCleanupOwner._guard(self)
-            receiver = self._remote_snapshot._result_owner_snapshot
-            if (result is not True or self._intent or self._result_barrier_snapshot is not barrier
-                    or type(receiver) is not RemoteResultOwner
-                    or self._result_token is None or receiver._validated is not True
-                    or self._result_token is not receiver._token_snapshot):
+            if result is not True or self._intent or self._result_barrier_snapshot is not barrier:
                 raise AuthorityRefusalError
-            RemoteResultOwner._guard(receiver, work=False)
+            if self._remote_snapshot._credential_handshake_snapshot is not None:
+                from .presentation_credential_result_body import NativeResultBodyOwner
+                receiver = self._remote_snapshot._signed_result_owner_snapshot
+                if (type(receiver) is not NativeResultBodyOwner
+                        or self._remote_snapshot._signed_result_owner is not receiver
+                        or self._remote_snapshot._result_owner_snapshot is not None
+                        or self._remote_snapshot._result_owner is not None
+                        or self._result_token is None
+                        or self._result_token is not receiver._token_origin):
+                    raise AuthorityRefusalError
+                NativeResultBodyOwner.current_notice(receiver)
+            else:
+                receiver = self._remote_snapshot._result_owner_snapshot
+                if (type(receiver) is not RemoteResultOwner
+                        or self._result_token is None or receiver._validated is not True
+                        or self._result_token is not receiver._token_snapshot):
+                    raise AuthorityRefusalError
+                RemoteResultOwner._guard(receiver, work=False)
             RemoteOperationOwner._retained_local(self._remote_snapshot)
             _task_allows_work()
             return True  # no header/avatar returned by this public readiness method

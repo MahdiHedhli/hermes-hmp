@@ -1,3 +1,29 @@
+## Signed image original-caller readiness — November 6, 2026
+
+The native signed-image path now has an original-work readiness publisher and a
+separate original-caller currentness check. The actual native result_ready API can
+return readiness for that caller without returning image bytes, metadata, token,
+terminal authority or release. The original Future, barrier/allocation, adoption,
+keys/policy/socket/budget and actor are checked; scheduler/native Future dispatch
+is rechecked after the last native callback before publication. No actor/phase
+selector or legacy result-owner substitution is accepted.
+
+Nine actual signed notification cases pass in 7.84s, including foreign/duplicate
+actors, final scheduler/Future shadows with zero foreign dispatch, coherent notice/
+barrier replacement, caller-side key retirement/token drift and actual native
+Future completion followed by scheduling failure. Ambiguous completion consumes
+the attempt and withdraws native/private output; it does not authorize readiness
+or retry. Independent read-only review accepts the bounded notification component.
+Final expanded affected regression: **1,738 passed, one skipped**, 142.79s,
+including legacy result-ready/terminal/write-quiescence consumers. Lint and
+whitespace pass; reviewer performed no tests or native operations.
+
+Production signed work still parks after GO; this is source component progress.
+Cooperative signed cleanup cursor/terminal/ACK, production reader composition,
+image publication and physical/release qualification remain open. Full phone
+character-image delivery is unfinished. No deployment/device/config/grant/provider
+change. Historical broker failures and sender-destination incident stay open.
+
 ## Signed image native adoption component — November 6, 2026
 
 The original signed body owner can now attach its validated image candidate to

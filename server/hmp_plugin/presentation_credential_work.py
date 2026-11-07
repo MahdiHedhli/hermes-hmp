@@ -333,6 +333,25 @@ class NativePhaseWorkOwner:
                  and _TASK.cancelling(refs[2]._task) == 0)
         return result
 
+    def _result_caller_material(self):
+        """Fixed original result caller/current role; retained material alone grants none."""
+        from .presentation_remote_cleanup import _TASK, RemoteCleanupOwner, _TaskAllocation
+
+        _require(type(self) is NativePhaseWorkOwner and type(self._refs) is tuple
+                 and self._refs is self._refs_snapshot and len(self._refs) == 12
+                 and type(self._refs[0]) is RemoteCleanupOwner
+                 and type(self._refs[6]) is _TaskAllocation
+                 and type(self._refs[6].task) is _TASK)
+        refs, cleanup = self._refs_snapshot, self._refs_snapshot[0]
+        RemoteCleanupOwner.authorize_result_caller(cleanup)
+        result = NativePhaseWorkOwner._retained_material(self)
+        RemoteCleanupOwner.authorize_result_caller(cleanup)
+        _require(self._refs is refs and self._refs_snapshot is refs
+                 and asyncio.current_task() is cleanup._caller_snapshot
+                 and _TASK.cancelling(cleanup._caller_snapshot) == 0
+                 and not _TASK.done(refs[6].task) and _TASK.cancelling(refs[6].task) == 0)
+        return result
+
     def _cleanup_material(self, cleanup):
         """Original cleanup actor/current role only; no work/policy/GO revival."""
         from .presentation_remote_cleanup import _TASK, RemoteCleanupOwner, _TaskAllocation

@@ -151,10 +151,17 @@ never renew expired work, replay a result or grant image access.
 
 The original-task envelope/body components now verify actual signed image bytes
 and independent native result2/parent/revision data in the original native buffer,
-with a private candidate and discard-only first-cause hook. Native adoption/result
-notification and production dispatch remain closed. See
+with a private candidate and first-cause withdrawal hook. Private native adoption
+and original-caller readiness are now qualified source components. Production
+reader composition and signed terminal/ACK remain closed; no terminal or release
+credit follows from readiness. See
 [body evidence](../../docs/research/presentation-signed-result-body-2026-11-06.md).
 The cancelled-read retirement fact is local and payload-free, not a cooperative
 terminal cursor, native resource release or ACK. Integrate the same original work
 cursor's discard/terminal continuation before normal OK/ABORTED terminal claims;
 never revive a cancelled Task or attach a replacement reader to complete cleanup.
+
+Original-caller readiness now has separate fixed authority from original-work
+publishing; it does not substitute for terminal claim/ACK. Ambiguous native Future
+scheduling consumes its attempt and withdraws output even if the Future became
+done. See [notification evidence](../../docs/research/presentation-signed-result-notification-2026-11-06.md).

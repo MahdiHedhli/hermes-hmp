@@ -1,12 +1,12 @@
 # Original gateway signed RESULT cursor
 
 Status: the fixed GO_SENT custody tail, signed envelope cursor and same-original-
-work body/private-candidate owner are source components. Signed body digest and
-independent native result2/parent/revision validation are implemented separately
-from native adoption, cooperative cleanup continuation and production dispatch.
-A private native adoption component is now under final verification; notification,
-cooperative cleanup continuation and production dispatch remain open. Preserve the complete requested character image, not a snapshot
-or unsigned compatibility fallback. The broker producer/writer are separate
+work body/private-candidate owner, private native adoption and original-caller
+notification are qualified source components. Signed body digest and independent
+native result2/parent/revision checks remain distinct from terminal authority.
+Cooperative cleanup continuation and production dispatch/publication remain open.
+Preserve the complete requested character image without a snapshot or unsigned
+compatibility fallback. The broker producer/writer are separate
 qualified components; local full write is not gateway receipt or native release.
 
 ## Retained owner and actual call path
@@ -188,3 +188,21 @@ This is private adoption only. The public readiness method still recognizes only
 the selected legacy owner; signed notification needs an explicitly reviewed caller
 contract. The original signed work task still parks in production after GO. No
 terminal, ACK, native release or HTTP/image delivery follows from adoption.
+
+## Original-caller notification component
+
+The signed body owner now has one original-work publisher for the actual native
+result Future and a separate fixed original-caller currentness path. Retained
+body/candidate/adoption metadata grants no authority by itself. Original-work
+gates remain original-work-only; the native result_ready signed branch requires
+original caller/current role, fixed RESULT_VALIDATED custody, actual notice
+allocation and adopted result. Legacy selected owners remain separate.
+
+Future/scheduler dispatch is rechecked after final native callbacks and before
+publishing only readiness. Partial native scheduling failure may leave the Future
+done; withdrawn notice/token/candidate still force caller refusal, with consumed
+attempt and no automatic replay. First cause withdraws the cleanup result token
+as well as native/private output. See [notification evidence](../../docs/research/presentation-signed-result-notification-2026-11-06.md).
+
+Production reader composition and cooperative signed cleanup/terminal/ACK remain
+open. No image bytes or release authority follow from a readiness Boolean.

@@ -59,6 +59,15 @@ from .test_presentation_supervisor import context as context
                                   "go_relay_result_sign_write_blocked_cancel",
                                   "go_relay_result_sign_write_body",
                                   "go_relay_result_sign_write_body_adopt",
+                                  "go_relay_result_sign_write_body_adopt_notice",
+                                  "go_relay_result_sign_write_body_adopt_notice_actors",
+                                  "go_relay_result_sign_write_body_adopt_notice_scheduler",
+                                  "go_relay_result_sign_write_body_adopt_notice_future",
+                                  "go_relay_result_sign_write_body_adopt_notice_swapped",
+                                  "go_relay_result_sign_write_body_adopt_notice_drift",
+                                  "go_relay_result_sign_write_body_adopt_notice_ambiguous",
+                                  "go_relay_result_sign_write_body_adopt_notice_revoked",
+                                  "go_relay_result_sign_write_body_adopt_notice_barrier",
                                   "go_relay_result_sign_write_body_adopt_wrong_actor",
                                   "go_relay_result_sign_write_body_adopt_key",
                                   "go_relay_result_sign_write_body_adopt_header",
@@ -150,7 +159,9 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                               "go_relay_result_sign_write_body_adopt",
                                               "go_relay_result_sign_write_body_wrong_actor",
                                               "go_relay_result_sign_write_body_avatar"))
-    adopted_key_retirement = stage == "go_relay_result_sign_write_body_adopt_key"
+    adopted_key_retirement = stage in (
+        "go_relay_result_sign_write_body_adopt_key",
+        "go_relay_result_sign_write_body_adopt_notice_revoked")
     operation_failure = (relay_failure or result_failure or writer_failure or body_fault
                          or adopted_key_retirement)
 
@@ -942,6 +953,85 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                             assert held["adopted_tail_token_changed"]
                         if stage.endswith("_fact"):
                             assert "foreign_adopted_fact_accessed" not in held
+            if "_adopt_notice" in stage:
+                from hmp_plugin import presentation_credential_result_body as body_module
+                from hmp_plugin.presentation_remote_cleanup import _FUTURE
+                publish = RemoteCleanupOwner._publish_write_quiescence
+                def published_go(owner):
+                    result = publish(owner)
+                    if (owner is owned._cleanup_owner_snapshot and body._adopted
+                            and not body._notice_attempted and not owner._intent
+                            and owner._go_notice_fact is not None):
+                        future = owner._result_barrier_snapshot[0]
+                        loop = body._scope_origin.envelope_scope.write_scope.loop
+                        expected_failure = stage.endswith(("_scheduler", "_future", "_ambiguous"))
+                        changed_dispatch = False
+                        saved_thread, saved_debug = loop._thread_id, loop._debug
+                        timeout = body_module._TIMEOUT
+                        def final_dispatch(sock):
+                            nonlocal changed_dispatch
+                            value = timeout(sock)
+                            if (body._notice_snapshot is not None and not changed_dispatch
+                                    and sock is body._scope_origin.envelope_scope.write_scope.sock):
+                                changed_dispatch = True
+                                if stage.endswith("_scheduler"):
+                                    def foreign_schedule(*args, **kwargs):
+                                        held["foreign_notice_dispatch"] = True
+                                        raise AssertionError("foreign scheduler dispatched")
+                                    loop.call_soon = foreign_schedule
+                                if stage.endswith("_future"):
+                                    def foreign_future(*args, **kwargs):
+                                        held["foreign_notice_dispatch"] = True
+                                        raise AssertionError("foreign Future dispatched")
+                                    future.add_done_callback = foreign_future
+                                if stage.endswith("_ambiguous"):
+                                    import threading
+                                    loop._debug = True
+                                    loop._thread_id = threading.get_ident() + 1
+                            return value
+                        if expected_failure:
+                            # A real native Future callback makes native scheduling observable.
+                            if stage.endswith("_ambiguous"):
+                                _FUTURE.add_done_callback(future, lambda _: None)
+                            monkeypatch.setattr(body_module, "_TIMEOUT", final_dispatch)
+                        try:
+                            if expected_failure:
+                                with pytest.raises(FrameError) as notice_refusal:
+                                    body.notify()
+                                assert notice_refusal.value.__context__ is None
+                                assert changed_dispatch and body._notice_attempted
+                                assert body._failed and body._retired
+                                assert owner._result_token is None
+                                assert body._notice_snapshot is None
+                                assert body._scope_origin.job.result is None
+                                assert "foreign_notice_dispatch" not in held
+                                assert _FUTURE.done(future) is stage.endswith("_ambiguous")
+                                if stage.endswith("_ambiguous"):
+                                    assert _FUTURE.result(future) is True
+                                with pytest.raises(FrameError):
+                                    body.notify()
+                                held["signed_notice_refused"] = True
+                            else:
+                                if stage.endswith("_actors"):
+                                    with pytest.raises(AuthorityRefusalError):
+                                        body.current_notice()  # work is not the caller
+                                assert body.notify() is True
+                                assert body._notified
+                                assert owner._result_token is body._token_origin
+                                assert owned._result_owner_snapshot is None
+                                with pytest.raises(FrameError):
+                                    body.notify()  # original work cannot notify twice
+                                held["signed_notice_published"] = True
+                        finally:
+                            # Restore only fixture dispatch after refusal, without replay/credit.
+                            loop._thread_id, loop._debug = saved_thread, saved_debug
+                            if "call_soon" in vars(loop):
+                                del loop.call_soon
+                            if changed_dispatch and stage.endswith("_future"):
+                                del future.add_done_callback
+                            monkeypatch.setattr(body_module, "_TIMEOUT", timeout)
+                    return result
+                monkeypatch.setattr(RemoteCleanupOwner, "_publish_write_quiescence", published_go)
             from hmp_plugin.presentation_clock import NativeClockOwner
             sample = NativeClockOwner.cleanup_sample
 
@@ -951,6 +1041,9 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     assert body._retired and body._candidate_snapshot is None
                     assert body._fact_snapshot is None
                     assert body._adoption_origin is None and body._token_origin is None
+                    assert body._notice_snapshot is None
+                    assert (body._scope_origin.envelope_scope.write_scope.refs[0]
+                            ._result_token is None)
                     assert body._scope_origin.job.result is None
                     assert body._scope_origin.job.remote_result_token is None
                     with pytest.raises(FrameError):
@@ -1087,6 +1180,61 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     if task.done() and not task.cancelled():
                         task.result()
                 raise
+            if "_adopt_notice" in stage:
+                body = held["gateway_body"]
+                if stage.endswith(("_scheduler", "_future", "_ambiguous")):
+                    assert held["signed_notice_refused"]
+                    assert not cleanup._result_awaited
+                    assert cleanup._result_token is None
+                    assert not remote._job_origin_snapshot.credit_released
+                    if stage.endswith("_ambiguous"):
+                        with pytest.raises((FrameError, AuthorityRefusalError)):
+                            await remote.result_ready()
+                        assert cleanup._result_awaited
+                        assert cleanup._result_token is None
+                else:
+                    assert held["signed_notice_published"]
+                    if stage.endswith("_actors"):
+                        async def wrong_notice_caller():
+                            with pytest.raises(AuthorityRefusalError):
+                                body.current_notice()
+                            with pytest.raises(FrameError):
+                                body.notify()
+                        await asyncio.create_task(wrong_notice_caller())
+                        assert not body._failed and not cleanup._result_awaited
+                    if stage.endswith("_revoked"):
+                        keys["gateway"].retire()
+                    if stage.endswith("_barrier"):
+                        original_future = cleanup._result_barrier_snapshot[0]
+                        cleanup._result_barrier = (original_future,)
+                        cleanup._result_barrier_snapshot = cleanup._result_barrier
+                    if stage.endswith("_swapped"):
+                        from hmp_plugin.presentation_credential_result_body import _BodyNotice
+                        prior = body._notice_snapshot
+                        body._notice = body._notice_snapshot = _BodyNotice(
+                            prior.mint, body, prior.scope, prior.adoption, prior.allocation)
+                    if stage.endswith("_drift"):
+                        from hmp_plugin import presentation_credential_result_body as body_module
+                        timeout = body_module._TIMEOUT
+                        def changed_notice_token(sock):
+                            value = timeout(sock)
+                            if sock is body._scope_origin.envelope_scope.write_scope.sock:
+                                cleanup._result_token = cleanup._result_token_snapshot = object()
+                                held["caller_notice_token_drift"] = True
+                            return value
+                        monkeypatch.setattr(body_module, "_TIMEOUT", changed_notice_token)
+                    if stage.endswith(("_swapped", "_drift", "_revoked", "_barrier")):
+                        with pytest.raises((FrameError, AuthorityRefusalError)):
+                            await remote.result_ready()
+                        assert body._failed and body._retired
+                        assert cleanup._result_token is None
+                        assert remote._job_origin_snapshot.result is None
+                        if stage.endswith("_drift"):
+                            assert held["caller_notice_token_drift"]
+                    else:
+                        assert await remote.result_ready() is True
+                        assert remote._job_origin_snapshot.result is body._candidate_snapshot
+                        assert not remote._job_origin_snapshot.credit_released
             if adopted_key_retirement:
                 # Retired signing authority cannot authorize a later cancel/terminal receipt.
                 assert held["gateway_body"]._failed and held["gateway_body"]._retired
