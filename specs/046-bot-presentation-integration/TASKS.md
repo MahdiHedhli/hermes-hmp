@@ -17,11 +17,14 @@
 - [x] Freeze original normal signed producer handoff and prepare a one-shot
       signed TERMINAL/2 envelope from current original broker role/context; enforce
       exact handoff body, wrong-actor/no-retry and late cause/key/scope refusal.
-- [ ] Qualify AVATAR-specific signed export, trusted runtime/startup,
-      cleanup-time/aborted exporters, counted
-      terminal delivery, remote acceptance, earlier/direct terminal positions,
-      EAGAIN waiting, lifecycle, original control-reader ACK and native release
-      before production routing.
+- [x] Qualify normal AVATAR and METADATA export/counting in the native synthetic
+      fixture, retaining same socket/task/budget and fixed signed-result write-slot
+      ownership; cover short/zero/EAGAIN/lost-ack/cause/current-owner drift refusals.
+- [ ] Explain expanded-run stopped-reader nextfeedrows first-frame refusal;
+      isolated/related green runs do not prove its cause or remove that gate.
+- [ ] Qualify trusted runtime/startup, cleanup-time/aborted exporters, remote
+      acceptance, earlier/direct terminal positions, EAGAIN waiting, lifecycle,
+      original control-reader ACK and native release before production routing.
 
 - [x] Separate historical native wake/custody binding from the existing strict
       frozen digest wrappers; actual3-byte original-digest advancement preserves

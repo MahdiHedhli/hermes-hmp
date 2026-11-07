@@ -30,6 +30,15 @@ def _require(value):
         raise FrameError("BI1_SIGNED_RESULT_COMPLETED_REFUSED")
 
 
+def _terminal_writing(writer):
+    terminal = writer._terminal_writer_origin
+    if terminal is None:
+        _require(writer._terminal_writer is None and writer._terminal_writer_cell is None)
+        return False
+    from .presentation_credential_terminal_write import CredentialTerminalWriter
+    return CredentialTerminalWriter.writing_for_result(terminal, writer)
+
+
 def metadata(writer):
     """Historical counted delivery and cleared bytes; no native effects."""
     _require(type(writer) is CredentialResultWriter and type(writer._scope_snapshot) is _WriteScope
@@ -75,7 +84,7 @@ def metadata(writer):
                  and writer._waiter_origin._unknown is False
                  and writer._waiter_origin._retired is True))
              and writer._payload is None and writer._payload_snapshot is None
-             and s.channel._writing is False
+             and s.channel._writing is _terminal_writing(writer)
              and type(writer._offset) is int and writer._offset is writer._offset_snapshot
              and writer._offset == len(s.raw) + len(s.header) + s.length)
     fact = writer._fact_snapshot

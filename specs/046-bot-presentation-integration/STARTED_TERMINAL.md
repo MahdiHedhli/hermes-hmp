@@ -1,3 +1,40 @@
+## Counted original-service TERMINAL delivery — November 7, 2026
+
+The normal signed completion envelope now has a retained original-service writer
+on the same authenticated socket/task. A fixed typed write-slot handoff from the
+completed RESULT writer permits only that exact terminal owner. Grammar intent
+precedes native sends; each actual returned byte count is retained before later
+currentness checks. Metadata and AVATAR fixtures now compose original native work,
+signed RESULT/local closure, signed terminal envelope and counted terminal send.
+The image payload remains withdrawn; this writer carries only bounded completion
+metadata. Native peer/clock qualification in these fixtures remains mocked.
+
+The writer reseals current producer/key/cause, fixed FD identity and nonblocking
+mode before each send. Short writes continue on the same attempt and original
+budget. Zero, EAGAIN, lost acknowledgement, cancellation or post-send cause refuse
+with UNKNOWN/no replay; cancellation is re-raised. Actual known byte counts survive
+scope/current-owner drift. Final cleanup clears only unchanged original claim,
+scope and both current/origin signed-result and terminal-producer ownership cells;
+a drifted claim remains busy/unknown rather than being overwritten.
+
+Only immediate nonblocking delivery is implemented here. EAGAIN waiting,
+cleanup-time/aborted exporters, trusted runtime/startup, original gateway terminal
+acceptance, original control-reader ACK and native resource release remain open.
+A local send count is not receiver acceptance or publication authority. Physical
+character-image delivery is unqualified. Existing unexplained broker refusals and
+sender-destination incident remain unresolved. No live host/device/grant/provider
+or deployment change occurred.
+
+Independent read-only review accepted the final current/origin ownership repair.
+Focused native cases:12 passed,136 deselected in8.26s. Expanded exact-source run:
+1 failed,2,111 passed,1 skipped in210.85s. The failure was the existing stopped-reader
+nextfeedrows case refusing a first RESULT-frame read with BI1_NATIVE_FRAME_READ_UNKNOWN
+before its intended next-auth mutation. It passed isolated (0.59s); all39 related
+frame cases passed in13.50s. The combined failure's cause is still unproven and is
+not resolved by those passes. No guard or250ms interval was relaxed. Source hashes
+remain unchanged; lint, plugin surface and whitespace pass. Runs overlap.
+Initial writer test-hook/selection mistakes are separately retained privately.
+
 ## Original-service signed TERMINAL/2 envelope — November 7, 2026
 
 The normal signed RESULT/local-closure producer now owns a separate one-shot

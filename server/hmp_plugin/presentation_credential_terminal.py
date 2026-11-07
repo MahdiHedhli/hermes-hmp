@@ -89,6 +89,7 @@ class CredentialTerminalProducer:
             transfer, result.refs, tuple(sorted(expected.items())), result.pins)
         owner._scope_cell = (owner, owner._scope_origin)
         owner._attempted = owner._failed = owner._complete = False
+        owner._writer = owner._writer_origin = owner._writer_cell = None
         owner._handoff = owner._handoff_origin = owner._handoff_cell = None
         owner._frozen = owner._frozen_origin = owner._frozen_cell = None
         local._signed_exporter = local._signed_exporter_origin = owner

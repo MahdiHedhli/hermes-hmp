@@ -14,6 +14,7 @@ import pytest
 from hmp_plugin import presentation_cancel_budget as budget_api
 from hmp_plugin import presentation_credential_cleanup_budget as cb
 from hmp_plugin import presentation_credential_terminal as ct
+from hmp_plugin import presentation_credential_terminal_write as tw
 from hmp_plugin.presentation_authority import AuthorityRefusalError
 from hmp_plugin.presentation_broker_cancel import (
     _CANCEL_RECEIPT_MINT,
@@ -77,6 +78,18 @@ _BODY_FINISH_SUFFIXES = ("_notice_native_finished",
                                   "go_relay_result_sign_take_alias", "go_relay_result_sign_write",
                                   "go_relay_result_sign_write_completed_fact",
                                   "go_relay_result_sign_write_completed_scope",
+                                  "go_relay_result_sign_write_avatar",
+                                  "go_relay_result_sign_write_deliver_normal",
+                                  "go_relay_result_sign_write_deliver_avatar",
+                                  "go_relay_result_sign_write_deliver_short",
+                                  "go_relay_result_sign_write_deliver_zero",
+                                  "go_relay_result_sign_write_deliver_lost",
+                                  "go_relay_result_sign_write_deliver_cause",
+                                  "go_relay_result_sign_write_deliver_slot",
+                                  "go_relay_result_sign_write_deliver_signedalias",
+                                  "go_relay_result_sign_write_deliver_produceralias",
+                                  "go_relay_result_sign_write_deliver_blocked",
+                                  "go_relay_result_sign_write_deliver_cancelled",
                                   "go_relay_result_sign_write_terminal_latecause",
                                   "go_relay_result_sign_write_terminal_key",
                                   "go_relay_result_sign_write_terminal_scope",
@@ -190,7 +203,9 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         service_pid=os.getpid() + 1), role="gateway", endpoint=spine._endpoint,
         observation=spine._observation)
     expected_avatar_sha = None
-    if stage.startswith("go_relay_result_sign_write_body"):
+    if (stage.startswith("go_relay_result_sign_write_body")
+            or stage in ("go_relay_result_sign_write_avatar",
+                         "go_relay_result_sign_write_deliver_avatar")):
         from pathlib import Path
 
         from .test_presentation_broker_resources import image
@@ -198,7 +213,8 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         asset.parent.mkdir(mode=0o700, exist_ok=True)
         asset.write_bytes(image())
         asset.chmod(0o600)
-        if "_body_avatar" in stage:
+        if "_body_avatar" in stage or stage in ("go_relay_result_sign_write_avatar",
+                                                "go_relay_result_sign_write_deliver_avatar"):
             import hashlib
 
             from hmp_plugin.presentation_authority import ListenerFence, ParentAuthorityAdapter
@@ -336,8 +352,9 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
         "go_relay_result_sign_write_body_adopt_key",
         "go_relay_result_sign_write_body_adopt_notice_revoked")
     terminal_fault = stage.startswith("go_relay_result_sign_write_terminal_")
+    terminal_delivery = stage.startswith("go_relay_result_sign_write_deliver_")
     operation_failure = (
-        terminal_fault
+        terminal_fault or terminal_delivery
         or relay_failure
         or result_failure
         or writer_failure
@@ -825,7 +842,7 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                             held["go_current_checked"] = True
                                             go_checked.set()
                                             raise BlockingIOError(errno.EAGAIN, "synthetic-block")
-                                        if stage.endswith("_zero"):
+                                        if stage.endswith("_zero") and not terminal_delivery:
                                             return 0
                                         if stage.endswith("_partial") and sent:
                                             return 0
@@ -879,9 +896,16 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                         assert sent == raw + frozen.header + frozen.payload
                                     assert signed_writer._payload_snapshot is None
                                     assert not channel._writing
-                                    if (stage == "go_relay_result_sign_write" or terminal_fault
-                                            or stage.startswith(
-                                                "go_relay_result_sign_write_completed_")):
+                                    if (
+                                        stage
+                                        in (
+                                            "go_relay_result_sign_write",
+                                            "go_relay_result_sign_write_avatar",
+                                        )
+                                        or terminal_fault
+                                        or terminal_delivery
+                                        or stage.startswith("go_relay_result_sign_write_completed_")
+                                    ):
                                         from hmp_plugin import (
                                             presentation_credential_result_completed,
                                         )
@@ -918,6 +942,11 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                                 spine, fact.scope.result_scope.refs[1])
                                             claim = terminal.claim_data()
                                             assert claim.outcome == "OK" and claim.exit_code == 0
+                                            assert claim.operation_kind == (
+                                                "AVATAR"
+                                                if stage.endswith("_avatar")
+                                                else "METADATA"
+                                            )
                                             assert claim.result_sha256 == fact.scope.payload_sha
                                             assert terminal._transfer_snapshot is fact
                                             assert terminal._observation_snapshot is (
@@ -1028,6 +1057,121 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                                             assert foreign_header_calls == []
                                             assert len(sent) == fact.count
                                             held["terminal_sign_calls"] = len(signed_calls)
+                                            if terminal_delivery:
+                                                delivery = tw.CredentialTerminalWriter.retain(
+                                                    exporter
+                                                )
+                                                held["terminal_delivery"] = delivery
+                                                real_send, writes, transmitted = (
+                                                    tw._SEND,
+                                                    [],
+                                                    bytearray(),
+                                                )
+                                                foreign_write_calls = []
+
+                                                class ForeignWriteCell:
+                                                    def __getitem__(self, key):
+                                                        foreign_write_calls.append(key)
+                                                        raise AssertionError("foreign write cell")
+
+                                                def terminal_send(sock, value):
+                                                    writes.append(len(value))
+                                                    if stage.endswith("_zero"):
+                                                        return 0
+                                                    if stage.endswith("_blocked"):
+                                                        import errno
+                                                        raise BlockingIOError(errno.EAGAIN,
+                                                                              "synthetic terminal")
+                                                    if stage.endswith("_cancelled"):
+                                                        raise asyncio.CancelledError
+                                                    limit = (
+                                                        113
+                                                        if stage.endswith("_short")
+                                                        else (
+                                                            13
+                                                            if stage.endswith(
+                                                                (
+                                                                    "_lost",
+                                                                    "_cause",
+                                                                    "_slot",
+                                                                    "_signedalias",
+                                                                    "_produceralias",
+                                                                )
+                                                            )
+                                                            else len(value)
+                                                        )
+                                                    )
+                                                    count = real_send(sock, value[:limit])
+                                                    transmitted.extend(value[:count])
+                                                    if stage.endswith("_lost"):
+                                                        raise OSError("SYNTHETIC_TERMINAL_ACK_LOST")
+                                                    if stage.endswith("_cause"):
+                                                        BrokerCancellationOwner._local_cause(control)
+                                                    if stage.endswith("_slot"):
+                                                        delivery._scope_cell = ForeignWriteCell()
+                                                    if stage.endswith("_signedalias"):
+                                                        signed_writer._terminal_writer = object()
+                                                    if stage.endswith("_produceralias"):
+                                                        exporter._writer = object()
+                                                    return count
+
+                                                monkeypatch.setattr(tw, "_SEND", terminal_send)
+                                                if stage.endswith(
+                                                    (
+                                                        "_zero",
+                                                        "_lost",
+                                                        "_cause",
+                                                        "_slot",
+                                                        "_signedalias",
+                                                        "_produceralias",
+                                                        "_blocked",
+                                                        "_cancelled",
+                                                    )
+                                                ):
+                                                    expected_error = (
+                                                        asyncio.CancelledError
+                                                        if stage.endswith("_cancelled")
+                                                        else FrameError
+                                                    )
+                                                    with pytest.raises(expected_error):
+                                                        await delivery.send()
+                                                    assert delivery._failed and delivery._unknown
+                                                    assert not delivery._complete
+                                                    assert delivery._offset == (
+                                                        13
+                                                        if stage.endswith(
+                                                            (
+                                                                "_cause",
+                                                                "_slot",
+                                                                "_signedalias",
+                                                                "_produceralias",
+                                                            )
+                                                        )
+                                                        else 0
+                                                    )
+                                                else:
+                                                    transfer = await delivery.send()
+                                                    assert transfer is delivery._fact_origin
+                                                    assert transfer.count == len(transmitted)
+                                                    assert (
+                                                        transmitted == envelope.raw + envelope.frame
+                                                    )
+                                                    assert (
+                                                        not delivery._active
+                                                        and not channel._writing
+                                                    )
+                                                first_writes = len(writes)
+                                                with pytest.raises(FrameError):
+                                                    await delivery.send()
+                                                assert len(writes) == first_writes
+                                                assert foreign_write_calls == []
+                                                if stage.endswith(
+                                                    ("_slot", "_signedalias", "_produceralias")
+                                                ):
+                                                    assert delivery._active and channel._writing
+                                                    assert delivery._count_cell[2] == 13
+                                                assert signed_writer._payload_snapshot is None
+
                                         assert producer._payload_snapshot is None
                                     held["signed_result_sent"] = True
                                 frozen = None
@@ -2581,6 +2725,15 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                 outcome = (await asyncio.gather(broker_task, return_exceptions=True))[0]
                 assert type(outcome) is asyncio.CancelledError and broker_task.cancelled()
                 frame = None
+            elif terminal_delivery:
+                outcome = (await asyncio.gather(broker_task, return_exceptions=True))[0]
+                held["terminal_delivery_broker_outcome"] = outcome
+                if isinstance(outcome, BaseException):
+                    assert isinstance(outcome, (FrameError, AuthorityRefusalError))
+                    frame = None
+                else:
+                    assert type(outcome) is BrokerFrame and outcome.header.kind == "CANCEL"
+                    frame = outcome
             elif terminal_fault:
                 outcome = (await asyncio.gather(broker_task, return_exceptions=True))[0]
                 if stage.endswith(("_terminal_key", "_terminal_verify")):
@@ -2592,6 +2745,12 @@ async def test_original_gateway_cancel_reaches_original_authenticated_broker(
                     frame = outcome
             else:
                 frame = await broker_task
+        if terminal_delivery:
+            delivery = held["terminal_delivery"]
+            assert delivery._attempted
+            assert not cleanup._result_token and remote._result_owner is None
+            assert not remote._job_origin_snapshot.credit_released
+            return  # counted local send alone is not receiver acceptance or native settlement
         if terminal_fault:
             exporter = held["terminal_exporter"]
             assert exporter._failed and exporter._attempted and not exporter._complete

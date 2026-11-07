@@ -4,6 +4,12 @@
 
 The package source is preserved from the private F1 implementation. See [HMP v1](../docs/architecture/contracts/HMP_V1.md) for its wire contract, [deployment](DEPLOYMENT.md) for profile routing, and [contributing](../CONTRIBUTING.md) for checks.
 
+The internal `presentation_credential_terminal_write.py` normal writer counts
+immediate nonblocking TERMINAL sends on the original authenticated service socket.
+A fixed original RESULT-to-terminal ownership handoff admits its write claim;
+unknown delivery never replays or clears changed ownership. EAGAIN waiting,
+receiver acceptance, ACK and native release remain separate.
+
 The internal `presentation_credential_terminal.py` normal exporter signs and
 verifies a bounded TERMINAL/2 envelope from the original signed-result/native-local
 producer and exact canonical handoff. It has no transport method and no ACK or

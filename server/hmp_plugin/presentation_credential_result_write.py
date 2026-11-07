@@ -80,6 +80,8 @@ class CredentialResultWriter:
             f.raw, f.header, len(f.payload), f.frame_sha, f.payload_sha)
         owner._scope_cell = (owner, owner._scope_snapshot)
         owner._completion_cell = None
+        owner._terminal_writer = owner._terminal_writer_origin = None
+        owner._terminal_writer_cell = None
         owner._payload = owner._payload_snapshot = f.payload
         owner._attempted = owner._active = owner._inflight = False
         owner._failed = owner._unknown = owner._complete = owner._retired = False
