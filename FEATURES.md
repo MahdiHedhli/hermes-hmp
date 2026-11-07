@@ -1,3 +1,13 @@
+## Unicode attribution packaged with bot presentation — November 7, 2026
+
+Exact wheel inventory verification found the existing Unicode license omitted
+from package data while the Unicode normalizer/data shipped. The package-data
+list now includes `hmp_plugin/UNICODE_LICENSE.txt`, preserving attribution.
+Independent focused review accepted the inclusion. A fresh wheel contains all162
+tracked plugin/startup files byte-for-byte, with complete RECORD hash/length
+verification and no console entry point. No plugin import, installation, runtime
+admission or physical bot-character delivery is claimed by this packaging check.
+
 ## Combined runtime-file snapshot implementation — November 7, 2026
 
 Implemented the fixed retain_runtime_files/verify_runtime_files path. It derives

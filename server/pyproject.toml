@@ -38,6 +38,7 @@ include = ["hmp_plugin*", "hmp_startup*"]
 [tool.setuptools.package-data]
 hmp_plugin = [
     "plugin.yaml",
+    "UNICODE_LICENSE.txt",
     "read_compat_builds.json",
     "write_supported_builds.json",
     "direct_send_supported_builds.json",
