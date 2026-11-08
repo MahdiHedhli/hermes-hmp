@@ -285,3 +285,25 @@ consumption with unchanged pending result followed by rightful-owner commit,
 and a policy checkpoint failure after validating original identity. The last
 requires sticky refusal, unchanged debit/cursor, original raw retirement and
 no ACK. All32 cases remain unrun; syntax/lint/scanner are static evidence only.
+
+## Fixed directory acknowledgement candidate
+
+The isolated ACK candidate retains the actual producer return and original
+policy commit, reserves an ACK-attempt marker before actor sampling, rejoins
+original pending state after sampling, and retires raw/snapshot/envelope plus
+the raw-bearing consumption backlink before advancing the exact original
+metadata cursor and publishing IDLE. Its final data tail rejoins original
+resource/descriptor/material/actor-origin/lifetime, charged history and actual
+commit cells without reusing an IDLE-only path while pending.
+
+A marker alone is partial history, not completed ACK: completion requires the
+retired result/backlink, advanced cursor and final IDLE closure. Clean wrong
+actor restores only this owned attempt marker and leaves prepared policy/raw
+for its owner. Drift/partial ACK keeps marker/cursor/debit history, fails
+stickily, conditionally retires original data and preserves foreign slots.
+No cursor rollback, refund or automatic replay exists. Fresh bounded owner
+refusal is raised after clearing raw-linked local aliases.
+
+This candidate is unreviewed/unrun/unwired. Partial-publication causal tests,
+actual caller integration, all metadata sites and device/runtime qualification
+remain required. The independently running producer29-case source is frozen.

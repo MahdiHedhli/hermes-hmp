@@ -641,15 +641,15 @@ def _pending_directory_cohort_tail(owner, consumer, actual):
              and result.raw[0] is actual.raw
              and type(actual.snapshot) is _NativeMetadataSnapshot
              and result.snapshot[0] is actual.snapshot
-             and type(result.category[0]) is str and result.category[0] == 'directory'
-             and result.acknowledged[0] is None)
+             and type(result.category[0]) is str and result.category[0] == 'directory')
     return actual
 
 
 def _pending_directory_return_tail(owner, consumer, actual):
     """Original pending result before any fixed policy consumption."""
     _pending_directory_cohort_tail(owner, consumer, actual)
-    _require(consumer.consumption[0] is None and consumer.commit[0] is None)
+    _require(consumer.consumption[0] is None and consumer.commit[0] is None
+             and actual.result.acknowledged[0] is None)
     return actual
 
 
@@ -739,11 +739,12 @@ class _DirectoryPolicyCommit(NamedTuple):
 
 def _consuming_directory_return_tail(owner, consumer, actual):
     _pending_directory_cohort_tail(owner, consumer, actual)
-    _require(consumer.consumption[0] is actual and consumer.commit[0] is None)
+    _require(consumer.consumption[0] is actual and consumer.commit[0] is None
+             and actual.result.acknowledged[0] is None)
     return actual
 
 
-def _prepared_directory_commit_tail(owner, consumer, actual, commit):
+def _directory_commit_cohort_tail(owner, consumer, actual, commit):
     _pending_directory_cohort_tail(owner, consumer, actual)
     _require(type(commit) is _DirectoryPolicyCommit and commit.owner is owner
              and commit.operation is actual.operation and commit.consumer is consumer
@@ -761,6 +762,12 @@ def _prepared_directory_commit_tail(owner, consumer, actual, commit):
              and all(commit.identity[index] == actual.snapshot.identity[index]
                      for index in range(5))
              and consumer.consumption[0] is actual and consumer.commit[0] is commit)
+    return commit
+
+
+def _prepared_directory_commit_tail(owner, consumer, actual, commit):
+    _directory_commit_cohort_tail(owner, consumer, actual, commit)
+    _require(actual.result.acknowledged[0] is None)
     return commit
 
 
@@ -844,4 +851,180 @@ def _consume_directory_policy(owner, consumer, actual):
         actual = None
         actor_state = actor_arguments = identity = commit = None
         operation = result = ledger = phase = consumer = None
+    raise ArtifactObservationError(owner) from None
+
+
+def _directory_ack_preparation_tail(owner, consumer, actual, commit):
+    _directory_commit_cohort_tail(owner, consumer, actual, commit)
+    _require(actual.result.acknowledged[0] is commit)
+    return commit
+
+
+def _acked_directory_commit_tail(owner, consumer, commit):
+    """Raw-retired original commit DATA; not admission to another operation."""
+    _require(type(consumer) is _DirectoryConsumer and consumer.owner is owner
+             and type(commit) is _DirectoryPolicyCommit and commit.owner is owner
+             and commit.consumer is consumer and commit.operation is consumer.operation
+             and type(consumer.operation) is _MetadataOperation
+             and type(consumer.resource) is _NativeMetadataResource
+             and commit.resource is consumer.resource
+             and consumer.operation.resource is consumer.resource)
+    operation, resource = consumer.operation, consumer.resource
+    registration, result = operation.registration, operation.result
+    _require(operation.owner is owner and resource.owner is owner
+             and resource.registration is registration)
+    _native_work_origin_tail(owner, registration, operation.native)
+    _require(operation.context is registration.context
+             and type(operation.operation) is int and operation.operation == 4
+             and operation.callee is operation.native.operations[4]
+             and operation.arguments is resource.arguments
+             and type(operation.arguments) is tuple and len(operation.arguments) == 1
+             and type(resource.site) is tuple and len(resource.site) == 3
+             and type(resource.site[0]) is int and resource.site[0] == 4
+             and type(resource.site[1]) is str and resource.site[1] == 'directory'
+             and type(resource.site[2]) is int)
+    metadata = _native_declared_metadata_cohort_tail(owner, registration, resource.held_walk)
+    _require(metadata is resource.metadata and type(commit.ordinal) is int
+             and 0 <= commit.ordinal < len(metadata.definitions)
+             and commit.ordinal is resource.ordinal and commit.site is resource.site
+             and metadata.definitions[commit.ordinal] is commit.site
+             and type(commit.next_ordinal) is int
+             and commit.next_ordinal == commit.ordinal + 1
+             and metadata.progress[0] is commit.next_ordinal
+             and metadata.progress[1] is None
+             and type(commit.identity) is tuple and len(commit.identity) == 5
+             and all(type(value) is int for value in commit.identity)
+             and type(result) is _MetadataResult
+             and type(result.attempt) is list and len(result.attempt) == 1
+             and result.attempt[0] is operation
+             and type(result.consumer) is list and len(result.consumer) == 1
+             and result.consumer[0] is consumer
+             and all(type(cell) is list and len(cell) == 1 for cell in
+                     (result.raw, result.category, result.snapshot,
+                      result.acknowledged, result.envelope, consumer.consumption, consumer.commit))
+             and result.raw[0] is result.unset
+             and result.category[0] is result.snapshot[0] is result.envelope[0] is None
+             and result.acknowledged[0] is consumer.commit[0] is commit
+             and consumer.consumption[0] is commit
+             and type(operation.state) is list and len(operation.state) == 3
+             and operation.state[0] is True and operation.state[1] is True
+             and operation.state[2] is False
+             and type(operation.ended) is list and len(operation.ended) == 1
+             and operation.ended[0] is True)
+    ledger, phase = operation.ledger, operation.phase
+    _require(ledger is registration.native_ledger and phase is registration.native_phase
+             and ledger.phase is phase and type(operation.attempts) is list
+             and ledger.attempts is operation.attempts and type(operation.index) is int
+             and 0 <= operation.index < len(operation.attempts)
+             and operation.attempts[operation.index] is operation
+             and type(operation.budget) is tuple and len(operation.budget) == 4
+             and ledger.counts is operation.budget[0]
+             and type(ledger.counts) is list and len(ledger.counts) == 2
+             and all(type(value) is int for value in ledger.counts)
+             and all(type(value) is int for value in operation.budget[1:])
+             and operation.budget[3] == operation.budget[1] + 1
+             and 0 <= operation.budget[1] < 1048576
+             and 0 <= ledger.counts[1] < 1048576 - operation.budget[1]
+             and ledger.counts[0] is operation.budget[3]
+             and ledger.counts[1] is operation.budget[2]
+             and type(ledger.inflight) is list and len(ledger.inflight) == 1
+             and ledger.inflight[0] is None
+             and type(ledger.failed) is list and len(ledger.failed) == 1
+             and ledger.failed[0] is False
+             and type(ledger.failure) is list and len(ledger.failure) == 1
+             and ledger.failure[0] is None
+             and type(phase.current) is list and len(phase.current) == 1
+             and phase.current[0] is phase.idle
+             and type(phase.result) is list and len(phase.result) == 1
+             and phase.result[0] is None)
+    _native_metadata_component_tail(owner, registration, resource.held_walk[0],
+                                    resource.descriptor, resource.site[2])
+    _require(operation.arguments[0] is resource.descriptor.fd
+             and _directory_material_tail(owner, consumer) is consumer)
+    _native_read_lifecycle_tail(owner, registration, consumer.parents)
+    _native_work_origin_tail(owner, registration, operation.native)
+    return commit
+
+
+def _ack_directory_policy(owner, consumer, actual, commit):
+    """Retire one actual prepared directory result and advance its original site.
+
+    The caller holds the actual producer return and commit through final closure.
+    Partial ACK/debit history is never rolled back or replayed on failure.
+    """
+    verified = actor_mismatch = False
+    operation = result = ledger = phase = category = None
+    actor_state = actor_arguments = None
+    try:
+        _prepared_directory_commit_tail(owner, consumer, actual, commit)
+        operation = actual.operation
+        result, ledger, phase = operation.result, operation.ledger, operation.phase
+        category = result.category[0]
+        verified = True
+        result.acknowledged[0] = commit
+        actor_arguments = (consumer, actual, commit)
+        actor_state = _native_pre_actor_state(owner, actor_arguments)
+        try:
+            _native_actor_context(operation.native.actor_calls,
+                                  (operation.native.native, operation.native.thread_native),
+                                  operation.context)
+        except _NativeActorMismatchError:
+            actor_mismatch = True
+            raise
+        _native_post_actor_state(owner, actor_state, actor_arguments)
+        _directory_ack_preparation_tail(owner, consumer, actual, commit)
+        result.raw[0] = result.unset
+        result.snapshot[0] = None
+        result.envelope[0] = None
+        result.category[0] = None
+        consumer.consumption[0] = commit  # retire the raw-bearing backlink too
+        consumer.resource.metadata.progress[0] = commit.next_ordinal
+        consumer.resource.metadata.progress[1] = None
+        phase.result[0] = None
+        phase.current[0] = phase.idle
+        _require(_acked_directory_commit_tail(owner, consumer, commit) is commit)
+        return commit
+    except BaseException:
+        clean_mismatch = False
+        if verified and actor_mismatch:
+            try:
+                _native_post_actor_state(owner, actor_state, actor_arguments)
+                _directory_ack_preparation_tail(owner, consumer, actual, commit)
+                clean_mismatch = True
+            except BaseException:
+                clean_mismatch = False
+        if clean_mismatch:
+            result.acknowledged[0] = None  # no ACK retired any original data
+        elif verified:
+            if type(operation.state) is list and len(operation.state) == 3:
+                operation.state[2] = True
+            if type(ledger.failed) is list and len(ledger.failed) == 1:
+                ledger.failed[0] = True
+            if (type(ledger.failure) is list and len(ledger.failure) == 1
+                    and ledger.failure[0] is None):
+                ledger.failure[0] = operation
+            if type(result.raw) is list and len(result.raw) == 1 and result.raw[0] is actual.raw:
+                result.raw[0] = result.unset
+            if (type(result.snapshot) is list and len(result.snapshot) == 1
+                    and result.snapshot[0] is actual.snapshot):
+                result.snapshot[0] = None
+            if (type(result.envelope) is list and len(result.envelope) == 1
+                    and result.envelope[0] is actual):
+                result.envelope[0] = None
+            if (type(result.category) is list and len(result.category) == 1
+                    and result.category[0] is category):
+                result.category[0] = None
+            if (type(consumer.consumption) is list and len(consumer.consumption) == 1
+                    and consumer.consumption[0] is actual):
+                consumer.consumption[0] = commit
+            if (type(phase.current) is list and len(phase.current) == 1
+                    and (phase.current[0] is phase.pending or phase.current[0] is phase.idle)):
+                phase.current[0] = phase.failed
+            if (type(phase.result) is list and len(phase.result) == 1
+                    and phase.result[0] is operation):
+                phase.result[0] = None
+    finally:
+        actual = commit = consumer = None
+        actor_state = actor_arguments = None
+        operation = result = ledger = phase = None
     raise ArtifactObservationError(owner) from None
