@@ -111,6 +111,12 @@ def _capture_payload_origin():
     return _origin_tail(origin)
 
 
+def _payload_state_is_clear(state):
+    """Identity-only checks: foreign entries never receive equality callbacks."""
+    return (type(state) is list and len(state) == 3
+            and state[0] is False and state[1] is False and state[2] is False)
+
+
 def _marker_tail(owner, origin, marker, payload):
     """Held original allocation joins, not a current-slot nomination or receipt."""
     _origin_tail(origin)
@@ -125,7 +131,15 @@ def _marker_tail(owner, origin, marker, payload):
              and type(marker.state) is list and len(marker.state) == 3
              and all(type(value) is bool for value in marker.state)
              and origin.reference_call(marker.reference) is payload)
-    _require(marker.marker_slot[0] is marker)
+    # Revalidate after the captured C weakref call, which is a profile boundary.
+    # Do not compare lists: an injected foreign state value must never get __eq__.
+    _require(type(marker.owner_link) is list and len(marker.owner_link) == 1
+             and type(marker.marker_slot) is list and len(marker.marker_slot) == 1
+             and marker.owner_link is not marker.marker_slot
+             and marker.marker_slot[0] is marker
+             and type(marker.state) is list and len(marker.state) == 3
+             and type(marker.state[0]) is bool and type(marker.state[1]) is bool
+             and type(marker.state[2]) is bool)
     return marker
 
 
@@ -150,7 +164,7 @@ def _allocate_directory_custody(owner, operation, consumer, origin, owner_link, 
              and marker.operation is operation and marker.consumer is consumer
              and marker.origin is origin and marker.owner_link is owner_link
              and marker.marker_slot is marker_slot and marker.reference is reference
-             and type(marker.state) is list and marker.state == [False, False, False]
+             and type(marker.state) is list and _payload_state_is_clear(marker.state)
              and type(reference) is origin.reference_type
              and origin.reference_callback.__get__(reference, origin.reference_type) is None
              and origin.reference_call(reference) is payload
@@ -160,7 +174,7 @@ def _allocate_directory_custody(owner, operation, consumer, origin, owner_link, 
         owner_link[0] = payload
         marker_slot[0] = marker
         _marker_tail(owner, origin, marker, payload)
-        _require(owner_link[0] is payload and marker.state == [False, False, False])
+        _require(owner_link[0] is payload and _payload_state_is_clear(marker.state))
         return marker, payload
     except BaseException:
         if len(owner_link) == 1 and owner_link[0] is payload:
@@ -173,12 +187,19 @@ def _allocate_directory_custody(owner, operation, consumer, origin, owner_link, 
 def _directory_payload_cells(owner, origin, marker, payload):
     """Temporary held cells, never retain these outside the caller's lifetime."""
     _marker_tail(owner, origin, marker, payload)
-    _require(marker.owner_link[0] is payload and marker.state == [False, False, False])
+    _require(marker.owner_link[0] is payload and _payload_state_is_clear(marker.state))
     cells = _PayloadCells(*(descriptor.__get__(payload, origin.payload_type)
                              for descriptor in origin.members))
     _require(all(type(cell) is list and len(cell) == 1 for cell in cells))
     _marker_tail(owner, origin, marker, payload)
-    _require(marker.owner_link[0] is payload and marker.state == [False, False, False])
+    _require(marker.owner_link[0] is payload and _payload_state_is_clear(marker.state))
+    # Rejoin the captured cells, rather than adopting a replacement from a later
+    # descriptor lookup. A fixed native caller still has to hold these before IO.
+    _require(all(descriptor.__get__(payload, origin.payload_type) is cell
+                 for descriptor, cell in zip(origin.members, cells, strict=True)))
+    _marker_tail(owner, origin, marker, payload)
+    _require(marker.owner_link[0] is payload and _payload_state_is_clear(marker.state)
+             and all(type(cell) is list and len(cell) == 1 for cell in cells))
     return cells
 
 

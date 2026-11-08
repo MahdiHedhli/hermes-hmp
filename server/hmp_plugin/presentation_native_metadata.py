@@ -8,7 +8,9 @@ from typing import NamedTuple
 from .presentation_metadata_custody import (
     _allocate_directory_custody,
     _capture_payload_origin,
+    _directory_payload_cells,
     _marker_tail,
+    _payload_state_is_clear,
     _PayloadOrigin,
 )
 from .presentation_startup_artifacts import (
@@ -59,8 +61,11 @@ class _MetadataResult(NamedTuple):
         _require(marker.operation is operation and marker.consumer is None
                  and marker.owner_link is self.custody_link
                  and marker.marker_slot is self.custody_slot
-                 and marker.state == [False, False, False])
-        return origin.members[index].__get__(payload, origin.payload_type)
+                 and _payload_state_is_clear(marker.state))
+        cells = _directory_payload_cells(operation.owner, origin, marker, payload)
+        cell = cells[index]
+        _require(type(cell) is list and len(cell) == 1)
+        return cell
 
     @property
     def raw(self):

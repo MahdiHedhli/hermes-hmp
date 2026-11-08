@@ -142,3 +142,61 @@ def test_callback_bearing_reference_is_refused_before_detach():
     assert marker.owner_link[0] is payload
     assert modified.state == [False, False, False]
     assert callback_calls == []
+
+
+@pytest.mark.parametrize('fault', ['state_after_weakref', 'cell_after_getter'])
+def test_post_descriptor_line_fault_refuses_without_foreign_callbacks(fault):
+    """Actual source-line faults; this is not a C-profile callback claim."""
+    import ast
+    import inspect
+    import sys
+
+    from hmp_plugin.presentation_metadata_custody import _marker_tail
+
+    owner, origin, marker, payload, _ = allocation()
+    calls = []
+
+    class Foreign:
+        def __eq__(self, _other):
+            calls.append('equality')
+            raise AssertionError('foreign equality')
+
+        def __getattr__(self, _name):
+            calls.append('getter')
+            raise AssertionError('foreign getter')
+
+    function = _marker_tail if fault == 'state_after_weakref' else _directory_payload_cells
+    lines, start = inspect.getsourcelines(function)
+    tree = ast.parse(''.join(lines)).body[0]
+    expressions = [node for node in tree.body if isinstance(node, ast.Expr)
+                   and isinstance(node.value, ast.Call)
+                   and isinstance(node.value.func, ast.Name)]
+    if fault == 'state_after_weakref':
+        target = [node for node in expressions if node.value.func.id == '_require'][-1]
+    else:
+        target = [node for node in expressions if node.value.func.id == '_marker_tail'][1]
+    target_line = start + target.lineno - 1
+    previous, injected = sys.gettrace(), []
+
+    def interrupt(frame, event, _arg):
+        if frame.f_code is function.__code__ and event == 'line' and frame.f_lineno == target_line:
+            assert frame.f_locals['marker'] is marker
+            assert frame.f_locals['payload'] is payload
+            injected.append(True)
+            sys.settrace(previous)
+            if fault == 'state_after_weakref':
+                marker.state[0] = Foreign()
+            else:
+                assert frame.f_locals['cells'].raw is origin.members[0].__get__(payload)
+                origin.members[0].__set__(payload, Foreign())
+        return interrupt
+
+    try:
+        sys.settrace(interrupt)
+        with pytest.raises(ArtifactObservationError):
+            function(owner, origin, marker, payload)
+    finally:
+        sys.settrace(previous)
+    assert injected == [True]
+    assert calls == []
+    assert marker.owner_link[0] is payload
