@@ -1,4 +1,4 @@
-## November 8 — 1,434 startup cases passed; later cleanup candidate has failures
+## November 8 — repaired reader passed 130 cases; image deployment awaits approval
 
 Open-registration source `1aa605d` passed all 1,434 configured startup cases on
 Python 3.14.9 with zero failures, errors or skips; its eight focused cases passed
@@ -22,10 +22,12 @@ Separate uninstalled source `9dc2875` finished its 68-case reader selection:
 synthetic guard function/line metadata: the caller passed an entire five-part
 walk receipt instead of its original plan. Successor `2312e0b` corrects that join
 and the optimistic close-status mirror without weakening the original-ledger
-validator. All14 focused cases passed on Python3.14.9, including a successful
-runtime read, actual lost-close-ACK case and malformed status tests. Source/log/
-XML bindings were rechecked. Broader130-case current/floor qualification is now
-running serially; the original failures are retained, not relabeled passing.
+validator. The first 14 focused cases passed on Python 3.14.9. The repaired source then
+passed all 130 selected read/close cases on that interpreter with zero failures,
+errors or skips and unchanged source. Actual source, receipt, log and XML hashes
+were rechecked. Python 3.11.15 qualification is running next in the serial lane.
+The original failures remain preserved, not relabeled passing; no complete
+startup, six-operation, runtime/service or device/image qualification is claimed.
 
 Corrected isolated EOF source `708beff` passed29 cases on each Python3.14.9 and
 3.11.15 with zero failures/errors/skips and unchanged source; all bindings were
@@ -43,7 +45,10 @@ compared with its expected prior62-file tree and matched. Approval for the
 reviewed dependency installation and one supported gateway restart has been
 requested and remains pending; no host change or physical image-display pass is
 claimed. Character factory/runtime admission, remaining cache/metadata/link/
-diagnostic integration and enumeration are still unfinished.
+diagnostic integration and enumeration are still unfinished. Separate source
+486bf04 prepares original cache journal joins and transient head handling; its
+new helper is unused DATA validation. The actual cache producer, fixed consumer,
+header/EOF acknowledgment and causal tests remain to implement.
 
 Device-local sections/static icons and selected-bot readiness are implemented in
 app source, with physical qualification pending. Desktop character parity and
