@@ -125,7 +125,8 @@ try:
         assert refused.failed_owner is held[0] and held[0]._failed
         assert len(held[1])==held[2]
         if CHANGE=='foreign_slot':assert held[0]._native_scope_registration is foreign
-        if CHANGE=='foreign_scope_slot':assert held[0]._origin.native_registration_slot[0] is foreign
+        if CHANGE=='foreign_scope_slot':
+            assert held[0]._origin.native_registration_slot[0] is foreign
     else:raise AssertionError('callback replacement adopted')
 finally:am._register_native_scope=actual_register
 assert foreign_calls==[]
