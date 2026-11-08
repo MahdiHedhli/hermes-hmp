@@ -987,8 +987,11 @@ def _prepare_declared_metadata_plan(owner, registration, walk):
     leaf = len(walk.components) - 1
     definitions += ((3, 'leaf_before', leaf), (4, 'leaf_opened', leaf),
                     (4, 'leaf_after_read', leaf), (3, 'leaf_after_read', leaf))
-    if walk.scope.source_digest is not None and walk.expected.path.endswith('.py'):
-        definitions += ((4, 'source_after_hash', leaf), (3, 'source_after_hash', leaf))
+    # The actual walker rechecks every held ancestor after hashing, regardless
+    # of whether source hashing is active. It does not recheck the leaf again.
+    definitions += tuple(site for index in range(len(walk.components) - 1)
+                         for site in ((4, 'directory_after_hash', index),
+                                      (3, 'directory_after_hash', index)))
     return _NativeDeclaredMetadataPlan(owner, walk.scope, walk, walk.expected,
                                        definitions, [0, None])
 

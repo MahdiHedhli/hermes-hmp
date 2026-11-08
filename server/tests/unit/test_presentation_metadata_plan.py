@@ -30,7 +30,8 @@ def test_declared_site_order_is_bounded_data_without_native_authority(source):
         (3, 'leaf_before', 2), (4, 'leaf_opened', 2),
         (4, 'leaf_after_read', 2), (3, 'leaf_after_read', 2))
     assert plan.definitions[6:] == (
-        ((4, 'source_after_hash', 2), (3, 'source_after_hash', 2)) if source else ())
+        (4, 'directory_after_hash', 0), (3, 'directory_after_hash', 0),
+        (4, 'directory_after_hash', 1), (3, 'directory_after_hash', 1))
     assert plan.progress == [0, None] and walk.metadata_slot == [None]
     # Merely constructing coherent plan DATA does not establish original lineage.
     with pytest.raises(a.ArtifactObservationError):
