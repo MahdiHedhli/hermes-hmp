@@ -99,7 +99,10 @@ class DeclaredCacheReadOwner:
                      and owner._retaining is True and owner._ready is False)
             from hmp_plugin.presentation_startup_artifacts import _register_native_scope
 
-            _register_native_scope(owner)
+            _register_native_scope(owner, scope, cell, root)
+            _require(owner._origin is scope and owner._scope is scope
+                     and owner._cell is cell and owner._root_cell is root
+                     and activation._cache_read_cell is root)
             owner._retaining = False
             return owner
         except BaseException:

@@ -323,11 +323,15 @@ class GatewayPackageOwner:
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)
             activation._package_cell = owner._root_cell
+            scope_cell, scope_root = owner._cell, owner._root_cell
             owner._count_cell = (owner, s, owner._bytes_read)
             _require(sys.dont_write_bytecode is True)  # no unlisted caches created during entry
             from .presentation_startup_artifacts import _register_native_scope
 
-            _register_native_scope(owner)
+            _register_native_scope(owner, s, scope_cell, scope_root)
+            _require(owner._origin is s and owner._scope is s
+                     and owner._cell is scope_cell and owner._root_cell is scope_root
+                     and activation._package_cell is scope_root)
             before = GatewayPackageOwner._tree(owner)
             _require(type(before) is _Tree and before.entries == entries)
             hashes = tuple(StartupArtifactOwner._file(owner, artifact) for artifact in files)

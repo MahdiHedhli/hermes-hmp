@@ -303,3 +303,14 @@ fixed consumer claim. Native operation dispatch, budget transitions, raw-result
 custody, reserved close enforcement and result ACK remain absent. Passing the
 registry check grants no IO or runtime admission. Other retention paths and the
 full affected regression still need qualification. No live host/device changed.
+
+Review found callback-order defects in the initial scope registry before any
+execution/deployment: registration could overwrite a foreign slot or adopt roots
+changed during actor/guard callbacks; currentness could adopt a paired replacement
+read after its guard. The repair takes original scope/cell/root from each fixed
+initializer, holds registry/index/vacancy across callbacks, and rejoins those
+originals before append/assignment and again in the caller. Currentness requires
+the held original record as an explicit argument before callback-bearing guards;
+paired owner/registry replacements cannot become the selected record. Six added
+callback-window causals bring scope registry coverage to14 pending cases. Source
+review/tests of this repair remain required; earlier lint is not a runtime pass.

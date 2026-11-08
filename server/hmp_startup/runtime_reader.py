@@ -129,7 +129,10 @@ class RuntimeSourceReadOwner:
                      and owner._released is False and owner._read_fact is None)
             from hmp_plugin.presentation_startup_artifacts import _register_native_scope
 
-            _register_native_scope(owner)
+            _register_native_scope(owner, scope, runtime_cell, runtime_root)
+            _require(owner._origin is scope and owner._scope is scope
+                     and owner._cell is runtime_cell and owner._root_cell is runtime_root
+                     and activation._runtime_read_cell is runtime_root)
             owner._retaining = False
             return owner
         except BaseException:
