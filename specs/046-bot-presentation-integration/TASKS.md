@@ -74,24 +74,34 @@ capture with zero observed callee c_call events and normal-case calibration.
 These events are not kernel-entry receipts. Source/receipt/log/XML bindings were
 rehashed. The full62-case selection then passed on Python3.14.9 with zero
 failures/errors/skips, unchanged source and rehashed source/receipt/log/XML.
-The same62-case Python3.11.15 lane is now live; no floor result is claimed.
-These qualify the selected metadata/component source only, not the later caller.
+The same62 cases passed on Python3.11.15 too, with zero failures/errors/skips,
+unchanged source and rehashed bindings. These qualify that selected source,
+not the later caller or a complete runtime/feature.
 
 Test-only `6d3a8cd`, with production identical to `b6b8322`, ran one original
 timeout case with a private45-second stack sampler and unchanged60-second
 deadline. It passed at26.093 seconds before sampling, leaving an empty stack
 file. This supplies no timeout cause and does not erase the original failures.
-Separate source `97d28c1` adds raw-free post-retirement ACK history and an
-unwired fixed caller retaining actual pre-C factory custody through producer,
-policy and ACK. Review found public/inner marker drift could otherwise prevent
-cleanup; its memory-only cleanup now uses the actual caller-held references and
-preserves foreign identity values. Five actual synthetic native caller cases
-(normal, lost return, revoked lifetime, public slot and inner marker corruption)
-are authored with GC disabled, but remain unrun behind the live floor suite.
-Lint/embedded-script syntax checks and bounded source review are not execution
-qualification. Actual lost-return/revoked-lifetime repair, complete retained-
-reference proof and remaining caller/site migrations stay open. No stored row
-may mint result/ACK or renewed-work authority; no prototype is installed.
+Separate caller source `e597dfe` has now passed13 memory cases and seven actual
+synthetic native caller cases on each supported interpreter (20 each), with
+zero failures/errors/skips, unchanged source and rehashed source/receipt/log/XML.
+The caller holds actual factory custody before effects and actual producer/
+policy/ACK returns. With cyclic GC disabled, tests verify owned capsule
+reclamation for normal operation, actual lost producer return, revocation,
+foreign public slot and copied inner marker. Late marker drift and a finalizer
+revoking activation during disposal preserve the real ACK/cursor/debit while
+failing the original operation; no native replay, refund or FD close is used.
+The call counter observes callee c_call events, not kernel-entry receipts.
+
+This handles the original lost-return counterexample in the isolated new caller;
+the original failing control remains preserved. It does not prove interruption
+at every store, wrong-actor cleanup, arbitrary foreign alias erasure, complete
+retained-root graphs or real directory/site integration. The original timeout
+cause remains unknown; no deadline was raised. These local implementation and
+runtime/device gates stay open; no prototype is installed. An ordinary ledger-
+field replacement finding was withdrawn after source verification showed the
+fields are immutable named tuples; unneeded defensive code was reverted. No
+runtime vulnerability or incident was established for that invalid example.
 The [caller and repair contract](https://github.com/MahdiHedhli/hermes-hmp/blob/feat/startup-bytecode-headers-20261107/specs/046-bot-presentation-integration/NATIVE_METADATA_RESULT_CUSTODY.md)
 and dated39-site inventory document the local work. Caller integration, all
 metadata/tree/link/missing-stat sites, six operations plus enumeration, original

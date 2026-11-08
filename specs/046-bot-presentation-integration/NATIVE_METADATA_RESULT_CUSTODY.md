@@ -71,21 +71,34 @@ profile event is not a kernel-entry receipt. Memory cases include actual final
 marker-return replacement and GC-disabled synthetic owned-graph reclamation.
 The full62-case selection then passed on Python3.14.9: zero failures/errors/
 skips, unchanged source and all source/receipt/log/XML hashes rechecked. Its
-Python3.11.15 lane remains live. Neither result qualifies later caller source.
+Python3.11.15 lane also passed all62 with unchanged source, no failures/errors/
+skips and rehashed bindings. Neither result alone qualifies later caller source.
 
-Separate `97d28c1` implements an unwired fixed caller retaining the actual factory
-triple before effects and the actual producer/policy/ACK returns. It separates
-raw-free ACK history from payload disposition, retires memory after the fixed
-synchronous producer has unwound under the original actor, and rejoins live
-history only after disposal. Original pre-effect caller references, rather than
-mutable public/inner marker identities, govern conditional owned-link detachment;
-normal result/ACK/copy guards stay strict. Foreign identity values survive and
-mark the path abnormal. Review found no remaining concrete blocker in that
-bounded source repair. Five native caller cases are authored with GC disabled,
-but unrun while the preceding floor suite is live. Their fixture output contract
-was corrected in read-only review before execution. The original lost-return
-defect remains open until actual causal caller qualification; interruption,
-disposal drift and complete retained-root graph evidence remain required.
+Caller `e597dfe` implements the unwired fixed path: it holds the actual factory
+triple before effects, actual producer/policy/ACK returns, and independent
+caller-local references for memory retirement after the synchronous call unwinds.
+Normal result/copy guards remain strict. Failure cleanup does not nominate a
+current stored envelope or depend on mutable public/inner marker hints; foreign
+values survive. Raw-free ACK history is rejoined only after disposal. Late
+refusal poisons original history while retaining real ACK/cursor/debit stores.
+
+Thirteen memory cases plus seven actual synthetic native caller cases pass on
+each interpreter, no failures/errors/skips, unchanged source and all source/
+receipt/log/XML hashes rechecked. Cyclic GC stays disabled during normal,
+producer-return loss, revoked-lifetime loss, public-slot corruption and copied
+inner-marker cases; each requires the owned payload weakref dead. Two late
+cases mutate the public marker after a real ACK or revoke activation through a
+sole-owned finalizer on disposal. Both preserve actual ACK/cursor1 and fail the
+operation without native replay/refund/close. Counter calibration observes the
+actual callee c_call event; it is not a kernel-entry receipt. The original
+failing producer-only control remains preserved, not relabeled passing.
+
+This qualifies the bounded new caller against the original loss counterexample;
+it is not real `_file` integration or proof of every retained alias/interrupt/
+wrong-actor path. A reported ordinary replacement of ledger/phase field bindings
+was invalid: the actual records are named tuples. The reviewer withdrew it,
+and unneeded defensive code was reverted before these executed runs. That
+example establishes neither a runtime vulnerability nor an incident.
 
 This repair is not accepted as complete. Required evidence includes the entire retained-root reference graph, coherent copy/foreign-link
 refusal, original-actor and revoked-lifetime retirement, interrupted detach,
