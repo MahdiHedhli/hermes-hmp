@@ -94,3 +94,51 @@ def test_owned_graph_reclaims_without_cyclic_gc():
     finally:
         if enabled:
             gc.enable()
+
+
+def test_interruption_after_detach_never_reattaches_or_rearms():
+    import inspect
+    import sys
+
+    owner, origin, marker, payload, _ = allocation()
+    function = _retire_directory_payload_data
+    lines, start = inspect.getsourcelines(function)
+    target = start + next(i for i, line in enumerate(lines)
+                          if 'record = tuple.__new__' in line)
+    previous = sys.gettrace()
+    injected = []
+
+    def interrupt(frame, event, _arg):
+        if frame.f_code is function.__code__ and event == 'line' and frame.f_lineno == target:
+            assert marker.owner_link[0] is None
+            assert marker.state == [True, False, False]
+            injected.append(True)
+            sys.settrace(previous)
+            raise RuntimeError('synthetic interruption')
+        return interrupt
+
+    try:
+        sys.settrace(interrupt)
+        with pytest.raises(ArtifactObservationError):
+            function(owner, origin, marker, payload)
+    finally:
+        sys.settrace(previous)
+    assert injected == [True]
+    assert marker.owner_link[0] is None
+    assert marker.state == [True, False, False]
+    record = function(owner, origin, marker, payload)
+    assert not record.detached and record.unmatched_link
+    assert marker.owner_link[0] is None
+    assert marker.state == [True, True, True]
+
+
+def test_callback_bearing_reference_is_refused_before_detach():
+    owner, origin, marker, payload, _ = allocation()
+    callback_calls = []
+    modified = marker._replace(reference=weakref.ref(payload, callback_calls.append))
+    marker.marker_slot[0] = modified
+    with pytest.raises(ArtifactObservationError):
+        _retire_directory_payload_data(owner, origin, modified, payload)
+    assert marker.owner_link[0] is payload
+    assert modified.state == [False, False, False]
+    assert callback_calls == []
