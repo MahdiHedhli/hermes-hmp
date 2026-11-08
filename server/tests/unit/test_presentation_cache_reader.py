@@ -204,6 +204,12 @@ else:
                     'consumer_wrong_thread','consumer_duplicate')
     assert observed_commits and observed_commits[-1].eof is True
     assert sum(c.eof for c in observed_commits)==1
+    assert all(c.result.raw[0] is c.result.unset and c.result.envelope[0] is None
+               for c in observed_commits)
+    import gc
+    gc.collect()
+    assert not any(type(value) is a._NativeCacheReadReturn
+                   and value.result[1][0] is owner for value in gc.get_objects())
     fact=owner.current_binding()
     assert original==cache_payload and owner._bytes_read==len(cache_payload)
     assert fact[4] is original and fact[5].bytecode_header==cache_payload[:16]

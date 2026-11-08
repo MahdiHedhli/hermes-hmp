@@ -85,3 +85,5 @@ The descendant source now routes registered declared-cache reads through the typ
 ### Partial acknowledgment test matrix, November 8
 
 A test-only descendant adds sixteen interruptions: eight exact consumer boundaries for a nonempty chunk and the same eight for actual EOF (ACK publication, raw retirement, envelope retirement, cursor, progress, EOF state, phase and return). Assertions require preserved actual ACK history, raw/envelope retirement, failed lineage, cleared original buffer and no replay. These are authored synthetic cases, not executed passes and not claims about every bytecode interruption. The original 18-case integration remains frozen for its already queued current/floor lane.
+
+Successful synthetic reads additionally assert that every retained commit has retired raw/envelope slots and that no exact cache-return envelope for this owner remains in the GC object inventory after collection. This is a focused regression for the prefix-bearing return wrapper, not a complete heap-size, deadline or native runtime qualification.
