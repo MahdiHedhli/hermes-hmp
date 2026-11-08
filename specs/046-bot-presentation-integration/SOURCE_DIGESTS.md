@@ -70,3 +70,11 @@ Timestamp/hash cache relationship, actual cache selection/fallback, future impor
 policy, archive members, ABI/library closure, listener/native/key/broker and
 physical character delivery remain unfinished HMP work. No upstream blocker is
 established by this implementation.
+
+## Original timestamp extension
+
+The immutable source receipt/fact also retains int(before.st_mtime), converted
+from the same held actual stat before file-open/read callbacks. Exact primitive
+type/range checks prevent conversion hooks/non-finite values. Consumption rejoins
+the original integer; negative-fraction/float-rounding cases prove nanosecond
+division is not substituted. See [cache-input rules](SOURCE_CACHE_INPUTS.md).

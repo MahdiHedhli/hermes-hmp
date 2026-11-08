@@ -315,16 +315,17 @@ class SourceDigestFact(NamedTuple):
     observations: tuple
     source_hash: bytes
     count: tuple
+    source_mtime: int
 
     def __repr__(self):
         return '<OriginalSourceDigestFact redacted>'
 
 
-def fact(root, owner, scope, expected, result, count, observations):
+def fact(root, owner, scope, expected, result, count, observations, source_mtime):
     _types(owner, scope, expected)
     _require(type(root) is _DigestRoot)
     _require(type(observations) is list and owner._count_cell is count)
-    value = SourceDigestFact(root, tuple(observations), result, count)
+    value = SourceDigestFact(root, tuple(observations), result, count, source_mtime)
     _require(root.owner is owner and root.scope is scope and root.expected is expected)
     seal_fact(value)
     _require(owner._count_cell is count)
@@ -332,7 +333,8 @@ def fact(root, owner, scope, expected, result, count, observations):
 
 
 def seal_fact(value):
-    _require(type(value) is SourceDigestFact)
+    _require(type(value) is SourceDigestFact and type(value.source_mtime) is int
+             and -2 ** 64 < value.source_mtime < 2 ** 64)
     root, result, count = value.root, value.source_hash, value.count
     _require(type(root) is _DigestRoot and type(root.effect) is _DigestEffect
              and type(root.context) is SourceDigestContext and type(root.context.effects) is list

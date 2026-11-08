@@ -1,3 +1,15 @@
+# November 7: source-loader cache input rules
+
+The original source stat timestamp now stays joined to source hash receipts.
+Pure cache-input rules match actual loader behavior for timestamp/hash modes,
+flags2, malformed headers, modulo fields and fallback.60 current cases and52
+actual Python3.11 child cases pass;36 current rule cases also pass after a
+parentheses-only lint repair. Independent bounded review accepted.
+Actual source/cache receipt and absence binding is next; this is input-attempt
+DATA, not successful loading or runtime admission. Bot-character delivery and
+host-local images remain unfinished. No live settings changed.
+See [scope](specs/046-bot-presentation-integration/SOURCE_CACHE_INPUTS.md).
+
 # November 7: original-read source digests
 
 Source hashing now uses the same original bounded file reads, preserving immutable

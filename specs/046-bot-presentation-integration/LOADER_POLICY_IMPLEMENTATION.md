@@ -91,3 +91,8 @@ callbacks/FD closure and consumes every selected source fact through continuatio
 The earlier in-progress checkpoint above is historical. Actual timestamp/hash cache
 relation/selection/fallback and fixed runtime consumption remain next; no source
 digest or header classifier alone admits code.
+
+Original timestamp custody and pure CPython input-attempt rules are implemented
+and locally qualified in [SOURCE_CACHE_INPUTS.md](SOURCE_CACHE_INPUTS.md).
+Original cache receipt/absence binding is next. These outcomes do not establish
+successful unmarshalling, code loading or runtime admission.

@@ -80,6 +80,7 @@ class _HashedArtifact(NamedTuple):
     bytecode_header: bytes
     source_hash: bytes = b""
     source_digest: object = None
+    source_mtime: int | None = None
 
     def __repr__(self):
         return "<HashedArtifact original-descriptor DATA redacted>"
@@ -960,6 +961,7 @@ class StartupArtifactOwner:
         held, directories, read_effects = [], [], []
         source_root = source_effect = source_buffer = None
         source_hash = b""
+        source_mtime = None
         source_observations = []
         progress = self._count_cell if s.runtime is not None else None
         data = digest = None
@@ -994,6 +996,10 @@ class StartupArtifactOwner:
                      and not before.st_mode & (0o022 | stat.S_ISUID | stat.S_ISGID))
             if _configuration(self):
                 _require(before.st_uid == s.context[1] and stat.S_IMODE(before.st_mode) == 0o600)
+            if source_effect is not None:
+                timestamp = before.st_mtime
+                _require(type(timestamp) in (int, float) and -2 ** 64 < timestamp < 2 ** 64)
+                source_mtime = int(timestamp)  # exact CPython path_stats conversion, not ns floor
             row, fd = StartupArtifactOwner._open(self, name, parent, False)
             held.append((row, fd))
             _require(_identity(StartupArtifactOwner._fstat(self, fd, s)) == original)
@@ -1053,7 +1059,7 @@ class StartupArtifactOwner:
                                               tuple(row for row, _ in held), tuple(read_effects))
             elif not _configuration(self):
                 result = _HashedArtifact(self, s, expected, original, actual_hash, header,
-                                         source_hash, source_root)
+                                         source_hash, source_root, source_mtime)
         except BaseException:
             if source_effect is not None and source_effect.attempted is True:
                 source_effect.unknown = True
@@ -1078,7 +1084,8 @@ class StartupArtifactOwner:
                  and self._bytes_read is counted)
         if source_effect is not None:
             source_fact = source_digest.fact(source_root, self, s, expected,
-                                             source_hash, count_cell, source_observations)
+                                             source_hash, count_cell, source_observations,
+                                             source_mtime)
             result = result._replace(source_digest=source_fact)
             _require(source_effect.cleared is True and source_effect.unknown is False
                      and source_effect.result is source_hash

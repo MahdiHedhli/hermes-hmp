@@ -95,7 +95,8 @@ def selected_source_hashes(continuation):
         _require(type(fact) is SourceDigestFact and seal_fact(fact) is fact
                  and fact.root.context is context
                  and fact.root.owner is receipt.owner and fact.root.scope is receipt.scope
-                 and fact.root.expected is expected and fact.source_hash is receipt.source_hash)
+                 and fact.root.expected is expected and fact.source_hash is receipt.source_hash
+                 and fact.source_mtime is receipt.source_mtime)
         result.append(SourceHashData(receipt, fact))
     held = tuple(result)
     _require(GatewayContinuationOwner.current_binding(continuation) is root
@@ -107,5 +108,6 @@ def selected_source_hashes(continuation):
                  and row.fact.root.context is context and row.fact.root.owner is row.receipt.owner
                  and row.fact.root.scope is row.receipt.scope and row.fact.root.expected is expected
                  and row.fact.source_hash is row.receipt.source_hash
+                 and row.fact.source_mtime is row.receipt.source_mtime
                  and seal_fact(row.fact) is row.fact)
     return held

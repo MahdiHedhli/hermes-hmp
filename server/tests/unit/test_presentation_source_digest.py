@@ -13,7 +13,8 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  "hash_lost_ack", "replay", "coherent_read_copy",
                                  "read_entry_copy", "final_hash_copy",
                                  "final_read_copy", "final_context_remove",
-                                 "linear_reads", "late_old_read"))
+                                 "linear_reads", "late_old_read", "negative_mtime",
+                                 "rounding_mtime"))
 def test_original_source_digest_reads(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     assert 'GatewayPackageOwner.verify_recipe(recipe)' in script
@@ -25,8 +26,13 @@ def test_original_source_digest_reads(tmp_path, monkeypatch, case):
 from hmp_plugin import presentation_source_digest as sd
 source_case=CASE_VALUE
 positive_cases=('normal','split_reads','replay','final_hash_copy',
-                'final_read_copy','final_context_remove','linear_reads')
+                'final_read_copy','final_context_remove','linear_reads','negative_mtime',
+                'rounding_mtime')
 foreign_calls=[]
+if source_case in ('negative_mtime','rounding_mtime'):
+    import os
+    stamp=-500000000 if source_case=='negative_mtime' else 1700000000999999999
+    os.utime(plugin_root/'presentation_startup_artifacts.py',ns=(stamp,stamp))
 replacement=bytearray(b'SYNTHETIC_REPLACEMENT')
 captured=[]
 actual_append=sd.append
@@ -123,6 +129,12 @@ for receipt in receipts:
     assert effect.attempted and effect.returned and effect.cleared and not effect.unknown
     assert effect.buffer==bytearray() and effect.result is receipt.source_hash
     assert len(receipt.source_hash)==8
+    assert type(receipt.source_mtime) is int and fact.source_mtime is receipt.source_mtime
+    stamp=Path(receipt.expected.path).stat()
+    assert receipt.source_mtime==int(stamp.st_mtime)
+    if source_case in ('negative_mtime','rounding_mtime') and receipt.expected.path.endswith(
+            '/presentation_startup_artifacts.py'):
+        assert receipt.source_mtime!=stamp.st_mtime_ns//1000000000
     assert effect.after[2]-effect.before[2]==receipt.expected.size
     assert receipt.source_hash==context.interpreter.source_hash.builtin(
         context.interpreter.source_hash.key,Path(receipt.expected.path).read_bytes())
@@ -195,8 +207,8 @@ def test_source_digest_malformed_metadata_no_hooks():
     checks = (
         lambda: sd.current(foreign, foreign),
         lambda: sd.begin(foreign, foreign, foreign),
-        lambda: sd.fact(foreign, foreign, foreign, foreign, b'12345678', (), []),
-        lambda: sd.seal_fact(sd.SourceDigestFact(foreign, (), b'12345678', ())),
+        lambda: sd.fact(foreign, foreign, foreign, foreign, b'12345678', (), [], 0),
+        lambda: sd.seal_fact(sd.SourceDigestFact(foreign, (), b'12345678', (), 0)),
     )
     for check in checks:
         with pytest.raises(sd.SourceDigestError):
