@@ -82,6 +82,10 @@ def test_snapshot_constructor_cannot_replace_actual_native_identity(tmp_path, mo
             assert metadata.progress[1] is operation.result.consumer[0]
             assert ledger.failed==[True] and ledger.failure[0] is operation
             assert phase.current[0] is phase.failed
+            assert ledger.inflight==[None] and phase.result==[None]
+            assert len(ledger.attempts)==attempts+1 and ledger.attempts[-1] is operation
+            assert operation.state==[True,True,True] and operation.ended==[True]
+            assert operation.result.custody_link==[None]
             assert not gc.isenabled() and payload_reference() is None
             assert marker.state==[True,True,False] and stage['debit_preserved']
             seen.append(True)
