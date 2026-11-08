@@ -1496,6 +1496,35 @@ def _run_directory_observation(owner, resource):
             pass
         finally:
             actor_state = actor_arguments = None
+    # A refusal after ACK/disposal still ends this caller. Poison only original
+    # matching history under the original actor; never rewind a real ACK/cursor.
+    if producer_started and producer_unwound:
+        try:
+            _require(type(operation) is _MetadataOperation and operation.owner is owner)
+            actor_arguments = (operation, marker)
+            actor_state = _native_pre_actor_state(owner, actor_arguments)
+            native = operation.native
+            _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                                  operation.context)
+            _native_post_actor_state(owner, actor_state, actor_arguments)
+            ledger, phase = operation.ledger, operation.phase
+            if (type(operation.state) is list and len(operation.state) == 3
+                    and operation.state[2] is False):
+                operation.state[2] = True
+            if (type(ledger.failed) is list and len(ledger.failed) == 1
+                    and ledger.failed[0] is False):
+                ledger.failed[0] = True
+            if (type(ledger.failure) is list and len(ledger.failure) == 1
+                    and ledger.failure[0] is None):
+                ledger.failure[0] = operation
+            if (type(phase.current) is list and len(phase.current) == 1
+                    and (phase.current[0] is phase.active or phase.current[0] is phase.pending
+                         or phase.current[0] is phase.idle)):
+                phase.current[0] = phase.failed
+        except BaseException:  # noqa: S110 - wrong actors get no history mutation authority
+            pass
+        finally:
+            actor_state = actor_arguments = None
     # In particular, a lost producer return cannot become a received envelope.
     # Original pending/failure/debit records remain; no current-row adoption.
     actual = payload = record = acked = commit = None

@@ -8,7 +8,8 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 
 @pytest.mark.parametrize('case', ['normal', 'lost_return', 'revoked_lost_return',
-                                 'foreign_slot_lost_return', 'foreign_inner_lost_return'])
+                                 'foreign_slot_lost_return', 'foreign_inner_lost_return',
+                                 'late_marker_drift', 'disposal_revocation'])
 def test_fixed_directory_caller(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -47,6 +48,13 @@ def exercise(frame):
     assert trace_before is profile_before is None
     gc_before=gc.isenabled()
     producer_code=m._produce_directory_metadata.__code__
+    ack_tail_code=m._acked_directory_commit_tail.__code__
+    caller_code=m._run_directory_observation.__code__
+    late_events=[];finalizer_events=[]
+    class RevokeOnDisposal:
+        def __del__(self):
+            activation_names['_retired']=True
+            finalizer_events.append(True)
     native_callee=registration.native_origin.operations[4]
     def capture_factory(actual_owner,actual_resource):
         triple=factory(actual_owner,actual_resource)
@@ -61,6 +69,17 @@ def exercise(frame):
             assert len(captured)==1 and frame.f_locals['operation'] is captured[0][0]
             native_entries.append(True)
     def lose_return(frame,event,arg):
+        if frame.f_code is ack_tail_code:
+            if (event=='return' and frame.f_back.f_code is caller_code
+                    and case in ('late_marker_drift','disposal_revocation')):
+                operation,marker,payload_reference=captured[0]
+                assert type(arg) is m._DirectoryPolicyCommit
+                assert arg is operation.result.acknowledged[0]
+                assert late_events==[]
+                late_events.append(True)
+                if case=='late_marker_drift':marker.marker_slot[0]=foreign_slot
+                else:payload_reference().category[0]=RevokeOnDisposal()
+            return lose_return
         if frame.f_code is not producer_code:return None
         if event=='return':
             operation,marker,payload_reference=captured[0]
@@ -69,7 +88,7 @@ def exercise(frame):
             assert frame.f_locals['actual'] is frame.f_locals['payload'] is None
             assert payload_reference() is not None
             returns.append(True)
-            if case!='normal':
+            if case not in ('normal','late_marker_drift','disposal_revocation'):
                 sys.settrace(trace_before)
                 if case=='revoked_lost_return':activation_names['_retired']=True
                 if case=='foreign_slot_lost_return':marker.marker_slot[0]=foreign_slot
@@ -120,17 +139,24 @@ def exercise(frame):
             assert ledger.failed==[True] and ledger.failure[0] is operation
             assert phase.current[0] is phase.failed
             assert operation.state==[True,True,True] and operation.ended==[True]
-            assert metadata.progress[0]==0
-            assert metadata.progress[1] is operation.result.consumer[0]
-            assert operation.result.acknowledged==[None]
+            if case in ('late_marker_drift','disposal_revocation'):
+                assert metadata.progress==[1,None] and late_events==[True]
+                assert type(operation.result.acknowledged[0]) is m._DirectoryPolicyCommit
+                assert operation.result.consumer[0].commit[0] is operation.result.acknowledged[0]
+            else:
+                assert metadata.progress[0]==0
+                assert metadata.progress[1] is operation.result.consumer[0]
+                assert operation.result.acknowledged==[None]
             assert marker.state[:2]==[True,True]
-        if case=='foreign_slot_lost_return':
+        if case in ('foreign_slot_lost_return','late_marker_drift'):
             assert marker.marker_slot[0] is foreign_slot and marker.state[2] is True
         else:assert marker.marker_slot[0] is marker
         if case=='foreign_inner_lost_return':
             assert len(foreign_inner)==1 and foreign_inner[0] is not marker
             assert marker.state[2] is True
-        if case=='revoked_lost_return':assert activation_names['_retired'] is True
+        if case in ('revoked_lost_return','disposal_revocation'):
+            assert activation_names['_retired'] is True
+        if case=='disposal_revocation':assert finalizer_events==[True]
         seen.append(True)
     finally:
         sys.settrace(trace_before)
