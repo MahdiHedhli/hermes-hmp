@@ -204,3 +204,13 @@ work path. Existing unclaimed/latch callers retain the IDLE wrapper. This source
 is unreviewed/unrun and remains unwired. It performs no fstat, pending native
 result publication, policy consumption or ACK, and grants no runtime/device
 qualification. Admission causal tests are still required.
+
+Authored admission cases invoke the real fixed admission helper on the original
+synthetic owner. The same-thread case checks one debit, actual ACTIVE identity
+and duplicate refusal. A separate real thread must receive the captured actor
+mismatch, leave work counts/attempts/failed state unchanged, end this exact
+intent and refuse replay on the owning thread. Fixture teardown restores only
+synthetic state so the parent source read can complete; this is not a production
+refund/abandon path. These cases are unrun. Finite independent source review
+found no concrete blocker; interruption coverage and producer/result custody
+remain explicit requirements.

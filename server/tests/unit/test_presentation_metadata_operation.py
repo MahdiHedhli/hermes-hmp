@@ -13,7 +13,8 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  'copied_operation', 'wrong_result_consumer',
                                  'active', 'active_wrong_phase', 'active_failed',
                                  'active_missing_debit', 'active_wrong_result',
-                                 'active_failure_record', 'latch_postpublication_failure'))
+                                 'active_failure_record', 'latch_postpublication_failure',
+                                 'admit', 'admit_wrong_actor'))
 def test_original_metadata_operation(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -62,7 +63,7 @@ def prepare(frame):
                         'copied_operation','wrong_result_consumer',
                         'active','active_wrong_phase','active_failed',
                         'active_missing_debit','active_wrong_result','active_failure_record',
-                        'latch_postpublication_failure')
+                        'latch_postpublication_failure','admit','admit_wrong_actor')
         assert resource.descriptor is descriptor
         assert resource.metadata is held[5] and resource.held_walk is held
         assert resource.arguments[0] is descriptor.fd
@@ -131,14 +132,58 @@ def prepare(frame):
                 except a.ArtifactObservationError:
                     assert case not in ('latched','active','active_wrong_phase','active_failed',
                                        'active_missing_debit','active_wrong_result',
-                                       'active_failure_record','latch_postpublication_failure')
+                                       'active_failure_record','latch_postpublication_failure','admit','admit_wrong_actor')
                 else:
-                    assert (case in ('latched','latch_postpublication_failure')
+                    assert (case in ('latched','latch_postpublication_failure',
+                                    'admit','admit_wrong_actor')
                             or case.startswith('active')) and returned is resource
                 # Latched structural validation never renews unclaimed admission.
                 try:a._native_declared_metadata_plan_tail(owner,registration,held)
                 except a.ArtifactObservationError:pass
                 else:raise AssertionError('latched plan renewed')
+                if case in ('admit','admit_wrong_actor'):
+                    preparation_before=tuple(ledger.preparation)
+                    if case=='admit':
+                        try:
+                            assert m._admit_directory_operation(owner,consumer) is operation
+                            assert m._active_directory_operation_tail(owner,consumer) is operation
+                            assert len(ledger.attempts)==attempts+1
+                            assert ledger.attempts[-1] is operation
+                            assert ledger.counts==[counts[0]+1,counts[1]]
+                            assert result.raw[0] is result.unset
+                            try:m._admit_directory_operation(owner,consumer)
+                            except a.ArtifactObservationError:pass
+                            else:raise AssertionError('operation admitted twice')
+                            assert ledger.counts==[counts[0]+1,counts[1]]
+                        finally:
+                            # Synthetic fixture retirement; no production refund path.
+                            assert ledger.attempts.pop() is operation
+                            ledger.counts[0]=counts[0]
+                            ledger.inflight[0]=None
+                            phase.current[0]=phase.idle
+                            phase.result[0]=None
+                            operation.state[:]=[False,False,False]
+                            ledger.preparation[:]=preparation_before
+                    else:
+                        import threading
+                        wrong_actor=[]
+                        def admit_from_wrong_thread():
+                            try:m._admit_directory_operation(owner,consumer)
+                            except BaseException as exc:wrong_actor.append(type(exc))
+                        worker=threading.Thread(target=admit_from_wrong_thread)
+                        worker.start();worker.join(5)
+                        assert not worker.is_alive()
+                        assert wrong_actor==[a._NativeActorMismatchError]
+                        assert operation.ended==[True] and operation.state==[False]*3
+                        assert ledger.counts==list(counts) and len(ledger.attempts)==attempts
+                        assert ledger.failed==[False] and ledger.failure==[None]
+                        assert phase.current[0] is phase.idle and phase.result==[None]
+                        assert ledger.inflight==[None] and progress[1] is consumer
+                        try:m._admit_directory_operation(owner,consumer)
+                        except a.ArtifactObservationError:pass
+                        else:raise AssertionError('wrong-actor intent replayed')
+                        operation.ended[0]=False  # fixture-only teardown
+                        ledger.preparation[:]=preparation_before
                 if case.startswith('active'):
                     # Guard-only synthetic ACTIVE state, not production admission.
                     # No native operation is called and all original cells restore.
