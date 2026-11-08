@@ -5,10 +5,14 @@ Declared bytecode-cache reader work has advanced separately: frozen producer
 malformed-field cases passing on both interpreters (3 each, no skips, unchanged
 source and verified log/XML bindings). Descendant `6f84dee` integrates
 a fixed buffer/hash/header and actual-EOF consumer plus caller ACK closure;
-18 cache-reader cases are running on Python 3.14.9; no aggregate result yet.
-Test-only descendant `d000e09` adds 16 partial-ACK interruptions, not yet run.
-A bounded independent source review found no new concrete blocker, not a runtime
-pass. Static checks pass; no aggregate cache integration pass is claimed. This cache is Python
+The 18-case cache-reader run on `6f84dee` finished 17 passing and one failing:
+activation-owner drift was refused but its read claim had already been cleared.
+The failed source/log/XML evidence is retained. Repair `8afe009` adds activation
+owner/cell joins before publication; independent finite review found no new
+blocker. Normal plus owner-drift cases passed on each Python version (2 each,
+unchanged source, verified log/XML). Its 34-case suite, including partial-ACK
+interruptions and prefix-wrapper retirement checks, is running on Python 3.14.9.
+No aggregate cache integration, floor or device pass is claimed. This cache is Python
 bytecode custody for character startup, not a delivered chat-image feature.
 Host-local chat media remains the separate reviewed deployment described below.
 No source prototype is represented as installed or physically qualified.
@@ -42,7 +46,11 @@ were rechecked. Python 3.11.15 then finished 129 passing and one failure: the
 synthetic source-digest `linear_reads` child exceeded its existing 60-second
 deadline. Source was unchanged; receipt/log/XML bindings were verified. This
 floor suite is not qualified. Test-only `daf6350` prepares a 45-second bounded
-stack diagnostic without changing the deadline; it is not yet executed.
+stack diagnostic without changing the deadline. It reproduced the timeout,
+but the parent did not persist child output. Test-only `ca2ea03` repairs private
+raw-output persistence and adds two failure-preservation checks; that diagnostic
+is queued after the cache lane. No performance cause or repaired floor pass is
+claimed.
 The original failures remain preserved, not relabeled passing; no complete
 startup, six-operation, runtime/service or device/image qualification is claimed.
 
