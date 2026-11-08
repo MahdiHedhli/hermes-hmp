@@ -226,8 +226,12 @@ def _directory_payload_cells(owner, origin, marker, payload):
 def _retire_directory_payload_data(owner, origin, marker, payload):
     """Detach held original memory only; outer caller proves actor/ended state.
 
-    No payload contents are read, erased or adopted as native results. Foreign
+    No raw-data cells are read, erased or adopted as native results. Foreign
     outer links and inner values remain untouched. This is not a native ACK.
+    The payload's custody-marker backlink must still be original: corruption
+    of that identity field currently refuses detachment and can retain owned
+    raw data. The fixed caller needs a separately reviewed original-held proof
+    for that case; this helper does not claim all inner-field drift cleanup.
     """
     record = None
     try:
