@@ -205,7 +205,7 @@ def _probe(source, owner, phase, index, native_registration=None):
     result = None
     failed = False
     try:
-        record, parent = StartupArtifactOwner._open(owner, "/", None, True)
+        record, parent = StartupArtifactOwner._open(owner, "/", None, True, native_registration)
         held.append((record, parent))
         signature = _directory(StartupArtifactOwner._fstat(owner, parent, scope), scope.context)
         ancestors.append(("/", None, parent, signature))
@@ -225,7 +225,7 @@ def _probe(source, owner, phase, index, native_registration=None):
                 break
             _require(position < len(parts) - 1)  # present unapproved cache is not absence
             expected = _directory(info, scope.context)
-            record, fd = StartupArtifactOwner._open(owner, name, parent, True)
+            record, fd = StartupArtifactOwner._open(owner, name, parent, True, native_registration)
             held.append((record, fd))
             _require(_directory(StartupArtifactOwner._fstat(owner, fd, scope), scope.context)
                      == expected)

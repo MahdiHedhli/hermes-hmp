@@ -512,3 +512,22 @@ positive/negative scanner cases are prepared. Static scanner and Ruff pass; pyte
 qualification is pending the existing serial lane. Other combined failures must
 still be assessed from the actual terminal JUnit/tracebacks. No production guard,
 upstream Hermes import or runtime permission was relaxed.
+
+## Original registration at native open boundary — unqualified candidate
+
+All eleven production StartupArtifactOwner._open call sites now forward their
+already-held registration: package trees, artifact/runtime link and file walks,
+entry metadata/trees, cache absence walks and fresh cache probes. Native opens
+refuse missing/copied registration before descriptor allocation, and rejoin the
+same held registration before native entry and after the returned fd is stored.
+A pure final join follows callback-bearing currentness before publishing the row.
+Legacy None registrations retain their existing path. Failure cleanup still uses
+the original known descriptor/root/context rather than a new work guard.
+
+Eight package/artifact normal/copied/missing/post-return-copy cases are prepared;
+post-return mutation must leave the actual known row close-attempted/closed while
+retaining unknown debt. These tests are unrun. Static scanner, Ruff and diff checks
+pass. This does not capture the original native open function, grant per-operation
+or descriptor authority, reserve cleanup capacity, enforce the aggregate quota or
+complete the other five native operations. Original raw-return/claim custody and
+all runtime/service/physical requirements remain open.

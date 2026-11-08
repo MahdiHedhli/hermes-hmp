@@ -916,23 +916,32 @@ class StartupArtifactOwner:
                  and s.activation._artifact_fact_cell is fact)
         return s
 
-    def _open(self, name, parent, directory):
-        s = _owner_guard(self)
+    def _open(self, name, parent, directory, native_registration=None):
+        s = _native_walk_scope(self, native_registration)
+        root_cell, owner_cell = self._root_cell, self._cell
+        registry = (None if native_registration is None
+                    else native_registration.lineage.ledger.scopes)
+        _native_registration_tail(self, s, owner_cell, root_cell,
+                                  native_registration, registry)
         _native_relative_arguments(s, name, parent)
         if s.native_files is not None:
             _require(type(directory) is bool)
         row = _Descriptor()
         s.records.append(row)  # original descriptor allocation before open
-        root_cell, fd = self._root_cell, None
+        fd = None
         row.attempted = True
         flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
         if directory:
             flags |= os.O_DIRECTORY
         try:
+            _native_registration_tail(self, s, owner_cell, root_cell,
+                                      native_registration, registry)
             fd = os.open(name, flags, dir_fd=parent)
             _require(type(fd) is int and fd >= 0)
             row.fd = fd
-            _require(_owner_guard(self) is s)
+            _require(_native_walk_scope(self, native_registration) is s)
+            _native_registration_tail(self, s, owner_cell, root_cell,
+                                      native_registration, registry)
             return row, fd
         except BaseException:
             row.unknown = self._unknown = True
@@ -1127,7 +1136,7 @@ class StartupArtifactOwner:
         try:
             parent = None
             for name in ("/", *path[1:].split("/")[:-1]):
-                row, fd = StartupArtifactOwner._open(self, name, parent, True)
+                row, fd = StartupArtifactOwner._open(self, name, parent, True, native_registration)
                 held.append((row, fd))
                 info = StartupArtifactOwner._fstat(self, fd, s)
                 mode = stat.S_IMODE(info.st_mode)
@@ -1322,7 +1331,7 @@ class StartupArtifactOwner:
                 source_buffer = None if source_root is None else source_root.buffer
             parent = None
             for name in ("/", *expected.path[1:].split("/")[:-1]):
-                row, fd = StartupArtifactOwner._open(self, name, parent, True)
+                row, fd = StartupArtifactOwner._open(self, name, parent, True, native_registration)
                 held.append((row, fd))
                 info = StartupArtifactOwner._fstat(self, fd, s)
                 signature = _identity(info, True)
@@ -1347,7 +1356,7 @@ class StartupArtifactOwner:
                 timestamp = before.st_mtime
                 _require(type(timestamp) in (int, float) and -2 ** 64 < timestamp < 2 ** 64)
                 source_mtime = int(timestamp)  # exact CPython path_stats conversion, not ns floor
-            row, fd = StartupArtifactOwner._open(self, name, parent, False)
+            row, fd = StartupArtifactOwner._open(self, name, parent, False, native_registration)
             held.append((row, fd))
             _require(_identity(StartupArtifactOwner._fstat(self, fd, s)) == original)
             digest = hashlib.sha256()

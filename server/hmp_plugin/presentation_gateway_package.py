@@ -538,7 +538,7 @@ class GatewayPackageOwner:
         try:
             parent = None
             for name in ("/", *meta.root[1:].split("/")):
-                row, fd = StartupArtifactOwner._open(self, name, parent, True)
+                row, fd = StartupArtifactOwner._open(self, name, parent, True, native_registration)
                 held.append((row, fd))
                 info = StartupArtifactOwner._fstat(self, fd, s)
                 mode = stat.S_IMODE(info.st_mode)
@@ -584,7 +584,7 @@ class GatewayPackageOwner:
             else:
                 _require(stat.S_ISDIR(info.st_mode))  # no symlinks, devices, pipes or sockets
                 result.append((path, "directory"))
-                row, child = StartupArtifactOwner._open(self, name, fd, True)
+                row, child = StartupArtifactOwner._open(self, name, fd, True, native_registration)
                 try:
                     child_info = StartupArtifactOwner._fstat(self, child, s)
                     _require(_identity(child_info, True) == _identity(info, True)

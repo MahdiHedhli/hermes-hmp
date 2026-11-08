@@ -304,7 +304,7 @@ class RuntimeCacheProbeOwner:
                          and not info.st_mode & (stat.S_ISUID | stat.S_ISGID)
                          and (not stat.S_IMODE(info.st_mode) & 0o022
                               or (info.st_uid == 0 and bool(info.st_mode & stat.S_ISVTX))))
-                row, fd = StartupArtifactOwner._open(self, name, parent, True)
+                row, fd = StartupArtifactOwner._open(self, name, parent, True, native_registration)
                 held.append((row, fd))
                 _require(_identity(StartupArtifactOwner._fstat(self, fd, s), True) == signature)
                 ancestors.append((name, parent, fd, signature))

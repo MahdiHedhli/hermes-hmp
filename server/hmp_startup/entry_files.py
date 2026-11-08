@@ -531,7 +531,7 @@ class EntryFileSnapshotOwner:
         try:
             parent = None
             for name in ("/", *root[1:].split("/")):
-                row, fd = StartupArtifactOwner._open(io, name, parent, True)
+                row, fd = StartupArtifactOwner._open(io, name, parent, True, native_registration)
                 held.append((row, fd))
                 info = StartupArtifactOwner._fstat(io, fd, s)
                 mode = stat.S_IMODE(info.st_mode)
@@ -573,7 +573,7 @@ class EntryFileSnapshotOwner:
         try:
             parent = None
             for name in ("/", *path[1:].split("/")[:-1]):
-                row, fd = StartupArtifactOwner._open(io, name, parent, True)
+                row, fd = StartupArtifactOwner._open(io, name, parent, True, native_registration)
                 held.append((row, fd))
                 info = StartupArtifactOwner._fstat(io, fd, s)
                 mode = stat.S_IMODE(info.st_mode)
@@ -621,7 +621,7 @@ class EntryFileSnapshotOwner:
             else:
                 _require(stat.S_ISDIR(info.st_mode))
                 entries.append((path, "directory"))
-                row, child = StartupArtifactOwner._open(io, name, fd, True)
+                row, child = StartupArtifactOwner._open(io, name, fd, True, native_registration)
                 try:
                     current = StartupArtifactOwner._fstat(io, child, s)
                     _require(_identity(current, True) == _identity(info, True)
