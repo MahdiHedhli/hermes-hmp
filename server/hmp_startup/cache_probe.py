@@ -18,6 +18,7 @@ from hmp_plugin.presentation_startup_artifacts import (
     _HashedArtifact,
     _identity,
     _native_registration_tail,
+    _native_relative_arguments,
     _native_walk_scope,
     _native_work_origin_tail,
     _Scope,
@@ -216,6 +217,7 @@ class RuntimeCacheProbeOwner:
         registry = (None if native_registration is None
                     else native_registration.lineage.ledger.scopes)
         _native_registration_tail(self, s, cell, root, native_registration, registry)
+        _native_relative_arguments(s, name, parent)
         try:
             _native_work_origin_tail(self, native_registration, native)
             _require(native is None or (stat_call is native.operations[3]

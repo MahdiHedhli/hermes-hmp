@@ -691,6 +691,8 @@ def _native_work_origin_tail(owner, registration, native):
         _require(type(flag) is int and namespace.get(name) is flag and original.get(name) is flag)
     _require(namespace.get('stat_result') is native.result_type
              and original.get('stat_result') is native.result_type)
+    _require(namespace.get('error') is native.errors[0]
+             and original.get('error') is native.errors[0])
     error_names = vars(builtins)
     for index, name in enumerate(('OSError', 'FileNotFoundError', 'PermissionError')):
         _require(type(native.errors[index]) is type

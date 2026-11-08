@@ -6,7 +6,8 @@ import pytest
 
 @pytest.mark.parametrize('method', ('_open', '_read', '_stat', '_fstat', '_readlink'))
 @pytest.mark.parametrize('change', ('normal', 'copy_origin', 'pre_os', 'late_os',
-                                    'late_posix', 'late_flags', 'late_result_type'))
+                                    'late_posix', 'late_flags', 'late_result_type',
+                                    'late_os_error_base', 'late_posix_error_base'))
 def test_fixed_work_calls_hold_original_native_origin(tmp_path, monkeypatch, method, change):
     from . import test_presentation_cache_observation as cache
     from . import test_presentation_entry_files as runner
@@ -27,11 +28,13 @@ def foreign(*args,**kwargs):
     foreign_calls.append('call');raise AssertionError('foreign native function')
 def mutate(registration,mode):
     origin=registration.lineage.native
-    namespace=origin.native if mode=='late_posix' else a.os
+    namespace=origin.native if mode in ('late_posix','late_posix_error_base') else a.os
     name=METHOD[1:]
     value=foreign
     if mode=='late_flags':name='O_NONBLOCK';value=ForeignValue()
     if mode=='late_result_type':name='stat_result';value=ForeignValue()
+    if mode in ('late_os_error_base','late_posix_error_base'):
+        name='error';value=ForeignValue()
     restore.append((namespace,name,getattr(namespace,name)))
     setattr(namespace,name,value);changed.append(True)
 def native_observed(frame):
@@ -91,3 +94,60 @@ raise SystemExit(0)
 
     monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
     cache.test_original_cache_absence_io(tmp_path, monkeypatch, 'missing_leaf')
+
+
+@pytest.mark.parametrize('position', (0, 1))
+@pytest.mark.parametrize('change', ('normal', 'foreign'))
+def test_fresh_probe_stat_arguments_before_native_coercion(
+    tmp_path, monkeypatch, position, change
+):
+    from . import test_presentation_cache_probe as probe
+    from . import test_presentation_entry_files as runner
+
+    actual_run = runner.test_actual_entry_and_wrapper_files
+    marker = '\ntry:owner.observe()\n'
+    injected = r'''
+actual_stat=pm.RuntimeCacheProbeOwner._stat_known
+native_calls=[];foreign_calls=[];calls=[];refusals=[];violations=[]
+class Foreign:
+    def __fspath__(self):foreign_calls.append('path');raise AssertionError('foreign path')
+    def __index__(self):foreign_calls.append('index');raise AssertionError('foreign index')
+    def __eq__(self,other):foreign_calls.append('eq');raise AssertionError('foreign equality')
+    def __bool__(self):foreign_calls.append('bool');raise AssertionError('foreign bool')
+def native_observed(frame):
+    if frame.f_locals.get('self') is owner:native_calls.append(True)
+observe_synthetic_native(pm.os.stat,actual_stat.__code__,native_observed)
+def checked_stat(target,name,parent,s,native_registration=None):
+    calls.append(True)
+    args=[name,parent,s,native_registration]
+    if CHANGE=='foreign':args[POSITION]=Foreign()
+    before=len(native_calls);count=target._count_cell;records=len(target._origin.records)
+    try:return actual_stat(target,*args)
+    except BaseException:
+        if CHANGE=='foreign':
+            refusals.append(True)
+            if len(native_calls)!=before or target._count_cell is not count:
+                violations.append('native effect or progress before argument refusal')
+            if len(target._origin.records)!=records:violations.append('descriptor before refusal')
+        raise
+pm.RuntimeCacheProbeOwner._stat_known=checked_stat
+try:owner.observe()
+except CacheProbeError:
+    assert CHANGE=='foreign' and calls and refusals
+else:assert CHANGE=='normal' and calls and native_calls and owner._ready
+finally:pm.RuntimeCacheProbeOwner._stat_known=actual_stat
+assert foreign_calls==[] and violations==[]
+if CHANGE=='foreign':assert not native_calls and owner._bytes_read==0
+assert all(row.close_attempted and row.closed for row in owner._origin.records)
+print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
+raise SystemExit(0)
+'''.replace('CHANGE', repr(change)).replace('POSITION', str(position))
+
+    def injected_run(directory, mutation):
+        assert runner.SCRIPT.count(marker) == 1
+        prefix = runner.SCRIPT[:runner.SCRIPT.index(marker)]
+        monkeypatch.setattr(runner, 'SCRIPT', prefix + injected)
+        actual_run(directory, mutation)
+
+    monkeypatch.setattr(runner, 'test_actual_entry_and_wrapper_files', injected_run)
+    probe.test_fresh_cache_probe(tmp_path, monkeypatch, 'missing')

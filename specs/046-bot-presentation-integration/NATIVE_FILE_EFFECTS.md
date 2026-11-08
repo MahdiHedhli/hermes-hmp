@@ -599,9 +599,9 @@ immediately before direct dispatch and the origin after post-return callbacks.
 No generic operation-selection or caller-supplied callable interface was added.
 Supported legacy None paths retain alias selection and avoid entry-only imports.
 
-Thirty-five composed fixed-operation cases are prepared: positive actual calls,
+Forty-five composed fixed-operation cases are prepared: positive actual calls,
 origin copies, os substitution before admission, and os/posix/flag/result-type
-substitution after the final work guard. Negative cases require zero actual
+and os/posix error-base substitution after the final work guard. Negative cases require zero actual
 selected native calls and zero foreign hooks; original known resources must still
 close. Four scanner cases keep the new lazy type join exact and local. Synthetic
 pre-call fault selectors now name the actual shared dispatch lines, preserving
@@ -615,3 +615,12 @@ current close path still uses a later os.close lookup: namespace drift can cause
 foreign cleanup dispatch or leak. That source limitation is not a deployed
 incident finding; no operational/factory/service/device or release readiness is
 claimed, and this source must not be deployed as fully owned native IO.
+
+Held-callee review found the fresh probe's private stat boundary lacked the
+shared native-only exact name/parent fence. The repair applies that same fence
+after admission and before stat, with four normal/foreign name/parent composed
+cases requiring zero foreign coercion hooks and zero native calls on refusal.
+The pure origin join also explicitly checks both os/posix error-base aliases
+against the original OSError class; ten added substitution cases cover those
+previously unjoined captured facts. This does not change missing-error/fallback
+authority or the unqualified close/resource/actor/runtime limits above.
