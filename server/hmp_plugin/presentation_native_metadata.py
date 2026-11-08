@@ -732,11 +732,19 @@ def _produce_directory_metadata(owner, consumer):
     callee, arguments = operation.callee, operation.arguments
     raw, snapshot, actual = result.unset, None, None
     category = 'directory'
+    origin = marker = payload = cells = None
+    raw_cell = category_cell = snapshot_cell = envelope_cell = None
     try:
+        # Capture actual cells before the native call. Compatibility properties
+        # perform closure work and must not sit between the C return and storage.
+        origin = result.custody_origin
+        payload, marker = result.custody_link[0], result.custody_slot[0]
+        cells = _directory_payload_cells(owner, origin, marker, payload)
+        raw_cell, category_cell, snapshot_cell, envelope_cell = cells[:4]
         _require(_active_directory_operation_tail(owner, consumer) is operation
                  and operation.callee is callee and operation.arguments is arguments)
         raw = callee(arguments[0])
-        result.raw[0] = raw  # retain the actual C return before allocating/validating
+        raw_cell[0] = raw  # retain the actual C return before allocating/validating
         operation.state[1] = True
         operation.ended[0] = True
         _returned_directory_operation_tail(owner, consumer, operation, raw)
@@ -746,9 +754,9 @@ def _produce_directory_metadata(owner, consumer):
         _require(type(snapshot) is _NativeMetadataSnapshot)
         actual = _DirectoryMetadataReturn(operation, result, consumer, raw, snapshot)
         _returned_directory_operation_tail(owner, consumer, operation, raw)
-        result.category[0] = category
-        result.snapshot[0] = snapshot
-        result.envelope[0] = actual
+        category_cell[0] = category
+        snapshot_cell[0] = snapshot
+        envelope_cell[0] = actual
         ledger.inflight[0] = None  # native call ended; pending result stays separately owned
         phase.current[0] = phase.pending
         _require(_pending_directory_return_tail(owner, consumer, actual) is actual)
@@ -764,17 +772,17 @@ def _produce_directory_metadata(owner, consumer):
             ledger.failure[0] = operation
         if type(ledger.failed) is list and len(ledger.failed) == 1:
             ledger.failed[0] = True
-        if type(result.raw) is list and len(result.raw) == 1 and result.raw[0] is raw:
-            result.raw[0] = result.unset
-        if (type(result.snapshot) is list and len(result.snapshot) == 1
-                and result.snapshot[0] is snapshot):
-            result.snapshot[0] = None
-        if (type(result.envelope) is list and len(result.envelope) == 1
-                and result.envelope[0] is actual):
-            result.envelope[0] = None
-        if (type(result.category) is list and len(result.category) == 1
-                and result.category[0] is category):
-            result.category[0] = None
+        if type(raw_cell) is list and len(raw_cell) == 1 and raw_cell[0] is raw:
+            raw_cell[0] = result.unset
+        if (type(snapshot_cell) is list and len(snapshot_cell) == 1
+                and snapshot_cell[0] is snapshot):
+            snapshot_cell[0] = None
+        if (type(envelope_cell) is list and len(envelope_cell) == 1
+                and envelope_cell[0] is actual):
+            envelope_cell[0] = None
+        if (type(category_cell) is list and len(category_cell) == 1
+                and category_cell[0] is category):
+            category_cell[0] = None
         if (type(phase.current) is list and len(phase.current) == 1
                 and (phase.current[0] is phase.active or phase.current[0] is phase.pending)):
             phase.current[0] = phase.failed
@@ -788,6 +796,8 @@ def _produce_directory_metadata(owner, consumer):
         raw = result.unset
         snapshot = None
         actual = None
+        origin = marker = payload = cells = None
+        raw_cell = category_cell = snapshot_cell = envelope_cell = None
     raise ArtifactObservationError(owner) from None
 
 
