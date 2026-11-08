@@ -17,25 +17,33 @@ no unrun candidate is claimed passing. Its floor and full regression runs depend
 on resolving the focused failures. No complete native IO/cleanup/quota/runtime
 or device qualification is claimed.
 
-Separate uninstalled source `9dc2875` connects original runtime-source read
-results, fixed consumption and EOF acknowledgment. Its 68-case focused current
-run is active and has reported failures; terminal diagnostics remain pending.
-Static checks and bounded review do not establish behavioral qualification.
+Separate uninstalled source `9dc2875` finished its 68-case reader selection:
+38 passed and 30 failed. Its first normal-case refusal was traced using only
+synthetic guard function/line metadata: the caller passed an entire five-part
+walk receipt instead of its original plan. Successor `2312e0b` corrects that join
+and the optimistic close-status mirror without weakening the original-ledger
+validator. All14 focused cases passed on Python3.14.9, including a successful
+runtime read, actual lost-close-ACK case and malformed status tests. Source/log/
+XML bindings were rechecked. Broader130-case current/floor qualification is now
+running serially; the original failures are retained, not relabeled passing.
 
-Corrected isolated EOF source `708beff` passed all 29 cases on both Python3.14.9
-and3.11.15, with zero failures/errors/skips and unchanged source; source, receipts,
-logs and XML bindings were rechecked. The original `7a4d42f` 26-pass/3-failure run
-and incorrect expected count25 remain preserved; its successor only restored the
-older baseline's four-argument fixture signature and corrected full count29.
+Corrected isolated EOF source `708beff` passed29 cases on each Python3.14.9 and
+3.11.15 with zero failures/errors/skips and unchanged source; all bindings were
+rechecked. Its original `7a4d42f`26-pass/3-failure fixture run remains preserved.
+Cleanup diagnostic `b3115ee` passed its two mock evidence tests but still failed
+the normal60-second timeout and close-status check. The latter now passes on
+2312e0b; the profiling timeout cause is still unresolved. No deadline was raised.
+The unstarted repeat on test-only3102341 was deferred before any child ran,
+allowing source diagnosis first; no active test was interrupted.
 
-Test-only cleanup candidate `b3115ee` preserves the 60-second deadline, adds
-private stack/timeout evidence and moves close-ACK injection to the actual native
-close receipt boundary. Its four-case diagnostic selection is queued, not a
-resolution of the original12 failures. Test-only `3102341` narrows unnecessary
-consumer profiling/tracing while retaining fault boundaries/assertions; it has
-no execution or performance result. Production source is unchanged in both
-fixture descendants. Cache/metadata/link/diagnostic integration and enumeration
-remain unfinished.
+Host-local media and desktop characters have separate source paths. Reviewed
+local-media package `5e247a6` plus client source `56d517c` do not depend on the
+unfinished character-source admission stack. The existing host code was freshly
+compared with its expected prior62-file tree and matched. Approval for the
+reviewed dependency installation and one supported gateway restart has been
+requested and remains pending; no host change or physical image-display pass is
+claimed. Character factory/runtime admission, remaining cache/metadata/link/
+diagnostic integration and enumeration are still unfinished.
 
 Device-local sections/static icons and selected-bot readiness are implemented in
 app source, with physical qualification pending. Desktop character parity and
