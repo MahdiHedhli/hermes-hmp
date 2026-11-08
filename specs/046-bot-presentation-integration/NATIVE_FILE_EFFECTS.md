@@ -42,35 +42,36 @@ same20 cases also passed on Python3.11.15 with unchanged source and rehashed
 source/log/XML evidence. Finite review found no new concrete defect after the
 explicit phase/failure-slot checks. These remain guard-only passes.
 
-Separate uninstalled source now binds the original consumer once and admits a
-fixed directory intent under the captured actor/ledger. Producer candidate
-`f47a1be` retains the actual captured-fstat return before snapshot/envelope
-allocation, with distinct ACTIVE/returned/PENDING checks. Review caught two
-producer defects before execution: pending must retire the in-flight call,
-and error handling must clear raw aliases and raise a fresh owner-attributed
-refusal. Both are corrected in source; dedicated execution is pending. Its29
-cases retain all earlier unrun26 cases and add actual synthetic-descriptor
-return/snapshot-failure/foreign-slot checks. All29 passed on Python3.14.9 with
-unchanged source and rehashed source/log/XML evidence; all29 also passed on
-Python3.11.15 with unchanged source and rehashed evidence. This qualifies the
-sampled original directory intent/admission/pending-return slice only. Separate consumer `6f5d4e1` and ACK `520b08d` have finite source review
-with no new concrete blocker, but their35-case selection remains unrun. A
-test-only ordinary-fstat entry hook `fcf9eac` passed both selected normal/late-ACK
-cases on each interpreter with source/evidence rehashed. Captured native OS
-functions are unchanged. First/last store-interruption preflights on `8f12da7`
-are now running before its45-case matrix; lost-return coverage remains open.
-The [caller contract](https://github.com/MahdiHedhli/hermes-hmp/blob/feat/startup-bytecode-headers-20261107/specs/046-bot-presentation-integration/NATIVE_METADATA_RESULT_CUSTODY.md)
-records the exact finish-cursor, configuration-policy and abort/lost-return
-migration requirements. They are local work, not upstream blockers. The dated
-39-site inventory is published as review data, never runtime authority. No fixed metadata policy/ACK
-execution qualification, integrated site advancement, complete
-operation migration, native runtime or physical character pass is claimed.
-Scanner policy is unchanged. Actual metadata admission/debit/native calls, fixed result
-policy/ACK, tree/link/diagnostic plans and full operation-budget integration remain
-unfinished; no host activation or physical feature pass is claimed. This cache is Python
-bytecode custody for character startup, not a delivered chat-image feature.
-Host-local chat media remains the separate reviewed deployment described below.
-No source prototype is represented as installed or physically qualified.
+Separate uninstalled directory producer `f47a1be` passed29 original intent/
+admission/pending-return cases on each supported interpreter. Candidate
+`8f12da7`, with production bytes unchanged from ACK source `520b08d`, then passed
+all45 selected synthetic native/policy/ACK cases on each interpreter, including
+10 source-store interruptions. Source/receipt/log/XML hashes were rechecked.
+These component passes are not complete caller, runtime or device acceptance.
+
+A new negative control on unchanged production `4072412` reproduced lost producer
+return on both interpreters: the actual return-event fault fired, the caller
+received no value, raw/envelope remained pending and the ledger was still healthy;
+the one-unit charge remained. Each original test failed once as expected, with
+exact private stage evidence rehashed. Those failures remain failures. Producer
+finally alone does not establish caller receipt; current stored rows cannot be
+adopted as returned receipts. The uninstalled candidate remains unqualified.
+
+Ended-preparation/known-return cleanup source `b643f02` has finite review but its
+50-case descendant is unrun and does not solve lost return/revoked lifetime.
+An independently pre-C-held retirement capsule/weak-identity design has conditional
+review only: its full raw-reference graph, copies/foreign slots, interruption,
+original context, revoked lifetime and GC-disabled cleanup need implementation
+and proof. No raw-bearing current-row lookup may mint result/ACK authority.
+The [caller and repair contract](https://github.com/MahdiHedhli/hermes-hmp/blob/feat/startup-bytecode-headers-20261107/specs/046-bot-presentation-integration/NATIVE_METADATA_RESULT_CUSTODY.md)
+and dated39-site inventory document the local work. Caller integration, all
+metadata/tree/link/missing-stat sites, six operations plus enumeration, original
+aggregate budgets/reserved cleanup, complete factory/service/key/runtime, the
+open minimum-version timeout and physical character delivery remain unfinished.
+No host activation, device/feature/release pass or observed user-data exposure
+is claimed. This startup bytecode/character custody work is separate from the
+reviewed host-local chat-image deployment, which retains its own owner decision
+and physical acceptance gates. No prototype is represented as installed.
 
 Open-registration source `1aa605d` passed all 1,434 configured startup cases on
 Python 3.14.9 with zero failures, errors or skips; its eight focused cases passed

@@ -6,24 +6,55 @@ The server/scanner implementation on this documentation branch remains
 results appear in [FEATURES](../../FEATURES.md). Source tests do not establish
 runtime, device, feature or release acceptance.
 
-## Verified preparation and remaining execution
+## Verified preparation and current unresolved defect
 
 - Original metadata plans/resources/intents and constructor closure have scoped
-  current/floor passes; their scope is preserved in FEATURES.
+  current/floor passes, preserved in FEATURES.
 - `a19560a`:14 structural cohort cases pass on each supported interpreter.
-- `a131932`:20 synthetic ACTIVE-state cases pass on each interpreter. They do
-  not prove actual actor admission or a native operation.
-- `f47a1be`:29 directory-intent/admission/pending-return cases pass on current
-  Python and29 also pass on minimum Python, with unchanged source and rehashed
-  source/log/XML evidence. This is a synthetic descriptor flow, not a gateway
-  or phone test.
-- Consumer `6f5d4e1` and ACK `520b08d` have finite source review, with execution
-  pending. Their one-use commit and ACK markers alone are not completion proof.
-- Test-only entry hook `fcf9eac` passed its two normal/late-ACK cases on each
-  interpreter with source/evidence rehashed. Store faults `8f12da7` leave
-  production bytes unchanged. First/last-line preflights are running before
-  crediting the authored45-case matrix. No full-matrix, runtime or performance
-  pass follows from the entry-hook result.
+- `a131932`:20 synthetic ACTIVE-state cases pass on each interpreter; these are
+  guard tests, not actual native admission.
+- `f47a1be`:29 original directory intent/admission/pending-return cases pass on
+  each interpreter with source/log/XML evidence rehashed.
+- `8f12da7`:45 selected synthetic native-directory/policy/ACK cases pass on each
+  interpreter, including10 source-store interruptions. Production is unchanged
+  from ACK candidate `520b08d`; source/evidence hashes were rechecked.
+- Separate negative control `4072412`, with unchanged production, reproduces a
+  lost producer return on both interpreters. Each original suite fails exactly
+  one assertion as expected; private evidence proves actual injection, no caller
+  receipt, pending raw/envelope retained, healthy ledger and preserved debit.
+  These failures are retained as failures, never qualification passes.
+- New ended-preparation/known-return cleanup source `b643f02` has finite review
+  but its50-case descendant remains unrun. It does not solve lost producer
+  returns, revoked lifetimes or partial-ACK discovery.
+
+The candidate is not qualified for complete caller integration or deployment.
+The positive matrix does not close the counterexample or remaining gates.
+
+## Lost-return failure and repair requirement
+
+A return-event exception can occur after the producer finally cleared its local
+aliases but before the caller received its value. Pure timing probes and the
+actual synthetic-descriptor control establish this on Python3.14.9/3.11.15.
+The current result remains pending without a caller-held receipt. Merely looking
+up a current stored envelope is not proof of the actual producer return, and
+retrying the native operation is not a repair.
+
+The repair must give the fixed caller independently held retirement custody
+before effects, separate from normal result/ACK authority. A conditionally
+reviewed proposal uses an original raw-free preparation marker, an original
+owner-link allocation and a weak identity anchor to a pre-C raw-bearing capsule.
+All owned raw/envelope/consumption paths must pass through the one detachable
+link. Current marker lookup is not independent provenance. Capsule custody must
+never authorize result consumption, ACK, renewed permission or native close.
+
+This proposal is not implemented or accepted as complete. Required evidence
+includes the entire retained-root reference graph, coherent copy/foreign-link
+refusal, original-actor and revoked-lifetime retirement, interrupted detach,
+return-event loss, sanitized exceptions and GC-disabled ownership/reclamation.
+Caller alias disposal can run callbacks and needs final original closure before
+further work. No erasure guarantee covers independently retained foreign aliases.
+This is local HMP work and an explicit release/integration gate; no deployed
+host, real user message or data exposure was observed in these tests.
 
 ## Fixed producer, policy and ACK contract
 
