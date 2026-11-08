@@ -84,7 +84,8 @@ if source_case=='hash_lost_ack':
     sd.finish=lost
 if source_case in ('split_reads','linear_reads','late_old_read'):
     actual_read=a.StartupArtifactOwner._read
-    def split(owner,fd,count,scope):return actual_read(owner,fd,min(count,257),scope)
+    def split(owner,fd,count,scope,native_registration=None):
+        return actual_read(owner,fd,min(count,257),scope,native_registration)
     a.StartupArtifactOwner._read=split
 try:
     plugin=GatewayPackageOwner.verify_recipe_source_hashes(recipe,entry)

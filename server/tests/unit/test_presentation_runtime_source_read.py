@@ -86,8 +86,8 @@ if case=='buffer_swap':
     from hmp_plugin.presentation_startup_artifacts import StartupArtifactOwner
     actual=StartupArtifactOwner._read
     replacement=bytearray(b'PRESERVE_REPLACEMENT')
-    def swap(self,fd,count,s):
-        data=actual(self,fd,count,s)
+    def swap(self,fd,count,s,native_registration=None):
+        data=actual(self,fd,count,s,native_registration)
         if self is owner:self._buffer=replacement
         return data
     StartupArtifactOwner._read=swap

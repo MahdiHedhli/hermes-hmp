@@ -575,3 +575,13 @@ This is registration custody only. Raw returns are not yet preallocated original
 native-result claims, and the original native callable, resource/step/consumer
 binding, quota/reserved close, cleanup after root retirement and actual native
 runtime/service/physical feature qualification remain unfinished.
+
+Read review found two synthetic fixed-signature wrappers: source-digest split
+reads and runtime-reader buffer substitution. Both now forward the optional
+registration unchanged; the 257-byte split and post-actual-read buffer mutation
+remain intact. These causals must execute rather than fail from call arity.
+Declared-cache finally may retire the active routing pointer when its original
+root/ledger/claim still match; actual attempt/result/effect and byte progress
+remain retained, unknown is latched, and no replay or fallback is authorized.
+This preserves existing cleanup semantics rather than treating pointer retirement
+as a successful acknowledgment of the refused native result.
