@@ -13,6 +13,7 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  'native_count_drift', 'foreign_read_claim', 'late_owner',
                                  'consumer_wrong_thread', 'consumer_duplicate',
                                  'consumer_feed_failure', 'consumer_eof_ack_failure',
+                                 'metadata_plan_copy',
                                  *(f'interrupt_{prefix}{point}'
                                    for prefix in ('', 'eof_')
                                    for point in ('ack', 'raw', 'envelope', 'cursor',
@@ -160,15 +161,34 @@ if case in ('consumer_feed_failure','consumer_eof_ack_failure'):
     boundary=('step.hash_update(step.digest, data)' if case=='consumer_feed_failure'
               else 'envelope.ack_cell[0] = commit')
     trace_synthetic_boundary(actual_consume.__code__,boundary,interrupt_consumer)
+if case=='metadata_plan_copy':
+    plan_swap=[]
+    def replace_metadata_plan(frame):
+        if frame.f_locals['self'] is owner:
+            held=frame.f_locals['native_walk']
+            assert type(held) is tuple and len(held)==6
+            original_plan=held[5]
+            assert original_plan is held[0].metadata_slot[0]
+            copied=original_plan._replace(progress=list(original_plan.progress))
+            held[0].metadata_slot[0]=copied
+            plan_swap.append((held,original_plan,copied))
+    trace_synthetic_boundary(a.StartupArtifactOwner._file.__code__,
+                             '_finish_native_declared_walk(self, native_registration, native_walk)',
+                             replace_metadata_plan)
 try:owner.read()
 except CacheReadError:
     assert case in ('changed','read_error','late_buffer','late_effect',
                     'late_ledger','late_lifecycle','native_count_drift',
                     'foreign_read_claim','late_owner','consumer_feed_failure',
-                    'consumer_eof_ack_failure') or case.startswith('interrupt_')
+                    'consumer_eof_ack_failure','metadata_plan_copy') or case.startswith('interrupt_')
     assert owner._failed
     assert not owner._ready and owner._fact is None and cm._READY is None
     assert original==bytearray()
+    if case=='metadata_plan_copy':
+        assert len(plan_swap)==1
+        held,original_plan,copied=plan_swap[0]
+        assert held[5] is original_plan and held[0].metadata_slot[0] is copied
+        assert held[3] is held[2][0] and held[4][0]==1
     if case.startswith('interrupt_'):
         assert len(interrupted)==1 and owner._unknown
         envelope=interrupted[0]
