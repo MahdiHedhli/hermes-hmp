@@ -1,25 +1,25 @@
-## November 8 — combined startup regression has failures; repair pending
+## November 8 — verified failure census and repaired focused results
 
-Entry metadata source `7b9b097` passed 108 selected cases on each of Python
-3.14.9 and 3.11.15; declaration membership `9e6f02a` passed eight on each.
-Exact source and receipt/log/XML bindings were verified. The combined configured
-1,398-case run on `9e6f02a` remains active with recorded failures; it is not
-qualified. Its full terminal result is still needed to assess every failure.
+Original source `9e6f02a` finished its 1,398 configured startup cases: 1,375
+passed and 23 failed. All 23 actual failures contain the same baseline S1 artifact
+import violation; source and receipt/log/XML hashes were verified. Separate repair
+`f37a618` passed 136 scanner cases on each of Python 3.14.9 and 3.11.15.
+Repaired candidate `77ae4dc` then passed 183 focused cases on each interpreter;
+its 1,426-case combined startup run is active. That combined pass is not yet proven.
 
-A separate static comparison confirms two baseline import-scanner violations.
-Repair `f37a618` narrowly allows three lazy HMP-owned startup type imports in the
-artifact module. Static scanner, Ruff and bounded independent source review pass;
-136 scanner tests per interpreter await the existing run's terminal result.
-This does not prove all regression failures fixed. Later primitive-argument
-`6d6b112` and declaration-walk `21ec9fa` candidates remain unqualified and separate.
-No later source candidate is integrated into this public branch or installed.
+Later open/read/metadata and held-native-function candidates remain separate,
+uninstalled source. Held-callee `09c77c6` has bounded source-review acceptance,
+not test qualification. Original registration/type/origin pins now precede nested
+access; missing primitive fences and source-fixture signature defects were repaired.
+Close still uses a later namespace lookup. Original resource/step/result claims,
+quota and reserved cleanup, runtime/key/service wiring and device qualification
+remain unfinished. No complete native IO safety or factory readiness is claimed.
 
-Bot characters and host-local images remain unfinished. Per-operation/resource/
-consumer custody, fixed native effects, aggregate quota and reserved cleanup,
-runtime/key/service wiring and physical delivery remain open HMP work; no upstream
-prerequisite has been established. File-walk intent/progress is not native
-permission or tamper-proof replay protection. No runtime/device/release pass is
-claimed. The latest iPad launch was rejected as Locked before execution.
+Device-local sections/static icons and selected-bot readiness are implemented in
+app source, with physical qualification pending. Desktop character parity and
+host-local image delivery remain unfinished. No upstream prerequisite has been
+established for the remaining HMP integration. These local candidates are not the
+public review branch's integrated source `34b862e`; no new deployment occurred.
 
 # Held native file effects — proposed integration contract
 
