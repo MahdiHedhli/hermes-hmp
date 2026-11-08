@@ -70,7 +70,7 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
       [Contract and limits](RUNTIME_CACHE_INPUT_CONTRACT.md).
 - [ ] **PS1-RUNTIME-CACHE-IO** Fresh original-row diagnostic metadata probe is
       implemented with bounded independent source acceptance;11 current and11
-      actual floor child cases pass. Shared startup regressions pending. Cache
+      actual floor child cases pass.1220 unchanged-source startup checks passed. Cache
       payload IO, typed failure/effect provenance and fallback authority remain
       incomplete. See [probe scope](RUNTIME_CACHE_PROBE.md).
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;

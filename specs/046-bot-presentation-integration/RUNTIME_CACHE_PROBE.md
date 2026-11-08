@@ -26,6 +26,6 @@ Eleven causal cases passed on Python 3.14.9 and eleven actual Python 3.11.15
 children passed with source hashes unchanged: missing component, appearance,
 symlink, counter replacement, original directory, declared regular file, wrong
 thread, replay, after-close counter replacement, copied completed fact and late
-callback fact replacement. These are bounded diagnostic source checks; the shared
-startup regression remains pending. No native/device qualification, cache fallback,
+callback fact replacement. These are bounded diagnostic source checks; the unchanged-source shared
+startup regression passed1220 cases in1453.48 seconds on source4f28ac0. No native/device qualification, cache fallback,
 live host change or operational factory admission is claimed.

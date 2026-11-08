@@ -2,8 +2,8 @@
 
 A diagnostic-only probe now rechecks original selected cache paths with bounded
 no-follow descriptor traversal and known cleanup, without reading cache bytes.
-Eleven current and eleven actual Python 3.11 child cases passed. Shared startup
-regressions remain pending. This does not enable cache fallback, code execution,
+Eleven current and eleven actual Python 3.11 child cases passed. The unchanged-source
+shared startup baseline passed1220 cases; later cleanup fault cases remain pending. This does not enable cache fallback, code execution,
 desktop character delivery or host-local images. See
 [scope and limits](specs/046-bot-presentation-integration/RUNTIME_CACHE_PROBE.md).
 
