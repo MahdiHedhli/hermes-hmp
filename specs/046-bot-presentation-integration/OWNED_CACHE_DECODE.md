@@ -93,3 +93,12 @@ filenames, wrong thread/replay, original/foreign slot and buffer cleanup, native
 function/metadata substitutions with zero foreign calls, and publication-time
 filename drift. Current/floor/broader and operational resource/native qualification
 remain pending. No code execution, source fallback or live host/device action.
+
+## Focused qualification
+
+Nineteen current synthetic cases passed in 213.54 seconds and nineteen actual
+Python 3.11.15 child cases passed. Qualification uses corrected, exact per-module
+receipts bound to case IDs, worktree, interpreter, file SHA and unchanged tracked
+source. Earlier misrouted floor claims were invalidated and are not evidence for
+this phase. The separate later native-IO field still needs combined regression
+coverage; neither focused run establishes resource/native execution admission.

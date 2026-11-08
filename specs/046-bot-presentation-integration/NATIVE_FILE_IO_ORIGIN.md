@@ -29,7 +29,9 @@ source phase and the complete integration contract. No operational factory is
 connected by this change.
 
 Independent bounded read-only source review accepted this metadata-only scope.
-Seventeen substitution/copy/foreign-metadata cases are prepared, NOT RUN while
-prior reader/decoder validation is active. Full Ruff, surface/privacy and diff
-checks pass. Actual current/floor/broader and native/operational qualification
-remain pending. No live host/device/settings/grants/provider action occurred.
+Seventeen substitution/copy/foreign-metadata cases passed on current Python
+and seventeen actual Python 3.11.15 children passed. Exact module/case/worktree/
+interpreter/source receipt bindings were independently validated; source hashes
+remained unchanged through branch reconciliation. Full Ruff, surface/privacy
+and diff checks pass. Combined broader startup and native/operational
+qualification remain pending. No live host/device/settings/grants/provider action occurred.

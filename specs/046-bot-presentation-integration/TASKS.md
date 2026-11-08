@@ -87,12 +87,13 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
 - [ ] **PS1-SELECTED-CACHE-DECODE** Implement fixed actual-successful-reader-only
       native decode/fixer custody with recomputed original selection evidence,
       ephemeral payload handling and historical effect facts. Independent bounded
-      contract and source review accepted this separate increment;19 causal
-      cases prepared, not run. Current/floor/broader tests remain pending. Known-unavailability/fallback and operational resource gates stay
-      open. [Contract and exact limits](OWNED_CACHE_DECODE.md).
+      contract and source review accepted this separate increment; 19 current and 19
+      actual floor causal cases passed. Combined broader tests remain pending.
+      Known-unavailability/fallback and operational resource gates stay open. [Contract and exact limits](OWNED_CACHE_DECODE.md).
 - [ ] **PS1-NATIVE-FILE-MACHINERY** Retain original observed POSIX C bindings,
       aliases, flags and result/error classes at interpreter entry. Metadata-only
-      implementation has bounded source acceptance;17 cases prepared, not run.
+      implementation has bounded source acceptance; 17 current and 17 actual floor
+      cases passed with verified receipt/source binding. Combined startup pending.
       Actual typed outcomes, audit/ABI/resource policy and fallback stay open.
       [Exact scope](NATIVE_FILE_IO_ORIGIN.md).
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;

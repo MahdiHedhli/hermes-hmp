@@ -2,13 +2,14 @@
 
 The isolated startup source retains originally observed POSIX C file bindings,
 aliases, flags and result/error classes. Bounded source review accepted the
-metadata-only claim;17 current/floor cases are queued, not run. This neither
+metadata-only claim;17 current and17 actual Python 3.11 cases passed, with
+source hashes unchanged. Combined startup regression remains pending. This neither
 performs file operations nor proves kernel entry, ABI correctness or permission
 unavailability. Known outcomes/cleanup and operational fallback remain open.
 See [scope](specs/046-bot-presentation-integration/NATIVE_FILE_IO_ORIGIN.md).
 
-The parent decoder baseline b892880 passed19 current synthetic cases; its actual
-Python 3.11 run is active. That does not qualify this new metadata field.
+The parent decoder baseline b892880 passed19 current synthetic cases and19
+actual Python 3.11 cases with exact receipt binding. That does not qualify this new metadata field.
 
 # November 8: selected-cache decode source awaiting tests
 
