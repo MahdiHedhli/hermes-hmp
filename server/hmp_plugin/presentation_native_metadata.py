@@ -13,6 +13,7 @@ from .presentation_metadata_custody import (
     _origin_tail,
     _payload_state_is_clear,
     _PayloadOrigin,
+    _retire_directory_payload_data,
 )
 from .presentation_startup_artifacts import (
     ArtifactObservationError,
@@ -1348,4 +1349,118 @@ def _abandon_known_directory_return(owner, consumer, actual, commit=None):
         actual = commit = consumer = None
         actor_state = actor_arguments = None
         operation = result = ledger = phase = None
+    raise ArtifactObservationError(owner) from None
+
+
+
+def _run_directory_observation(owner, resource):
+    """Unwired fixed directory caller with pre-effect independent memory custody.
+
+    Only the actual factory/producer/policy/ACK returns are used. Cleanup is
+    memory-only after the fixed synchronous producer has unwound; it never
+    consults a current envelope as a receipt, closes an FD, refunds or retries.
+    A successful return is the actual closed commit, with its payload gone.
+    """
+    operation = marker = payload = origin = result = consumer = None
+    actual = commit = acked = record = None
+    actor_state = actor_arguments = None
+    producer_started = producer_unwound = complete = retired = False
+    # Retain these fixed function references across preparation callbacks. This
+    # is not a caller-selected dispatcher or a new admission surface.
+    produce, consume, acknowledge = (
+        _produce_directory_metadata, _consume_directory_policy, _ack_directory_policy)
+    try:
+        operation, marker, payload = _prepare_metadata_operation_with_custody(owner, resource)
+        result, origin = operation.result, operation.result.custody_origin
+        _marker_tail(owner, origin, marker, payload)
+        _require(marker.operation is operation and marker.consumer is None
+                 and result.custody_link is marker.owner_link
+                 and result.custody_slot is marker.marker_slot)
+        consumer = _prepare_directory_consumer(owner, operation)
+        _require(_latch_directory_consumer(owner, consumer) is consumer)
+        producer_started = True
+        try:
+            actual = produce(owner, consumer)
+        finally:
+            # Control flow, not a current stored ended flag: the actual fixed
+            # synchronous call returned or raised before this caller continues.
+            producer_unwound = True
+        commit = consume(owner, consumer, actual)
+        acked = acknowledge(owner, consumer, actual, commit)
+        _require(acked is commit
+                 and _acked_directory_commit_tail(owner, consumer, commit) is commit)
+        complete = True
+    except BaseException:  # noqa: S110 - never log private raw-bearing exceptions
+        pass
+
+    # Leave the original exception handler before disposal so a fresh outward
+    # error cannot carry its private exception/traceback as implicit context.
+    actual = None
+    try:
+        _require(type(operation) is _MetadataOperation and operation.owner is owner
+                 and (not producer_started or producer_unwound))
+        native = operation.native
+        actor_arguments = (operation, marker)
+        actor_state = _native_pre_actor_state(owner, actor_arguments)
+        _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                              operation.context)
+        _native_post_actor_state(owner, actor_state, actor_arguments)
+        _marker_tail(owner, origin, marker, payload)
+        _require(marker.operation is operation and result is operation.result
+                 and result.custody_origin is origin
+                 and result.custody_link is marker.owner_link
+                 and result.custody_slot is marker.marker_slot)
+        if not complete and producer_started and producer_unwound:
+            # Preserve real debit/ACK/cursor history and all foreign replacements.
+            # This branch admits no native work and does not require live grants.
+            ledger, phase = operation.ledger, operation.phase
+            if (type(operation.state) is list and len(operation.state) == 3
+                    and operation.state[2] is False):
+                operation.state[2] = True
+            if (type(ledger.failed) is list and len(ledger.failed) == 1
+                    and ledger.failed[0] is False):
+                ledger.failed[0] = True
+            if (type(ledger.failure) is list and len(ledger.failure) == 1
+                    and ledger.failure[0] is None):
+                ledger.failure[0] = operation
+            if (type(phase.current) is list and len(phase.current) == 1
+                    and (phase.current[0] is phase.active or phase.current[0] is phase.pending
+                         or phase.current[0] is phase.idle)):
+                phase.current[0] = phase.failed
+            if (type(phase.result) is list and len(phase.result) == 1
+                    and phase.result[0] is operation):
+                phase.result[0] = None
+            if (type(ledger.inflight) is list and len(ledger.inflight) == 1
+                    and ledger.inflight[0] is operation):
+                ledger.inflight[0] = None
+        record = _retire_directory_payload_data(owner, origin, marker, payload)
+        retired = True
+        if complete:
+            _require(record.detached is True and record.unmatched_link is False)
+    except BaseException:
+        complete = False
+    finally:
+        # Detaching is distinct from disposing the caller's last strong alias.
+        # Disposal can run finalizers; all normal live closure follows it.
+        actual = payload = None
+        actor_state = actor_arguments = None
+
+    if complete and retired:
+        try:
+            actor_arguments = (operation, marker, commit, record)
+            actor_state = _native_pre_actor_state(owner, actor_arguments)
+            native = operation.native
+            _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                                  operation.context)
+            _native_post_actor_state(owner, actor_state, actor_arguments)
+            _require(_retired_directory_commit_tail(
+                owner, consumer, commit, origin, marker, record) is commit)
+            return commit
+        except BaseException:  # noqa: S110 - no raw exceptions or retry on disposal drift
+            pass
+        finally:
+            actor_state = actor_arguments = None
+    # In particular, a lost producer return cannot become a received envelope.
+    # Original pending/failure/debit records remain; no current-row adoption.
+    actual = payload = record = acked = commit = None
     raise ArtifactObservationError(owner) from None
