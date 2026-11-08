@@ -23,6 +23,11 @@ def test_snapshot_constructor_cannot_replace_actual_native_identity(tmp_path, mo
         constructor_calls.append(True)
         return snapshot_factory(cls,(identity[0]+1,*identity[1:]),mtime+1)
 '''),
+            ("        if event=='return':\n"
+             "            operation,marker,payload_reference=captured[0]", r'''
+        if event=='return' and arg is not None:
+            operation,marker,payload_reference=captured[0]
+'''),
             ("            returns.append(True)", r'''
             native_identities.append(a._identity(arg.raw,True))
             snapshot_matches.append(arg.snapshot.identity==a._identity(arg.raw)
@@ -33,12 +38,28 @@ def test_snapshot_constructor_cannot_replace_actual_native_identity(tmp_path, mo
     a._NativeMetadataSnapshot.__new__=staticmethod(drift_snapshot)
     m._prepare_metadata_operation_with_custody=capture_factory
 '''),
+            ("        try:\n            returned=m._run_directory_observation(owner,resource)", r'''
+        probe_refused=False;returned=None
+        try:
+            returned=m._run_directory_observation(owner,resource)
+'''),
+            ("            assert case!='normal'", r'''
+            probe_refused=True
+            assert case=='normal'
+'''),
+            ("        assert len(captured)==1 and returns==[True] and native_entries==[True]", r'''
+        assert len(captured)==1 and native_entries==[True]
+        assert returns==([] if probe_refused else [True])
+'''),
             ("        assert not gc.isenabled() and payload_reference() is None", r'''
-        stage=dict(case='snapshot_constructor_drift',constructor_calls=len(constructor_calls),
+        stage=dict(case='snapshot_constructor_drift',refused=probe_refused,
+                   constructor_calls=len(constructor_calls),
                    native_entries=len(native_entries),producer_returns=len(returns),
                    snapshot_matches_native=snapshot_matches==[True],
                    commit_matches_native=(len(native_identities)==1
+                                          and returned is not None
                                           and returned.identity==native_identities[0]),
+                   acknowledged=operation.result.acknowledged[0] is not None,
                    payload_alive=payload_reference() is not None,
                    gc_disabled=not gc.isenabled(),marker_state=list(marker.state),
                    debit_preserved=ledger.counts==[counts[0]+1,counts[1]],
@@ -46,6 +67,18 @@ def test_snapshot_constructor_cannot_replace_actual_native_identity(tmp_path, mo
         diagnostic_path=Path(sys.argv[1])/'caller-snapshot-constructor-stage.json'
         diagnostic_fd=os.open(diagnostic_path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600)
         with os.fdopen(diagnostic_fd,'w') as stream:json.dump(stage,stream,sort_keys=True)
+        if probe_refused:
+            assert constructor_calls==[True] and returns==[]
+            assert operation.result.acknowledged==[None]
+            assert operation.result.consumer[0].commit==[None]
+            assert metadata.progress[0]==0
+            assert metadata.progress[1] is operation.result.consumer[0]
+            assert ledger.failed==[True] and ledger.failure[0] is operation
+            assert phase.current[0] is phase.failed
+            assert not gc.isenabled() and payload_reference() is None
+            assert marker.state==[True,True,False] and stage['debit_preserved']
+            seen.append(True)
+            return
         assert snapshot_matches==[True] and returned.identity==native_identities[0]
         assert not gc.isenabled() and payload_reference() is None
 '''),
