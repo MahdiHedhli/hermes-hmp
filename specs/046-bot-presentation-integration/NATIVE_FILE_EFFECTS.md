@@ -203,3 +203,58 @@ cache/source scope lineage through the original entry getter. Static AST layout
 comparison and the10+10 selected actual constructor/receipt causals passed;
 broader constructor/phase regression remains required.
 No earlier lint or syntax check is represented as a runtime qualification.
+
+## Accepted native outcome distinction — November 8, 2026
+
+Status: bounded read-only contract refinement accepted. The unwired sanitizer
+implements only closed diagnostic classification; the operation owner and typed
+consumer integration remain absent.
+
+An operation's raised outcome is terminal and single-use. It never becomes a
+success, kernel-absence fact or source-fallback permit. This differs from lineage
+integrity/resource failure, which terminates collection except known cleanup.
+
+Class-only sanitization would weaken existing cache missing-path checks and is
+not sufficient. Only the fixed STAT exception handler may compute a closed
+reported_missing_for_original_stat_argument category, after checking all of:
+exact originally captured FileNotFoundError class; exact int errno equal to the
+existing ENOENT requirement; exact str filename equal to the held original stat
+argument. Type fences precede equality; foreign subclasses/attributes are never
+inspected. Retain no exception, traceback, errno, filename, message or repr. The
+closed category records what the native boundary reported, not kernel provenance.
+
+Diagnostic acknowledgment requires an original typed plan/consumer claim made
+before the call: original owner/scope, cache source, pass, path index, observation
+ordinal, exact native stat arguments and original result allocation. The fixed
+consumer may acknowledge only that exact category/claim. Its next same-path stat
+is a distinct predeclared observation ordinal, never a retry or renewed allowance.
+Preserve actual parent descriptors, ancestor rechecks, currentness and known
+cleanup before publishing diagnostic DATA. No callback/Boolean chooses continuation.
+
+Permission/structure/wrong-errno/wrong-name/foreign-subclass stat outcomes,
+fstat/open/read/readlink errors, unknown open/close resource debt, and actor/
+ownership/result drift terminate collection. Only known original cleanup remains.
+Unknown debt is neither released nor converted into work credit. The accepted
+diagnostic acknowledgment does not erase the operation refusal or poison the
+entire shared lineage; the same aggregate quota and all prior facts remain.
+
+Existing legacy missing-path checks remain unchanged until the typed consumer
+route is integrated. Never reconstruct or rethrow an exception from sanitized
+metadata. Runtime admission and fallback still require separate reviewed policy.
+
+Review: existing character_custody_review, source-only; no tests, writes, native
+calls, device actions or deployment performed by reviewer.
+
+## Stat sanitizer implementation checkpoint
+
+Source2cad9e5 adds an unwired exact-type diagnostic classifier plus15 synthetic
+negative/normal cases. Full Ruff passes; tests have not run while the earlier
+1290-case source regression occupies the serialized test lane. Independent
+read-only review found no blocker within this narrow diagnostic-only scope.
+The captured exception descriptors are trusted import-time metadata, not a
+validated original interpreter dependency. Before native-owner integration, bind
+their exact descriptor identity/class and ENOENT type to the held original error
+origin. No exception or traceback is retained by the result. Calling the helper
+with a constructed exception proves no actual operation or kernel condition.
+No production route imports it and no authority, fallback or image delivery is
+implemented by this checkpoint.
