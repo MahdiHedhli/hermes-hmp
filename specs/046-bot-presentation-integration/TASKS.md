@@ -903,3 +903,18 @@ See [native file effects contract](NATIVE_FILE_EFFECTS.md). The integrated origi
 lineage and unwired diagnostic classifier do not implement the remaining full
 operation/consumer/cleanup/runtime/device requirements. Unpublished ledger and
 repaired scope registry remain separate pending source qualification.
+
+### Unpublished registration source qualification — November 8
+
+- [x] Ledger1b47c95:16 current/16 actual3.11.15 selected cases passed.
+- [x] Scope registry731e7ac:14 current/14 actual3.11.15 cases passed.
+- [x] Original scope slot874d6bf:20 current/20 actual3.11.15 cases passed.
+- [x] Repaired partial file walkersfffa1b3:22 current/22 actual3.11.15 cases passed.
+- [ ] Finish cache/link11ff67b55-case actual3.11.15 run; current55 passed.
+- [ ] Execute fresh-probe0d74d6525 current/floor cases sequentially.
+- [ ] Complete entry metadata/tree registration, original step/consumer plans and
+      native-operation/enumeration/cleanup/runtime/device requirements.
+
+All completed boxes here describe exact selected source tests, not delivered
+character or host-local-image features. These candidate sources are not included
+in this branch's34b862e server/scanner bytes and are not deployed.

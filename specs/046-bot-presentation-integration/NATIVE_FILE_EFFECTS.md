@@ -276,3 +276,27 @@ failures/errors/skips and unchanged source. Source/config/receipt/log/XML bindin
 were verified. These results supersede the pending statements at earlier dated
 checkpoints for those exact sources. No operational dispatcher, cleanup
 reservation, service/runtime or device-image pass is implied.
+
+## November 8 — selected registration checks passed; device features unchanged
+
+The separate source candidates passed on actual Python3.14.9 and3.11.15:
+ledger1b47c95 (16 cases each), scope registry731e7ac (14 each), original scope
+slot874d6bf (20 each), and repaired partial file-walker threadingfffa1b3
+(22 each). Exact source/config/receipt/log/XML bindings were verified. Initial
+walker failures (21 setup failures, then19 passes/2 legacy failures) remain
+preserved; root-shape and legacy import fixes did not weaken native checks.
+
+Cache/link forwarding11ff67b passed55 current-version cases; its actual3.11.15
+run remains pending. Fresh-probe0d74d65 has9 new plus16 existing cases queued
+sequentially behind it. These remain unpublished source candidates, separate
+from this review branch's34b862e code. No selected result is whole-plugin, native
+runtime, device or release qualification. No host/device/deployment changed.
+
+Bot characters and host-local images remain unfinished. Remaining work includes
+entry metadata/tree registration forwarding, original per-step/consumer plans,
+six fixed native-operation and separate enumeration effects, shared quota and
+reserved cleanup, production native/key/service wiring and physical delivery.
+No upstream prerequisite was established for the remaining HMP integration.
+Earlier pending checkpoints below are historical and superseded only for the
+exact source/results named above.
+
