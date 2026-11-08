@@ -539,12 +539,18 @@ def _register_native_scope(owner, s, cell, root):
 
 def _native_registration_tail(owner, s, cell, root, registration, registry):
     """Pure held DATA rejoin after the fixed caller's last work callback."""
-    _require(_capture_native_scope(s, cell, root) is registration
+    _require(type(s) is _Scope and type(cell) is tuple and len(cell) == 2
+             and cell[0] is owner and cell[1] is s
+             and type(root) is tuple and len(root) in (3, 4)
+             and root[0] is s.activation and root[1] is owner and root[2] is s
              and owner._scope is s and owner._origin is s
              and owner._cell is cell and owner._root_cell is root)
     if registration is None:
-        _require(registry is None)
+        # Preserve the already-validated legacy configuration/approval root.
+        _require(registry is None and s.native_files is None
+                 and s.native_registration_slot is None)
         return
+    _require(_capture_native_scope(s, cell, root) is registration)
     _require(type(registry) is list and type(registration.index) is int
              and 0 <= registration.index < len(registry)
              and registry[registration.index] is registration

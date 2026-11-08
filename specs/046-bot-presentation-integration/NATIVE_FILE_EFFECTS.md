@@ -366,3 +366,12 @@ after final origin callbacks and again before fact publication; no new actor/
 freshness callback cycle is started. Three added causal cases mutate the source
 effect or registration at those precise tails. The new walker set is11 cases,
 not yet executed; source review of this repair remains required.
+
+The first21-case threading run on27135dc failed21/21 during setup: the new final
+join incorrectly reused the three-part entry-root capture for legacy operator
+approval's four-part root. The failure is preserved; no deeper mutation case is
+claimed as exercised. The repair keeps the existing held legacy3/4 root identity
+and unchanged owner guards, requires both native fieldsNone in the legacy branch,
+and applies strict original-slot capture only to entry-bound registrations. This
+is compatibility repair, not a relaxation of operator approval or native scope
+authority. Exact repaired runs and independent review remain required.
