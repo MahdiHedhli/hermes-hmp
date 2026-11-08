@@ -23,12 +23,15 @@ Separate unqualified metadata preparation `b63aed9` inventories all39 stat/fstat
 sites and both missing-stat diagnostics, captures primitive stat DATA, allocates
 lazy original declared-file site plans and retains the actual plan in its walk
 handoff. Review corrected the plan to match final ancestor checks. Eleven focused
-plan/caller cases are queued, unrun. Resource descendant `e593cde` binds actual
-opened descriptors and parent chains to original allocation/ledger evidence;
-five composed resource cases are queued, unrun. Finite source review found no new
-concrete blocker, not runtime qualification. Native metadata debit, fixed
-consumers/ACK, tree/link/diagnostic plans and full operation-budget integration
-remain unfinished. This cache is Python
+plan/caller cases passed on each supported Python version (11 each). Resource
+`e593cde` passed five composed cases on each version, and operation preparation
+`0884893` passed eight on each; all sources/receipt/log/XML bindings were rehashed.
+These qualify preparation slices only. Directory-consumer preparation `bbf877d`
+retains original scope/material/lifetime bindings and one-use result ownership;
+nine focused cases are running current-version first, then the floor. Scanner
+policy is unchanged. Actual metadata admission/debit/native calls, fixed result
+policy/ACK, tree/link/diagnostic plans and full operation-budget integration remain
+unfinished; no host activation or physical feature pass is claimed. This cache is Python
 bytecode custody for character startup, not a delivered chat-image feature.
 Host-local chat media remains the separate reviewed deployment described below.
 No source prototype is represented as installed or physically qualified.
@@ -64,8 +67,13 @@ deadline. Source was unchanged; receipt/log/XML bindings were verified. This
 floor suite is not qualified. Test-only `daf6350` prepares a 45-second bounded
 stack diagnostic without changing the deadline. It reproduced the timeout,
 but the parent did not persist child output. Test-only `ca2ea03` repairs private
-raw-output persistence and adds two failure-preservation checks; that diagnostic
-is queued after the cache lane. No performance cause or repaired floor pass is
+raw-output persistence and adds two failure-preservation checks; all three
+isolated cases passed, with the linear case at58.038 seconds. A further test-only
+`01b586c` saved a private45-second stack even on success and passed at59.128s.
+The sample shows repeated parent-package descriptor-history validation during
+entry-file completion, not proof of an exclusive cause. Review found no safe
+direct audit deletion across callback/import boundaries. The original timeouts
+remain preserved; no deadline extension, weakened test or full floor pass is
 claimed.
 The original failures remain preserved, not relabeled passing; no complete
 startup, six-operation, runtime/service or device/image qualification is claimed.
