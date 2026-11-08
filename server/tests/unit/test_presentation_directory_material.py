@@ -27,9 +27,8 @@ index=next(i for i,row in enumerate(rows) if row.plan_row.source.path==str(dep_r
 owner=RuntimeSourceReadOwner.retain(continuation,index)
 seen=[];injected=[];restore=[];outcomes=[]
 def no_action(self):return None
-def drift(frame):
+def drift(consumer):
     if injected:return
-    consumer=frame.f_locals['consumer']
     assert consumer.owner is owner
     if case=='material_code':
         original=consumer.material.__code__
@@ -44,8 +43,6 @@ def drift(frame):
         original=sys.modules[name];sys.modules[name]=ModuleType(name)
         restore.append(lambda:sys.modules.__setitem__(name,original))
     injected.append(True)
-trace_synthetic_boundary(m._prepare_directory_consumer.__code__,
-                         '_require(_resource_tail(owner, resource) is resource',drift)
 def prepare(frame):
     if frame.f_locals['self'] is not owner or seen:return
     resource=a._prepare_native_metadata_resource(
@@ -54,9 +51,17 @@ def prepare(frame):
     operation=m._prepare_metadata_operation(owner,resource)
     counts=tuple(operation.ledger.counts);attempts=len(operation.ledger.attempts)
     refused=False;returned=None
-    try:returned=sys.call_tracing(m._prepare_directory_consumer,(owner,operation))
+    original_new=m._DirectoryConsumer.__new__
+    original_descriptor=vars(m._DirectoryConsumer)['__new__']
+    def construct(cls,*values):
+        consumer=original_new(cls,*values)
+        drift(consumer)
+        return consumer
+    m._DirectoryConsumer.__new__=staticmethod(construct)
+    try:returned=m._prepare_directory_consumer(owner,operation)
     except a.ArtifactObservationError:refused=True
     finally:
+        m._DirectoryConsumer.__new__=original_descriptor
         for action in reversed(restore):action()
     outcomes.append(dict(case=case,injected=injected==[True],refused=refused,
                          published=returned is not None and
