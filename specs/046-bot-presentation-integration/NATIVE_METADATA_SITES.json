@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "purpose": "review inventory only; not runtime plan, permission or admission",
-  "sourceBase": "8afe009f93044387a352c4f642c1162296eba789",
+  "sourceBase": "872e0fb66a8c84b13f01b4c433b85ad56aa5072e",
   "sources": {
-    "server/hmp_plugin/presentation_startup_artifacts.py": "86fae9f5d3327ddc73316f6e75a5bc0d9cec93aa3db3833a8cc818e9956c8013",
+    "server/hmp_plugin/presentation_startup_artifacts.py": "0c4d1a78a0b8ac3f641a50e2b30f8e89346f49274c876349d37ed417e38f8359",
     "server/hmp_plugin/presentation_gateway_package.py": "f602dedee29d69ba354556bd8b7de2e4574bdb3c9c8e524938438a32b7f0a41b",
     "server/hmp_plugin/presentation_startup_cache.py": "ec6d54e0b0de476f7a2d13b8896f6c3db9650ca519452ae1b6cb3642a35b4682",
     "server/hmp_startup/entry_files.py": "bd286f8922817a41a4103637c2b7d8eecc1f58f2a7fa0794ed0cc8d4ba6d1989",
@@ -15,7 +15,7 @@
       "scope": "StartupArtifactOwner._link_path",
       "kind": "fstat",
       "siteOrdinal": 0,
-      "line": 3386,
+      "line": 3583,
       "arguments": [
         "self",
         "fd",
@@ -29,7 +29,7 @@
       "scope": "StartupArtifactOwner._link_path",
       "kind": "stat",
       "siteOrdinal": 0,
-      "line": 3394,
+      "line": 3591,
       "arguments": [
         "self",
         "name",
@@ -44,7 +44,7 @@
       "scope": "StartupArtifactOwner._link_path",
       "kind": "stat",
       "siteOrdinal": 1,
-      "line": 3413,
+      "line": 3610,
       "arguments": [
         "self",
         "name",
@@ -59,7 +59,7 @@
       "scope": "StartupArtifactOwner._link_path",
       "kind": "fstat",
       "siteOrdinal": 1,
-      "line": 3416,
+      "line": 3613,
       "arguments": [
         "self",
         "fd",
@@ -73,7 +73,7 @@
       "scope": "StartupArtifactOwner._link_path",
       "kind": "stat",
       "siteOrdinal": 2,
-      "line": 3418,
+      "line": 3615,
       "arguments": [
         "self",
         "item",
@@ -88,7 +88,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "fstat",
       "siteOrdinal": 0,
-      "line": 3587,
+      "line": 3784,
       "arguments": [
         "self",
         "fd",
@@ -102,7 +102,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "stat",
       "siteOrdinal": 0,
-      "line": 3598,
+      "line": 3795,
       "arguments": [
         "self",
         "name",
@@ -117,7 +117,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "fstat",
       "siteOrdinal": 1,
-      "line": 3612,
+      "line": 3809,
       "arguments": [
         "self",
         "fd",
@@ -131,7 +131,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "fstat",
       "siteOrdinal": 2,
-      "line": 3697,
+      "line": 3894,
       "arguments": [
         "self",
         "fd",
@@ -145,7 +145,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "stat",
       "siteOrdinal": 1,
-      "line": 3699,
+      "line": 3896,
       "arguments": [
         "self",
         "name",
@@ -160,7 +160,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "fstat",
       "siteOrdinal": 3,
-      "line": 3711,
+      "line": 3908,
       "arguments": [
         "self",
         "directory",
@@ -174,7 +174,7 @@
       "scope": "StartupArtifactOwner._file",
       "kind": "stat",
       "siteOrdinal": 2,
-      "line": 3713,
+      "line": 3910,
       "arguments": [
         "self",
         "name",
@@ -578,8 +578,9 @@
     "hmp_startup.cache_probe.RuntimeCacheProbeOwner._stat_known"
   ],
   "remaining": [
-    "independent original site-plan allocation",
-    "fixed per-site consumer policies",
-    "all six operation integration and separate enumeration effects"
+    "directory caller actor-preflight causal qualification",
+    "fixed leaf and final-ancestor consumer policies",
+    "actual walker metadata ACK cursor integration; never skip zero cursor guard",
+    "remaining operation and enumeration integration with original lifetime/resource bounds"
   ]
 }

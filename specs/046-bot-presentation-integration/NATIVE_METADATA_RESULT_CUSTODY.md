@@ -228,3 +228,15 @@ repair regression is running serially; independent repair review, wrong-actor/
 repeated-interruption coverage, actual-site integration and physical/runtime
 qualification remain open. This is not a completed image-delivery feature.
 
+
+## Refreshed semantic site inventory
+
+`NATIVE_METADATA_SITES.json` now binds the uninstalled actor-preflight candidate
+`872e0fb`: all39 semantic call entries match the prior inventory when line
+numbers are excluded; current line positions and all five source hashes were
+verified. Both diagnostic function locations were rechecked. This is review
+DATA, never runtime admission or a current-process receipt. It does not mean
+these sites have been migrated to the new caller. The actor-preflight draft is
+source-reviewed but its causal tests are pending; the original control remains
+separate. Leaf/final-ancestor policies, actual walker ACK cursor integration,
+remaining operations and enumeration still require implementation and verification.
