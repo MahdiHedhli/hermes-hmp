@@ -464,3 +464,15 @@ cannot masquerade as a causal pass. Child scripts parse; tests have not run.
 Independent review and exact current/floor qualification remain required. This
 check is a prerequisite for fixed per-step claims, not a replacement for them,
 raw-operation custody, resource accounting or runtime/image authority.
+
+## Native primitive argument boundary — unqualified source candidate
+
+Entry-bound open/stat require exact string relative components and an exact
+nonnegative integer parent; only fixed root slash accepts no parent. Open's
+directory selector must be an exact Boolean. Read/fstat require exact nonnegative
+integer descriptors. Legacy paths retain their previous behavior. Existing
+readlink and close already enforce exact bytes/integer arguments. These checks
+reject foreign path/index/Boolean behavior before native calls; they do not prove
+original descriptor membership, per-step authority or typed native outcomes.
+Fourteen normal/foreign actual composed-file cases are prepared; tests pending.
+Full operation custody, reservations and service/physical qualification remain open.

@@ -565,6 +565,23 @@ def _native_walk_scope(owner, registration):
     return _native_scope_current(owner, registration).scope
 
 
+def _native_relative_arguments(s, name, parent):
+    """Primitive shape only; does not grant path/descriptor or step authority."""
+    if s.native_files is None:
+        return
+    _require(type(name) is str and type(parent) in (int, type(None)))
+    if parent is None:
+        _require(name == "/")
+    else:
+        _require(parent >= 0 and len(name) > 0 and name not in (".", "..")
+                 and "/" not in name and "\x00" not in name)
+
+
+def _native_descriptor_argument(s, fd):
+    if s.native_files is not None:
+        _require(type(fd) is int and fd >= 0)
+
+
 class StartupArtifactOwner:
     @classmethod
     def observe(cls, activation, expected):
@@ -827,6 +844,9 @@ class StartupArtifactOwner:
 
     def _open(self, name, parent, directory):
         s = _owner_guard(self)
+        _native_relative_arguments(s, name, parent)
+        if s.native_files is not None:
+            _require(type(directory) is bool)
         row = _Descriptor()
         s.records.append(row)  # original descriptor allocation before open
         root_cell, fd = self._root_cell, None
@@ -883,6 +903,8 @@ class StartupArtifactOwner:
             raise
 
     def _read(self, fd, count, s):
+        _require(type(s) is _Scope)
+        _native_descriptor_argument(s, fd)
         if type(self) is StartupArtifactOwner:
             _require(self._ready is False and self._attempt_cell is not None)
         _require(_owner_guard(self) is s and type(count) is int
@@ -943,12 +965,14 @@ class StartupArtifactOwner:
 
     def _stat(self, name, parent, s):
         _require(_owner_guard(self) is s)
+        _native_relative_arguments(s, name, parent)
         value = os.stat(name, dir_fd=parent, follow_symlinks=False)
         _require(type(value) is os.stat_result and _owner_guard(self) is s)
         return value
 
     def _fstat(self, fd, s):
         _require(_owner_guard(self) is s)
+        _native_descriptor_argument(s, fd)
         value = os.fstat(fd)
         _require(type(value) is os.stat_result and _owner_guard(self) is s)
         return value
