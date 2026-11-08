@@ -56,7 +56,13 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
       cleanup. Implementation and bounded source review accepted;130 focused
       reader/scanner checks and15 actual floor child cases passed;1162 unchanged
       startup checks passed. Fixture-only line wrap preserves script AST and
-      passes one current/two floor rechecks plus full lint. Linux CI pending. [Contract and runtime limits](RUNTIME_SOURCE_READ.md).
+      passes one current/two floor rechecks plus full lint. Linux CI pending.
+      [Contract and runtime limits](RUNTIME_SOURCE_READ.md).
+- [ ] **PS1-SOURCE-COMPILATION** Capture original actual compiler resolution and
+      own one native source compilation without execution. Isolated implementation
+      and bounded source review accepted;37 current matrix cases plus stronger
+      parity/syntax checks pass.38 actual floor children pass; shared-entry
+      qualification remains pending. [Contract and limits](SOURCE_COMPILATION_CONTRACT.md).
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
       Next reviewed executable slice: original source-hash builtin/key/machinery,

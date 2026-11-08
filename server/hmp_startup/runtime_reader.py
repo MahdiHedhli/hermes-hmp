@@ -11,7 +11,7 @@ from hmp_plugin.presentation_startup_artifacts import StartupArtifactOwner, _Sco
 
 from .gateway_continuation import GatewayContinuationOwner
 
-_OWNER = _ROOT = _CELL = None
+_OWNER = _ROOT = _CELL = _READY = None
 
 
 class RuntimeReadError(Exception):
@@ -63,7 +63,7 @@ class RuntimeSourceReadOwner:
 
         _require(cls is RuntimeSourceReadOwner and type(continuation) is GatewayContinuationOwner
                  and type(index) is int and index >= 0
-                 and _OWNER is None and _ROOT is None and _CELL is None)
+                 and _OWNER is None and _ROOT is None and _CELL is None and _READY is None)
         hash_origin = _sha_origin()
         root = GatewayContinuationOwner.current_binding(continuation)
         activation = root[1]
@@ -80,7 +80,9 @@ class RuntimeSourceReadOwner:
         owner._count_cell = None
         owner._ready = owner._failed = owner._unknown = owner._reading = False
         owner._started = owner._released = False
-        owner._receipt = None
+        owner._retaining = True
+        owner._receipt = owner._read_fact = None
+        owner._compiler_owner = owner._compiler_cell = None
         try:
             rows = selected_cache_input_attempts(continuation)
             _require(index < len(rows) and activation._runtime_read_owner is owner
@@ -119,7 +121,10 @@ class RuntimeSourceReadOwner:
                      and _OWNER is owner and owner._root_cell is runtime_root
                      and owner._origin is scope and scope.parent[1] is selected
                      and scope.parent[2] is buffer and owner._buffer is buffer
-                     and owner._original_buffer is buffer)
+                     and owner._original_buffer is buffer
+                     and owner._started is False and owner._ready is False
+                     and owner._released is False and owner._read_fact is None)
+            owner._retaining = False
             return owner
         except BaseException:
             owner._failed = True
@@ -182,23 +187,40 @@ class RuntimeSourceReadOwner:
                  and s.activation._runtime_read_owner is self
                  and s.activation._runtime_read_cell is runtime_root
                  and self._failed is False and self._unknown is False
-                 and self._released is False
+                 and type(self._released) is bool and type(self._retaining) is bool
                  and type(self._count_cell) is tuple and len(self._count_cell) == 3
                  and self._count_cell[0] is self and self._count_cell[1] is s
                  and self._count_cell[2] is self._bytes_read
                  and type(self._bytes_read) is int
                  and 0 <= self._bytes_read <= s.expected[0].size
                  and len(buffer) <= s.expected[0].size)
+        if self._ready is True:
+            _require(type(_READY) is tuple and len(_READY) == 8
+                     and self._read_fact is _READY
+                     and _READY[0] is self and _READY[1] is runtime_root
+                     and _READY[2] is cell and _READY[3] is selected and _READY[4] is buffer
+                     and type(_READY[5]) is _HashedArtifact
+                     and self._receipt is _READY[5] and _READY[5].owner is self
+                     and _READY[5].scope is s and _READY[5].expected is s.expected[0]
+                     and _READY[6] is self._count_cell
+                     and type(_READY[7]) is SourceDigestFact
+                     and _READY[5].source_digest is _READY[7]
+                     and _READY[7].count is _READY[6])
+        else:
+            _require(self._ready is False and _READY is None
+                     and self._read_fact is None and self._receipt is None)
         return s, runtime_root, cell, selected, buffer, root
 
     def _guard(self):
         held = RuntimeSourceReadOwner._original(self)
+        _require(self._released is False)
         s, _, _, _, _, root = held
         _require(root[0]._root is root and root[0]._source is root[2]
                  and GatewayContinuationOwner._seal(root[0]) is root[2]
                  and _context() == s.context)
         current = RuntimeSourceReadOwner._original(self)
         _require(all(a is b for a, b in zip(held, current, strict=True))
+                 and self._released is False
                  and root[0]._root is root and root[0]._source is root[2]
                  and GatewayContinuationOwner._seal(root[0]) is root[2])
         return s
@@ -214,12 +236,14 @@ class RuntimeSourceReadOwner:
         _require(RuntimeSourceReadOwner._guard(self) is s and self._count_cell is cell)
 
     def read(self):
+        global _READY
         # Pure original-owner/shape checks precede the sticky attempt, then all
         # callback-bearing work is inside the failure/cleanup boundary.
         from hmp_plugin.presentation_source_digest import seal_fact
 
         s, _, _, selected, buffer, _ = RuntimeSourceReadOwner._original(self)
-        _require(self._started is False and self._ready is False)
+        _require(self._started is False and self._ready is False and self._released is False
+                 and self._retaining is False)
         self._started = True
         failed = False
         snapshot = digest = None
@@ -259,7 +283,11 @@ class RuntimeSourceReadOwner:
                      and receipt.source_digest is source_fact
                      and seal_fact(source_fact) is source_fact
                      and buffer == snapshot)
+            _require(_READY is None and self._read_fact is None and self._receipt is None)
+            ready = (self, self._root_cell, self._cell, selected, buffer,
+                     receipt, count, source_fact)
             self._receipt = receipt
+            self._read_fact = _READY = ready
             self._ready = True
         except BaseException:
             self._failed = failed = True
@@ -269,6 +297,28 @@ class RuntimeSourceReadOwner:
             RuntimeSourceReadOwner._clear(self, buffer)
             raise RuntimeReadError(self) from None
         return self
+
+    def historical_binding(self):
+        """Original completed read DATA; no actor or current-byte authority."""
+        from hmp_plugin.presentation_source_digest import seal_fact
+
+        s, _, _, _, buffer, root = RuntimeSourceReadOwner._original(self)
+        _require(self._ready is True and self._retaining is False)
+        ready = _READY
+        _require((len(buffer) == 0 if self._released else len(buffer) == s.expected[0].size)
+                 and root[0]._root is root and root[0]._source is root[2]
+                 and GatewayContinuationOwner._seal(root[0]) is root[2]
+                 and seal_fact(ready[7]) is ready[7]
+                 and _READY is ready and self._read_fact is ready
+                 and self._count_cell is ready[6] and self._receipt is ready[5])
+        return ready
+
+    def completed_binding(self):
+        """Actual current owner; bytes still need a content seal before use."""
+        ready = RuntimeSourceReadOwner.historical_binding(self)
+        RuntimeSourceReadOwner._guard(self)
+        _require(RuntimeSourceReadOwner.historical_binding(self) is ready)
+        return ready
 
     def _clear(self, buffer):
         # Clear the captured original allocation even if a mutable slot changed.

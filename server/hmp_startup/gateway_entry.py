@@ -7,6 +7,7 @@ later factory still supplies independent installation/operator/runtime checks.
 from __future__ import annotations
 
 import _imp
+import builtins
 import importlib._bootstrap_external
 import importlib.util
 import os
@@ -142,6 +143,53 @@ def _same_source_hash(origin, current):
             and current.key == origin.key)
 
 
+class _SourceCompileOrigin(NamedTuple):
+    module: ModuleType
+    loader_type: type
+    function: FunctionType
+    code: CodeType
+    builtins_module: ModuleType
+    namespace: dict
+    compiler: BuiltinFunctionType
+
+    def __repr__(self):
+        return "<OriginalInterpreterSourceCompiler redacted>"
+
+
+def _source_compile_origin(source_hash):
+    _require(type(source_hash) is _SourceHashOrigin and type(sys.modules) is dict
+             and type(builtins) is ModuleType and sys.modules.get("builtins") is builtins
+             and type(source_hash.module) is ModuleType
+             and type(source_hash.loader_type) is type)
+    module, loader = source_hash.module, source_hash.loader_type
+    _require(sys.modules.get("_frozen_importlib_external") is module
+             and sys.modules.get("importlib._bootstrap_external") is module
+             and vars(module).get("SourceLoader") is loader)
+    function = vars(loader).get("source_to_code")
+    _require(type(function) is FunctionType and function.__globals__ is vars(module)
+             and type(function.__module__) is str
+             and function.__module__ == "_frozen_importlib_external"
+             and type(function.__code__) is CodeType
+             and type(function.__builtins__) is dict
+             and function.__builtins__ is vars(builtins)
+             and "compile" not in vars(module))
+    names = function.__code__.co_names
+    _require(type(names) is tuple and all(type(name) is str for name in names))
+    namespace = function.__builtins__
+    compiler = namespace.get("compile")
+    _require(type(compiler) is BuiltinFunctionType and compiler.__self__ is builtins
+             and type(compiler.__name__) is str and compiler.__name__ == "compile"
+             and type(compiler.__module__) is str and compiler.__module__ == "builtins"
+             and "compile" in names)
+    return _SourceCompileOrigin(module, loader, function, function.__code__,
+                                builtins, namespace, compiler)
+
+
+def _same_source_compile(origin, current):
+    _require(type(origin) is _SourceCompileOrigin and type(current) is _SourceCompileOrigin)
+    return all(a is b for a, b in zip(origin, current, strict=True))
+
+
 class _InterpreterOrigin(NamedTuple):
     implementation: SimpleNamespace
     version: object
@@ -151,6 +199,7 @@ class _InterpreterOrigin(NamedTuple):
     bytecode_magic: bytes
     cache_policy: _CachePolicyOrigin
     source_hash: _SourceHashOrigin
+    source_compile: _SourceCompileOrigin
 
     def __repr__(self):
         return "<OriginalInterpreterOrigin redacted>"
@@ -181,8 +230,9 @@ def _interpreter():
     magic = vars(bytecode).get("MAGIC_NUMBER")
     _require(type(magic) is bytes and len(magic) == 4)
     cache = _cache_policy()
+    source_hash = _source_hash_origin(cache.module)
     return _InterpreterOrigin(implementation, version, flags, data, bytecode, magic,
-                              cache, _source_hash_origin(cache.module))
+                              cache, source_hash, _source_compile_origin(source_hash))
 
 
 def _interpreter_current(origin):
@@ -195,7 +245,8 @@ def _interpreter_current(origin):
              and type(origin.cache_policy) is _CachePolicyOrigin
              and current.cache_policy.module is origin.cache_policy.module
              and _cache_values(current.cache_policy) == _cache_values(origin.cache_policy)
-             and _same_source_hash(origin.source_hash, current.source_hash))
+             and _same_source_hash(origin.source_hash, current.source_hash)
+             and _same_source_compile(origin.source_compile, current.source_compile))
     return origin
 
 
