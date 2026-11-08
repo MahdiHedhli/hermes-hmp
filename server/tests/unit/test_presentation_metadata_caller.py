@@ -9,7 +9,7 @@ from .test_presentation_gateway_approval import operator_composed_script
 
 @pytest.mark.parametrize('case', ['normal', 'lost_return', 'revoked_lost_return',
                                  'foreign_slot_lost_return', 'foreign_inner_lost_return',
-                                 'late_marker_drift', 'disposal_revocation',
+                                 'late_marker_drift', 'disposal_revocation', 'wrong_actor',
                                  'lost_return_interrupt_before', 'lost_return_interrupt_after'])
 def test_fixed_directory_caller(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
@@ -18,7 +18,7 @@ def test_fixed_directory_caller(tmp_path, monkeypatch, case):
     script = script[:script.rfind('print(json.dumps')]
     script += '\ncase=' + repr(case) + '\n'
     script += r'''
-import ast, gc, inspect, os, weakref
+import ast, gc, inspect, os, threading, weakref
 from hmp_startup.gateway_continuation import GatewayContinuationOwner
 from hmp_startup.cache_selection import selected_cache_input_attempts
 from hmp_startup.runtime_reader import RuntimeSourceReadOwner
@@ -40,6 +40,28 @@ def exercise(frame):
     preparation=tuple(ledger.preparation)
     metadata=walk[5]
     assert metadata.progress==[0,None]
+    if case=='wrong_actor':
+        before=(tuple(ledger.counts),tuple(ledger.attempts),tuple(ledger.preparation),
+                tuple(ledger.inflight),tuple(ledger.failed),tuple(ledger.failure),
+                tuple(phase.current),tuple(phase.result),tuple(metadata.progress))
+        outcomes=[]
+        def wrong_actor_call():
+            try:m._run_directory_observation(owner,resource)
+            except a.ArtifactObservationError as exc:
+                outcomes.append(exc.failed_owner is owner
+                                and str(exc)=='BI1_STARTUP_ARTIFACTS_REFUSED'
+                                and exc.__cause__ is exc.__context__ is None)
+            except BaseException:outcomes.append(False)
+            else:outcomes.append(False)
+        worker=threading.Thread(target=wrong_actor_call)
+        worker.start();worker.join(10)
+        assert not worker.is_alive() and outcomes==[True]
+        after=(tuple(ledger.counts),tuple(ledger.attempts),tuple(ledger.preparation),
+               tuple(ledger.inflight),tuple(ledger.failed),tuple(ledger.failure),
+               tuple(phase.current),tuple(phase.result),tuple(metadata.progress))
+        assert before==after
+        seen.append(True)
+        return
     factory=m._prepare_metadata_operation_with_custody
     captured=[];returns=[];native_entries=[];foreign_inner=[]
     foreign_slot=object()
