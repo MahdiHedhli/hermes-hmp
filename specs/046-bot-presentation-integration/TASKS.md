@@ -63,10 +63,10 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
       and bounded source review accepted;37 current matrix cases plus stronger
       parity/syntax checks pass.38 actual floor children and1185 unchanged-source
       startup regressions pass; Linux/operational qualification remains separate. [Contract and limits](SOURCE_COMPILATION_CONTRACT.md).
-- [ ] **PS1-CACHE-DECODE-ORIGIN** Hold original native marshal/fixer and frozen
+- [x] **PS1-CACHE-DECODE-ORIGIN** Hold original native marshal/fixer and frozen
       helper origins; refuse substitutions before dispatch.17 current and17
-      actual floor cases pass; bounded review accepted. Shared-entry regressions
-      pending; this is not owned decoding or execution.
+      actual floor cases and1202 unchanged-source shared-startup cases pass;
+      bounded review accepted; this is not owned decoding or execution.
       [Contract and limits](RUNTIME_CACHE_INPUT_CONTRACT.md).
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.

@@ -6,7 +6,8 @@ function/code/foreign metadata refuses before dispatch.17 current and17 actual
 Python3.11 child cases pass with source unchanged; bounded source review accepted.
 Native parity includes accepted trailing data, malformed/non-code refusal and
 nested filename mutation without payload execution. Rebase preserved every tested
-source hash. Shared-startup regressions are active/pending for this new change.
+source hash. The unchanged-source shared-startup baseline passed1202 cases. Linux CI,
+installed and operational qualification remain separate.
 Owned cache IO, selection/decode/fixer effects and operational admission remain
 unfinished. No bot-character/local-media delivery or deployment is claimed.
 See [contract](specs/046-bot-presentation-integration/RUNTIME_CACHE_INPUT_CONTRACT.md).

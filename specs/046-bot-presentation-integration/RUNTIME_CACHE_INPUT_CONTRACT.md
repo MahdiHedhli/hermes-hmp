@@ -114,6 +114,6 @@ unchanged. Metadata refusals cover callable/code/alias/module-map substitutions
 and foreign metadata with zero foreign calls. Actual native helper/direct loads+
 fix parity covers accepted trailing data, EOF, bad tags, non-code refusal and
 nested distinct filenames. Returned code is never executed. Independent bounded
-source review accepted the origin-only implementation; broader shared-entry
-regressions remain pending. Input/cleanup/selection/fixer effect and operational
+source review accepted the origin-only implementation; the unchanged-source broader shared-startup baseline passed1202 cases.
+Linux full-plugin/installed/operational qualification remains separate. Input/cleanup/selection/fixer effect and operational
 resource/native admission requirements above remain open.
