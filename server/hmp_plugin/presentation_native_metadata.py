@@ -9,12 +9,10 @@ from .presentation_metadata_custody import (
     _allocate_directory_custody,
     _capture_payload_origin,
     _directory_payload_cells,
-    _held_marker_identity_tail,
     _marker_tail,
     _origin_tail,
     _payload_state_is_clear,
     _PayloadOrigin,
-    _retire_directory_payload_data,
 )
 from .presentation_startup_artifacts import (
     ArtifactObservationError,
@@ -1075,7 +1073,7 @@ def _acked_directory_commit_tail(owner, consumer, commit):
 def _retired_directory_commit_tail(owner, consumer, commit, origin, marker, record):
     """Closed ACK plus actual caller-held retirement DATA, never a native ACK.
 
-    The fixed caller must hold the actual commit and retirement return, clear its
+    The fixed caller must hold the actual commit and retirement allocation, clear its
     payload/cell/envelope aliases, then use this tail before any further work.
     Neither a current record lookup nor constructing matching DATA is a receipt.
     """
@@ -1364,6 +1362,7 @@ def _run_directory_observation(owner, resource):
     A successful return is the actual closed commit, with its payload gone.
     """
     operation = marker = payload = origin = result = consumer = None
+    held_link = held_slot = held_state = held_reference = None
     actual = commit = acked = record = None
     actor_state = actor_arguments = None
     producer_started = producer_unwound = complete = retired = False
@@ -1378,6 +1377,8 @@ def _run_directory_observation(owner, resource):
         _require(marker.operation is operation and marker.consumer is None
                  and result.custody_link is marker.owner_link
                  and result.custody_slot is marker.marker_slot)
+        held_link, held_slot = marker.owner_link, marker.marker_slot
+        held_state, held_reference = marker.state, marker.reference
         consumer = _prepare_directory_consumer(owner, operation)
         _require(_latch_directory_consumer(owner, consumer) is consumer)
         producer_started = True
@@ -1407,11 +1408,19 @@ def _run_directory_observation(owner, resource):
         _native_actor_context(native.actor_calls, (native.native, native.thread_native),
                               operation.context)
         _native_post_actor_state(owner, actor_state, actor_arguments)
-        _held_marker_identity_tail(owner, origin, marker, payload)
-        _require(marker.operation is operation and result is operation.result
-                 and result.custody_origin is origin
-                 and result.custody_link is marker.owner_link
-                 and result.custody_slot is marker.marker_slot)
+        # This fixed frame received the actual factory triple before effects.
+        # Mutable marker slots/backlinks cannot revoke its memory-only custody.
+        # Normal result/ACK guards remain strict and never use this branch.
+        _origin_tail(origin)
+        _require(type(marker) is origin.marker_type and marker.owner is owner
+                 and marker.operation is operation and marker.origin is origin
+                 and marker.owner_link is held_link and marker.marker_slot is held_slot
+                 and marker.state is held_state and marker.reference is held_reference
+                 and type(payload) is origin.payload_type
+                 and type(held_reference) is origin.reference_type
+                 and origin.reference_callback.__get__(
+                     held_reference, origin.reference_type) is None
+                 and origin.reference_call(held_reference) is payload)
         if not complete and producer_started and producer_unwound:
             # Preserve real debit/ACK/cursor history and all foreign replacements.
             # This branch admits no native work and does not require live grants.
@@ -1435,7 +1444,31 @@ def _run_directory_observation(owner, resource):
             if (type(ledger.inflight) is list and len(ledger.inflight) == 1
                     and ledger.inflight[0] is operation):
                 ledger.inflight[0] = None
-        record = _retire_directory_payload_data(owner, origin, marker, payload)
+        # Conditional detach uses the pre-effect link allocation and actual
+        # held payload. Never read a current envelope/record to nominate either.
+        detached = (type(held_link) is list and len(held_link) == 1
+                    and held_link[0] is payload)
+        if detached:
+            held_link[0] = None
+        unmatched_marker = not (
+            type(held_slot) is list and len(held_slot) == 1 and held_slot[0] is marker
+            and _payload_state_is_clear(held_state))
+        try:
+            if origin.marker_member.__get__(payload, origin.payload_type) is not marker:
+                unmatched_marker = True
+        except BaseException:
+            unmatched_marker = True
+        # These are historical memory-disposition markers, never native ACKs.
+        # Preserve foreign entries in the original state list as well.
+        if type(held_state) is list and len(held_state) == 3:
+            if held_state[0] is False:
+                held_state[0] = True
+            if (unmatched_marker or not detached) and held_state[2] is False:
+                held_state[2] = True
+        record = tuple.__new__(origin.record_type,
+                               (marker, detached, not detached, unmatched_marker))
+        if type(held_state) is list and len(held_state) == 3 and held_state[1] is False:
+            held_state[1] = True
         retired = True
         if complete:
             _require(record.detached is True and record.unmatched_link is False
