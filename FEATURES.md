@@ -13,15 +13,22 @@ blocker. Normal plus owner-drift cases passed on each Python version (2 each,
 unchanged source, verified log/XML). Its 34-case suite, including partial-ACK
 interruptions and prefix-wrapper retirement checks, passed on Python 3.14.9:
 zero failures/errors/skips, unchanged source, source/receipt/log/XML rehashed.
-The same 34-case Python 3.11.15 run is active. This is a cache-reader suite pass,
-not complete startup, six-operation, runtime/service or physical qualification.
+The same 34-case suite also passed on Python 3.11.15, with zero failures/errors/
+skips and unchanged source; source/receipt/log/XML bindings were independently
+rehashed. Both runs qualify this cache-reader slice only. The separate floor
+linear-read timeout remains open; no complete startup, six-operation, runtime/
+service or physical qualification is claimed.
 
 Separate unqualified metadata preparation `b63aed9` inventories all39 stat/fstat
 sites and both missing-stat diagnostics, captures primitive stat DATA, allocates
 lazy original declared-file site plans and retains the actual plan in its walk
 handoff. Review corrected the plan to match final ancestor checks. Eleven focused
-plan/caller cases are queued, unrun. Native metadata debit, fixed consumers/ACK,
-tree/link/diagnostic plans and full operation-budget integration remain unfinished. This cache is Python
+plan/caller cases are queued, unrun. Resource descendant `e593cde` binds actual
+opened descriptors and parent chains to original allocation/ledger evidence;
+five composed resource cases are queued, unrun. Finite source review found no new
+concrete blocker, not runtime qualification. Native metadata debit, fixed
+consumers/ACK, tree/link/diagnostic plans and full operation-budget integration
+remain unfinished. This cache is Python
 bytecode custody for character startup, not a delivered chat-image feature.
 Host-local chat media remains the separate reviewed deployment described below.
 No source prototype is represented as installed or physically qualified.
