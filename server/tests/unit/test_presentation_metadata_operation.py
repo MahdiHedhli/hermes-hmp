@@ -31,7 +31,7 @@ from .test_presentation_gateway_approval import operator_composed_script
                         'ack_interrupt_pending',
                         'ack_interrupt_phase_result',
                         'ack_interrupt_idle',
-                        'ack_interrupt_final'))
+                        'ack_interrupt_final','abort_pending','abort_prepared','abort_wrong_actor'))
 def test_original_metadata_operation(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -95,7 +95,7 @@ def prepare(frame):
                         'ack_interrupt_pending',
                         'ack_interrupt_phase_result',
                         'ack_interrupt_idle',
-                        'ack_interrupt_final')
+                        'ack_interrupt_final','abort_pending','abort_prepared','abort_wrong_actor')
         assert resource.descriptor is descriptor
         assert resource.metadata is held[5] and resource.held_walk is held
         assert resource.arguments[0] is descriptor.fd
@@ -179,7 +179,7 @@ def prepare(frame):
                         'ack_interrupt_pending',
                         'ack_interrupt_phase_result',
                         'ack_interrupt_idle',
-                        'ack_interrupt_final')
+                        'ack_interrupt_final','abort_pending','abort_prepared','abort_wrong_actor')
                 else:
                     assert (case in ('latched','latch_postpublication_failure',
                                     'admit','admit_wrong_actor','admit_wrong_actor_release',
@@ -197,7 +197,7 @@ def prepare(frame):
                         'ack_interrupt_pending',
                         'ack_interrupt_phase_result',
                         'ack_interrupt_idle',
-                        'ack_interrupt_final')
+                        'ack_interrupt_final','abort_pending','abort_prepared','abort_wrong_actor')
                             or case.startswith('active')) and returned is resource
                 # Latched structural validation never renews unclaimed admission.
                 try:a._native_declared_metadata_plan_tail(owner,registration,held)
@@ -328,7 +328,7 @@ def prepare(frame):
                         else:
                             operation.ended[0]=False  # original disposable fixture teardown
                         ledger.preparation[:]=preparation_before
-                if case.startswith(('produce','consume','ack')):
+                if case.startswith(('produce','consume','ack','abort')):
                     preparation_before=tuple(ledger.preparation)
                     snapshot_original=m._native_metadata_snapshot
                     captured=[];foreign_raw=object()
@@ -384,7 +384,7 @@ def prepare(frame):
                         'ack_interrupt_pending',
                         'ack_interrupt_phase_result',
                         'ack_interrupt_idle',
-                        'ack_interrupt_final')
+                        'ack_interrupt_final','abort_pending','abort_prepared','abort_wrong_actor')
                                 assert type(actual) is m._DirectoryMetadataReturn
                                 pending=m._pending_directory_return_tail(owner,consumer,actual)
                                 assert pending is actual
@@ -400,7 +400,7 @@ def prepare(frame):
                                 except a.ArtifactObservationError:pass
                                 else:raise AssertionError('pending native result admitted work')
                                 assert result.acknowledged==consumer.commit==[None]
-                                if case.startswith(('consume','ack')):
+                                if case.startswith(('consume','ack')) or case=='abort_prepared':
                                     try:m._consume_directory_policy(owner,consumer,actual._replace())
                                     except a.ArtifactObservationError:pass
                                     else:raise AssertionError('copied pending result consumed')
@@ -461,7 +461,7 @@ def prepare(frame):
                         'ack_interrupt_pending',
                         'ack_interrupt_phase_result',
                         'ack_interrupt_idle',
-                        'ack_interrupt_final')
+                        'ack_interrupt_final','abort_pending','abort_prepared','abort_wrong_actor')
                                             assert type(commit) is m._DirectoryPolicyCommit
                                             assert commit.identity==actual.snapshot.identity[:5]
                                             assert commit.owner is owner
@@ -621,6 +621,60 @@ def prepare(frame):
                                                 assert result.acknowledged[0] is commit
                                                 assert progress==expected_progress
                                     finally:m._directory_identity=policy_original
+                                if case.startswith('abort'):
+                                    abort_commit=commit if case=='abort_prepared' else None
+                                    try:m._abandon_known_directory_return(
+                                        owner,consumer,actual._replace(),abort_commit)
+                                    except a.ArtifactObservationError:pass
+                                    else:raise AssertionError('copied native return abandoned')
+                                    assert ledger.failed==[False] and result.raw[0] is actual.raw
+                                    if abort_commit is not None:
+                                        try:m._abandon_known_directory_return(
+                                            owner,consumer,actual,abort_commit._replace())
+                                        except a.ArtifactObservationError:pass
+                                        else:raise AssertionError('copied policy commit abandoned')
+                                        assert ledger.failed==[False]
+                                    if case=='abort_wrong_actor':
+                                        import threading
+                                        abort_errors=[]
+                                        def abort_from_wrong_thread():
+                                            try:m._abandon_known_directory_return(
+                                                owner,consumer,actual)
+                                            except BaseException as exc:
+                                                abort_errors.append((type(exc),
+                                                    exc.__context__ is None,
+                                                    getattr(exc,'failed_owner',None) is owner))
+                                        worker=threading.Thread(target=abort_from_wrong_thread)
+                                        worker.start();worker.join(5)
+                                        assert not worker.is_alive()
+                                        expected=(a.ArtifactObservationError,True,True)
+                                        assert abort_errors==[expected]
+                                        assert ledger.failed==[False] and ledger.failure==[None]
+                                        assert result.raw[0] is actual.raw
+                                        assert result.envelope[0] is actual
+                                        assert phase.current[0] is phase.pending
+                                    abandoned=m._abandon_known_directory_return(
+                                        owner,consumer,actual,abort_commit)
+                                    assert abandoned is None
+                                    assert operation.state==[True,True,True]
+                                    assert operation.ended==[True]
+                                    assert ledger.failed==[True] and ledger.failure[0] is operation
+                                    assert result.raw[0] is result.unset
+                                    assert result.snapshot==result.envelope==[None]
+                                    assert result.category==result.acknowledged==[None]
+                                    assert consumer.commit[0] is abort_commit
+                                    expected_consumption=(None
+                                        if abort_commit is None else operation)
+                                    assert consumer.consumption[0] is expected_consumption
+                                    assert progress==[resource.ordinal,consumer]
+                                    assert phase.current[0] is phase.failed
+                                    assert phase.result==ledger.inflight==[None]
+                                    try:m._abandon_known_directory_return(
+                                        owner,consumer,actual,abort_commit)
+                                    except a.ArtifactObservationError:pass
+                                    else:raise AssertionError('aborted return reused')
+                                    assert progress==[resource.ordinal,consumer]
+                                    assert result.acknowledged==[None]
                             assert captured==[True]
                             assert ledger.counts==[counts[0]+1,counts[1]]
                             assert ledger.attempts[-1] is operation

@@ -395,3 +395,11 @@ This is unreviewed/unrun/unwired. It does not solve producer lost-return,
 revoked-lifetime cleanup or partial-ACK recovery, which remain required before
 complete caller integration. Normal cancellation here deliberately fails the
 original operation; it is not a retry or new authority.
+
+Finite read-only review found no new concrete blocker within known-return
+cleanup. Three authored cases add pending abort, prepared-policy abort and
+actual wrong-thread abort refusal followed by rightful-owner cleanup. They
+require copied-return/commit refusal, retained one-unit debt/attempt/cursor,
+no ACK, original raw retirement and no reusable result. The50-case descendant
+retains every prior47 case; all new cases remain unrun. The earlier45-case
+matrix continues unchanged.
