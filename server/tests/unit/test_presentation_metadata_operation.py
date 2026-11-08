@@ -14,7 +14,8 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  'active', 'active_wrong_phase', 'active_failed',
                                  'active_missing_debit', 'active_wrong_result',
                                  'active_failure_record', 'latch_postpublication_failure',
-                                 'admit', 'admit_wrong_actor'))
+                                 'admit', 'admit_wrong_actor', 'admit_before_debit_failure',
+                                 'admit_after_debit_failure', 'admit_foreign_slot_failure'))
 def test_original_metadata_operation(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -63,7 +64,8 @@ def prepare(frame):
                         'copied_operation','wrong_result_consumer',
                         'active','active_wrong_phase','active_failed',
                         'active_missing_debit','active_wrong_result','active_failure_record',
-                        'latch_postpublication_failure','admit','admit_wrong_actor')
+                        'latch_postpublication_failure','admit','admit_wrong_actor','admit_before_debit_failure',
+                        'admit_after_debit_failure','admit_foreign_slot_failure')
         assert resource.descriptor is descriptor
         assert resource.metadata is held[5] and resource.held_walk is held
         assert resource.arguments[0] is descriptor.fd
@@ -132,18 +134,69 @@ def prepare(frame):
                 except a.ArtifactObservationError:
                     assert case not in ('latched','active','active_wrong_phase','active_failed',
                                        'active_missing_debit','active_wrong_result',
-                                       'active_failure_record','latch_postpublication_failure','admit','admit_wrong_actor')
+                                       'active_failure_record','latch_postpublication_failure','admit','admit_wrong_actor','admit_before_debit_failure',
+                        'admit_after_debit_failure','admit_foreign_slot_failure')
                 else:
                     assert (case in ('latched','latch_postpublication_failure',
-                                    'admit','admit_wrong_actor')
+                                    'admit','admit_wrong_actor','admit_before_debit_failure',
+                        'admit_after_debit_failure','admit_foreign_slot_failure')
                             or case.startswith('active')) and returned is resource
                 # Latched structural validation never renews unclaimed admission.
                 try:a._native_declared_metadata_plan_tail(owner,registration,held)
                 except a.ArtifactObservationError:pass
                 else:raise AssertionError('latched plan renewed')
-                if case in ('admit','admit_wrong_actor'):
+                if case in ('admit','admit_wrong_actor','admit_before_debit_failure',
+                        'admit_after_debit_failure','admit_foreign_slot_failure'):
                     preparation_before=tuple(ledger.preparation)
-                    if case=='admit':
+                    if case in ('admit_before_debit_failure','admit_after_debit_failure',
+                                'admit_foreign_slot_failure'):
+                        checkpoint=('_directory_admission_preparation_tail'
+                                    if case=='admit_before_debit_failure'
+                                    else '_active_directory_operation_tail')
+                        fault_original=getattr(m,checkpoint)
+                        fault_events=[];foreign_slot=object()
+                        def refuse_admission_checkpoint(*arguments):
+                            assert fault_original(*arguments) is operation
+                            fault_events.append(True)
+                            if case=='admit_foreign_slot_failure':
+                                phase.result[0]=foreign_slot
+                            raise a.ArtifactObservationError()
+                        setattr(m,checkpoint,refuse_admission_checkpoint)
+                        try:
+                            try:
+                                try:m._admit_directory_operation(owner,consumer)
+                                except a.ArtifactObservationError:pass
+                                else:raise AssertionError('admission fault swallowed')
+                            finally:setattr(m,checkpoint,fault_original)
+                            debit=0 if case=='admit_before_debit_failure' else 1
+                            assert fault_events==[True]
+                            assert ledger.counts==[counts[0]+debit,counts[1]]
+                            assert len(ledger.attempts)==attempts+debit
+                            if debit:assert ledger.attempts[-1] is operation
+                            assert operation.state==[bool(debit),False,True]
+                            assert ledger.failed==[True] and ledger.failure[0] is operation
+                            assert phase.current[0] is phase.failed and ledger.inflight==[None]
+                            if case=='admit_foreign_slot_failure':
+                                assert phase.result[0] is foreign_slot
+                            else:assert phase.result==[None]
+                            assert result.raw[0] is result.unset
+                            try:m._admit_directory_operation(owner,consumer)
+                            except a.ArtifactObservationError:pass
+                            else:raise AssertionError('failed admission replayed')
+                            assert ledger.counts==[counts[0]+debit,counts[1]]
+                        finally:
+                            # Restore this disposable fixture only, never production debt.
+                            if len(ledger.attempts)>attempts:
+                                assert ledger.attempts.pop() is operation
+                            ledger.counts[0]=counts[0]
+                            ledger.inflight[0]=None
+                            ledger.failed[0]=False
+                            ledger.failure[0]=None
+                            phase.current[0]=phase.idle
+                            phase.result[0]=None
+                            operation.state[:]=[False,False,False]
+                            ledger.preparation[:]=preparation_before
+                    elif case=='admit':
                         try:
                             assert m._admit_directory_operation(owner,consumer) is operation
                             assert m._active_directory_operation_tail(owner,consumer) is operation

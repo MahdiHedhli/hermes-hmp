@@ -214,3 +214,11 @@ synthetic state so the parent source read can complete; this is not a production
 refund/abandon path. These cases are unrun. Finite independent source review
 found no concrete blocker; interruption coverage and producer/result custody
 remain explicit requirements.
+
+Admission interruption coverage now also includes actual checkpoint wrappers
+that first validate the original cohort and then raise before the debit or
+after the actual debit/ACTIVE join. Assertions distinguish zero-charge sticky
+failure from preserved one-unit debt and actual attempt history, require replay
+refusal, and check that a foreign phase-result replacement survives cleanup.
+Wrappers restore in finally; fixture-only ledger restoration is explicitly
+separate from production cleanup. All three cases remain unrun.
