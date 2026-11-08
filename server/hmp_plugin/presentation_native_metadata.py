@@ -5,6 +5,12 @@ import sys
 from types import FunctionType, ModuleType
 from typing import NamedTuple
 
+from .presentation_metadata_custody import (
+    _allocate_directory_custody,
+    _capture_payload_origin,
+    _marker_tail,
+    _PayloadOrigin,
+)
 from .presentation_startup_artifacts import (
     ArtifactObservationError,
     StartupArtifactOwner,
@@ -28,14 +34,49 @@ from .presentation_startup_artifacts import (
 
 
 class _MetadataResult(NamedTuple):
+    """Raw-free retained history; payload access is DATA, never admission."""
     attempt: list
     consumer: list
     unset: object
-    raw: list
-    category: list
-    snapshot: list
     acknowledged: list
-    envelope: list
+    custody_origin: _PayloadOrigin
+    custody_link: list
+    custody_slot: list
+
+    def _cell(self, index):
+        # These compatibility accessors preserve the existing fixed-policy joins.
+        # A future fixed caller must independently hold the actual factory return
+        # across effects; following this current link cannot establish custody.
+        origin = self.custody_origin
+        _require(type(self.attempt) is list and len(self.attempt) == 1
+                 and type(self.attempt[0]) is _MetadataOperation
+                 and self.attempt[0].result is self
+                 and type(self.custody_link) is list and len(self.custody_link) == 1
+                 and type(self.custody_slot) is list and len(self.custody_slot) == 1)
+        operation = self.attempt[0]
+        payload, marker = self.custody_link[0], self.custody_slot[0]
+        _marker_tail(operation.owner, origin, marker, payload)
+        _require(marker.operation is operation and marker.consumer is None
+                 and marker.owner_link is self.custody_link
+                 and marker.marker_slot is self.custody_slot
+                 and marker.state == [False, False, False])
+        return origin.members[index].__get__(payload, origin.payload_type)
+
+    @property
+    def raw(self):
+        return self._cell(0)
+
+    @property
+    def category(self):
+        return self._cell(1)
+
+    @property
+    def snapshot(self):
+        return self._cell(2)
+
+    @property
+    def envelope(self):
+        return self._cell(3)
 
     def __repr__(self):
         return '<MetadataResult unqualified original DATA redacted>'
@@ -85,6 +126,15 @@ def _resource_tail(owner, resource):
 
 
 def _prepare_metadata_operation(owner, resource):
+    """Legacy preparation DATA; this wrapper does not retain retirement custody."""
+    intent, marker, payload = _prepare_metadata_operation_with_custody(owner, resource)
+    # Native calls are not made here. Fixed callers must use the three actual
+    # factory returns above rather than rediscovering payload identity later.
+    del marker, payload
+    return intent
+
+
+def _prepare_metadata_operation_with_custody(owner, resource):
     """Preallocate original result cells and fixed call DATA without a debit.
 
     The future fixed producer must retain this actual allocation across admission,
@@ -113,19 +163,22 @@ def _prepare_metadata_operation(owner, resource):
     operation = resource.site[0]
     callee = native.operations[operation]
     unset = object()
-    result = _MetadataResult([None], [None], unset, [unset], [None], [None], [None], [None])
+    origin = _capture_payload_origin()
+    result = _MetadataResult([None], [None], unset, [None], origin, [None], [None])
     intent = _MetadataOperation(owner, resource, registration, ledger, phase, native,
                                 registration.context, operation, callee, resource.arguments,
                                 index, attempts, (counts, used, reserved, used + 1), result,
                                 [False, False, False], [False])
     result.attempt[0] = intent
+    marker, payload = _allocate_directory_custody(
+        owner, intent, None, origin, result.custody_link, result.custody_slot, unset)
     _require(_resource_tail(owner, resource) is resource
              and ledger.attempts is attempts and len(attempts) == index
              and ledger.counts is counts and counts[0] is used and counts[1] is reserved
              and phase.current[0] is phase.idle and phase.result[0] is None
              and ledger.inflight[0] is None and ledger.failed[0] is False
              and native.operations[operation] is callee)
-    return intent
+    return intent, marker, payload
 
 
 class _DirectoryConsumer(NamedTuple):
@@ -144,8 +197,11 @@ class _DirectoryConsumer(NamedTuple):
     file_code: object
     file_module: ModuleType
     file_owner_type: type
-    consumption: list
     commit: list
+
+    @property
+    def consumption(self):
+        return self.operation.result._cell(4)
 
     def __repr__(self):
         return '<DirectoryConsumer unqualified fixed policy redacted>'
@@ -339,7 +395,7 @@ def _prepare_directory_consumer(owner, operation):
     consumer = _DirectoryConsumer(owner, operation, resource, parents, kind,
                                    class_name, module_name, origin[0], origin[1], module,
                                    origin[4], origin[5], file_module, StartupArtifactOwner,
-                                   [None], [None])
+                                   [None])
     _require(_resource_tail(owner, resource) is resource
              and operation.result is result and result.consumer[0] is None
              and result.attempt[0] is operation and result.raw[0] is result.unset)

@@ -217,7 +217,8 @@ def test_actual_entry_and_wrapper_files(tmp_path, mutation):
     for name in ("presentation_gateway_activation.py", "presentation_startup_artifacts.py",
                  "presentation_startup_selection.py", "presentation_gateway_recipe.py",
                  "presentation_gateway_package.py", "presentation_startup_cache.py",
-                 "presentation_source_digest.py", "presentation_native_metadata.py"):
+                 "presentation_source_digest.py", "presentation_native_metadata.py",
+                 "presentation_metadata_custody.py"):
         shutil.copyfile(SERVER / "hmp_plugin" / name, tmp_path / "hmp_plugin" / name)
     for name in ("__init__.py", "gateway_entry.py", "entry_files.py", "runtime_files.py",
                  "gateway_approval.py", "gateway_continuation.py", "bytecode_headers.py",
