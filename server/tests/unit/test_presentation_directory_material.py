@@ -54,7 +54,7 @@ def prepare(frame):
     operation=m._prepare_metadata_operation(owner,resource)
     counts=tuple(operation.ledger.counts);attempts=len(operation.ledger.attempts)
     refused=False;returned=None
-    try:returned=m._prepare_directory_consumer(owner,operation)
+    try:returned=sys.call_tracing(m._prepare_directory_consumer,(owner,operation))
     except a.ArtifactObservationError:refused=True
     finally:
         for action in reversed(restore):action()
