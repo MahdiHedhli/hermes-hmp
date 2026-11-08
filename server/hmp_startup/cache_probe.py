@@ -23,6 +23,7 @@ from .cache_candidates import PlannedCachePath
 from .cache_context import CacheInputData
 from .cache_selection import BoundCacheInputAttempt, selected_cache_input_attempts
 from .gateway_continuation import GatewayContinuationOwner, _ContinuationSource
+from .gateway_entry import GatewayEntryOwner
 from .runtime_files import RuntimePackage
 
 _OWNER = _ROOT = _CELL = _FACT = None
@@ -130,6 +131,7 @@ class RuntimeCacheProbeOwner:
                  and type(self._count_cell) is tuple and len(self._count_cell) == 3
                  and self._count_cell[0] is self and self._count_cell[1] is s
                  and type(self._count_cell[2]) is int and self._count_cell[2] == 0)
+        _require(s.native_files is GatewayEntryOwner._native_file_lineage(s.parent[0][2].entry))
         selected = s.parent[1]
         row = selected.plan_row
         _require(type(row.location) is PlannedCachePath and type(row.location.path) is str

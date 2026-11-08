@@ -10,6 +10,7 @@ from types import BuiltinFunctionType, MethodDescriptorType, ModuleType
 from hmp_plugin.presentation_startup_artifacts import StartupArtifactOwner, _Scope
 
 from .gateway_continuation import GatewayContinuationOwner
+from .gateway_entry import GatewayEntryOwner
 
 _OWNER = _ROOT = _CELL = _READY = None
 
@@ -172,6 +173,8 @@ class RuntimeSourceReadOwner:
                  and s.source_digest.entry is root[2].entry
                  and s.source_digest.binding is root[2].entry_binding
                  and s.source_digest.activation is s.activation
+                 and s.native_files is s.source_digest.native_files
+                 and s.native_files is GatewayEntryOwner._native_file_lineage(root[2].entry)
                  and type(selected.source.receipt.sha256) is str
                  and type(selected.source.receipt.identity) is tuple
                  and len(selected.source.receipt.identity) == 9

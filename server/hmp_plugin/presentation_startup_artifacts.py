@@ -80,7 +80,6 @@ class _HashedArtifact(NamedTuple):
     bytecode_header: bytes
     source_hash: bytes = b""
     source_digest: object = None
-    native_files: object = None
     source_mtime: int | None = None
 
     def __repr__(self):
@@ -107,6 +106,7 @@ class _Scope(NamedTuple):
     reads: object = None
     cache: object = None
     source_digest: object = None
+    native_files: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
