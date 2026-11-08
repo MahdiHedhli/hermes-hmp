@@ -2293,6 +2293,142 @@ def _consume_native_runtime_read(owner, envelope):
         raise refusal from None
 
 
+class _NativeCacheReadCommit(NamedTuple):
+    """Bounded raw-free cache ACK; deliberately excludes journal prefix tuples."""
+    operation: _NativeFileOperation
+    result: _NativeFileResultClaim
+    consumer: _NativeReadConsumer
+    step: _NativeReadFileStep
+    count: tuple
+    ordinal: int
+    remaining: int
+    eof: bool
+    consumption_token: object
+    cache_attempt: tuple
+    cache_result: tuple
+    cache_index: int
+    header: bytes
+
+    def __repr__(self):
+        return '<NativeCacheReadCommit unqualified progress redacted>'
+
+
+def _consume_native_cache_read(owner, envelope):
+    """Fixed cache buffer/hash consumer prototype; no file-loop caller yet."""
+    data = step = operation = cache_kind = None
+    token = consumption_cell = arguments = actor_state = None
+    owns_consumption = failed = cleanup_unknown = False
+    try:
+        _require(type(envelope) is _NativeReadResult)
+        operation, consumer, step = envelope.operation, envelope.consumer, envelope.step
+        _require(_native_read_result_tail(owner, envelope) is step.scope
+                 and vars(step.material_module).get('__name__') == 'hmp_startup.cache_reader'
+                 and type(envelope.cache_return) is _NativeCacheReadReturn
+                 and step.source is None and envelope.commit_cell[0] is None)
+        _native_read_accumulator_tail(owner, step, consumer.before_count)
+        data, cache_kind = envelope.raw, step.owner_type
+        consumption_cell = envelope.consumption_cell
+        _require(consumption_cell[0] is None)
+        token = object()
+        arguments = (operation, consumer, step, data)
+        actor_state = _native_pre_actor_state(owner, arguments)
+        _native_actor_context(operation.native.actor_calls,
+                              (operation.native.native, operation.native.thread_native),
+                              operation.context)
+        _native_post_actor_state(owner, actor_state, arguments)
+        _require(_native_read_result_tail(owner, envelope) is step.scope)
+        _native_read_accumulator_tail(owner, step, consumer.before_count)
+        _require(consumption_cell[0] is None)
+        consumption_cell[0] = token
+        owns_consumption = True
+        from hmp_startup.cache_reader import DeclaredCacheReadOwner
+
+        _require(type(owner) is DeclaredCacheReadOwner and cache_kind is DeclaredCacheReadOwner
+                 and _native_read_result_current(owner, envelope) is step.scope
+                 and consumption_cell[0] is token)
+        length, eof = len(data), consumer.remaining == 0
+        _require(length == 0 if eof else 0 < length <= consumer.remaining)
+        if not eof:
+            step.buffer.extend(data)
+            _require(_native_read_result_current(owner, envelope) is step.scope)
+            step.hash_update(step.digest, data)
+            _require(_native_read_result_current(owner, envelope) is step.scope)
+        actual = envelope.cache_return
+        commit = _NativeCacheReadCommit(
+            operation, envelope.result, consumer, step, envelope.after_count,
+            consumer.ordinal + 1, consumer.remaining - length, eof, token,
+            actual.attempt, actual.result, actual.index, bytes(step.buffer[:16]))
+        envelope.commit_cell[0] = commit
+        _require(_native_read_result_current(owner, envelope) is step.scope)
+        _native_cache_read_commit_tail(owner, envelope, commit, token)
+        envelope.ack_cell[0] = commit
+        envelope.raw_cell[0] = envelope.result.unset
+        envelope.envelope_cell[0] = None
+        step.progress[0] = commit.ordinal
+        step.progress[1] = commit.remaining
+        step.progress[2] = commit.count
+        step.progress[3] = None
+        step.eof[0] = commit.eof
+        phase = operation.registration.native_phase
+        phase.result[0] = None
+        phase.current[0] = phase.idle
+        return commit
+    except BaseException:
+        failed = True
+        owns_consumption = (owns_consumption or
+                            (token is not None and type(consumption_cell) is list
+                             and len(consumption_cell) == 1 and consumption_cell[0] is token))
+        if owns_consumption:
+            if cache_kind is not None and type(owner) is cache_kind:
+                owner._failed = owner._unknown = True
+            try:
+                _abandon_native_read(owner, operation, data, envelope)
+            except BaseException:
+                cleanup_unknown = True
+            try:
+                buffer = step.buffer
+                _require(type(buffer) is bytearray)
+                zeros = bytes(65536)
+                for start in range(0, len(buffer), len(zeros)):
+                    width = min(len(zeros), len(buffer) - start)
+                    buffer[start:start + width] = zeros[:width]
+                buffer.clear()
+            except BaseException:
+                cleanup_unknown = True
+    finally:
+        data = envelope = arguments = actor_state = None
+    if failed:
+        refusal = ArtifactObservationError(owner)
+        refusal.cleanup_unknown = cleanup_unknown
+        raise refusal from None
+
+
+def _native_cache_read_commit_tail(owner, envelope, commit, token):
+    """Actual pending cache return and bounded header closure before ACK."""
+    scope = _native_read_result_tail(owner, envelope)
+    _require(type(commit) is _NativeCacheReadCommit
+             and envelope.commit_cell[0] is commit
+             and envelope.consumption_cell[0] is token
+             and commit.consumption_token is token
+             and commit.operation is envelope.operation and commit.result is envelope.result
+             and commit.consumer is envelope.consumer and commit.step is envelope.step
+             and commit.count is envelope.after_count)
+    actual, step, consumer = envelope.cache_return, commit.step, commit.consumer
+    _require(type(actual) is _NativeCacheReadReturn
+             and commit.cache_attempt is actual.attempt and commit.cache_result is actual.result
+             and commit.cache_index is actual.index
+             and type(commit.ordinal) is int and commit.ordinal == consumer.ordinal + 1
+             and type(commit.remaining) is int
+             and commit.remaining == consumer.remaining - len(envelope.raw)
+             and type(commit.eof) is bool and commit.eof is (consumer.remaining == 0)
+             and (len(envelope.raw) == 0 if commit.eof else len(envelope.raw) > 0)
+             and type(commit.header) is bytes
+             and len(commit.header) == min(16, commit.count[2])
+             and commit.header == step.buffer[:16])
+    _native_read_accumulator_tail(owner, step, commit.count)
+    return scope
+
+
 def _native_runtime_read_commit_tail(owner, envelope, commit, source_buffer, token):
     """Import-free final consumer progress closure while original read is pending."""
     scope = _native_read_result_tail(owner, envelope)
