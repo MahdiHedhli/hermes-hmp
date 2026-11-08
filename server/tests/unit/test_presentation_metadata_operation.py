@@ -12,7 +12,8 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  'latched', 'copied_consumer', 'wrong_pending',
                                  'copied_operation', 'wrong_result_consumer',
                                  'active', 'active_wrong_phase', 'active_failed',
-                                 'active_missing_debit', 'active_wrong_result'))
+                                 'active_missing_debit', 'active_wrong_result',
+                                 'active_failure_record'))
 def test_original_metadata_operation(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -60,7 +61,7 @@ def prepare(frame):
         assert case in ('normal','latched','copied_consumer','wrong_pending',
                         'copied_operation','wrong_result_consumer',
                         'active','active_wrong_phase','active_failed',
-                        'active_missing_debit','active_wrong_result')
+                        'active_missing_debit','active_wrong_result','active_failure_record')
         assert resource.descriptor is descriptor
         assert resource.metadata is held[5] and resource.held_walk is held
         assert resource.arguments[0] is descriptor.fd
@@ -102,7 +103,7 @@ def prepare(frame):
                 try:returned=m._latched_directory_resource_tail(owner,candidate_consumer)
                 except a.ArtifactObservationError:
                     assert case not in ('latched','active','active_wrong_phase','active_failed',
-                                       'active_missing_debit','active_wrong_result')
+                                       'active_missing_debit','active_wrong_result','active_failure_record')
                 else:
                     assert (case=='latched' or case.startswith('active')) and returned is resource
                 # Latched structural validation never renews unclaimed admission.
@@ -124,6 +125,7 @@ def prepare(frame):
                     try:
                         if case=='active_wrong_phase':phase.current[0]=phase.pending
                         elif case=='active_failed':ledger.failed[0]=True
+                        elif case=='active_failure_record':ledger.failure[0]=object()
                         elif case=='active_missing_debit':ledger.counts[0]=counts[0]
                         elif case=='active_wrong_result':phase.result[0]=operation._replace()
                         try:active=m._active_directory_operation_tail(owner,consumer)
@@ -134,6 +136,7 @@ def prepare(frame):
                         ledger.counts[0]=counts[0]
                         ledger.inflight[0]=None
                         ledger.failed[0]=False
+                        ledger.failure[0]=None
                         phase.current[0]=phase.idle
                         phase.result[0]=None
                         operation.state[0]=False

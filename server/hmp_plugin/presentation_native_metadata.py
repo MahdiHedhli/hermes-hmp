@@ -409,6 +409,9 @@ def _active_directory_operation_tail(owner, consumer):
              and type(ledger.failed) is list and len(ledger.failed) == 1
              and ledger.failed[0] is False
              and type(phase.current) is list and len(phase.current) == 1
+             and ledger.phase is phase
+             and type(ledger.failure) is list and len(ledger.failure) == 1
+             and ledger.failure[0] is None
              and phase.current[0] is phase.active
              and type(phase.result) is list and len(phase.result) == 1
              and phase.result[0] is operation
