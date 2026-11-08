@@ -7,11 +7,15 @@ from typing import NamedTuple
 
 from .presentation_startup_artifacts import (
     StartupArtifactOwner,
+    _native_actor_context,
     _native_declared_metadata_cohort_tail,
     _native_declared_metadata_plan_tail,
     _native_metadata_component_tail,
+    _native_post_actor_state,
+    _native_pre_actor_state,
     _native_read_lifecycle_tail,
     _native_work_origin_tail,
+    _NativeActorMismatchError,
     _NativeMetadataResource,
     _NativeMetadataSnapshot,
     _NativeScopeRegistration,
@@ -195,7 +199,7 @@ def _directory_material_tail(owner, consumer):
     return consumer
 
 
-def _unused_directory_cells_tail(owner, operation):
+def _unspent_directory_cells_tail(owner, operation):
     """Untouched original intent cells only; caller proves resource/consumer joins."""
     _require(type(operation) is _MetadataOperation and operation.owner is owner
              and type(operation.result) is _MetadataResult
@@ -235,15 +239,21 @@ def _unused_directory_cells_tail(owner, operation):
                      for cell in (result.category, result.snapshot,
                                   result.acknowledged, result.envelope))
              and type(phase.current) is list and len(phase.current) == 1
-             and phase.current[0] is phase.idle
              and type(phase.result) is list and len(phase.result) == 1
-             and phase.result[0] is None
              and type(ledger.inflight) is list and len(ledger.inflight) == 1
-             and ledger.inflight[0] is None
              and type(ledger.failed) is list and len(ledger.failed) == 1
              and ledger.failed[0] is False
              and type(ledger.failure) is list and len(ledger.failure) == 1
              and ledger.failure[0] is None)
+    return result
+
+
+def _unused_directory_cells_tail(owner, operation):
+    """Unspent cells plus IDLE; not usable during admission preparation."""
+    result = _unspent_directory_cells_tail(owner, operation)
+    ledger, phase = operation.ledger, operation.phase
+    _require(phase.current[0] is phase.idle and phase.result[0] is None
+             and ledger.inflight[0] is None)
     return result
 
 
@@ -481,3 +491,99 @@ def _latch_directory_consumer(owner, consumer):
              and _unused_directory_cells_tail(owner, operation) is result
              and result.consumer[0] is consumer)
     return consumer
+
+
+def _directory_admission_preparation_tail(owner, consumer, operation, token):
+    """Original reserved preparation cohort after actor sampling; no new grant."""
+    _require(type(operation) is _MetadataOperation
+             and _latched_directory_resource_tail(owner, consumer) is operation.resource
+             and consumer.operation is operation)
+    result = _unspent_directory_cells_tail(owner, operation)
+    ledger, phase = operation.ledger, operation.phase
+    _require(type(token) is list and len(token) == 3
+             and ledger.preparation is token
+             and token[0] is owner and token[1] is operation.registration
+             and token[2] is consumer
+             and ledger.inflight[0] is token
+             and phase.current[0] is phase.active and phase.result[0] is token
+             and type(result.consumer) is list and len(result.consumer) == 1
+             and result.consumer[0] is consumer
+             and type(consumer.consumption) is list and len(consumer.consumption) == 1
+             and consumer.consumption[0] is None
+             and type(consumer.commit) is list and len(consumer.commit) == 1
+             and consumer.commit[0] is None)
+    return operation
+
+
+def _admit_directory_operation(owner, consumer):
+    """Admit exactly one fixed directory fstat intent; no native call or ACK.
+
+    Wrong actor with unchanged inputs spends no work unit and ends this intent.
+    Any drift or partial publication keeps sticky failure/debt; never refund,
+    replay or erase a foreign slot. The caller must retain this actual return.
+    """
+    _latched_directory_resource_tail(owner, consumer)
+    operation = consumer.operation
+    _unused_directory_cells_tail(owner, operation)
+    ledger, phase, native = operation.ledger, operation.phase, operation.native
+    counts, attempts = ledger.counts, ledger.attempts
+    inflight, failed, failure = ledger.inflight, ledger.failed, ledger.failure
+    state, ended, token = operation.state, operation.ended, ledger.preparation
+    _require(type(token) is list and len(token) == 3
+             and type(consumer.consumption) is list and len(consumer.consumption) == 1
+             and consumer.consumption[0] is None
+             and type(consumer.commit) is list and len(consumer.commit) == 1
+             and consumer.commit[0] is None)
+    actor_mismatch = False
+    actor_state = actor_arguments = None
+    try:
+        inflight[0] = token
+        token[0], token[1], token[2] = owner, operation.registration, consumer
+        phase.result[0] = token
+        phase.current[0] = phase.active
+        actor_arguments = (consumer, operation, operation.callee, *operation.arguments)
+        actor_state = _native_pre_actor_state(owner, actor_arguments)
+        try:
+            _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                                  operation.context)
+        except _NativeActorMismatchError:
+            actor_mismatch = True
+            raise
+        _native_post_actor_state(owner, actor_state, actor_arguments)
+        _directory_admission_preparation_tail(owner, consumer, operation, token)
+        attempts.append(operation)
+        counts[0] = operation.budget[3]
+        state[0] = True
+        phase.result[0] = operation
+        inflight[0] = operation
+        _require(_active_directory_operation_tail(owner, consumer) is operation)
+        return operation
+    except BaseException:
+        clean_mismatch = False
+        if actor_mismatch:
+            try:
+                _native_post_actor_state(owner, actor_state, actor_arguments)
+                _directory_admission_preparation_tail(owner, consumer, operation, token)
+                clean_mismatch = True
+            except BaseException:
+                clean_mismatch = False
+        if clean_mismatch:
+            ended[0] = True  # this exact intent cannot be admitted again
+            phase.current[0] = phase.idle
+        else:
+            if type(failure) is list and len(failure) == 1 and failure[0] is None:
+                failure[0] = operation
+            if type(failed) is list and len(failed) == 1:
+                failed[0] = True
+            if type(state) is list and len(state) == 3:
+                state[2] = True
+            if (type(phase.current) is list and len(phase.current) == 1
+                    and (phase.current[0] is phase.active or phase.current[0] is phase.idle)):
+                phase.current[0] = phase.failed
+        if (type(phase.result) is list and len(phase.result) == 1
+                and (phase.result[0] is token or phase.result[0] is operation)):
+            phase.result[0] = None
+        if (type(inflight) is list and len(inflight) == 1
+                and (inflight[0] is token or inflight[0] is operation)):
+            inflight[0] = None
+        raise

@@ -187,3 +187,20 @@ verifies the actual original slot before raising, restores that function in
 finally, and requires the published slot/result to remain intact and a second
 latch to refuse. Fixture-only cleanup then permits the existing source read to
 complete. This is authored causal coverage, not yet an observed pass.
+
+## Fixed directory admission candidate
+
+The next isolated candidate reserves the original preparation token before
+exact captured PID/effective-UID/thread sampling, rejoins original owner/argument
+and latched resource/material/budget state after that sample, then records one
+actual intent/debit and publishes the original ACTIVE operation. A clean wrong
+actor ends this intent without debit; drift or partial publication preserves
+sticky failure and existing debt. Cleanup clears only slots still containing
+this original token/operation, preserving foreign replacements.
+
+The shared untouched-cell check is now separate from its explicit IDLE wrapper
+so a reserved ACTIVE preparation token can be checked without using an IDLE-only
+work path. Existing unclaimed/latch callers retain the IDLE wrapper. This source
+is unreviewed/unrun and remains unwired. It performs no fstat, pending native
+result publication, policy consumption or ACK, and grants no runtime/device
+qualification. Admission causal tests are still required.
