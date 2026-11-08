@@ -2314,7 +2314,7 @@ class _NativeCacheReadCommit(NamedTuple):
 
 
 def _consume_native_cache_read(owner, envelope):
-    """Fixed cache buffer/hash consumer prototype; no file-loop caller yet."""
+    """Fixed cache buffer/hash consumer; integrated source requires runtime qualification."""
     data = step = operation = cache_kind = None
     token = consumption_cell = arguments = actor_state = None
     owns_consumption = failed = cleanup_unknown = False

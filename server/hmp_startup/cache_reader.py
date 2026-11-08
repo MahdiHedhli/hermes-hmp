@@ -452,6 +452,8 @@ class DeclaredCacheReadOwner:
             result_slot[0] = result
             effect.after, effect.returned = after, True
             same = (_OWNER is self and _ROOT is root and _CELL is cell
+                    and s.activation._cache_read_owner is self
+                    and s.activation._cache_read_cell is root
                     and self._origin is s and self._scope is s
                     and self._root_cell is root and self._cell is cell
                     and self._count_cell is before and self._bytes_read is before[2]
