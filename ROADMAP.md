@@ -1,3 +1,23 @@
+## Integrated startup verification — November 8, 2026
+
+The combined startup candidate `1ab9910` failed **215 cases** and passed
+**1,065**. It is not qualified for installation or character-image delivery.
+Several synthetic fixtures replaced canonical native file functions even during
+normal observation; the new continuity checks correctly reject that substitution.
+The test-only migration preserves those checks. Four normal paths and 74 first
+migration operator/link checks passed; the remaining 144-case investigation and
+the refined 160-case fixture suite are not completed evidence. See
+[fixture migration and limits](specs/046-bot-presentation-integration/NATIVE_IO_FIXTURE_MIGRATION.md).
+
+Source-level startup, cache and transport components do not yet establish an
+operational presentation service. Native listener/key ownership, complete runtime
+closure, broker terminal custody, authenticated avatar delivery and physical
+mobile display remain required. No new startup component is installed on a host
+or device. The installed iPad candidate remains build `2026110702`; Apple's latest
+launch attempt was rejected as locked before app execution, so it provides no
+launch-crash verdict. Device-local sections/static icons and host-local images
+retain separate implementation and physical qualification gates.
+
 ## Internal signed CANCEL routing checkpoint — November 6, 2026
 
 The retained credential cleanup route now composes signed CANCEL on the original
@@ -319,7 +339,7 @@ expiry remains a refused run, not a pass. Current mint-memory, RSS and writer/
 control/residual/ABA evidence remain required, so C6b stays open. No phone image
 display, production activation or release qualification is claimed.
 
-HMP follows the [feature list](FEATURES.md), [unified gateway research](HermesUnifiedGatewayResearch.md), and [requests for Nous](NOUS_GATEWAY_OBSERVATIONS.md). The research describes a target architecture, not a remote API available to HMP today. As of September 29, Nous [PR #106742](https://github.com/NousResearch/hermes-agent/pull/106742) is open with conflicts; its [entry-point plan](https://gist.github.com/unsupportedpastels/765f9d551ce88ee01630c18367763e75) places authenticated remote clients in a later cutover.
+HMP follows the [feature list](FEATURES.md), [unified gateway research](HermesUnifiedGatewayResearch.md), and [requests for Nous](NOUS_GATEWAY_OBSERVATIONS.md). The research describes a target architecture, not a remote API available to HMP today. The following is a historical September 29 checkpoint, not a current upstream status check: Nous [PR #106742](https://github.com/NousResearch/hermes-agent/pull/106742) is open with conflicts; its [entry-point plan](https://gist.github.com/unsupportedpastels/765f9d551ce88ee01630c18367763e75) places authenticated remote clients in a later cutover.
 
 | Investment | Work | Boundary |
 | --- | --- | --- |
