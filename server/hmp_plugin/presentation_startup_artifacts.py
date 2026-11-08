@@ -338,7 +338,10 @@ def _configuration(owner):
     if type(owner) is RuntimeSourceReadOwner:
         return False
     from hmp_startup.cache_probe import RuntimeCacheProbeOwner
-    _require(type(owner) is RuntimeCacheProbeOwner)
+    if type(owner) is RuntimeCacheProbeOwner:
+        return False
+    from hmp_startup.cache_reader import DeclaredCacheReadOwner
+    _require(type(owner) is DeclaredCacheReadOwner)
     return False
 
 
@@ -361,8 +364,11 @@ def _owner_guard(owner):
     if type(owner) is RuntimeSourceReadOwner:
         return RuntimeSourceReadOwner._guard(owner)
     from hmp_startup.cache_probe import RuntimeCacheProbeOwner
-    _require(type(owner) is RuntimeCacheProbeOwner)
-    return RuntimeCacheProbeOwner._guard(owner)
+    if type(owner) is RuntimeCacheProbeOwner:
+        return RuntimeCacheProbeOwner._guard(owner)
+    from hmp_startup.cache_reader import DeclaredCacheReadOwner
+    _require(type(owner) is DeclaredCacheReadOwner)
+    return DeclaredCacheReadOwner._guard(owner)
 
 
 def _root(owner, activation):
@@ -384,8 +390,11 @@ def _root(owner, activation):
     if type(owner) is RuntimeSourceReadOwner:
         return activation._runtime_read_cell
     from hmp_startup.cache_probe import RuntimeCacheProbeOwner
-    _require(type(owner) is RuntimeCacheProbeOwner)
-    return activation._runtime_cache_probe_cell
+    if type(owner) is RuntimeCacheProbeOwner:
+        return activation._runtime_cache_probe_cell
+    from hmp_startup.cache_reader import DeclaredCacheReadOwner
+    _require(type(owner) is DeclaredCacheReadOwner)
+    return activation._cache_read_cell
 
 
 def _append_configuration(owner, data):
@@ -405,8 +414,12 @@ def _append_configuration(owner, data):
         from .presentation_gateway_package import GatewayPackageOwner
         if type(owner) is not GatewayPackageOwner:
             from hmp_startup.runtime_reader import RuntimeSourceReadOwner
-            _require(type(owner) is RuntimeSourceReadOwner)
-            RuntimeSourceReadOwner._append(owner, data)
+            if type(owner) is RuntimeSourceReadOwner:
+                RuntimeSourceReadOwner._append(owner, data)
+            else:
+                from hmp_startup.cache_reader import DeclaredCacheReadOwner
+                _require(type(owner) is DeclaredCacheReadOwner)
+                DeclaredCacheReadOwner._append(owner, data)
 
 
 class StartupArtifactOwner:
@@ -975,6 +988,7 @@ class StartupArtifactOwner:
     def _file(self, expected):
         s = _owner_guard(self)
         anchor = type(expected) is OperatorApprovalPath
+        declared_reader = None
         if anchor:
             from hmp_startup.gateway_approval import GatewayApprovalOwner
             _require(type(self) is GatewayApprovalOwner and type(s.expected) is tuple
@@ -988,6 +1002,12 @@ class StartupArtifactOwner:
                     if type(self) is RuntimeSourceReadOwner:
                         _require(expected is s.expected[0] and self._started is True
                                  and self._ready is False)
+                    else:
+                        from hmp_startup.cache_reader import DeclaredCacheReadOwner
+                        if type(self) is DeclaredCacheReadOwner:
+                            _require(expected is s.expected[0] and self._started is True
+                                     and self._ready is False)
+                            declared_reader = DeclaredCacheReadOwner
         root_cell = self._root_cell
         held, directories, read_effects = [], [], []
         source_root = source_effect = source_buffer = None
@@ -1042,7 +1062,9 @@ class StartupArtifactOwner:
             while remaining:
                 _require(_owner_guard(self) is s)
                 _require(progress is None or self._count_cell is progress)
-                data = StartupArtifactOwner._read(self, fd, min(remaining, 65536), s)
+                data = (StartupArtifactOwner._read(self, fd, min(remaining, 65536), s)
+                        if declared_reader is None else
+                        declared_reader._read(self, fd, min(remaining, 65536), s))
                 if source_root is not None:
                     source_observations.append(source_digest.capture(source_root))
                 if anchor:
@@ -1061,7 +1083,8 @@ class StartupArtifactOwner:
                 data = None
                 _require(_owner_guard(self) is s)
             _require(progress is None or self._count_cell is progress)
-            data = StartupArtifactOwner._read(self, fd, 1, s)
+            data = (StartupArtifactOwner._read(self, fd, 1, s) if declared_reader is None
+                    else declared_reader._read(self, fd, 1, s))
             if source_root is not None:
                 source_observations.append(source_digest.capture(source_root))
             if anchor:

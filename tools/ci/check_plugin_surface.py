@@ -223,6 +223,7 @@ class _ModuleScanner(ast.NodeVisitor):
                 "hmp_startup.gateway_approval": {"GatewayApprovalOwner"},
                 "hmp_startup.runtime_reader": {"RuntimeSourceReadOwner"},
                 "hmp_startup.cache_probe": {"RuntimeCacheProbeOwner"},
+                "hmp_startup.cache_reader": {"DeclaredCacheReadOwner"},
                 "hmp_startup.runtime_files": {"ExecutableLinkPlan", "RuntimeFilePlan"},
             }
             cache_joins = {

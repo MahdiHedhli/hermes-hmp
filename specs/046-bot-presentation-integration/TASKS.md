@@ -77,6 +77,12 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
       actual floor child cases pass.1220 unchanged-source startup checks passed. Cache
       payload IO, typed failure/effect provenance and fallback authority remain
       incomplete. See [probe scope](RUNTIME_CACHE_PROBE.md).
+- [ ] **PS1-DECLARED-CACHE-READ** Original declared-row byte reader implemented
+      in an isolated branch, with independent bounded source acceptance after
+      effect/claim custody repairs.14 causal cases and5 scanner cases prepared,
+      not run; actual floor/broader/resource qualification pending. This does
+      not cover known native unavailability, source fallback or code decoding.
+      [Contract and review limits](DECLARED_CACHE_READ.md).
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
       Next reviewed executable slice: original source-hash builtin/key/machinery,

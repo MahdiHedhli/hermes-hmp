@@ -148,6 +148,8 @@ class GatewayActivationOwner:
         owner._runtime_read_owner = owner._runtime_read_cell = None
         owner._runtime_cache_probe_owner = owner._runtime_cache_probe_cell = None
         owner._runtime_cache_probe_fact = None
+        owner._cache_read_owner = owner._cache_read_cell = owner._cache_read_fact = None
+        owner._cache_read_attempts = owner._cache_read_results = None
         owner._selection_owner = owner._selection_cell = owner._selection_fact_cell = None
         owner._package_owner = owner._package_cell = owner._package_fact_cell = None
         owner._recipe_owner = owner._recipe_cell = None

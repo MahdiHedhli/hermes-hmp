@@ -1,3 +1,12 @@
+# November 7: declared cache reader awaiting causal qualification
+
+The isolated declared-cache reader now retains original native read results and
+counts before refusal, seals the effect chain, and preserves unknown cleanup debt
+on ownership drift. Bounded independent source review accepted the repaired code;
+14 reader cases and5 scanner cases are prepared but not run. This is a loader
+prerequisite, not desktop character delivery, host-local images or operational
+admission. See [scope and remaining checks](specs/046-bot-presentation-integration/DECLARED_CACHE_READ.md).
+
 # November 7: fresh cache metadata probe under qualification
 
 A diagnostic-only probe now rechecks original selected cache paths with bounded
