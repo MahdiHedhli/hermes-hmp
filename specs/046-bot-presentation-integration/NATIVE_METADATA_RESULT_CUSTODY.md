@@ -258,3 +258,22 @@ work refusal while pending, no ACK, sticky failure where applicable, preserved
 foreign data, and no original exception context or raw producer-local aliases
 in the outward refusal. Fixture-only retirement is not a production ACK or
 refund. This29-case descendant retains all earlier26 cases and remains unrun.
+
+## Fixed policy consumer candidate, ACK still separate
+
+A separate isolated consumer now latches the actual producer envelope before
+original actor sampling, rejoins the original result/material/lifetime after
+that sample, applies the fixed POSIX directory policy with the original UID,
+and returns an actual original identity commit. Commit fields contain no raw
+stat_result or envelope, but the operation still indirectly retains pending
+raw storage until the separate ACK retires it; no memory-retirement claim
+follows from commit preparation. Copied pending returns cannot consume it.
+
+Clean wrong-actor refusal restores only this owned consumption latch and leaves
+the pending result intact. Drift/policy failure preserves charged history and
+sticky refusal, retires only original result slots and drops the original
+envelope from the consumption latch. Foreign slots survive. Outward failures
+are fresh bounded owner-attributed errors with raw-linked locals cleared.
+
+This source is unreviewed/unrun and unwired. One-use raw retirement, cursor
+advance, partial-ACK behavior and IDLE publication remain unimplemented.

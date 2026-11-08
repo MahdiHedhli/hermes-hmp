@@ -450,9 +450,7 @@ def _charged_directory_operation_tail(owner, consumer):
                      for cell in (result.category, result.snapshot,
                                   result.acknowledged, result.envelope))
              and type(consumer.consumption) is list and len(consumer.consumption) == 1
-             and consumer.consumption[0] is None
-             and type(consumer.commit) is list and len(consumer.commit) == 1
-             and consumer.commit[0] is None)
+             and type(consumer.commit) is list and len(consumer.commit) == 1)
     return operation
 
 
@@ -462,6 +460,7 @@ def _active_directory_operation_tail(owner, consumer):
     result = operation.result
     _require(operation.state[1] is False and operation.ended[0] is False
              and operation.ledger.inflight[0] is operation
+             and consumer.consumption[0] is None and consumer.commit[0] is None
              and operation.phase.current[0] is operation.phase.active
              and result.raw[0] is result.unset
              and all(cell[0] is None for cell in (result.category, result.snapshot,
@@ -618,6 +617,7 @@ def _returned_directory_operation_tail(owner, consumer, operation, raw):
              and operation.state[1] is True and operation.ended[0] is True
              and operation.phase.current[0] is operation.phase.active
              and operation.ledger.inflight[0] is operation
+             and consumer.consumption[0] is None and consumer.commit[0] is None
              and type(raw) is operation.native.result_type
              and operation.result.raw[0] is raw
              and all(cell[0] is None for cell in (operation.result.category,
@@ -626,7 +626,7 @@ def _returned_directory_operation_tail(owner, consumer, operation, raw):
     return operation
 
 
-def _pending_directory_return_tail(owner, consumer, actual):
+def _pending_directory_cohort_tail(owner, consumer, actual):
     """Rejoin the actual producer return; constructing matching DATA is no grant."""
     _require(type(actual) is _DirectoryMetadataReturn)
     operation = _charged_directory_operation_tail(owner, consumer)
@@ -643,6 +643,13 @@ def _pending_directory_return_tail(owner, consumer, actual):
              and result.snapshot[0] is actual.snapshot
              and type(result.category[0]) is str and result.category[0] == 'directory'
              and result.acknowledged[0] is None)
+    return actual
+
+
+def _pending_directory_return_tail(owner, consumer, actual):
+    """Original pending result before any fixed policy consumption."""
+    _pending_directory_cohort_tail(owner, consumer, actual)
+    _require(consumer.consumption[0] is None and consumer.commit[0] is None)
     return actual
 
 
@@ -713,4 +720,128 @@ def _produce_directory_metadata(owner, consumer):
         raw = result.unset
         snapshot = None
         actual = None
+    raise ArtifactObservationError(owner) from None
+
+
+class _DirectoryPolicyCommit(NamedTuple):
+    owner: object
+    operation: _MetadataOperation
+    consumer: _DirectoryConsumer
+    resource: _NativeMetadataResource
+    site: tuple
+    ordinal: int
+    next_ordinal: int
+    identity: tuple
+
+    def __repr__(self):
+        return '<DirectoryPolicyCommit prepared original DATA redacted>'
+
+
+def _consuming_directory_return_tail(owner, consumer, actual):
+    _pending_directory_cohort_tail(owner, consumer, actual)
+    _require(consumer.consumption[0] is actual and consumer.commit[0] is None)
+    return actual
+
+
+def _prepared_directory_commit_tail(owner, consumer, actual, commit):
+    _pending_directory_cohort_tail(owner, consumer, actual)
+    _require(type(commit) is _DirectoryPolicyCommit and commit.owner is owner
+             and commit.operation is actual.operation and commit.consumer is consumer
+             and commit.resource is consumer.resource
+             and commit.site is consumer.resource.site
+             and commit.ordinal is consumer.resource.ordinal
+             and type(commit.next_ordinal) is int
+             and commit.next_ordinal == commit.ordinal + 1
+             and commit.next_ordinal < len(consumer.resource.metadata.definitions)
+             and type(commit.identity) is tuple and len(commit.identity) == 5
+             and all(type(value) is int for value in commit.identity)
+             and type(actual.snapshot.identity) is tuple
+             and len(actual.snapshot.identity) == 9
+             and all(type(value) is int for value in actual.snapshot.identity)
+             and all(commit.identity[index] == actual.snapshot.identity[index]
+                     for index in range(5))
+             and consumer.consumption[0] is actual and consumer.commit[0] is commit)
+    return commit
+
+
+def _consume_directory_policy(owner, consumer, actual):
+    """Consume one original pending result into a fixed policy commit; not ACK.
+
+    Pending raw storage remains owned until a separate fixed ACK retires it.
+    A clean wrong actor leaves the original result available to its owner.
+    Drift fails closed, preserving debt and retiring only held original data.
+    """
+    verified = actor_mismatch = False
+    operation = result = ledger = phase = category = None
+    actor_state = actor_arguments = identity = commit = None
+    try:
+        _pending_directory_return_tail(owner, consumer, actual)
+        operation = actual.operation
+        result, ledger, phase = operation.result, operation.ledger, operation.phase
+        category = result.category[0]
+        verified = True
+        consumer.consumption[0] = actual
+        actor_arguments = (consumer, actual, operation)
+        actor_state = _native_pre_actor_state(owner, actor_arguments)
+        try:
+            _native_actor_context(operation.native.actor_calls,
+                                  (operation.native.native, operation.native.thread_native),
+                                  operation.context)
+        except _NativeActorMismatchError:
+            actor_mismatch = True
+            raise
+        _native_post_actor_state(owner, actor_state, actor_arguments)
+        _consuming_directory_return_tail(owner, consumer, actual)
+        identity = _directory_identity(actual.snapshot, operation.context[1])
+        _consuming_directory_return_tail(owner, consumer, actual)
+        resource = consumer.resource
+        commit = _DirectoryPolicyCommit(owner, operation, consumer, resource, resource.site,
+                                         resource.ordinal, resource.ordinal + 1, identity)
+        _consuming_directory_return_tail(owner, consumer, actual)
+        consumer.commit[0] = commit
+        _require(_prepared_directory_commit_tail(owner, consumer, actual, commit) is commit)
+        return commit
+    except BaseException:
+        clean_mismatch = False
+        if verified and actor_mismatch:
+            try:
+                _native_post_actor_state(owner, actor_state, actor_arguments)
+                _consuming_directory_return_tail(owner, consumer, actual)
+                clean_mismatch = True
+            except BaseException:
+                clean_mismatch = False
+        if clean_mismatch:
+            consumer.consumption[0] = None  # no policy was consumed, no new IO/debit
+        elif verified:
+            if type(operation.state) is list and len(operation.state) == 3:
+                operation.state[2] = True
+            if type(ledger.failed) is list and len(ledger.failed) == 1:
+                ledger.failed[0] = True
+            if (type(ledger.failure) is list and len(ledger.failure) == 1
+                    and ledger.failure[0] is None):
+                ledger.failure[0] = operation
+            if type(result.raw) is list and len(result.raw) == 1 and result.raw[0] is actual.raw:
+                result.raw[0] = result.unset
+            if (type(result.snapshot) is list and len(result.snapshot) == 1
+                    and result.snapshot[0] is actual.snapshot):
+                result.snapshot[0] = None
+            if (type(result.envelope) is list and len(result.envelope) == 1
+                    and result.envelope[0] is actual):
+                result.envelope[0] = None
+            if (type(result.category) is list and len(result.category) == 1
+                    and result.category[0] is category):
+                result.category[0] = None
+            if (type(consumer.consumption) is list and len(consumer.consumption) == 1
+                    and consumer.consumption[0] is actual):
+                consumer.consumption[0] = operation
+            if (type(phase.current) is list and len(phase.current) == 1
+                    and (phase.current[0] is phase.pending or phase.current[0] is phase.idle)):
+                phase.current[0] = phase.failed
+            if (type(phase.result) is list and len(phase.result) == 1
+                    and phase.result[0] is operation):
+                phase.result[0] = None
+    finally:
+        actual = None
+        actor_state = actor_arguments = identity = commit = None
+        operation = result = ledger = phase = consumer = None
     raise ArtifactObservationError(owner) from None
