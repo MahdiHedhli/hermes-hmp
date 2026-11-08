@@ -646,3 +646,22 @@ state is only identity revalidation, never a type authority or import source.
 Five added normal/copied/foreign and paired-replacement cases include a matching
 foreign-type module plus getter traps and require zero getters/native calls.
 These repairs and tests are unqualified until independent review and execution.
+
+## Captured actor functions — close prerequisite, unqualified source
+
+Entry now retains exact original POSIX getpid/geteuid and _thread.get_ident,
+including their original native/Python namespace modules. Interpreter-current
+comparison checks the same allocations; native work-origin joins verify aliases
+without calling substituted functions. Each fixed work dispatch then checks its
+actual actor with the captured functions before file IO. The separate actor
+context helper intentionally does not depend on current namespace aliases, so a
+future independently retained close claim can use it after work retirement.
+This helper establishes context equality only; it grants no cleanup authority.
+
+Six added origin-substitution cases and nine actual-context cases are prepared,
+including wrong identity/thread and valid context despite retired alias fields.
+Synthetic alias hooks are retired before thread/interpreter shutdown. Static
+scanner/Ruff/diff and child-script parsing pass; tests remain unrun. Close still
+uses its old path until immutable original open/close claims, reserved capacity,
+raw slots and all coupled descriptor-status validators land together. No quota,
+resource, factory/runtime/service/device or feature completion is claimed.

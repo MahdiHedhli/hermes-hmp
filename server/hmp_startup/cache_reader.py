@@ -11,6 +11,7 @@ from hmp_plugin.presentation_startup_artifacts import (
     _capture_native_work_origin,
     _Descriptor,
     _HashedArtifact,
+    _native_actor_context,
     _native_registration_tail,
     _native_walk_scope,
     _native_work_origin_tail,
@@ -287,6 +288,8 @@ class DeclaredCacheReadOwner:
             _require(native is None or read_call is native.operations[1])
             if native is None:
                 read_call = os.read
+            if native is not None:
+                _native_actor_context(native, native_registration.context)
             data = read_call(fd, requested)
             _require(type(data) is bytes)
             length = len(data)

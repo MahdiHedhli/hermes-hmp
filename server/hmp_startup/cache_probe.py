@@ -17,6 +17,7 @@ from hmp_plugin.presentation_startup_artifacts import (
     _Descriptor,
     _HashedArtifact,
     _identity,
+    _native_actor_context,
     _native_registration_tail,
     _native_relative_arguments,
     _native_walk_scope,
@@ -224,6 +225,8 @@ class RuntimeCacheProbeOwner:
                      and result_type is native.result_type and missing_type is native.errors[1]))
             if native is None:
                 stat_call = os.stat
+            if native is not None:
+                _native_actor_context(native, native_registration.context)
             result = stat_call(name, dir_fd=parent, follow_symlinks=False)
         except missing_type as exc:
             _require(type(exc) is missing_type

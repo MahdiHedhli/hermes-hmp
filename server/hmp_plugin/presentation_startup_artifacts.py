@@ -737,10 +737,38 @@ def _native_work_origin_tail(owner, registration, native):
              and original.get('stat_result') is native.result_type)
     _require(namespace.get('error') is native.errors[0]
              and original.get('error') is native.errors[0])
+    _require(type(native.thread_namespace) is ModuleType and native.thread_namespace is threading
+             and type(native.thread_native) is ModuleType
+             and modules.get('threading') is native.thread_namespace
+             and modules.get('_thread') is native.thread_native
+             and type(native.actor_calls) is tuple and len(native.actor_calls) == 3)
+    for index, source, alias, name in (
+            (0, native.native, native.namespace, 'getpid'),
+            (1, native.native, native.namespace, 'geteuid'),
+            (2, native.thread_native, native.thread_namespace, 'get_ident')):
+        function = native.actor_calls[index]
+        _require(type(function) is BuiltinFunctionType and function.__self__ is source
+                 and type(function.__name__) is str and function.__name__ == name
+                 and vars(source).get(name) is function and vars(alias).get(name) is function)
     error_names = vars(builtins)
     for index, name in enumerate(('OSError', 'FileNotFoundError', 'PermissionError')):
         _require(type(native.errors[index]) is type
                  and error_names.get(name) is native.errors[index])
+
+
+def _native_actor_context(native, expected):
+    """Actual captured actor functions; independent of later namespace aliases."""
+    _require(type(expected) is tuple and len(expected) == 3
+             and all(type(value) is int for value in expected)
+             and type(native.actor_calls) is tuple and len(native.actor_calls) == 3)
+    functions = native.actor_calls
+    _require(all(type(function) is BuiltinFunctionType for function in functions)
+             and functions[0].__self__ is native.native
+             and functions[1].__self__ is native.native
+             and functions[2].__self__ is native.thread_native)
+    actual = (functions[0](), functions[1](), functions[2]())
+    _require(all(type(value) is int for value in actual) and actual == expected)
+    return actual
 
 
 def _native_relative_arguments(s, name, parent):
@@ -1054,6 +1082,8 @@ class StartupArtifactOwner:
             _require(native is None or open_call is native.operations[0])
             if native is None:
                 open_call = os.open
+            if native is not None:
+                _native_actor_context(native, native_registration.context)
             fd = open_call(name, flags, dir_fd=parent)
             _require(type(fd) is int and fd >= 0)
             row.fd = fd
@@ -1140,6 +1170,8 @@ class StartupArtifactOwner:
             _require(native is None or read_call is native.operations[1])
             if native is None:
                 read_call = os.read
+            if native is not None:
+                _native_actor_context(native, native_registration.context)
             data = read_call(fd, count)
             _require(type(data) is bytes)
             runtime = s.runtime
@@ -1193,6 +1225,8 @@ class StartupArtifactOwner:
         _require(native is None or result_type is native.result_type)
         if native is None:
             stat_call = os.stat
+        if native is not None:
+            _native_actor_context(native, native_registration.context)
         value = stat_call(name, dir_fd=parent, follow_symlinks=False)
         _require(type(value) is (os.stat_result if native is None else result_type)
                  and _native_walk_scope(self, native_registration) is s)
@@ -1215,6 +1249,8 @@ class StartupArtifactOwner:
         _require(native is None or result_type is native.result_type)
         if native is None:
             fstat_call = os.fstat
+        if native is not None:
+            _native_actor_context(native, native_registration.context)
         value = fstat_call(fd)
         _require(type(value) is (os.stat_result if native is None else result_type)
                  and _native_walk_scope(self, native_registration) is s)
@@ -1256,6 +1292,8 @@ class StartupArtifactOwner:
             _require(native is None or readlink_call is native.operations[5])
             if native is None:
                 readlink_call = os.readlink
+            if native is not None:
+                _native_actor_context(native, native_registration.context)
             data = readlink_call(name, dir_fd=parent)  # bytes input => bytes output
             _require(type(data) is bytes)
             after = start[2] + len(data)  # actual result before postchecks, including refusals

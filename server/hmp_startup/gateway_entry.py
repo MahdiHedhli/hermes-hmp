@@ -251,6 +251,9 @@ class _NativeIOOrigin(NamedTuple):
     flags: tuple
     result_type: type
     errors: tuple
+    thread_namespace: ModuleType
+    thread_native: ModuleType
+    actor_calls: tuple
 
     def __repr__(self):
         return "<OriginalNativeFileMachinery metadata-only>"
@@ -292,7 +295,19 @@ def _native_io_origin():
                  and type(kind.__module__) is str and kind.__module__ == "builtins"
                  and type(kind.__mro__) is tuple and base in kind.__mro__)
         errors.append(kind)
-    return _NativeIOOrigin(os, native, tuple(operations), tuple(flags), result_type, tuple(errors))
+    thread_native = sys.modules.get('_thread')
+    _require(type(threading) is ModuleType and sys.modules.get('threading') is threading
+             and type(thread_native) is ModuleType)
+    actor_calls = []
+    for namespace, alias, name in ((native, os, 'getpid'), (native, os, 'geteuid'),
+                                    (thread_native, threading, 'get_ident')):
+        function = vars(namespace).get(name)
+        _require(type(function) is BuiltinFunctionType and function.__self__ is namespace
+                 and type(function.__name__) is str and function.__name__ == name
+                 and vars(alias).get(name) is function)
+        actor_calls.append(function)
+    return _NativeIOOrigin(os, native, tuple(operations), tuple(flags), result_type, tuple(errors),
+                           threading, thread_native, tuple(actor_calls))
 
 
 def _same_native_io(origin, current):
@@ -302,6 +317,11 @@ def _same_native_io(origin, current):
              and type(origin.errors) is tuple and type(current.errors) is tuple)
     return (origin.namespace is current.namespace and origin.native is current.native
             and origin.result_type is current.result_type
+            and origin.thread_namespace is current.thread_namespace
+            and origin.thread_native is current.thread_native
+            and type(origin.actor_calls) is tuple and type(current.actor_calls) is tuple
+            and len(origin.actor_calls) == len(current.actor_calls) == 3
+            and all(a is b for a, b in zip(origin.actor_calls, current.actor_calls, strict=True))
             and len(origin.operations) == len(current.operations) == 6
             and len(origin.flags) == len(current.flags) == 5
             and len(origin.errors) == len(current.errors) == 3

@@ -11,7 +11,9 @@ import pytest
 CASES = ('normal', 'os_read', 'native_open', 'native_read', 'native_close',
          'os_flag', 'native_flag', 'flag_copy', 'os_name', 'os_module',
          'native_module', 'result_type', 'result_type_copy', 'error_base',
-         'permission_error', 'permission_error_copy', 'function_metadata')
+         'permission_error', 'permission_error_copy', 'function_metadata',
+         'os_getpid', 'native_getpid', 'os_geteuid', 'thread_get_ident',
+         'native_get_ident', 'thread_module')
 SCRIPT = r'''
 import builtins,json,os,sys
 from types import ModuleType
@@ -44,9 +46,17 @@ elif case=='permission_error':builtins.PermissionError=Foreign()
 elif case=='permission_error_copy':
     builtins.PermissionError=type('PermissionError',(OSError,),{'__module__':'builtins'})
 elif case=='function_metadata':held.operations[1].__module__=Foreign()
+elif case=='os_getpid':os.getpid=foreign
+elif case=='native_getpid':vars(held.native)['getpid']=foreign
+elif case=='os_geteuid':os.geteuid=foreign
+elif case=='thread_get_ident':vars(held.thread_namespace)['get_ident']=foreign
+elif case=='native_get_ident':vars(held.thread_native)['get_ident']=foreign
+elif case=='thread_module':sys.modules['_thread']=ModuleType('synthetic_thread')
 try:_interpreter_current(origin)
 except GatewayEntryError:assert case!='normal' and calls==[]
 else:assert case=='normal'
+if case=='thread_get_ident':vars(held.thread_namespace)['get_ident']=held.actor_calls[2]
+elif case=='native_get_ident':vars(held.thread_native)['get_ident']=held.actor_calls[2]
 assert calls==[]
 print(json.dumps({'case':case,'foreignCalls':calls,'fileOperationInvokedByCapture':False}))
 '''
