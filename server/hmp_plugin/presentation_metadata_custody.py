@@ -131,7 +131,7 @@ def _marker_tail(owner, origin, marker, payload):
              and type(marker.state) is list and len(marker.state) == 3
              and all(type(value) is bool for value in marker.state)
              and origin.reference_call(marker.reference) is payload)
-    # Revalidate after the captured C weakref call, which is a profile boundary.
+    # Revalidate after the captured C weakref call; no profiling capability is assumed.
     # Do not compare lists: an injected foreign state value must never get __eq__.
     _require(type(marker.owner_link) is list and len(marker.owner_link) == 1
              and type(marker.marker_slot) is list and len(marker.marker_slot) == 1
@@ -193,12 +193,15 @@ def _directory_payload_cells(owner, origin, marker, payload):
     _require(all(type(cell) is list and len(cell) == 1 for cell in cells))
     _marker_tail(owner, origin, marker, payload)
     _require(marker.owner_link[0] is payload and _payload_state_is_clear(marker.state))
-    # Rejoin the captured cells, rather than adopting a replacement from a later
-    # descriptor lookup. A fixed native caller still has to hold these before IO.
+    # Rejoin the captured cells after the last weakref check, rather than
+    # adopting replacements. No further weakref call follows these cell joins.
+    # A fixed native caller still has to hold the actual cells before IO.
     _require(all(descriptor.__get__(payload, origin.payload_type) is cell
                  for descriptor, cell in zip(origin.members, cells, strict=True)))
-    _marker_tail(owner, origin, marker, payload)
-    _require(marker.owner_link[0] is payload and _payload_state_is_clear(marker.state)
+    _require(type(marker.owner_link) is list and len(marker.owner_link) == 1
+             and marker.owner_link[0] is payload
+             and type(marker.marker_slot) is list and len(marker.marker_slot) == 1
+             and marker.marker_slot[0] is marker and _payload_state_is_clear(marker.state)
              and all(type(cell) is list and len(cell) == 1 for cell in cells))
     return cells
 
