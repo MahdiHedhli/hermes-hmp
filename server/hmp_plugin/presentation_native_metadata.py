@@ -17,6 +17,7 @@ from .presentation_metadata_custody import (
 from .presentation_startup_artifacts import (
     ArtifactObservationError,
     StartupArtifactOwner,
+    _MAX_FILE,
     _native_actor_context,
     _native_declared_metadata_cohort_tail,
     _native_declared_metadata_plan_tail,
@@ -432,6 +433,28 @@ def _directory_identity(snapshot, actor_uid):
              and not mode & 0o6000
              and (not mode & 0o022 or (uid == 0 and mode & 0o1000 != 0)))
     return identity[:5]
+
+
+
+def _declared_leaf_identity(snapshot, actor_uid, expected_size):
+    """Fixed runtime/cache regular-file policy DATA, not an admission or ACK.
+
+    This excludes anchor/configuration policies. A future fixed consumer must
+    bind expected_size to its original declared row and snapshot to the actual
+    retained native return; valid-looking DATA cannot substitute for those joins.
+    """
+    _require(type(snapshot) is _NativeMetadataSnapshot and type(actor_uid) is int
+             and actor_uid >= 0 and type(expected_size) is int
+             and 0 <= expected_size <= _MAX_FILE
+             and type(snapshot.identity) is tuple and len(snapshot.identity) == 9
+             and all(type(value) is int for value in snapshot.identity))
+    identity = snapshot.identity
+    mode, uid, links, size = identity[2], identity[3], identity[5], identity[6]
+    # Preserve _file's exact policy without mutable stat-module callbacks.
+    _require(mode & 0o170000 == 0o100000 and uid in (0, actor_uid)
+             and links == 1 and size == expected_size
+             and not mode & (0o022 | 0o6000))
+    return identity
 
 
 def _latched_directory_resource_tail(owner, consumer):
