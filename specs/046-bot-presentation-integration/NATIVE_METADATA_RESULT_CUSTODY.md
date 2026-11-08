@@ -307,3 +307,12 @@ refusal is raised after clearing raw-linked local aliases.
 This candidate is unreviewed/unrun/unwired. Partial-publication causal tests,
 actual caller integration, all metadata sites and device/runtime qualification
 remain required. The independently running producer29-case source is frozen.
+
+Finite read-only ACK review found no new concrete blocker; callers must retain
+the actual commit through final closure, then discard their actual producer
+envelope alias. Three authored cases add normal ACK, a real wrong-thread ACK
+refusal followed by rightful-owner completion, and a fault after the complete
+final ACK state is checked. They require original debt/marker/cursor history,
+raw/backlink retirement, duplicate/copied-commit refusal and sticky late failure
+without rewind. They do not cover every store interruption or lost return.
+All35 cases are unrun; the earlier29-case producer run remains untouched.

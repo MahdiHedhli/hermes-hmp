@@ -18,7 +18,8 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  'admit_after_debit_failure', 'admit_foreign_slot_failure',
                                  'produce', 'produce_snapshot_failure',
                                  'produce_foreign_raw_failure', 'consume',
-                                 'consume_wrong_actor', 'consume_policy_failure'))
+                                 'consume_wrong_actor', 'consume_policy_failure',
+                                 'ack', 'ack_wrong_actor', 'ack_late_failure'))
 def test_original_metadata_operation(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -70,7 +71,8 @@ def prepare(frame):
                         'latch_postpublication_failure','admit','admit_wrong_actor','admit_before_debit_failure',
                         'admit_after_debit_failure','admit_foreign_slot_failure',
                         'produce','produce_snapshot_failure','produce_foreign_raw_failure',
-                        'consume','consume_wrong_actor','consume_policy_failure')
+                        'consume','consume_wrong_actor','consume_policy_failure',
+                        'ack','ack_wrong_actor','ack_late_failure')
         assert resource.descriptor is descriptor
         assert resource.metadata is held[5] and resource.held_walk is held
         assert resource.arguments[0] is descriptor.fd
@@ -142,13 +144,15 @@ def prepare(frame):
                                        'active_failure_record','latch_postpublication_failure','admit','admit_wrong_actor','admit_before_debit_failure',
                         'admit_after_debit_failure','admit_foreign_slot_failure',
                         'produce','produce_snapshot_failure','produce_foreign_raw_failure',
-                        'consume','consume_wrong_actor','consume_policy_failure')
+                        'consume','consume_wrong_actor','consume_policy_failure',
+                        'ack','ack_wrong_actor','ack_late_failure')
                 else:
                     assert (case in ('latched','latch_postpublication_failure',
                                     'admit','admit_wrong_actor','admit_before_debit_failure',
                         'admit_after_debit_failure','admit_foreign_slot_failure',
                         'produce','produce_snapshot_failure','produce_foreign_raw_failure',
-                        'consume','consume_wrong_actor','consume_policy_failure')
+                        'consume','consume_wrong_actor','consume_policy_failure',
+                        'ack','ack_wrong_actor','ack_late_failure')
                             or case.startswith('active')) and returned is resource
                 # Latched structural validation never renews unclaimed admission.
                 try:a._native_declared_metadata_plan_tail(owner,registration,held)
@@ -246,7 +250,7 @@ def prepare(frame):
                         else:raise AssertionError('wrong-actor intent replayed')
                         operation.ended[0]=False  # fixture-only teardown
                         ledger.preparation[:]=preparation_before
-                if case.startswith(('produce','consume')):
+                if case.startswith(('produce','consume','ack')):
                     preparation_before=tuple(ledger.preparation)
                     snapshot_original=m._native_metadata_snapshot
                     captured=[];foreign_raw=object()
@@ -291,7 +295,8 @@ def prepare(frame):
                                 assert result.snapshot==result.envelope==[None]
                             else:
                                 assert case in ('produce','consume','consume_wrong_actor',
-                                                'consume_policy_failure')
+                                                'consume_policy_failure','ack','ack_wrong_actor',
+                                                'ack_late_failure')
                                 assert type(actual) is m._DirectoryMetadataReturn
                                 pending=m._pending_directory_return_tail(owner,consumer,actual)
                                 assert pending is actual
@@ -307,7 +312,7 @@ def prepare(frame):
                                 except a.ArtifactObservationError:pass
                                 else:raise AssertionError('pending native result admitted work')
                                 assert result.acknowledged==consumer.commit==[None]
-                                if case.startswith('consume'):
+                                if case.startswith(('consume','ack')):
                                     try:m._consume_directory_policy(owner,consumer,actual._replace())
                                     except a.ArtifactObservationError:pass
                                     else:raise AssertionError('copied pending result consumed')
@@ -357,7 +362,8 @@ def prepare(frame):
                                             assert phase.current[0] is phase.failed
                                             assert progress[0] is resource.ordinal
                                         else:
-                                            assert case in ('consume','consume_wrong_actor')
+                                            assert case in ('consume','consume_wrong_actor','ack',
+                                                            'ack_wrong_actor','ack_late_failure')
                                             assert type(commit) is m._DirectoryPolicyCommit
                                             assert commit.identity==actual.snapshot.identity[:5]
                                             assert commit.owner is owner
@@ -376,6 +382,75 @@ def prepare(frame):
                                                 raise AssertionError('policy consumed twice')
                                             assert consumer.commit[0] is commit
                                             assert ledger.failed==[False]
+                                            if case.startswith('ack'):
+                                                try:m._ack_directory_policy(
+                                                    owner,consumer,actual,commit._replace())
+                                                except a.ArtifactObservationError:pass
+                                                else:raise AssertionError('copied commit ACKed')
+                                                assert result.acknowledged==[None]
+                                                if case=='ack_wrong_actor':
+                                                    import threading
+                                                    ack_errors=[]
+                                                    def ack_from_wrong_thread():
+                                                        try:m._ack_directory_policy(
+                                                            owner,consumer,actual,commit)
+                                                        except BaseException as exc:
+                                                            ack_errors.append((type(exc),
+                                                                exc.__context__ is None))
+                                                    worker=threading.Thread(
+                                                        target=ack_from_wrong_thread)
+                                                    worker.start();worker.join(5)
+                                                    assert not worker.is_alive()
+                                                    expected=(a.ArtifactObservationError,True)
+                                                    assert ack_errors==[expected]
+                                                    assert result.acknowledged==[None]
+                                                    assert consumer.consumption[0] is actual
+                                                    assert result.raw[0] is actual.raw
+                                                    assert phase.current[0] is phase.pending
+                                                    assert ledger.failed==[False]
+                                                ack_original=m._acked_directory_commit_tail
+                                                ack_events=[]
+                                                if case=='ack_late_failure':
+                                                    def refuse_after_ack(*args):
+                                                        assert ack_original(*args) is commit
+                                                        ack_events.append(True)
+                                                        raise a.ArtifactObservationError(owner)
+                                                    m._acked_directory_commit_tail=refuse_after_ack
+                                                try:
+                                                    try:acked=m._ack_directory_policy(
+                                                        owner,consumer,actual,commit)
+                                                    except a.ArtifactObservationError as exc:
+                                                        assert case=='ack_late_failure'
+                                                        assert exc.failed_owner is owner
+                                                        assert exc.__context__ is None
+                                                        assert ack_events==[True]
+                                                        assert ledger.failed==[True]
+                                                        assert ledger.failure[0] is operation
+                                                        assert operation.state==[True,True,True]
+                                                        assert phase.current[0] is phase.failed
+                                                    else:
+                                                        assert case in ('ack','ack_wrong_actor')
+                                                        assert acked is commit
+                                                        assert ack_original(
+                                                            owner,consumer,commit) is commit
+                                                        assert phase.current[0] is phase.idle
+                                                        assert ledger.failed==[False]
+                                                finally:
+                                                    m._acked_directory_commit_tail=ack_original
+                                                assert result.acknowledged[0] is commit
+                                                assert consumer.commit[0] is commit
+                                                assert consumer.consumption[0] is commit
+                                                assert result.raw[0] is result.unset
+                                                assert result.snapshot==result.envelope==[None]
+                                                assert result.category==[None]
+                                                assert progress==[commit.next_ordinal,None]
+                                                assert phase.result==ledger.inflight==[None]
+                                                try:m._ack_directory_policy(
+                                                    owner,consumer,actual,commit)
+                                                except a.ArtifactObservationError:pass
+                                                else:raise AssertionError('ACK replayed')
+                                                assert result.acknowledged[0] is commit
+                                                assert progress==[commit.next_ordinal,None]
                                     finally:m._directory_identity=policy_original
                             assert captured==[True]
                             assert ledger.counts==[counts[0]+1,counts[1]]
@@ -395,6 +470,9 @@ def prepare(frame):
                         result.raw[0]=result.unset
                         result.snapshot[0]=result.envelope[0]=result.category[0]=None
                         consumer.consumption[0]=consumer.commit[0]=None
+                        result.acknowledged[0]=None
+                        # Disposable fixture teardown, never production rollback.
+                        progress[0]=resource.ordinal
                         ledger.preparation[:]=preparation_before
                 if case.startswith('active'):
                     # Guard-only synthetic ACTIVE state, not production admission.
