@@ -1,4 +1,4 @@
-"""Actual native-return snapshot constructor drift; no live host or file reads."""
+"""Synthetic native-return snapshot drift; no live-host or user-data reads."""
 from . import test_presentation_entry_files as base
 from .test_presentation_metadata_caller import test_fixed_directory_caller as _actual_caller
 
