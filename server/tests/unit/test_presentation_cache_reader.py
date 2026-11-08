@@ -10,7 +10,9 @@ from .test_presentation_gateway_approval import operator_composed_script
 @pytest.mark.parametrize('case', ('normal', 'changed', 'wrong_thread', 'replay',
                                  'read_error', 'fact_copy', 'late_buffer', 'release_foreign',
                                  'late_effect', 'late_ledger', 'late_lifecycle',
-                                 'native_count_drift', 'foreign_read_claim', 'late_owner'))
+                                 'native_count_drift', 'foreign_read_claim', 'late_owner',
+                                 'consumer_wrong_thread', 'consumer_duplicate',
+                                 'consumer_feed_failure', 'consumer_eof_ack_failure'))
 def test_declared_cache_reader(tmp_path, monkeypatch, case):
     script, mutation = operator_composed_script('links')
     script = script.replace('GatewayPackageOwner.verify_recipe(recipe)',
@@ -55,7 +57,7 @@ if case=='read_error':
         if frame.f_locals['self'] is owner:
             read_calls+=1
             if read_calls==2:raise OSError(errno.EIO,'synthetic lost read acknowledgement')
-    trace_synthetic_boundary(DeclaredCacheReadOwner._read.__code__,
+    trace_synthetic_boundary(DeclaredCacheReadOwner._read_native.__code__,
                              '_require(type(data) is bytes)',fail_after_prefix)
 if case in ('native_count_drift','foreign_read_claim'):
     foreign_claim=object()
@@ -63,16 +65,16 @@ if case in ('native_count_drift','foreign_read_claim'):
         if frame.f_locals['self'] is owner:
             if case=='native_count_drift':owner._count_cell=tuple(list(owner._count_cell))
             else:owner._read_claim=foreign_claim
-    trace_synthetic_boundary(DeclaredCacheReadOwner._read.__code__,
+    trace_synthetic_boundary(DeclaredCacheReadOwner._read_native.__code__,
                              '_require(type(data) is bytes)',drift_after_actual_read)
 if case=='late_owner':
-    actual_context=cm._context
     foreign_owner=object()
-    def drift_owner_after_native_return():
-        if owner._read_claim is not None and not owner._reading and cm._RESULTS:
+    def drift_owner_after_native_return(frame):
+        if frame.f_locals['self'] is owner:
+            assert frame.f_locals['result_slot'][0] is not None
             owner._origin.activation._cache_read_owner=foreign_owner
-        return actual_context()
-    cm._context=drift_owner_after_native_return
+    trace_synthetic_boundary(DeclaredCacheReadOwner._read_native.__code__,
+                             'same = (_OWNER is self',drift_owner_after_native_return)
 if case in ('late_buffer','late_effect','late_ledger','late_lifecycle'):
     actual_context=cm._context
     def replace_after_close():
@@ -88,11 +90,56 @@ if case in ('late_buffer','late_effect','late_ledger','late_lifecycle'):
             else:owner._started=False
         return actual_context()
     cm._context=replace_after_close
+from hmp_plugin import presentation_startup_artifacts as a
+actual_consume=a._consume_native_cache_read
+consumer_checks=[];observed_commits=[]
+def consume_cache(self,envelope):
+    assert self is owner and type(envelope.cache_return) is a._NativeCacheReadReturn
+    actual=envelope.cache_return
+    if case=='consumer_wrong_thread' and not consumer_checks:
+        import threading
+        prior=(owner._failed,owner._unknown,bytes(original),envelope.raw_cell[0])
+        refused=[]
+        def wrong_thread():
+            try:actual_consume(self,envelope)
+            except a.ArtifactObservationError:refused.append(True)
+        thread=threading.Thread(target=wrong_thread);thread.start();thread.join(timeout=10)
+        assert not thread.is_alive() and refused==[True]
+        assert prior==(owner._failed,owner._unknown,bytes(original),envelope.raw_cell[0])
+        consumer_checks.append(True)
+    commit=actual_consume(self,envelope)
+    assert type(commit) is a._NativeCacheReadCommit
+    assert commit.cache_attempt is actual.attempt and commit.cache_result is actual.result
+    assert commit.cache_index is actual.index and commit.header==bytes(original[:16])
+    assert not hasattr(commit,'heads') and not hasattr(commit,'result_heads')
+    assert envelope.raw_cell[0] is envelope.result.unset and envelope.envelope_cell[0] is None
+    assert commit.eof is (len(envelope.raw)==0)
+    observed_commits.append(commit)
+    if case=='consumer_duplicate':
+        prior=(owner._failed,owner._unknown,bytes(original))
+        try:actual_consume(self,envelope)
+        except a.ArtifactObservationError:pass
+        else:raise AssertionError('duplicate cache consumer accepted')
+        assert prior==(owner._failed,owner._unknown,bytes(original))
+        consumer_checks.append(True)
+    return commit
+a._consume_native_cache_read=consume_cache
+if case in ('consumer_feed_failure','consumer_eof_ack_failure'):
+    def interrupt_consumer(frame):
+        envelope=frame.f_locals['envelope']
+        if envelope.consumer.owner is owner and (
+                case=='consumer_feed_failure' or frame.f_locals['eof']):
+            consumer_checks.append(True)
+            raise OSError('SYNTHETIC_CACHE_CONSUMER_INTERRUPTION')
+    boundary=('step.hash_update(step.digest, data)' if case=='consumer_feed_failure'
+              else 'envelope.ack_cell[0] = commit')
+    trace_synthetic_boundary(actual_consume.__code__,boundary,interrupt_consumer)
 try:owner.read()
 except CacheReadError:
     assert case in ('changed','read_error','late_buffer','late_effect',
                     'late_ledger','late_lifecycle','native_count_drift',
-                    'foreign_read_claim','late_owner') and owner._failed
+                    'foreign_read_claim','late_owner','consumer_feed_failure',
+                    'consumer_eof_ack_failure') and owner._failed
     assert not owner._ready and owner._fact is None and cm._READY is None
     assert original==bytearray()
     if case=='read_error':
@@ -112,7 +159,10 @@ except CacheReadError:
         else:assert owner._count_cell is not attempt[3]
 
 else:
-    assert case in ('normal','wrong_thread','replay','fact_copy','release_foreign')
+    assert case in ('normal','wrong_thread','replay','fact_copy','release_foreign',
+                    'consumer_wrong_thread','consumer_duplicate')
+    assert observed_commits and observed_commits[-1].eof is True
+    assert sum(c.eof for c in observed_commits)==1
     fact=owner.current_binding()
     assert original==cache_payload and owner._bytes_read==len(cache_payload)
     assert fact[4] is original and fact[5].bytecode_header==cache_payload[:16]
@@ -130,6 +180,7 @@ else:
     owner.release()
     assert original==bytearray() and owner._released
     if case=='release_foreign':assert owner._buffer==bytearray(b'FOREIGN')
+if case.startswith('consumer_'):assert consumer_checks
 assert checked._fact_cell[2]._count_cell is old_count
 assert all(row.closed and row.close_attempted and not row.unknown for row in owner._origin.records)
 print(json.dumps({'mutation':mutation,'runtime_admitted':False}))
