@@ -1,20 +1,25 @@
-## November 8 — presentation integration checkpoint
+## November 8 — combined startup regression has failures; repair pending
 
-Cache/link registration source `11ff67b` passed 55 selected cases on each of
-Python 3.14.9 and 3.11.15. Fresh-probe source `9a4ed59` passed 27 on each.
-Receipt, source, log and XML bindings were verified; earlier failed candidates
-remain preserved. Entry metadata source `7b9b097` passed 108 selected current
-cases; its floor run is still active. Declaration membership `9e6f02a` has
-independent bounded source acceptance and eight cases queued, not yet passed.
-These later candidates are separate from the public review branch's integrated
-`34b862e` source and are not installed.
+Entry metadata source `7b9b097` passed 108 selected cases on each of Python
+3.14.9 and 3.11.15; declaration membership `9e6f02a` passed eight on each.
+Exact source and receipt/log/XML bindings were verified. The combined configured
+1,398-case run on `9e6f02a` remains active with recorded failures; it is not
+qualified. Its full terminal result is still needed to assess every failure.
 
-Bot characters and host-local images remain unfinished. Original per-step and
-consumer claims, fixed native operations and separate enumeration effects,
-shared quota/reserved cleanup, runtime/key/service wiring and physical delivery
-remain open. These are HMP integration tasks; no upstream prerequisite has been
-established. Source tests are not whole-plugin, device or release qualification.
-The latest iPad launch was rejected as Locked before execution, not a crash.
+A separate static comparison confirms two baseline import-scanner violations.
+Repair `f37a618` narrowly allows three lazy HMP-owned startup type imports in the
+artifact module. Static scanner, Ruff and bounded independent source review pass;
+136 scanner tests per interpreter await the existing run's terminal result.
+This does not prove all regression failures fixed. Later primitive-argument
+`6d6b112` and declaration-walk `21ec9fa` candidates remain unqualified and separate.
+No later source candidate is integrated into this public branch or installed.
+
+Bot characters and host-local images remain unfinished. Per-operation/resource/
+consumer custody, fixed native effects, aggregate quota and reserved cleanup,
+runtime/key/service wiring and physical delivery remain open HMP work; no upstream
+prerequisite has been established. File-walk intent/progress is not native
+permission or tamper-proof replay protection. No runtime/device/release pass is
+claimed. The latest iPad launch was rejected as Locked before execution.
 
 # Held native file effects — proposed integration contract
 
