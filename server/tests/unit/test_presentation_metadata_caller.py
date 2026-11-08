@@ -64,12 +64,12 @@ def exercise(frame):
                 and isinstance(node.targets[0].slice,ast.Constant)
                 and node.targets[0].slice.value==0
                 and isinstance(node.value,ast.Constant) and node.value.value is None]
-        assert len(stores)==1
+        assert len(stores)==2
         after=[node for node in ast.walk(tree) if isinstance(node,ast.Assign)
                and any(isinstance(target,ast.Name) and target.id=='unmatched_marker'
                        for target in node.targets)]
         assert after
-        target=(stores[0] if case=='lost_return_interrupt_before'
+        target=(min(stores,key=lambda node:node.lineno) if case=='lost_return_interrupt_before'
                 else min(after,key=lambda node:node.lineno))
         target_line=start+target.lineno-1
     class RevokeOnDisposal:

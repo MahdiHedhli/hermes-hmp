@@ -1476,10 +1476,40 @@ def _run_directory_observation(owner, resource):
     except BaseException:
         complete = False
     finally:
-        # Detaching is distinct from disposing the caller's last strong alias.
-        # Disposal can run finalizers; all normal live closure follows it.
-        actual = payload = None
-        actor_state = actor_arguments = None
+        try:
+            if not retired and type(operation) is _MetadataOperation:
+                # An interruption can precede the first detach store. Recheck
+                # the original actor and pre-effect custody before a final
+                # memory-only detach; never manufacture a retirement/ACK record.
+                _require(operation.owner is owner
+                         and (not producer_started or producer_unwound))
+                native = operation.native
+                actor_arguments = (operation, marker)
+                actor_state = _native_pre_actor_state(owner, actor_arguments)
+                _native_actor_context(native.actor_calls,
+                                      (native.native, native.thread_native),
+                                      operation.context)
+                _native_post_actor_state(owner, actor_state, actor_arguments)
+                _origin_tail(origin)
+                _require(type(marker) is origin.marker_type and marker.owner is owner
+                         and marker.operation is operation and marker.origin is origin
+                         and marker.owner_link is held_link
+                         and marker.marker_slot is held_slot
+                         and marker.state is held_state and marker.reference is held_reference
+                         and type(payload) is origin.payload_type
+                         and type(held_reference) is origin.reference_type
+                         and origin.reference_callback.__get__(
+                             held_reference, origin.reference_type) is None
+                         and origin.reference_call(held_reference) is payload)
+                if (type(held_link) is list and len(held_link) == 1
+                        and held_link[0] is payload):
+                    held_link[0] = None
+        except BaseException:  # noqa: S110 - no private exceptions or authority bypass
+            complete = False
+        finally:
+            # Disposal can run finalizers; all normal live closure follows it.
+            actual = payload = None
+            actor_state = actor_arguments = None
 
     if complete and retired:
         try:
