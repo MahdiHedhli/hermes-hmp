@@ -47,8 +47,24 @@ All owned raw/envelope/consumption paths must pass through the one detachable
 link. Current marker lookup is not independent provenance. Capsule custody must
 never authorize result consumption, ACK, renewed permission or native close.
 
-This proposal is not implemented or accepted as complete. Required evidence
-includes the entire retained-root reference graph, coherent copy/foreign-link
+Implementation has started in isolated candidate `b6b8322`. Its retained
+`_MetadataResult` now keeps the raw/category/snapshot/envelope cells behind the
+payload link, and `_DirectoryConsumer.consumption` resolves through that same
+payload rather than retaining a separate raw-bearing list. The preparation
+factory exposes the actual operation/marker/payload before native effects.
+Compatibility accessors are DATA only: following their current links cannot
+establish a producer receipt or independent caller custody. The legacy preparation
+wrapper does not retain those original factory returns across native work.
+
+The memory-only component has eight focused checks passing on each interpreter,
+including an injected interruption after detachment, callback-bearing weakref
+refusal and GC-disabled reclamation of a synthetic owned graph. These checks do
+not establish reclamation in the actual metadata pipeline. The 58-case migrated
+metadata/component regression is running with immutable source/log/XML binding;
+no result is claimed yet. The fixed caller and its ended-call failure cleanup
+are still missing, so the original lost-return defect remains open.
+
+This repair is not accepted as complete. Required evidence includes the entire retained-root reference graph, coherent copy/foreign-link
 refusal, original-actor and revoked-lifetime retirement, interrupted detach,
 return-event loss, sanitized exceptions and GC-disabled ownership/reclamation.
 Caller alias disposal can run callbacks and needs final original closure before
