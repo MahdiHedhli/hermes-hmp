@@ -1504,7 +1504,7 @@ def _run_directory_observation(owner, resource):
                 if (type(held_link) is list and len(held_link) == 1
                         and held_link[0] is payload):
                     held_link[0] = None
-        except BaseException:  # noqa: S110 - no private exceptions or authority bypass
+        except BaseException:  # no private exceptions or authority bypass
             complete = False
         finally:
             # Disposal can run finalizers; all normal live closure follows it.
