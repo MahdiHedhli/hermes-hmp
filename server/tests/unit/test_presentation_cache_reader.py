@@ -180,7 +180,8 @@ except CacheReadError:
     assert case in ('changed','read_error','late_buffer','late_effect',
                     'late_ledger','late_lifecycle','native_count_drift',
                     'foreign_read_claim','late_owner','consumer_feed_failure',
-                    'consumer_eof_ack_failure','metadata_plan_copy') or case.startswith('interrupt_')
+                    'consumer_eof_ack_failure','metadata_plan_copy') or (
+                        case.startswith('interrupt_'))
     assert owner._failed
     assert not owner._ready and owner._fact is None and cm._READY is None
     assert original==bytearray()
