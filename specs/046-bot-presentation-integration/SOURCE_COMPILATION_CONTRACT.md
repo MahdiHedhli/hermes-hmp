@@ -103,6 +103,11 @@ checks passed3 further cases and actual syntax-error sanitization passed1. The
 parity child intentionally runs under -O/-OO, so ordinary assert statements are
 not used for its verification. 38 actual Python3.11.15 child cases passed with source hashes unchanged;
 all floor-tested source hashes also match after reconciling the published
-fixture/docs repair. Broader shared entry/reader qualification is now active; no production deployment or native admission is
+fixture/docs repair. The broader shared-entry/reader baseline passed1185 cases with source hashes
+unchanged; no production deployment or native admission is
 claimed. The original reader's separate unchanged-source1162-pass baseline does
 not qualify these new compiler/reader changes.
+
+The1185-case result is local source qualification for895e832. Linux full-plugin
+CI, operational resource/loader/native admission and physical delivery remain
+separate; no execution authority follows from this result.

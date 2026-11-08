@@ -7,8 +7,8 @@ refuses replay and stale callbacks, then clears source bytes. It never executes
 code or grants runtime/native/key authority. Independent bounded review accepted.
 37 current matrix cases plus stronger optimization/syntax checks passed;38 actual
 Python3.11 child cases passed with source unchanged. Reconciliation with the
-fixture/docs fix preserved all tested source hashes. Broader startup checks are
-active, not yet a pass. No bot-character/local-media delivery or deployment claim.
+fixture/docs fix preserved all tested source hashes. The broader startup baseline passed1185 cases with source hashes unchanged.
+Linux CI and operational/physical qualification remain separate. No bot-character/local-media delivery or deployment claim.
 See [contract](specs/046-bot-presentation-integration/SOURCE_COMPILATION_CONTRACT.md).
 
 # November 7: fresh runtime source read
