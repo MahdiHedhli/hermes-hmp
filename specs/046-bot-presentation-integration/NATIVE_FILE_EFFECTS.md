@@ -599,11 +599,13 @@ immediately before direct dispatch and the origin after post-return callbacks.
 No generic operation-selection or caller-supplied callable interface was added.
 Supported legacy None paths retain alias selection and avoid entry-only imports.
 
-Forty-five composed fixed-operation cases are prepared: positive actual calls,
+Fifty composed fixed-operation cases are prepared: positive actual calls,
 origin copies, os substitution before admission, and os/posix/flag/result-type
 and os/posix error-base substitution after the final work guard. Negative cases require zero actual
 selected native calls and zero foreign hooks; original known resources must still
-close. Four scanner cases keep the new lazy type join exact and local. Synthetic
+close. Capture checks only the already-loaded entry module dictionary, requiring no new
+entry import or scanner allowance. Five missing-type module cases require zero
+missing-attribute hooks. Synthetic
 pre-call fault selectors now name the actual shared dispatch lines, preserving
 fault timing instead of silently selecting the unused legacy branch. Existing
 actual-return/progress/debt cases remain required. Tests have not run.
@@ -624,3 +626,10 @@ The pure origin join also explicitly checks both os/posix error-base aliases
 against the original OSError class; ten added substitution cases cover those
 previously unjoined captured facts. This does not change missing-error/fallback
 authority or the unqualified close/resource/actor/runtime limits above.
+
+Capture refinement: remove dynamic entry imports before work guards; inspect the
+already-loaded exact module dictionary and type identities instead. A foreign
+module with missing definitions is rejected without invoking its __getattr__.
+The draft NativeIOOrigin import allowance and four associated cases were removed;
+the existing scanner boundary remains unchanged. This does not by itself anchor
+all module/code/runtime dependencies, which remain separate admission gates.

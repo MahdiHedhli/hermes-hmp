@@ -645,12 +645,16 @@ def _capture_native_work_origin(owner, registration):
     """Original DATA for fixed callers; never select or perform an operation."""
     if registration is None:
         return None
-    from hmp_startup.gateway_entry import _NativeFileLineage, _NativeIOOrigin
-
     _require(type(registration) is _NativeScopeRegistration and registration.owner is owner
-             and type(registration.lineage) is _NativeFileLineage
-             and type(registration.lineage.native) is _NativeIOOrigin)
+             and type(sys) is ModuleType)
+    modules = vars(sys).get('modules')
+    _require(type(modules) is dict)
+    entry = modules.get('hmp_startup.gateway_entry')
+    _require(type(entry) is ModuleType)
+    names = vars(entry)
+    _require(type(registration.lineage) is names.get('_NativeFileLineage'))
     native = registration.lineage.native
+    _require(type(native) is names.get('_NativeIOOrigin'))
     _native_work_origin_tail(owner, registration, native)
     return native
 

@@ -7,7 +7,8 @@ import pytest
 @pytest.mark.parametrize('method', ('_open', '_read', '_stat', '_fstat', '_readlink'))
 @pytest.mark.parametrize('change', ('normal', 'copy_origin', 'pre_os', 'late_os',
                                     'late_posix', 'late_flags', 'late_result_type',
-                                    'late_os_error_base', 'late_posix_error_base'))
+                                    'late_os_error_base', 'late_posix_error_base',
+                                    'pre_entry_module'))
 def test_fixed_work_calls_hold_original_native_origin(tmp_path, monkeypatch, method, change):
     from . import test_presentation_cache_observation as cache
     from . import test_presentation_entry_files as runner
@@ -20,13 +21,20 @@ actual_capture=a._capture_native_work_origin;actual_tail=a._native_work_origin_t
 wanted=a.StartupArtifactOwner if METHOD=='_readlink' else GatewayPackageOwner
 calls=[];native_calls=[];foreign_calls=[];changed=[];refusals=[];violations=[];targets=[]
 original_native=getattr(a.os,METHOD[1:])
-restore=[]
+restore=[];restore_modules=[]
 class ForeignValue:
     def __index__(self):foreign_calls.append('index');raise AssertionError('foreign index')
     def __bool__(self):foreign_calls.append('bool');raise AssertionError('foreign bool')
 def foreign(*args,**kwargs):
     foreign_calls.append('call');raise AssertionError('foreign native function')
 def mutate(registration,mode):
+    if mode=='pre_entry_module':
+        fake=type(sys)('hmp_startup.gateway_entry')
+        def missing(name):
+            foreign_calls.append('entry_get');raise AssertionError('foreign entry getter')
+        fake.__getattr__=missing
+        restore_modules.append(sys.modules['hmp_startup.gateway_entry'])
+        sys.modules['hmp_startup.gateway_entry']=fake;changed.append(True);return
     origin=registration.lineage.native
     namespace=origin.native if mode in ('late_posix','late_posix_error_base') else a.os
     name=METHOD[1:]
@@ -45,7 +53,7 @@ def checked_method(target,*args):
         return actual_method(target,*args)
     calls.append(True);targets.append(target)
     count=target._count_cell;before=len(native_calls)
-    if CHANGE=='pre_os' and not changed:mutate(args[-1],CHANGE)
+    if CHANGE in ('pre_os','pre_entry_module') and not changed:mutate(args[-1],CHANGE)
     try:return actual_method(target,*args)
     except BaseException:
         refusals.append(True)
@@ -77,6 +85,7 @@ finally:
     setattr(a.StartupArtifactOwner,METHOD,actual_method)
     a._capture_native_work_origin=actual_capture;a._native_work_origin_tail=actual_tail
     for namespace,name,value in reversed(restore):setattr(namespace,name,value)
+    for module in reversed(restore_modules):sys.modules['hmp_startup.gateway_entry']=module
 assert foreign_calls==[] and violations==[]
 if CHANGE!='normal':
     assert not native_calls

@@ -221,7 +221,6 @@ class _ModuleScanner(ast.NodeVisitor):
             local_types = {
                 "hmp_startup.gateway_entry": {
                     "GatewayEntryOwner", "_NativeFileLineage", "_NativeFileLedger",
-                    "_NativeIOOrigin",
                 },
                 "hmp_startup.entry_files": {"EntryFileSnapshotOwner"},
                 "hmp_startup.gateway_approval": {"GatewayApprovalOwner"},
