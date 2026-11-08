@@ -66,3 +66,34 @@ errors remain failures. Directory enumeration is a separate effect contract.
 - Current and minimum Python suites, complete startup selection, CPU/RSS/deadline,
   native service/key/runtime and physical character display are separate gates.
   No deadline extension, legacy permission broadening, or host deployment here.
+
+## Finite contract review additions
+
+Each site plan needs an independently anchored original allocation plus a one-use
+consumption latch captured before the first admitted callback. Stat binds the
+actual nofollow parent allocation and original lexical component; fstat binds the
+actual held open result and its FD, never numeric-FD membership alone. Review
+inventory `NATIVE_METADATA_SITES.json` records source hashes and syntax sites;
+it is not the independent runtime plan or admission authority.
+
+Pending metadata must not invoke IDLE-only work guards. The fixed material policy
+closure is surrounded by import-free original plan/result tails. Snapshot fields
+are exactly dev/ino/mode/uid/gid for directory identity, adding nlink/size/mtime_ns/
+ctime_ns for file identity. Preserve exact integer primitives. Where source
+bytecode timestamp policy needs seconds, retain actual st_mtime and perform the
+existing bounded `int(actual st_mtime)` conversion, not nanosecond flooring. Keep
+the actual stat_result held until the primitive snapshot and consumer commit are
+closed after callbacks.
+
+The diagnostic producer classifies an actual native exception only inside the
+native-call handler, through captured exact error classes/member descriptors.
+Keep bounded diagnostic category DATA, never the exception/traceback/errno/name
+object. Bind each diagnostic to its original pass/path/component/ordinal; the next
+distinct confirmation needs its own plan and follows the previous typed ACK.
+Both share the same original global quota. Do not broaden generic stat to treat
+any exception as missing.
+
+Known raised native work, mismatched result, interrupted publication and partial
+ACK all need an explicit ended/abandon transition. Reserved descriptor cleanup
+can proceed only after that original work has ended; unknown/ACK/debit history
+remains sticky. No retry or restoration of IDLE can erase ambiguous work.
