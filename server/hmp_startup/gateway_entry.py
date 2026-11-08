@@ -375,11 +375,26 @@ def _interpreter_current(origin):
     return origin
 
 
+class _NativeFileLedger(NamedTuple):
+    """Original storage allocation, not a dispatcher or operation receipt."""
+    entry: object
+    native: _NativeIOOrigin
+    context: tuple
+    attempts: list
+    counts: list
+    inflight: list
+    failed: list
+
+    def __repr__(self):
+        return "<OriginalNativeFileLedger storage-only redacted>"
+
+
 class _NativeFileLineage(NamedTuple):
     """Original entry allocation only; no operation, receipt or fallback grant."""
     entry: object
     native: _NativeIOOrigin
     context: tuple
+    ledger: _NativeFileLedger
 
     def __repr__(self):
         return "<OriginalNativeFileLineage unimplemented-effects redacted>"
@@ -396,6 +411,7 @@ class _Invocation(NamedTuple):
     original_arguments: tuple
     interpreter: _InterpreterOrigin
     native_files: _NativeFileLineage
+    native_file_ledger: _NativeFileLedger
 
     def __repr__(self):
         return "<GatewayEntryInvocation redacted>"
@@ -456,10 +472,13 @@ class GatewayEntryOwner:
             context = (os.getpid(), os.geteuid(), threading.get_ident())
             _require(all(type(v) is int for v in context))
             interpreter = _interpreter()
-            native_files = _NativeFileLineage(owner, interpreter.native_io, context)
+            ledger = _NativeFileLedger(owner, interpreter.native_io, context,
+                                       [], [0, 0], [None], [False])
+            native_files = _NativeFileLineage(owner, interpreter.native_io, context, ledger)
             s = _Invocation(context, main, file, vars(main).get("__spec__"),
                             sys.argv, _arguments(sys.argv),
-                            sys.orig_argv, _arguments(sys.orig_argv), interpreter, native_files)
+                            sys.orig_argv, _arguments(sys.orig_argv), interpreter,
+                            native_files, ledger)
             owner._scope = s
             cell = (owner, s)
             _CELL = cell
@@ -538,6 +557,11 @@ class GatewayEntryOwner:
                  and s.native_files.entry is self
                  and s.native_files.native is s.interpreter.native_io
                  and s.native_files.context is s.context
+                 and type(s.native_file_ledger) is _NativeFileLedger
+                 and s.native_files.ledger is s.native_file_ledger
+                 and s.native_file_ledger.entry is self
+                 and s.native_file_ledger.native is s.interpreter.native_io
+                 and s.native_file_ledger.context is s.context
                  and type(s.interpreter.data) is InterpreterStartupData
                  and data.interpreter is s.interpreter.data)
         return s, cell, started

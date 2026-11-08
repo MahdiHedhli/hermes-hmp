@@ -18,6 +18,12 @@ lineage=GatewayEntryOwner._native_file_lineage(owner)
 assert lineage is owner._scope.native_files
 assert lineage.entry is owner and lineage.native is owner._scope.interpreter.native_io
 assert lineage.context is owner._scope.context
+ledger=owner._scope.native_file_ledger
+assert lineage.ledger is ledger
+assert ledger.entry is owner and ledger.native is lineage.native
+assert ledger.context is lineage.context
+assert ledger.attempts==[] and ledger.counts==[0,0]
+assert ledger.inflight==[None] and ledger.failed==[False]
 calls=[]
 class Foreign:
     def __getattr__(self,name):calls.append('get');raise AssertionError('foreign getter')

@@ -265,3 +265,15 @@ owner and fixed slot names are required. Three synthetic dependency-substitution
 cases bring the selected test set to18; none have executed yet. This validates
 local capture shape only. Joining those captures to the original interpreter
 origin remains required at native-owner integration, with actual claim custody.
+
+## Shared ledger storage allocation — unqualified
+
+The next separate source increment preallocates ledger storage before bootstrap:
+an empty attempt list, used/reserved count cell, in-flight cell and failure cell.
+Both the immutable original invocation and original lineage retain the same
+ledger, entry/native/context allocation. Retained-binding checks join those
+identities. Existing lineage causals now assert the original initial storage.
+No dispatcher, scope registry, step/consumer claim, counter transitions, close
+reservation or native call is implemented yet. Storage allocation is not an
+operation budget enforcement or image capability. Tests have not run on this
+increment; earlier exact-source qualifications do not apply to it.
