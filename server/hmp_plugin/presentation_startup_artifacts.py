@@ -996,8 +996,8 @@ def _prepare_declared_metadata_plan(owner, registration, walk):
                                        definitions, [0, None])
 
 
-def _native_declared_metadata_plan_tail(owner, registration, held):
-    """Held original file plan joins only; no operation or ACK permission."""
+def _native_declared_metadata_cohort_tail(owner, registration, held):
+    """Structural held plan joins; no phase, resource or operation authority."""
     _require(type(registration) is _NativeScopeRegistration
              and type(held) is tuple and len(held) == 6)
     walk, walks, progress, index, state, metadata = held
@@ -1018,8 +1018,15 @@ def _native_declared_metadata_plan_tail(owner, registration, held):
              and type(metadata.definitions) is tuple and len(metadata.definitions) <= 16384
              and type(metadata.progress) is list and len(metadata.progress) == 2
              and type(metadata.progress[0]) is int
-             and 0 <= metadata.progress[0] < len(metadata.definitions)
-             and metadata.progress[1] is None)
+             and 0 <= metadata.progress[0] < len(metadata.definitions))
+    return metadata
+
+
+
+def _native_declared_metadata_plan_tail(owner, registration, held):
+    """Original unclaimed admission input; a latched consumer is not renewable."""
+    metadata = _native_declared_metadata_cohort_tail(owner, registration, held)
+    _require(metadata.progress[1] is None)
     _native_work_registration_tail(owner, registration)
     return metadata
 

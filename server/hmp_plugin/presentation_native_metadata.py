@@ -7,7 +7,9 @@ from typing import NamedTuple
 
 from .presentation_startup_artifacts import (
     StartupArtifactOwner,
+    _native_declared_metadata_cohort_tail,
     _native_declared_metadata_plan_tail,
+    _native_metadata_component_tail,
     _native_read_lifecycle_tail,
     _native_work_origin_tail,
     _NativeMetadataResource,
@@ -329,3 +331,44 @@ def _directory_identity(snapshot, actor_uid):
              and not mode & 0o6000
              and (not mode & 0o022 or (uid == 0 and mode & 0o1000 != 0)))
     return identity[:5]
+
+
+def _latched_directory_resource_tail(owner, consumer):
+    """Original already-latched cohort DATA; not a phase check or work grant."""
+    _require(type(consumer) is _DirectoryConsumer and consumer.owner is owner
+             and type(consumer.operation) is _MetadataOperation
+             and type(consumer.resource) is _NativeMetadataResource
+             and consumer.operation.resource is consumer.resource)
+    operation, resource = consumer.operation, consumer.resource
+    registration = resource.registration
+    metadata = _native_declared_metadata_cohort_tail(owner, registration, resource.held_walk)
+    _require(metadata is resource.metadata and metadata.progress[0] is resource.ordinal
+             and metadata.progress[1] is consumer
+             and type(resource.ordinal) is int
+             and metadata.definitions[resource.ordinal] is resource.site
+             and type(resource.site) is tuple and len(resource.site) == 3
+             and type(resource.site[0]) is int and resource.site[0] == 4
+             and type(resource.site[1]) is str and resource.site[1] == 'directory'
+             and type(resource.site[2]) is int
+             and operation.owner is owner and operation.registration is registration
+             and operation.ledger is registration.native_ledger
+             and operation.phase is registration.native_phase
+             and operation.native is registration.native_origin
+             and operation.context is registration.context
+             and type(operation.operation) is int and operation.operation == 4
+             and operation.callee is operation.native.operations[4]
+             and operation.arguments is resource.arguments
+             and type(operation.result) is _MetadataResult
+             and type(operation.result.attempt) is list and len(operation.result.attempt) == 1
+             and operation.result.attempt[0] is operation
+             and type(operation.result.consumer) is list and len(operation.result.consumer) == 1
+             and operation.result.consumer[0] is consumer
+             and type(resource.arguments) is tuple and len(resource.arguments) == 1)
+    _native_metadata_component_tail(owner, registration, resource.held_walk[0],
+                                    resource.descriptor, resource.site[2])
+    _require(resource.arguments[0] is resource.descriptor.fd
+             and _directory_material_tail(owner, consumer) is consumer)
+    _native_read_lifecycle_tail(owner, registration, consumer.parents)
+    _native_work_origin_tail(owner, registration, operation.native)
+    _require(_directory_material_tail(owner, consumer) is consumer)
+    return resource

@@ -133,3 +133,19 @@ Finite review found the initial consumer factory rechecked resource/lifetime but
 ## Fixed directory policy DATA
 
 An isolated descendant now implements the existing POSIX directory checks over an exact primitive stat snapshot: directory type, root/current UID, no setuid/setgid, and no group/world write except root-owned sticky directories. It uses literal POSIX bit operations to avoid a new mutable stat-helper callback during future pending consumption. Twenty authored scalar/foreign-hook cases cover allowed roots/owner directories and unsafe modes/types/owners. It returns five-field identity DATA only; actual native-return provenance, one-use consumption, work debit and ACK remain separate unimplemented requirements. No mode/provider/grant/job or host setting changes occur.
+
+## Latched cohort preparation checkpoint — November 8
+
+The unclaimed metadata-plan validator now delegates structural joins to a
+separate helper and still requires an empty pending-consumer slot before its
+original work-registration check. The new latched directory-resource helper
+requires the original consumer in that slot, original operation/result links,
+resource/site/ordinal, held descriptor chain and retained material closures.
+It performs no phase transition, debit, actor sampling, native call or ACK.
+Type checks precede primitive equality at the operation/site boundary.
+
+This helper is preparation only: static checks passed; dedicated causal
+latched-consumer tests and independent review remain required before wiring it.
+Separately, frozen constructor repair source `cefd515` passed 12 cases on both
+Python 3.14.9 and 3.11.15; policy source `d537500` passed 20 on each. These
+results do not qualify this changed helper, an integrated dispatcher or devices.
