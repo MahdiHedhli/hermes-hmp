@@ -362,7 +362,8 @@ def prepare(frame):
                                         values=cursor.tb_frame.f_locals
                                         assert values['raw'] is result.unset
                                         assert values['snapshot'] is values['actual'] is None
-                                        for alias in ('origin','marker','payload','cells',
+                                        for alias in ('origin','marker','payload',
+                                                      'cells','joined_cells',
                                                       'raw_cell','category_cell','snapshot_cell',
                                                       'envelope_cell'):
                                             assert values[alias] is None

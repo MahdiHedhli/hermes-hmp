@@ -732,7 +732,7 @@ def _produce_directory_metadata(owner, consumer):
     callee, arguments = operation.callee, operation.arguments
     raw, snapshot, actual = result.unset, None, None
     category = 'directory'
-    origin = marker = payload = cells = None
+    origin = marker = payload = cells = joined_cells = None
     raw_cell = category_cell = snapshot_cell = envelope_cell = None
     try:
         # Capture actual cells before the native call. Compatibility properties
@@ -743,6 +743,24 @@ def _produce_directory_metadata(owner, consumer):
         raw_cell, category_cell, snapshot_cell, envelope_cell = cells[:4]
         _require(_active_directory_operation_tail(owner, consumer) is operation
                  and operation.callee is callee and operation.arguments is arguments)
+        # ACTIVE closure can execute descriptor joins. Rejoin the held original
+        # capsule/cells afterward; never dispatch using a recaptured replacement.
+        joined_cells = _directory_payload_cells(owner, origin, marker, payload)
+        _require(result.custody_origin is origin
+                 and result.custody_link is marker.owner_link
+                 and result.custody_slot is marker.marker_slot
+                 and marker.operation is operation
+                 and all(before is after for before, after in
+                         zip(cells, joined_cells, strict=True))
+                 and operation.callee is callee and operation.arguments is arguments
+                 and operation.result is result and consumer.operation is operation
+                 and phase.current[0] is phase.active and phase.result[0] is operation
+                 and ledger.inflight[0] is operation and ledger.failed[0] is False
+                 and operation.state[0] is True and operation.state[1] is False
+                 and operation.state[2] is False and operation.ended[0] is False
+                 and raw_cell[0] is result.unset
+                 and category_cell[0] is snapshot_cell[0] is envelope_cell[0] is None
+                 and cells.consumption[0] is None)
         raw = callee(arguments[0])
         raw_cell[0] = raw  # retain the actual C return before allocating/validating
         operation.state[1] = True
@@ -796,7 +814,7 @@ def _produce_directory_metadata(owner, consumer):
         raw = result.unset
         snapshot = None
         actual = None
-        origin = marker = payload = cells = None
+        origin = marker = payload = cells = joined_cells = None
         raw_cell = category_cell = snapshot_cell = envelope_cell = None
     raise ArtifactObservationError(owner) from None
 
