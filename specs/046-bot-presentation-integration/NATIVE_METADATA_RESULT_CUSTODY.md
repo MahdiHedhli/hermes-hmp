@@ -209,3 +209,22 @@ character delivery. The existing minimum-version60-second timeout remains open;
 no deadline extension or narrower fixture closes it. Host-local chat images are
 separate from this startup/character path and retain their own deployment and
 physical acceptance gates.
+
+## Single interruption checkpoint
+
+The same source `e597dfe` subsequently passed the full71-case selected metadata,
+memory and caller regression on each interpreter (71 each, no failures/errors/
+skips, unchanged source and rehashed evidence). A separate test-only single-
+interruption control `9808a93` then found pre-detach payload retention on both
+interpreters; post-detach controls reclaimed it. Each control suite remains one
+failure and one pass, not qualification. Corrected diagnostics reached actual
+producer/native/arm/injection checkpoints exactly once, with GC disabled and
+original debit/failed phase preserved; earlier missing-diagnostic refusals remain
+inconclusive. Isolated repair `779312e` rechecks original actor and pre-effect
+custody before a final conditional memory-only detach. Both before/after cases
+now pass on each interpreter (2 each), with payload reclaimed and no invented
+retirement/ACK marker. Lint and plugin-surface checks pass. The broader73-case
+repair regression is running serially; independent repair review, wrong-actor/
+repeated-interruption coverage, actual-site integration and physical/runtime
+qualification remain open. This is not a completed image-delivery feature.
+

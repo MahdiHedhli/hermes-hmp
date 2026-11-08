@@ -82,6 +82,22 @@ Test-only `6d3a8cd`, with production identical to `b6b8322`, ran one original
 timeout case with a private45-second stack sampler and unchanged60-second
 deadline. It passed at26.093 seconds before sampling, leaving an empty stack
 file. This supplies no timeout cause and does not erase the original failures.
+The same source `e597dfe` subsequently passed the full71-case selected metadata,
+memory and caller regression on each interpreter (71 each, no failures/errors/
+skips, unchanged source and rehashed evidence). A separate test-only single-
+interruption control `9808a93` then found pre-detach payload retention on both
+interpreters; post-detach controls reclaimed it. Each control suite remains one
+failure and one pass, not qualification. Corrected diagnostics reached actual
+producer/native/arm/injection checkpoints exactly once, with GC disabled and
+original debit/failed phase preserved; earlier missing-diagnostic refusals remain
+inconclusive. Isolated repair `779312e` rechecks original actor and pre-effect
+custody before a final conditional memory-only detach. Both before/after cases
+now pass on each interpreter (2 each), with payload reclaimed and no invented
+retirement/ACK marker. Lint and plugin-surface checks pass. The broader73-case
+repair regression is running serially; independent repair review, wrong-actor/
+repeated-interruption coverage, actual-site integration and physical/runtime
+qualification remain open. This is not a completed image-delivery feature.
+
 Separate caller source `e597dfe` has now passed13 memory cases and seven actual
 synthetic native caller cases on each supported interpreter (20 each), with
 zero failures/errors/skips, unchanged source and rehashed source/receipt/log/XML.
