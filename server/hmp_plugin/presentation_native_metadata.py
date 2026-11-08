@@ -126,6 +126,7 @@ def _resource_tail(owner, resource):
         owner, resource.registration, resource.held_walk, resource.descriptor,
         resource.arguments[0] if resource.site[0] == 3 else None)
     _require(actual.metadata is resource.metadata and actual.site is resource.site
+             and actual.variant is resource.variant
              and actual.ordinal is resource.ordinal and actual.descriptor is resource.descriptor
              and all(before is after for before, after in
                      zip(resource.arguments, actual.arguments, strict=True)))
@@ -470,6 +471,7 @@ def _latched_directory_resource_tail(owner, consumer):
              and metadata.progress[1] is consumer
              and type(resource.ordinal) is int
              and metadata.definitions[resource.ordinal] is resource.site
+             and metadata.variants[resource.ordinal] is resource.variant
              and type(resource.site) is tuple and len(resource.site) == 3
              and type(resource.site[0]) is int and resource.site[0] == 4
              and type(resource.site[1]) is str and resource.site[1] == 'directory'

@@ -953,6 +953,18 @@ def _native_walk_scope(owner, registration):
     return _native_scope_current(owner, registration).scope
 
 
+class _NativeDeclaredMetadataSite(NamedTuple):
+    """Closed original row binding DATA; never a selectable effect or policy."""
+    owner: object
+    walk: _NativeDeclaredWalk
+    expected: ExpectedArtifact
+    site: tuple
+    ordinal: int
+
+    def __repr__(self):
+        return '<NativeDeclaredMetadataSite unqualified row DATA redacted>'
+
+
 class _NativeDeclaredMetadataPlan(NamedTuple):
     """Original per-file site allocation; resource binding and ACK still required."""
     owner: object
@@ -960,6 +972,7 @@ class _NativeDeclaredMetadataPlan(NamedTuple):
     walk: _NativeDeclaredWalk
     expected: ExpectedArtifact
     definitions: tuple
+    variants: tuple
     progress: list
 
     def __repr__(self):
@@ -992,8 +1005,37 @@ def _prepare_declared_metadata_plan(owner, registration, walk):
     definitions += tuple(site for index in range(len(walk.components) - 1)
                          for site in ((4, 'directory_after_hash', index),
                                       (3, 'directory_after_hash', index)))
+    variants = tuple(_NativeDeclaredMetadataSite(owner, walk, walk.expected, site, ordinal)
+                     for ordinal, site in enumerate(definitions))
     return _NativeDeclaredMetadataPlan(owner, walk.scope, walk, walk.expected,
-                                       definitions, [0, None])
+                                       definitions, variants, [0, None])
+
+
+def _native_declared_metadata_site_tail(owner, metadata, ordinal):
+    """Validate one original row binding; this supplies no lineage/admission."""
+    _require(type(metadata) is _NativeDeclaredMetadataPlan and metadata.owner is owner
+             and type(metadata.walk) is _NativeDeclaredWalk
+             and metadata.walk.owner is owner and metadata.expected is metadata.walk.expected
+             and type(metadata.definitions) is tuple and type(metadata.variants) is tuple
+             and len(metadata.variants) == len(metadata.definitions)
+             and type(ordinal) is int and 0 <= ordinal < len(metadata.definitions))
+    variant, site = metadata.variants[ordinal], metadata.definitions[ordinal]
+    _require(type(variant) is _NativeDeclaredMetadataSite
+             and variant.owner is owner and variant.walk is metadata.walk
+             and variant.expected is metadata.expected and variant.site is site
+             and type(variant.ordinal) is int and variant.ordinal == ordinal
+             and type(site) is tuple and len(site) == 3
+             and type(site[0]) is int and type(site[1]) is str and type(site[2]) is int
+             and type(metadata.walk.components) is tuple
+             and 0 <= site[2] < len(metadata.walk.components))
+    leaf = len(metadata.walk.components) - 1
+    _require((site[1] == 'directory' and site[0] == 4 and site[2] < leaf)
+             or (site[1] == 'leaf_before' and site[0] == 3 and site[2] == leaf)
+             or (site[1] == 'leaf_opened' and site[0] == 4 and site[2] == leaf)
+             or (site[1] == 'leaf_after_read' and site[0] in (3, 4) and site[2] == leaf)
+             or (site[1] == 'directory_after_hash' and site[0] in (3, 4)
+                 and site[2] < leaf))
+    return variant
 
 
 def _native_declared_metadata_cohort_tail(owner, registration, held):
@@ -1019,6 +1061,7 @@ def _native_declared_metadata_cohort_tail(owner, registration, held):
              and type(metadata.progress) is list and len(metadata.progress) == 2
              and type(metadata.progress[0]) is int
              and 0 <= metadata.progress[0] < len(metadata.definitions))
+    _native_declared_metadata_site_tail(owner, metadata, metadata.progress[0])
     return metadata
 
 
@@ -1075,6 +1118,7 @@ class _NativeMetadataResource(NamedTuple):
     held_walk: tuple
     metadata: _NativeDeclaredMetadataPlan
     site: tuple
+    variant: _NativeDeclaredMetadataSite
     ordinal: int
     descriptor: object
     arguments: tuple
@@ -1088,6 +1132,7 @@ def _prepare_native_metadata_resource(owner, registration, held, descriptor, nam
     metadata = _native_declared_metadata_plan_tail(owner, registration, held)
     ordinal = metadata.progress[0]
     site = metadata.definitions[ordinal]
+    variant = _native_declared_metadata_site_tail(owner, metadata, ordinal)
     _require(type(site) is tuple and len(site) == 3 and type(site[0]) is int
              and site[0] in (3, 4) and type(site[1]) is str and type(site[2]) is int)
     walk, operation, component = held[0], site[0], site[2]
@@ -1103,8 +1148,9 @@ def _prepare_native_metadata_resource(owner, registration, held, descriptor, nam
         _native_metadata_component_tail(owner, registration, walk, descriptor, component - 1)
         arguments = (name, None if descriptor is None else descriptor.fd)
     _require(_native_declared_metadata_plan_tail(owner, registration, held) is metadata
-             and metadata.progress[0] is ordinal and metadata.definitions[ordinal] is site)
-    return _NativeMetadataResource(owner, registration, held, metadata, site, ordinal,
+             and metadata.progress[0] is ordinal and metadata.definitions[ordinal] is site
+             and _native_declared_metadata_site_tail(owner, metadata, ordinal) is variant)
+    return _NativeMetadataResource(owner, registration, held, metadata, site, variant, ordinal,
                                    descriptor, arguments)
 
 
