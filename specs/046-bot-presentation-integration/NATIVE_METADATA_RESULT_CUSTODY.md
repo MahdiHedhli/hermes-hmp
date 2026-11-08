@@ -47,34 +47,31 @@ All owned raw/envelope/consumption paths must pass through the one detachable
 link. Current marker lookup is not independent provenance. Capsule custody must
 never authorize result consumption, ACK, renewed permission or native close.
 
-Implementation has started in isolated candidate `b6b8322`. Its retained
-`_MetadataResult` now keeps the raw/category/snapshot/envelope cells behind the
-payload link, and `_DirectoryConsumer.consumption` resolves through that same
-payload rather than retaining a separate raw-bearing list. The preparation
-factory exposes the actual operation/marker/payload before native effects.
-Compatibility accessors are DATA only: following their current links cannot
-establish a producer receipt or independent caller custody. The legacy preparation
-wrapper does not retain those original factory returns across native work.
+Implementation has started in isolated candidates. `b6b8322` moved retained
+raw/category/snapshot/envelope cells and consumer consumption behind the payload
+link; its factory exposes the actual operation/marker/payload before effects.
+The legacy preparation wrapper does not retain those factory returns across
+native work. Compatibility lookups remain DATA, never independent custody.
 
-The memory-only component has eight focused checks passing on each interpreter,
-including an injected interruption after detachment, callback-bearing weakref
-refusal and GC-disabled reclamation of a synthetic owned graph. These checks do
-not establish reclamation in the actual metadata pipeline. The 58-case migrated
-metadata/component regression is running with immutable source/log/XML binding;
-three failures are observed in its still-live current lane; no final count or
-passing qualification is claimed. The fixed caller and its ended-call failure cleanup
-are still missing, so the original lost-return defect remains open.
+Its58-case current suite finished55 passing/3 failing, no errors/skips, unchanged
+source. The failures are original60-second child timeouts, not a diagnosed cause;
+its floor lane did not start. All failed evidence is preserved. Test-only
+`6d3a8cd` retained the same production and deadline and passed one original case
+at26.093 seconds, before its45-second sampler. Its empty stack establishes no
+cause and does not close the original failures.
 
-Read-only review found two additional gaps in `b6b8322`: the state type fence
-preceded the weakref C return, allowing a later list equality to call a foreign
-`__eq__`, and the compatibility accessor lacked a final exact-cell fence.
-Separate candidates through `1dba397` add identity-only clear-state checks, post-weakref
-shape/type closure, captured-cell identity/shape revalidation, pre-C held-cell
-capture and an immediate raw-return store. Three new
-source-line/actual-marker-return fault cases are authored but unrun while the original serial suite
-continues unchanged. These are source-line injections, not evidence that every
-slot wrapper emits a C-profile event. The review findings remain unresolved
-qualification gates until the repair and actual caller are causally verified.
+Read-only review identified state/equality and cell-identity ordering gaps.
+Successor `963b0a6` closes those reviewed gaps, captures producer cells before C,
+stores its actual raw return immediately and rejoins lifecycle/material/native/
+budget history after custody checks. Eleven memory cases and four fixed-producer
+cases pass on each interpreter, with exact source/receipt/log/XML rehashed. The
+producer cases include activation retirement after the final custody helper,
+zero observed callee c_call events and a normal-case counter calibration. A
+profile event is not a kernel-entry receipt. Memory cases include actual final
+marker-return replacement and GC-disabled synthetic owned-graph reclamation.
+These are focused passes; the full62-case serial selection is running with no
+result claimed. The actual fixed caller and ended-call failure retirement are
+still absent, so the original lost-return defect remains open.
 
 This repair is not accepted as complete. Required evidence includes the entire retained-root reference graph, coherent copy/foreign-link
 refusal, original-actor and revoked-lifetime retirement, interrupted detach,

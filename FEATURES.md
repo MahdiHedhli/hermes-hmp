@@ -57,25 +57,31 @@ exact private stage evidence rehashed. Those failures remain failures. Producer
 finally alone does not establish caller receipt; current stored rows cannot be
 adopted as returned receipts. The uninstalled candidate remains unqualified.
 
-Directory custody migration has begun in isolated source `b6b8322`: retained
-result/consumer raw-bearing cells now sit behind one detachable payload link,
-and a factory returns actual pre-effect operation/marker/payload references.
-Eight memory-only checks passed on each supported interpreter, including an
-interruption after detach and GC-disabled synthetic graph reclamation. These
-observed focused outputs do not qualify the actual native caller. Its bound
-58-case current-version regression is still running with three failures already
-observed; no final count or passing qualification is claimed. The floor lane
-has not started. This failed-progress candidate is preserved unchanged.
+Directory custody migration `b6b8322` moved retained result/consumer raw-bearing
+cells behind one detachable payload link. Its 58-case current-version regression
+finished55 passing/3 failing, with no errors/skips and unchanged source. All
+three failures reached the original60-second child deadline; no cause is yet
+established. The failed source/receipt/log/XML evidence was rehashed and retained;
+that candidate is not qualified and its floor lane did not start.
 
-Read-only review found post-weakref state/equality and captured-cell closure gaps.
-Separate successor `1dba397` uses identity-only state checks, closes the reported
-last-marker ordering gap, captures actual cells before the native call, stores
-its raw return immediately and rejoins held cells after ACTIVE closure. Focused
-lint passes. New source-line/actual-return fault tests and strengthened private
-alias checks are authored but unrun while the original suite remains live.
-This is not a claim that every slot wrapper emits C-profile events. The actual
-fixed caller, lost-return/revoked-lifetime retirement and complete raw-reference
-proof remain open. No stored row may mint result/ACK or renewed-work authority.
+Successor `963b0a6` fixes reviewed state/equality and captured-cell ordering gaps,
+captures actual cells before C, stores the raw return immediately, and rejoins
+original lifecycle/material/native/budget state after custody callbacks. Its11
+memory checks passed on each supported interpreter, including actual marker-
+return cell replacement and GC-disabled synthetic reclamation. Its four fixed
+producer cases also passed on each version, including revocation after custody
+capture with zero observed callee c_call events and normal-case calibration.
+These events are not kernel-entry receipts. Source/receipt/log/XML bindings were
+rehashed; these are focused component/producer passes only. The full62-case
+current/floor selection has now started serially; no result is claimed yet.
+
+Test-only `6d3a8cd`, with production identical to `b6b8322`, ran one original
+timeout case with a private45-second stack sampler and unchanged60-second
+deadline. It passed at26.093 seconds before sampling, leaving an empty stack
+file. This supplies no timeout cause and does not erase the original failures.
+Actual fixed-caller lost-return/revoked-lifetime retirement, the full retained-
+reference proof and remaining caller/site migrations stay open. No stored row
+may mint result/ACK or renewed-work authority; no prototype is installed.
 The [caller and repair contract](https://github.com/MahdiHedhli/hermes-hmp/blob/feat/startup-bytecode-headers-20261107/specs/046-bot-presentation-integration/NATIVE_METADATA_RESULT_CUSTODY.md)
 and dated39-site inventory document the local work. Caller integration, all
 metadata/tree/link/missing-stat sites, six operations plus enumeration, original
