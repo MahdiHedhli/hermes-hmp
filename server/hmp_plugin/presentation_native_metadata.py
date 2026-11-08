@@ -195,13 +195,14 @@ def _directory_material_tail(owner, consumer):
     return consumer
 
 
-def _unused_directory_intent_tail(owner, operation):
-    """Original unused cells/budget before binding this fixed consumer."""
+def _unused_directory_cells_tail(owner, operation):
+    """Untouched original intent cells only; caller proves resource/consumer joins."""
     _require(type(operation) is _MetadataOperation and operation.owner is owner
              and type(operation.result) is _MetadataResult
              and type(operation.operation) is int and operation.operation == 4)
     resource, result = operation.resource, operation.result
-    _resource_tail(owner, resource)
+    _require(type(resource) is _NativeMetadataResource
+             and type(resource.registration) is _NativeScopeRegistration)
     registration = resource.registration
     ledger, phase = registration.native_ledger, registration.native_phase
     _require(operation.registration is registration and operation.ledger is ledger
@@ -230,10 +231,28 @@ def _unused_directory_intent_tail(owner, operation):
              and type(result.raw) is list and len(result.raw) == 1
              and result.raw[0] is result.unset
              and all(type(cell) is list and len(cell) == 1 and cell[0] is None
-                     for cell in (result.consumer, result.category, result.snapshot,
+                     for cell in (result.category, result.snapshot,
                                   result.acknowledged, result.envelope))
-             and phase.current[0] is phase.idle and phase.result[0] is None
-             and ledger.inflight[0] is None and ledger.failed[0] is False)
+             and type(phase.current) is list and len(phase.current) == 1
+             and phase.current[0] is phase.idle
+             and type(phase.result) is list and len(phase.result) == 1
+             and phase.result[0] is None
+             and type(ledger.inflight) is list and len(ledger.inflight) == 1
+             and ledger.inflight[0] is None
+             and type(ledger.failed) is list and len(ledger.failed) == 1
+             and ledger.failed[0] is False
+             and type(ledger.failure) is list and len(ledger.failure) == 1
+             and ledger.failure[0] is None)
+    return result
+
+
+def _unused_directory_intent_tail(owner, operation):
+    """Original unclaimed preparation input; no consumer can renew it."""
+    _require(type(operation) is _MetadataOperation)
+    _resource_tail(owner, operation.resource)
+    result = _unused_directory_cells_tail(owner, operation)
+    _require(type(result.consumer) is list and len(result.consumer) == 1
+             and result.consumer[0] is None)
     return result
 
 
@@ -425,3 +444,39 @@ def _active_directory_operation_tail(owner, consumer):
              and type(consumer.commit) is list and len(consumer.commit) == 1
              and consumer.commit[0] is None)
     return operation
+
+
+def _latch_directory_consumer(owner, consumer):
+    """Bind the actual prepared consumer to its empty original metadata site.
+
+    This is a one-use plan latch, not actor admission, debit, native work or ACK.
+    If final closure refuses after publication, leave the original slot visible;
+    never erase a foreign replacement or silently retry this publication.
+    """
+    _require(type(consumer) is _DirectoryConsumer and consumer.owner is owner
+             and type(consumer.operation) is _MetadataOperation
+             and consumer.operation.resource is consumer.resource)
+    operation = consumer.operation
+    resource = _resource_tail(owner, consumer.resource)
+    result = _unused_directory_cells_tail(owner, operation)
+    _require(operation.result is result
+             and type(result.consumer) is list and len(result.consumer) == 1
+             and result.consumer[0] is consumer
+             and type(consumer.consumption) is list and len(consumer.consumption) == 1
+             and consumer.consumption[0] is None
+             and type(consumer.commit) is list and len(consumer.commit) == 1
+             and consumer.commit[0] is None
+             and _directory_material_tail(owner, consumer) is consumer)
+    _native_read_lifecycle_tail(owner, resource.registration, consumer.parents)
+    ledger = operation.ledger
+    _require(type(ledger.failure) is list and len(ledger.failure) == 1
+             and ledger.failure[0] is None
+             and _resource_tail(owner, resource) is resource
+             and _unused_directory_cells_tail(owner, operation) is result
+             and result.consumer[0] is consumer
+             and _directory_material_tail(owner, consumer) is consumer)
+    resource.metadata.progress[1] = consumer
+    _require(_latched_directory_resource_tail(owner, consumer) is resource
+             and _unused_directory_cells_tail(owner, operation) is result
+             and result.consumer[0] is consumer)
+    return consumer

@@ -91,7 +91,11 @@ def prepare(frame):
         else:raise AssertionError('directory consumer rebound')
         assert result.consumer[0] is consumer
         if case!='normal':
-            progress[1]=consumer
+            assert m._latch_directory_consumer(owner,consumer) is consumer
+            assert progress[1] is consumer
+            try:m._latch_directory_consumer(owner,consumer)
+            except a.ArtifactObservationError:pass
+            else:raise AssertionError('metadata consumer latched twice')
             candidate_consumer=consumer
             if case=='copied_consumer':candidate_consumer=consumer._replace()
             elif case=='wrong_pending':progress[1]=consumer._replace()

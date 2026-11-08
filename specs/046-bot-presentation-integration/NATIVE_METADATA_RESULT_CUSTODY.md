@@ -165,3 +165,19 @@ Dedicated cases cover unused intent, valid synthetic state, wrong phase, sticky
 ledger failure, missing debit and copied phase result. Static checks passed;
 execution and independent review are pending. Literal producer, pending result
 retention, fixed policy consumption, ACK and migration remain incomplete.
+
+## Original consumer site latch
+
+The fixed directory consumer can now be bound exactly once to its original
+metadata progress slot through a dedicated unused-intent path. It rejoins the
+original resource, result/consumer backlinks, untouched work/budget/phase cells,
+material and lifetime closure before publication, then rejoins the actual
+latched cohort afterward. Repeated binding is refused. If post-publication
+closure fails, the slot remains observable rather than being cleared/replayed.
+The separate pre-consumer wrapper still requires an empty result-consumer cell.
+
+Composed guard fixtures now invoke this latch instead of assigning that slot
+directly. Existing synthetic ACTIVE setup remains explicitly guard-only. No
+actor sampling, debit, native fstat or ACK occurs here; producer, abandonment
+and full end-to-end qualification remain required. Static checks pass; dedicated
+execution and finite independent review are pending.
