@@ -1,3 +1,16 @@
+# November 7: original cache decoder machinery
+
+The interpreter now retains actual frozen cache-decoder function/code, native
+marshal.loads, actual CodeType and native filename fixer. Changed module/alias/
+function/code/foreign metadata refuses before dispatch.17 current and17 actual
+Python3.11 child cases pass with source unchanged; bounded source review accepted.
+Native parity includes accepted trailing data, malformed/non-code refusal and
+nested filename mutation without payload execution. Rebase preserved every tested
+source hash. Shared-startup regressions are active/pending for this new change.
+Owned cache IO, selection/decode/fixer effects and operational admission remain
+unfinished. No bot-character/local-media delivery or deployment is claimed.
+See [contract](specs/046-bot-presentation-integration/RUNTIME_CACHE_INPUT_CONTRACT.md).
+
 # November 7: owned source compilation under qualification
 
 The original interpreter now retains actual SourceLoader source_to_code metadata,
