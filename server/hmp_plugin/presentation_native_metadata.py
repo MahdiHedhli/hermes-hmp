@@ -1,10 +1,14 @@
 """Unwired original metadata intent/result preparation; no syscall dispatcher."""
 from __future__ import annotations
 
+import sys
+from types import FunctionType, ModuleType
 from typing import NamedTuple
 
 from .presentation_startup_artifacts import (
+    StartupArtifactOwner,
     _native_declared_metadata_plan_tail,
+    _native_read_lifecycle_tail,
     _native_work_origin_tail,
     _NativeMetadataResource,
     _prepare_native_metadata_resource,
@@ -111,3 +115,137 @@ def _prepare_metadata_operation(owner, resource):
              and ledger.inflight[0] is None and ledger.failed[0] is False
              and native.operations[operation] is callee)
     return intent
+
+
+class _DirectoryConsumer(NamedTuple):
+    """Fixed source/cache directory policy preparation; not an ACK."""
+    owner: object
+    operation: _MetadataOperation
+    resource: _NativeMetadataResource
+    parents: tuple
+    owner_type: type
+    material: object
+    material_code: object
+    material_module: ModuleType
+    file_function: object
+    file_code: object
+    file_module: ModuleType
+    consumption: list
+    commit: list
+
+    def __repr__(self):
+        return '<DirectoryConsumer unqualified fixed policy redacted>'
+
+
+def _unused_directory_intent_tail(owner, operation):
+    """Original unused cells/budget before binding this fixed consumer."""
+    _require(type(operation) is _MetadataOperation and operation.owner is owner
+             and type(operation.result) is _MetadataResult
+             and type(operation.operation) is int and operation.operation == 4)
+    resource, result = operation.resource, operation.result
+    _resource_tail(owner, resource)
+    registration = resource.registration
+    ledger, phase = registration.native_ledger, registration.native_phase
+    _require(operation.registration is registration and operation.ledger is ledger
+             and operation.phase is phase and operation.native is registration.native_origin
+             and operation.context is registration.context
+             and operation.callee is operation.native.operations[4]
+             and operation.arguments is resource.arguments
+             and type(operation.budget) is tuple and len(operation.budget) == 4
+             and ledger.counts is operation.budget[0]
+             and type(ledger.counts) is list and len(ledger.counts) == 2
+             and type(ledger.counts[0]) is int and type(ledger.counts[1]) is int
+             and ledger.counts[0] is operation.budget[1]
+             and ledger.counts[1] is operation.budget[2]
+             and type(operation.budget[3]) is int
+             and operation.budget[3] == ledger.counts[0] + 1
+             and 0 <= ledger.counts[0] < 1048576
+             and 0 <= ledger.counts[1] < 1048576 - ledger.counts[0]
+             and type(operation.attempts) is list and ledger.attempts is operation.attempts
+             and type(operation.index) is int and operation.index == len(operation.attempts)
+             and type(operation.state) is list and len(operation.state) == 3
+             and all(type(value) is bool and value is False for value in operation.state)
+             and type(operation.ended) is list and len(operation.ended) == 1
+             and operation.ended[0] is False
+             and type(result.attempt) is list and len(result.attempt) == 1
+             and result.attempt[0] is operation
+             and type(result.raw) is list and len(result.raw) == 1
+             and result.raw[0] is result.unset
+             and all(type(cell) is list and len(cell) == 1 and cell[0] is None
+                     for cell in (result.consumer, result.category, result.snapshot,
+                                  result.acknowledged, result.envelope))
+             and phase.current[0] is phase.idle and phase.result[0] is None
+             and ledger.inflight[0] is None and ledger.failed[0] is False)
+    return result
+
+
+def _prepare_directory_consumer(owner, operation):
+    """Bind one actual unused intent to the fixed runtime/cache directory policy.
+
+    Other owner/configuration/tree policies need their own reviewed consumers.
+    Nothing here publishes ACTIVE, debits allowance or invokes native work.
+    """
+    _require(type(operation) is _MetadataOperation and operation.owner is owner
+             and type(operation.operation) is int and operation.operation == 4
+             and type(operation.result) is _MetadataResult)
+    resource, result = operation.resource, operation.result
+    _resource_tail(owner, resource)
+    _require(resource.site[1] == 'directory'
+             and operation.registration is resource.registration
+             and type(operation.state) is list and len(operation.state) == 3
+             and all(type(value) is bool and value is False for value in operation.state)
+             and type(operation.ended) is list and len(operation.ended) == 1
+             and operation.ended[0] is False
+             and type(result.attempt) is list and len(result.attempt) == 1
+             and result.attempt[0] is operation
+             and type(result.consumer) is list and len(result.consumer) == 1
+             and result.consumer[0] is None and type(result.raw) is list
+             and len(result.raw) == 1 and result.raw[0] is result.unset
+             and all(type(cell) is list and len(cell) == 1 and cell[0] is None
+                     for cell in (result.category, result.snapshot,
+                                  result.acknowledged, result.envelope)))
+    _require(_unused_directory_intent_tail(owner, operation) is result)
+    scope = resource.registration.scope
+    origin = scope.material_origin
+    _require(type(origin) is tuple and len(origin) == 6 and type(origin[3]) is type
+             and type(owner) is origin[3])
+    # The scope's original class/namespace are retained authority. Registry
+    # lookups below only rejoin them; they never nominate a replacement type.
+    kind = origin[3]
+    class_name = kind.__name__
+    _require(type(class_name) is str)
+    if class_name == 'RuntimeSourceReadOwner':
+        module_name = 'hmp_startup.runtime_reader'
+    else:
+        _require(class_name == 'DeclaredCacheReadOwner')
+        module_name = 'hmp_startup.cache_reader'
+    _require(type(origin) is tuple and len(origin) == 6 and origin[3] is kind
+             and type(origin[0]) is FunctionType and origin[0].__code__ is origin[1]
+             and type(origin[4]) is FunctionType and origin[4].__code__ is origin[5]
+             and type(sys.modules) is dict)
+    module = sys.modules.get(module_name)
+    file_module = sys.modules.get('hmp_plugin.presentation_startup_artifacts')
+    _require(type(file_module) is ModuleType and origin[4].__globals__ is vars(file_module)
+             and vars(StartupArtifactOwner).get('_file') is origin[4]
+             and type(module) is ModuleType and vars(module).get(class_name) is kind
+             and type(vars(module).get('__name__')) is str
+             and vars(module).get('__name__') == module_name
+             and type(kind.__module__) is str and kind.__module__ == module_name
+             and origin[0].__globals__ is vars(module)
+             and origin[2] is vars(module) and vars(kind).get('_material_guard') is origin[0]
+             and type(scope.parent) is tuple and len(scope.parent) == 6
+             and type(scope.parent[0]) is tuple and len(scope.parent[0]) == 3)
+    root = scope.parent[0]
+    parents = (scope.activation, scope.activation_scope, root, root[0], type(root[0]),
+               root[2], type(root[2]))
+    _native_read_lifecycle_tail(owner, resource.registration, parents)
+    consumer = _DirectoryConsumer(owner, operation, resource, parents, kind, origin[0],
+                                   origin[1], module, origin[4], origin[5], file_module,
+                                   [None], [None])
+    _require(_resource_tail(owner, resource) is resource
+             and operation.result is result and result.consumer[0] is None
+             and result.attempt[0] is operation and result.raw[0] is result.unset)
+    _native_read_lifecycle_tail(owner, resource.registration, parents)
+    _require(_unused_directory_intent_tail(owner, operation) is result)
+    result.consumer[0] = consumer
+    return consumer
