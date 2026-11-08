@@ -10,6 +10,7 @@ from .presentation_metadata_custody import (
     _capture_payload_origin,
     _directory_payload_cells,
     _marker_tail,
+    _origin_tail,
     _payload_state_is_clear,
     _PayloadOrigin,
 )
@@ -972,8 +973,8 @@ def _directory_ack_preparation_tail(owner, consumer, actual, commit):
     return commit
 
 
-def _acked_directory_commit_tail(owner, consumer, commit):
-    """Raw-retired original commit DATA; not admission to another operation."""
+def _acked_directory_history_tail(owner, consumer, commit):
+    """Raw-free ACK history closure; not admission or a returned-receipt proof."""
     _require(type(consumer) is _DirectoryConsumer and consumer.owner is owner
              and type(commit) is _DirectoryPolicyCommit and commit.owner is owner
              and commit.consumer is consumer and commit.operation is consumer.operation
@@ -1011,13 +1012,9 @@ def _acked_directory_commit_tail(owner, consumer, commit):
              and result.attempt[0] is operation
              and type(result.consumer) is list and len(result.consumer) == 1
              and result.consumer[0] is consumer
-             and all(type(cell) is list and len(cell) == 1 for cell in
-                     (result.raw, result.category, result.snapshot,
-                      result.acknowledged, result.envelope, consumer.consumption, consumer.commit))
-             and result.raw[0] is result.unset
-             and result.category[0] is result.snapshot[0] is result.envelope[0] is None
+             and type(result.acknowledged) is list and len(result.acknowledged) == 1
+             and type(consumer.commit) is list and len(consumer.commit) == 1
              and result.acknowledged[0] is consumer.commit[0] is commit
-             and consumer.consumption[0] is commit
              and type(operation.state) is list and len(operation.state) == 3
              and operation.state[0] is True and operation.state[1] is True
              and operation.state[2] is False
@@ -1055,6 +1052,58 @@ def _acked_directory_commit_tail(owner, consumer, commit):
              and _directory_material_tail(owner, consumer) is consumer)
     _native_read_lifecycle_tail(owner, registration, consumer.parents)
     _native_work_origin_tail(owner, registration, operation.native)
+    return commit
+
+
+
+def _acked_directory_commit_tail(owner, consumer, commit):
+    """Original closed ACK with its still-attached, already cleared payload."""
+    _acked_directory_history_tail(owner, consumer, commit)
+    result = consumer.operation.result
+    _require(all(type(cell) is list and len(cell) == 1 for cell in
+                 (result.raw, result.category, result.snapshot,
+                  result.envelope, consumer.consumption))
+             and result.raw[0] is result.unset
+             and result.category[0] is result.snapshot[0] is result.envelope[0] is None
+             and consumer.consumption[0] is commit)
+    # Payload getters include descriptor/weakref joins; close live history again.
+    return _acked_directory_history_tail(owner, consumer, commit)
+
+
+def _retired_directory_commit_tail(owner, consumer, commit, origin, marker, record):
+    """Closed ACK plus actual caller-held retirement DATA, never a native ACK.
+
+    The fixed caller must hold the actual commit and retirement return, clear its
+    payload/cell/envelope aliases, then use this tail before any further work.
+    Neither a current record lookup nor constructing matching DATA is a receipt.
+    """
+    _acked_directory_history_tail(owner, consumer, commit)
+    _origin_tail(origin)
+    operation = consumer.operation
+    result = operation.result
+    _require(type(marker) is origin.marker_type and marker.owner is owner
+             and marker.operation is operation and marker.consumer is None
+             and marker.origin is origin and result.custody_origin is origin
+             and type(marker.owner_link) is list and len(marker.owner_link) == 1
+             and result.custody_link is marker.owner_link and marker.owner_link[0] is None
+             and type(marker.marker_slot) is list and len(marker.marker_slot) == 1
+             and result.custody_slot is marker.marker_slot and marker.marker_slot[0] is marker
+             and type(marker.state) is list and len(marker.state) == 3
+             and marker.state[0] is True and marker.state[1] is True and marker.state[2] is False
+             and type(record) is origin.record_type and record.marker is marker
+             and record.detached is True and record.unmatched_link is False
+             and type(marker.reference) is origin.reference_type
+             and origin.reference_callback.__get__(marker.reference, origin.reference_type) is None
+             and origin.reference_call(marker.reference) is None)
+    # Disposal may have run finalizers; no payload reads or weakref calls after
+    # this live material/registration/lifecycle/native/budget/history closure.
+    _acked_directory_history_tail(owner, consumer, commit)
+    _require(result.custody_origin is origin and result.custody_link is marker.owner_link
+             and marker.owner_link[0] is None and result.custody_slot is marker.marker_slot
+             and marker.marker_slot[0] is marker and marker.state[0] is True
+             and marker.state[1] is True and marker.state[2] is False
+             and record.marker is marker and record.detached is True
+             and record.unmatched_link is False)
     return commit
 
 
