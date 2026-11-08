@@ -375,6 +375,16 @@ def _interpreter_current(origin):
     return origin
 
 
+class _NativeFileLineage(NamedTuple):
+    """Original entry allocation only; no operation, receipt or fallback grant."""
+    entry: object
+    native: _NativeIOOrigin
+    context: tuple
+
+    def __repr__(self):
+        return "<OriginalNativeFileLineage unimplemented-effects redacted>"
+
+
 class _Invocation(NamedTuple):
     context: tuple
     main: ModuleType
@@ -385,6 +395,7 @@ class _Invocation(NamedTuple):
     original: list
     original_arguments: tuple
     interpreter: _InterpreterOrigin
+    native_files: _NativeFileLineage
 
     def __repr__(self):
         return "<GatewayEntryInvocation redacted>"
@@ -444,9 +455,11 @@ class GatewayEntryOwner:
                      and len(file) <= 4096 and "\0" not in file)
             context = (os.getpid(), os.geteuid(), threading.get_ident())
             _require(all(type(v) is int for v in context))
+            interpreter = _interpreter()
+            native_files = _NativeFileLineage(owner, interpreter.native_io, context)
             s = _Invocation(context, main, file, vars(main).get("__spec__"),
                             sys.argv, _arguments(sys.argv),
-                            sys.orig_argv, _arguments(sys.orig_argv), _interpreter())
+                            sys.orig_argv, _arguments(sys.orig_argv), interpreter, native_files)
             owner._scope = s
             cell = (owner, s)
             _CELL = cell
@@ -521,9 +534,18 @@ class GatewayEntryOwner:
                  and data.native_root is activation_scope.root
                  and data.environment is activation_scope.environment
                  and type(s.interpreter) is _InterpreterOrigin
+                 and type(s.native_files) is _NativeFileLineage
+                 and s.native_files.entry is self
+                 and s.native_files.native is s.interpreter.native_io
+                 and s.native_files.context is s.context
                  and type(s.interpreter.data) is InterpreterStartupData
                  and data.interpreter is s.interpreter.data)
         return s, cell, started
+
+    def _native_file_lineage(self):
+        """Return original allocation DATA, never discover or recreate an owner."""
+        binding = GatewayEntryOwner._retained_binding(self)
+        return binding[0].native_files
 
     def retained_data(self):
         """Original immutable observations, not current imports or runtime permission."""

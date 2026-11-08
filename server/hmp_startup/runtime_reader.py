@@ -10,6 +10,7 @@ from types import BuiltinFunctionType, MethodDescriptorType, ModuleType
 from hmp_plugin.presentation_startup_artifacts import StartupArtifactOwner, _Scope
 
 from .gateway_continuation import GatewayContinuationOwner
+from .gateway_entry import GatewayEntryOwner
 
 _OWNER = _ROOT = _CELL = _READY = None
 
@@ -103,9 +104,11 @@ class RuntimeSourceReadOwner:
                      and _sha_current(hash_origin) is hash_origin)
             digest_context = SourceDigestContext(root[2].entry, root[2].entry_binding,
                                                  root[2].entry_binding[0].interpreter,
-                                                 activation, [])
+                                                 activation, [],
+                                                 root[2].entry_binding[0].native_files)
             scope = _Scope(activation, root[2].io_scope.activation_scope, (expected,),
-                           context, [], reads=[], source_digest=digest_context)
+                           context, [], reads=[], source_digest=digest_context,
+                           native_files=digest_context.native_files)
             scope = scope._replace(parent=(root, selected, buffer,
                                           scope.records, scope.reads, hash_origin))
             owner._origin = owner._scope = scope
@@ -170,6 +173,8 @@ class RuntimeSourceReadOwner:
                  and s.source_digest.entry is root[2].entry
                  and s.source_digest.binding is root[2].entry_binding
                  and s.source_digest.activation is s.activation
+                 and s.native_files is s.source_digest.native_files
+                 and s.native_files is GatewayEntryOwner._native_file_lineage(root[2].entry)
                  and type(selected.source.receipt.sha256) is str
                  and type(selected.source.receipt.identity) is tuple
                  and len(selected.source.receipt.identity) == 9

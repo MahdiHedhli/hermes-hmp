@@ -21,6 +21,7 @@ class SourceDigestContext(NamedTuple):
     interpreter: object
     activation: object
     effects: list
+    native_files: object
 
     def __repr__(self):
         return '<OriginalSourceDigestContext redacted>'
@@ -78,7 +79,8 @@ def retain(entry, activation):
     _require(type(binding) is tuple and len(binding) == 3
              and all(a is b for a, b in zip(binding, current, strict=True))
              and binding[2][3] is activation)
-    return SourceDigestContext(entry, binding, binding[0].interpreter, activation, [])
+    return SourceDigestContext(entry, binding, binding[0].interpreter, activation, [],
+                               GatewayEntryOwner._native_file_lineage(entry))
 
 
 def current(context, scope):
@@ -95,6 +97,8 @@ def current(context, scope):
     _require(all(a is b for a, b in zip(context.binding, actual, strict=True))
              and context.binding[0].interpreter is context.interpreter
              and context.binding[2][3] is context.activation
+             and context.native_files is GatewayEntryOwner._native_file_lineage(context.entry)
+             and scope.native_files is context.native_files
              and _interpreter_current(context.interpreter) is context.interpreter)
     return context
 

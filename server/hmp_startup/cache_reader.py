@@ -15,6 +15,7 @@ from hmp_plugin.presentation_startup_artifacts import (
 
 from .cache_selection import BoundCacheInputAttempt, selected_cache_input_attempts
 from .gateway_continuation import GatewayContinuationOwner, _ContinuationSource
+from .gateway_entry import GatewayEntryOwner
 from .runtime_reader import _context, _sha_current, _sha_origin
 
 _OWNER = _ROOT = _CELL = _READY = None
@@ -82,7 +83,8 @@ class DeclaredCacheReadOwner:
                      and owner._root_cell is partial and owner._buffer is buffer
                      and activation._cache_read_cell is partial)
             scope = _Scope(activation, parent[2].io_scope.activation_scope, (expected,),
-                           context, [], reads=[])
+                           context, [], reads=[],
+                           native_files=parent[2].entry_binding[0].native_files)
             scope = scope._replace(parent=(parent, selected, buffer, scope.records,
                                           scope.reads, hash_origin))
             owner._scope = owner._origin = scope
@@ -146,7 +148,8 @@ class DeclaredCacheReadOwner:
                  and type(self._bytes_read) is int and self._count_cell[2] is self._bytes_read
                  and 0 <= self._bytes_read <= s.expected[0].size
                  and len(buffer) <= s.expected[0].size)
-        _require(_sha_current(origin) is origin)
+        _require(s.native_files is GatewayEntryOwner._native_file_lineage(parent[2].entry)
+                 and _sha_current(origin) is origin)
         DeclaredCacheReadOwner._read_chain(self, s, full=self._ready is True)
         if self._ready is True:
             _require(type(_READY) is tuple and len(_READY) == 11

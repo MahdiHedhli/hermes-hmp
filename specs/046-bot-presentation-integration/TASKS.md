@@ -887,8 +887,8 @@ historical, not an alternative live authorization path or resolved incident.
 
 ### Original native file effects — pending source branches November 8
 
-- [ ] Qualify original-entry lineage across the running1,290-case regression.
-- [ ] Execute exact18 current/floor sanitizer cases; preserve diagnostic DATA
+- [x] Original-entry lineage5883690:1,290 configured startup cases passed on actual3.14.9, unchanged source, zero failures/errors/skips.
+- [x] Exact18 current and18 actual3.11.15 sanitizer cases passed on66f7897; preserve diagnostic DATA
       versus actual operation/kernel/authority distinctions.
 - [ ] Execute exact16 current/floor ledger cases; shape checks do not enforce
       transitions or qualify resource recovery.
@@ -898,3 +898,8 @@ historical, not an alternative live authorization path or resolved incident.
       shared attempt accounting and preallocated reserved cleanup custody.
 - [ ] Qualify actual temporary native returns, original result ACK, refusal and
       cleanup semantics before production presentation/runtime and device tests.
+
+See [native file effects contract](NATIVE_FILE_EFFECTS.md). The integrated original
+lineage and unwired diagnostic classifier do not implement the remaining full
+operation/consumer/cleanup/runtime/device requirements. Unpublished ledger and
+repaired scope registry remain separate pending source qualification.

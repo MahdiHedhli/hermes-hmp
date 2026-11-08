@@ -38,6 +38,8 @@ rows=selected_cache_input_attempts(continuation)
 index=next(i for i,row in enumerate(rows) if row.plan_row.source.path==str(dep_root/'__init__.py'))
 old_count=checked._fact_cell[2]._count_cell
 owner=RuntimeCacheProbeOwner.retain(continuation,index)
+assert owner._origin.native_files is continuation._source.entry_binding[0].native_files
+assert owner._origin.source_digest is None
 path=Path(rows[index].plan_row.location.path)
 if case in ('appearance','symlink'):
     path.parent.mkdir(mode=0o700)

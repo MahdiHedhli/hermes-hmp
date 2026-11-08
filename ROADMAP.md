@@ -10,13 +10,17 @@ remain preserved failure history. The fixture repair preserved production native
 alias and continuity checks. See
 [fixture migration and limits](specs/046-bot-presentation-integration/NATIVE_IO_FIXTURE_MIGRATION.md).
 
-Separate unpublished source branches add original-entry lineage, an unwired stat
-diagnostic sanitizer and shared ledger storage/shape checks. Their source reviews
-are bounded; they do not implement operation accounting or image delivery. The
-lineage's expected1,290-case regression is running;18-case current/floor sanitizer
-checks and16-case current/floor ledger checks are serialized behind it. No result
-is claimed for those pending runs. Full six-boundary dispatch, typed step/consumer
-claims and independently anchored reserved cleanup remain implementation tasks.
+Original-lineage source5883690 subsequently passed all1,290 configured startup
+cases across35 modules on actual3.14.9 in2,508.53 seconds: zero failures/errors/
+skips and unchanged source. Its10 actual3.11.15 selected cases retain their scope.
+Unwired stat classifier66f7897 passed18 cases on each actual3.14.9/3.11.15. Exact
+receipt/source/log/XML bindings were verified. These source increments are now
+integrated for review, without a claim of operational image delivery.
+
+Separate unpublished ledger/scope-registry candidates remain under serialized
+16-case and14-case current/floor qualification. Original step/consumer claims,
+all six fixed dispatch paths, shared accounting with reserved closes, independent
+cleanup, native service wiring and physical delivery remain implementation tasks.
 
 Source-level startup, cache and transport components do not yet establish an
 operational presentation service. Native listener/key ownership, complete runtime

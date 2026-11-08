@@ -1,17 +1,19 @@
-# November 8: next image prerequisites remain unpublished and unqualified
+# November 8: original lineage and stat diagnostics source checks passed
 
-Original file-lineage source has10 current and10 actual3.11.15 selected passes;
-its broader1,290-case regression is still running. Separate source66f7897 adds an
-unwired stat diagnostic sanitizer with bounded independent review and lint pass;
-18 current/floor cases are queued. Source1b47c95 adds original ledger storage and
-closed state-shape checks;16 current/floor cases are queued after that. These
-source changes are not in the public candidate below and are not installed.
+Original-lineage source5883690 passed all1,290 configured startup cases across35
+modules in2,508.53 seconds on actual3.14.9, zero failures/errors/skips and unchanged
+source. Selected lineage cases also have10 actual3.11.15 passes. Unwired stat
+sanitizer source66f7897 passed18 cases on actual3.14.9 and18 on actual3.11.15,
+zero failures/errors/skips and unchanged source. Receipt/source/log/XML bindings
+were verified. The sanitizer adds no IO, operation receipt or fallback authority.
 
-No upstream prerequisite was found for this integration. Remaining HMP work is
-the actual six fixed file-operation paths, typed original step/consumer claims,
-shared accounting with reserved closes, runtime/service wiring and physical
-character/image delivery. Letter avatars and host-local MEDIA text therefore
-remain known missing behavior; helper reviews are not delivered features.
+The review branch now integrates those source increments; these exact tests do
+not qualify subsequent untested code. Unpublished ledger1b47c95 and repaired
+scope-registry731e7ac remain in separate frozen test candidates. Their16-case
+and14-case current/floor checks are running or queued sequentially. Full six
+fixed file operations, typed step/consumer claims, quota/reserved cleanup, native
+service/runtime wiring and physical image delivery remain unfinished HMP work;
+no upstream prerequisite was established for it. No new source is installed.
 
 # November 8: repaired startup source regression passed
 

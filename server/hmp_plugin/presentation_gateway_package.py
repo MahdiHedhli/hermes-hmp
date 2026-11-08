@@ -316,7 +316,9 @@ class GatewayPackageOwner:
                 digest_context = retain(source_entry, activation)
             s = IoScope(activation, activation._scope, meta,
                         (os.getpid(), os.geteuid(), threading.get_ident()), [],
-                        reads=None if digest_context is None else [], source_digest=digest_context)
+                        reads=None if digest_context is None else [], source_digest=digest_context,
+                        native_files=(None if digest_context is None
+                                      else digest_context.native_files))
             owner._scope = owner._origin = s
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)

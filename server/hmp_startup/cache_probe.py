@@ -23,6 +23,7 @@ from .cache_candidates import PlannedCachePath
 from .cache_context import CacheInputData
 from .cache_selection import BoundCacheInputAttempt, selected_cache_input_attempts
 from .gateway_continuation import GatewayContinuationOwner, _ContinuationSource
+from .gateway_entry import GatewayEntryOwner
 from .runtime_files import RuntimePackage
 
 _OWNER = _ROOT = _CELL = _FACT = None
@@ -88,7 +89,8 @@ class RuntimeCacheProbeOwner:
                      and owner._root_cell is partial
                      and activation._runtime_cache_probe_cell is partial)
             scope = _Scope(activation, root[2].io_scope.activation_scope,
-                           (selected.plan_row.source,), context, [], parent=(root, selected))
+                           (selected.plan_row.source,), context, [], parent=(root, selected),
+                           native_files=root[2].entry_binding[0].native_files)
             cell = (owner, scope)
             runtime_root = (activation, owner, scope)
             owner._scope = owner._origin = scope
@@ -129,6 +131,7 @@ class RuntimeCacheProbeOwner:
                  and type(self._count_cell) is tuple and len(self._count_cell) == 3
                  and self._count_cell[0] is self and self._count_cell[1] is s
                  and type(self._count_cell[2]) is int and self._count_cell[2] == 0)
+        _require(s.native_files is GatewayEntryOwner._native_file_lineage(s.parent[0][2].entry))
         selected = s.parent[1]
         row = selected.plan_row
         _require(type(row.location) is PlannedCachePath and type(row.location.path) is str
