@@ -57,12 +57,25 @@ exact private stage evidence rehashed. Those failures remain failures. Producer
 finally alone does not establish caller receipt; current stored rows cannot be
 adopted as returned receipts. The uninstalled candidate remains unqualified.
 
-Ended-preparation/known-return cleanup source `b643f02` has finite review but its
-50-case descendant is unrun and does not solve lost return/revoked lifetime.
-An independently pre-C-held retirement capsule/weak-identity design has conditional
-review only: its full raw-reference graph, copies/foreign slots, interruption,
-original context, revoked lifetime and GC-disabled cleanup need implementation
-and proof. No raw-bearing current-row lookup may mint result/ACK authority.
+Directory custody migration has begun in isolated source `b6b8322`: retained
+result/consumer raw-bearing cells now sit behind one detachable payload link,
+and a factory returns actual pre-effect operation/marker/payload references.
+Eight memory-only checks passed on each supported interpreter, including an
+interruption after detach and GC-disabled synthetic graph reclamation. These
+observed focused outputs do not qualify the actual native caller. Its bound
+58-case current-version regression is still running with three failures already
+observed; no final count or passing qualification is claimed. The floor lane
+has not started. This failed-progress candidate is preserved unchanged.
+
+Read-only review found post-weakref state/equality and captured-cell closure gaps.
+Separate successor `1dba397` uses identity-only state checks, closes the reported
+last-marker ordering gap, captures actual cells before the native call, stores
+its raw return immediately and rejoins held cells after ACTIVE closure. Focused
+lint passes. New source-line/actual-return fault tests and strengthened private
+alias checks are authored but unrun while the original suite remains live.
+This is not a claim that every slot wrapper emits C-profile events. The actual
+fixed caller, lost-return/revoked-lifetime retirement and complete raw-reference
+proof remain open. No stored row may mint result/ACK or renewed-work authority.
 The [caller and repair contract](https://github.com/MahdiHedhli/hermes-hmp/blob/feat/startup-bytecode-headers-20261107/specs/046-bot-presentation-integration/NATIVE_METADATA_RESULT_CUSTODY.md)
 and dated39-site inventory document the local work. Caller integration, all
 metadata/tree/link/missing-stat sites, six operations plus enumeration, original

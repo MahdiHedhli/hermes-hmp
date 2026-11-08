@@ -61,15 +61,17 @@ including an injected interruption after detachment, callback-bearing weakref
 refusal and GC-disabled reclamation of a synthetic owned graph. These checks do
 not establish reclamation in the actual metadata pipeline. The 58-case migrated
 metadata/component regression is running with immutable source/log/XML binding;
-no result is claimed yet. The fixed caller and its ended-call failure cleanup
+three failures are observed in its still-live current lane; no final count or
+passing qualification is claimed. The fixed caller and its ended-call failure cleanup
 are still missing, so the original lost-return defect remains open.
 
 Read-only review found two additional gaps in `b6b8322`: the state type fence
 preceded the weakref C return, allowing a later list equality to call a foreign
 `__eq__`, and the compatibility accessor lacked a final exact-cell fence.
-Separate candidate `bba67d1` adds identity-only clear-state checks, post-weakref
-shape/type closure, and captured-cell identity/shape revalidation. Its two new
-source-line fault cases are authored but unrun while the original serial suite
+Separate candidates through `1dba397` add identity-only clear-state checks, post-weakref
+shape/type closure, captured-cell identity/shape revalidation, pre-C held-cell
+capture and an immediate raw-return store. Three new
+source-line/actual-marker-return fault cases are authored but unrun while the original serial suite
 continues unchanged. These are source-line injections, not evidence that every
 slot wrapper emits a C-profile event. The review findings remain unresolved
 qualification gates until the repair and actual caller are causally verified.
