@@ -132,7 +132,7 @@ def exercise(frame):
         if (interrupt_case and event=='c_return'
                 and arg is registration.native_origin.actor_calls[2]
                 and frame.f_code is a._native_actor_context.__code__
-                and frame.f_back.f_code is caller_code and not arm_events):
+                and frame.f_back.f_code is caller_code and returns==[True] and not arm_events):
             assert returns==[True] and native_entries==[True]
             # Do not materialize caller f_locals: a cached Python3.11 snapshot
             # could itself retain the payload beyond the caller's fastlocals.

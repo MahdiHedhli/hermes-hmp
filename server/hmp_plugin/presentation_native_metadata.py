@@ -1371,6 +1371,21 @@ def _run_directory_observation(owner, resource):
     produce, consume, acknowledge = (
         _produce_directory_metadata, _consume_directory_policy, _ack_directory_policy)
     try:
+        # Reject a foreign actor before allocating/latching caller-owned custody.
+        # This is eligibility only: the producer still samples the actor at its
+        # original ACTIVE admission boundary immediately before native effects.
+        _resource_tail(owner, resource)
+        registration = resource.registration
+        native = registration.native_origin
+        actor_arguments = (resource, registration)
+        actor_state = _native_pre_actor_state(owner, actor_arguments)
+        _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                              registration.context)
+        _native_post_actor_state(owner, actor_state, actor_arguments)
+        _require(_resource_tail(owner, resource) is resource
+                 and resource.registration is registration
+                 and registration.native_origin is native)
+        actor_state = actor_arguments = None
         operation, marker, payload = _prepare_metadata_operation_with_custody(owner, resource)
         result, origin = operation.result, operation.result.custody_origin
         _marker_tail(owner, origin, marker, payload)
