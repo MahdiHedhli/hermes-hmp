@@ -1439,6 +1439,83 @@ def _native_read_accumulator_tail(owner, step, before):
     return step
 
 
+def _native_cache_read_input_tail(owner, consumer, heads, attempt):
+    """Original cache journal DATA joins only; unused, never read/ACK authority.
+
+    The fixed producer must hold the actual heads/attempt before actor callbacks.
+    Do not recapture them from owner mirrors after a callback. Prefix references
+    are transient and must not survive the original call's eventual ACK.
+    """
+    _require(type(consumer) is _NativeReadConsumer and consumer.owner is owner
+             and type(consumer.file_step) is _NativeReadFileStep
+             and type(consumer.registration) is _NativeScopeRegistration)
+    step, registration = consumer.file_step, consumer.registration
+    _require(step.owner is owner and type(step.scope) is _Scope
+             and type(step.scope.activation) is GatewayActivationOwner
+             and step.scope is consumer.scope
+             and step.registration is registration and registration.owner is owner
+             and registration.scope is step.scope
+             and type(step.material_module) is ModuleType
+             and type(step.owner_type) is type and type(owner) is step.owner_type
+             and type(heads) is tuple and len(heads) == 3
+             and all(type(head) is tuple for head in heads)
+             and type(attempt) is tuple and len(attempt) == 5)
+    namespace = vars(step.material_module)
+    _require(type(namespace) is dict and len(namespace) <= 4096
+             and all(type(key) is str for key in namespace)
+             and type(namespace.get('__name__')) is str
+             and namespace.get('__name__') == 'hmp_startup.cache_reader'
+             and namespace.get('DeclaredCacheReadOwner') is step.owner_type
+             and type(step.scope.material_origin) is tuple
+             and len(step.scope.material_origin) == 6
+             and step.scope.material_origin[2] is namespace)
+    prior_attempts, prior_results, attempts = heads
+    index = len(prior_attempts)
+    _require(0 <= index < 4096 and len(prior_results) == index
+             and len(attempts) == index + 1 and attempts[index] is attempt
+             and type(consumer.effect) is list and len(consumer.effect) == 1
+             and type(consumer.effect[0]) is _ReadEffect
+             and consumer.effect[0].before is consumer.before_count
+             and consumer.effect[0].after is None
+             and consumer.effect[0].returned is False and consumer.effect[0].unknown is False
+             and type(consumer.descriptor) is _NativeOpenedDescriptor
+             and attempt[0] is consumer.effect[0]
+             and type(attempt[1]) is int and attempt[1] is consumer.descriptor.fd
+             and type(attempt[2]) is int and attempt[2] is consumer.requested
+             and attempt[3] is consumer.before_count
+             and type(attempt[4]) is list and len(attempt[4]) == 1
+             and attempt[4][0] is None)
+    own, active = vars(owner), vars(step.scope.activation)
+    _require(type(own) is dict and len(own) <= 512
+             and all(type(key) is str for key in own)
+             and type(active) is dict and len(active) <= 512
+             and all(type(key) is str for key in active)
+             and namespace.get('_OWNER') is owner
+             and namespace.get('_ROOT') is registration.root
+             and namespace.get('_CELL') is registration.cell
+             and namespace.get('_READY') is None
+             and namespace.get('_ATTEMPTS') is attempts
+             and namespace.get('_RESULTS') is prior_results
+             and own.get('_cache_native_heads') is heads
+             and own.get('_attempts') is attempts and own.get('_results') is prior_results
+             and own.get('_read_claim') is attempt and own.get('_reading') is True
+             and own.get('_admitting') is False and own.get('_retaining') is False
+             and own.get('_started') is True and own.get('_ready') is False
+             and own.get('_released') is False and own.get('_failed') is False
+             and own.get('_unknown') is False
+             and own.get('_count_cell') is consumer.before_count
+             and active.get('_cache_read_owner') is owner
+             and active.get('_cache_read_cell') is registration.root
+             and active.get('_cache_read_attempts') is attempts
+             and active.get('_cache_read_results') is prior_results
+             and active.get('_cache_read_fact') is None)
+    _native_work_registration_tail(owner, registration)
+    _native_read_walk_tail(owner, registration, consumer.walk, consumer.expected, step)
+    _native_read_lifecycle_tail(owner, registration, step.parents)
+    _native_read_accumulator_tail(owner, step, consumer.before_count)
+    return heads
+
+
 def _new_native_read_file_step(
     owner, registration, walk, expected, descriptor, digest, source, observations
 ):

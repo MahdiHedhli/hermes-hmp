@@ -74,6 +74,7 @@ class DeclaredCacheReadOwner:
         owner._read_claim = None
         owner._retaining = True
         owner._bytes_read = 0
+        owner._cache_native_heads = None  # fixed producer's transient per-call roots only
         owner._fact = None
         owner._decoder_owner = owner._decoder_cell = owner._decoder_fact = None
         owner._attempts = activation._cache_read_attempts = _ATTEMPTS
