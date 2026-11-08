@@ -18,6 +18,8 @@ from hmp_plugin.presentation_startup_artifacts import (
     _HashedArtifact,
     _identity,
     _native_actor_context,
+    _native_post_actor_state,
+    _native_pre_actor_state,
     _native_registration_tail,
     _native_relative_arguments,
     _native_walk_scope,
@@ -226,7 +228,16 @@ class RuntimeCacheProbeOwner:
             if native is None:
                 stat_call = os.stat
             if native is not None:
-                _native_actor_context(native, native_registration.context)
+                held_state = _native_pre_actor_state(self, (name, parent, stat_call, result_type,
+                                                           missing_type))
+                _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                                      native_registration.context)
+                _native_post_actor_state(self, held_state,
+                                         (name, parent, stat_call, result_type, missing_type))
+                _native_registration_tail(self, s, cell, root, native_registration, registry)
+                _native_work_origin_tail(self, native_registration, native)
+                _require(stat_call is native.operations[3] and result_type is native.result_type
+                         and missing_type is native.errors[1] and _ROOT is root and _CELL is cell)
             result = stat_call(name, dir_fd=parent, follow_symlinks=False)
         except missing_type as exc:
             _require(type(exc) is missing_type

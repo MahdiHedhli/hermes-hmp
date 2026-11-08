@@ -665,3 +665,22 @@ scanner/Ruff/diff and child-script parsing pass; tests remain unrun. Close still
 uses its old path until immutable original open/close claims, reserved capacity,
 raw slots and all coupled descriptor-status validators land together. No quota,
 resource, factory/runtime/service/device or feature completion is claimed.
+
+## Actor-return repair checkpoint — November 8
+
+The actor-functions candidate now repeats original owner/argument, registration,
+native origin and selected callee joins after sampling the three captured actor
+functions at all seven fixed work dispatches. Open additionally preserves the
+original descriptor-list allocation, length and each original row identity.
+Read and readlink preserve their original count/effect/read-claim state. These
+checks are bounded source repairs, not reserved-close or whole-runtime authority.
+The actor helper accepts structurally fenced internal tuples; only the joined
+registration supplies provenance. Shape or context equality alone grants nothing.
+
+Ten new synthetic child cases mutate native aliases or the registration at the
+actual final get_ident C-return; three malformed actor tuple cases must refuse
+without foreign getters. They are prepared, not executed or accepted. Ruff, diff
+checks and the plugin-surface scanner pass. Independent review is pending; the
+serialized prior regression remains running. Native close reservation, runtime
+binding, bot character delivery, local image delivery and physical qualification
+remain incomplete. No deployment or installed-feature claim follows.

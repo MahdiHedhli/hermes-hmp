@@ -756,16 +756,38 @@ def _native_work_origin_tail(owner, registration, native):
                  and error_names.get(name) is native.errors[index])
 
 
-def _native_actor_context(native, expected):
-    """Actual captured actor functions; independent of later namespace aliases."""
+def _native_pre_actor_state(owner, arguments):
+    """Bounded original owner/argument mirrors, not an operation permission."""
+    names = vars(owner)
+    _require(type(names) is dict and len(names) <= 512
+             and all(type(key) is str for key in names) and type(arguments) is tuple)
+    return names, tuple(names.items()), arguments
+
+
+def _native_post_actor_state(owner, held, arguments):
+    names, entries, original_arguments = held
+    _require(vars(owner) is names and len(names) == len(entries)
+             and all(key in names and names[key] is value for key, value in entries)
+             and type(arguments) is tuple and len(arguments) == len(original_arguments)
+             and all(a is b for a, b in zip(arguments, original_arguments, strict=True)))
+
+
+def _native_actor_context(functions, modules, expected):
+    """Internal context DATA only; caller must hold validated original functions.
+
+    Shape/context equality grants neither work nor close authority. Fixed work
+    callers obtain these references from the joined registration; future close
+    callers must obtain them from an independently anchored original close claim.
+    """
     _require(type(expected) is tuple and len(expected) == 3
              and all(type(value) is int for value in expected)
-             and type(native.actor_calls) is tuple and len(native.actor_calls) == 3)
-    functions = native.actor_calls
-    _require(all(type(function) is BuiltinFunctionType for function in functions)
-             and functions[0].__self__ is native.native
-             and functions[1].__self__ is native.native
-             and functions[2].__self__ is native.thread_native)
+             and type(functions) is tuple and len(functions) == 3
+             and type(modules) is tuple and len(modules) == 2
+             and all(type(module) is ModuleType for module in modules)
+             and all(type(function) is BuiltinFunctionType for function in functions))
+    _require(functions[0].__self__ is modules[0] and functions[0].__name__ == 'getpid'
+             and functions[1].__self__ is modules[0] and functions[1].__name__ == 'geteuid'
+             and functions[2].__self__ is modules[1] and functions[2].__name__ == 'get_ident')
     actual = (functions[0](), functions[1](), functions[2]())
     _require(all(type(value) is int for value in actual) and actual == expected)
     return actual
@@ -1083,7 +1105,25 @@ class StartupArtifactOwner:
             if native is None:
                 open_call = os.open
             if native is not None:
-                _native_actor_context(native, native_registration.context)
+                records = s.records
+                record_prefix = tuple(records)
+                arguments = (name, parent, directory, flags, open_call)
+                held_state = _native_pre_actor_state(self, arguments)
+                _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                                      native_registration.context)
+                _native_post_actor_state(self, held_state,
+                                         (name, parent, directory, flags, open_call))
+                _native_registration_tail(self, s, owner_cell, root_cell,
+                                          native_registration, registry)
+                _native_work_origin_tail(self, native_registration, native)
+                _require(open_call is native.operations[0] and native_flags is native.flags
+                         and row.fd is None and row.attempted is True
+                         and row.close_attempted is False and row.closed is False
+                         and row.unknown is False and s.records is records
+                         and len(records) == len(record_prefix)
+                         and all(actual is original for actual, original in
+                                 zip(records, record_prefix, strict=True))
+                         and records[-1] is row)
             fd = open_call(name, flags, dir_fd=parent)
             _require(type(fd) is int and fd >= 0)
             row.fd = fd
@@ -1171,7 +1211,18 @@ class StartupArtifactOwner:
             if native is None:
                 read_call = os.read
             if native is not None:
-                _native_actor_context(native, native_registration.context)
+                held_state = _native_pre_actor_state(self, (fd, count, read_call))
+                _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                                      native_registration.context)
+                _native_post_actor_state(self, held_state, (fd, count, read_call))
+                _native_registration_tail(self, s, owner_cell, root,
+                                          native_registration, registry)
+                _native_work_origin_tail(self, native_registration, native)
+                _require(read_call is native.operations[1] and self._count_cell is cell
+                         and self._bytes_read is before and self._reading is True
+                         and (effect is None or (effect.before is cell and effect.after is None
+                              and effect.returned is False and effect.unknown is False
+                              and s.reads[read_index] is effect)))
             data = read_call(fd, count)
             _require(type(data) is bytes)
             runtime = s.runtime
@@ -1226,7 +1277,13 @@ class StartupArtifactOwner:
         if native is None:
             stat_call = os.stat
         if native is not None:
-            _native_actor_context(native, native_registration.context)
+            held_state = _native_pre_actor_state(self, (name, parent, stat_call, result_type))
+            _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                                      native_registration.context)
+            _native_post_actor_state(self, held_state, (name, parent, stat_call, result_type))
+            _native_registration_tail(self, s, cell, root, native_registration, registry)
+            _native_work_origin_tail(self, native_registration, native)
+            _require(stat_call is native.operations[3] and result_type is native.result_type)
         value = stat_call(name, dir_fd=parent, follow_symlinks=False)
         _require(type(value) is (os.stat_result if native is None else result_type)
                  and _native_walk_scope(self, native_registration) is s)
@@ -1250,7 +1307,13 @@ class StartupArtifactOwner:
         if native is None:
             fstat_call = os.fstat
         if native is not None:
-            _native_actor_context(native, native_registration.context)
+            held_state = _native_pre_actor_state(self, (fd, fstat_call, result_type))
+            _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                                      native_registration.context)
+            _native_post_actor_state(self, held_state, (fd, fstat_call, result_type))
+            _native_registration_tail(self, s, cell, root, native_registration, registry)
+            _native_work_origin_tail(self, native_registration, native)
+            _require(fstat_call is native.operations[4] and result_type is native.result_type)
         value = fstat_call(fd)
         _require(type(value) is (os.stat_result if native is None else result_type)
                  and _native_walk_scope(self, native_registration) is s)
@@ -1293,7 +1356,17 @@ class StartupArtifactOwner:
             if native is None:
                 readlink_call = os.readlink
             if native is not None:
-                _native_actor_context(native, native_registration.context)
+                held_state = _native_pre_actor_state(self, (name, parent, hop, readlink_call))
+                _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                                      native_registration.context)
+                _native_post_actor_state(self, held_state, (name, parent, hop, readlink_call))
+                _native_registration_tail(self, s, owner_cell, root,
+                                          native_registration, native_registry)
+                _native_work_origin_tail(self, native_registration, native)
+                _require(readlink_call is native.operations[5] and self._count_cell is start
+                         and runtime.count[0] is start and self._reading is True
+                         and runtime.reads[position] is record and record.attempted is True
+                         and record.returned is False and record.unknown is False)
             data = readlink_call(name, dir_fd=parent)  # bytes input => bytes output
             _require(type(data) is bytes)
             after = start[2] + len(data)  # actual result before postchecks, including refusals

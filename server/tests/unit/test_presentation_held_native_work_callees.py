@@ -8,7 +8,8 @@ import pytest
 @pytest.mark.parametrize('change', ('normal', 'copy_origin', 'pre_os', 'late_os',
                                     'late_posix', 'late_flags', 'late_result_type',
                                     'late_os_error_base', 'late_posix_error_base',
-                                    'pre_entry_module'))
+                                    'pre_entry_module', 'actor_return_os',
+                                    'actor_return_registration'))
 def test_fixed_work_calls_hold_original_native_origin(tmp_path, monkeypatch, method, change):
     from . import test_presentation_cache_observation as cache
     from . import test_presentation_entry_files as runner
@@ -48,6 +49,22 @@ def mutate(registration,mode):
 def native_observed(frame):
     if type(frame.f_locals.get('self')) is wanted:native_calls.append(True)
 observe_synthetic_native(original_native,actual_method.__code__,native_observed)
+original_profile=sys.getprofile()
+def final_actor_profile(frame,event,arg):
+    original_profile(frame,event,arg)
+    if (event=='c_return' and frame.f_code is a._native_actor_context.__code__
+            and CHANGE.startswith('actor_return_') and not changed):
+        caller=frame.f_back
+        target=caller.f_locals.get('self')
+        if caller.f_code is actual_method.__code__ and type(target) is wanted:
+            registration=caller.f_locals['native_registration']
+            if arg is registration.native_origin.actor_calls[2]:
+                if CHANGE=='actor_return_os':mutate(registration,'late_os')
+                else:
+                    target._native_scope_registration=registration._replace()
+                    changed.append(True)
+sys.setprofile(final_actor_profile)
+
 def checked_method(target,*args):
     if type(target) is not wanted or type(args[-1]) is not a._NativeScopeRegistration:
         return actual_method(target,*args)
@@ -82,6 +99,7 @@ except Exception:
     assert CHANGE!='normal' and calls and refusals and changed
 else:assert CHANGE=='normal' and calls and native_calls and checked._ready
 finally:
+    sys.setprofile(original_profile)
     setattr(a.StartupArtifactOwner,METHOD,actual_method)
     a._capture_native_work_origin=actual_capture;a._native_work_origin_tail=actual_tail
     for namespace,name,value in reversed(restore):setattr(namespace,name,value)

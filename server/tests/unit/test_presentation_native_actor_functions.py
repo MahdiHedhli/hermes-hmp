@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 
 CASES = ('normal', 'os_pid', 'os_uid', 'thread_alias', 'thread_native',
-         'wrong_pid', 'wrong_uid', 'wrong_tid', 'wrong_thread')
+         'wrong_pid', 'wrong_uid', 'wrong_tid', 'wrong_thread',
+         'wrong_functions', 'wrong_modules', 'wrong_expected')
 SCRIPT = r'''
 import json,os,sys,threading
 sys.path.insert(0,sys.argv[1])
@@ -25,9 +26,16 @@ elif case=='thread_native':vars(native.thread_native)['get_ident']=foreign
 elif case=='wrong_pid':expected=(-1,expected[1],expected[2])
 elif case=='wrong_uid':expected=(expected[0],-1,expected[2])
 elif case=='wrong_tid':expected=(expected[0],expected[1],-1)
+functions=native.actor_calls;modules=(native.native,native.thread_native)
+class Foreign:
+    def __getattr__(self,name):foreign_calls.append('get');raise AssertionError('getter')
+    def __iter__(self):foreign_calls.append('iter');raise AssertionError('iteration')
+if case=='wrong_functions':functions=Foreign()
+elif case=='wrong_modules':modules=Foreign()
+elif case=='wrong_expected':expected=Foreign()
 refused=[]
 def check():
-    try:actual=_native_actor_context(native,expected)
+    try:actual=_native_actor_context(functions,modules,expected)
     except ArtifactObservationError:refused.append(True)
     else:
         assert case in ('normal','os_pid','os_uid','thread_alias','thread_native')

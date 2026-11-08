@@ -12,6 +12,8 @@ from hmp_plugin.presentation_startup_artifacts import (
     _Descriptor,
     _HashedArtifact,
     _native_actor_context,
+    _native_post_actor_state,
+    _native_pre_actor_state,
     _native_registration_tail,
     _native_walk_scope,
     _native_work_origin_tail,
@@ -289,7 +291,19 @@ class DeclaredCacheReadOwner:
             if native is None:
                 read_call = os.read
             if native is not None:
-                _native_actor_context(native, native_registration.context)
+                held_state = _native_pre_actor_state(self, (fd, requested, read_call))
+                _native_actor_context(native.actor_calls, (native.native, native.thread_native),
+                                      native_registration.context)
+                _native_post_actor_state(self, held_state, (fd, requested, read_call))
+                _native_registration_tail(self, s, cell, root, native_registration, registry)
+                _native_work_origin_tail(self, native_registration, native)
+                _require(read_call is native.operations[1] and _OWNER is self
+                         and _ROOT is root and _CELL is cell and _ATTEMPTS is attempts
+                         and _RESULTS is prior_results and self._read_claim is attempt
+                         and self._count_cell is before and self._reading is True
+                         and result_slot[0] is None and effect.before is before
+                         and effect.after is None and effect.returned is False
+                         and effect.unknown is False and s.reads[-1] is effect)
             data = read_call(fd, requested)
             _require(type(data) is bytes)
             length = len(data)
