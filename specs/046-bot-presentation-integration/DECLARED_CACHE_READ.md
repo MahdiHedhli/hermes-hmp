@@ -26,8 +26,8 @@ intentionally not valid bytecode.
 Focused qualification passed 141 current checks (14 reader and 127 scanner) and
 14 actual Python 3.11.15 children. Full Ruff, surface/privacy and diff checks pass.
 Independent bounded read-only source review accepted the repaired source. The
-source is committed; broader shared-startup and runtime/device qualification
-remain pending. No live host/device/settings/grant/provider change is claimed.
+source is committed; the shared-startup baseline passed 1,244 checks with source unchanged;
+runtime/device qualification remains pending. No live host/device/settings/grant/provider change is claimed.
 Earlier review findings and their repair history follow.
 
 ## Review findings — unresolved, no admission
@@ -82,3 +82,8 @@ error, copied facts, late buffer/effect/ledger/lifecycle replacements, native
 post-read count drift, foreign read claims and late activation ownership drift.
 The broader shared-startup regression remains pending; operational/resource/native
 and physical qualification remain separate. No cache decoding or execution occurs.
+
+The unchanged-source shared-startup baseline on `faf6a81` passed 1,244 cases in
+1,710.72 seconds. This covers the shared reader/activation/file-dispatch changes
+and does not qualify the later selected-cache decoder or native-IO metadata field.
+Operational resource/native/physical qualification remains open.

@@ -4,7 +4,8 @@ The isolated declared-cache reader now retains original native read results and
 counts before refusal, seals the effect chain, and preserves unknown cleanup debt
 on ownership drift. Bounded independent source review accepted the repaired code;
 141 current checks (14 reader and127 scanner cases) and14 actual Python 3.11
-child cases passed, with source hashes unchanged. Shared-startup regression pending. This is a loader
+child cases passed, with source hashes unchanged. The shared-startup baseline
+passed 1,244 checks; this remains source-only, not operational admission. This is a loader
 prerequisite, not desktop character delivery, host-local images or operational
 admission. See [scope and remaining checks](specs/046-bot-presentation-integration/DECLARED_CACHE_READ.md).
 
