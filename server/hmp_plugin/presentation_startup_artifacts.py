@@ -107,6 +107,7 @@ class _Scope(NamedTuple):
     cache: object = None
     source_digest: object = None
     native_files: object = None
+    native_registration_slot: object = None
 
     def __repr__(self):
         return "<StartupArtifactScope redacted>"
@@ -437,6 +438,24 @@ class _NativeScopeRegistration(NamedTuple):
         return "<OriginalNativeScopeRegistration DATA redacted>"
 
 
+def _capture_native_scope(s, cell, root):
+    """Capture original scope-slot DATA without an actor/current callback."""
+    _require(type(s) is _Scope and type(cell) is tuple and len(cell) == 2
+             and cell[1] is s and type(root) is tuple and len(root) == 3
+             and root[0] is s.activation and root[1] is cell[0] and root[2] is s)
+    slot = s.native_registration_slot
+    if s.native_files is None:
+        _require(slot is None)
+        return None
+    _require(type(slot) is list and len(slot) == 1)
+    record = slot[0]
+    _require(type(record) is _NativeScopeRegistration
+             and record.scope is s and record.owner is cell[0]
+             and record.cell is cell and record.root is root
+             and record.lineage is s.native_files and record.context is s.context)
+    return record
+
+
 def _native_scope_current(owner, record):
     from hmp_startup.gateway_entry import (
         GatewayEntryOwner,
@@ -450,6 +469,8 @@ def _native_scope_current(owner, record):
              and type(record.lineage.ledger) is _NativeFileLedger)
     s, lineage, cell, root = record.scope, record.lineage, record.cell, record.root
     registry, index = lineage.ledger.scopes, record.index
+    slot = s.native_registration_slot
+    _require(type(slot) is list and len(slot) == 1 and slot[0] is record)
     _require(type(registry) is list and type(index) is int and 0 <= index < len(registry)
              and registry[index] is record and s.native_files is lineage)
     _require(_owner_guard(owner) is s
@@ -458,14 +479,21 @@ def _native_scope_current(owner, record):
              and owner._cell is cell and owner._root_cell is root
              and vars(owner).get('_native_scope_registration') is record
              and record.context is s.context and lineage.ledger.scopes is registry
-             and index < len(registry) and registry[index] is record)
+             and index < len(registry) and registry[index] is record
+             and s.native_registration_slot is slot and len(slot) == 1
+             and slot[0] is record)
     return record
 
 
 def _register_native_scope(owner, s, cell, root):
     from hmp_startup.gateway_entry import GatewayEntryOwner, _NativeFileLineage
 
-    _require(type(s) is _Scope and _owner_guard(owner) is s
+    _require(type(s) is _Scope)
+    slot = s.native_registration_slot
+    _require((s.native_files is None and slot is None)
+             or (s.native_files is not None and type(slot) is list
+                 and len(slot) == 1 and slot[0] is None))
+    _require(_owner_guard(owner) is s
              and owner._scope is s and owner._origin is s
              and owner._cell is cell and owner._root_cell is root)
     if s.native_files is None:
@@ -476,6 +504,7 @@ def _register_native_scope(owner, s, cell, root):
     registry = lineage.ledger.scopes
     index = len(registry)
     _require(index < 1048576 and vars(owner).get('_native_scope_registration') is None
+             and s.native_registration_slot is slot and len(slot) == 1 and slot[0] is None
              and type(s.context) is tuple and len(s.context) == 3
              and all(type(value) is int for value in s.context))
     actor = (os.getpid(), os.geteuid(), threading.get_ident())
@@ -485,7 +514,8 @@ def _register_native_scope(owner, s, cell, root):
              and owner._cell is cell and owner._root_cell is root
              and s.native_files is lineage and lineage.ledger.scopes is registry
              and len(registry) == index
-             and vars(owner).get('_native_scope_registration') is None)
+             and vars(owner).get('_native_scope_registration') is None
+             and s.native_registration_slot is slot and len(slot) == 1 and slot[0] is None)
     record = _NativeScopeRegistration(lineage, owner, s, cell, root, s.context, index)
     _require(type(record) is _NativeScopeRegistration and record.lineage is lineage
              and record.owner is owner and record.scope is s
@@ -494,9 +524,14 @@ def _register_native_scope(owner, s, cell, root):
              and owner._scope is s and owner._origin is s
              and owner._cell is cell and owner._root_cell is root
              and lineage.ledger.scopes is registry and len(registry) == index
-             and vars(owner).get('_native_scope_registration') is None)
+             and vars(owner).get('_native_scope_registration') is None
+             and s.native_registration_slot is slot and len(slot) == 1 and slot[0] is None)
     registry.append(record)
-    _require(vars(owner).get('_native_scope_registration') is None)
+    _require(vars(owner).get('_native_scope_registration') is None
+             and s.native_registration_slot is slot and len(slot) == 1 and slot[0] is None)
+    slot[0] = record
+    _require(vars(owner).get('_native_scope_registration') is None
+             and len(slot) == 1 and slot[0] is record)
     owner._native_scope_registration = record
     _require(_native_scope_current(owner, record) is record)
     return record
@@ -562,7 +597,8 @@ class StartupArtifactOwner:
             s = _Scope(activation, activation._scope, expected,
                        (os.getpid(), os.geteuid(), threading.get_ident()), [], source, runtime,
                        None if digest_context is None else [], cache, digest_context,
-                       None if digest_context is None else digest_context.native_files)
+                       None if digest_context is None else digest_context.native_files,
+                       None if digest_context is None else [None])
             owner._scope = owner._origin = s
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)

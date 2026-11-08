@@ -314,3 +314,24 @@ the held original record as an explicit argument before callback-bearing guards;
 paired owner/registry replacements cannot become the selected record. Six added
 callback-window causals bring scope registry coverage to14 pending cases. Source
 review/tests of this repair remain required; earlier lint is not a runtime pass.
+
+## Original registration slot and callback-free capture — unqualified
+
+The next source increment adds a trailing defaultNone registration slot to the
+original immutable IO scope. Only entry-bound constructors allocate exact[None];
+legacy scope constructors keepNone. Registration holds the slot across callbacks
+and fills it once with its actual registration alongside registry/owner mirrors,
+without overwriting a foreign value. Currentness requires the same held slot and
+actual record after callbacks. A callback-free metadata capture accepts the
+initializer-held scope/cell/root and returns that slot's original record; actor/
+authority currentness is still a separate required operation. Twenty source
+causals are present, including substituted slot values, no guard call during
+capture and slot changes during registration callbacks. Tests are not run yet.
+
+Explicit registration threading through all file/tree/cache/link walkers and
+typed per-step/consumer claims remain required. Cleanup must use held original
+registration/resource custody without reviving callback-bearing work guards.
+Package/entry scandir, iterator advancement and iterator close are separate
+filesystem effects: the six captured operations do not cover those effects,
+whose origin/effect/cleanup qualification remains open. No native operation or
+image capability is granted merely by capture or registry presence.

@@ -84,7 +84,8 @@ class DeclaredCacheReadOwner:
                      and activation._cache_read_cell is partial)
             scope = _Scope(activation, parent[2].io_scope.activation_scope, (expected,),
                            context, [], reads=[],
-                           native_files=parent[2].entry_binding[0].native_files)
+                           native_files=parent[2].entry_binding[0].native_files,
+                           native_registration_slot=[None])
             scope = scope._replace(parent=(parent, selected, buffer, scope.records,
                                           scope.reads, hash_origin))
             owner._scope = owner._origin = scope

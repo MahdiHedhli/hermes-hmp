@@ -318,7 +318,8 @@ class GatewayPackageOwner:
                         (os.getpid(), os.geteuid(), threading.get_ident()), [],
                         reads=None if digest_context is None else [], source_digest=digest_context,
                         native_files=(None if digest_context is None
-                                      else digest_context.native_files))
+                                      else digest_context.native_files),
+                        native_registration_slot=None if digest_context is None else [None])
             owner._scope = owner._origin = s
             owner._cell = (owner, s)
             owner._root_cell = (activation, owner, s)

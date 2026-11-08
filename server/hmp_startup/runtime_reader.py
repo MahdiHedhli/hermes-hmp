@@ -108,7 +108,8 @@ class RuntimeSourceReadOwner:
                                                  root[2].entry_binding[0].native_files)
             scope = _Scope(activation, root[2].io_scope.activation_scope, (expected,),
                            context, [], reads=[], source_digest=digest_context,
-                           native_files=digest_context.native_files)
+                           native_files=digest_context.native_files,
+                           native_registration_slot=[None])
             scope = scope._replace(parent=(root, selected, buffer,
                                           scope.records, scope.reads, hash_origin))
             owner._origin = owner._scope = scope

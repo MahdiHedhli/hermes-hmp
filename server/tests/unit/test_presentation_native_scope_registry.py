@@ -6,7 +6,7 @@ import pytest
 
 @pytest.mark.parametrize('kind', ('probe', 'reader'))
 @pytest.mark.parametrize('change', ('normal', 'copied_owner', 'foreign_owner', 'copied_registry',
-                                  'guard_pair'))
+                                  'guard_pair', 'copied_slot', 'foreign_slot'))
 def test_original_native_scope_registration(tmp_path, monkeypatch, kind, change):
     from . import test_presentation_cache_probe as probe
     from . import test_presentation_cache_reader as reader
@@ -20,6 +20,13 @@ from hmp_plugin.presentation_startup_artifacts import (
     _native_scope_current,ArtifactObservationError)
 import hmp_plugin.presentation_startup_artifacts as am
 record=owner._native_scope_registration
+actual_guard=am._owner_guard
+pure_calls=[]
+def forbidden_guard(*args):pure_calls.append('guard');raise AssertionError('capture callback')
+am._owner_guard=forbidden_guard
+try:assert am._capture_native_scope(owner._origin,owner._cell,owner._root_cell) is record
+finally:am._owner_guard=actual_guard
+assert pure_calls==[]
 assert _native_scope_current(owner,record) is record
 assert record.owner is owner and record.scope is owner._origin
 assert record.cell is owner._cell and record.root is owner._root_cell
@@ -35,6 +42,8 @@ change=CHANGE
 if change=='copied_owner':owner._native_scope_registration=record._replace()
 if change=='foreign_owner':owner._native_scope_registration=ForeignRegistration()
 if change=='copied_registry':registry[record.index]=record._replace()
+if change=='copied_slot':owner._origin.native_registration_slot[0]=record._replace()
+if change=='foreign_slot':owner._origin.native_registration_slot[0]=ForeignRegistration()
 actual_guard=am._owner_guard
 if change=='guard_pair':
     def changed_guard(target):
@@ -54,6 +63,7 @@ assert calls==[]
 # Fixture restoration tests only data-shape custody, never operation recovery.
 owner._native_scope_registration=record
 registry[record.index]=record
+owner._origin.native_registration_slot[:]=[record]
 '''.replace('CHANGE', repr(change))
 
     def injected_run(directory, mutation):
@@ -69,7 +79,7 @@ registry[record.index]=record
 
 
 @pytest.mark.parametrize('kind', ('probe', 'reader'))
-@pytest.mark.parametrize('change', ('foreign_slot', 'coherent_roots'))
+@pytest.mark.parametrize('change', ('foreign_slot', 'foreign_scope_slot', 'coherent_roots'))
 def test_registration_rejoins_before_publication(tmp_path, monkeypatch, kind, change):
     from . import test_presentation_cache_probe as probe
     from . import test_presentation_cache_reader as reader
@@ -98,6 +108,7 @@ def changed_register(target,scope,cell,root):
             calls[0]+=1
             if calls[0]==2:
                 if CHANGE=='foreign_slot':target._native_scope_registration=foreign
+                elif CHANGE=='foreign_scope_slot':scope.native_registration_slot[0]=foreign
                 else:
                     newcell=tuple(list(cell));newroot=tuple(list(root))
                     target._cell=MODULE._CELL=newcell
@@ -114,6 +125,7 @@ try:
         assert refused.failed_owner is held[0] and held[0]._failed
         assert len(held[1])==held[2]
         if CHANGE=='foreign_slot':assert held[0]._native_scope_registration is foreign
+        if CHANGE=='foreign_scope_slot':assert held[0]._origin.native_registration_slot[0] is foreign
     else:raise AssertionError('callback replacement adopted')
 finally:am._register_native_scope=actual_register
 assert foreign_calls==[]
