@@ -7,7 +7,11 @@ normal observation; the new continuity checks correctly reject that substitution
 The test-only migration preserves those checks. Four normal paths and 74 first
 migration operator/link checks passed. The144-case residual investigation
 finished with125 passes and19 failures, no skips/errors and unchanged source.
-The refined164-case fixture suite is now running; no integrated pass is claimed. See
+The reviewed refinement passed164 cases. Integrated1a49174 then passed all1,280
+configured startup checks in2,429.39 seconds on actual Python3.14.9, with zero
+failures/errors/skips and unchanged source. The migrated actual3.11 fixture run
+is still in progress; operational, whole-plugin, installation and physical
+qualification remain distinct. See
 [fixture migration and limits](specs/046-bot-presentation-integration/NATIVE_IO_FIXTURE_MIGRATION.md).
 
 Source-level startup, cache and transport components do not yet establish an

@@ -25,9 +25,17 @@ cache probe5 and cache reader3. All19 map to fixture modules changed by the
 reviewed refinement; this mapping does not itself prove that the repair succeeds.
 
 Independent read-only review accepted the refined descriptor monitor. Its separate
-seven-module suite declares164 cases and is now running on2971995, with a unique
-source-bound receipt. No full integration pass is claimed. Production checks,
-live hosts/devices, permissions and installed builds are unchanged.
+seven-module suite passed164 cases on2971995 in1,179 seconds. All19 prior failed
+case IDs were individually matched to passing JUnit cases. Integrated1a49174 has
+byte-identical server/scanner source and passed all1,280 configured startup checks
+in2,429.39 seconds on actual Python3.14.9. Both runs had zero failures/errors/skips
+and unchanged source; exact source/test/receipt/log/XML bindings were checked.
+
+The164-case actual3.11 fixture run is in progress. A separate original-entry
+lineage increment is not covered by1a49174's result. This source regression does
+not qualify native/runtime admission, other plugin features, image delivery,
+physical devices or release. Production checks, live hosts/devices, permissions
+and installed builds are unchanged.
 
 Validation outputs must use explicit run configuration and a unique private run
 directory, with source/test manifest and machine-readable result counts. A copied

@@ -1,21 +1,25 @@
-# November 8: combined integration not qualified
+# November 8: repaired startup source regression passed
 
-The combined startup suite failed 215 cases and passed 1,065 on source1ab9910.
-Focused decoder and native-binding checks remain valid but do not establish an
-integrated pass. Four normal paths and74 operator/link checks passed after
-moving fixture observations away from canonical native aliases. A further reviewed
-monitoring refinement is under test. The144-case residual run completed with
-125 passes and19 failures, zero skips/errors and unchanged source. The19 failures
-remain unresolved evidence. The reviewed seven-module refinement is now running
-with164 statically declared cases; its actual results remain pending.
-Production checks remain unchanged. Character/local-image delivery stays open.
+The reviewed test-only fixture migration passed164 cases. The integrated1a49174
+candidate then passed all1,280 configured startup checks in2,429.39 seconds on
+actual Python3.14.9, with zero failures/errors/skips and unchanged server/scanner
+source. Every prior19 residual failure ID is included in the focused passing run.
+This supersedes the failed1ab9910 baseline for these exact source/fixture bytes;
+its215 failures/1,065 passes and the125/19 residual result remain preserved history.
+
+Production checks and native aliases were not weakened. The164-case actual3.11
+fixture run is now in progress; prior isolated floor results keep their original
+scope. A separate original-entry binding increment passed10 current and10 actual
+3.11.15 cases, but is not included in1a49174's1,280-case result. Operation budgets,
+native effect/cleanup receipts, complete runtime/key/service wiring, physical
+character/local-image delivery and release qualification remain open.
 
 # November 8: original file bindings captured, not syscall outcomes
 
 The isolated startup source retains originally observed POSIX C file bindings,
 aliases, flags and result/error classes. Bounded source review accepted the
 metadata-only claim;17 current and17 actual Python 3.11 cases passed, with
-source hashes unchanged. The later combined startup regression failed as recorded above. This neither
+source hashes unchanged. The later repaired startup regression passed as recorded above. This neither
 performs file operations nor proves kernel entry, ABI correctness or permission
 unavailability. Known outcomes/cleanup and operational fallback remain open.
 See [scope](specs/046-bot-presentation-integration/NATIVE_FILE_IO_ORIGIN.md).
@@ -23,18 +27,18 @@ See [scope](specs/046-bot-presentation-integration/NATIVE_FILE_IO_ORIGIN.md).
 The parent decoder baseline b892880 passed19 current synthetic cases and19
 actual Python 3.11 cases with exact receipt binding. That does not qualify this new metadata field.
 
-# November 8: isolated selected-cache decode qualified; integration failed
+# November 8: selected-cache decode source-qualified; operational gates open
 
 The isolated source now owns original native cache decoding and filename-fix
 results without executing code or authorizing source fallback. Bounded independent
 source review accepted the repaired custody and publication joins. On baseline
 `b892880`,19 current and19 actual Python3.11 synthetic cases passed with exact
-source/test/interpreter receipt binding. The combined-source failures above remain
-open; the isolated pass does not qualify that integration or operational native
+source/test/interpreter receipt binding. The later repaired1a49174 source
+regression passed as recorded above. Neither result qualifies operational native
 parsing, complete loader admission or physical character/image delivery. See
 [scope and remaining qualification](specs/046-bot-presentation-integration/OWNED_CACHE_DECODE.md).
 
-# November 7: declared cache reader awaiting causal qualification
+# November 7: declared cache reader source-qualified; operational gates open
 
 The isolated declared-cache reader now retains original native read results and
 counts before refusal, seals the effect chain, and preserves unknown cleanup debt

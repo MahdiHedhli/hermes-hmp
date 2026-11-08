@@ -12,8 +12,12 @@ A later output-path collision lost the original raw1,244-case binding. The
 successful log and prior in-session binding inspection remain; the missing record
 is not reconstructed. The later combined `1ab9910` run failed215 cases and passed
 1,065. Its144-case residual rerun passed125 and failed19, including three reader
-fault cases. The reviewed fixture migration is now running separately; these
-failures are not treated as resolved before its terminal result.
+fault cases. The reviewed migration subsequently passed164 cases, with each
+prior19 failed ID matched to a pass. The repaired1a49174 candidate passed all1,280
+configured startup checks on actual Python3.14.9, zero failures/errors/skips and
+unchanged source. This resolves the observed fixture regression for that exact
+candidate, not operational/native/resource or physical qualification. The164-case
+actual3.11 fixture run remains in progress.
 
 The migrated `read_error` fixture injects loss of acknowledgement after a second
 actual native read. It retains a known acknowledged65KiB prefix and unknown debt;

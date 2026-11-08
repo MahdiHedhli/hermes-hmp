@@ -33,13 +33,15 @@ Seventeen substitution/copy/foreign-metadata cases passed on current Python
 and seventeen actual Python 3.11.15 children passed. Exact module/case/worktree/
 interpreter/source receipt bindings were independently validated; source hashes
 remained unchanged through branch reconciliation. Full Ruff, surface/privacy
-and diff checks pass. Combined broader startup and native/operational
-qualification remain pending. No live host/device/settings/grants/provider action occurred.
+and diff checks pass. The repaired configured startup regression passed as
+recorded below; native/operational qualification remains pending. No live host/device/settings/grants/provider action occurred.
 
 The combined source1ab9910 suite failed215 cases and passed1,065. Fixture alias
 spies conflict with the new continuity checks; initial test-only migration passes
 four normal paths and74 operator/link checks. The144-case residual run completed
 with125 passes and19 failures, no skips/errors and unchanged source. The separate
-reviewed164-case refined-monitor suite is running; its result remains pending. The source is not integrated-qualified, and no failed case is
-assumed resolved merely because it resembles a fixture issue. Production guards
-remain intact.
+reviewed refinement passed164 cases, including all19 prior failure IDs. The
+integrated1a49174 candidate passed all1,280 configured startup checks on actual
+Python3.14.9, zero failures/errors/skips, with source unchanged. These are source
+results, not native outcome/ABI/runtime or image-delivery qualification. Actual
+3.11 fixture migration remains under test. Production guards remain intact.
