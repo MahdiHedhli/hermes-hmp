@@ -1,18 +1,22 @@
 ## Integrated startup verification — November 8, 2026
 
-The combined startup candidate `1ab9910` failed **215 cases** and passed
-**1,065**. It is not qualified for installation or character-image delivery.
-Several synthetic fixtures replaced canonical native file functions even during
-normal observation; the new continuity checks correctly reject that substitution.
-The test-only migration preserves those checks. Four normal paths and 74 first
-migration operator/link checks passed. The144-case residual investigation
-finished with125 passes and19 failures, no skips/errors and unchanged source.
-The reviewed refinement passed164 cases. Integrated1a49174 then passed all1,280
-configured startup checks in2,429.39 seconds on actual Python3.14.9, with zero
-failures/errors/skips and unchanged source. The same164 fixture cases also passed on actual3.11.15,
-zero failures/errors/skips and unchanged source; operational, whole-plugin, installation and physical
-qualification remain distinct. See
+The latest verified integrated source `1a49174` passed **1,280 configured startup
+cases** on actual Python3.14.9 with zero failures/errors/skips and unchanged source.
+The reviewed fixture matrix also passed164 cases on actual3.11.15. These are
+source checks, not installation, whole-plugin, native service or device acceptance.
+
+The older `1ab9910` run (215 failures/1,065 passes) and its125/19 residual result
+remain preserved failure history. The fixture repair preserved production native
+alias and continuity checks. See
 [fixture migration and limits](specs/046-bot-presentation-integration/NATIVE_IO_FIXTURE_MIGRATION.md).
+
+Separate unpublished source branches add original-entry lineage, an unwired stat
+diagnostic sanitizer and shared ledger storage/shape checks. Their source reviews
+are bounded; they do not implement operation accounting or image delivery. The
+lineage's expected1,290-case regression is running;18-case current/floor sanitizer
+checks and16-case current/floor ledger checks are serialized behind it. No result
+is claimed for those pending runs. Full six-boundary dispatch, typed step/consumer
+claims and independently anchored reserved cleanup remain implementation tasks.
 
 Source-level startup, cache and transport components do not yet establish an
 operational presentation service. Native listener/key ownership, complete runtime

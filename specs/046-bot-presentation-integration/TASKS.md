@@ -884,3 +884,17 @@ historical, not an alternative live authorization path or resolved incident.
 - [ ] Qualify actual installation closure, required links, future imports and
       OS-loaded libraries plus executed entry/operator/native/key factory. D1 is
       file DATA only; broker acceptance/ACK/release and physical images remain open.
+
+### Original native file effects — pending source branches November 8
+
+- [ ] Qualify original-entry lineage across the running1,290-case regression.
+- [ ] Execute exact18 current/floor sanitizer cases; preserve diagnostic DATA
+      versus actual operation/kernel/authority distinctions.
+- [ ] Execute exact16 current/floor ledger cases; shape checks do not enforce
+      transitions or qualify resource recovery.
+- [ ] Bind actual scope and predeclared step/consumer claims to the original
+      ledger; replace inactive-only shape with a closed claim lifecycle.
+- [ ] Implement all six fixed boundaries plus direct cache read/stat migration,
+      shared attempt accounting and preallocated reserved cleanup custody.
+- [ ] Qualify actual temporary native returns, original result ACK, refusal and
+      cleanup semantics before production presentation/runtime and device tests.

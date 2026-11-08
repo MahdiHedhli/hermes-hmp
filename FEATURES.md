@@ -1,3 +1,18 @@
+# November 8: next image prerequisites remain unpublished and unqualified
+
+Original file-lineage source has10 current and10 actual3.11.15 selected passes;
+its broader1,290-case regression is still running. Separate source66f7897 adds an
+unwired stat diagnostic sanitizer with bounded independent review and lint pass;
+18 current/floor cases are queued. Source1b47c95 adds original ledger storage and
+closed state-shape checks;16 current/floor cases are queued after that. These
+source changes are not in the public candidate below and are not installed.
+
+No upstream prerequisite was found for this integration. Remaining HMP work is
+the actual six fixed file-operation paths, typed original step/consumer claims,
+shared accounting with reserved closes, runtime/service wiring and physical
+character/image delivery. Letter avatars and host-local MEDIA text therefore
+remain known missing behavior; helper reviews are not delivered features.
+
 # November 8: repaired startup source regression passed
 
 The reviewed test-only fixture migration passed164 cases. The integrated1a49174
