@@ -19,6 +19,7 @@ from .test_presentation_gateway_approval import operator_composed_script
                                  'admit_before_debit_failure',
                                  'admit_after_debit_failure', 'admit_foreign_slot_failure',
                                  'produce', 'produce_snapshot_failure',
+                                 'produce_pre_call_revocation',
                                  'produce_foreign_raw_failure', 'consume',
                                  'consume_wrong_actor', 'consume_policy_failure',
                                  'ack', 'ack_wrong_actor', 'ack_late_failure',
@@ -83,7 +84,7 @@ def prepare(frame):
                         'latch_postpublication_failure','admit','admit_wrong_actor','admit_wrong_actor_release',
                         'admit_wrong_actor_release_foreign','admit_before_debit_failure',
                         'admit_after_debit_failure','admit_foreign_slot_failure',
-                        'produce','produce_snapshot_failure','produce_foreign_raw_failure',
+                        'produce','produce_snapshot_failure','produce_pre_call_revocation','produce_foreign_raw_failure',
                         'consume','consume_wrong_actor','consume_policy_failure',
                         'ack','ack_wrong_actor','ack_late_failure',
                         'ack_interrupt_raw',
@@ -167,7 +168,7 @@ def prepare(frame):
                                        'active_failure_record','latch_postpublication_failure','admit','admit_wrong_actor','admit_wrong_actor_release',
                         'admit_wrong_actor_release_foreign','admit_before_debit_failure',
                         'admit_after_debit_failure','admit_foreign_slot_failure',
-                        'produce','produce_snapshot_failure','produce_foreign_raw_failure',
+                        'produce','produce_snapshot_failure','produce_pre_call_revocation','produce_foreign_raw_failure',
                         'consume','consume_wrong_actor','consume_policy_failure',
                         'ack','ack_wrong_actor','ack_late_failure',
                         'ack_interrupt_raw',
@@ -185,7 +186,7 @@ def prepare(frame):
                                     'admit','admit_wrong_actor','admit_wrong_actor_release',
                         'admit_wrong_actor_release_foreign','admit_before_debit_failure',
                         'admit_after_debit_failure','admit_foreign_slot_failure',
-                        'produce','produce_snapshot_failure','produce_foreign_raw_failure',
+                        'produce','produce_snapshot_failure','produce_pre_call_revocation','produce_foreign_raw_failure',
                         'consume','consume_wrong_actor','consume_policy_failure',
                         'ack','ack_wrong_actor','ack_late_failure',
                         'ack_interrupt_raw',
@@ -346,11 +347,35 @@ def prepare(frame):
                         if case=='produce_foreign_raw_failure':result.raw[0]=foreign_raw
                         return observed
                     m._native_metadata_snapshot=observe_original_metadata
+                    cells_original=m._directory_payload_cells
+                    direct_cell_returns=[];native_entries=[]
+                    activation_names=vars(consumer.parents[0])
+                    retired_before=activation_names['_retired']
+                    profile_before=sys.getprofile()
+                    def observe_producer_cells(*arguments):
+                        held_cells=cells_original(*arguments)
+                        if sys._getframe(1).f_code is m._produce_directory_metadata.__code__:
+                            direct_cell_returns.append(True)
+                            if len(direct_cell_returns)==2:
+                                assert activation_names['_retired'] is False
+                                activation_names['_retired']=True
+                        return held_cells
+                    def observe_native_entry(frame,event,arg):
+                        if (event=='c_call' and arg is operation.callee
+                                and frame.f_code is m._produce_directory_metadata.__code__):
+                            assert frame.f_locals['arguments'] is operation.arguments
+                            native_entries.append(True)
+                    if case=='produce_pre_call_revocation':
+                        m._directory_payload_cells=observe_producer_cells
+                    if case in ('produce','produce_pre_call_revocation'):
+                        assert profile_before is None
+                        sys.setprofile(observe_native_entry)
                     try:
                         try:
                             try:actual=m._produce_directory_metadata(owner,consumer)
                             except a.ArtifactObservationError as exc:
                                 assert case in ('produce_snapshot_failure',
+                                                'produce_pre_call_revocation',
                                                 'produce_foreign_raw_failure')
                                 assert str(exc)=='BI1_STARTUP_ARTIFACTS_REFUSED'
                                 assert exc.failed_owner is owner
@@ -369,7 +394,8 @@ def prepare(frame):
                                             assert values[alias] is None
                                     cursor=cursor.tb_next
                                 assert ledger.failed==[True] and ledger.failure[0] is operation
-                                assert operation.state==[True,True,True]
+                                returned=case!='produce_pre_call_revocation'
+                                assert operation.state==[True,returned,True]
                                 assert phase.current[0] is phase.failed
                                 assert phase.result==[None] and ledger.inflight==[None]
                                 expected_raw=(foreign_raw if case=='produce_foreign_raw_failure'
@@ -680,10 +706,18 @@ def prepare(frame):
                                     else:raise AssertionError('aborted return reused')
                                     assert progress==[resource.ordinal,consumer]
                                     assert result.acknowledged==[None]
-                            assert captured==[True]
+                            if case=='produce_pre_call_revocation':
+                                assert direct_cell_returns==[True,True]
+                                assert native_entries==[] and captured==[]
+                            else:assert captured==[True]
+                            if case=='produce':assert native_entries==[True]
                             assert ledger.counts==[counts[0]+1,counts[1]]
                             assert ledger.attempts[-1] is operation
-                        finally:m._native_metadata_snapshot=snapshot_original
+                        finally:
+                            sys.setprofile(profile_before)
+                            m._directory_payload_cells=cells_original
+                            activation_names['_retired']=retired_before
+                            m._native_metadata_snapshot=snapshot_original
                     finally:
                         # Dispose only this synthetic fixture; no production ACK/refund.
                         assert ledger.attempts.pop() is operation
