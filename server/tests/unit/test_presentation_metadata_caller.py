@@ -174,6 +174,7 @@ def exercise(frame):
             alive=payload_reference() is not None
             stage=dict(case=case,producer_returns=len(returns),native_entries=len(native_entries),
                        armed=len(arm_events),injected=len(detach_faults),payload_alive=alive,
+                       gc_disabled=not gc.isenabled(),marker_state=list(marker.state),
                        owned_link_retains_payload=(alive and
                            marker.owner_link[0] is payload_reference()),
                        debit_preserved=ledger.counts==[counts[0]+1,counts[1]],
