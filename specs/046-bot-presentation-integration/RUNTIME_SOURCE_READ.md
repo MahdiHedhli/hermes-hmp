@@ -47,6 +47,9 @@ version/commit membership is not a runtime availability allowlist.
 
 Qualification checkpoint:130 focused reader/scanner checks passed;15 actual
 Python3.11.15 child cases passed with source hashes unchanged. Independent
-bounded read-only review accepted the repaired source. Broad startup regressions
-are active/pending; no full-plugin, Linux CI, installed or physical qualification
-is claimed. Lint, surface, privacy/log and diff checks pass.
+bounded read-only review accepted the repaired source. The unchanged-source broad startup baseline passed1162 cases. CI found an
+overlong updated fixture tuple line before Linux tests ran. The subsequent
+fixture-only wrap preserves generated script AST; one current normal case and
+two actual floor children passed after it, as did full server/tools Ruff. No
+full-plugin, repaired-head Linux CI, installed or physical qualification is
+claimed. Surface, privacy/log and diff checks pass.

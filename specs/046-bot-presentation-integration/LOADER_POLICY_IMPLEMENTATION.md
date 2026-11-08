@@ -149,7 +149,9 @@ gate is implemented by these tests or this contract.
 
 A separately bounded runtime source reader is implemented and independently
 reviewed in [RUNTIME_SOURCE_READ.md](RUNTIME_SOURCE_READ.md).130 focused reader/
-scanner cases and15 actual Python3.11 child cases pass; broad startup checks
-are active/pending. It uses
+scanner cases and15 actual Python3.11 child cases pass;1162 unchanged-source
+startup cases also passed. The subsequent fixture-only line wrap preserves the
+generated script AST and passes current/floor rechecks and full lint. Linux CI
+on the repaired head remains pending. It uses
 original source selection, fresh read/digest effects and a final immutable
 snapshot/content seal. It is not a code loader, cache writer or admission gate.
