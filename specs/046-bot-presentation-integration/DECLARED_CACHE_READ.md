@@ -1,4 +1,4 @@
-# Declared cache byte reader — implementation under review
+# Declared cache byte reader — focused source qualification
 
 This branch adds one bounded fresh read of a cache artifact selected from the
 actual original continuation. It accepts an original continuation and row index,
@@ -23,11 +23,12 @@ the independently held original allocation without redirecting to a foreign slot
 No cache payload is decoded or executed, and the synthetic fixture payload is
 intentionally not valid bytecode.
 
-Fourteen causal cases and five import-boundary cases are prepared, NOT RUN while
-the existing probe baseline and its serialized cleanup checks remain active.
-Full Ruff, surface/privacy and diff checks pass. Independent read-only review is
-requested. Source is uncommitted/unpublished and no runtime/device qualification
-or live host/device/settings/grant/provider change is claimed.
+Focused qualification passed 141 current checks (14 reader and 127 scanner) and
+14 actual Python 3.11.15 children. Full Ruff, surface/privacy and diff checks pass.
+Independent bounded read-only source review accepted the repaired source. The
+source is committed; broader shared-startup and runtime/device qualification
+remain pending. No live host/device/settings/grant/provider change is claimed.
+Earlier review findings and their repair history follow.
 
 ## Review findings — unresolved, no admission
 
@@ -70,3 +71,14 @@ above as historical findings, not a claim that this repair passed tests.
 Final bounded independent read-only source review found no remaining concrete
 blocker after the exact cleanup joins. This is source-only acceptance: fourteen
 reader cases, actual floor, broader and operational qualification remain pending.
+
+## Focused qualification result
+
+All 141 current checks passed (14 reader and 127 scanner cases). All fourteen
+actual Python 3.11.15 child cases passed; source hashes remained unchanged through
+both runs and public-branch ancestry reconciliation. Cases include normal read,
+metadata change, wrong thread without attempt consumption, replay, partial-read
+error, copied facts, late buffer/effect/ledger/lifecycle replacements, native
+post-read count drift, foreign read claims and late activation ownership drift.
+The broader shared-startup regression remains pending; operational/resource/native
+and physical qualification remain separate. No cache decoding or execution occurs.
