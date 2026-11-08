@@ -7,9 +7,9 @@ source. Every prior19 residual failure ID is included in the focused passing run
 This supersedes the failed1ab9910 baseline for these exact source/fixture bytes;
 its215 failures/1,065 passes and the125/19 residual result remain preserved history.
 
-Production checks and native aliases were not weakened. The164-case actual3.11
-fixture run is now in progress; prior isolated floor results keep their original
-scope. A separate original-entry binding increment passed10 current and10 actual
+Production checks and native aliases were not weakened. The same164-case fixture matrix also passed on actual3.11.15, with zero
+failures/errors/skips and unchanged source; prior isolated floor results retain
+their original scope. A separate original-entry binding increment passed10 current and10 actual
 3.11.15 cases, but is not included in1a49174's1,280-case result. Operation budgets,
 native effect/cleanup receipts, complete runtime/key/service wiring, physical
 character/local-image delivery and release qualification remain open.

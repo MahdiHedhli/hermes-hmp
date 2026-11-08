@@ -43,5 +43,5 @@ with125 passes and19 failures, no skips/errors and unchanged source. The separat
 reviewed refinement passed164 cases, including all19 prior failure IDs. The
 integrated1a49174 candidate passed all1,280 configured startup checks on actual
 Python3.14.9, zero failures/errors/skips, with source unchanged. These are source
-results, not native outcome/ABI/runtime or image-delivery qualification. Actual
-3.11 fixture migration remains under test. Production guards remain intact.
+results, not native outcome/ABI/runtime or image-delivery qualification. The164 migrated fixture cases
+also passed on actual3.11.15, source unchanged and zero failures/errors/skips. Production guards remain intact.

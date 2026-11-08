@@ -31,7 +31,8 @@ byte-identical server/scanner source and passed all1,280 configured startup chec
 in2,429.39 seconds on actual Python3.14.9. Both runs had zero failures/errors/skips
 and unchanged source; exact source/test/receipt/log/XML bindings were checked.
 
-The164-case actual3.11 fixture run is in progress. A separate original-entry
+The same164 cases passed on actual3.11.15, zero failures/errors/skips and
+unchanged source, with exact interpreter/source/log/XML bindings checked. A separate original-entry
 lineage increment is not covered by1a49174's result. This source regression does
 not qualify native/runtime admission, other plugin features, image delivery,
 physical devices or release. Production checks, live hosts/devices, permissions

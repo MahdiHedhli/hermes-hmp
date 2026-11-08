@@ -8,7 +8,8 @@ independent source review accepted the repaired custody/publication checks. The
 original combined `1ab9910` run failed215 cases and passed1,065. The reviewed
 fixture refinement then passed164 cases, and repaired1a49174 passed all1,280
 configured startup checks on actual Python3.14.9 with zero failures/errors/skips
-and unchanged source. Actual3.11 fixture migration is still under test. None of
+and unchanged source. The same164-case fixture matrix
+also passed on actual3.11.15, zero failures/errors/skips and unchanged source. None of
 these source results qualifies code execution, fallback, resources, operational
 native admission or phone images.
 

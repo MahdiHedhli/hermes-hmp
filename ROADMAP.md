@@ -9,8 +9,8 @@ migration operator/link checks passed. The144-case residual investigation
 finished with125 passes and19 failures, no skips/errors and unchanged source.
 The reviewed refinement passed164 cases. Integrated1a49174 then passed all1,280
 configured startup checks in2,429.39 seconds on actual Python3.14.9, with zero
-failures/errors/skips and unchanged source. The migrated actual3.11 fixture run
-is still in progress; operational, whole-plugin, installation and physical
+failures/errors/skips and unchanged source. The same164 fixture cases also passed on actual3.11.15,
+zero failures/errors/skips and unchanged source; operational, whole-plugin, installation and physical
 qualification remain distinct. See
 [fixture migration and limits](specs/046-bot-presentation-integration/NATIVE_IO_FIXTURE_MIGRATION.md).
 

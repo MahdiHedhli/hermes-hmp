@@ -17,7 +17,8 @@ prior19 failed ID matched to a pass. The repaired1a49174 candidate passed all1,2
 configured startup checks on actual Python3.14.9, zero failures/errors/skips and
 unchanged source. This resolves the observed fixture regression for that exact
 candidate, not operational/native/resource or physical qualification. The164-case
-actual3.11 fixture run remains in progress.
+actual3.11.15 fixture run also passed, zero failures/errors/skips and unchanged
+source; these remain exact source results, not operational admission.
 
 The migrated `read_error` fixture injects loss of acknowledgement after a second
 actual native read. It retains a known acknowledged65KiB prefix and unknown debt;
