@@ -6,7 +6,8 @@ import pytest
 from . import test_presentation_gateway_entry as base
 
 CASES = ('normal', 'copied_context', 'foreign_context', 'copied_scope',
-         'foreign_scope', 'legacy_scope')
+         'foreign_scope', 'legacy_scope', 'foreign_count', 'bool_count',
+         'negative_count', 'over_reserved', 'foreign_inflight', 'foreign_failed')
 BODY = r'''
 from hmp_plugin.presentation_source_digest import retain,current,SourceDigestError
 from hmp_plugin.presentation_startup_artifacts import _Scope,_HashedArtifact
@@ -28,9 +29,24 @@ calls=[]
 class Foreign:
     def __getattr__(self,name):calls.append('get');raise AssertionError('foreign getter')
     def __eq__(self,other):calls.append('eq');raise AssertionError('foreign equality')
+case=LINEAGE_CASE
+if case in ('foreign_count','bool_count','negative_count','over_reserved',
+            'foreign_inflight','foreign_failed'):
+    from hmp_startup.gateway_entry import GatewayEntryError
+    if case=='foreign_count':ledger.counts[0]=Foreign()
+    if case=='bool_count':ledger.counts[0]=True
+    if case=='negative_count':ledger.counts[0]=-1
+    if case=='over_reserved':ledger.counts[:]=[1048576,1]
+    if case=='foreign_inflight':ledger.inflight[0]=Foreign()
+    if case=='foreign_failed':ledger.failed[0]=Foreign()
+    try:GatewayEntryOwner._native_file_lineage(owner)
+    except GatewayEntryError:pass
+    else:raise AssertionError('invalid original ledger state accepted')
+    assert calls==[]
+    ledger.counts[:]=[0,0];ledger.inflight[:]=[None];ledger.failed[:]=[False]
+    case='normal'
 context=retain(owner,owner._activation)
 assert context.native_files is lineage
-case=LINEAGE_CASE
 if case=='copied_context':context=context._replace(native_files=lineage._replace())
 if case=='foreign_context':context=context._replace(native_files=Foreign())
 scope=_Scope(owner._activation,owner._activation._scope,(),lineage.context,[],

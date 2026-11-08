@@ -277,3 +277,12 @@ No dispatcher, scope registry, step/consumer claim, counter transitions, close
 reservation or native call is implemented yet. Storage allocation is not an
 operation budget enforcement or image capability. Tests have not run on this
 increment; earlier exact-source qualifications do not apply to it.
+
+The retained data getter now checks mutable storage shape before returning it:
+exact lists/lengths, exact integer counters within the shared cap and reservation
+headroom, inactive in-flight state and exact boolean failure state. Six added
+original-cell mutations cover opaque/bool/negative counts, over-reservation and
+foreign in-flight/failure values without foreign callbacks. This is structural
+DATA validation only: attempt node/consumer custody and real counter transitions
+remain unimplemented, and no native call is permitted merely by passing it.
+Tests on this16-case lineage set are pending the existing serialized test lane.

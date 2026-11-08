@@ -389,6 +389,20 @@ class _NativeFileLedger(NamedTuple):
         return "<OriginalNativeFileLedger storage-only redacted>"
 
 
+def _native_file_ledger_shape(ledger):
+    # Shape only, never an effect grant or a completed operation observation.
+    _require(type(ledger) is _NativeFileLedger
+             and type(ledger.attempts) is list and len(ledger.attempts) <= 1048576
+             and type(ledger.counts) is list and len(ledger.counts) == 2
+             and type(ledger.counts[0]) is int and type(ledger.counts[1]) is int
+             and 0 <= ledger.counts[0] <= 1048576
+             and 0 <= ledger.counts[1] <= 1048576 - ledger.counts[0]
+             and type(ledger.inflight) is list and len(ledger.inflight) == 1
+             and ledger.inflight[0] is None
+             and type(ledger.failed) is list and len(ledger.failed) == 1
+             and type(ledger.failed[0]) is bool)
+
+
 class _NativeFileLineage(NamedTuple):
     """Original entry allocation only; no operation, receipt or fallback grant."""
     entry: object
@@ -564,6 +578,7 @@ class GatewayEntryOwner:
                  and s.native_file_ledger.context is s.context
                  and type(s.interpreter.data) is InterpreterStartupData
                  and data.interpreter is s.interpreter.data)
+        _native_file_ledger_shape(s.native_file_ledger)
         return s, cell, started
 
     def _native_file_lineage(self):
