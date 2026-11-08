@@ -29,3 +29,11 @@ thread, replay, after-close counter replacement, copied completed fact and late
 callback fact replacement. These are bounded diagnostic source checks; the unchanged-source shared
 startup regression passed1220 cases in1453.48 seconds on source4f28ac0. No native/device qualification, cache fallback,
 live host change or operational factory admission is claimed.
+
+Five additional causal OS/cleanup cases passed on Python 3.14.9 and five actual
+Python 3.11.15 children passed with unchanged source: stat permission refusal,
+structural ENOTDIR refusal, failed-open uncertainty, fstat refusal after owned
+open, and a lost close acknowledgement after the actual close. Failures remain
+sticky; known descriptors close, unknown resources retain their state, and no
+case authorizes source fallback. These focused checks supplement the 1,220-case
+baseline; the later fault cases were not part of that baseline run.

@@ -68,6 +68,10 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
       actual floor cases and1202 unchanged-source shared-startup cases pass;
       bounded review accepted; this is not owned decoding or execution.
       [Contract and limits](RUNTIME_CACHE_INPUT_CONTRACT.md).
+- [x] **PS1-CACHE-METADATA-PROBE** Fresh no-follow original-row diagnostic probe,
+      with bounded review;11 current/11 actual floor cases,122 scanner checks,
+      and1,220 unchanged-source startup cases passed. Five later cleanup fault
+      cases passed on both actual interpreters. No payload/fallback authority.
 - [ ] **PS1-RUNTIME-CACHE-IO** Fresh original-row diagnostic metadata probe is
       implemented with bounded independent source acceptance;11 current and11
       actual floor child cases pass.1220 unchanged-source startup checks passed. Cache
