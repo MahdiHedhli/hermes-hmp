@@ -28,8 +28,14 @@ plan/caller cases passed on each supported Python version (11 each). Resource
 `0884893` passed eight on each; all sources/receipt/log/XML bindings were rehashed.
 These qualify preparation slices only. Directory-consumer preparation `bbf877d`
 retains original scope/material/lifetime bindings and one-use result ownership;
-nine focused cases are running current-version first, then the floor. Scanner
-policy is unchanged. Actual metadata admission/debit/native calls, fixed result
+nine focused cases passed on each interpreter. Subsequent causal constructor
+mutation tests reproduced a missing final material-closure check on the control;
+repair `cefd515` passed all12 cases on each interpreter. Each injected mutation
+was refused before publication. Fixed directory-policy DATA source `d537500`
+passed20 cases on each interpreter. Exact source/log/XML hashes were rechecked.
+Latched-cohort preparation `a19560a` separates structural joins from unclaimed
+admission;14 dedicated cases are running on current Python. That new source is
+not yet qualified. Scanner policy is unchanged. Actual metadata admission/debit/native calls, fixed result
 policy/ACK, tree/link/diagnostic plans and full operation-budget integration remain
 unfinished; no host activation or physical feature pass is claimed. This cache is Python
 bytecode custody for character startup, not a delivered chat-image feature.
