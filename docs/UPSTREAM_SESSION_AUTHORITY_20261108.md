@@ -57,3 +57,28 @@ Next steps are an authorized native actor/transport contract assessment and
 source fixtures before any capability advertisement or live integration. Keep
 minimum-version support and actual API/security/host gates distinct; this note
 is not a new version allowlist or a reason to switch features off globally.
+
+## Independent source follow-up
+
+BasePlatformAdapter documents a gateway_runner back-reference. This supplies
+object access/routing, not a separate device principal or capability grant.
+Independent read-only review of that interface, PluginContext, the native
+verified-ticket ingress and existing HMP bridge paths did not identify a
+qualified HMP pairing-to-native actor issuer. This is a bounded finding, not
+proof that no such route exists anywhere in the SDK or that an upstream patch
+is necessarily required. Any viable integration still needs a native-owned
+trust/delegation contract binding the verified HMP device, instance, profile,
+explicit session read/submit intersection, current revocation/served-profile/bot
+authority, transport/lifetime and audit cleanup.
+
+The native LOCAL session owner check rejects a different principal unless an
+operator capability applies. Native owner_identity distinguishes verified OS
+grants and authenticated dashboard sign-in; pairing in HMP does not silently
+become a dashboard login. API-peer owner recovery, a copied stored owner or a
+dummy login provider is not that delegation contract. Jobs/model controls do
+not imply native operator/create/control/approve rights.
+
+SessionAuthority.authorize can restore or mount cold session state and touch
+retirement state. Combined with attach subscription/lifecycle changes, this
+makes both inappropriate as passive background readiness probes. No such
+method was invoked in this source review, and no native grant was created.

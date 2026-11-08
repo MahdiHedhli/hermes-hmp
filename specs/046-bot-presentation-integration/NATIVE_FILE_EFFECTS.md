@@ -90,7 +90,12 @@ mapped explicitly, and session attachment changes subscription/lifecycle state
 rather than acting as a passive health read. Legacy peer sends generate a fresh
 delivery key; contract presence alone does not resolve external message identity
 or the duplicate-history bug. No live requests, grants or session operations
-were performed. See the current native session-authority source note.
+were performed. Independent read-only review confirms that the public runner
+reference is not itself a device-authority issuer. No qualified per-device native
+read/submit delegation route was identified in the inspected paths; this is not
+proof the entire SDK lacks one or that upstream code changes are required.
+Native authorize can also restore/mount cold sessions, so passive readiness must
+not invoke it. See the current native session-authority source note.
 
 Fixed-site DATA preparation `e285873` adds original row variants allocated with
 the plan before descriptor acquisition. Structural role/op/component checks,
