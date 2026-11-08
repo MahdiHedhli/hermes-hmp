@@ -3,15 +3,15 @@ import pytest
 
 from hmp_plugin.presentation_native_metadata import _declared_leaf_identity
 from hmp_plugin.presentation_startup_artifacts import (
-    ArtifactObservationError,
     _MAX_FILE,
+    ArtifactObservationError,
     _NativeMetadataSnapshot,
 )
 
 
 def snapshot(**changes):
-    values = dict(dev=1, inode=2, mode=0o100644, uid=501, gid=20,
-                  links=1, size=7, mtime_ns=8, ctime_ns=9)
+    values = {'dev': 1, 'inode': 2, 'mode': 0o100644, 'uid': 501, 'gid': 20,
+              'links': 1, 'size': 7, 'mtime_ns': 8, 'ctime_ns': 9}
     values.update(changes)
     return _NativeMetadataSnapshot(tuple(values.values()), 0.0)
 

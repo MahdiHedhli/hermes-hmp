@@ -15,9 +15,9 @@ from .presentation_metadata_custody import (
     _PayloadOrigin,
 )
 from .presentation_startup_artifacts import (
+    _MAX_FILE,
     ArtifactObservationError,
     StartupArtifactOwner,
-    _MAX_FILE,
     _native_actor_context,
     _native_declared_metadata_cohort_tail,
     _native_declared_metadata_plan_tail,
