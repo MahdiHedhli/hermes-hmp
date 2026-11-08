@@ -1,25 +1,22 @@
-## November 8 — verified failure census and repaired focused results
+## November 8 — 1,426 startup cases passed; image features still unfinished
 
-Original source `9e6f02a` finished its 1,398 configured startup cases: 1,375
-passed and 23 failed. All 23 actual failures contain the same baseline S1 artifact
-import violation; source and receipt/log/XML hashes were verified. Separate repair
-`f37a618` passed 136 scanner cases on each of Python 3.14.9 and 3.11.15.
-Repaired candidate `77ae4dc` then passed 183 focused cases on each interpreter;
-its 1,426-case combined startup run is active. That combined pass is not yet proven.
+Repaired source `77ae4dc` passed all 1,426 configured startup cases on Python
+3.14.9 with zero failures, errors or skips. Source, receipt, log and XML hashes
+were independently rechecked. Its 183 focused cases also passed on Python 3.14.9
+and 3.11.15. The original `9e6f02a` 1,398-case failure remains preserved separately;
+this later result does not relabel it as passing.
 
-Later open/read/metadata and held-native-function candidates remain separate,
-uninstalled source. Held-callee `09c77c6` has bounded source-review acceptance,
-not test qualification. Original registration/type/origin pins now precede nested
-access; missing primitive fences and source-fixture signature defects were repaired.
-Close still uses a later namespace lookup. Original resource/step/result claims,
-quota and reserved cleanup, runtime/key/service wiring and device qualification
-remain unfinished. No complete native IO safety or factory readiness is claimed.
+Later open/read/callee/actor candidates remain separate and uninstalled. Actor
+repair `ca41d91` and cache-return tests `744d75d` have bounded source-review
+acceptance, with execution queued. Reserved-close implementation is dirty WIP:
+review defects are being repaired and transition tests are being added. No complete
+native IO, cleanup, quota, factory, runtime/key/service or device qualification is claimed.
 
 Device-local sections/static icons and selected-bot readiness are implemented in
 app source, with physical qualification pending. Desktop character parity and
 host-local image delivery remain unfinished. No upstream prerequisite has been
-established for the remaining HMP integration. These local candidates are not the
-public review branch's integrated source `34b862e`; no new deployment occurred.
+established for the remaining HMP integration. Public integrated code remains
+`34b862e`; these are local qualification candidates, with no new deployment.
 
 ## November 8 — selected registration checks passed; device features unchanged
 
