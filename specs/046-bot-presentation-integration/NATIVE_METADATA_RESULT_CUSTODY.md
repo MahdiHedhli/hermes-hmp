@@ -251,6 +251,7 @@ instrumentation (`7105740`) passes the same case on each with all nine observed
 shared-state fields unchanged. Each original control remains one failure, not
 a qualification pass. The23 declared-leaf and19 fixed-variant DATA tests also
 pass on both versions, with unchanged sources and verified source/log/XML/
-checkpoint bindings. A selected combined actual-caller run on `cc9603e` is in
-progress. These are isolated source results, not full walker/native/runtime or
+checkpoint bindings. Four selected combined actual-caller cases on `cc9603e`
+now pass on each interpreter, with unchanged source and verified source/log/XML
+bindings. The broader121-case selected regression is running serially. These are isolated source results, not full walker/native/runtime or
 physical image/bot-character acceptance. No live host/device changes occurred.

@@ -134,8 +134,11 @@ repair regression now passes on Python3.14.9 (zero failures/errors/skips,
 unchanged source and every source/log/XML hash rechecked). The same73 cases
 also passed on Python3.11.15 with zero failures/errors/skips, unchanged source
 and all source/log/XML hashes rechecked. Independent repair review found no new blocker for the
-single interruption. Combined fixed-variant caller and broader isolation/
-repeated-interruption coverage, actual-site integration and physical/runtime
+single interruption. Four selected combined actual-caller cases on `cc9603e`
+now pass on each interpreter: normal, wrong actor and before/after-detach
+interruption, with unchanged source and rehashed evidence. A broader121-case
+selected regression of that exact source is running serially. Other isolation/
+repeated-interruption cases, actual-site integration and physical/runtime
 qualification remain open. The older73-case baseline does not cover the later
 cross-thread preparation defect; the separate repair/control evidence above
 must not be replaced by that passing baseline. This is not a completed image-delivery feature.
