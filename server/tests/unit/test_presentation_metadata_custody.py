@@ -244,3 +244,22 @@ def test_cell_replacement_after_last_marker_return_is_not_adopted():
     assert origin.members[0].__get__(payload) is foreign_cell
     assert marker.owner_link[0] is payload
     assert marker.state == [False, False, False]
+
+
+@pytest.mark.parametrize('replacement', [None, object()])
+def test_retirement_preserves_foreign_marker_slot_and_detaches_original(replacement):
+    owner, origin, marker, payload, _ = allocation()
+    marker.marker_slot[0] = replacement
+    with pytest.raises(ArtifactObservationError):
+        _directory_payload_cells(owner, origin, marker, payload)
+    copied = marker._replace()
+    with pytest.raises(ArtifactObservationError):
+        _retire_directory_payload_data(owner, origin, copied, payload)
+    assert marker.owner_link[0] is payload
+    assert marker.marker_slot[0] is replacement
+    assert marker.state == [False, False, False]
+    record = _retire_directory_payload_data(owner, origin, marker, payload)
+    assert record.detached and not record.unmatched_link and record.unmatched_marker
+    assert marker.owner_link[0] is None
+    assert marker.marker_slot[0] is replacement
+    assert marker.state == [True, True, True]

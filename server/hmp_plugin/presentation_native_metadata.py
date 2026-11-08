@@ -9,6 +9,7 @@ from .presentation_metadata_custody import (
     _allocate_directory_custody,
     _capture_payload_origin,
     _directory_payload_cells,
+    _held_marker_identity_tail,
     _marker_tail,
     _origin_tail,
     _payload_state_is_clear,
@@ -1093,6 +1094,7 @@ def _retired_directory_commit_tail(owner, consumer, commit, origin, marker, reco
              and marker.state[0] is True and marker.state[1] is True and marker.state[2] is False
              and type(record) is origin.record_type and record.marker is marker
              and record.detached is True and record.unmatched_link is False
+             and record.unmatched_marker is False
              and type(marker.reference) is origin.reference_type
              and origin.reference_callback.__get__(marker.reference, origin.reference_type) is None
              and origin.reference_call(marker.reference) is None)
@@ -1104,7 +1106,7 @@ def _retired_directory_commit_tail(owner, consumer, commit, origin, marker, reco
              and marker.marker_slot[0] is marker and marker.state[0] is True
              and marker.state[1] is True and marker.state[2] is False
              and record.marker is marker and record.detached is True
-             and record.unmatched_link is False)
+             and record.unmatched_link is False and record.unmatched_marker is False)
     return commit
 
 
@@ -1405,7 +1407,7 @@ def _run_directory_observation(owner, resource):
         _native_actor_context(native.actor_calls, (native.native, native.thread_native),
                               operation.context)
         _native_post_actor_state(owner, actor_state, actor_arguments)
-        _marker_tail(owner, origin, marker, payload)
+        _held_marker_identity_tail(owner, origin, marker, payload)
         _require(marker.operation is operation and result is operation.result
                  and result.custody_origin is origin
                  and result.custody_link is marker.owner_link
@@ -1436,7 +1438,8 @@ def _run_directory_observation(owner, resource):
         record = _retire_directory_payload_data(owner, origin, marker, payload)
         retired = True
         if complete:
-            _require(record.detached is True and record.unmatched_link is False)
+            _require(record.detached is True and record.unmatched_link is False
+                     and record.unmatched_marker is False)
     except BaseException:
         complete = False
     finally:

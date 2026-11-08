@@ -17,7 +17,7 @@ _FIELDS = ('raw', 'category', 'snapshot', 'envelope', 'consumption')
 
 
 class _DirectoryPayload:
-    __slots__ = (*_FIELDS, '__weakref__')
+    __slots__ = (*_FIELDS, 'marker', '__weakref__')
 
     def __repr__(self):
         return '<DirectoryPayload private DATA redacted>'
@@ -28,6 +28,7 @@ class _PayloadOrigin(NamedTuple):
     marker_type: type
     record_type: type
     members: tuple
+    marker_member: object
     reference_type: type
     reference_call: object
     reference_callback: object
@@ -54,6 +55,7 @@ class _RetirementRecord(NamedTuple):
     marker: _RetirementMarker
     detached: bool
     unmatched_link: bool
+    unmatched_marker: bool
 
     def __repr__(self):
         return '<RetirementRecord historical DATA redacted>'
@@ -77,6 +79,9 @@ def _origin_tail(origin):
              and origin.marker_type is _RetirementMarker
              and origin.record_type is _RetirementRecord
              and type(origin.members) is tuple and len(origin.members) == len(_FIELDS)
+             and type(origin.marker_member) is MemberDescriptorType
+             and origin.marker_member.__objclass__ is origin.payload_type
+             and origin.marker_member.__name__ == 'marker'
              and type(origin.reference_type) is type
              and type(origin.reference_call) is WrapperDescriptorType
              and origin.reference_call.__objclass__ is origin.reference_type
@@ -106,7 +111,8 @@ def _capture_payload_origin():
              and reference_type.__module__ == 'weakref')
     origin = tuple.__new__(_PayloadOrigin, (
         _DirectoryPayload, _RetirementMarker, _RetirementRecord,
-        tuple(vars(_DirectoryPayload).get(name) for name in _FIELDS), reference_type,
+        tuple(vars(_DirectoryPayload).get(name) for name in _FIELDS),
+        vars(_DirectoryPayload).get('marker'), reference_type,
         vars(reference_type).get('__call__'), vars(reference_type).get('__callback__')))
     return _origin_tail(origin)
 
@@ -117,7 +123,7 @@ def _payload_state_is_clear(state):
             and state[0] is False and state[1] is False and state[2] is False)
 
 
-def _marker_tail(owner, origin, marker, payload):
+def _held_marker_identity_tail(owner, origin, marker, payload):
     """Held original allocation joins, not a current-slot nomination or receipt."""
     _origin_tail(origin)
     _require(type(marker) is origin.marker_type and marker.owner is owner
@@ -125,19 +131,29 @@ def _marker_tail(owner, origin, marker, payload):
              and type(marker.owner_link) is list and len(marker.owner_link) == 1
              and type(marker.marker_slot) is list and len(marker.marker_slot) == 1
              and marker.owner_link is not marker.marker_slot
-             and marker.marker_slot[0] is marker
              and type(marker.reference) is origin.reference_type
              and origin.reference_callback.__get__(marker.reference, origin.reference_type) is None
              and type(marker.state) is list and len(marker.state) == 3
              and all(type(value) is bool for value in marker.state)
              and origin.reference_call(marker.reference) is payload)
-    # Revalidate after the captured C weakref call; no profiling capability is assumed.
+    # The held payload retains the actual factory marker as a raw-free backlink.
+    # It rejects a copied marker even when the public marker slot is foreign.
+    _require(origin.marker_member.__get__(payload, origin.payload_type) is marker)
+    # Revalidate after captured descriptor calls; no profiling capability is assumed.
     # Do not compare lists: an injected foreign state value must never get __eq__.
     _require(type(marker.owner_link) is list and len(marker.owner_link) == 1
              and type(marker.marker_slot) is list and len(marker.marker_slot) == 1
              and marker.owner_link is not marker.marker_slot
-             and marker.marker_slot[0] is marker
              and type(marker.state) is list and len(marker.state) == 3
+             and type(marker.state[0]) is bool and type(marker.state[1]) is bool
+             and type(marker.state[2]) is bool)
+    return marker
+
+
+def _marker_tail(owner, origin, marker, payload):
+    """Strict normal joins; foreign marker slots cannot authorize result use."""
+    _held_marker_identity_tail(owner, origin, marker, payload)
+    _require(marker.marker_slot[0] is marker
              and type(marker.state[0]) is bool and type(marker.state[1]) is bool
              and type(marker.state[2]) is bool)
     return marker
@@ -160,6 +176,7 @@ def _allocate_directory_custody(owner, operation, consumer, origin, owner_link, 
     marker = tuple.__new__(origin.marker_type, (
         owner, operation, consumer, origin, owner_link, marker_slot, reference,
         [False, False, False]))
+    origin.marker_member.__set__(payload, marker)
     _require(type(marker) is origin.marker_type and marker.owner is owner
              and marker.operation is operation and marker.consumer is consumer
              and marker.origin is origin and marker.owner_link is owner_link
@@ -214,19 +231,26 @@ def _retire_directory_payload_data(owner, origin, marker, payload):
     """
     record = None
     try:
-        _marker_tail(owner, origin, marker, payload)
+        _held_marker_identity_tail(owner, origin, marker, payload)
         _require(marker.state[1] is False)
         marker.state[0] = True
         detached = marker.owner_link[0] is payload
+        unmatched_marker = marker.marker_slot[0] is not marker
+        if unmatched_marker:
+            marker.state[2] = True
         if detached:
             marker.owner_link[0] = None
         else:
             marker.state[2] = True
-        record = tuple.__new__(origin.record_type, (marker, detached, not detached))
-        _marker_tail(owner, origin, marker, payload)
+        record = tuple.__new__(origin.record_type,
+                               (marker, detached, not detached, unmatched_marker))
+        _held_marker_identity_tail(owner, origin, marker, payload)
         _require(type(record) is origin.record_type and record.marker is marker
                  and type(record.detached) is bool and record.detached is detached
                  and type(record.unmatched_link) is bool and record.unmatched_link is (not detached)
+                 and type(record.unmatched_marker) is bool
+                 and record.unmatched_marker is unmatched_marker
+                 and (marker.marker_slot[0] is not marker) is unmatched_marker
                  and marker.state[0] is True and marker.state[1] is False
                  and ((detached and marker.owner_link[0] is None)
                       or (not detached and marker.owner_link[0] is not payload)))
