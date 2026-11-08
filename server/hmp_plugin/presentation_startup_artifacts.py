@@ -537,6 +537,14 @@ def _register_native_scope(owner, s, cell, root):
     return record
 
 
+def _native_walk_scope(owner, registration):
+    if registration is None:
+        s = _owner_guard(owner)
+        _require(s.native_files is None and s.native_registration_slot is None)
+        return s
+    return _native_scope_current(owner, registration).scope
+
+
 class StartupArtifactOwner:
     @classmethod
     def observe(cls, activation, expected):
@@ -643,6 +651,7 @@ class StartupArtifactOwner:
         _require(cls is StartupArtifactOwner and type(owner) is StartupArtifactOwner
                  and type(owner._origin) is _Scope)
         s, root = owner._origin, owner._root_cell
+        native_registration = _capture_native_scope(s, owner._cell, root)
         activation = s.activation
         _require(owner._ready is False and owner._failed is False and owner._unknown is False
                  and owner._attempt_cell is None and activation._artifact_attempt_cell is None)
@@ -654,7 +663,7 @@ class StartupArtifactOwner:
         try:
             context = (os.getpid(), os.geteuid(), threading.get_ident())
             _require(all(type(v) is int for v in context) and context == s.context)
-            _require(StartupArtifactOwner._guard(owner) is s
+            _require(_native_walk_scope(owner, native_registration) is s
                      and owner._count_cell is owner._initial_count_cell
                      and all(type(row) is _Descriptor and row.closed is True
                              and row.unknown is False and row.close_attempted is True
@@ -675,7 +684,7 @@ class StartupArtifactOwner:
             progress = owner._count_cell
             for row in s.expected:
                 _require(owner._count_cell is progress)
-                collected.append(StartupArtifactOwner._file(owner, row))
+                collected.append(StartupArtifactOwner._file(owner, row, native_registration))
                 progress = owner._count_cell
             hashes = tuple(collected)
             if runtime is not None:
@@ -699,7 +708,7 @@ class StartupArtifactOwner:
                 cache_after = observe_pass(s.cache, owner, 1, cache_before)
                 _require(seal(s.cache, owner, cache_before, cache_after) is s.cache)
             count = owner._count_cell
-            _require(StartupArtifactOwner._guard(owner) is s
+            _require(_native_walk_scope(owner, native_registration) is s
                      and owner._root_cell is root and owner._attempt_cell is attempt
                      and activation._artifact_attempt_cell is attempt
                      and type(count) is tuple and len(count) == 3
@@ -1107,8 +1116,8 @@ class StartupArtifactOwner:
         _require(seal(fact[2], self, fact[3], fact[4]) is fact[2])
         return fact
 
-    def _file(self, expected):
-        s = _owner_guard(self)
+    def _file(self, expected, native_registration=None):
+        s = _native_walk_scope(self, native_registration)
         anchor = type(expected) is OperatorApprovalPath
         declared_reader = None
         if anchor:
@@ -1182,7 +1191,7 @@ class StartupArtifactOwner:
                               and expected.path.endswith(".pyc"))
             remaining = before.st_size if anchor else expected.size
             while remaining:
-                _require(_owner_guard(self) is s)
+                _require(_native_walk_scope(self, native_registration) is s)
                 _require(progress is None or self._count_cell is progress)
                 data = (StartupArtifactOwner._read(self, fd, min(remaining, 65536), s)
                         if declared_reader is None else
@@ -1195,7 +1204,7 @@ class StartupArtifactOwner:
                     progress = self._count_cell
                 _require(0 < len(data) <= remaining)
                 remaining -= len(data)
-                _require(_owner_guard(self) is s)
+                _require(_native_walk_scope(self, native_registration) is s)
                 _append_configuration(self, data)
                 digest.update(data)
                 if source_effect is not None:
@@ -1203,7 +1212,7 @@ class StartupArtifactOwner:
                 if capture_header and len(header) < 16:
                     header += data[:16 - len(header)]
                 data = None
-                _require(_owner_guard(self) is s)
+                _require(_native_walk_scope(self, native_registration) is s)
             _require(progress is None or self._count_cell is progress)
             data = (StartupArtifactOwner._read(self, fd, 1, s) if declared_reader is None
                     else declared_reader._read(self, fd, 1, s))
@@ -1214,9 +1223,9 @@ class StartupArtifactOwner:
             count_cell, counted = self._count_cell, self._bytes_read
             _require(data == b"" and _identity(StartupArtifactOwner._fstat(self, fd, s)) == original
                      and _identity(StartupArtifactOwner._stat(self, name, parent, s)) == original)
-            _require(_owner_guard(self) is s)
+            _require(_native_walk_scope(self, native_registration) is s)
             actual_hash = digest.hexdigest()
-            _require(_owner_guard(self) is s
+            _require(_native_walk_scope(self, native_registration) is s
                      and type(actual_hash) is str
                      and (anchor or actual_hash == expected.sha256))
             if source_effect is not None:
@@ -1228,7 +1237,7 @@ class StartupArtifactOwner:
                     and _identity(StartupArtifactOwner._stat(self, name, parent, s), True)
                     == signature
                 )
-            _require(_owner_guard(self) is s)
+            _require(_native_walk_scope(self, native_registration) is s)
             result = expected
             if anchor:
                 result = _OperatorFileReceipt(self, s, expected, original, actual_hash, count_cell,
@@ -1256,8 +1265,8 @@ class StartupArtifactOwner:
                     failed = True
         if failed:
             raise ArtifactObservationError(self) from None
-        _require(_owner_guard(self) is s and self._count_cell is count_cell
-                 and self._bytes_read is counted)
+        _require(_native_walk_scope(self, native_registration) is s
+                 and self._count_cell is count_cell and self._bytes_read is counted)
         if source_effect is not None:
             source_fact = source_digest.fact(source_root, self, s, expected,
                                              source_hash, count_cell, source_observations,
@@ -1266,4 +1275,6 @@ class StartupArtifactOwner:
             _require(source_effect.cleared is True and source_effect.unknown is False
                      and source_effect.result is source_hash
                      and source_effect.buffer is source_buffer and len(source_buffer) == 0)
+        _require(_native_walk_scope(self, native_registration) is s
+                 and self._count_cell is count_cell and self._bytes_read is counted)
         return result

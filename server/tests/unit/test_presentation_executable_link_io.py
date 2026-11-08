@@ -52,9 +52,9 @@ else:
 actual_file=a.StartupArtifactOwner._file
 foreign_before=None
 if mutation in ("io_link_replace","io_target_replace","io_after_hash_mode","io_before_copy"):
-    def after_file(io,expected):
+    def after_file(io,expected,native_registration=None):
         global foreign_before
-        value=actual_file(io,expected)
+        value=actual_file(io,expected,native_registration)
         if expected is selected.target:
             if mutation=="io_link_replace":
                 replacement=base/"new-link";replacement.symlink_to(fake_target)

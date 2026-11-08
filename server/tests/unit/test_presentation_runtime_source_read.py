@@ -48,8 +48,8 @@ if case=='changed_source':(dep_root/'__init__.py').write_bytes(b'CHANGED_SYNTHET
 if case in ('count_copy','source_fact_copy'):
     from hmp_plugin.presentation_startup_artifacts import StartupArtifactOwner
     actual_file=StartupArtifactOwner._file
-    def replace_after(self,expected):
-        receipt=actual_file(self,expected)
+    def replace_after(self,expected,native_registration=None):
+        receipt=actual_file(self,expected,native_registration)
         if self is owner:
             copied=tuple(list(owner._count_cell))
             if case=='count_copy':owner._count_cell=copied

@@ -7,8 +7,10 @@ from hmp_plugin.presentation_gateway_activation import GatewayActivationOwner
 from hmp_plugin.presentation_startup_artifacts import (
     ExpectedArtifact,
     StartupArtifactOwner,
+    _capture_native_scope,
     _Descriptor,
     _HashedArtifact,
+    _native_walk_scope,
     _ReadEffect,
     _Scope,
 )
@@ -337,6 +339,7 @@ class DeclaredCacheReadOwner:
                  and self._ready is False and self._released is False
                  and self._admitting is False)
         root, cell, count = _ROOT, _CELL, self._count_cell
+        native_registration = _capture_native_scope(s, cell, root)
         selected, buffer = s.parent[1:3]
         self._admitting = True
         admitted = False
@@ -356,8 +359,8 @@ class DeclaredCacheReadOwner:
         failed = False
         snapshot = digest = None
         try:
-            _require(DeclaredCacheReadOwner._guard(self) is s)
-            receipt = StartupArtifactOwner._file(self, s.expected[0])
+            _require(_native_walk_scope(self, native_registration) is s)
+            receipt = StartupArtifactOwner._file(self, s.expected[0], native_registration)
             count = self._count_cell
             DeclaredCacheReadOwner._read_chain(self, s, full=True)
             records, reads = tuple(s.records), tuple(s.reads)
@@ -379,7 +382,7 @@ class DeclaredCacheReadOwner:
                              for row in records)
                      and all(type(row) is _ReadEffect and row.returned is True
                              and row.unknown is False for row in reads)
-                     and DeclaredCacheReadOwner._guard(self) is s and _ROOT is root
+                     and _native_walk_scope(self, native_registration) is s and _ROOT is root
                      and _CELL is cell and self._count_cell is count
                      and s.parent[1] is selected and s.parent[2] is buffer
                      and len(s.records) == len(records) and len(s.reads) == len(reads)

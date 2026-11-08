@@ -27,9 +27,9 @@ if case=='ancestor_link':
 actual_file=a.StartupArtifactOwner._file
 if case in ('appears_after_hash','parent_replaced'):
     changed=False
-    def after_file(self,expected):
+    def after_file(self,expected,native_registration=None):
         global changed
-        result=actual_file(self,expected)
+        result=actual_file(self,expected,native_registration)
         if not changed:
             changed=True
             if case=='appears_after_hash':

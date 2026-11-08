@@ -335,3 +335,25 @@ Package/entry scandir, iterator advancement and iterator close are separate
 filesystem effects: the six captured operations do not cover those effects,
 whose origin/effect/cleanup qualification remains open. No native operation or
 image capability is granted merely by capture or registry presence.
+
+## Held registration threading — partial, unqualified source
+
+The next separate source increment threads the actual registration returned by
+package initialization through both tree passes, recursive walks, enumeration
+work guards and file hashing. Artifact complete captures from its original scope
+slot before actor callbacks and passes the same record to every file. Runtime
+source/cache readers capture before admission and pass that original to_file.
+File work guards validate the held record; legacyNone remains separate. Existing
+file fault wrappers forward the new argument so intended mutations are not
+replaced by accidental signature errors. Eight new actual isolated source/cache
+walker cases cover normal forwarding, copied/missing arguments and paired slot/
+owner/registry substitution. They assert zero new file descriptors/bytes on
+refusal; these cases are present but have not run.
+
+This is not complete registration threading: entry-file metadata/tree walks,
+cache before/after/ancestor probes, link/hop observations and per-operation
+arguments/consumers remain to integrate. The six native boundaries/direct cache
+read/stat, separate enumeration effect origin, quota and independent reserved
+cleanup remain unfinished. Existing cleanup is not made dependent on a new work
+guard. No source fallback, live host/device change or runtime/image acceptance
+is implied by the partial source map.

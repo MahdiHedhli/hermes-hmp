@@ -89,8 +89,8 @@ if mutation == "retired_scan":
 if mutation == "after_hash_replace":
     actual_file = a.StartupArtifactOwner._file
     replaced = []
-    def replace_after_hash(current, expected):
-        result = actual_file(current, expected)
+    def replace_after_hash(current, expected, native_registration=None):
+        result = actual_file(current, expected, native_registration)
         if expected.path.endswith("/unused.py"):
             data = unused.read_bytes()
             replacement = root / "temporary-replacement.py"
@@ -103,8 +103,8 @@ if mutation == "after_hash_replace":
 foreign_fact = object()
 if mutation == "pre_fact_replacement":
     actual_file = a.StartupArtifactOwner._file
-    def set_foreign_fact(current, expected):
-        result = actual_file(current, expected)
+    def set_foreign_fact(current, expected, native_registration=None):
+        result = actual_file(current, expected, native_registration)
         owner._package_fact_cell = foreign_fact
         return result
     a.StartupArtifactOwner._file = set_foreign_fact

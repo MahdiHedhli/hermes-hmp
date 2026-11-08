@@ -7,7 +7,12 @@ import sys
 import threading
 from types import BuiltinFunctionType, MethodDescriptorType, ModuleType
 
-from hmp_plugin.presentation_startup_artifacts import StartupArtifactOwner, _Scope
+from hmp_plugin.presentation_startup_artifacts import (
+    StartupArtifactOwner,
+    _capture_native_scope,
+    _native_walk_scope,
+    _Scope,
+)
 
 from .gateway_continuation import GatewayContinuationOwner
 from .gateway_entry import GatewayEntryOwner
@@ -253,19 +258,20 @@ class RuntimeSourceReadOwner:
         # callback-bearing work is inside the failure/cleanup boundary.
         from hmp_plugin.presentation_source_digest import seal_fact
 
-        s, _, _, selected, buffer, _ = RuntimeSourceReadOwner._original(self)
+        s, held_root, held_cell, selected, buffer, _ = RuntimeSourceReadOwner._original(self)
+        native_registration = _capture_native_scope(s, held_cell, held_root)
         _require(self._started is False and self._ready is False and self._released is False
                  and self._retaining is False)
         self._started = True
         failed = False
         snapshot = digest = None
         try:
-            _require(RuntimeSourceReadOwner._guard(self) is s)
-            receipt = StartupArtifactOwner._file(self, s.expected[0])
+            _require(_native_walk_scope(self, native_registration) is s)
+            receipt = StartupArtifactOwner._file(self, s.expected[0], native_registration)
             count = self._count_cell
             source_fact = receipt.source_digest
             expected_sha = s.expected[0].sha256
-            _require(RuntimeSourceReadOwner._guard(self) is s
+            _require(_native_walk_scope(self, native_registration) is s
                      and self._selected is selected and self._original_buffer is buffer
                      and receipt.expected is s.expected[0]
                      and receipt.identity == selected.source.receipt.identity
@@ -288,7 +294,7 @@ class RuntimeSourceReadOwner:
             _require(type(digest) is hash_origin[2])
             actual_hash = hash_origin[3](digest)
             _require(type(actual_hash) is str and actual_hash == expected_sha
-                     and RuntimeSourceReadOwner._guard(self) is s
+                     and _native_walk_scope(self, native_registration) is s
                      and self._selected is selected and self._original_buffer is buffer
                      and _sha_current(hash_origin) is hash_origin
                      and self._count_cell is count and source_fact.count is count

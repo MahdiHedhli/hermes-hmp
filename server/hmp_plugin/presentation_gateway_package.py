@@ -26,6 +26,7 @@ from .presentation_startup_artifacts import (
     _expected,
     _HashedArtifact,
     _identity,
+    _native_walk_scope,
 )
 from .presentation_startup_artifacts import _Scope as IoScope
 from .presentation_startup_selection import (
@@ -329,18 +330,19 @@ class GatewayPackageOwner:
             _require(sys.dont_write_bytecode is True)  # no unlisted caches created during entry
             from .presentation_startup_artifacts import _register_native_scope
 
-            _register_native_scope(owner, s, scope_cell, scope_root)
+            native_registration = _register_native_scope(owner, s, scope_cell, scope_root)
             _require(owner._origin is s and owner._scope is s
                      and owner._cell is scope_cell and owner._root_cell is scope_root
                      and activation._package_cell is scope_root)
-            before = GatewayPackageOwner._tree(owner)
+            before = GatewayPackageOwner._tree(owner, native_registration)
             _require(type(before) is _Tree and before.entries == entries)
-            hashes = tuple(StartupArtifactOwner._file(owner, artifact) for artifact in files)
+            hashes = tuple(StartupArtifactOwner._file(owner, artifact, native_registration)
+                           for artifact in files)
             actual_count = owner._count_cell
-            after = GatewayPackageOwner._tree(owner)
+            after = GatewayPackageOwner._tree(owner, native_registration)
             _snapshot_join(before, after, hashes, meta, owner, s)
             origins = GatewayPackageOwner._origins(owner)
-            _require(GatewayPackageOwner._guard(owner) is s)
+            _require(_native_walk_scope(owner, native_registration) is s)
             _require(_same_origins(origins, GatewayPackageOwner._origins(owner)))
             _require(all(type(r) is _Descriptor and r.closed is True and r.unknown is False
                          for r in s.records)
@@ -462,8 +464,8 @@ class GatewayPackageOwner:
                  and self._unknown is False)
         return s
 
-    def _names(self, fd):
-        s = GatewayPackageOwner._guard(self)
+    def _names(self, fd, native_registration=None):
+        s = _native_walk_scope(self, native_registration)
         root_cell = self._root_cell
         scan = _Scan()
         s.expected.scans.append(scan)  # before iterator constructor/hidden FD effects
@@ -474,9 +476,10 @@ class GatewayPackageOwner:
             scan.attempted = True
             iterator = os.scandir(fd)
             scan.iterator = iterator
-            _require(GatewayPackageOwner._guard(self) is s)
+            _require(_native_walk_scope(self, native_registration) is s)
             while True:
-                _require(GatewayPackageOwner._guard(self) is s and type(self._seen) is int)
+                _require(_native_walk_scope(self, native_registration) is s
+                         and type(self._seen) is int)
                 before = self._seen
                 try:
                     entry = next(iterator)
@@ -489,7 +492,7 @@ class GatewayPackageOwner:
                 _require(type(name) is str and name not in ("", ".", "..")
                          and "/" not in name and len(name.encode("utf-8")) <= 1024)
                 _require(self._seen <= 2 * _MAX_ENTRIES
-                         and GatewayPackageOwner._guard(self) is s)
+                         and _native_walk_scope(self, native_registration) is s)
                 names.append(name)
         except BaseException:
             failed = scan.unknown = self._unknown = True
@@ -512,11 +515,11 @@ class GatewayPackageOwner:
                     failed = scan.unknown = self._unknown = True
         if failed:
             raise PackageInventoryError(self) from None
-        _require(GatewayPackageOwner._guard(self) is s)
+        _require(_native_walk_scope(self, native_registration) is s)
         return sorted(names)
 
-    def _tree(self):
-        s = GatewayPackageOwner._guard(self)
+    def _tree(self, native_registration=None):
+        s = _native_walk_scope(self, native_registration)
         meta, root_cell = s.expected, self._root_cell
         held, result, file_rows, directory_rows, ancestors = [], [], [], [], []
         failed = False
@@ -532,7 +535,8 @@ class GatewayPackageOwner:
                          and (not mode & 0o022 or (info.st_uid == 0 and bool(mode & stat.S_ISVTX))))
                 ancestors.append((name, parent, fd, _identity(info, True)))
                 parent = fd
-            GatewayPackageOwner._walk(self, parent, "", result, file_rows, directory_rows)
+            GatewayPackageOwner._walk(self, parent, "", result, file_rows, directory_rows,
+                                      native_registration)
             for name, parent, fd, signature in ancestors:
                 _require(_identity(StartupArtifactOwner._fstat(self, fd, s), True) == signature
                          and _identity(StartupArtifactOwner._stat(self, name, parent, s), True)
@@ -547,17 +551,17 @@ class GatewayPackageOwner:
                     row.unknown = self._unknown = failed = True
         if failed:
             raise PackageInventoryError(self) from None
-        _require(GatewayPackageOwner._guard(self) is s)
+        _require(_native_walk_scope(self, native_registration) is s)
         return _Tree(tuple(sorted(result)), tuple(sorted(file_rows)), tuple(sorted(directory_rows)),
                      tuple((name, signature) for name, _, _, signature in ancestors))
 
-    def _walk(self, fd, prefix, result, file_rows, directory_rows):
-        s = GatewayPackageOwner._guard(self)
+    def _walk(self, fd, prefix, result, file_rows, directory_rows, native_registration=None):
+        s = _native_walk_scope(self, native_registration)
         root_cell = self._root_cell
         _require(prefix.count("/") <= 32)
         before = _identity(StartupArtifactOwner._fstat(self, fd, s), True)
         directory_rows.append((prefix, before))
-        for name in GatewayPackageOwner._names(self, fd):
+        for name in GatewayPackageOwner._names(self, fd, native_registration):
             _require(name not in _PRIVATE and not name.startswith(".env."))
             path = prefix + name
             info = StartupArtifactOwner._stat(self, name, fd, s)
@@ -575,7 +579,7 @@ class GatewayPackageOwner:
                              and child_info.st_uid in (0, s.context[1])
                              and not child_info.st_mode & (0o022 | stat.S_ISUID | stat.S_ISGID))
                     GatewayPackageOwner._walk(self, child, path + "/", result,
-                                             file_rows, directory_rows)
+                                             file_rows, directory_rows, native_registration)
                     _require(_identity(StartupArtifactOwner._stat(self, name, fd, s), True)
                              == _identity(info, True))
                 finally:
