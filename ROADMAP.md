@@ -72,14 +72,24 @@ return cell replacement and GC-disabled synthetic reclamation. Its four fixed
 producer cases also passed on each version, including revocation after custody
 capture with zero observed callee c_call events and normal-case calibration.
 These events are not kernel-entry receipts. Source/receipt/log/XML bindings were
-rehashed; these are focused component/producer passes only. The full62-case
-current/floor selection has now started serially; no result is claimed yet.
+rehashed. The full62-case selection then passed on Python3.14.9 with zero
+failures/errors/skips, unchanged source and rehashed source/receipt/log/XML.
+The same62-case Python3.11.15 lane is now live; no floor result is claimed.
+These qualify the selected metadata/component source only, not the later caller.
 
 Test-only `6d3a8cd`, with production identical to `b6b8322`, ran one original
 timeout case with a private45-second stack sampler and unchanged60-second
 deadline. It passed at26.093 seconds before sampling, leaving an empty stack
 file. This supplies no timeout cause and does not erase the original failures.
-Actual fixed-caller lost-return/revoked-lifetime retirement, the full retained-
+Separate source `97d28c1` adds raw-free post-retirement ACK history and an
+unwired fixed caller retaining actual pre-C factory custody through producer,
+policy and ACK. Review found public/inner marker drift could otherwise prevent
+cleanup; its memory-only cleanup now uses the actual caller-held references and
+preserves foreign identity values. Five actual synthetic native caller cases
+(normal, lost return, revoked lifetime, public slot and inner marker corruption)
+are authored with GC disabled, but remain unrun behind the live floor suite.
+Lint/embedded-script syntax checks and bounded source review are not execution
+qualification. Actual lost-return/revoked-lifetime repair, complete retained-
 reference proof and remaining caller/site migrations stay open. No stored row
 may mint result/ACK or renewed-work authority; no prototype is installed.
 The [caller and repair contract](https://github.com/MahdiHedhli/hermes-hmp/blob/feat/startup-bytecode-headers-20261107/specs/046-bot-presentation-integration/NATIVE_METADATA_RESULT_CUSTODY.md)

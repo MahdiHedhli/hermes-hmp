@@ -69,9 +69,23 @@ producer cases include activation retirement after the final custody helper,
 zero observed callee c_call events and a normal-case counter calibration. A
 profile event is not a kernel-entry receipt. Memory cases include actual final
 marker-return replacement and GC-disabled synthetic owned-graph reclamation.
-These are focused passes; the full62-case serial selection is running with no
-result claimed. The actual fixed caller and ended-call failure retirement are
-still absent, so the original lost-return defect remains open.
+The full62-case selection then passed on Python3.14.9: zero failures/errors/
+skips, unchanged source and all source/receipt/log/XML hashes rechecked. Its
+Python3.11.15 lane remains live. Neither result qualifies later caller source.
+
+Separate `97d28c1` implements an unwired fixed caller retaining the actual factory
+triple before effects and the actual producer/policy/ACK returns. It separates
+raw-free ACK history from payload disposition, retires memory after the fixed
+synchronous producer has unwound under the original actor, and rejoins live
+history only after disposal. Original pre-effect caller references, rather than
+mutable public/inner marker identities, govern conditional owned-link detachment;
+normal result/ACK/copy guards stay strict. Foreign identity values survive and
+mark the path abnormal. Review found no remaining concrete blocker in that
+bounded source repair. Five native caller cases are authored with GC disabled,
+but unrun while the preceding floor suite is live. Their fixture output contract
+was corrected in read-only review before execution. The original lost-return
+defect remains open until actual causal caller qualification; interruption,
+disposal drift and complete retained-root graph evidence remain required.
 
 This repair is not accepted as complete. Required evidence includes the entire retained-root reference graph, coherent copy/foreign-link
 refusal, original-actor and revoked-lifetime retirement, interrupted detach,
@@ -137,7 +151,7 @@ releasing its owned preparation without rearming that intent also needs an
 explicit reviewed path. These are local implementation requirements, not a new
 upstream API blocker or a request to broaden permissions.
 
-## Next fixed-caller implementation and acceptance
+## Fixed-caller implementation and acceptance
 
 The next caller must obtain the actual operation/marker/payload factory return
 before preparing/latching the consumer or entering the native producer. Its
