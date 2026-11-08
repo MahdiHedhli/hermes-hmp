@@ -44,8 +44,12 @@ def exercise(frame):
         before=(tuple(ledger.counts),tuple(ledger.attempts),tuple(ledger.preparation),
                 tuple(ledger.inflight),tuple(ledger.failed),tuple(ledger.failure),
                 tuple(phase.current),tuple(phase.result),tuple(metadata.progress))
-        outcomes=[]
+        outcomes=[];wrong_native_entries=[]
+        native_callee=registration.native_origin.operations[4]
+        def wrong_actor_profile(frame,event,arg):
+            if event=='c_call' and arg is native_callee:wrong_native_entries.append(True)
         def wrong_actor_call():
+            sys.setprofile(wrong_actor_profile)
             try:m._run_directory_observation(owner,resource)
             except a.ArtifactObservationError as exc:
                 outcomes.append(exc.failed_owner is owner
@@ -53,9 +57,10 @@ def exercise(frame):
                                 and exc.__cause__ is exc.__context__ is None)
             except BaseException:outcomes.append(False)
             else:outcomes.append(False)
+            finally:sys.setprofile(None)
         worker=threading.Thread(target=wrong_actor_call)
         worker.start();worker.join(10)
-        assert not worker.is_alive() and outcomes==[True]
+        assert not worker.is_alive() and outcomes==[True] and wrong_native_entries==[]
         after=(tuple(ledger.counts),tuple(ledger.attempts),tuple(ledger.preparation),
                tuple(ledger.inflight),tuple(ledger.failed),tuple(ledger.failure),
                tuple(phase.current),tuple(phase.result),tuple(metadata.progress))
