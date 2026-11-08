@@ -11,6 +11,7 @@ from .presentation_startup_artifacts import (
     _native_declared_metadata_cohort_tail,
     _native_declared_metadata_plan_tail,
     _native_metadata_component_tail,
+    _native_metadata_snapshot,
     _native_post_actor_state,
     _native_pre_actor_state,
     _native_read_lifecycle_tail,
@@ -404,8 +405,8 @@ def _latched_directory_resource_tail(owner, consumer):
     return resource
 
 
-def _active_directory_operation_tail(owner, consumer):
-    """Rejoin an already-debited ACTIVE directory intent; never admit work.
+def _charged_directory_operation_tail(owner, consumer):
+    """Rejoin an already-debited directory intent; never admit work.
 
     The future producer must hold its original consumer across admission. A
     caller-built matching ledger row is not an independent native-call receipt.
@@ -415,10 +416,10 @@ def _active_directory_operation_tail(owner, consumer):
     operation = consumer.operation
     ledger, phase, result = operation.ledger, operation.phase, operation.result
     _require(type(operation.state) is list and len(operation.state) == 3
-             and operation.state[0] is True and operation.state[1] is False
+             and operation.state[0] is True and type(operation.state[1]) is bool
              and operation.state[2] is False
              and type(operation.ended) is list and len(operation.ended) == 1
-             and operation.ended[0] is False
+             and type(operation.ended[0]) is bool
              and type(operation.attempts) is list
              and ledger.attempts is operation.attempts
              and type(operation.index) is int
@@ -442,18 +443,28 @@ def _active_directory_operation_tail(owner, consumer):
              and ledger.phase is phase
              and type(ledger.failure) is list and len(ledger.failure) == 1
              and ledger.failure[0] is None
-             and phase.current[0] is phase.active
              and type(phase.result) is list and len(phase.result) == 1
              and phase.result[0] is operation
              and type(result.raw) is list and len(result.raw) == 1
-             and result.raw[0] is result.unset
-             and all(type(cell) is list and len(cell) == 1 and cell[0] is None
+             and all(type(cell) is list and len(cell) == 1
                      for cell in (result.category, result.snapshot,
                                   result.acknowledged, result.envelope))
              and type(consumer.consumption) is list and len(consumer.consumption) == 1
              and consumer.consumption[0] is None
              and type(consumer.commit) is list and len(consumer.commit) == 1
              and consumer.commit[0] is None)
+    return operation
+
+
+def _active_directory_operation_tail(owner, consumer):
+    """Original charged intent immediately before its fixed native call."""
+    operation = _charged_directory_operation_tail(owner, consumer)
+    result = operation.result
+    _require(operation.state[1] is False and operation.ended[0] is False
+             and operation.phase.current[0] is operation.phase.active
+             and result.raw[0] is result.unset
+             and all(cell[0] is None for cell in (result.category, result.snapshot,
+                                                result.acknowledged, result.envelope)))
     return operation
 
 
@@ -586,4 +597,112 @@ def _admit_directory_operation(owner, consumer):
         if (type(inflight) is list and len(inflight) == 1
                 and (inflight[0] is token or inflight[0] is operation)):
             inflight[0] = None
+        raise
+
+
+class _DirectoryMetadataReturn(NamedTuple):
+    operation: _MetadataOperation
+    result: _MetadataResult
+    consumer: _DirectoryConsumer
+    raw: object
+    snapshot: _NativeMetadataSnapshot
+
+    def __repr__(self):
+        return '<DirectoryMetadataReturn pending original DATA redacted>'
+
+
+def _returned_directory_operation_tail(owner, consumer, operation, raw):
+    """Actual raw return retained in original ACTIVE storage, before publication."""
+    _require(_charged_directory_operation_tail(owner, consumer) is operation
+             and operation.state[1] is True and operation.ended[0] is True
+             and operation.phase.current[0] is operation.phase.active
+             and type(raw) is operation.native.result_type
+             and operation.result.raw[0] is raw
+             and all(cell[0] is None for cell in (operation.result.category,
+                     operation.result.snapshot, operation.result.acknowledged,
+                     operation.result.envelope)))
+    return operation
+
+
+def _pending_directory_return_tail(owner, consumer, actual):
+    """Rejoin the actual producer return; constructing matching DATA is no grant."""
+    _require(type(actual) is _DirectoryMetadataReturn)
+    operation = _charged_directory_operation_tail(owner, consumer)
+    result, phase = operation.result, operation.phase
+    _require(actual.operation is operation and actual.result is result
+             and actual.consumer is consumer
+             and operation.state[1] is True and operation.ended[0] is True
+             and phase.current[0] is phase.pending
+             and result.envelope[0] is actual
+             and type(actual.raw) is operation.native.result_type
+             and result.raw[0] is actual.raw
+             and type(actual.snapshot) is _NativeMetadataSnapshot
+             and result.snapshot[0] is actual.snapshot
+             and type(result.category[0]) is str and result.category[0] == 'directory'
+             and result.acknowledged[0] is None)
+    return actual
+
+
+def _produce_directory_metadata(owner, consumer):
+    """One fixed captured fstat with original return custody; no policy ACK.
+
+    This producer is unwired. Its caller must retain the actual return and use
+    the fixed policy consumer; PENDING cannot admit more work or descriptor close.
+    """
+    operation = _admit_directory_operation(owner, consumer)
+    result, ledger, phase = operation.result, operation.ledger, operation.phase
+    callee, arguments = operation.callee, operation.arguments
+    raw, snapshot, actual = result.unset, None, None
+    category = 'directory'
+    try:
+        _require(_active_directory_operation_tail(owner, consumer) is operation
+                 and operation.callee is callee and operation.arguments is arguments)
+        raw = callee(arguments[0])
+        result.raw[0] = raw  # retain the actual C return before allocating/validating
+        operation.state[1] = True
+        operation.ended[0] = True
+        _returned_directory_operation_tail(owner, consumer, operation, raw)
+        snapshot = _native_metadata_snapshot(owner, operation.registration,
+                                             operation.native, raw)
+        _returned_directory_operation_tail(owner, consumer, operation, raw)
+        _require(type(snapshot) is _NativeMetadataSnapshot)
+        actual = _DirectoryMetadataReturn(operation, result, consumer, raw, snapshot)
+        _returned_directory_operation_tail(owner, consumer, operation, raw)
+        result.category[0] = category
+        result.snapshot[0] = snapshot
+        result.envelope[0] = actual
+        phase.current[0] = phase.pending
+        _require(_pending_directory_return_tail(owner, consumer, actual) is actual)
+        return actual
+    except BaseException:
+        # No refund/replay. Retire only held original data, preserving replacement slots.
+        if type(operation.ended) is list and len(operation.ended) == 1:
+            operation.ended[0] = True
+        if type(operation.state) is list and len(operation.state) == 3:
+            operation.state[2] = True
+        if (type(ledger.failure) is list and len(ledger.failure) == 1
+                and ledger.failure[0] is None):
+            ledger.failure[0] = operation
+        if type(ledger.failed) is list and len(ledger.failed) == 1:
+            ledger.failed[0] = True
+        if type(result.raw) is list and len(result.raw) == 1 and result.raw[0] is raw:
+            result.raw[0] = result.unset
+        if (type(result.snapshot) is list and len(result.snapshot) == 1
+                and result.snapshot[0] is snapshot):
+            result.snapshot[0] = None
+        if (type(result.envelope) is list and len(result.envelope) == 1
+                and result.envelope[0] is actual):
+            result.envelope[0] = None
+        if (type(result.category) is list and len(result.category) == 1
+                and result.category[0] is category):
+            result.category[0] = None
+        if (type(phase.current) is list and len(phase.current) == 1
+                and (phase.current[0] is phase.active or phase.current[0] is phase.pending)):
+            phase.current[0] = phase.failed
+        if (type(phase.result) is list and len(phase.result) == 1
+                and phase.result[0] is operation):
+            phase.result[0] = None
+        if (type(ledger.inflight) is list and len(ledger.inflight) == 1
+                and ledger.inflight[0] is operation):
+            ledger.inflight[0] = None
         raise

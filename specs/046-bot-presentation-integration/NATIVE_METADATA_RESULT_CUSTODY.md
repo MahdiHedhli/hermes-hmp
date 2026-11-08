@@ -222,3 +222,24 @@ failure from preserved one-unit debt and actual attempt history, require replay
 refusal, and check that a foreign phase-result replacement survives cleanup.
 Wrappers restore in finally; fixture-only ledger restoration is explicitly
 separate from production cleanup. All three cases remain unrun.
+
+## First fixed directory producer candidate
+
+The isolated directory producer holds the actual admitted operation/callee and
+arguments through the final ACTIVE guard, invokes only that captured fstat on
+the original descriptor, and immediately stores its actual return in the
+original result slot before validation or snapshot/envelope allocation. It
+then rejoins the same charged operation and raw return around snapshot and
+envelope construction, publishes the original pending envelope, and leaves
+work/close admission blocked pending fixed consumption.
+
+The charged-cohort helper is phase-neutral DATA only; ACTIVE/returned/PENDING
+wrappers enforce their separate state/raw/envelope requirements. Failure
+preserves debit/attempt history and sticky refusal, retiring only original
+raw/snapshot/envelope/category slots and original in-flight pointers; foreign
+replacements survive. No metadata policy ACK or site advancement is implemented.
+
+This candidate is unwired and unrun. Lint and closed-plugin scanner pass.
+Independent review, actual synthetic-descriptor native-call evidence, causal
+return/publication faults and current/floor qualification remain required;
+there is no installed-runtime, host update or character-delivery claim.
