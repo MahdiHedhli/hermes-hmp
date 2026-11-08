@@ -884,3 +884,12 @@ historical, not an alternative live authorization path or resolved incident.
 - [ ] Qualify actual installation closure, required links, future imports and
       OS-loaded libraries plus executed entry/operator/native/key factory. D1 is
       file DATA only; broker acceptance/ACK/release and physical images remain open.
+
+### Original native file effects — proposed November 8, 2026
+
+- [ ] Review and freeze [held native effects](NATIVE_FILE_EFFECTS.md), including
+      aggregate storage/traceback lifetime and no operational fallback.
+- [ ] Integrate all six held native operations through the original IO scope,
+      preserving actual outcomes, descriptor custody, byte progress and unknown debt.
+- [ ] Complete current/floor/affected causals and independent security review;
+      this work cannot mark startup, service delivery or physical images complete.
