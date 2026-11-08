@@ -244,6 +244,72 @@ def _same_cache_decode(origin, current):
     return all(a is b for a, b in zip(origin, current, strict=True))
 
 
+class _NativeIOOrigin(NamedTuple):
+    namespace: ModuleType
+    native: ModuleType
+    operations: tuple
+    flags: tuple
+    result_type: type
+    errors: tuple
+
+    def __repr__(self):
+        return "<OriginalNativeFileMachinery metadata-only>"
+
+
+def _native_io_origin():
+    # Capture canonical C bindings without opening a path or minting an outcome.
+    _require(type(os) is ModuleType and type(builtins) is ModuleType
+             and type(sys.modules) is dict and sys.modules.get("os") is os
+             and sys.modules.get("builtins") is builtins
+             and type(vars(os).get("name")) is str and vars(os).get("name") == "posix")
+    native = sys.modules.get("posix")
+    _require(type(native) is ModuleType)
+    operations = []
+    for name in ("open", "read", "close", "stat", "fstat", "readlink"):
+        value = vars(native).get(name)
+        _require(type(value) is BuiltinFunctionType and value.__self__ is native
+                 and type(value.__name__) is str and value.__name__ == name
+                 and type(value.__module__) is str and value.__module__ == "posix"
+                 and vars(os).get(name) is value)
+        operations.append(value)
+    flags = []
+    for index, name in enumerate(("O_RDONLY", "O_NOFOLLOW", "O_CLOEXEC",
+                                  "O_NONBLOCK", "O_DIRECTORY")):
+        value = vars(native).get(name)
+        _require(type(value) is int and (value == 0 if index == 0 else value > 0)
+                 and vars(os).get(name) is value)
+        flags.append(value)
+    result_type = vars(native).get("stat_result")
+    _require(type(result_type) is type and vars(os).get("stat_result") is result_type
+             and type(result_type.__name__) is str and result_type.__name__ == "stat_result")
+    base = vars(native).get("error")
+    _require(type(base) is type and vars(os).get("error") is base
+             and vars(builtins).get("OSError") is base)
+    errors = []
+    for name in ("OSError", "FileNotFoundError", "PermissionError"):
+        kind = vars(builtins).get(name)
+        _require(type(kind) is type and type(kind.__name__) is str and kind.__name__ == name
+                 and type(kind.__module__) is str and kind.__module__ == "builtins"
+                 and type(kind.__mro__) is tuple and base in kind.__mro__)
+        errors.append(kind)
+    return _NativeIOOrigin(os, native, tuple(operations), tuple(flags), result_type, tuple(errors))
+
+
+def _same_native_io(origin, current):
+    _require(type(origin) is _NativeIOOrigin and type(current) is _NativeIOOrigin
+             and type(origin.operations) is tuple and type(current.operations) is tuple
+             and type(origin.flags) is tuple and type(current.flags) is tuple
+             and type(origin.errors) is tuple and type(current.errors) is tuple)
+    return (origin.namespace is current.namespace and origin.native is current.native
+            and origin.result_type is current.result_type
+            and len(origin.operations) == len(current.operations) == 6
+            and len(origin.flags) == len(current.flags) == 5
+            and len(origin.errors) == len(current.errors) == 3
+            and all(a is b for a, b in zip(origin.operations, current.operations, strict=True))
+            and all(a is b for a, b in zip(origin.flags, current.flags, strict=True))
+            and all(a is b for a, b in zip(origin.errors, current.errors, strict=True)))
+
+
 class _InterpreterOrigin(NamedTuple):
     implementation: SimpleNamespace
     version: object
@@ -255,6 +321,7 @@ class _InterpreterOrigin(NamedTuple):
     source_hash: _SourceHashOrigin
     source_compile: _SourceCompileOrigin
     cache_decode: _CacheDecodeOrigin
+    native_io: _NativeIOOrigin
 
     def __repr__(self):
         return "<OriginalInterpreterOrigin redacted>"
@@ -288,7 +355,7 @@ def _interpreter():
     source_hash = _source_hash_origin(cache.module)
     return _InterpreterOrigin(implementation, version, flags, data, bytecode, magic,
                               cache, source_hash, _source_compile_origin(source_hash),
-                              _cache_decode_origin(source_hash))
+                              _cache_decode_origin(source_hash), _native_io_origin())
 
 
 def _interpreter_current(origin):
@@ -303,7 +370,8 @@ def _interpreter_current(origin):
              and _cache_values(current.cache_policy) == _cache_values(origin.cache_policy)
              and _same_source_hash(origin.source_hash, current.source_hash)
              and _same_source_compile(origin.source_compile, current.source_compile)
-             and _same_cache_decode(origin.cache_decode, current.cache_decode))
+             and _same_cache_decode(origin.cache_decode, current.cache_decode)
+             and _same_native_io(origin.native_io, current.native_io))
     return origin
 
 

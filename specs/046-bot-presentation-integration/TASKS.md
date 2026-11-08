@@ -90,6 +90,11 @@ See [fixed startup factory contract](GATEWAY_STARTUP_FACTORY.md).
       contract and source review accepted this separate increment;19 causal
       cases prepared, not run. Current/floor/broader tests remain pending. Known-unavailability/fallback and operational resource gates stay
       open. [Contract and exact limits](OWNED_CACHE_DECODE.md).
+- [ ] **PS1-NATIVE-FILE-MACHINERY** Retain original observed POSIX C bindings,
+      aliases, flags and result/error classes at interpreter entry. Metadata-only
+      implementation has bounded source acceptance;17 cases prepared, not run.
+      Actual typed outcomes, audit/ABI/resource policy and fallback stay open.
+      [Exact scope](NATIVE_FILE_IO_ORIGIN.md).
 - [ ] **PS1-LOADER** Enforce actual platform runtime/current and future import policy;
       snapshot DATA cannot mint startup admission.
       Next reviewed executable slice: original source-hash builtin/key/machinery,
