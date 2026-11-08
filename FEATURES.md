@@ -5,6 +5,7 @@ Focused decoder and native-binding checks remain valid but do not establish an
 integrated pass. Four normal paths and74 operator/link checks passed after
 moving fixture observations away from canonical native aliases. A further reviewed
 monitoring refinement is untested;144 residual original failures are running.
+The queued seven-module refinement declares164 cases; actual results remain pending.
 Production checks remain unchanged. Character/local-image delivery stays open.
 
 # November 8: original file bindings captured, not syscall outcomes
@@ -12,7 +13,7 @@ Production checks remain unchanged. Character/local-image delivery stays open.
 The isolated startup source retains originally observed POSIX C file bindings,
 aliases, flags and result/error classes. Bounded source review accepted the
 metadata-only claim;17 current and17 actual Python 3.11 cases passed, with
-source hashes unchanged. Combined startup regression remains pending. This neither
+source hashes unchanged. The later combined startup regression failed as recorded above. This neither
 performs file operations nor proves kernel entry, ABI correctness or permission
 unavailability. Known outcomes/cleanup and operational fallback remain open.
 See [scope](specs/046-bot-presentation-integration/NATIVE_FILE_IO_ORIGIN.md).
@@ -20,12 +21,14 @@ See [scope](specs/046-bot-presentation-integration/NATIVE_FILE_IO_ORIGIN.md).
 The parent decoder baseline b892880 passed19 current synthetic cases and19
 actual Python 3.11 cases with exact receipt binding. That does not qualify this new metadata field.
 
-# November 8: selected-cache decode source awaiting tests
+# November 8: isolated selected-cache decode qualified; integration failed
 
 The isolated source now owns original native cache decoding and filename-fix
 results without executing code or authorizing source fallback. Bounded independent
-source review accepted the repaired custody and publication joins. Nineteen
-synthetic cases are prepared, not run. This does not qualify operational native
+source review accepted the repaired custody and publication joins. On baseline
+`b892880`,19 current and19 actual Python3.11 synthetic cases passed with exact
+source/test/interpreter receipt binding. The combined-source failures above remain
+open; the isolated pass does not qualify that integration or operational native
 parsing, complete loader admission or physical character/image delivery. See
 [scope and remaining qualification](specs/046-bot-presentation-integration/OWNED_CACHE_DECODE.md).
 
@@ -36,7 +39,10 @@ counts before refusal, seals the effect chain, and preserves unknown cleanup deb
 on ownership drift. Bounded independent source review accepted the repaired code;
 141 current checks (14 reader and127 scanner cases) and14 actual Python 3.11
 child cases passed, with source hashes unchanged. The shared-startup baseline
-passed 1,244 checks; this remains source-only, not operational admission. This is a loader
+passed 1,244 checks. A later output-path collision lost its original raw binding;
+the successful log and prior in-session binding inspection remain, and the lost
+record is not reconstructed. This remains historical source evidence, not a new
+combined integration pass or operational admission. This is a loader
 prerequisite, not desktop character delivery, host-local images or operational
 admission. See [scope and remaining checks](specs/046-bot-presentation-integration/DECLARED_CACHE_READ.md).
 
